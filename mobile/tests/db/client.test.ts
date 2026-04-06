@@ -45,6 +45,6 @@ describe('getDb', () => {
     const { getDb } = await import('@/db/client');
     const db = await getDb();
     expect(db).toHaveProperty('execAsync');
-    expect((db as { execAsync: Mock }).execAsync).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;');
+    expect((db as unknown as { execAsync: Mock }).execAsync).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;');
   });
 });

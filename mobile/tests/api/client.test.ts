@@ -36,7 +36,7 @@ describe('apiClient', () => {
 
       await apiClient.get('/health');
 
-      const [, init] = (global.fetch as Mock).mock.calls[0];
+      const [, init] = (global.fetch as Mock).mock.calls[0]!;
       expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer valid-token');
     });
 
@@ -85,9 +85,9 @@ describe('apiClient', () => {
 
       mockRefreshTokens.mockResolvedValue(false);
 
-      const error = await apiClient.get('/protected').catch((e) => e);
+      const error = await apiClient.get('/protected').catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ApiError);
-      expect(error.status).toBe(401);
+      expect((error as ApiError).status).toBe(401);
     });
   });
 });

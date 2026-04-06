@@ -15,10 +15,10 @@ describe('seedDatabase', () => {
     await seedDatabase(db);
     expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
     const categoryCalls = db.runAsync.mock.calls.filter((c: string[]) =>
-      c[0].includes('ingredient_categories')
+      c[0]?.includes('ingredient_categories')
     );
     const stapleCalls = db.runAsync.mock.calls.filter((c: string[]) =>
-      c[0].includes('ingredients')
+      c[0]?.includes('ingredients')
     );
     expect(categoryCalls).toHaveLength(23);
     expect(stapleCalls).toHaveLength(10);
