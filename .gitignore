@@ -1,0 +1,18 @@
+# Mobile
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/.env
+mobile/drizzle/
+
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/.env
+backend/.aws-sam/
+
+# SQLite dev exports
+**/.superpowers/
+
+# macOS
+.DS_Store
