@@ -1,0 +1,58 @@
+export const theme = {
+  colors: {
+    background: "#fdfaf6",
+    surface: "#f0e8de",
+    card: "#ffffff",
+    border: "#ede3d8",
+    primary: "#2a9d8f",
+    primaryLight: "#e8f5f3",
+    warning: "#e07c3c",
+    warningLight: "#fde8d0",
+    success: "#1a6b4a",
+    successLight: "#d4f0e8",
+    text: "#2c1a0e",
+    textSecondary: "#9c7a5e",
+    textDisabled: "#c8b8a8",
+  },
+  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
+  radius: { sm: 8, md: 12, lg: 16, pill: 999 },
+  shadow: {
+    card: {
+      shadowColor: "#2c1a0e",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.07,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    sheet: {
+      shadowColor: "#2c1a0e",
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+    fab: {
+      shadowColor: "#2a9d8f",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+  },
+  typography: {
+    largeTitle: { fontSize: 34, fontWeight: "800", letterSpacing: -0.5 },
+    title2: { fontSize: 22, fontWeight: "700" },
+    headline: { fontSize: 17, fontWeight: "600" },
+    body: { fontSize: 17, fontWeight: "400" },
+    subhead: { fontSize: 15, fontWeight: "400" },
+    caption: { fontSize: 12, fontWeight: "400" },
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+    },
+  },
+} as const;
+
+export type Theme = typeof theme;
