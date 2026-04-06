@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Glean",
+    "slug": "glean",
+    "version": "1.0.0",
+    "scheme": "glean",
+    "platforms": ["ios", "android"],
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#2a9d8f" } },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      ["expo-camera", { "cameraPermission": "Allow Glean to scan receipts." }]
+    ],
+    "extra": {
+      "eas": { "projectId": "REPLACE_ME" }
+    }
+  }
+}
