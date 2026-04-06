@@ -1,13 +1,17 @@
 // mobile/src/api/client.ts
-import { authStorage } from '@/auth/storage';
-import { refreshTokens } from '@/auth/cognito';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+import { refreshTokens } from "@/auth/cognito";
+import { authStorage } from "@/auth/storage";
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
@@ -15,7 +19,7 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   const token = await authStorage.getAccessToken();
   const isFormData = options.body instanceof FormData;
   const headers: HeadersInit = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
@@ -25,12 +29,12 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   if (response.status === 401 && retry) {
     const refreshed = await refreshTokens();
     if (refreshed) return request<T>(path, options, false);
-    throw new ApiError(401, 'Session expired — please sign in again');
+    throw new ApiError(401, "Session expired — please sign in again");
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new ApiError(response.status, body.detail ?? 'Request failed');
+    const body = await response.json().catch(() => ({ detail: "Unknown error" }));
+    throw new ApiError(response.status, body.detail ?? "Request failed");
   }
 
   return response.json() as Promise<T>;
@@ -39,7 +43,7 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
 export const apiClient = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   postForm: <T>(path: string, formData: FormData) =>
-    request<T>(path, { method: 'POST', body: formData }),
+    request<T>(path, { method: "POST", body: formData }),
 };

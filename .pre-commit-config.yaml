@@ -1,0 +1,44 @@
+repos:
+  # ─── Python / Backend ────────────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        files: ^backend/
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.45.0
+    hooks:
+      - id: typos
+        files: ^backend/
+  - repo: local
+    hooks:
+      - id: vulture
+        name: vulture (dead code)
+        language: system
+        entry: bash -c 'cd backend && uv run vulture src/ vulture_whitelist.py'
+        pass_filenames: false
+        files: ^backend/.*\.py$
+
+  # ─── TypeScript / Mobile ─────────────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: biome
+        name: biome (lint + format)
+        language: system
+        entry: bash -c 'cd mobile && npx biome check --write .'
+        pass_filenames: false
+        files: ^mobile/.*\.(ts|tsx|js|jsx|json)$
+        exclude: ^mobile/(node_modules|\.expo)/
+      - id: tsc
+        name: TypeScript check
+        language: system
+        entry: bash -c 'cd mobile && npx tsc --noEmit'
+        pass_filenames: false
+        files: ^mobile/.*\.tsx?$
+        exclude: ^mobile/(node_modules|\.expo)/

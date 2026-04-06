@@ -45,7 +45,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "W", "C4", "C90", "PT", "RUF", "A", "T20", "PIE", "RET", "TCH", "ASYNC", "FLY", "PERF", "PLC", "PLE"]
-per-file-ignores = { "tests/**" = ["S101"] }
+per-file-ignores = { "tests/**" = ["S101"], "vulture_whitelist.py" = ["B018", "F821"] }
 
 [tool.black]
 line-length = 120
@@ -71,3 +71,9 @@ paths = ["src/"]
 
 [tool.typos.default]
 locale = "en-gb"
+
+[tool.typos.default.extend-words]
+# Standard spellings in HTTP headers, AWS APIs, and OAuth specs
+Authorization = "Authorization"
+# FastAPI/Starlette constant name — cannot be changed
+Unauthorized = "Unauthorized"

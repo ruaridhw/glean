@@ -1,16 +1,18 @@
 // mobile/src/auth/cognito.ts
 import {
-  CognitoUser,
-  CognitoUserPool,
   AuthenticationDetails,
-  CognitoUserSession,
   CognitoRefreshToken,
+  CognitoUser,
   CognitoUserAttribute,
-} from 'amazon-cognito-identity-js';
-import { authStorage } from './storage';
+  CognitoUserPool,
+  type CognitoUserSession,
+} from "amazon-cognito-identity-js";
+import { authStorage } from "./storage";
 
 const userPool = new CognitoUserPool({
+  // biome-ignore lint/style/noNonNullAssertion: required Expo public env vars
   UserPoolId: process.env.EXPO_PUBLIC_COGNITO_USER_POOL_ID!,
+  // biome-ignore lint/style/noNonNullAssertion: required Expo public env vars
   ClientId: process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID!,
 });
 
@@ -33,7 +35,7 @@ export async function signIn(email: string, password: string): Promise<void> {
           resolve();
         },
         onFailure: reject,
-      }
+      },
     );
   });
 }
@@ -43,9 +45,9 @@ export async function signUp(email: string, password: string): Promise<void> {
     userPool.signUp(
       email,
       password,
-      [new CognitoUserAttribute({ Name: 'email', Value: email })],
+      [new CognitoUserAttribute({ Name: "email", Value: email })],
       [],
-      (err) => (err ? reject(err) : resolve())
+      (err) => (err ? reject(err) : resolve()),
     );
   });
 }
@@ -73,7 +75,7 @@ export async function refreshTokens(): Promise<boolean> {
           });
           resolve(true);
         }
-      }
+      },
     );
   });
 }

@@ -1,9 +1,10 @@
 // mobile/app/_layout.tsx
-import { useEffect, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import { getDb } from '@/db/client';
-import { seedDatabase } from '@/db/seed';
-import { authStorage } from '@/auth/storage';
+
+import { router, Stack } from "expo-router";
+import { useEffect, useState } from "react";
+import { authStorage } from "@/auth/storage";
+import { getDb } from "@/db/client";
+import { seedDatabase } from "@/db/seed";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -15,7 +16,7 @@ export default function RootLayout() {
         await seedDatabase(db);
         const authenticated = await authStorage.hasTokens();
         if (!authenticated) {
-          router.replace('/sign-in');
+          router.replace("/sign-in");
         }
       } finally {
         setReady(true);

@@ -53,10 +53,7 @@ def verify_cognito_token(
             key,
             algorithms=["RS256"],
             audience=settings.cognito_app_client_id,
-            issuer=(
-                f"https://cognito-idp.{settings.aws_region}.amazonaws.com"
-                f"/{settings.cognito_user_pool_id}"
-            ),
+            issuer=(f"https://cognito-idp.{settings.aws_region}.amazonaws.com" f"/{settings.cognito_user_pool_id}"),
         )
         user_sub: str = payload["sub"]
         request.state.user_sub = user_sub

@@ -42,10 +42,10 @@ export interface Recipe {
   difficulty?: string | null;
   active_time_mins?: number | null;
   total_time_mins?: number | null;
-  not_suitable_for: string[];   // JSON array, serialised as text in DB
+  not_suitable_for: string[]; // JSON array, serialised as text in DB
   yield_count?: number | null;
-  nutrition?: string | null;    // JSON string
-  instructions: string[];       // JSON array, serialised as text in DB
+  nutrition?: string | null; // JSON string
+  instructions: string[]; // JSON array, serialised as text in DB
   last_cooked_at?: string | null;
   is_ai_generated: boolean;
   // Populated at query time from recipe_dietary_flags join
@@ -60,7 +60,7 @@ export interface RecipeIngredient {
   unit: string;
   preparation?: string | null;
   is_optional: boolean;
-  substitutions: string[];      // JSON array, serialised as text in DB
+  substitutions: string[]; // JSON array, serialised as text in DB
   // Joined field
   ingredient?: Ingredient;
 }
@@ -68,7 +68,7 @@ export interface RecipeIngredient {
 export interface MealPlanEntry {
   id: number;
   recipe_id: number;
-  planned_date: string;         // ISO date string YYYY-MM-DD
+  planned_date: string; // ISO date string YYYY-MM-DD
   cooked_at?: string | null;
   servings: number;
   // Joined field
@@ -81,7 +81,7 @@ export interface ShoppingListItem {
   name: string;
   quantity?: number | null;
   unit?: string | null;
-  source: 'manual' | 'meal_plan' | 'ai';
+  source: "manual" | "meal_plan" | "ai";
   is_checked: boolean;
 }
 
@@ -90,6 +90,6 @@ export interface UserConfig {
   purchase_tolerance: number;
   preferred_servings: number;
   meals_per_week: number;
-  dietary_flags: string[];      // JSON array, serialised as text in DB
+  dietary_flags: string[]; // JSON array, serialised as text in DB
   max_active_time_mins?: number | null;
 }

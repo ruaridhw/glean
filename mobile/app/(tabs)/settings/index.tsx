@@ -1,12 +1,13 @@
 // mobile/app/(tabs)/settings/index.tsx
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
-import { signOut } from '@/auth/cognito';
+
+import { router } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { signOut } from "@/auth/cognito";
 
 export default function SettingsScreen() {
   async function handleSignOut() {
     await signOut();
-    router.replace('/sign-in');
+    router.replace("/sign-in");
   }
 
   return (
@@ -20,8 +21,8 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: '#fff' },
-  heading: { fontSize: 24, fontWeight: '700', marginBottom: 32 },
-  button: { backgroundColor: '#e63946', borderRadius: 8, padding: 14, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
+  heading: { fontSize: 24, fontWeight: "700", marginBottom: 32 },
+  button: { backgroundColor: "#e63946", borderRadius: 8, padding: 14, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 });
