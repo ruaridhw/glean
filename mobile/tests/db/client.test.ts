@@ -1,27 +1,25 @@
 // mobile/tests/db/client.test.ts
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Mock } from 'vitest';
 
-vi.mock('expo-sqlite', () => ({
-  openDatabaseSync: vi.fn(() => ({
-    execAsync: vi.fn().mockResolvedValue(undefined),
+jest.mock('expo-sqlite', () => ({
+  openDatabaseSync: jest.fn(() => ({
+    execAsync: jest.fn().mockResolvedValue(undefined),
   })),
 }));
 
-vi.mock('drizzle-orm/expo-sqlite', () => ({
-  drizzle: vi.fn(() => ({})),
+jest.mock('drizzle-orm/expo-sqlite', () => ({
+  drizzle: jest.fn(() => ({})),
 }));
 
-const mockMigrate = vi.fn().mockResolvedValue(undefined);
-vi.mock('drizzle-orm/expo-sqlite/migrator', () => ({
+const mockMigrate = jest.fn().mockResolvedValue(undefined);
+jest.mock('drizzle-orm/expo-sqlite/migrator', () => ({
   migrate: mockMigrate,
 }));
 
-vi.mock('../../drizzle/migrations', () => ({ default: {} }));
+jest.mock('../../drizzle/migrations', () => ({ default: {} }), { virtual: true });
 
 describe('getDb', () => {
   beforeEach(() => {
-    vi.resetModules();
+    jest.resetModules();
     mockMigrate.mockClear();
   });
 
@@ -39,12 +37,11 @@ describe('getDb', () => {
   });
 
   it('returns the raw expo-sqlite database', async () => {
-    // The client module calls openDatabaseSync at the top level and stores the
-    // result as `expo`. getDb() returns that same object. We verify it is the
-    // expo-sqlite instance by confirming execAsync is present and was called.
     const { getDb } = await import('@/db/client');
     const db = await getDb();
     expect(db).toHaveProperty('execAsync');
-    expect((db as unknown as { execAsync: Mock }).execAsync).toHaveBeenCalledWith('PRAGMA foreign_keys = ON;');
+    expect((db as jest.Mock & { execAsync: jest.Mock }).execAsync).toHaveBeenCalledWith(
+      'PRAGMA foreign_keys = ON;',
+    );
   });
 });

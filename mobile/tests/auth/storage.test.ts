@@ -1,22 +1,19 @@
 // mobile/tests/auth/storage.test.ts
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Mock } from 'vitest';
-
-vi.mock('expo-secure-store', () => ({
-  getItemAsync: vi.fn(),
-  setItemAsync: vi.fn(),
-  deleteItemAsync: vi.fn(),
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 
 import * as SecureStore from 'expo-secure-store';
 import { authStorage } from '@/auth/storage';
 
-const mockGetItem = SecureStore.getItemAsync as Mock;
-const mockSetItem = SecureStore.setItemAsync as Mock;
-const mockDeleteItem = SecureStore.deleteItemAsync as Mock;
+const mockGetItem = SecureStore.getItemAsync as jest.Mock;
+const mockSetItem = SecureStore.setItemAsync as jest.Mock;
+const mockDeleteItem = SecureStore.deleteItemAsync as jest.Mock;
 
 describe('authStorage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => jest.clearAllMocks());
 
   describe('setTokens', () => {
     it('stores all four tokens in SecureStore', async () => {

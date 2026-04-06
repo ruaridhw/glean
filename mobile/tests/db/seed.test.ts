@@ -1,11 +1,10 @@
 // mobile/tests/db/seed.test.ts
-import { describe, expect, it, vi } from 'vitest';
 import { seedDatabase } from '@/db/seed';
 
 function makeMockDb(categoryCount: number) {
-  const runAsync = vi.fn().mockResolvedValue(undefined);
-  const getFirstAsync = vi.fn().mockResolvedValue({ count: categoryCount });
-  const withTransactionAsync = vi.fn(async (fn: () => Promise<void>) => fn());
+  const runAsync = jest.fn().mockResolvedValue(undefined);
+  const getFirstAsync = jest.fn().mockResolvedValue({ count: categoryCount });
+  const withTransactionAsync = jest.fn(async (fn: () => Promise<void>) => fn());
   return { runAsync, getFirstAsync, withTransactionAsync } as any;
 }
 
@@ -15,10 +14,10 @@ describe('seedDatabase', () => {
     await seedDatabase(db);
     expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
     const categoryCalls = db.runAsync.mock.calls.filter((c: string[]) =>
-      c[0]?.includes('ingredient_categories')
+      c[0]?.includes('ingredient_categories'),
     );
     const stapleCalls = db.runAsync.mock.calls.filter((c: string[]) =>
-      c[0]?.includes('ingredients')
+      c[0]?.includes('ingredients'),
     );
     expect(categoryCalls).toHaveLength(23);
     expect(stapleCalls).toHaveLength(10);
