@@ -11,8 +11,25 @@ backend/__pycache__/
 backend/.env
 backend/.aws-sam/
 
+# Python artifacts
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.mypy_cache/
+backend/.ruff_cache/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
 # SQLite dev exports
 **/.superpowers/
 
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # macOS
 .DS_Store
+.DS_Store?
