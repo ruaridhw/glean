@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.14
+    Environment:
+      Variables:
+        ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+        RECIPE_API_KEY: !Ref RecipeApiKey
+        COGNITO_USER_POOL_ID: !Ref GleanUserPool
+        COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
+        S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
+        POWERTOOLS_SERVICE_NAME: glean
+        LOG_LEVEL: INFO
+
+Parameters:
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+  RecipeApiKey:
+    Type: String
+    NoEcho: true
+
+Resources:
+  GleanUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: glean-user-pool
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  GleanUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: glean-mobile-client
+      UserPoolId: !Ref GleanUserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+
+  GleanReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "glean-receipts-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            ExpirationInDays: 1
+
+  GleanFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: glean.main.handler
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - CloudWatchLogsFullAccess
+        - S3CrudPolicy:
+            BucketName: !Ref GleanReceiptsBucket
+        - TextractFullAccess
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+  GleanFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${GleanFunction}"
+      RetentionInDays: 14
+
+  ErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: glean-lambda-errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GleanFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UserPoolId:
+    Value: !Ref GleanUserPool
+  UserPoolClientId:
+    Value: !Ref GleanUserPoolClient
