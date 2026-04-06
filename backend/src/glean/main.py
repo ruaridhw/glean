@@ -1,5 +1,10 @@
+from __future__ import annotations
+
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from mangum import Mangum
@@ -20,7 +25,7 @@ limiter = Limiter(key_func=get_user_sub)
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
     logger.info("Glean API starting up")
     yield
 
