@@ -12,7 +12,7 @@ dependencies = [
     "boto3",
     "aws-xray-sdk>=2.15.0",
     "python-multipart>=0.0.24",
-    "anthropic>=0.50",
+    "langchain-anthropic>=1.4.0",
 ]
 
 [project.optional-dependencies]

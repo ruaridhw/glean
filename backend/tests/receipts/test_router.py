@@ -31,19 +31,19 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     mock_textract = MagicMock()
     mock_textract.analyze_expense.return_value = _mock_textract_response()
 
-    mock_claude_content = MagicMock()
-    mock_claude_content.text = json.dumps(_mock_claude_response())
-    mock_claude_msg = MagicMock()
-    mock_claude_msg.content = [mock_claude_content]
-    mock_claude_msg.usage.input_tokens = 120
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(_mock_claude_response())
 
     def boto3_client_factory(service_name: str, **kwargs):
         if service_name == "s3":
             return mock_s3
         return mock_textract
 
-    with patch("boto3.client", side_effect=boto3_client_factory), patch("anthropic.Anthropic") as MockAnthropic:
-        MockAnthropic.return_value.messages.create.return_value = mock_claude_msg
+    with (
+        patch("boto3.client", side_effect=boto3_client_factory),
+        patch("glean.receipts.service.ChatAnthropic") as MockChatAnthropic,
+    ):
+        MockChatAnthropic.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/scan",
             headers=auth_headers,
@@ -62,8 +62,6 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
 
 
 def test_scan_receipt_requires_auth(unauth_client: TestClient) -> None:
-    # unauth_client has no dependency_overrides, so verify_cognito_token runs for real
-    # and rejects the request with 401 when no Authorization header is present
     response = unauth_client.post("/receipts/scan", files={"file": ("r.jpg", b"x", "image/jpeg")})
     assert response.status_code == 401
 
@@ -90,14 +88,11 @@ def test_scan_receipt_rejects_oversized(client: TestClient, auth_headers: dict[s
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
-    mock_claude_content = MagicMock()
-    mock_claude_content.text = json.dumps(_mock_claude_response())
-    mock_claude_msg = MagicMock()
-    mock_claude_msg.content = [mock_claude_content]
-    mock_claude_msg.usage.input_tokens = 80
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(_mock_claude_response())
 
-    with patch("anthropic.Anthropic") as MockAnthropic:
-        MockAnthropic.return_value.messages.create.return_value = mock_claude_msg
+    with patch("glean.receipts.service.ChatAnthropic") as MockChatAnthropic:
+        MockChatAnthropic.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/describe",
             headers=auth_headers,

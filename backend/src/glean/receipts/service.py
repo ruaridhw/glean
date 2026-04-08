@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import uuid
 
-import anthropic
 import boto3
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import settings
 from glean.observability import logger, tracer
@@ -61,29 +62,22 @@ def scan_receipt(image_bytes: bytes) -> ScanResponse:
     finally:
         s3.delete_object(Bucket=settings.s3_receipts_bucket, Key=s3_key)
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        system=NORMALISE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": json.dumps(lines)}],
-    )
-    raw = message.content[0].text
-    logger.info("claude normalised items", extra={"tokens": message.usage.input_tokens})
+    model = ChatAnthropic(model="claude-sonnet-4-6", api_key=settings.anthropic_api_key)
+    result = model.invoke([SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))])
+    logger.info("claude normalised items")
 
-    items = [ParsedIngredient(**item) for item in json.loads(raw)]
+    items = [ParsedIngredient(**item) for item in json.loads(result.content)]
     return ScanResponse(items=items)
 
 
 @tracer.capture_method
 def describe_purchase(request: DescribeRequest) -> ScanResponse:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        system=NORMALISE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"Parse this grocery purchase description: {request.text}"}],
+    model = ChatAnthropic(model="claude-sonnet-4-6", api_key=settings.anthropic_api_key)
+    result = model.invoke(
+        [
+            SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
+            HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
+        ]
     )
-    raw = message.content[0].text
-    items = [ParsedIngredient(**item) for item in json.loads(raw)]
+    items = [ParsedIngredient(**item) for item in json.loads(result.content)]
     return ScanResponse(items=items)
