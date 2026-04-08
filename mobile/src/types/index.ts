@@ -25,7 +25,9 @@ export interface PantryItem {
   last_used_at?: string | null;
   updated_at: string;
   // Joined fields (populated at query time)
-  ingredient?: Ingredient;
+  canonical_name: string;
+  is_staple: boolean;
+  food_group?: string | null;
 }
 
 export interface RecipeDietaryFlag {
