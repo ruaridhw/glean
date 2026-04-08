@@ -12,3 +12,7 @@ recipe_api_base_url  # Pydantic Settings field
 log_level  # Pydantic Settings field
 rate_limit_per_hour  # Pydantic Settings field
 model_config  # Pydantic v2 model configuration
+name  # ParsedIngredient Pydantic field
+quantity  # ParsedIngredient Pydantic field
+unit  # ParsedIngredient Pydantic field
+unit_price  # ParsedIngredient Pydantic field

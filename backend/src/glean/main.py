@@ -15,6 +15,7 @@ from slowapi.util import get_remote_address
 from glean.dev.router import router as dev_router
 from glean.health.router import router as health_router
 from glean.observability import logger
+from glean.receipts.router import router as receipts_router
 
 
 def get_user_sub(request: Request) -> str:
@@ -36,5 +37,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(health_router)
 app.include_router(dev_router)
+app.include_router(receipts_router)
 
 handler = Mangum(app)

@@ -1,0 +1,22 @@
+{
+  "ExpenseDocuments": [{
+    "LineItemGroups": [{
+      "LineItems": [
+        {
+          "LineItemExpenseFields": [
+            {"Type": {"Text": "ITEM"}, "ValueDetection": {"Text": "CKNBR SL 500G", "Confidence": 92.0}},
+            {"Type": {"Text": "QUANTITY"}, "ValueDetection": {"Text": "1", "Confidence": 95.0}},
+            {"Type": {"Text": "PRICE"}, "ValueDetection": {"Text": "3.50", "Confidence": 98.0}}
+          ]
+        },
+        {
+          "LineItemExpenseFields": [
+            {"Type": {"Text": "ITEM"}, "ValueDetection": {"Text": "WHOLE MILK 2L", "Confidence": 97.0}},
+            {"Type": {"Text": "QUANTITY"}, "ValueDetection": {"Text": "1", "Confidence": 99.0}},
+            {"Type": {"Text": "PRICE"}, "ValueDetection": {"Text": "1.35", "Confidence": 99.0}}
+          ]
+        }
+      ]
+    }]
+  }]
+}

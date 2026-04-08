@@ -12,6 +12,7 @@ dependencies = [
     "boto3",
     "aws-xray-sdk>=2.15.0",
     "python-multipart>=0.0.24",
+    "anthropic>=0.50",
 ]
 
 [project.optional-dependencies]
@@ -77,3 +78,5 @@ locale = "en-gb"
 Authorization = "Authorization"
 # FastAPI/Starlette constant name — cannot be changed
 Unauthorized = "Unauthorized"
+# boto3 Textract API uses American spelling — cannot be changed to match en-gb locale
+analyze = "analyze"
