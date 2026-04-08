@@ -12,8 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { getDb } from "@/db/client";
-import { resolveOrCreateIngredient } from "@/db/ingredients";
+import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds } from "@/db/shopping";
 import { normalizeUnit } from "@/normalization/units";
@@ -43,13 +42,9 @@ export default function ReviewScreen() {
     setSaving(true);
     try {
       const resolvedIds: number[] = [];
-      const db = await getDb();
       for (const item of items) {
         const ingredientId = await resolveOrCreateIngredient({ canonical_name: item.name });
-        const ingredient = await db.getFirstAsync<{ canonical_unit: string | null }>(
-          "SELECT canonical_unit FROM ingredients WHERE id = ?",
-          [ingredientId],
-        );
+        const ingredient = await getIngredientById(ingredientId);
         const normalized = normalizeUnit({
           quantity: item.quantity,
           unit: item.unit,

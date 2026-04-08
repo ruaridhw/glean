@@ -1,28 +1,35 @@
 // mobile/src/db/pantry.ts
 
+import { eq, sql } from "drizzle-orm";
 import type { PantryItem } from "@/types";
-import { getDb } from "./client";
+import { drizzleDb } from "./client";
+import { ingredientCategories, ingredients, pantryItems } from "./schema";
 
-// Returns all pantry items joined with ingredient name + food_group
 export async function getPantryItems(): Promise<PantryItem[]> {
-  const db = await getDb();
-  const rows = await db.getAllAsync<PantryItem>(`
-    SELECT
-      p.*,
-      i.canonical_name,
-      i.is_staple,
-      ic.food_group
-    FROM pantry_items p
-    JOIN ingredients i ON p.ingredient_id = i.id
-    LEFT JOIN ingredient_categories ic ON i.category = ic.category
-    ORDER BY
-      CASE WHEN p.expiry_date IS NOT NULL THEN p.expiry_date ELSE '9999-12-31' END ASC,
-      CASE WHEN p.last_used_at IS NOT NULL THEN p.last_used_at ELSE '0000-01-01' END ASC
-  `);
-  return rows;
+  const rows = await drizzleDb
+    .select({
+      id: pantryItems.id,
+      ingredient_id: pantryItems.ingredient_id,
+      quantity: pantryItems.quantity,
+      unit: pantryItems.unit,
+      unit_price: pantryItems.unit_price,
+      expiry_date: pantryItems.expiry_date,
+      last_used_at: pantryItems.last_used_at,
+      updated_at: pantryItems.updated_at,
+      canonical_name: ingredients.canonical_name,
+      is_staple: ingredients.is_staple,
+      food_group: ingredientCategories.food_group,
+    })
+    .from(pantryItems)
+    .innerJoin(ingredients, eq(pantryItems.ingredient_id, ingredients.id))
+    .leftJoin(ingredientCategories, eq(ingredients.category, ingredientCategories.category))
+    .orderBy(
+      sql`CASE WHEN ${pantryItems.expiry_date} IS NOT NULL THEN ${pantryItems.expiry_date} ELSE '9999-12-31' END`,
+      sql`CASE WHEN ${pantryItems.last_used_at} IS NOT NULL THEN ${pantryItems.last_used_at} ELSE '0000-01-01' END`,
+    );
+  return rows as PantryItem[];
 }
 
-// Upsert: if ingredient already in pantry, add quantity; otherwise insert.
 export async function upsertPantryItem(params: {
   ingredient_id: number;
   quantity: number;
@@ -30,43 +37,40 @@ export async function upsertPantryItem(params: {
   unit_price?: number | null;
   expiry_date?: string | null;
 }): Promise<void> {
-  const db = await getDb();
-  const existing = await db.getFirstAsync<{ id: number; quantity: number }>(
-    "SELECT id, quantity FROM pantry_items WHERE ingredient_id = ?",
-    [params.ingredient_id],
-  );
+  const existing = await drizzleDb
+    .select({ id: pantryItems.id })
+    .from(pantryItems)
+    .where(eq(pantryItems.ingredient_id, params.ingredient_id))
+    .limit(1);
 
-  if (existing) {
-    await db.runAsync(
-      `UPDATE pantry_items
-       SET quantity = quantity + ?, unit_price = COALESCE(?, unit_price), updated_at = datetime('now')
-       WHERE id = ?`,
-      [params.quantity, params.unit_price ?? null, existing.id],
-    );
+  const match = existing[0];
+  if (match) {
+    await drizzleDb
+      .update(pantryItems)
+      .set({
+        quantity: sql`${pantryItems.quantity} + ${params.quantity}`,
+        unit_price: sql`COALESCE(${params.unit_price ?? null}, ${pantryItems.unit_price})`,
+        updated_at: sql`datetime('now')`,
+      })
+      .where(eq(pantryItems.id, match.id));
   } else {
-    await db.runAsync(
-      `INSERT INTO pantry_items (ingredient_id, quantity, unit, unit_price, expiry_date)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        params.ingredient_id,
-        params.quantity,
-        params.unit,
-        params.unit_price ?? null,
-        params.expiry_date ?? null,
-      ],
-    );
+    await drizzleDb.insert(pantryItems).values({
+      ingredient_id: params.ingredient_id,
+      quantity: params.quantity,
+      unit: params.unit,
+      unit_price: params.unit_price ?? null,
+      expiry_date: params.expiry_date ?? null,
+    });
   }
 }
 
 export async function updatePantryQuantity(id: number, quantity: number): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE pantry_items SET quantity = ?, updated_at = datetime('now') WHERE id = ?`,
-    [quantity, id],
-  );
+  await drizzleDb
+    .update(pantryItems)
+    .set({ quantity, updated_at: sql`datetime('now')` })
+    .where(eq(pantryItems.id, id));
 }
 
 export async function deletePantryItem(id: number): Promise<void> {
-  const db = await getDb();
-  await db.runAsync("DELETE FROM pantry_items WHERE id = ?", [id]);
+  await drizzleDb.delete(pantryItems).where(eq(pantryItems.id, id));
 }
