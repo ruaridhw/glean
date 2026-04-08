@@ -1,0 +1,14 @@
+[
+  {
+    "recipe_id": 1,
+    "title": "Chicken Stir Fry",
+    "reason": "Uses chicken breast expiring in 2 days and you haven't cooked it in 3 weeks.",
+    "missing_ingredients": ["soy sauce"]
+  },
+  {
+    "recipe_id": 3,
+    "title": "Lentil Soup",
+    "reason": "No protein dish this week and lentils have been unused for 12 days.",
+    "missing_ingredients": []
+  }
+]

@@ -17,6 +17,7 @@ from glean.health.router import router as health_router
 from glean.observability import logger
 from glean.receipts.router import router as receipts_router
 from glean.recipes.router import router as recipes_router
+from glean.suggestions.router import router as suggestions_router
 
 
 def get_user_sub(request: Request) -> str:
@@ -40,5 +41,6 @@ app.include_router(health_router)
 app.include_router(dev_router)
 app.include_router(receipts_router)
 app.include_router(recipes_router)
+app.include_router(suggestions_router)
 
 handler = Mangum(app)

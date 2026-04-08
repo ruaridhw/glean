@@ -12,9 +12,9 @@ recipe_api_base_url  # Pydantic Settings field
 log_level  # Pydantic Settings field
 rate_limit_per_hour  # Pydantic Settings field
 model_config  # Pydantic v2 model configuration
-name  # ParsedIngredient Pydantic field
-quantity  # ParsedIngredient Pydantic field
-unit  # ParsedIngredient Pydantic field
+name  # Pydantic field (ParsedIngredient, CompressedPantryItem)
+quantity  # Pydantic field (ParsedIngredient, CompressedPantryItem)
+unit  # Pydantic field (ParsedIngredient, CompressedPantryItem)
 unit_price  # ParsedIngredient Pydantic field
 # recipe_api/schemas.py Pydantic fields
 description  # RecipeApiIngredient field
@@ -23,5 +23,15 @@ category  # RecipeApiIngredient field
 api_ingredient_id  # RecipeIngredientOut field
 canonical_name  # RecipeIngredientOut field
 external_id  # RecipeOut / RecipeSearchResult field
-title  # RecipeOut / RecipeSearchResult field
+title  # Pydantic field (RecipeOut, RecipeSearchResult, SuggestedRecipe)
 dietary_flags  # RecipeOut / RecipeSearchResult field
+# suggestions schemas — fields accessed via Pydantic model_dump / FastAPI serialisation
+id  # CompressedPantryItem
+food_group  # CompressedPantryItem
+urgency_score  # CompressedPantryItem
+recipe_id  # RecipeHistoryItem / SuggestedRecipe
+last_cooked_at  # RecipeHistoryItem
+food_groups  # RecipeHistoryItem
+reason  # SuggestedRecipe
+missing_ingredients  # SuggestedRecipe
+get_suggestions  # FastAPI route handler
