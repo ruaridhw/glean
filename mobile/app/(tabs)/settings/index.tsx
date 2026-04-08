@@ -35,5 +35,9 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     alignItems: "center",
   },
-  buttonText: { color: theme.colors.card, fontWeight: "600", fontSize: 16 },
+  buttonText: {
+    color: theme.colors.card,
+    fontWeight: "600",
+    fontSize: theme.typography.subhead.fontSize,
+  },
 });

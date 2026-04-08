@@ -14,8 +14,8 @@ export default function TabsLayout() {
           borderTopWidth: 0.5,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
+          fontSize: theme.typography.sectionLabel.fontSize,
+          fontWeight: theme.typography.headline.fontWeight,
         },
       }}
     >
