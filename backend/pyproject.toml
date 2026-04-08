@@ -12,14 +12,15 @@ dependencies = [
     "boto3",
     "aws-xray-sdk>=2.15.0",
     "python-multipart>=0.0.24",
+    "httpx>=0.28.1",
     "langchain-anthropic>=1.4.0",
+    "beautifulsoup4>=4.14.3",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0",
     "pytest-cov>=7.0",
-    "httpx>=0.28",
     "pre-commit>=4.5",
     "ruff>=0.15",
     "black>=26.0",

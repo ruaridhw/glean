@@ -1,0 +1,12 @@
+{
+  "@type": "Recipe",
+  "name": "Spaghetti Carbonara",
+  "recipeIngredient": ["200g spaghetti", "3 eggs"],
+  "recipeInstructions": [
+    {"@type": "HowToStep", "text": "Boil spaghetti in salted water until al dente."},
+    {"@type": "HowToStep", "text": "Mix eggs with cheese. Combine with pasta off the heat."}
+  ],
+  "totalTime": "PT20M",
+  "prepTime": "PT5M",
+  "recipeYield": "2 servings"
+}

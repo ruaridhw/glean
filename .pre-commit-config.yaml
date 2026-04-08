@@ -10,6 +10,7 @@ repos:
     rev: 26.3.1
     hooks:
       - id: black
+        args: [--fast]
         files: ^backend/
   - repo: https://github.com/crate-ci/typos
     rev: v1.45.0

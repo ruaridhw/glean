@@ -1,0 +1,7 @@
+{
+  "results": [
+    {"id": "abc-123", "name": "Spaghetti Carbonara", "cuisine": "Italian", "difficulty": "Easy", "total_time": "PT20M", "flags": []},
+    {"id": "def-456", "name": "Chicken Tikka Masala", "cuisine": "Indian", "difficulty": "Intermediate", "total_time": "PT45M", "flags": ["Gluten-Free"]}
+  ],
+  "total": 2
+}

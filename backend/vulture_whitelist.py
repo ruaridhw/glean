@@ -16,3 +16,12 @@ name  # ParsedIngredient Pydantic field
 quantity  # ParsedIngredient Pydantic field
 unit  # ParsedIngredient Pydantic field
 unit_price  # ParsedIngredient Pydantic field
+# recipe_api/schemas.py Pydantic fields
+description  # RecipeApiIngredient field
+category  # RecipeApiIngredient field
+# recipes/schemas.py Pydantic fields
+api_ingredient_id  # RecipeIngredientOut field
+canonical_name  # RecipeIngredientOut field
+external_id  # RecipeOut / RecipeSearchResult field
+title  # RecipeOut / RecipeSearchResult field
+dietary_flags  # RecipeOut / RecipeSearchResult field
