@@ -35,18 +35,6 @@ import { drizzleDb } from "@/db/client";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { saveRecipe } from "@/db/recipes";
 
-function makeInsertChain(lastInsertRowId: number | null = null) {
-  const onConflictDoNothing = jest.fn().mockResolvedValue({});
-  const values = jest.fn().mockResolvedValue(
-    lastInsertRowId !== null ? { lastInsertRowId } : {},
-  );
-  (values as jest.Mock & { mockReturnValue: (v: unknown) => void }).mockReturnValue =
-    values.mockReturnValue.bind(values);
-  // For chains that need .onConflictDoNothing()
-  const valuesWithConflict = jest.fn().mockReturnValue({ onConflictDoNothing });
-  return { values, valuesWithConflict, onConflictDoNothing };
-}
-
 describe("saveRecipe", () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -79,7 +67,9 @@ describe("saveRecipe", () => {
       if (callCount === 1) {
         return { values: jest.fn().mockResolvedValue({ lastInsertRowId: 1 }) };
       }
-      return { values: jest.fn().mockReturnValue({ onConflictDoNothing: jest.fn().mockResolvedValue({}) }) };
+      return {
+        values: jest.fn().mockReturnValue({ onConflictDoNothing: jest.fn().mockResolvedValue({}) }),
+      };
     });
     (resolveOrCreateIngredient as jest.Mock).mockResolvedValue(1);
 
@@ -106,7 +96,9 @@ describe("saveRecipe", () => {
           }),
         };
       }
-      return { values: jest.fn().mockReturnValue({ onConflictDoNothing: jest.fn().mockResolvedValue({}) }) };
+      return {
+        values: jest.fn().mockReturnValue({ onConflictDoNothing: jest.fn().mockResolvedValue({}) }),
+      };
     });
     (resolveOrCreateIngredient as jest.Mock).mockResolvedValue(1);
 

@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import type { Recipe, RecipeIngredient } from "@/types";
 import { drizzleDb } from "./client";
-import { ingredientCategories, ingredients, recipeDietaryFlags, recipeIngredients, recipes } from "./schema";
 import { resolveOrCreateIngredient } from "./ingredients";
+import { ingredients, recipeDietaryFlags, recipeIngredients, recipes } from "./schema";
 
 function parseRecipe(row: typeof recipes.$inferSelect): Recipe {
   return {
