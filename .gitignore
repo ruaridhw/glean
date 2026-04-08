@@ -30,6 +30,9 @@ backend/.ruff_cache/
 *.swp
 *.swo
 
+# Git worktrees
+.worktrees/
+
 # macOS
 .DS_Store
 .DS_Store?
