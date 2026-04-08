@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: theme.colors.card,
-    fontWeight: "600",
+    fontWeight: theme.typography.headline.fontWeight,
     fontSize: theme.typography.subhead.fontSize,
   },
 });
