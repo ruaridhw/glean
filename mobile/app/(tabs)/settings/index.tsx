@@ -38,6 +38,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: theme.colors.card,
     fontWeight: theme.typography.headline.fontWeight,
-    fontSize: theme.typography.subhead.fontSize,
+    fontSize: 14,
   },
 });
