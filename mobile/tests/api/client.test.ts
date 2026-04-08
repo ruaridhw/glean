@@ -34,7 +34,7 @@ describe("apiClient", () => {
       await apiClient.get("/health");
 
       const [, init] = (global.fetch as jest.Mock).mock.calls[0]!;
-      expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer valid-token");
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer valid-token");
     });
 
     it("throws ApiError on non-2xx response", async () => {
