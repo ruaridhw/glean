@@ -1,4 +1,0 @@
-[default.extend-words]
-# AWS boto3 Textract uses American English spelling for its API method name.
-# "analyse_expense" is incorrect — the real method is "analyze_expense".
-analyze = "analyze"
