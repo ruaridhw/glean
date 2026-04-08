@@ -16,19 +16,21 @@ describe("authStorage", () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe("setTokens", () => {
-    it("stores all four tokens in SecureStore", async () => {
+    it("stores all five tokens in SecureStore", async () => {
       mockSetItem.mockResolvedValue(undefined);
       await authStorage.setTokens({
         access: "acc",
         refresh: "ref",
         id: "id",
         email: "user@example.com",
+        userSub: "sub-uuid",
       });
-      expect(mockSetItem).toHaveBeenCalledTimes(4);
+      expect(mockSetItem).toHaveBeenCalledTimes(5);
       expect(mockSetItem).toHaveBeenCalledWith("glean_access_token", "acc");
       expect(mockSetItem).toHaveBeenCalledWith("glean_refresh_token", "ref");
       expect(mockSetItem).toHaveBeenCalledWith("glean_id_token", "id");
       expect(mockSetItem).toHaveBeenCalledWith("glean_email", "user@example.com");
+      expect(mockSetItem).toHaveBeenCalledWith("glean_user_sub", "sub-uuid");
     });
   });
 
@@ -42,10 +44,10 @@ describe("authStorage", () => {
   });
 
   describe("clearTokens", () => {
-    it("deletes all four keys", async () => {
+    it("deletes all five keys", async () => {
       mockDeleteItem.mockResolvedValue(undefined);
       await authStorage.clearTokens();
-      expect(mockDeleteItem).toHaveBeenCalledTimes(4);
+      expect(mockDeleteItem).toHaveBeenCalledTimes(5);
     });
   });
 

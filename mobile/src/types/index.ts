@@ -73,8 +73,7 @@ export interface MealPlanEntry {
   planned_date: string; // ISO date string YYYY-MM-DD
   cooked_at?: string | null;
   servings: number;
-  // Joined field
-  recipe?: Recipe;
+  recipe_title: string; // Joined from recipes
 }
 
 export interface ShoppingListItem {
@@ -88,7 +87,7 @@ export interface ShoppingListItem {
 }
 
 export interface UserConfig {
-  id: number;
+  id: string; // Cognito user sub (UUID)
   purchase_tolerance: number;
   preferred_servings: number;
   meals_per_week: number;

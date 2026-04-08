@@ -97,7 +97,7 @@ export const shoppingListItems = sqliteTable("shopping_list_items", {
 });
 
 export const userConfig = sqliteTable("user_config", {
-  id: integer("id").primaryKey(),
+  id: text("id").primaryKey(), // Cognito user sub (UUID)
   purchase_tolerance: real("purchase_tolerance").notNull().default(0.5),
   preferred_servings: integer("preferred_servings").notNull().default(2),
   meals_per_week: integer("meals_per_week").notNull().default(5),

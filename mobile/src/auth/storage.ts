@@ -6,6 +6,7 @@ const KEYS = {
   refreshToken: "glean_refresh_token",
   idToken: "glean_id_token",
   email: "glean_email",
+  userSub: "glean_user_sub",
 };
 
 export const authStorage = {
@@ -18,16 +19,21 @@ export const authStorage = {
   async getEmail(): Promise<string | null> {
     return SecureStore.getItemAsync(KEYS.email);
   },
+  async getUserSub(): Promise<string | null> {
+    return SecureStore.getItemAsync(KEYS.userSub);
+  },
   async setTokens(params: {
     access: string;
     refresh: string;
     id: string;
     email: string;
+    userSub: string;
   }): Promise<void> {
     await SecureStore.setItemAsync(KEYS.accessToken, params.access);
     await SecureStore.setItemAsync(KEYS.refreshToken, params.refresh);
     await SecureStore.setItemAsync(KEYS.idToken, params.id);
     await SecureStore.setItemAsync(KEYS.email, params.email);
+    await SecureStore.setItemAsync(KEYS.userSub, params.userSub);
   },
   async clearTokens(): Promise<void> {
     await Promise.all(

@@ -26,11 +26,13 @@ export async function signIn(email: string, password: string): Promise<void> {
       new AuthenticationDetails({ Username: email, Password: password }),
       {
         onSuccess: async (session: CognitoUserSession) => {
+          const idPayload = session.getIdToken().decodePayload();
           await authStorage.setTokens({
             access: session.getAccessToken().getJwtToken(),
             refresh: session.getRefreshToken().getToken(),
             id: session.getIdToken().getJwtToken(),
             email,
+            userSub: idPayload.sub as string,
           });
           resolve();
         },
@@ -67,11 +69,13 @@ export async function refreshTokens(): Promise<boolean> {
           await authStorage.clearTokens();
           resolve(false);
         } else {
+          const idPayload = session.getIdToken().decodePayload();
           await authStorage.setTokens({
             access: session.getAccessToken().getJwtToken(),
             refresh: session.getRefreshToken().getToken(),
             id: session.getIdToken().getJwtToken(),
             email,
+            userSub: idPayload.sub as string,
           });
           resolve(true);
         }
