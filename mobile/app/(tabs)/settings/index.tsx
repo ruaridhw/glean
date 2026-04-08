@@ -3,6 +3,7 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { signOut } from "@/auth/cognito";
+import { theme } from "@/theme";
 
 export default function SettingsScreen() {
   async function handleSignOut() {
@@ -21,8 +22,18 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
-  heading: { fontSize: 24, fontWeight: "700", marginBottom: 32 },
-  button: { backgroundColor: "#e63946", borderRadius: 8, padding: 14, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  container: { flex: 1, padding: theme.spacing.lg, backgroundColor: theme.colors.background },
+  heading: {
+    fontSize: theme.typography.title2.fontSize,
+    fontWeight: theme.typography.title2.fontWeight,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xxl,
+  },
+  button: {
+    backgroundColor: theme.colors.warning,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    alignItems: "center",
+  },
+  buttonText: { color: theme.colors.card, fontWeight: "600", fontSize: 16 },
 });

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { authStorage } from "@/auth/storage";
 import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
+import { theme } from "@/theme";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -27,7 +28,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <Stack>
+    <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
     </Stack>

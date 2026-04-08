@@ -1,12 +1,24 @@
 import { StyleSheet, Text, View } from "react-native";
+import { theme } from "@/theme";
+
 export default function PantryScreen() {
   return (
-    <View style={s.c}>
-      <Text style={s.t}>Pantry</Text>
+    <View style={s.container}>
+      <Text style={s.title}>Pantry</Text>
     </View>
   );
 }
+
 const s = StyleSheet.create({
-  c: { flex: 1, alignItems: "center", justifyContent: "center" },
-  t: { fontSize: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: theme.typography.largeTitle.fontSize,
+    fontWeight: theme.typography.largeTitle.fontWeight,
+    color: theme.colors.text,
+  },
 });
