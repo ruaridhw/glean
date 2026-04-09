@@ -35,3 +35,6 @@ food_groups  # RecipeHistoryItem
 reason  # SuggestedRecipe
 missing_ingredients  # SuggestedRecipe
 get_suggestions  # FastAPI route handler
+get_field_value  # PydanticBaseSettingsSource abstract method implementation
+settings_customise_sources  # pydantic-settings hook, called by BaseSettings metaclass
+cls  # classmethod first argument (settings_customise_sources)

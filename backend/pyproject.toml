@@ -77,7 +77,7 @@ exclude_lines = [
 
 [tool.vulture]
 min_confidence = 60
-paths = ["src/"]
+paths = ["src/", "vulture_whitelist.py"]
 
 [tool.typos.default]
 locale = "en-gb"
