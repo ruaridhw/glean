@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
-import { checkOffByIngredientIds } from "@/db/shopping";
+import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
 import { normalizeUnit } from "@/normalization/units";
 
 interface ReviewItem {
@@ -26,7 +26,7 @@ interface ReviewItem {
 }
 
 export default function ReviewScreen() {
-  const params = useLocalSearchParams<{ items: string }>();
+  const params = useLocalSearchParams<{ items: string; returnTo?: string }>();
   const [items, setItems] = useState<ReviewItem[]>(JSON.parse(params.items ?? "[]"));
   const [saving, setSaving] = useState(false);
 
@@ -60,7 +60,10 @@ export default function ReviewScreen() {
         resolvedIds.push(ingredientId);
       }
       await checkOffByIngredientIds(resolvedIds);
-      router.replace("/(tabs)/pantry");
+      if (params.returnTo === "shop") {
+        await completeCheckout();
+      }
+      router.replace(params.returnTo === "shop" ? "/(tabs)/shop" : "/(tabs)/pantry");
     } catch {
       Alert.alert("Error", "Failed to save. Please try again.");
     } finally {

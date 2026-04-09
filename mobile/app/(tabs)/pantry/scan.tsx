@@ -1,12 +1,13 @@
 // mobile/app/(tabs)/pantry/scan.tsx
 
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { apiClient } from "@/api/client";
 
 export default function ScanScreen() {
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
   const cameraRef = useRef<CameraView>(null);
@@ -37,7 +38,7 @@ export default function ScanScreen() {
       const result = await apiClient.postForm<{ items: unknown[] }>("/receipts/scan", form);
       router.push({
         pathname: "/(tabs)/pantry/review",
-        params: { items: JSON.stringify(result.items) },
+        params: { items: JSON.stringify(result.items), ...(returnTo ? { returnTo } : {}) },
       });
     } catch {
       Alert.alert("Scan failed", "Could not process receipt. Try again or add items manually.");
