@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Glean GitHub Actions OIDC provider and deployment IAM roles
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: ruaridhw
+  GitHubRepo:
+    Type: String
+    Default: glean
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  GleanDeployPolicyProd:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: GleanDeployPolicyProd
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: cloudformation:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:CreateBucket
+            Resource:
+              - arn:aws:s3:::glean-sam-artifacts-prod
+              - arn:aws:s3:::glean-sam-artifacts-prod/*
+          - Effect: Allow
+            Action: lambda:*
+            Resource: '*'
+          - Effect: Allow
+            Action: apigateway:*
+            Resource: '*'
+          - Effect: Allow
+            Action: cognito-idp:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:PassRole
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - iam:TagRole
+              - iam:UntagRole
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - logs:*
+              - cloudwatch:*
+              - xray:*
+              - textract:*
+            Resource: '*'
+          - Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Sub 'arn:aws:secretsmanager:eu-west-2:${AWS::AccountId}:secret:glean/prod/*'
+
+  GleanDeployRoleProd:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GleanDeployRoleProd
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  !Sub 'repo:${GitHubOrg}/${GitHubRepo}:environment:prod'
+      ManagedPolicyArns:
+        - !Ref GleanDeployPolicyProd
+
+  GleanDeployPolicyDev:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: GleanDeployPolicyDev
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: cloudformation:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:CreateBucket
+            Resource:
+              - arn:aws:s3:::glean-sam-artifacts-dev
+              - arn:aws:s3:::glean-sam-artifacts-dev/*
+          - Effect: Allow
+            Action: lambda:*
+            Resource: '*'
+          - Effect: Allow
+            Action: apigateway:*
+            Resource: '*'
+          - Effect: Allow
+            Action: cognito-idp:*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:PassRole
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - iam:TagRole
+              - iam:UntagRole
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - logs:*
+              - cloudwatch:*
+              - xray:*
+              - textract:*
+            Resource: '*'
+          - Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Sub 'arn:aws:secretsmanager:eu-west-2:${AWS::AccountId}:secret:glean/dev/*'
+
+  GleanDeployRoleDev:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GleanDeployRoleDev
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
+      ManagedPolicyArns:
+        - !Ref GleanDeployPolicyDev
+
+Outputs:
+  GleanDeployRoleProdArn:
+    Value: !GetAtt GleanDeployRoleProd.Arn
+  GleanDeployRoleDevArn:
+    Value: !GetAtt GleanDeployRoleDev.Arn
+  OidcProviderArn:
+    Value: !GetAtt GitHubOidcProvider.Arn
