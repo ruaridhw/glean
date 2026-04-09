@@ -4,9 +4,9 @@ set -euo pipefail
 REGION="eu-west-2"
 STACK_NAME="glean-bootstrap"
 
-echo "==> Creating SAM artifact S3 buckets..."
-aws s3 mb s3://glean-sam-artifacts-prod --region "$REGION" 2>/dev/null || echo "  glean-sam-artifacts-prod already exists"
-aws s3 mb s3://glean-sam-artifacts-dev --region "$REGION" 2>/dev/null || echo "  glean-sam-artifacts-dev already exists"
+echo "==> Creating SAM artefact S3 buckets..."
+aws s3 mb s3://glean-sam-artefacts-prod --region "$REGION" 2>/dev/null || echo "  glean-sam-artefacts-prod already exists"
+aws s3 mb s3://glean-sam-artefacts-dev --region "$REGION" 2>/dev/null || echo "  glean-sam-artefacts-dev already exists"
 
 echo "==> Deploying OIDC provider and IAM roles..."
 # Note: if the OIDC provider already exists in your account, this will fail.

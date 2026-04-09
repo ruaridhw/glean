@@ -39,8 +39,8 @@ Resources:
               - s3:GetBucketLocation
               - s3:CreateBucket
             Resource:
-              - arn:aws:s3:::glean-sam-artifacts-prod
-              - arn:aws:s3:::glean-sam-artifacts-prod/*
+              - arn:aws:s3:::glean-sam-artefacts-prod
+              - arn:aws:s3:::glean-sam-artefacts-prod/*
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
@@ -116,8 +116,8 @@ Resources:
               - s3:GetBucketLocation
               - s3:CreateBucket
             Resource:
-              - arn:aws:s3:::glean-sam-artifacts-dev
-              - arn:aws:s3:::glean-sam-artifacts-dev/*
+              - arn:aws:s3:::glean-sam-artefacts-dev
+              - arn:aws:s3:::glean-sam-artefacts-dev/*
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
