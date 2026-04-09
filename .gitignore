@@ -33,6 +33,9 @@ backend/.ruff_cache/
 # Git worktrees
 .worktrees/
 
+# Local infra secrets
+infra/.bootstrap-outputs
+
 # macOS
 .DS_Store
 .DS_Store?
