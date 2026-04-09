@@ -1,0 +1,67 @@
+name: Mobile Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK on EAS
+        id: eas-build
+        run: |
+          BUILD_OUTPUT=$(eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json 2>/dev/null)
+          echo "build_url=$(echo "$BUILD_OUTPUT" | jq -r '.artifacts.buildUrl')" >> "$GITHUB_OUTPUT"
+          echo "build_id=$(echo "$BUILD_OUTPUT" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        run: |
+          curl -L -o release.apk "${{ steps.eas-build.outputs.build_url }}"
+
+      - name: Get app version
+        id: app-version
+        run: |
+          VERSION=$(node -e "const c = require('./app.json'); console.log(c.expo.version)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.app-version.outputs.version }}" \
+            release.apk \
+            --title "v${{ steps.app-version.outputs.version }}" \
+            --notes "Android APK built via EAS (build ID: ${{ steps.eas-build.outputs.build_id }})" \
+            --repo "${{ github.repository }}"
