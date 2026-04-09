@@ -84,3 +84,33 @@ export async function checkOffByIngredientIds(ingredientIds: number[]): Promise<
     .set({ is_checked: true })
     .where(inArray(shoppingListItems.ingredient_id, ingredientIds));
 }
+
+export async function addManualShoppingItem(params: {
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  ingredient_id?: number | null;
+}): Promise<void> {
+  await drizzleDb.insert(shoppingListItems).values({
+    ingredient_id: params.ingredient_id ?? null,
+    name: params.name,
+    quantity: params.quantity ?? null,
+    unit: params.unit ?? null,
+    source: "manual",
+  });
+}
+
+export async function toggleShoppingItem(id: number, checked: boolean): Promise<void> {
+  await drizzleDb
+    .update(shoppingListItems)
+    .set({ is_checked: checked })
+    .where(eq(shoppingListItems.id, id));
+}
+
+export async function deleteShoppingItem(id: number): Promise<void> {
+  await drizzleDb.delete(shoppingListItems).where(eq(shoppingListItems.id, id));
+}
+
+export async function completeCheckout(): Promise<void> {
+  await drizzleDb.delete(shoppingListItems).where(eq(shoppingListItems.is_checked, true));
+}
