@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from glean.dependencies import verify_cognito_token
 from glean.dev.router import router as dev_router
 from glean.health.router import router as health_router
 from glean.observability import logger
@@ -42,5 +44,9 @@ app.include_router(dev_router)
 app.include_router(receipts_router)
 app.include_router(recipes_router)
 app.include_router(suggestions_router)
+
+if os.environ.get("ENVIRONMENT") == "dev":
+    app.dependency_overrides[verify_cognito_token] = lambda: "local-dev-user"
+    logger.warning("Auth bypassed — ENVIRONMENT=dev")
 
 handler = Mangum(app)
