@@ -1,0 +1,15 @@
+version = 0.1
+
+[prod.deploy.parameters]
+stack_name = "glean-api-prod"
+s3_bucket = "glean-sam-artefacts-prod"
+region = "eu-west-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod"
+
+[dev.deploy.parameters]
+stack_name = "glean-api-dev"
+s3_bucket = "glean-sam-artefacts-dev"
+region = "eu-west-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=dev"
