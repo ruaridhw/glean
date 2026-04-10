@@ -3,7 +3,7 @@ mobile/node_modules/
 mobile/.expo/
 mobile/dist/
 mobile/.env
-mobile/drizzle/
+# mobile/drizzle/ — tracked: migrations are required at runtime
 
 # Backend
 backend/.venv/
