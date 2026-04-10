@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
@@ -139,6 +140,37 @@ export default function PlanScreen() {
   const emptySlots = Math.max(0, mealsPerWeek - entries.length);
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+
+  if (entries.length === 0) {
+    return (
+      <View style={s.container}>
+        <View style={s.header}>
+          <Text style={s.heading}>This Week</Text>
+          <Pressable
+            style={[s.generateBtn, generating && s.generateBtnDisabled]}
+            onPress={generateWeek}
+            disabled={generating}
+          >
+            {generating ? (
+              <ActivityIndicator size="small" color={theme.colors.card} />
+            ) : (
+              <Text style={s.generateBtnText}>Generate week</Text>
+            )}
+          </Pressable>
+        </View>
+        <EmptyState
+          testID="plan.emptyState"
+          icon="calendar-outline"
+          title="No meals planned this week"
+          message="Add recipes to your plan or let AI suggest a week."
+          actions={[
+            { label: "Browse recipes", onPress: () => router.push("/(tabs)/meals" as never) },
+            { label: "Generate plan", onPress: generateWeek },
+          ]}
+        />
+      </View>
+    );
+  }
 
   type ListItem = MealPlanEntry | { id: number; isEmpty: true };
 

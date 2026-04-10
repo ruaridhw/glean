@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import { theme } from "@/theme";
 import type { PantryItem } from "@/types";
@@ -66,6 +67,24 @@ export default function PantryScreen() {
   }, {});
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.heading} testID="pantry.heading">Pantry</Text>
+        <EmptyState
+          testID="pantry.emptyState"
+          icon="basket-outline"
+          title="Your pantry is empty"
+          message="Scan a receipt or describe what you have to get started."
+          actions={[
+            { label: "Scan receipt", onPress: () => router.push("/(tabs)/pantry/scan") },
+            { label: "Describe items", onPress: () => router.push("/(tabs)/pantry/describe") },
+          ]}
+        />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
