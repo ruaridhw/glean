@@ -52,6 +52,7 @@ export default function PlanScreen() {
       }
       await addMealPlanEntry(recipeId);
       await addShoppingGapsForRecipe(recipeId);
+      showSuccess("Meal planned");
       await load();
     },
     [mealsPerWeek, load],

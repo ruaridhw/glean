@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
+import { showSuccess } from "@/utils/toast";
 import { upsertPantryItem } from "@/db/pantry";
 
 const UNITS = ["g", "ml", "units", "kg", "l"];
@@ -27,6 +28,7 @@ export default function ManualEntryScreen() {
         canonical_name: name.trim().toLowerCase(),
       });
       await upsertPantryItem({ ingredient_id: ingredientId, quantity: qty, unit });
+      showSuccess("Added to pantry");
       router.replace("/(tabs)/pantry");
     } catch {
       Alert.alert("Failed to save item.");

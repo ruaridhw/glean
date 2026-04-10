@@ -2,6 +2,7 @@
 
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import { showSuccess } from "@/utils/toast";
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +65,7 @@ export default function ReviewScreen() {
       if (params.returnTo === "shop") {
         await completeCheckout();
       }
+      showSuccess(`Added ${items.length} item${items.length !== 1 ? "s" : ""} to pantry`);
       router.replace(params.returnTo === "shop" ? "/(tabs)/shop" : "/(tabs)/pantry");
     } catch {
       Alert.alert("Error", "Failed to save. Please try again.");
