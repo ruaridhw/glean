@@ -2,6 +2,7 @@
 
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
+import { showSuccess } from "@/utils/toast";
 import {
   ActivityIndicator,
   Alert,
@@ -90,6 +91,7 @@ export default function ShopScreen() {
                   text: "Clear",
                   onPress: async () => {
                     await completeCheckout();
+                    showSuccess("Checkout complete");
                     await load();
                   },
                 },
