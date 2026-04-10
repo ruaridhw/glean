@@ -41,6 +41,15 @@ export default function TabsLayout() {
         name="settings/index"
         options={{ title: "Settings", tabBarTestID: "tabs.settings", tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text> }}
       />
+      {/* Sub-screens — hide from tab bar */}
+      <Tabs.Screen name="pantry/add" options={{ href: null }} />
+      <Tabs.Screen name="pantry/describe" options={{ href: null }} />
+      <Tabs.Screen name="pantry/manual-entry" options={{ href: null }} />
+      <Tabs.Screen name="pantry/review" options={{ href: null }} />
+      <Tabs.Screen name="pantry/scan" options={{ href: null }} />
+      <Tabs.Screen name="pantry/scan-progress" options={{ href: null }} />
+      <Tabs.Screen name="meals/search" options={{ href: null }} />
+      <Tabs.Screen name="meals/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
