@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import boto3
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages.content import create_image_block
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -97,13 +98,14 @@ def _scan_via_vision(image_bytes: bytes) -> ScanResponse:
         settings.receipt_vision_model, api_key=settings.openrouter_api_key
     )
     b64 = base64.b64encode(image_bytes).decode()
+    image_block = create_image_block(base64=b64, mime_type="image/jpeg")
     result = vision_model.invoke(
         [
             SystemMessage(content=VISION_SYSTEM_PROMPT),
             HumanMessage(
                 content=[
                     {"type": "text", "text": "Extract and normalise all items from this receipt."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    image_block,
                 ]
             ),
         ],

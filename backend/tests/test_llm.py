@@ -17,22 +17,24 @@ class TestCreateChatModel:
             assert model is mock_cls.return_value
 
 
-def _mock_models_response(model_ids: list[str]) -> MagicMock:
-    resp = MagicMock()
-    resp.json.return_value = {"data": [{"id": mid} for mid in model_ids]}
-    return resp
+def _mock_model_objects(model_ids: list[str]) -> list[MagicMock]:
+    return [MagicMock(id=mid) for mid in model_ids]
 
 
 class TestValidateModel:
     def test_valid_model_passes(self) -> None:
-        resp = _mock_models_response(["anthropic/claude-sonnet-4.6", "google/gemma-4-26b-a4b-it:free"])
-        with patch("glean.llm.httpx.get", return_value=resp):
-            validate_model("anthropic/claude-sonnet-4.6")  # should not raise
+        mock_client = MagicMock()
+        mock_client.models.list.return_value.data = _mock_model_objects(
+            ["anthropic/claude-sonnet-4.6", "google/gemma-4-26b-a4b-it:free"]
+        )
+        with patch("glean.llm.OpenRouter", return_value=mock_client):
+            validate_model("anthropic/claude-sonnet-4.6", api_key="test-key")
 
     def test_unknown_model_raises(self) -> None:
-        resp = _mock_models_response(["anthropic/claude-sonnet-4.6"])
+        mock_client = MagicMock()
+        mock_client.models.list.return_value.data = _mock_model_objects(["anthropic/claude-sonnet-4.6"])
         with (
-            patch("glean.llm.httpx.get", return_value=resp),
+            patch("glean.llm.OpenRouter", return_value=mock_client),
             pytest.raises(ValueError, match="Unknown OpenRouter model"),
         ):
-            validate_model("nonexistent/model-99")
+            validate_model("nonexistent/model-99", api_key="test-key")

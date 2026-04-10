@@ -3,15 +3,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-import httpx
 from langchain_openrouter import ChatOpenRouter
+from openrouter import OpenRouter
 
 from glean.config import settings
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-
-_OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 
 class Feature(StrEnum):
@@ -20,11 +18,11 @@ class Feature(StrEnum):
     RECIPE_IMPORT = "recipe-import"
 
 
-def validate_model(model_id: str) -> None:
+def validate_model(model_id: str, *, api_key: str | None = None) -> None:
     """Check that *model_id* exists in the OpenRouter catalogue. Raises ValueError if not."""
-    resp = httpx.get(_OPENROUTER_MODELS_URL, timeout=10.0)
-    resp.raise_for_status()
-    known_ids = {m["id"] for m in resp.json()["data"]}
+    client = OpenRouter(api_key=api_key or settings.openrouter_api_key)
+    resp = client.models.list()
+    known_ids = {m.id for m in resp.data}
     if model_id not in known_ids:
         raise ValueError(
             f"Unknown OpenRouter model: {model_id!r}. "
