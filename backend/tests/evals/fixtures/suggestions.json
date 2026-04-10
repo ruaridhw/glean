@@ -1,0 +1,92 @@
+[
+  {
+    "input": {
+      "pantry": [
+        {"id": 1, "name": "chicken breast", "quantity": 400, "unit": "g", "food_group": "protein", "urgency_score": 85.0},
+        {"id": 2, "name": "broccoli", "quantity": 300, "unit": "g", "food_group": "veg", "urgency_score": 72.0},
+        {"id": 3, "name": "basmati rice", "quantity": 800, "unit": "g", "food_group": "carb", "urgency_score": 10.0}
+      ],
+      "recipe_history": [
+        {"recipe_id": 1, "title": "Chicken Stir Fry", "last_cooked_at": "2026-03-17T00:00:00Z", "food_groups": ["protein", "veg"]},
+        {"recipe_id": 2, "title": "Chicken Curry", "last_cooked_at": "2026-04-01T00:00:00Z", "food_groups": ["protein", "carb"]},
+        {"recipe_id": 3, "title": "Lentil Soup", "last_cooked_at": null, "food_groups": ["protein", "carb"]}
+      ],
+      "food_group_coverage": {"protein": 1, "carb": 2, "veg": 0},
+      "purchase_tolerance": 0.3,
+      "meals_per_week": 3,
+      "dietary_flags": [],
+      "max_active_time_mins": null
+    },
+    "expected": {
+      "suggestions": [
+        {
+          "recipe_id": 1,
+          "title": "Chicken Stir Fry",
+          "reason": "Uses chicken breast (urgency 85, expiring soon) and broccoli (urgency 72). Covers protein and veg — veg has 0 coverage this week. Not cooked since March 17.",
+          "missing_ingredients": ["soy sauce"]
+        },
+        {
+          "recipe_id": 3,
+          "title": "Lentil Soup",
+          "reason": "Never cooked before. Covers protein and carb food groups. No missing ingredients needed.",
+          "missing_ingredients": []
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "pantry": [
+        {"id": 4, "name": "salmon fillet", "quantity": 260, "unit": "g", "food_group": "protein", "urgency_score": 95.0},
+        {"id": 5, "name": "lemon", "quantity": 2, "unit": "units", "food_group": "fruit", "urgency_score": 60.0},
+        {"id": 6, "name": "asparagus", "quantity": 200, "unit": "g", "food_group": "veg", "urgency_score": 88.0}
+      ],
+      "recipe_history": [
+        {"recipe_id": 10, "title": "Lemon Salmon", "last_cooked_at": "2026-03-01T00:00:00Z", "food_groups": ["protein", "veg"]},
+        {"recipe_id": 11, "title": "Pasta Carbonara", "last_cooked_at": "2026-04-05T00:00:00Z", "food_groups": ["protein", "carb"]}
+      ],
+      "food_group_coverage": {"protein": 0, "carb": 1, "veg": 0},
+      "purchase_tolerance": 0.0,
+      "meals_per_week": 2,
+      "dietary_flags": ["pescatarian"],
+      "max_active_time_mins": 30
+    },
+    "expected": {
+      "suggestions": [
+        {
+          "recipe_id": 10,
+          "title": "Lemon Salmon",
+          "reason": "Uses salmon (urgency 95) and lemon (urgency 60). Covers protein and veg, both at 0 this week. Pescatarian-friendly.",
+          "missing_ingredients": []
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "pantry": [
+        {"id": 7, "name": "tofu", "quantity": 400, "unit": "g", "food_group": "protein", "urgency_score": 45.0},
+        {"id": 8, "name": "spinach", "quantity": 150, "unit": "g", "food_group": "veg", "urgency_score": 92.0}
+      ],
+      "recipe_history": [
+        {"recipe_id": 20, "title": "Tofu Stir Fry", "last_cooked_at": "2026-04-07T00:00:00Z", "food_groups": ["protein", "veg"]},
+        {"recipe_id": 21, "title": "Steak and Chips", "last_cooked_at": null, "food_groups": ["protein", "carb"]}
+      ],
+      "food_group_coverage": {"protein": 3, "carb": 2, "veg": 1},
+      "purchase_tolerance": 0.5,
+      "meals_per_week": 2,
+      "dietary_flags": ["vegan"],
+      "max_active_time_mins": null
+    },
+    "expected": {
+      "suggestions": [
+        {
+          "recipe_id": 20,
+          "title": "Tofu Stir Fry",
+          "reason": "Uses spinach (urgency 92, expiring soon) and tofu. Vegan-friendly. Cooked recently but spinach urgency overrides.",
+          "missing_ingredients": []
+        }
+      ]
+    }
+  }
+]

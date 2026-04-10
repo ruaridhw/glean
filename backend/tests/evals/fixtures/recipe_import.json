@@ -1,0 +1,60 @@
+[
+  {
+    "input": {
+      "html": "<html><head><title>Classic Spaghetti Carbonara</title></head><body><h1>Classic Spaghetti Carbonara</h1><p>A traditional Italian pasta dish.</p><h2>Ingredients</h2><ul><li>400g spaghetti</li><li>200g guanciale or pancetta</li><li>4 large egg yolks</li><li>100g pecorino romano</li><li>Freshly ground black pepper</li></ul><h2>Method</h2><ol><li>Cook the spaghetti in salted boiling water until al dente.</li><li>Meanwhile, cut the guanciale into small strips and fry until crispy.</li><li>Beat the egg yolks with grated pecorino and black pepper.</li><li>Drain pasta, reserving some cooking water. Toss with guanciale off heat.</li><li>Add egg mixture, toss quickly. Add cooking water if needed for creaminess.</li></ol><p>Serves 4. Total time: 25 minutes.</p></body></html>",
+      "url": "https://example.com/carbonara"
+    },
+    "expected": {
+      "title": "Classic Spaghetti Carbonara",
+      "source_url": "https://example.com/carbonara",
+      "ingredients": ["400g spaghetti", "200g guanciale or pancetta", "4 large egg yolks", "100g pecorino romano", "Freshly ground black pepper"],
+      "instructions": [
+        "Cook the spaghetti in salted boiling water until al dente.",
+        "Meanwhile, cut the guanciale into small strips and fry until crispy.",
+        "Beat the egg yolks with grated pecorino and black pepper.",
+        "Drain pasta, reserving some cooking water. Toss with guanciale off heat.",
+        "Add egg mixture, toss quickly. Add cooking water if needed for creaminess."
+      ],
+      "total_time": "PT25M"
+    }
+  },
+  {
+    "input": {
+      "html": "<html><body><h1>Simple Tomato Soup</h1><p>Prep: 10 mins | Cook: 30 mins</p><h3>What you need</h3><p>2 tins chopped tomatoes, 1 onion, 2 cloves garlic, 500ml vegetable stock, 1 tbsp olive oil, salt and pepper</p><h3>How to make it</h3><p>1. Dice the onion and garlic. Heat oil in a large saucepan. 2. Fry onion until soft, add garlic for 1 minute. 3. Add tomatoes and stock, bring to a boil. 4. Simmer for 25 minutes. 5. Blend until smooth and season to taste.</p><p>Makes 4 bowls.</p></body></html>",
+      "url": "https://example.com/tomato-soup"
+    },
+    "expected": {
+      "title": "Simple Tomato Soup",
+      "source_url": "https://example.com/tomato-soup",
+      "ingredients": ["2 tins chopped tomatoes", "1 onion", "2 cloves garlic", "500ml vegetable stock", "1 tbsp olive oil", "salt and pepper"],
+      "instructions": [
+        "Dice the onion and garlic. Heat oil in a large saucepan.",
+        "Fry onion until soft, add garlic for 1 minute.",
+        "Add tomatoes and stock, bring to a boil.",
+        "Simmer for 25 minutes.",
+        "Blend until smooth and season to taste."
+      ],
+      "total_time": "PT40M"
+    }
+  },
+  {
+    "input": {
+      "html": "<html><body><article><h1>Vegan Thai Green Curry</h1><div class='meta'>Difficulty: Easy | Time: 35 minutes | Serves 4</div><div class='ingredients'><h2>Ingredients</h2><ul><li>1 tin coconut milk</li><li>2 tbsp green curry paste</li><li>200g tofu, cubed</li><li>1 red pepper, sliced</li><li>100g baby sweetcorn</li><li>Handful of Thai basil</li><li>1 tbsp soy sauce</li><li>Jasmine rice to serve</li></ul></div><div class='method'><h2>Method</h2><ol><li>Heat a splash of coconut milk in a wok until bubbling.</li><li>Fry the curry paste for 2 minutes until fragrant.</li><li>Add remaining coconut milk, tofu, pepper and sweetcorn.</li><li>Simmer for 15 minutes until vegetables are tender.</li><li>Stir in soy sauce and Thai basil. Serve over jasmine rice.</li></ol></div></article></body></html>",
+      "url": "https://example.com/thai-green-curry"
+    },
+    "expected": {
+      "title": "Vegan Thai Green Curry",
+      "source_url": "https://example.com/thai-green-curry",
+      "ingredients": ["1 tin coconut milk", "2 tbsp green curry paste", "200g tofu, cubed", "1 red pepper, sliced", "100g baby sweetcorn", "Handful of Thai basil", "1 tbsp soy sauce", "Jasmine rice to serve"],
+      "instructions": [
+        "Heat a splash of coconut milk in a wok until bubbling.",
+        "Fry the curry paste for 2 minutes until fragrant.",
+        "Add remaining coconut milk, tofu, pepper and sweetcorn.",
+        "Simmer for 15 minutes until vegetables are tender.",
+        "Stir in soy sauce and Thai basil. Serve over jasmine rice."
+      ],
+      "dietary_flags": ["vegan"],
+      "total_time": "PT35M"
+    }
+  }
+]

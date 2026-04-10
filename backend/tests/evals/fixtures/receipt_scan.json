@@ -1,0 +1,72 @@
+[
+  {
+    "input": {
+      "line_items": [
+        {"name": "BNLS CHKN BRST 500G", "quantity_raw": "1", "price": "3.50"},
+        {"name": "WHL MILK 2L", "quantity_raw": "2", "price": "1.35"}
+      ]
+    },
+    "expected": {
+      "items": [
+        {"name": "chicken breast", "quantity": 500, "unit": "g", "unit_price": 0.007, "confidence": 0.92},
+        {"name": "whole milk", "quantity": 2000, "unit": "ml", "unit_price": 0.000675, "confidence": 0.97}
+      ]
+    }
+  },
+  {
+    "input": {
+      "line_items": [
+        {"name": "ORG BANANAS x5", "quantity_raw": "5", "price": "1.20"},
+        {"name": "BROCCOLI 350G", "quantity_raw": "1", "price": "0.89"}
+      ]
+    },
+    "expected": {
+      "items": [
+        {"name": "banana", "quantity": 5, "unit": "units", "unit_price": 0.24, "confidence": 0.95},
+        {"name": "broccoli", "quantity": 350, "unit": "g", "unit_price": 0.00254, "confidence": 0.93}
+      ]
+    }
+  },
+  {
+    "input": {
+      "line_items": [
+        {"name": "FREE RANGE EGGS x12", "quantity_raw": "1", "price": "3.20"},
+        {"name": "CHEDDAR CHEESE 400G", "quantity_raw": "1", "price": "2.75"},
+        {"name": "OLIVE OIL 500ML", "quantity_raw": "1", "price": "4.50"}
+      ]
+    },
+    "expected": {
+      "items": [
+        {"name": "free range eggs", "quantity": 12, "unit": "units", "unit_price": 0.2667, "confidence": 0.94},
+        {"name": "cheddar cheese", "quantity": 400, "unit": "g", "unit_price": 0.006875, "confidence": 0.95},
+        {"name": "olive oil", "quantity": 500, "unit": "ml", "unit_price": 0.009, "confidence": 0.96}
+      ]
+    }
+  },
+  {
+    "input": {
+      "line_items": [
+        {"name": "BASMATI RICE 1KG", "quantity_raw": "1", "price": "1.89"},
+        {"name": "TINNED TOMS 4PK", "quantity_raw": "1", "price": "2.00"}
+      ]
+    },
+    "expected": {
+      "items": [
+        {"name": "basmati rice", "quantity": 1000, "unit": "g", "unit_price": 0.00189, "confidence": 0.96},
+        {"name": "tinned tomatoes", "quantity": 4, "unit": "units", "unit_price": 0.50, "confidence": 0.85}
+      ]
+    }
+  },
+  {
+    "input": {
+      "line_items": [
+        {"name": "SALMON FILLETS 2PK 260G", "quantity_raw": "1", "price": "5.00"}
+      ]
+    },
+    "expected": {
+      "items": [
+        {"name": "salmon fillet", "quantity": 260, "unit": "g", "unit_price": 0.01923, "confidence": 0.90}
+      ]
+    }
+  }
+]
