@@ -3,7 +3,6 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -13,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import { theme } from "@/theme";
@@ -66,11 +66,17 @@ export default function PantryScreen() {
     return acc;
   }, {});
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading)
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Text testID="pantry.heading" style={styles.heading}>Pantry</Text>
+        <PantrySkeleton />
+      </SafeAreaView>
+    );
 
   if (items.length === 0) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <Text style={styles.heading} testID="pantry.heading">Pantry</Text>
         <EmptyState
           testID="pantry.emptyState"
@@ -82,7 +88,10 @@ export default function PantryScreen() {
             { label: "Describe items", onPress: () => router.push("/(tabs)/pantry/describe") },
           ]}
         />
-      </View>
+        <Pressable style={styles.fab} testID="pantry.fab" onPress={() => router.push("/(tabs)/pantry/add")}>
+          <Text style={styles.fabText}>＋</Text>
+        </Pressable>
+      </SafeAreaView>
     );
   }
 
