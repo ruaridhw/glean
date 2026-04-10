@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except ImportError:
+    ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
+
+
+def create_chat_model(provider: str, model: str, *, api_key: str) -> BaseChatModel:
+    match provider:
+        case "anthropic":
+            return ChatAnthropic(model=model, api_key=api_key)
+        case "google":
+            if ChatGoogleGenerativeAI is None:
+                raise ImportError("langchain-google-genai is required for the google provider")
+            return ChatGoogleGenerativeAI(model=model, api_key=api_key)
+        case _:
+            raise ValueError(f"Unknown LLM provider: {provider}")
