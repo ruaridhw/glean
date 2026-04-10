@@ -12,43 +12,32 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
+import { useRecipeSearch, useImportRecipe } from "@/api/hooks";
+import { ErrorState } from "@/components/ui/ErrorState";
 import type { SaveRecipeParams } from "@/db/recipes";
 import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
 import { theme } from "@/theme";
+import { showSuccess } from "@/utils/toast";
 
 /** API response shape for recipe detail — matches SaveRecipeParams. */
 type RecipeDetailResponse = SaveRecipeParams;
 
-interface SearchResult {
-  external_id: string;
-  title: string;
-  cuisine: string | null;
-  difficulty: string | null;
-  total_time_mins: number | null;
-  dietary_flags: string[];
-}
-
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [importUrl, setImportUrl] = useState("");
 
-  async function search() {
+  const { data, isLoading, isError, refetch } = useRecipeSearch(submittedQuery);
+  const results = data?.results ?? [];
+
+  const importMutation = useImportRecipe();
+
+  function handleSearch() {
     if (!query.trim()) return;
-    setLoading(true);
-    try {
-      const data = await apiClient.get<{ results: SearchResult[] }>(
-        `/recipes/search?q=${encodeURIComponent(query)}`,
-      );
-      setResults(data.results);
-    } catch {
-      Alert.alert("Search failed");
-    } finally {
-      setLoading(false);
-    }
+    setSubmittedQuery(query.trim());
   }
 
-  async function addRecipe(result: SearchResult) {
+  async function addRecipe(result: { external_id: string }) {
     const cached = await getRecipeByExternalId(result.external_id);
     if (cached) {
       router.push(`/(tabs)/meals/${cached.id}`);
@@ -57,9 +46,22 @@ export default function SearchScreen() {
     try {
       const detail = await apiClient.get<RecipeDetailResponse>(`/recipes/${result.external_id}`);
       const id = await saveRecipe({ ...detail, ingredients: detail.ingredients ?? [] });
+      showSuccess("Recipe saved");
       router.push(`/(tabs)/meals/${id}`);
     } catch {
       Alert.alert("Failed to fetch recipe details.");
+    }
+  }
+
+  async function importFromUrl() {
+    if (!importUrl.trim()) return;
+    try {
+      const detail = await importMutation.mutateAsync(importUrl.trim());
+      const id = await saveRecipe({ ...detail, ingredients: detail.ingredients ?? [] });
+      showSuccess("Recipe imported");
+      router.push(`/(tabs)/meals/${id}`);
+    } catch {
+      Alert.alert("Import failed", "Could not parse the recipe. Try a different URL.");
     }
   }
 
@@ -74,16 +76,22 @@ export default function SearchScreen() {
           onChangeText={setQuery}
           placeholder="Search recipes…"
           returnKeyType="search"
-          onSubmitEditing={search}
+          onSubmitEditing={handleSearch}
           placeholderTextColor={theme.colors.textDisabled}
         />
-        <Pressable style={s.searchBtn} onPress={search}>
+        <Pressable style={s.searchBtn} onPress={handleSearch}>
           <Text style={s.searchBtnText}>Go</Text>
         </Pressable>
       </View>
 
-      {loading ? (
+      {isLoading ? (
         <ActivityIndicator style={{ marginTop: theme.spacing.xl }} color={theme.colors.primary} />
+      ) : isError ? (
+        <ErrorState
+          testID="search.error"
+          message="Search failed. Check your connection and try again."
+          onRetry={refetch}
+        />
       ) : (
         <FlatList
           data={results}
@@ -104,6 +112,26 @@ export default function SearchScreen() {
           )}
         />
       )}
+
+      <View style={s.importSection}>
+        <Text style={s.importLabel}>Import from URL</Text>
+        <TextInput
+          style={s.importInput}
+          value={importUrl}
+          onChangeText={setImportUrl}
+          placeholder="https://..."
+          autoCapitalize="none"
+          keyboardType="url"
+          placeholderTextColor={theme.colors.textDisabled}
+        />
+        <Pressable style={s.importBtn} onPress={importFromUrl} disabled={importMutation.isPending}>
+          {importMutation.isPending ? (
+            <ActivityIndicator color={theme.colors.card} />
+          ) : (
+            <Text style={s.importBtnText}>Import</Text>
+          )}
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
