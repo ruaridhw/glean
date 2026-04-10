@@ -69,8 +69,9 @@ export default function PantryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Pantry</Text>
+      <Text style={styles.heading} testID="pantry.heading">Pantry</Text>
       <FlatList
+        testID="pantry.list"
         data={Object.entries(grouped)}
         keyExtractor={([group]) => group}
         renderItem={({ item: [group, groupItems] }) => (
@@ -109,7 +110,7 @@ export default function PantryScreen() {
           </View>
         )}
       />
-      <Pressable style={styles.fab} onPress={() => router.push("/(tabs)/pantry/add")}>
+      <Pressable style={styles.fab} testID="pantry.fab" onPress={() => router.push("/(tabs)/pantry/add")}>
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
     </SafeAreaView>

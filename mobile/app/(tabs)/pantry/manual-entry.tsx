@@ -43,6 +43,7 @@ export default function ManualEntryScreen() {
         value={name}
         onChangeText={setName}
         placeholder="Ingredient name"
+        testID="manualEntry.nameInput"
         autoFocus
       />
       <View style={styles.row}>
@@ -51,6 +52,7 @@ export default function ManualEntryScreen() {
           value={quantity}
           onChangeText={setQuantity}
           placeholder="Quantity"
+          testID="manualEntry.quantityInput"
           keyboardType="numeric"
         />
         <View style={styles.unitRow}>
@@ -65,7 +67,7 @@ export default function ManualEntryScreen() {
           ))}
         </View>
       </View>
-      <Pressable style={styles.button} onPress={save} disabled={saving}>
+      <Pressable style={styles.button} testID="manualEntry.saveButton" onPress={save} disabled={saving}>
         <Text style={styles.buttonText}>Add to Pantry</Text>
       </Pressable>
     </SafeAreaView>

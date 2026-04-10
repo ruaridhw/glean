@@ -23,23 +23,23 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="pantry"
-        options={{ title: "Pantry", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🥬</Text> }}
+        options={{ title: "Pantry", tabBarTestID: "tabs.pantry", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🥬</Text> }}
       />
       <Tabs.Screen
         name="meals"
-        options={{ title: "Meals", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🍽️</Text> }}
+        options={{ title: "Meals", tabBarTestID: "tabs.meals", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🍽️</Text> }}
       />
       <Tabs.Screen
         name="plan/index"
-        options={{ title: "Plan", tabBarIcon: () => <Text style={{ fontSize: 20 }}>📅</Text> }}
+        options={{ title: "Plan", tabBarTestID: "tabs.plan", tabBarIcon: () => <Text style={{ fontSize: 20 }}>📅</Text> }}
       />
       <Tabs.Screen
         name="shop/index"
-        options={{ title: "Shop", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🛒</Text> }}
+        options={{ title: "Shop", tabBarTestID: "tabs.shop", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🛒</Text> }}
       />
       <Tabs.Screen
         name="settings/index"
-        options={{ title: "Settings", tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text> }}
+        options={{ title: "Settings", tabBarTestID: "tabs.settings", tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text> }}
       />
     </Tabs>
   );
