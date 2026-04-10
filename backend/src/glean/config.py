@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     s3_receipts_bucket: str
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
+    llm_provider: str = "anthropic"
+    llm_model: str = "claude-sonnet-4-6"
+    langchain_project: str = "glean-dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
