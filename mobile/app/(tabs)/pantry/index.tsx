@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
@@ -26,7 +27,9 @@ export default function PantryScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setItems(await getPantryItems());
+    const result = await getPantryItems();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setItems(result);
     setLoading(false);
   }, []);
 
@@ -53,6 +56,7 @@ export default function PantryScreen() {
         style: "destructive",
         onPress: async () => {
           await deletePantryItem(item.id);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           await load();
         },
       },

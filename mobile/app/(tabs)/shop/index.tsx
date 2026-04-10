@@ -6,6 +6,7 @@ import { showSuccess } from "@/utils/toast";
 import {
   Alert,
   FlatList,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
@@ -33,7 +34,9 @@ export default function ShopScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setItems(await getShoppingListItems());
+    const result = await getShoppingListItems();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setItems(result);
     setLoading(false);
   }, []);
 
@@ -49,11 +52,13 @@ export default function ShopScreen() {
     await addManualShoppingItem({ name: newItemName.trim() });
     setNewItemName("");
     setAdding(false);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 
   async function handleToggle(item: ShoppingListItem) {
     await toggleShoppingItem(item.id, !item.is_checked);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 

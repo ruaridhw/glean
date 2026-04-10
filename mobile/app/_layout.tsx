@@ -2,6 +2,7 @@
 
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
+import { Platform, UIManager } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { authStorage } from "@/auth/storage";
 import { getDb } from "@/db/client";
@@ -10,6 +11,10 @@ import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
 import { Toast, toastConfig } from "@/components/ui/Toast";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
