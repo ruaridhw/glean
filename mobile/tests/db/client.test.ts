@@ -1,5 +1,8 @@
 // mobile/tests/db/client.test.ts
 
+import { migrate } from "drizzle-orm/expo-sqlite/migrator";
+import { openDatabaseSync } from "expo-sqlite";
+
 jest.mock("expo-sqlite", () => ({
   openDatabaseSync: jest.fn(() => ({
     execAsync: jest.fn().mockResolvedValue(undefined),
@@ -10,38 +13,29 @@ jest.mock("drizzle-orm/expo-sqlite", () => ({
   drizzle: jest.fn(() => ({})),
 }));
 
-const mockMigrate = jest.fn().mockResolvedValue(undefined);
 jest.mock("drizzle-orm/expo-sqlite/migrator", () => ({
-  migrate: mockMigrate,
+  migrate: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../../drizzle/migrations", () => ({ default: {} }), { virtual: true });
 
-describe("getDb", () => {
-  beforeEach(() => {
-    jest.resetModules();
-    mockMigrate.mockClear();
-  });
+import { getDb } from "@/db/client";
 
+describe("getDb", () => {
   it("calls migrate on first invocation", async () => {
-    const { getDb } = await import("@/db/client");
     await getDb();
-    expect(mockMigrate).toHaveBeenCalledTimes(1);
+    expect(migrate).toHaveBeenCalledTimes(1);
   });
 
   it("does not call migrate on subsequent invocations", async () => {
-    const { getDb } = await import("@/db/client");
     await getDb();
-    await getDb();
-    expect(mockMigrate).toHaveBeenCalledTimes(1);
+    expect(migrate).toHaveBeenCalledTimes(1);
   });
 
   it("returns the raw expo-sqlite database", async () => {
-    const { getDb } = await import("@/db/client");
     const db = await getDb();
-    expect(db).toHaveProperty("execAsync");
-    expect((db as unknown as { execAsync: jest.Mock }).execAsync).toHaveBeenCalledWith(
-      "PRAGMA foreign_keys = ON;",
-    );
+    const mockDb = (openDatabaseSync as jest.Mock).mock.results[0]!.value;
+    expect(db).toBe(mockDb);
+    expect(mockDb.execAsync).toHaveBeenCalledWith("PRAGMA foreign_keys = ON;");
   });
 });
