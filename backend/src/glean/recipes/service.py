@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import settings
@@ -27,6 +26,8 @@ from glean.recipes.schemas import (
 )
 
 if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
+
     from glean.recipe_api.schemas import RecipeApiRecipe
 
 URL_PARSE_SYSTEM_PROMPT = """You are a recipe extraction assistant. Given HTML from a recipe page,

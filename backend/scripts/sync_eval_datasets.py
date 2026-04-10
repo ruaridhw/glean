@@ -24,7 +24,7 @@ def sync_dataset(client: Client, fixture_path: Path, dataset_name: str) -> None:
         existing = client.read_dataset(dataset_name=dataset_name)
         client.delete_dataset(dataset_id=existing.id)
         print(f"  Deleted existing dataset: {dataset_name}")
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     dataset = client.create_dataset(dataset_name=dataset_name)

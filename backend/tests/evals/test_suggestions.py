@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 from glean.suggestions.schemas import SuggestedRecipe
 from glean.suggestions.service import SUGGESTION_SYSTEM_PROMPT

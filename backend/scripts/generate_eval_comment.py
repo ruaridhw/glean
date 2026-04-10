@@ -89,6 +89,18 @@ def _status_icon(results: list[TestResult]) -> str:
     return "\u2705" if all(r.passed for r in results) else "\u274c"
 
 
+def _render_table(results: list[TestResult], pass_icon: str, fail_icon: str) -> list[str]:
+    lines = ["", "| Check | Status |", "|-------|--------|"]
+    lines.extend(f"| {r.name} | {pass_icon if r.passed else fail_icon} |" for r in results)
+    failures = [r for r in results if not r.passed]
+    if failures:
+        label = "**Failures:**" if fail_icon == "\u274c" else "**Issues:**"
+        lines.append("")
+        lines.append(label)
+        lines.extend(f"- `{r.name}`: {r.failure_message}" for r in failures)
+    return lines
+
+
 def _detail_section(name: str, fr: FeatureResults) -> str:
     structural_score = _score(fr.structural)
     heuristic_score = _pct(fr.heuristic)
@@ -102,39 +114,16 @@ def _detail_section(name: str, fr: FeatureResults) -> str:
         "### Structural (hard gate)",
     ]
 
-    if fr.structural:
-        if all(r.passed for r in fr.structural):
-            lines.append(f"All {len(fr.structural)} checks passed.")
-        else:
-            lines.append("")
-            lines.append("| Check | Status |")
-            lines.append("|-------|--------|")
-            for r in fr.structural:
-                icon = "\u2705" if r.passed else "\u274c"
-                lines.append(f"| {r.name} | {icon} |")
-            failures = [r for r in fr.structural if not r.passed]
-            if failures:
-                lines.append("")
-                lines.append("**Failures:**")
-                for r in failures:
-                    lines.append(f"- `{r.name}`: {r.failure_message}")
-    else:
+    if not fr.structural:
         lines.append("No structural tests found.")
+    elif all(r.passed for r in fr.structural):
+        lines.append(f"All {len(fr.structural)} checks passed.")
+    else:
+        lines.extend(_render_table(fr.structural, "\u2705", "\u274c"))
 
     lines.extend(["", "### Heuristic (soft gate)"])
     if fr.heuristic:
-        lines.append("")
-        lines.append("| Check | Status |")
-        lines.append("|-------|--------|")
-        for r in fr.heuristic:
-            icon = "\u2705" if r.passed else "\u26a0\ufe0f"
-            lines.append(f"| {r.name} | {icon} |")
-        failures = [r for r in fr.heuristic if not r.passed]
-        if failures:
-            lines.append("")
-            lines.append("**Issues:**")
-            for r in failures:
-                lines.append(f"- `{r.name}`: {r.failure_message}")
+        lines.extend(_render_table(fr.heuristic, "\u2705", "\u26a0\ufe0f"))
     else:
         lines.append("No heuristic tests found.")
 

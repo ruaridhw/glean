@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from langchain_core.language_models import BaseChatModel
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 from glean.llm import create_chat_model
 

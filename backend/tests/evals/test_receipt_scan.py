@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 from glean.receipts.schemas import ParsedIngredient
 from glean.receipts.service import NORMALISE_SYSTEM_PROMPT
@@ -158,7 +160,7 @@ class TestReceiptScanJudge:
         for i, example in enumerate(receipt_scan_dataset):
             content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
             items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item, raw_input in zip(items, example["input"]["line_items"]):
+            for item, raw_input in zip(items, example["input"]["line_items"], strict=True):
                 score = judge_receipt_scan(
                     model=judge_model,
                     raw_name=raw_input["name"],

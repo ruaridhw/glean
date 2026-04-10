@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 from glean.config import settings
 from glean.llm import Feature, create_chat_model

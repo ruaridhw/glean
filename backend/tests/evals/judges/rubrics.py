@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+from typing import TYPE_CHECKING
 
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 RECEIPT_SCAN_RUBRIC = """You are evaluating a grocery receipt normalisation system.
 Given a raw receipt line item name and the system's normalised output, rate the quality 1-5:
