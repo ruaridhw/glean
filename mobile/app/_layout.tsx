@@ -9,6 +9,7 @@ import { seedDatabase } from "@/db/seed";
 import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
 import { Toast, toastConfig } from "@/components/ui/Toast";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +46,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <OfflineBanner />
       <>
         <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
