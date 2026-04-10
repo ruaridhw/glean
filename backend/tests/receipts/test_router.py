@@ -87,6 +87,31 @@ def test_scan_receipt_rejects_oversized(client: TestClient, auth_headers: dict[s
     assert "10MB" in response.json()["detail"]
 
 
+def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, str]) -> None:
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(_mock_claude_response())
+
+    with (
+        patch("glean.receipts.service.settings") as mock_settings,
+        patch("glean.receipts.service.create_chat_model") as mock_create,
+    ):
+        mock_settings.receipt_ocr_mode = "vision"
+        mock_settings.receipt_vision_model = "anthropic/claude-sonnet-4.6"
+        mock_settings.openrouter_api_key = "test-key"
+        mock_create.return_value.invoke.return_value = mock_result
+        response = client.post(
+            "/receipts/scan",
+            headers=auth_headers,
+            files={"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 2
+    assert items[0]["name"] == "chicken breast"
+    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key="test-key")
+
+
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())

@@ -1,6 +1,7 @@
 # backend/src/glean/receipts/service.py
 from __future__ import annotations
 
+import base64
 import json
 import uuid
 from typing import TYPE_CHECKING
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 from glean.config import settings
-from glean.llm import Feature, get_default_model
+from glean.llm import Feature, create_chat_model, get_default_model
 from glean.observability import logger, tracer
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
 
@@ -23,6 +24,16 @@ Given a list of receipt line items (name, quantity, price), return a JSON array 
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
 - confidence: 0.0-1.0 reflecting how certain you are about the normalisation
+
+Respond with ONLY valid JSON. No markdown, no explanation."""
+
+VISION_SYSTEM_PROMPT = """You are a grocery receipt scanner and ingredient normaliser.
+Given an image of a grocery receipt, extract all line items and return a JSON array of objects with:
+- name: canonical lowercase ingredient name (e.g. "chicken breast", "whole milk")
+- quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
+- unit: "g", "ml", or "units"
+- unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
+- confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation
 
 Respond with ONLY valid JSON. No markdown, no explanation."""
 
@@ -49,8 +60,13 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
     return lines
 
 
+def _normalise_items(raw_content: str) -> list[ParsedIngredient]:
+    return [ParsedIngredient(**item) for item in json.loads(raw_content)]
+
+
 @tracer.capture_method
-def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> ScanResponse:
+def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel) -> ScanResponse:
+    """OCR via AWS Textract, then normalise extracted text with the LLM."""
     s3 = boto3.client("s3", region_name=settings.aws_region)
     s3_key = f"receipts/tmp/{uuid.uuid4()}.jpg"
     logger.info("uploading receipt to s3", extra={"key": s3_key, "bytes": len(image_bytes)})
@@ -66,15 +82,42 @@ def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> S
     finally:
         s3.delete_object(Bucket=settings.s3_receipts_bucket, Key=s3_key)
 
-    model = model or get_default_model()
     result = model.invoke(
         [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
         config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
-    logger.info("claude normalised items")
+    logger.info("llm normalised items")
+    return ScanResponse(items=_normalise_items(result.content))
 
-    items = [ParsedIngredient(**item) for item in json.loads(result.content)]
-    return ScanResponse(items=items)
+
+@tracer.capture_method
+def _scan_via_vision(image_bytes: bytes) -> ScanResponse:
+    """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
+    vision_model = create_chat_model(
+        settings.receipt_vision_model, api_key=settings.openrouter_api_key
+    )
+    b64 = base64.b64encode(image_bytes).decode()
+    result = vision_model.invoke(
+        [
+            SystemMessage(content=VISION_SYSTEM_PROMPT),
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "Extract and normalise all items from this receipt."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ]
+            ),
+        ],
+        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
+    )
+    logger.info("vision model scanned receipt")
+    return ScanResponse(items=_normalise_items(result.content))
+
+
+@tracer.capture_method
+def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> ScanResponse:
+    if settings.receipt_ocr_mode == "vision":
+        return _scan_via_vision(image_bytes)
+    return _scan_via_textract(image_bytes, model=model or get_default_model())
 
 
 @tracer.capture_method
@@ -87,5 +130,4 @@ def describe_purchase(request: DescribeRequest, *, model: BaseChatModel | None =
         ],
         config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
-    items = [ParsedIngredient(**item) for item in json.loads(result.content)]
-    return ScanResponse(items=items)
+    return ScanResponse(items=_normalise_items(result.content))

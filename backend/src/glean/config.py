@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
     llm_model: str = "anthropic/claude-sonnet-4.6"
+    receipt_ocr_mode: str = "textract"  # "textract" (AWS) or "vision" (OpenRouter vision model)
+    receipt_vision_model: str = "anthropic/claude-sonnet-4.6"
     langchain_project: str = "glean-dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
