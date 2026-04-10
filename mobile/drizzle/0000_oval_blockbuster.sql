@@ -85,7 +85,7 @@ CREATE TABLE `shopping_list_items` (
 );
 --> statement-breakpoint
 CREATE TABLE `user_config` (
-	`id` integer PRIMARY KEY NOT NULL,
+	`id` text PRIMARY KEY NOT NULL,
 	`purchase_tolerance` real DEFAULT 0.5 NOT NULL,
 	`preferred_servings` integer DEFAULT 2 NOT NULL,
 	`meals_per_week` integer DEFAULT 5 NOT NULL,
