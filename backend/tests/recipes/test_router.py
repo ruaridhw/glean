@@ -177,7 +177,7 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     with (
         patch("glean.recipes.service.socket.gethostbyname", return_value="93.184.216.34"),
         patch("glean.recipes.service.httpx.get", return_value=mock_http_response),
-        patch("glean.recipes.service.create_chat_model", return_value=mock_llm),
+        patch("glean.recipes.service.get_default_model", return_value=mock_llm),
     ):
         resp = client.post("/recipes/import-url", json={"url": "https://example.com/pasta"})
 

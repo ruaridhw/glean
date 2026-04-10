@@ -3,15 +3,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from langchain_anthropic import ChatAnthropic
+from langchain_openrouter import ChatOpenRouter
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-
-try:
-    from langchain_google_genai import ChatGoogleGenerativeAI
-except ImportError:
-    ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
 
 
 class Feature(StrEnum):
@@ -20,13 +15,11 @@ class Feature(StrEnum):
     RECIPE_IMPORT = "recipe-import"
 
 
-def create_chat_model(provider: str, model: str, *, api_key: str) -> BaseChatModel:
-    match provider:
-        case "anthropic":
-            return ChatAnthropic(model=model, api_key=api_key)
-        case "google":
-            if ChatGoogleGenerativeAI is None:
-                raise ImportError("langchain-google-genai is required for the google provider")
-            return ChatGoogleGenerativeAI(model=model, api_key=api_key)
-        case _:
-            raise ValueError(f"Unknown LLM provider: {provider}")
+def create_chat_model(model: str, *, api_key: str) -> BaseChatModel:
+    return ChatOpenRouter(model=model, openrouter_api_key=api_key)
+
+
+def get_default_model() -> BaseChatModel:
+    from glean.config import settings  # noqa: PLC0415 - local import avoids circular dependency
+
+    return create_chat_model(settings.llm_model, api_key=settings.openrouter_api_key)

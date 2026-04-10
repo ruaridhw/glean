@@ -20,10 +20,9 @@ def _load_fixture(name: str) -> list[dict[str, Any]]:
 
 
 def _make_model() -> BaseChatModel:
-    provider = os.environ.get("GLEAN_LLM_PROVIDER", "google")
-    model = os.environ.get("GLEAN_LLM_MODEL", "gemma-3")
-    api_key = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", "")
-    return create_chat_model(provider, model, api_key=api_key)
+    model = os.environ.get("GLEAN_LLM_MODEL", "google/gemma-4-26b-a4b-it:free")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    return create_chat_model(model, api_key=api_key)
 
 
 @pytest.fixture(scope="session")

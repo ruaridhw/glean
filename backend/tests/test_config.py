@@ -16,7 +16,7 @@ class TestSecretsManagerSourceOutsideLambda:
 
 
 class TestSecretsManagerSourceInLambda:
-    def test_fetches_anthropic_and_recipe_keys(self) -> None:
+    def test_fetches_openrouter_and_recipe_keys(self) -> None:
         lambda_env = {
             "AWS_LAMBDA_FUNCTION_NAME": "glean-api-prod",
             "ENVIRONMENT": "prod",
@@ -27,7 +27,7 @@ class TestSecretsManagerSourceInLambda:
             result = source()
 
         assert result == {
-            "anthropic_api_key": "val:glean/prod/anthropic-api-key",
+            "openrouter_api_key": "val:glean/prod/openrouter-api-key",
             "recipe_api_key": "val:glean/prod/recipe-api-key",
         }
 
@@ -42,7 +42,7 @@ class TestSecretsManagerSourceInLambda:
             source()
 
         fetched_names = [call.args[0] for call in mock_get.call_args_list]
-        assert "glean/dev/anthropic-api-key" in fetched_names
+        assert "glean/dev/openrouter-api-key" in fetched_names
         assert "glean/dev/recipe-api-key" in fetched_names
 
     def test_raises_if_environment_not_set(self) -> None:

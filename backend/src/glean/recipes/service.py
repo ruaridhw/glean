@@ -11,8 +11,7 @@ import httpx
 from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
-from glean.llm import Feature, create_chat_model
+from glean.llm import Feature, get_default_model
 from glean.observability import logger
 from glean.recipe_api.client import _iso_to_mins, recipe_api_client
 from glean.recipes.schemas import (
@@ -270,9 +269,7 @@ def import_recipe_from_url(
         return _schema_org_to_recipe_out(schema_data, request.url)
 
     logger.info("recipe import via LangChain/Claude fallback", extra={"url": request.url})
-    llm = model or create_chat_model(
-        settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key
-    )
+    llm = model or get_default_model()
     response = llm.invoke(
         [
             SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),

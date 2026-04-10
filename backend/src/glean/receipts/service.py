@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 from glean.config import settings
-from glean.llm import Feature, create_chat_model
+from glean.llm import Feature, get_default_model
 from glean.observability import logger, tracer
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
 
@@ -49,10 +49,6 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
     return lines
 
 
-def _default_model() -> BaseChatModel:
-    return create_chat_model(settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key)
-
-
 @tracer.capture_method
 def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> ScanResponse:
     s3 = boto3.client("s3", region_name=settings.aws_region)
@@ -70,7 +66,7 @@ def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> S
     finally:
         s3.delete_object(Bucket=settings.s3_receipts_bucket, Key=s3_key)
 
-    model = model or _default_model()
+    model = model or get_default_model()
     result = model.invoke(
         [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
         config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
@@ -83,7 +79,7 @@ def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> S
 
 @tracer.capture_method
 def describe_purchase(request: DescribeRequest, *, model: BaseChatModel | None = None) -> ScanResponse:
-    model = model or _default_model()
+    model = model or get_default_model()
     result = model.invoke(
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),

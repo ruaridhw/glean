@@ -3,18 +3,10 @@ name: LLM Evals
 on:
   workflow_dispatch:
     inputs:
-      provider:
-        description: 'LLM provider (anthropic or google)'
-        required: true
-        default: 'google'
-        type: choice
-        options:
-          - anthropic
-          - google
       model:
-        description: 'Model name'
+        description: 'OpenRouter model (e.g. anthropic/claude-sonnet-4.6, google/gemma-4-26b-a4b-it:free)'
         required: true
-        default: 'gemma-3'
+        default: 'google/gemma-4-26b-a4b-it:free'
         type: string
 
 permissions:
@@ -29,13 +21,11 @@ jobs:
       run:
         working-directory: backend
     env:
-      GLEAN_LLM_PROVIDER: ${{ inputs.provider }}
       GLEAN_LLM_MODEL: ${{ inputs.model }}
       LANGCHAIN_TRACING_V2: "true"
       LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
       LANGCHAIN_PROJECT: glean-evals
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +60,7 @@ jobs:
           python scripts/generate_eval_comment.py \
             --hard-gate results/hard-gate.xml \
             --soft-gate results/soft-gate.xml \
-            --model "${{ inputs.provider }}/${{ inputs.model }}" \
+            --model "${{ inputs.model }}" \
             > results/pr-comment.md
 
       - name: Post PR comment

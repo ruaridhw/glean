@@ -8,8 +8,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.config import settings
-from glean.llm import Feature, create_chat_model
+from glean.llm import Feature, get_default_model
 from glean.observability import logger, tracer
 from glean.suggestions.schemas import SuggestedRecipe, SuggestionRequest, SuggestionResponse
 
@@ -34,9 +33,7 @@ Respond with ONLY valid JSON. No markdown."""
 def get_suggestions(
     request: SuggestionRequest, *, model: BaseChatModel | None = None
 ) -> SuggestionResponse:
-    model = model or create_chat_model(
-        settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key
-    )
+    model = model or get_default_model()
 
     context = {
         "pantry": [item.model_dump() for item in request.pantry],

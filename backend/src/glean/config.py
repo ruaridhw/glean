@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class SecretsManagerSource(PydanticBaseSettingsSource):
-    """Fetches anthropic_api_key and recipe_api_key from AWS Secrets Manager.
+    """Fetches openrouter_api_key and recipe_api_key from AWS Secrets Manager.
 
     Only active when running inside Lambda (AWS_LAMBDA_FUNCTION_NAME is set).
     Falls back to a no-op outside Lambda so local .env continues to work.
@@ -26,13 +26,13 @@ class SecretsManagerSource(PydanticBaseSettingsSource):
             return {}
         env = os.environ["ENVIRONMENT"]
         return {
-            "anthropic_api_key": parameters.get_secret(f"glean/{env}/anthropic-api-key"),
+            "openrouter_api_key": parameters.get_secret(f"glean/{env}/openrouter-api-key"),
             "recipe_api_key": parameters.get_secret(f"glean/{env}/recipe-api-key"),
         }
 
 
 class Settings(BaseSettings):
-    anthropic_api_key: str
+    openrouter_api_key: str
     recipe_api_key: str
     recipe_api_base_url: str = "https://recipe-api.com/api/v1"
     aws_region: str = "eu-west-2"
@@ -41,8 +41,7 @@ class Settings(BaseSettings):
     s3_receipts_bucket: str
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
-    llm_provider: str = "anthropic"
-    llm_model: str = "claude-sonnet-4-6"
+    llm_model: str = "anthropic/claude-sonnet-4.6"
     langchain_project: str = "glean-dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
