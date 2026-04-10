@@ -20,6 +20,7 @@ export const authStorage = {
     return SecureStore.getItemAsync(KEYS.email);
   },
   async getUserSub(): Promise<string | null> {
+    if (__DEV__) return "dev-user-sub";
     return SecureStore.getItemAsync(KEYS.userSub);
   },
   async setTokens(params: {
@@ -41,6 +42,7 @@ export const authStorage = {
     );
   },
   async hasTokens(): Promise<boolean> {
+    if (__DEV__) return true;
     const token = await SecureStore.getItemAsync(KEYS.accessToken);
     return token !== null && token.length > 0;
   },
