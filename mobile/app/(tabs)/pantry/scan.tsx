@@ -2,18 +2,16 @@
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
-import { useRef } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { useScanReceipt } from "@/api/hooks";
-import { ErrorState } from "@/components/ui/ErrorState";
+import { useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function ScanScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
+  const [capturing, setCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
-  const scanMutation = useScanReceipt();
 
-  if (!permission) return <View style={{ flex: 1 }} />;
+  if (!permission) return <View style={styles.container} />;
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -26,44 +24,28 @@ export default function ScanScreen() {
   }
 
   async function capture() {
-    if (!cameraRef.current || scanMutation.isPending) return;
-    const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 });
-    if (!photo?.base64) return;
-    const blob = await (await fetch(`data:image/jpeg;base64,${photo.base64}`)).blob();
-    const form = new FormData();
-    form.append("file", blob, "receipt.jpg");
-    scanMutation.mutate(form, {
-      onSuccess: (result) => {
-        router.push({
-          pathname: "/(tabs)/pantry/review",
-          params: { items: JSON.stringify(result.items), ...(returnTo ? { returnTo } : {}) },
-        });
-      },
-    });
+    if (!cameraRef.current || capturing) return;
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.8 });
+      if (!photo?.base64) return;
+      router.push({
+        pathname: "/(tabs)/pantry/scan-progress",
+        params: { photoBase64: photo.base64, ...(returnTo ? { returnTo } : {}) },
+      });
+    } finally {
+      setCapturing(false);
+    }
   }
 
   return (
     <View style={styles.container}>
       <CameraView ref={cameraRef} style={styles.camera} facing="back" />
-      {scanMutation.isError ? (
-        <View style={styles.errorOverlay}>
-          <ErrorState
-            testID="scan.error"
-            message="Could not process receipt. Try again or add items manually."
-            onRetry={() => scanMutation.reset()}
-          />
-        </View>
-      ) : (
-        <View style={styles.controls}>
-          {scanMutation.isPending ? (
-            <ActivityIndicator size="large" color="#fff" />
-          ) : (
-            <Pressable style={styles.shutterButton} onPress={capture}>
-              <View style={styles.shutterInner} />
-            </Pressable>
-          )}
-        </View>
-      )}
+      <View style={styles.controls}>
+        <Pressable style={styles.shutterButton} onPress={capture} disabled={capturing}>
+          <View style={styles.shutterInner} />
+        </Pressable>
+      </View>
     </View>
   );
 }
