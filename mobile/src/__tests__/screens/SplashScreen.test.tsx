@@ -1,11 +1,6 @@
 import { render } from "@testing-library/react-native";
 import SplashScreen from "@/screens/SplashScreen";
 
-// Mock the image require
-jest.mock("../../../assets/glean-logo.png", () => "mocked-logo", {
-  virtual: true,
-});
-
 describe("SplashScreen", () => {
   it("renders the app background color", () => {
     const { getByTestId } = render(<SplashScreen />);
