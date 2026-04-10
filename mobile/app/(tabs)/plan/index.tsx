@@ -142,7 +142,7 @@ export default function PlanScreen() {
 
   if (entries.length === 0) {
     return (
-      <View style={s.container}>
+      <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.header}>
           <Text style={s.heading}>This Week</Text>
           <Pressable
@@ -174,7 +174,7 @@ export default function PlanScreen() {
             { label: "Generate plan", onPress: generateWeek },
           ]}
         />
-      </View>
+      </SafeAreaView>
     );
   }
 

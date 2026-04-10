@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
 import { apiClient } from "@/api/client";
 import { useRecipeSearch, useImportRecipe } from "@/api/hooks";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -85,7 +86,7 @@ export default function SearchScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator style={{ marginTop: theme.spacing.xl }} color={theme.colors.primary} />
+        <MealsSkeleton />
       ) : isError ? (
         <ErrorState
           testID="search.error"

@@ -4,7 +4,6 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { showSuccess } from "@/utils/toast";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -14,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ShoppingSkeleton } from "@/components/skeletons/ShoppingSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
   addManualShoppingItem,
@@ -108,7 +108,15 @@ export default function ShopScreen() {
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading)
+    return (
+      <SafeAreaView style={s.container} edges={["top"]}>
+        <View style={s.header}>
+          <Text style={s.heading}>Shopping List</Text>
+        </View>
+        <ShoppingSkeleton />
+      </SafeAreaView>
+    );
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>

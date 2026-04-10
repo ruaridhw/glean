@@ -1,7 +1,8 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getSavedRecipes } from "@/db/recipes";
 import { theme } from "@/theme";
@@ -37,7 +38,7 @@ export default function MealsScreen() {
 
       {tab === "saved" ? (
         loading ? (
-          <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} />
+          <MealsSkeleton />
         ) : (
           <FlatList
             data={recipes}
