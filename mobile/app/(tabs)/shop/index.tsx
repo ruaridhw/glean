@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -165,7 +166,17 @@ export default function ShopScreen() {
             </Pressable>
           </View>
         }
-        ListEmptyComponent={<Text style={s.empty}>Your shopping list is empty.</Text>}
+        ListEmptyComponent={
+          <EmptyState
+            testID="shop.emptyState"
+            icon="cart-outline"
+            title="Your shopping list is empty"
+            message="Plan some meals and we'll figure out what you need."
+            actions={[
+              { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
+            ]}
+          />
+        }
       />
     </SafeAreaView>
   );

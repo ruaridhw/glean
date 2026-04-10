@@ -2,6 +2,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getSavedRecipes } from "@/db/recipes";
 import { theme } from "@/theme";
 import type { Recipe } from "@/types";
@@ -59,7 +60,15 @@ export default function MealsScreen() {
               </Pressable>
             )}
             ListEmptyComponent={
-              <Text style={s.empty}>No recipes yet. Discover some or import via URL.</Text>
+              <EmptyState
+                testID="meals.emptyState"
+                icon="restaurant-outline"
+                title="No recipes yet"
+                message="Discover recipes or import one from a URL."
+                actions={[
+                  { label: "Search recipes", onPress: () => router.push("/(tabs)/meals/search") },
+                ]}
+              />
             }
           />
         )
