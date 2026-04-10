@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""Generate a jazzy GitHub PR comment from eval JUnit XML results."""
+from __future__ import annotations
+
+import argparse
+import sys
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+
+
+@dataclass
+class TestResult:
+    name: str
+    classname: str
+    passed: bool
+    failure_message: str = ""
+
+
+@dataclass
+class FeatureResults:
+    structural: list[TestResult] = field(default_factory=list)
+    heuristic: list[TestResult] = field(default_factory=list)
+    judge: list[TestResult] = field(default_factory=list)
+
+
+def parse_junit_xml(path: str) -> list[TestResult]:
+    results: list[TestResult] = []
+    try:
+        tree = ET.parse(path)  # noqa: S314
+    except (ET.ParseError, FileNotFoundError):
+        return results
+    for testcase in tree.iter("testcase"):
+        failure = testcase.find("failure")
+        results.append(
+            TestResult(
+                name=testcase.get("name", ""),
+                classname=testcase.get("classname", ""),
+                passed=failure is None,
+                failure_message=failure.get("message", "") if failure is not None else "",
+            )
+        )
+    return results
+
+
+def classify_results(results: list[TestResult]) -> dict[str, FeatureResults]:
+    features: dict[str, FeatureResults] = {
+        "receipt-scan": FeatureResults(),
+        "suggestions": FeatureResults(),
+        "recipe-import": FeatureResults(),
+    }
+    for r in results:
+        classname_lower = r.classname.lower()
+        if "receipt" in classname_lower:
+            feature = "receipt-scan"
+        elif "suggestion" in classname_lower:
+            feature = "suggestions"
+        elif "recipe" in classname_lower:
+            feature = "recipe-import"
+        else:
+            continue
+
+        if "structural" in classname_lower:
+            features[feature].structural.append(r)
+        elif "heuristic" in classname_lower:
+            features[feature].heuristic.append(r)
+        elif "judge" in classname_lower:
+            features[feature].judge.append(r)
+    return features
+
+
+def _score(results: list[TestResult]) -> str:
+    if not results:
+        return "\u2014"
+    passed = sum(1 for r in results if r.passed)
+    total = len(results)
+    return f"{passed}/{total}"
+
+
+def _pct(results: list[TestResult]) -> str:
+    if not results:
+        return "\u2014"
+    passed = sum(1 for r in results if r.passed)
+    return f"{100 * passed // len(results)}%"
+
+
+def _status_icon(results: list[TestResult]) -> str:
+    if not results:
+        return "\u2b1c"
+    return "\u2705" if all(r.passed for r in results) else "\u274c"
+
+
+def _detail_section(name: str, fr: FeatureResults) -> str:
+    structural_score = _score(fr.structural)
+    heuristic_score = _pct(fr.heuristic)
+    judge_score = _pct(fr.judge)
+
+    lines = [
+        "<details>",
+        f"<summary><strong>{name}</strong> \u2014 {structural_score} structural, "
+        f"{heuristic_score} heuristic, {judge_score} judge</summary>",
+        "",
+        "### Structural (hard gate)",
+    ]
+
+    if fr.structural:
+        if all(r.passed for r in fr.structural):
+            lines.append(f"All {len(fr.structural)} checks passed.")
+        else:
+            lines.append("")
+            lines.append("| Check | Status |")
+            lines.append("|-------|--------|")
+            for r in fr.structural:
+                icon = "\u2705" if r.passed else "\u274c"
+                lines.append(f"| {r.name} | {icon} |")
+            failures = [r for r in fr.structural if not r.passed]
+            if failures:
+                lines.append("")
+                lines.append("**Failures:**")
+                for r in failures:
+                    lines.append(f"- `{r.name}`: {r.failure_message}")
+    else:
+        lines.append("No structural tests found.")
+
+    lines.extend(["", "### Heuristic (soft gate)"])
+    if fr.heuristic:
+        lines.append("")
+        lines.append("| Check | Status |")
+        lines.append("|-------|--------|")
+        for r in fr.heuristic:
+            icon = "\u2705" if r.passed else "\u26a0\ufe0f"
+            lines.append(f"| {r.name} | {icon} |")
+        failures = [r for r in fr.heuristic if not r.passed]
+        if failures:
+            lines.append("")
+            lines.append("**Issues:**")
+            for r in failures:
+                lines.append(f"- `{r.name}`: {r.failure_message}")
+    else:
+        lines.append("No heuristic tests found.")
+
+    lines.extend(["", "### LLM Judge (soft gate)"])
+    if fr.judge:
+        for r in fr.judge:
+            icon = "\u2705" if r.passed else "\u26a0\ufe0f"
+            lines.append(f"- {icon} {r.name}")
+            if not r.passed:
+                lines.append(f"  - {r.failure_message}")
+    else:
+        lines.append("No judge tests found.")
+
+    lines.extend(["", "</details>", ""])
+    return "\n".join(lines)
+
+
+def generate_comment(
+    hard_results: list[TestResult],
+    soft_results: list[TestResult],
+    model: str,
+) -> str:
+    all_results = hard_results + soft_results
+    features = classify_results(all_results)
+
+    hard_passed = all(r.passed for r in hard_results) if hard_results else True
+    soft_issues = [r for r in soft_results if not r.passed]
+
+    lines = [
+        f"## \U0001f9ea Eval Results \u2014 `{model}`",
+        "",
+        "| Feature | Structural | Heuristic | LLM Judge |",
+        "|---------|:----------:|:---------:|:---------:|",
+    ]
+
+    for name, fr in features.items():
+        s_icon = _status_icon(fr.structural)
+        lines.append(
+            f"| {name} | {s_icon} {_score(fr.structural)} | {_pct(fr.heuristic)} | {_pct(fr.judge)} |"
+        )
+
+    lines.append("")
+    if hard_passed:
+        lines.append("**Hard gate:** \u2705 Passed \u2014 all structural checks passed")
+    else:
+        lines.append("**Hard gate:** \u274c Failed \u2014 structural checks have failures")
+
+    if soft_issues:
+        lines.append(f"**Soft gate:** \u26a0\ufe0f Advisory \u2014 {len(soft_issues)} soft check(s) flagged")
+    else:
+        lines.append("**Soft gate:** \u2705 All soft checks passed")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    for name, fr in features.items():
+        lines.append(_detail_section(name, fr))
+
+    lines.append("---")
+    lines.append("")
+    lines.append("\U0001f517 View traces in LangSmith: `glean-evals` project")
+
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate eval PR comment from JUnit XML")
+    parser.add_argument("--hard-gate", required=True, help="Path to hard-gate JUnit XML")
+    parser.add_argument("--soft-gate", required=True, help="Path to soft-gate JUnit XML")
+    parser.add_argument("--model", required=True, help="Model identifier for display")
+    args = parser.parse_args()
+
+    hard_results = parse_junit_xml(args.hard_gate)
+    soft_results = parse_junit_xml(args.soft_gate)
+    comment = generate_comment(hard_results, soft_results, args.model)
+    sys.stdout.write(comment)
+
+
+if __name__ == "__main__":
+    main()
