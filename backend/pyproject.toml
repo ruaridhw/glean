@@ -33,7 +33,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/evals"
 markers = ["soft_gate: marks tests as soft-gate evaluations (deselect with '-m \"not soft_gate\"')"]
 
 [build-system]
