@@ -7,6 +7,7 @@ import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
 import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
+import { Toast, toastConfig } from "@/components/ui/Toast";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -35,10 +36,13 @@ export default function RootLayout() {
   if (!ready) return <SplashScreen />;
 
   return (
-    <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+      </Stack>
+      <Toast config={toastConfig} />
+    </>
   );
 }
