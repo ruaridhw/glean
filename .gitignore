@@ -32,6 +32,7 @@ backend/.ruff_cache/
 
 # Git worktrees
 .worktrees/
+**/worktrees/
 
 # Local infra secrets
 infra/.bootstrap-outputs
