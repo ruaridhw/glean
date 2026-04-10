@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Animated, View } from "react-native";
 
 interface PulsingDotsProps {
@@ -7,11 +7,7 @@ interface PulsingDotsProps {
   spacing?: number;
 }
 
-export default function PulsingDots({
-  color,
-  size = 8,
-  spacing = 8,
-}: PulsingDotsProps) {
+export default function PulsingDots({ color, size = 8, spacing = 8 }: PulsingDotsProps) {
   const animations = useRef([
     new Animated.Value(0),
     new Animated.Value(0),
@@ -35,9 +31,9 @@ export default function PulsingDots({
                 duration: 800,
                 useNativeDriver: false,
               }),
-            ])
+            ]),
           ),
-        ])
+        ]),
       );
 
       Animated.parallel(animationSequence).start();
@@ -58,7 +54,7 @@ export default function PulsingDots({
       {animations.map((anim, index) => (
         <Animated.View
           // biome-ignore lint/suspicious/noArrayIndexKey: static fixed-length array, never reorders
-          key={index}
+          key={`pulsing-dot-${index}`}
           testID="pulsing-dot"
           style={{
             width: size,

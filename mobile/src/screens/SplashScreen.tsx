@@ -1,7 +1,6 @@
-import React from "react";
-import { View, Image } from "react-native";
-import { theme } from "@/theme";
+import { Image, View } from "react-native";
 import PulsingDots from "@/components/PulsingDots";
+import { theme } from "@/theme";
 
 export default function SplashScreen() {
   return (
