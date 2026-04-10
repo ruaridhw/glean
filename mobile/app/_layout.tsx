@@ -2,12 +2,20 @@
 
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { authStorage } from "@/auth/storage";
 import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
 import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
 import { Toast, toastConfig } from "@/components/ui/Toast";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 0 },
+    mutations: { retry: 0 },
+  },
+});
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -36,13 +44,15 @@ export default function RootLayout() {
   if (!ready) return <SplashScreen />;
 
   return (
-    <>
-      <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      </Stack>
-      <Toast config={toastConfig} />
-    </>
+    <QueryClientProvider client={queryClient}>
+      <>
+        <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack>
+        <Toast config={toastConfig} />
+      </>
+    </QueryClientProvider>
   );
 }
