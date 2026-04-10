@@ -5,10 +5,11 @@ import json
 import uuid
 
 import boto3
-from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import settings
+from glean.llm import Feature, create_chat_model
 from glean.observability import logger, tracer
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
 
@@ -45,8 +46,12 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
     return lines
 
 
+def _default_model() -> BaseChatModel:
+    return create_chat_model(settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key)
+
+
 @tracer.capture_method
-def scan_receipt(image_bytes: bytes) -> ScanResponse:
+def scan_receipt(image_bytes: bytes, *, model: BaseChatModel | None = None) -> ScanResponse:
     s3 = boto3.client("s3", region_name=settings.aws_region)
     s3_key = f"receipts/tmp/{uuid.uuid4()}.jpg"
     logger.info("uploading receipt to s3", extra={"key": s3_key, "bytes": len(image_bytes)})
@@ -62,8 +67,11 @@ def scan_receipt(image_bytes: bytes) -> ScanResponse:
     finally:
         s3.delete_object(Bucket=settings.s3_receipts_bucket, Key=s3_key)
 
-    model = ChatAnthropic(model="claude-sonnet-4-6", api_key=settings.anthropic_api_key)
-    result = model.invoke([SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))])
+    model = model or _default_model()
+    result = model.invoke(
+        [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
+        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
+    )
     logger.info("claude normalised items")
 
     items = [ParsedIngredient(**item) for item in json.loads(result.content)]
@@ -71,13 +79,14 @@ def scan_receipt(image_bytes: bytes) -> ScanResponse:
 
 
 @tracer.capture_method
-def describe_purchase(request: DescribeRequest) -> ScanResponse:
-    model = ChatAnthropic(model="claude-sonnet-4-6", api_key=settings.anthropic_api_key)
+def describe_purchase(request: DescribeRequest, *, model: BaseChatModel | None = None) -> ScanResponse:
+    model = model or _default_model()
     result = model.invoke(
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
-        ]
+        ],
+        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
     items = [ParsedIngredient(**item) for item in json.loads(result.content)]
     return ScanResponse(items=items)

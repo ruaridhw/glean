@@ -41,9 +41,9 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
 
     with (
         patch("boto3.client", side_effect=boto3_client_factory),
-        patch("glean.receipts.service.ChatAnthropic") as MockChatAnthropic,
+        patch("glean.receipts.service.create_chat_model") as mock_create,
     ):
-        MockChatAnthropic.return_value.invoke.return_value = mock_result
+        mock_create.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/scan",
             headers=auth_headers,
@@ -91,8 +91,8 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())
 
-    with patch("glean.receipts.service.ChatAnthropic") as MockChatAnthropic:
-        MockChatAnthropic.return_value.invoke.return_value = mock_result
+    with patch("glean.receipts.service.create_chat_model") as mock_create:
+        mock_create.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/describe",
             headers=auth_headers,

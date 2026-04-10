@@ -46,8 +46,8 @@ def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: d
     mock_result = MagicMock()
     mock_result.content = json.dumps(fixture)
 
-    with patch("glean.suggestions.service.ChatAnthropic") as MockChatAnthropic:
-        MockChatAnthropic.return_value.invoke.return_value = mock_result
+    with patch("glean.suggestions.service.create_chat_model") as mock_create:
+        mock_create.return_value.invoke.return_value = mock_result
         response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
 
     assert response.status_code == 200

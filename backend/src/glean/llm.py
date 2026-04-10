@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from enum import StrEnum
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 
@@ -7,6 +9,12 @@ try:
     from langchain_google_genai import ChatGoogleGenerativeAI
 except ImportError:
     ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
+
+
+class Feature(StrEnum):
+    RECEIPT_SCAN = "receipt-scan"
+    SUGGESTIONS = "suggestions"
+    RECIPE_IMPORT = "recipe-import"
 
 
 def create_chat_model(provider: str, model: str, *, api_key: str) -> BaseChatModel:

@@ -9,10 +9,11 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import settings
+from glean.llm import Feature, create_chat_model
 from glean.observability import logger
 from glean.recipe_api.client import _iso_to_mins, recipe_api_client
 from glean.recipes.schemas import (
@@ -255,7 +256,9 @@ def _llm_json_to_recipe_out(data: dict, url: str) -> RecipeOut:
     )
 
 
-def import_recipe_from_url(request: ImportUrlRequest) -> RecipeOut:
+def import_recipe_from_url(
+    request: ImportUrlRequest, *, model: BaseChatModel | None = None
+) -> RecipeOut:
     _validate_url_ssrf(request.url)
 
     html = httpx.get(request.url, follow_redirects=True, timeout=10.0).text
@@ -266,12 +269,15 @@ def import_recipe_from_url(request: ImportUrlRequest) -> RecipeOut:
         return _schema_org_to_recipe_out(schema_data, request.url)
 
     logger.info("recipe import via LangChain/Claude fallback", extra={"url": request.url})
-    llm = ChatAnthropic(model="claude-3-5-sonnet-20241022", api_key=settings.anthropic_api_key)
+    llm = model or create_chat_model(
+        settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key
+    )
     response = llm.invoke(
         [
             SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
-        ]
+        ],
+        config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
     )
     data = json.loads(response.content)
     return _llm_json_to_recipe_out(data, request.url)

@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import json
 
-from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import settings
+from glean.llm import Feature, create_chat_model
 from glean.observability import logger, tracer
 from glean.suggestions.schemas import SuggestedRecipe, SuggestionRequest, SuggestionResponse
 
@@ -25,8 +28,12 @@ Respond with ONLY valid JSON. No markdown."""
 
 
 @tracer.capture_method
-def get_suggestions(request: SuggestionRequest) -> SuggestionResponse:
-    model = ChatAnthropic(model="claude-sonnet-4-6", api_key=settings.anthropic_api_key)
+def get_suggestions(
+    request: SuggestionRequest, *, model: BaseChatModel | None = None
+) -> SuggestionResponse:
+    model = model or create_chat_model(
+        settings.llm_provider, settings.llm_model, api_key=settings.anthropic_api_key
+    )
 
     context = {
         "pantry": [item.model_dump() for item in request.pantry],
@@ -50,7 +57,8 @@ def get_suggestions(request: SuggestionRequest) -> SuggestionResponse:
         [
             SystemMessage(content=SUGGESTION_SYSTEM_PROMPT),
             HumanMessage(content=json.dumps(context, default=str)),
-        ]
+        ],
+        config={"metadata": {"feature": Feature.SUGGESTIONS}},
     )
     raw = json.loads(result.content)
     logger.info("suggestions received", extra={"count": len(raw)})
