@@ -2,7 +2,6 @@
 
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { showSuccess } from "@/utils/toast";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +17,7 @@ import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
 import { normalizeUnit } from "@/normalization/units";
+import { showSuccess } from "@/utils/toast";
 
 interface ReviewItem {
   name: string;

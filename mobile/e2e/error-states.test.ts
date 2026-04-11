@@ -13,9 +13,7 @@ describe("Error States: offline banner and API error handling", () => {
       .toBeVisible()
       .withTimeout(10000);
 
-    await expect(
-      element(by.text("You're offline. Some features need internet."))
-    ).toBeVisible();
+    await expect(element(by.text("You're offline. Some features need internet."))).toBeVisible();
 
     await device.executeShellCommand("cmd connectivity airplane-mode disable");
 
