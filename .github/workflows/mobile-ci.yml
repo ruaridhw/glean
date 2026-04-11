@@ -174,12 +174,28 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
           name: android-apk
           path: mobile/artifacts
+
+      - name: Bump patch version
+        run: |
+          CURRENT=$(node -e "console.log(require('./app.json').expo.version)")
+          NEXT=$(echo "$CURRENT" | awk -F. '{print $1"."$2"."$3+1}')
+          sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEXT\"/" app.json
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app.json
+          git commit -m "🔖 chore: bump patch version [skip ci]"
+          git push
 
       - name: Get app version
         id: app-version
