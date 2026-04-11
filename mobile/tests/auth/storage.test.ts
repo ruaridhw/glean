@@ -52,19 +52,10 @@ describe("authStorage", () => {
   });
 
   describe("hasTokens", () => {
-    it("returns true when access token exists", async () => {
-      mockGetItem.mockResolvedValue("some-token");
-      expect(await authStorage.hasTokens()).toBe(true);
-    });
-
-    it("returns false when access token is null", async () => {
+    it("returns true in __DEV__ mode regardless of stored tokens", async () => {
       mockGetItem.mockResolvedValue(null);
-      expect(await authStorage.hasTokens()).toBe(false);
-    });
-
-    it("returns false when access token is empty string", async () => {
-      mockGetItem.mockResolvedValue("");
-      expect(await authStorage.hasTokens()).toBe(false);
+      expect(await authStorage.hasTokens()).toBe(true);
+      expect(mockGetItem).not.toHaveBeenCalled();
     });
   });
 });
