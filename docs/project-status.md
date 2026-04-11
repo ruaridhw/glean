@@ -31,9 +31,7 @@ End-to-end deployment pipeline. Current branch, not yet merged.
 **GitHub Actions**
 - `backend-ci.yml` — PR: ruff lint + pytest + SAM validate (parallel)
 - `backend-deploy.yml` — Push to `main` → prod (GitHub Environment gate); `workflow_dispatch` → dev
-- `mobile-ci.yml` — PR: biome + jest (parallel)
-- `mobile-deploy.yml` — Push to `main` → EAS Android build → GitHub Release with APK
-- `mobile/eas.json` — EAS `production` profile (`android.buildType: apk`)
+- `mobile-ci.yml` — PR + push to `main`: biome + jest + Gradle build + Maestro E2E (parallel where possible); on `main` also deploys APK as GitHub Release
 
 ---
 
@@ -78,5 +76,5 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
 | Storage | SQLite (mobile, local-first), S3 (receipt image buffer) |
 | Infra | AWS SAM, CloudFormation, CloudWatch, X-Ray |
 | CI/CD | GitHub Actions, OIDC, EAS |
-| Testing | pytest + coverage (backend), jest-expo + detox (mobile) |
+| Testing | pytest + coverage (backend), jest-expo + maestro (mobile) |
 | Linting | ruff + black (backend), biome (mobile) |
