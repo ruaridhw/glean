@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+CACHE_DIR="$(cd "$(dirname "$0")/.." && pwd)/.cache"
+mkdir -p "$CACHE_DIR"
+ADB="$HOME/Library/Android/sdk/platform-tools/adb"
+OUT="${1:-$CACHE_DIR/emu-screenshot.png}"
+"$ADB" exec-out screencap -p > "$OUT"
+echo "$OUT"

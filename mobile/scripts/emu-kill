@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+lsof -ti:8081 | xargs kill -9 2>/dev/null
+echo "Metro killed"
+"$(dirname "$0")/emu-clear"

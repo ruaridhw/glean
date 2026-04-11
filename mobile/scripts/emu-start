@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+MOBILE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+exec "$MOBILE_DIR/node_modules/.bin/expo" start --android --clear "$@"

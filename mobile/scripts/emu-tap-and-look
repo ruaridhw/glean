@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Tap (by text or coordinates), wait, then screenshot.
+# Usage:
+#   emu-tap-and-look "Discover"
+#   emu-tap-and-look 540 1200
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+CACHE_DIR="$(cd "$SCRIPTS/.." && pwd)/.cache"
+mkdir -p "$CACHE_DIR"
+OUT="${CACHE_DIR}/emu-screenshot.png"
+
+"$SCRIPTS/emu-tap" "$@"
+sleep 1.5
+"$SCRIPTS/emu-screenshot" "$OUT"

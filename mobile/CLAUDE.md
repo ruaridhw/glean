@@ -32,13 +32,14 @@ export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ### Common commands
 
 ```bash
-# Start Expo on Android emulator (with SDK paths and fresh Metro cache)
-ANDROID_HOME=$HOME/Library/Android/sdk \
-  PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH \
-  npx expo start --android --clear
+# Kill Metro + clear app data
+mobile/scripts/emu-kill
 
-# Clear Expo Go app data (resets SQLite DB and migrations)
-$HOME/Library/Android/sdk/platform-tools/adb shell pm clear host.exp.exponent
+# Start Expo on Android emulator (SDK paths + fresh Metro cache)
+mobile/scripts/emu-start
+
+# Clear Expo Go app data only (resets SQLite DB and migrations)
+mobile/scripts/emu-clear
 
 # List running emulators
 $HOME/Library/Android/sdk/platform-tools/adb devices
@@ -46,29 +47,42 @@ $HOME/Library/Android/sdk/platform-tools/adb devices
 
 ### Controlling the emulator non-interactively
 
-Claude can drive the Android emulator via `adb` without user intervention.
-Always use the full adb path: `$HOME/Library/Android/sdk/platform-tools/adb`.
+Claude can drive the Android emulator via helper scripts in `mobile/scripts/`.
+All scripts are auto-approved in `.claude/settings.json`.
+
+```bash
+# Tap by visible text (uses uiautomator to find element bounds)
+mobile/scripts/emu-tap "Discover"
+mobile/scripts/emu-tap "Import from URL"
+
+# Tap by coordinates (x, y)
+mobile/scripts/emu-tap 540 1200
+
+# Tap + wait + screenshot in one call (supports text or coordinates)
+mobile/scripts/emu-tap-and-look "Discover"
+mobile/scripts/emu-tap-and-look 540 1200
+
+# Type text (spaces auto-escaped to %s)
+mobile/scripts/emu-type hello world
+
+# Press keys
+mobile/scripts/emu-input keyevent KEYCODE_BACK
+mobile/scripts/emu-input keyevent KEYCODE_ENTER
+
+# Swipe (x1, y1, x2, y2, duration_ms)
+mobile/scripts/emu-input swipe 540 1500 540 500 300
+
+# Screenshot → then Read(mobile/.cache/emu-screenshot.png) to view
+mobile/scripts/emu-screenshot
+
+# Clear Expo Go app data (resets SQLite DB)
+mobile/scripts/emu-clear
+```
+
+For commands not covered by a script, use the full adb path:
 
 ```bash
 ADB="$HOME/Library/Android/sdk/platform-tools/adb"
-
-# Screenshot → view in Claude (multimodal)
-$ADB exec-out screencap -p > /tmp/emu-screenshot.png
-# Then use Read tool on /tmp/emu-screenshot.png to see the screen
-
-# Tap at coordinates (x, y)
-$ADB shell input tap 540 1200
-
-# Type text (spaces must be %s)
-$ADB shell input text "hello%sworld"
-
-# Press keys
-$ADB shell input keyevent KEYCODE_BACK
-$ADB shell input keyevent KEYCODE_HOME
-$ADB shell input keyevent KEYCODE_ENTER
-
-# Swipe (x1, y1, x2, y2, duration_ms)
-$ADB shell input swipe 540 1500 540 500 300
 
 # Read recent logcat (Expo/React Native output)
 $ADB logcat -d -t 50 '*:E'           # last 50 error lines
@@ -83,11 +97,12 @@ $ADB shell pidof host.exp.exponent
 
 ### Workflow: visual debugging
 
-1. Take a screenshot with `adb exec-out screencap -p > /tmp/emu-screenshot.png`
-2. Read it with the Read tool to see the current screen state
-3. Tap/type/swipe to interact
-4. Screenshot again to verify the result
-5. Use logcat if something looks wrong
+1. `mobile/scripts/emu-screenshot` then `Read(mobile/.cache/emu-screenshot.png)` to see the screen
+2. `mobile/scripts/emu-tap "Button Text"` or `emu-type ...` to interact
+3. `mobile/scripts/emu-tap-and-look "Button Text"` to tap + screenshot in one step
+4. Use logcat if something looks wrong
+
+Prefer tapping by text over coordinates — it's resilient to layout changes and screen sizes.
 
 ## Architecture
 

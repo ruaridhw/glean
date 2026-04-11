@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+ADB="$HOME/Library/Android/sdk/platform-tools/adb"
+exec "$ADB" shell input "$@"
