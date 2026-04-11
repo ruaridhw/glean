@@ -6,7 +6,10 @@
     "scheme": "glean",
     "platforms": ["ios", "android"],
     "ios": { "supportsTablet": true },
-    "android": { "adaptiveIcon": { "backgroundColor": "#2a9d8f" } },
+    "android": {
+      "package": "com.ruaridhw.glean",
+      "adaptiveIcon": { "backgroundColor": "#2a9d8f" }
+    },
     "plugins": [
       "expo-router",
       "expo-sqlite",

@@ -1,0 +1,43 @@
+appId: ${APP_ID}
+name: "Screens: all main screens render key elements"
+---
+- runFlow: helpers/launch.yaml
+
+# Pantry: heading and FAB
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Pantry
+- assertVisible: "Pantry"
+- assertVisible: "＋"
+
+# Meals: heading and tab toggles
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Meals
+- assertVisible: "Meals"
+- assertVisible: "My Recipes"
+- assertVisible: "Discover"
+
+# Plan: heading and generate button
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Plan
+- assertVisible: "This Week"
+- assertVisible: "Generate week"
+
+# Shop: heading
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Shop
+- assertVisible: "Shopping List"
+
+# Settings: heading
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Settings
+- assertVisible: "Settings"

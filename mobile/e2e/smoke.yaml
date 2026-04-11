@@ -1,0 +1,57 @@
+appId: ${APP_ID}
+name: "Smoke: launch, tab navigation, and CRUD"
+---
+# Fresh launch
+- runFlow: helpers/launch.yaml
+
+# --- Verify all 5 tabs are visible ---
+- assertVisible: "Pantry"
+- assertVisible: "Meals"
+- assertVisible: "Plan"
+- assertVisible: "Shop"
+- assertVisible: "Settings"
+
+# --- Navigate to each tab and assert heading ---
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Meals
+- assertVisible: "Meals"
+
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Plan
+- assertVisible: "This Week"
+
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Shop
+- assertVisible: "Shopping List"
+
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Settings
+- assertVisible: "Settings"
+
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Pantry
+- assertVisible: "Pantry"
+
+# --- Add item via manual entry ---
+- tapOn: "＋"
+- assertVisible: "Manual Entry"
+- tapOn: "Manual Entry"
+
+- tapOn: "Ingredient name"
+- inputText: "test chicken"
+- tapOn: "Quantity"
+- inputText: "500"
+- tapOn: "Add to Pantry"
+
+# --- Verify item appears in pantry ---
+- assertVisible: "test chicken"

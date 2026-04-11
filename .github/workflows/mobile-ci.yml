@@ -4,6 +4,13 @@ on:
   pull_request:
     paths:
       - 'mobile/**'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+
+permissions:
+  contents: write
 
 jobs:
   lint:
@@ -41,3 +48,150 @@ jobs:
         run: npm ci
       - name: Run jest
         run: NODE_OPTIONS=--experimental-vm-modules npx jest --coverage
+
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        run: cd android && ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+  e2e:
+    name: E2E
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      API_LEVEL: 35
+      ARCH: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/artifacts
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          arch: ${{ env.ARCH }}
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: false
+          script: echo 'Generated AVD snapshot for caching.'
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Run E2E tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          arch: ${{ env.ARCH }}
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: false
+          script: |
+            adb install mobile/artifacts/app-release.apk
+            maestro test --env APP_ID=com.ruaridhw.glean mobile/e2e/
+
+      - name: Zip Maestro artifacts
+        if: failure()
+        run: cd ~/.maestro/tests && zip -r /tmp/maestro-artifacts.zip .
+
+      - name: Upload Maestro artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-artifacts
+          path: /tmp/maestro-artifacts.zip
+          retention-days: 14
+
+  deploy:
+    name: Deploy
+    needs: [lint, test, e2e]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/artifacts
+
+      - name: Get app version
+        id: app-version
+        run: |
+          VERSION=$(node -e "const c = require('./app.json'); console.log(c.expo.version)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.app-version.outputs.version }}" \
+            artifacts/app-release.apk \
+            --title "v${{ steps.app-version.outputs.version }}" \
+            --notes "Android APK built from commit ${{ github.sha }}" \
+            --repo "${{ github.repository }}"

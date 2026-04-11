@@ -31,6 +31,7 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
     </Stack>
