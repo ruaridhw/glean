@@ -6,6 +6,7 @@ const toastStyle = {
   borderRadius: theme.radius.md,
   paddingVertical: theme.spacing.md,
   backgroundColor: theme.colors.card,
+  minWidth: "85%" as const,
   shadowColor: theme.shadow.card.shadowColor,
   shadowOffset: theme.shadow.card.shadowOffset,
   shadowOpacity: theme.shadow.card.shadowOpacity,

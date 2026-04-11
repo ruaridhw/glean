@@ -150,12 +150,18 @@ const s = StyleSheet.create({
     padding: theme.spacing.xxl,
   },
   iconContainer: { marginBottom: theme.spacing.xxl },
-  steps: { gap: theme.spacing.lg, width: "100%" },
+  steps: {
+    gap: theme.spacing.lg,
+    width: "100%",
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    ...theme.shadow.card,
+  },
   stepRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
+    gap: theme.spacing.lg,
   },
   stepLabel: {
     fontSize: theme.typography.body.fontSize,
