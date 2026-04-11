@@ -18,12 +18,12 @@ export function SkeletonBox({
       Animated.sequence([
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 800,
+          duration: 1000,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 0.3,
-          duration: 800,
+          duration: 1000,
           useNativeDriver: true,
         }),
       ]),

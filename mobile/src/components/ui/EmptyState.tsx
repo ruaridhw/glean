@@ -41,7 +41,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     padding: theme.spacing.xxl,
   },
-  icon: { marginBottom: theme.spacing.lg },
+  icon: { marginBottom: theme.spacing.xl, opacity: 0.6 },
   title: {
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,
@@ -60,8 +60,10 @@ const s = StyleSheet.create({
   actionBtn: {
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xl,
     paddingVertical: theme.spacing.md,
+    minHeight: 44,
+    justifyContent: "center",
   },
   actionText: {
     color: theme.colors.card,

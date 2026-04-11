@@ -15,10 +15,10 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <View style={s.container} testID={testID}>
-      <Ionicons name="alert-circle-outline" size={48} color={theme.colors.warning} />
+      <Ionicons name="alert-circle-outline" size={48} color={theme.colors.warning} style={s.icon} />
       <Text style={s.message}>{message}</Text>
       <Pressable
-        style={s.retryBtn}
+        style={({ pressed }) => [s.retryBtn, pressed && s.retryBtnPressed]}
         onPress={onRetry}
         testID={testID ? `${testID}.retry` : undefined}
       >
@@ -32,8 +32,9 @@ const s = StyleSheet.create({
   container: {
     alignItems: "center",
     padding: theme.spacing.xxl,
-    gap: theme.spacing.md,
+    gap: theme.spacing.lg,
   },
+  icon: { opacity: 0.6, marginBottom: theme.spacing.xs },
   message: {
     fontSize: theme.typography.subhead.fontSize,
     color: theme.colors.textSecondary,
@@ -44,9 +45,14 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    minHeight: 44,
+    justifyContent: "center",
     marginTop: theme.spacing.sm,
+  },
+  retryBtnPressed: {
+    backgroundColor: theme.colors.primaryLight,
   },
   retryText: {
     color: theme.colors.primary,

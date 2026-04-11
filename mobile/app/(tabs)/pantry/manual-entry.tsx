@@ -6,6 +6,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
+import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
 const UNITS = ["g", "ml", "units", "kg", "l"];
@@ -82,34 +83,49 @@ export default function ManualEntryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
-  heading: { fontSize: 22, fontWeight: "700", marginBottom: 20 },
+  container: { flex: 1, padding: theme.spacing.xl, backgroundColor: theme.colors.background },
+  heading: {
+    fontSize: theme.typography.title2.fontSize,
+    fontWeight: theme.typography.title2.fontWeight,
+    color: theme.colors.text,
+    marginBottom: 20,
+  },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.md,
     fontSize: 16,
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.card,
   },
-  row: { flexDirection: "row", marginBottom: 12 },
-  unitRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  row: { flexDirection: "row", marginBottom: theme.spacing.md },
+  unitRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.xs + 2 },
   unitBtn: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 6,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    minHeight: 36,
+    justifyContent: "center",
   },
-  unitBtnActive: { borderColor: "#2a9d8f", backgroundColor: "#2a9d8f" },
-  unitText: { color: "#444", fontSize: 13 },
-  unitTextActive: { color: "#fff", fontSize: 13 },
+  unitBtnActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary },
+  unitText: { color: theme.colors.text, fontSize: 13 },
+  unitTextActive: { color: theme.colors.card, fontSize: 13 },
   button: {
-    backgroundColor: "#2a9d8f",
-    borderRadius: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
     padding: 14,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
+    minHeight: 44,
+    justifyContent: "center",
   },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  buttonText: {
+    color: theme.colors.card,
+    fontWeight: theme.typography.headline.fontWeight as "600",
+    fontSize: 16,
+  },
 });
