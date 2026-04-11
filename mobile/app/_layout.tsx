@@ -9,8 +9,8 @@ import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { Toast, toastConfig } from "@/components/ui/Toast";
 import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
-import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
+import { theme } from "@/theme";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -52,14 +52,12 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <OfflineBanner />
-      <>
-        <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        </Stack>
-        <Toast config={toastConfig} />
-      </>
+      <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+      </Stack>
+      <Toast config={toastConfig} />
     </QueryClientProvider>
   );
 }

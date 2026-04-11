@@ -2,7 +2,6 @@
 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { showSuccess } from "@/utils/toast";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSuggestMeals } from "@/api/hooks";
+import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { getUserConfig } from "@/db/config";
@@ -139,7 +139,7 @@ export default function PlanScreen() {
 
   const emptySlots = Math.max(0, mealsPerWeek - entries.length);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading) return <PlanSkeleton rows={mealsPerWeek} />;
 
   if (entries.length === 0) {
     return (

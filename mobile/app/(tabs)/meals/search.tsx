@@ -11,7 +11,6 @@ import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
-
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");

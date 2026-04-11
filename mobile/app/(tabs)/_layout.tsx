@@ -23,23 +23,43 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="pantry"
-        options={{ title: "Pantry", tabBarTestID: "tabs.pantry", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🥬</Text> }}
+        options={{
+          title: "Pantry",
+          tabBarButtonTestID: "tabs.pantry",
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🥬</Text>,
+        }}
       />
       <Tabs.Screen
         name="meals"
-        options={{ title: "Meals", tabBarTestID: "tabs.meals", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🍽️</Text> }}
+        options={{
+          title: "Meals",
+          tabBarButtonTestID: "tabs.meals",
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🍽️</Text>,
+        }}
       />
       <Tabs.Screen
         name="plan/index"
-        options={{ title: "Plan", tabBarTestID: "tabs.plan", tabBarIcon: () => <Text style={{ fontSize: 20 }}>📅</Text> }}
+        options={{
+          title: "Plan",
+          tabBarButtonTestID: "tabs.plan",
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>📅</Text>,
+        }}
       />
       <Tabs.Screen
         name="shop/index"
-        options={{ title: "Shop", tabBarTestID: "tabs.shop", tabBarIcon: () => <Text style={{ fontSize: 20 }}>🛒</Text> }}
+        options={{
+          title: "Shop",
+          tabBarButtonTestID: "tabs.shop",
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🛒</Text>,
+        }}
       />
       <Tabs.Screen
         name="settings/index"
-        options={{ title: "Settings", tabBarTestID: "tabs.settings", tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text> }}
+        options={{
+          title: "Settings",
+          tabBarButtonTestID: "tabs.settings",
+          tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text>,
+        }}
       />
       {/* Sub-screens — hide from tab bar */}
       <Tabs.Screen name="pantry/add" options={{ href: null }} />

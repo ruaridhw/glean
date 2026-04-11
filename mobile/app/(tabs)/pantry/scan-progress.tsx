@@ -54,8 +54,8 @@ export default function ScanProgressScreen() {
     const interval = setInterval(() => {
       elapsed += 200;
       let cumulativeMs = 0;
-      for (let i = 0; i < STEPS.length; i++) {
-        cumulativeMs += STEPS[i].durationMs;
+      for (const [i, step] of STEPS.entries()) {
+        cumulativeMs += step.durationMs;
         if (elapsed < cumulativeMs) {
           setActiveStep(i);
           return;

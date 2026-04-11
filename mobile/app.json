@@ -13,10 +13,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#2a9d8f"
       },
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
     },
     "plugins": [
       "expo-router",
