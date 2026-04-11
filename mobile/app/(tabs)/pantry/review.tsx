@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
@@ -72,7 +73,7 @@ export default function ReviewScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.heading}>Review Items</Text>
       <Text style={styles.subtitle}>Edit or remove any items before confirming.</Text>
       <FlatList
@@ -108,7 +109,7 @@ export default function ReviewScreen() {
           </Text>
         )}
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 

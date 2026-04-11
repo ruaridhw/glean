@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 
 export default function DescribeScreen() {
@@ -37,7 +38,7 @@ export default function DescribeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.heading}>Describe your shop</Text>
       <Text style={styles.subtitle}>e.g. "I bought a kilo of mince and two tins of tomatoes"</Text>
       <TextInput
@@ -55,7 +56,7 @@ export default function DescribeScreen() {
           <Text style={styles.buttonText}>Parse →</Text>
         )}
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import type { SaveRecipeParams } from "@/db/recipes";
 import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
@@ -81,7 +82,7 @@ export default function SearchScreen() {
   }
 
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container} edges={["top"]}>
       <Text style={s.heading}>Discover Recipes</Text>
 
       <View style={s.searchRow}>
@@ -141,7 +142,7 @@ export default function SearchScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
