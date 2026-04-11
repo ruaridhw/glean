@@ -12,7 +12,9 @@ describe("Toast: shows success message after pantry item added", () => {
     await expect(element(by.text("Manual Entry"))).toBeVisible();
     await element(by.text("Manual Entry")).tap();
 
-    await waitFor(element(by.id("manualEntry.nameInput"))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.id("manualEntry.nameInput")))
+      .toBeVisible()
+      .withTimeout(5000);
     await element(by.id("manualEntry.nameInput")).typeText("toast test item");
     await element(by.id("manualEntry.quantityInput")).typeText("100");
     await element(by.id("manualEntry.saveButton")).tap();

@@ -17,7 +17,11 @@ export function ErrorState({
     <View style={s.container} testID={testID}>
       <Ionicons name="alert-circle-outline" size={48} color={theme.colors.warning} />
       <Text style={s.message}>{message}</Text>
-      <Pressable style={s.retryBtn} onPress={onRetry} testID={testID ? `${testID}.retry` : undefined}>
+      <Pressable
+        style={s.retryBtn}
+        onPress={onRetry}
+        testID={testID ? `${testID}.retry` : undefined}
+      >
         <Text style={s.retryText}>Try again</Text>
       </Pressable>
     </View>

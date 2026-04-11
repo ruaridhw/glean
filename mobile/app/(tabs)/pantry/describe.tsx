@@ -2,7 +2,7 @@
 
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDescribeReceipt } from "@/api/hooks";
 import { ErrorState } from "@/components/ui/ErrorState";
