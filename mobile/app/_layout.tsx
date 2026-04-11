@@ -57,7 +57,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       </Stack>
-      <Toast config={toastConfig} />
+      <Toast config={toastConfig} position="bottom" bottomOffset={80} />
     </QueryClientProvider>
   );
 }

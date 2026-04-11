@@ -29,8 +29,6 @@
       "enabled": false
     },
     "splash": {
-      "image": "./assets/glean-logo.png",
-      "resizeMode": "contain",
       "backgroundColor": "#fdfaf6"
     }
   }
