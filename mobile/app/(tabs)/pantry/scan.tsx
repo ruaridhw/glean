@@ -40,7 +40,7 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+      <CameraView testID="scan.camera" ref={cameraRef} style={styles.camera} facing="back" />
       <View style={styles.controls}>
         <Pressable style={styles.shutterButton} onPress={capture} disabled={capturing}>
           <View style={styles.shutterInner} />
