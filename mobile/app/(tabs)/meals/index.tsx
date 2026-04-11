@@ -64,14 +64,15 @@ export default function MealsScreen() {
           />
         )
       ) : (
-        <Pressable style={s.discoverBtn} onPress={() => router.push("/(tabs)/meals/search")}>
-          <Text style={s.discoverText}>Search recipes →</Text>
-        </Pressable>
+        <>
+          <Pressable style={s.discoverBtn} onPress={() => router.push("/(tabs)/meals/search")}>
+            <Text style={s.discoverText}>Search recipes →</Text>
+          </Pressable>
+          <Pressable style={s.importBtn} onPress={() => router.push("/(tabs)/meals/import")}>
+            <Text style={s.importText}>Import from URL</Text>
+          </Pressable>
+        </>
       )}
-
-      <Pressable style={s.importBtn} onPress={() => router.push("/(tabs)/meals/search")}>
-        <Text style={s.importText}>Import from URL</Text>
-      </Pressable>
     </SafeAreaView>
   );
 }
