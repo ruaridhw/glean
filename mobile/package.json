@@ -7,7 +7,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "e2e": "detox test",
+    "e2e": "maestro test --env APP_ID=${APP_ID:-host.exp.exponent} --env EXPO_URL=${EXPO_URL:-exp://localhost:8081} e2e/",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios"
@@ -38,7 +38,6 @@
     "@types/react": "~19.1.0",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-preset-expo": "^55.0.16",
-    "detox": "^20",
     "drizzle-kit": "^0.31",
     "jest": "^29",
     "jest-expo": "~54.0.17",
