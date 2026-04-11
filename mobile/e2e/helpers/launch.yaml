@@ -1,0 +1,16 @@
+appId: ${APP_ID}
+---
+- clearState: ${APP_ID}
+- launchApp: ${APP_ID}
+- runFlow:
+    when:
+      visible: "Enter URL manually"
+    file: open-dev-url.yaml
+- extendedWaitUntil:
+    visible: "Glean"
+    timeout: 30000
+    optional: true
+- tapOn:
+    point: 95%,67%
+    label: "Dismiss Expo Go dev menu"
+    optional: true
