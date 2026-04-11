@@ -11,7 +11,7 @@ export interface PantryItemForCompression {
   food_group: string;
 }
 
-export interface CompressedPantryItem {
+interface CompressedPantryItem {
   id: number;
   name: string;
   quantity: number;

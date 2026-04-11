@@ -5,7 +5,7 @@ import type { Ingredient } from "@/types";
 import { drizzleDb } from "./client";
 import { ingredients } from "./schema";
 
-export async function findIngredientByName(canonicalName: string): Promise<Ingredient | null> {
+async function findIngredientByName(canonicalName: string): Promise<Ingredient | null> {
   const [row] = await drizzleDb
     .select()
     .from(ingredients)
@@ -14,7 +14,7 @@ export async function findIngredientByName(canonicalName: string): Promise<Ingre
   return row ?? null;
 }
 
-export async function findIngredientByApiId(apiId: string): Promise<Ingredient | null> {
+async function findIngredientByApiId(apiId: string): Promise<Ingredient | null> {
   const [row] = await drizzleDb
     .select()
     .from(ingredients)

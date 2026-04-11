@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["babel.config.js", "src/auth/async-storage-shim.ts"],
+  "ignoreBinaries": ["maestro"],
+  "ignoreDependencies": ["babel-preset-expo", "babel-plugin-inline-import"]
+}

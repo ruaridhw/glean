@@ -54,7 +54,7 @@ const INGREDIENT_DENSITY: Record<string, number> = {
   water: 1.0,
 };
 
-export interface NormalizeResult {
+interface NormalizeResult {
   quantity: number;
   unit: string;
   source: "identity" | "lookup" | "density";

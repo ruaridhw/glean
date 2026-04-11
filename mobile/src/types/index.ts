@@ -1,10 +1,5 @@
 // mobile/src/types/index.ts
 
-export interface IngredientCategory {
-  category: string;
-  food_group: string;
-}
-
 export interface Ingredient {
   id: number;
   canonical_name: string;
@@ -28,11 +23,6 @@ export interface PantryItem {
   canonical_name: string;
   is_staple: boolean;
   food_group?: string | null;
-}
-
-export interface RecipeDietaryFlag {
-  recipe_id: number;
-  flag: string;
 }
 
 export interface Recipe {

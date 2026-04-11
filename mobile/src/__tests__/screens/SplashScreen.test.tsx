@@ -1,6 +1,9 @@
 import { render } from "@testing-library/react-native";
 import SplashScreen from "@/screens/SplashScreen";
 
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
 describe("SplashScreen", () => {
   it("renders the app background color", () => {
     const { getByTestId } = render(<SplashScreen />);

@@ -1,6 +1,9 @@
 import { render } from "@testing-library/react-native";
 import PulsingDots from "@/components/PulsingDots";
 
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
 describe("PulsingDots", () => {
   it("renders three dots", () => {
     const { getAllByTestId } = render(<PulsingDots color="#2a9d8f" />);
