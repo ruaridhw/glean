@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -107,7 +108,7 @@ export default function ShopScreen() {
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.header}>
         <Text style={s.heading}>Shopping List</Text>
         {checked.length > 0 && (
@@ -164,7 +165,7 @@ export default function ShopScreen() {
         }
         ListEmptyComponent={<Text style={s.empty}>Your shopping list is empty.</Text>}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
