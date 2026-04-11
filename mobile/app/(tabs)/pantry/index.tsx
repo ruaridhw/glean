@@ -183,7 +183,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   name: { flex: 1, fontSize: theme.typography.subhead.fontSize, color: theme.colors.text },
-  qty: { fontSize: theme.typography.subhead.fontSize, color: theme.colors.primary, marginRight: theme.spacing.md },
+  qty: {
+    fontSize: theme.typography.subhead.fontSize,
+    color: theme.colors.primary,
+    marginRight: theme.spacing.md,
+  },
   editInput: {
     width: 80,
     borderWidth: 1,
