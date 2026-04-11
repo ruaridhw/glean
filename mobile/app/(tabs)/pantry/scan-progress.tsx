@@ -46,8 +46,7 @@ export default function ScanProgressScreen() {
       });
     }
     submit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [photoBase64, scanMutation.mutate]);
 
   // Timed step progression
   useEffect(() => {
@@ -128,9 +127,7 @@ export default function ScanProgressScreen() {
                 ]}
               >
                 {step.label}
-                {isActive && !isComplete && activeStep === STEPS.length - 1 && !apiDone
-                  ? "…"
-                  : ""}
+                {isActive && !isComplete && activeStep === STEPS.length - 1 && !apiDone ? "…" : ""}
               </Text>
             </View>
           );

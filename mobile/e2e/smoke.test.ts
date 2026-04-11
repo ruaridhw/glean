@@ -37,12 +37,16 @@ describe("Smoke: launch, tab navigation, and CRUD", () => {
     await expect(element(by.text("Manual Entry"))).toBeVisible();
     await element(by.text("Manual Entry")).tap();
 
-    await waitFor(element(by.id("manualEntry.nameInput"))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.id("manualEntry.nameInput")))
+      .toBeVisible()
+      .withTimeout(5000);
     await element(by.id("manualEntry.nameInput")).typeText("test chicken");
     await element(by.id("manualEntry.quantityInput")).typeText("500");
     await element(by.id("manualEntry.saveButton")).tap();
 
-    await waitFor(element(by.id("pantry.heading"))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.id("pantry.heading")))
+      .toBeVisible()
+      .withTimeout(5000);
     await expect(element(by.text("test chicken"))).toBeVisible();
   });
 });

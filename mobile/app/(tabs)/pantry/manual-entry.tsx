@@ -5,8 +5,8 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
-import { showSuccess } from "@/utils/toast";
 import { upsertPantryItem } from "@/db/pantry";
+import { showSuccess } from "@/utils/toast";
 
 const UNITS = ["g", "ml", "units", "kg", "l"];
 
@@ -69,7 +69,12 @@ export default function ManualEntryScreen() {
           ))}
         </View>
       </View>
-      <Pressable style={styles.button} testID="manualEntry.saveButton" onPress={save} disabled={saving}>
+      <Pressable
+        style={styles.button}
+        testID="manualEntry.saveButton"
+        onPress={save}
+        disabled={saving}
+      >
         <Text style={styles.buttonText}>Add to Pantry</Text>
       </Pressable>
     </SafeAreaView>

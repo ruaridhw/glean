@@ -1,16 +1,16 @@
 // mobile/app/_layout.tsx
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, UIManager } from "react-native";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { authStorage } from "@/auth/storage";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
+import { Toast, toastConfig } from "@/components/ui/Toast";
 import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
 import { theme } from "@/theme";
 import SplashScreen from "@/screens/SplashScreen";
-import { Toast, toastConfig } from "@/components/ui/Toast";
-import { OfflineBanner } from "@/components/ui/OfflineBanner";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
