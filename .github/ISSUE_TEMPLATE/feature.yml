@@ -1,0 +1,44 @@
+name: Feature Request
+description: Propose a new feature or enhancement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is the feature and why does it matter?
+      placeholder: Describe the feature, the problem it solves, and the user impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: User-facing outcomes — what the user sees, feels, or can do when this ships. Avoid naming components, libraries, or implementation details.
+      placeholder: |
+        - [ ] User sees X when Y happens
+        - [ ] Feature behaves like Z
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-approach
+    attributes:
+      label: Technical approach (subject to change)
+      description: Implementation details — libraries, component names, architecture decisions. These may evolve during development.
+      placeholder: |
+        - [ ] Uses library X
+        - [ ] New component in src/components/
+        - Files to modify, API changes, etc.
+    validations:
+      required: false
+
+  - type: input
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Other issues that must be completed first.
+      placeholder: "#12, #14"
+    validations:
+      required: false
