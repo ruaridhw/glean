@@ -115,20 +115,12 @@ export default function ShopScreen() {
 
   if (loading)
     return (
-<<<<<<< HEAD
       <SafeAreaView style={s.container} edges={["top"]}>
-=======
-      <View style={s.container}>
->>>>>>> 666f30e (✨ feat: replace loading spinners with skeleton placeholders)
         <View style={s.header}>
           <Text style={s.heading}>Shopping List</Text>
         </View>
         <ShoppingSkeleton />
-<<<<<<< HEAD
       </SafeAreaView>
-=======
-      </View>
->>>>>>> 666f30e (✨ feat: replace loading spinners with skeleton placeholders)
     );
 
   return (

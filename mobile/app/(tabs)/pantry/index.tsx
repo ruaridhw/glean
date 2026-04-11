@@ -96,7 +96,11 @@ export default function PantryScreen() {
             { label: "Describe items", onPress: () => router.push("/(tabs)/pantry/describe") },
           ]}
         />
-        <Pressable style={styles.fab} testID="pantry.fab" onPress={() => router.push("/(tabs)/pantry/add")}>
+        <Pressable
+          style={styles.fab}
+          testID="pantry.fab"
+          onPress={() => router.push("/(tabs)/pantry/add")}
+        >
           <Text style={styles.fabText}>＋</Text>
         </Pressable>
       </SafeAreaView>
