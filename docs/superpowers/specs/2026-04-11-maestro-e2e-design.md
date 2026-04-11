@@ -19,7 +19,7 @@ Replace Detox with Maestro for end-to-end testing of the Glean mobile app. Add E
 ### Tests to port (6 flows)
 
 **smoke.yaml** — Launch, tab navigation, and pantry CRUD
-- Verify all 5 tabs are visible
+- Verify all 5 tabs are visible, and only 5 tabs are visible.
 - Navigate to each tab and assert heading text
 - Add item via manual entry (FAB → Manual Entry → fill name/quantity → save)
 - Verify item appears in pantry list
@@ -149,7 +149,7 @@ mobile-ci.yml
     ├── Setup Node 22 + npm cache
     ├── npm ci
     ├── Setup Java 17 + Gradle cache
-    ├── AVD cache (API level 34)
+    ├── AVD cache (API level 35, Pixel_10_Pro)
     ├── Create AVD snapshot (cache miss only)
     ├── expo prebuild --platform android
     ├── Gradle assembleDebug
@@ -162,7 +162,7 @@ mobile-ci.yml
 ### Caching strategy (3 layers)
 
 **1. AVD snapshot cache**
-- Key: `avd-{API_LEVEL}`
+- Key: `avd-35`
 - Path: `~/.android/avd/*, ~/.android/adb*`
 - Saves ~1-2 min of AVD creation and first-boot time
 - Only recreated when API level changes
@@ -178,7 +178,8 @@ mobile-ci.yml
 
 ### Emulator configuration
 
-- API Level: 34 (matches existing Detox `Pixel_7_API_34` AVD)
+- API Level: 35 (Android 15, stable and well-supported by emulator runner)
+- AVD Profile: Pixel_10_Pro
 - Architecture: x86_64
 - Options: `-no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none`
 - Animations disabled for test reliability
