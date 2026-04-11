@@ -27,8 +27,7 @@ export function useScanReceipt() {
 
 export function useDescribeReceipt() {
   return useMutation({
-    mutationFn: (text: string) =>
-      apiClient.post<DescribeResponse>("/receipts/describe", { text }),
+    mutationFn: (text: string) => apiClient.post<DescribeResponse>("/receipts/describe", { text }),
   });
 }
 
