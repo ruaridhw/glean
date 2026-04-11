@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import type {
   DescribeResponse,
-  RecipeOut,
   RecipeSearchResponse,
   ScanResponse,
   SuggestionResponse,
@@ -28,12 +27,6 @@ export function useScanReceipt() {
 export function useDescribeReceipt() {
   return useMutation({
     mutationFn: (text: string) => apiClient.post<DescribeResponse>("/receipts/describe", { text }),
-  });
-}
-
-export function useImportRecipe() {
-  return useMutation({
-    mutationFn: (url: string) => apiClient.post<RecipeOut>("/recipes/import-url", { url }),
   });
 }
 
