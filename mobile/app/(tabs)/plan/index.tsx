@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
@@ -141,7 +142,7 @@ export default function PlanScreen() {
   type ListItem = MealPlanEntry | { id: number; isEmpty: true };
 
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.header}>
         <Text style={s.heading}>This Week</Text>
         <Pressable
@@ -198,7 +199,7 @@ export default function PlanScreen() {
           );
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
