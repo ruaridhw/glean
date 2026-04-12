@@ -1,6 +1,16 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import { useRecipeSearch } from "@/api/hooks";
@@ -40,58 +50,66 @@ export default function SearchScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <Text style={s.heading}>Discover Recipes</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={s.keyboardView}
+    >
+      <SafeAreaView style={s.container} edges={["top"]}>
+        <Text style={s.heading}>Discover Recipes</Text>
 
-      <View style={s.searchRow}>
-        <TextInput
-          style={s.searchInput}
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search recipes…"
-          returnKeyType="search"
-          onSubmitEditing={handleSearch}
-          placeholderTextColor={theme.colors.textDisabled}
-        />
-        <Pressable style={s.searchBtn} onPress={handleSearch}>
-          <Text style={s.searchBtnText}>Go</Text>
-        </Pressable>
-      </View>
+        <View style={s.searchRow}>
+          <TextInput
+            style={s.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search recipes…"
+            returnKeyType="search"
+            onSubmitEditing={handleSearch}
+            placeholderTextColor={theme.colors.textDisabled}
+            autoFocus
+          />
+          <Pressable style={s.searchBtn} onPress={handleSearch}>
+            <Text style={s.searchBtnText}>Go</Text>
+          </Pressable>
+        </View>
 
-      {isLoading ? (
-        <MealsSkeleton />
-      ) : isError ? (
-        <ErrorState
-          testID="search.error"
-          message="Search failed. Check your connection and try again."
-          onRetry={refetch}
-        />
-      ) : (
-        <FlatList
-          data={results}
-          keyExtractor={(r) => r.external_id}
-          renderItem={({ item }) => (
-            <Pressable style={s.result} onPress={() => addRecipe(item)}>
-              <Text style={s.resultTitle}>{item.title}</Text>
-              <Text style={s.resultMeta}>
-                {[
-                  item.cuisine,
-                  item.difficulty,
-                  item.total_time_mins ? `${item.total_time_mins}min` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </Text>
-            </Pressable>
-          )}
-        />
-      )}
-    </SafeAreaView>
+        {isLoading ? (
+          <MealsSkeleton />
+        ) : isError ? (
+          <ErrorState
+            testID="search.error"
+            message="Search failed. Check your connection and try again."
+            onRetry={refetch}
+          />
+        ) : (
+          <FlatList
+            data={results}
+            keyExtractor={(r) => r.external_id}
+            keyboardDismissMode="on-drag"
+            renderItem={({ item }) => (
+              <Pressable style={s.result} onPress={() => addRecipe(item)}>
+                <Text style={s.resultTitle}>{item.title}</Text>
+                <Text style={s.resultMeta}>
+                  {[
+                    item.cuisine,
+                    item.difficulty,
+                    item.total_time_mins ? `${item.total_time_mins}min` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Text>
+              </Pressable>
+            )}
+          />
+        )}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg },
+  keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, padding: theme.spacing.lg },
   heading: {
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,
