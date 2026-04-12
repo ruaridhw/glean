@@ -1,4 +1,4 @@
-appId: com.ruaridhw.glean
+appId: ${APP_ID}
 name: "Error States: offline banner and API error handling"
 ---
 - runFlow: helpers/launch.yaml
@@ -6,48 +6,34 @@ name: "Error States: offline banner and API error handling"
 # --- Test 1: Offline banner ---
 # Enable airplane mode
 - runScript:
-    script: |
-      const proc = java.lang.Runtime.getRuntime().exec(
-        ["adb", "shell", "cmd", "connectivity", "airplane-mode", "enable"]
-      )
-      proc.waitFor()
+    file: helpers/airplane-mode-enable.js
 
 # Wait for offline banner to appear
 - extendedWaitUntil:
-    visible:
-      id: "offlineBanner"
+    visible: "You're offline. Some features need internet."
     timeout: 10000
 - assertVisible: "You're offline. Some features need internet."
 
 # Disable airplane mode
 - runScript:
-    script: |
-      const proc = java.lang.Runtime.getRuntime().exec(
-        ["adb", "shell", "cmd", "connectivity", "airplane-mode", "disable"]
-      )
-      proc.waitFor()
+    file: helpers/airplane-mode-disable.js
 
 # Wait for offline banner to disappear
 - extendedWaitUntil:
-    notVisible:
-      id: "offlineBanner"
+    notVisible: "You're offline. Some features need internet."
     timeout: 10000
 
 # --- Test 2: Search error state ---
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: meals
+      tab: Meals
 - tapOn: "Discover"
 - tapOn: "Search recipes →"
 
 # Disconnect
 - runScript:
-    script: |
-      const proc = java.lang.Runtime.getRuntime().exec(
-        ["adb", "shell", "cmd", "connectivity", "airplane-mode", "enable"]
-      )
-      proc.waitFor()
+    file: helpers/airplane-mode-enable.js
 
 # Type search query and submit
 - tapOn:
@@ -58,15 +44,10 @@ name: "Error States: offline banner and API error handling"
 
 # Wait for error state
 - extendedWaitUntil:
-    visible:
-      id: "search.error"
+    visible: "Try again"
     timeout: 10000
 - assertVisible: "Try again"
 
 # Restore connectivity (cleanup)
 - runScript:
-    script: |
-      const proc = java.lang.Runtime.getRuntime().exec(
-        ["adb", "shell", "cmd", "connectivity", "airplane-mode", "disable"]
-      )
-      proc.waitFor()
+    file: helpers/airplane-mode-disable.js
