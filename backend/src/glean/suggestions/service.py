@@ -30,9 +30,7 @@ Respond with ONLY valid JSON. No markdown."""
 
 
 @tracer.capture_method
-def get_suggestions(
-    request: SuggestionRequest, *, model: BaseChatModel | None = None
-) -> SuggestionResponse:
+def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel | None = None) -> SuggestionResponse:
     model = model or get_default_model()
 
     context = {

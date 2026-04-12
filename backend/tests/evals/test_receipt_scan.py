@@ -17,9 +17,7 @@ from .judges.rubrics import judge_receipt_scan
 ALLOWED_UNITS = {"g", "ml", "units"}
 
 
-def _invoke_receipt_scan(
-    model: BaseChatModel, line_items: list[dict], *, example_idx: int
-) -> str:
+def _invoke_receipt_scan(model: BaseChatModel, line_items: list[dict], *, example_idx: int) -> str:
     result = model.invoke(
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
@@ -75,9 +73,7 @@ class TestReceiptScanStructural:
             content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
             items = json.loads(content)
             expected_count = len(example["input"]["line_items"])
-            assert len(items) == expected_count, (
-                f"Example {i}: expected {expected_count} items, got {len(items)}"
-            )
+            assert len(items) == expected_count, f"Example {i}: expected {expected_count} items, got {len(items)}"
 
 
 @pytest.mark.soft_gate

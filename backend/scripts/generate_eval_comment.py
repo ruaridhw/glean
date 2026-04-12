@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate a jazzy GitHub PR comment from eval JUnit XML results."""
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,7 @@ def parse_junit_xml(path: str) -> list[TestResult]:
     results: list[TestResult] = []
     try:
         tree = ET.parse(path)  # noqa: S314
-    except (ET.ParseError, FileNotFoundError):
+    except ET.ParseError, FileNotFoundError:
         return results
     for testcase in tree.iter("testcase"):
         failure = testcase.find("failure")
@@ -161,9 +162,7 @@ def generate_comment(
 
     for name, fr in features.items():
         s_icon = _status_icon(fr.structural)
-        lines.append(
-            f"| {name} | {s_icon} {_score(fr.structural)} | {_pct(fr.heuristic)} | {_pct(fr.judge)} |"
-        )
+        lines.append(f"| {name} | {s_icon} {_score(fr.structural)} | {_pct(fr.heuristic)} | {_pct(fr.judge)} |")
 
     lines.append("")
     if hard_passed:
