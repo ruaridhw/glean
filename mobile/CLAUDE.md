@@ -1,19 +1,16 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code when working in the Glean mobile app.
-
-## Preferred tools
-
-- Use `rg` for fast text and file search
-- Use `rtk` when reading large files, listing directories, or running noisy commands
+See `../CLAUDE.md` for repo-wide Makefile targets and preferred tools.
 
 ## Commands
 
+Prefer `make test-mobile` / `make lint-mobile` from the repo root. Use the commands
+below for targeted runs within this directory:
+
 ```bash
-npm test                               # all tests (uses --experimental-vm-modules)
 npm test -- --watch                    # watch mode
 npm test -- tests/db/client.test.ts    # single file
-npm run check                          # biome lint + tsc + knip (dead code)
 npx drizzle-kit generate              # regenerate migrations from schema.ts
 ```
 
