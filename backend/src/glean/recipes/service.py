@@ -256,9 +256,7 @@ def _llm_json_to_recipe_out(data: dict, url: str) -> RecipeOut:
     )
 
 
-def import_recipe_from_url(
-    request: ImportUrlRequest, *, model: BaseChatModel | None = None
-) -> RecipeOut:
+def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel | None = None) -> RecipeOut:
     _validate_url_ssrf(request.url)
 
     html = httpx.get(request.url, follow_redirects=True, timeout=10.0).text

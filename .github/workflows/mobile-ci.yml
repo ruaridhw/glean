@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'mobile/**'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,8 +29,8 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Biome check
-        run: npx biome check .
+      - name: Lint, typecheck, and dead code
+        run: npm run check
 
   test:
     name: Test
@@ -51,6 +52,7 @@ jobs:
 
   build:
     name: Build Android APK
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -90,7 +92,7 @@ jobs:
   e2e:
     name: E2E
     needs: build
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -3,9 +3,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +13,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ShoppingSkeleton } from "@/components/skeletons/ShoppingSkeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -22,6 +24,7 @@ import {
 } from "@/db/shopping";
 import { theme } from "@/theme";
 import type { ShoppingListItem } from "@/types";
+import { showSuccess } from "@/utils/toast";
 
 export default function ShopScreen() {
   const [items, setItems] = useState<ShoppingListItem[]>([]);
@@ -31,7 +34,9 @@ export default function ShopScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setItems(await getShoppingListItems());
+    const result = await getShoppingListItems();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setItems(result);
     setLoading(false);
   }, []);
 
@@ -47,11 +52,13 @@ export default function ShopScreen() {
     await addManualShoppingItem({ name: newItemName.trim() });
     setNewItemName("");
     setAdding(false);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 
   async function handleToggle(item: ShoppingListItem) {
     await toggleShoppingItem(item.id, !item.is_checked);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 
@@ -90,6 +97,7 @@ export default function ShopScreen() {
                   text: "Clear",
                   onPress: async () => {
                     await completeCheckout();
+                    showSuccess("Checkout complete");
                     await load();
                   },
                 },
@@ -105,7 +113,15 @@ export default function ShopScreen() {
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading)
+    return (
+      <SafeAreaView style={s.container} edges={["top"]}>
+        <View style={s.header}>
+          <Text style={s.heading}>Shopping List</Text>
+        </View>
+        <ShoppingSkeleton />
+      </SafeAreaView>
+    );
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -163,7 +179,17 @@ export default function ShopScreen() {
             </Pressable>
           </View>
         }
-        ListEmptyComponent={<Text style={s.empty}>Your shopping list is empty.</Text>}
+        ListEmptyComponent={
+          <EmptyState
+            testID="shop.emptyState"
+            icon="cart-outline"
+            title="Your shopping list is empty"
+            message="Plan some meals and we'll figure out what you need."
+            actions={[
+              { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
+            ]}
+          />
+        }
       />
     </SafeAreaView>
   );

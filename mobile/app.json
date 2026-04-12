@@ -5,22 +5,30 @@
     "version": "0.1.1",
     "scheme": "glean",
     "platforms": ["ios", "android"],
-    "ios": { "supportsTablet": true },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "package": "com.ruaridhw.glean",
-      "adaptiveIcon": { "backgroundColor": "#2a9d8f" }
+      "adaptiveIcon": {
+        "backgroundColor": "#2a9d8f"
+      },
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      ["expo-camera", { "cameraPermission": "Allow Glean to scan receipts." }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Glean to scan receipts."
+        }
+      ]
     ],
     "updates": {
       "enabled": false
     },
     "splash": {
-      "image": "./assets/glean-logo.png",
-      "resizeMode": "contain",
       "backgroundColor": "#fdfaf6"
     }
   }

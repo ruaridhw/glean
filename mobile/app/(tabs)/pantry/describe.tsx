@@ -2,39 +2,25 @@
 
 import { router } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiClient } from "@/api/client";
+import { useDescribeReceipt } from "@/api/hooks";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default function DescribeScreen() {
   const [text, setText] = useState("");
-  const [loading, setLoading] = useState(false);
+  const describeMutation = useDescribeReceipt();
 
-  async function parse() {
-    if (!text.trim()) return;
-    setLoading(true);
-    try {
-      const result = await apiClient.post<{ items: unknown[] }>("/receipts/describe", { text });
-      router.push({
-        pathname: "/(tabs)/pantry/review",
-        params: { items: JSON.stringify(result.items) },
-      });
-    } catch {
-      Alert.alert(
-        "Parse failed",
-        'Could not understand that. Try being more specific, e.g. "500g chicken breast, 2 tins tomatoes".',
-      );
-    } finally {
-      setLoading(false);
-    }
+  function parse() {
+    if (!text.trim() || describeMutation.isPending) return;
+    describeMutation.mutate(text, {
+      onSuccess: (result) => {
+        router.push({
+          pathname: "/(tabs)/pantry/review",
+          params: { items: JSON.stringify(result.items) },
+        });
+      },
+    });
   }
 
   return (
@@ -49,8 +35,19 @@ export default function DescribeScreen() {
         multiline
         autoFocus
       />
-      <Pressable style={styles.button} onPress={parse} disabled={loading || !text.trim()}>
-        {loading ? (
+      {describeMutation.isError && (
+        <ErrorState
+          testID="describe.error"
+          message='Could not understand that. Try being more specific, e.g. "500g chicken breast, 2 tins tomatoes".'
+          onRetry={() => describeMutation.reset()}
+        />
+      )}
+      <Pressable
+        style={styles.button}
+        onPress={parse}
+        disabled={describeMutation.isPending || !text.trim()}
+      >
+        {describeMutation.isPending ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.buttonText}>Parse →</Text>

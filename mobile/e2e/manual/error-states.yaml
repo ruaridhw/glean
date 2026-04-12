@@ -1,0 +1,53 @@
+appId: ${APP_ID}
+name: "Error States: offline banner and API error handling"
+---
+- runFlow: helpers/launch.yaml
+
+# --- Test 1: Offline banner ---
+# Enable airplane mode
+- runScript:
+    file: helpers/airplane-mode-enable.js
+
+# Wait for offline banner to appear
+- extendedWaitUntil:
+    visible: "You're offline. Some features need internet."
+    timeout: 10000
+- assertVisible: "You're offline. Some features need internet."
+
+# Disable airplane mode
+- runScript:
+    file: helpers/airplane-mode-disable.js
+
+# Wait for offline banner to disappear
+- extendedWaitUntil:
+    notVisible: "You're offline. Some features need internet."
+    timeout: 10000
+
+# --- Test 2: Search error state ---
+- runFlow:
+    file: helpers/navigate-tab.yaml
+    env:
+      tab: Meals
+- tapOn: "Discover"
+- tapOn: "Search recipes →"
+
+# Disconnect
+- runScript:
+    file: helpers/airplane-mode-enable.js
+
+# Type search query and submit
+- tapOn:
+    id: "search.input"
+    optional: true
+- inputText: "chicken"
+- pressKey: Enter
+
+# Wait for error state
+- extendedWaitUntil:
+    visible: "Try again"
+    timeout: 10000
+- assertVisible: "Try again"
+
+# Restore connectivity (cleanup)
+- runScript:
+    file: helpers/airplane-mode-disable.js

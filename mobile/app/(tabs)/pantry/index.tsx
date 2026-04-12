@@ -3,9 +3,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +13,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import { theme } from "@/theme";
 import type { PantryItem } from "@/types";
@@ -25,7 +27,9 @@ export default function PantryScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setItems(await getPantryItems());
+    const result = await getPantryItems();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setItems(result);
     setLoading(false);
   }, []);
 
@@ -52,6 +56,7 @@ export default function PantryScreen() {
         style: "destructive",
         onPress: async () => {
           await deletePantryItem(item.id);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           await load();
         },
       },
@@ -65,12 +70,50 @@ export default function PantryScreen() {
     return acc;
   }, {});
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading)
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Text testID="pantry.heading" style={styles.heading}>
+          Pantry
+        </Text>
+        <PantrySkeleton />
+      </SafeAreaView>
+    );
+
+  if (items.length === 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Text style={styles.heading} testID="pantry.heading">
+          Pantry
+        </Text>
+        <EmptyState
+          testID="pantry.emptyState"
+          icon="basket-outline"
+          title="Your pantry is empty"
+          message="Scan a receipt or describe what you have to get started."
+          actions={[
+            { label: "Scan receipt", onPress: () => router.push("/(tabs)/pantry/scan") },
+            { label: "Describe items", onPress: () => router.push("/(tabs)/pantry/describe") },
+          ]}
+        />
+        <Pressable
+          style={styles.fab}
+          testID="pantry.fab"
+          onPress={() => router.push("/(tabs)/pantry/add")}
+        >
+          <Text style={styles.fabText}>＋</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Pantry</Text>
+      <Text style={styles.heading} testID="pantry.heading">
+        Pantry
+      </Text>
       <FlatList
+        testID="pantry.list"
         data={Object.entries(grouped)}
         keyExtractor={([group]) => group}
         renderItem={({ item: [group, groupItems] }) => (
@@ -109,7 +152,11 @@ export default function PantryScreen() {
           </View>
         )}
       />
-      <Pressable style={styles.fab} onPress={() => router.push("/(tabs)/pantry/add")}>
+      <Pressable
+        style={styles.fab}
+        testID="pantry.fab"
+        onPress={() => router.push("/(tabs)/pantry/add")}
+      >
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
     </SafeAreaView>
@@ -125,43 +172,47 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
   },
   groupHeader: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#888",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    ...theme.typography.sectionLabel,
+    color: theme.colors.textSecondary,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "#eee",
+    borderColor: theme.colors.border,
   },
-  name: { flex: 1, fontSize: 15 },
-  qty: { fontSize: 15, color: "#2a9d8f", marginRight: 12 },
+  name: { flex: 1, fontSize: theme.typography.subhead.fontSize, color: theme.colors.text },
+  qty: {
+    fontSize: theme.typography.subhead.fontSize,
+    color: theme.colors.primary,
+    marginRight: theme.spacing.md,
+  },
   editInput: {
     width: 80,
     borderWidth: 1,
-    borderColor: "#2a9d8f",
-    borderRadius: 4,
-    padding: 4,
-    fontSize: 15,
-    marginRight: 12,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.xs,
+    fontSize: theme.typography.subhead.fontSize,
+    marginRight: theme.spacing.md,
   },
-  delete: { color: "#ccc", fontSize: 16 },
+  delete: { color: theme.colors.textDisabled, fontSize: 16 },
   fab: {
     position: "absolute",
-    bottom: 24,
-    right: 24,
+    bottom: theme.spacing.xl,
+    right: theme.spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#2a9d8f",
+    backgroundColor: theme.colors.primary,
     justifyContent: "center",
     alignItems: "center",
+    ...theme.shadow.fab,
   },
-  fabText: { color: "#fff", fontSize: 28, lineHeight: 32 },
+  fabText: { color: theme.colors.card, fontSize: 28, lineHeight: 32 },
 });

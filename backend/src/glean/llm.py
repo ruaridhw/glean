@@ -25,8 +25,7 @@ def validate_model(model_id: str, *, api_key: str | None = None) -> None:
     known_ids = {m.id for m in resp.data}
     if model_id not in known_ids:
         raise ValueError(
-            f"Unknown OpenRouter model: {model_id!r}. "
-            f"See https://openrouter.ai/models for available models."
+            f"Unknown OpenRouter model: {model_id!r}. See https://openrouter.ai/models for available models."
         )
 
 

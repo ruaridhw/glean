@@ -1,62 +1,38 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
-import type { SaveRecipeParams } from "@/db/recipes";
+import { useRecipeSearch } from "@/api/hooks";
+import type { RecipeOut } from "@/api/types";
+import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
 import { theme } from "@/theme";
-
-/** API response shape for recipe detail — matches SaveRecipeParams. */
-type RecipeDetailResponse = SaveRecipeParams;
-
-interface SearchResult {
-  external_id: string;
-  title: string;
-  cuisine: string | null;
-  difficulty: string | null;
-  total_time_mins: number | null;
-  dietary_flags: string[];
-}
+import { showSuccess } from "@/utils/toast";
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState("");
 
-  async function search() {
+  const { data, isLoading, isError, refetch } = useRecipeSearch(submittedQuery);
+  const results = data?.results ?? [];
+
+  function handleSearch() {
     if (!query.trim()) return;
-    setLoading(true);
-    try {
-      const data = await apiClient.get<{ results: SearchResult[] }>(
-        `/recipes/search?q=${encodeURIComponent(query)}`,
-      );
-      setResults(data.results);
-    } catch {
-      Alert.alert("Search failed");
-    } finally {
-      setLoading(false);
-    }
+    setSubmittedQuery(query.trim());
   }
 
-  async function addRecipe(result: SearchResult) {
+  async function addRecipe(result: { external_id: string }) {
     const cached = await getRecipeByExternalId(result.external_id);
     if (cached) {
       router.push(`/(tabs)/meals/${cached.id}`);
       return;
     }
     try {
-      const detail = await apiClient.get<RecipeDetailResponse>(`/recipes/${result.external_id}`);
+      const detail = await apiClient.get<RecipeOut>(`/recipes/${result.external_id}`);
       const id = await saveRecipe({ ...detail, ingredients: detail.ingredients ?? [] });
+      showSuccess("Recipe saved");
       router.push(`/(tabs)/meals/${id}`);
     } catch {
       Alert.alert("Failed to fetch recipe details.");
@@ -74,16 +50,22 @@ export default function SearchScreen() {
           onChangeText={setQuery}
           placeholder="Search recipes…"
           returnKeyType="search"
-          onSubmitEditing={search}
+          onSubmitEditing={handleSearch}
           placeholderTextColor={theme.colors.textDisabled}
         />
-        <Pressable style={s.searchBtn} onPress={search}>
+        <Pressable style={s.searchBtn} onPress={handleSearch}>
           <Text style={s.searchBtnText}>Go</Text>
         </Pressable>
       </View>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: theme.spacing.xl }} color={theme.colors.primary} />
+      {isLoading ? (
+        <MealsSkeleton />
+      ) : isError ? (
+        <ErrorState
+          testID="search.error"
+          message="Search failed. Check your connection and try again."
+          onRetry={refetch}
+        />
       ) : (
         <FlatList
           data={results}

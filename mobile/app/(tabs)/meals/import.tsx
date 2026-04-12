@@ -1,6 +1,15 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import type { SaveRecipeParams } from "@/db/recipes";
@@ -30,34 +39,40 @@ export default function ImportScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <Text style={s.heading}>Import from URL</Text>
-      <Text style={s.subtitle}>Paste a recipe URL and we'll extract the details</Text>
-      <TextInput
-        style={s.input}
-        value={url}
-        onChangeText={setUrl}
-        placeholder="https://..."
-        autoFocus
-        autoCapitalize="none"
-        keyboardType="url"
-        returnKeyType="go"
-        onSubmitEditing={importFromUrl}
-        placeholderTextColor={theme.colors.textDisabled}
-      />
-      <Pressable style={s.button} onPress={importFromUrl} disabled={importing || !url.trim()}>
-        {importing ? (
-          <ActivityIndicator color={theme.colors.card} />
-        ) : (
-          <Text style={s.buttonText}>Import</Text>
-        )}
-      </Pressable>
-    </SafeAreaView>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={s.keyboardView}
+    >
+      <SafeAreaView style={s.container} edges={["top"]}>
+        <Text style={s.heading}>Import from URL</Text>
+        <Text style={s.subtitle}>Paste a recipe URL and we'll extract the details</Text>
+        <TextInput
+          style={s.input}
+          value={url}
+          onChangeText={setUrl}
+          placeholder="https://..."
+          autoFocus
+          autoCapitalize="none"
+          keyboardType="url"
+          returnKeyType="go"
+          onSubmitEditing={importFromUrl}
+          placeholderTextColor={theme.colors.textDisabled}
+        />
+        <Pressable style={s.button} onPress={importFromUrl} disabled={importing || !url.trim()}>
+          {importing ? (
+            <ActivityIndicator color={theme.colors.card} />
+          ) : (
+            <Text style={s.buttonText}>Import</Text>
+          )}
+        </Pressable>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg },
+  keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, padding: theme.spacing.lg },
   heading: {
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,
