@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getRecipeById, getRecipeIngredients } from "@/db/recipes";
 import { theme } from "@/theme";
 import type { Recipe, RecipeIngredient } from "@/types";
@@ -32,57 +33,60 @@ export default function RecipeDetailScreen() {
     typeof recipe.instructions === "string" ? JSON.parse(recipe.instructions) : recipe.instructions;
 
   return (
-    <ScrollView style={s.container}>
-      <Text style={s.title}>{recipe.title}</Text>
-      <Text style={s.meta}>
-        {[
-          recipe.cuisine,
-          recipe.difficulty,
-          recipe.total_time_mins ? `${recipe.total_time_mins} min` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </Text>
-      {(recipe.dietary_flags?.length ?? 0) > 0 && (
-        <View style={s.flags}>
-          {recipe.dietary_flags?.map((f) => (
-            <View key={f} style={s.flag}>
-              <Text style={s.flagText}>{f}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <Text style={s.sectionHeading}>Ingredients</Text>
-      {ingredients.map((ing) => (
-        <Text key={ing.id} style={s.ingredient}>
-          • {ing.quantity}
-          {ing.unit} {ing.ingredient?.canonical_name ?? ""}
-          {ing.preparation ? `, ${ing.preparation}` : ""}
-          {ing.is_optional ? " (optional)" : ""}
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <ScrollView contentContainerStyle={s.content}>
+        <Text style={s.title}>{recipe.title}</Text>
+        <Text style={s.meta}>
+          {[
+            recipe.cuisine,
+            recipe.difficulty,
+            recipe.total_time_mins ? `${recipe.total_time_mins} min` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </Text>
-      ))}
+        {(recipe.dietary_flags?.length ?? 0) > 0 && (
+          <View style={s.flags}>
+            {recipe.dietary_flags?.map((f) => (
+              <View key={f} style={s.flag}>
+                <Text style={s.flagText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-      <Text style={s.sectionHeading}>Instructions</Text>
-      {instructions.map((step: { step_number: number; phase: string; text: string }) => (
-        <View key={step.step_number} style={s.step}>
-          <Text style={s.stepNum}>{step.step_number}</Text>
-          <Text style={s.stepText}>{step.text}</Text>
-        </View>
-      ))}
+        <Text style={s.sectionHeading}>Ingredients</Text>
+        {ingredients.map((ing) => (
+          <Text key={ing.id} style={s.ingredient}>
+            • {ing.quantity}
+            {ing.unit} {ing.ingredient?.canonical_name ?? ""}
+            {ing.preparation ? `, ${ing.preparation}` : ""}
+            {ing.is_optional ? " (optional)" : ""}
+          </Text>
+        ))}
 
-      <Pressable
-        style={s.addBtn}
-        onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
-      >
-        <Text style={s.addBtnText}>Add to Plan</Text>
-      </Pressable>
-    </ScrollView>
+        <Text style={s.sectionHeading}>Instructions</Text>
+        {instructions.map((step: { step_number: number; phase: string; text: string }) => (
+          <View key={step.step_number} style={s.step}>
+            <Text style={s.stepNum}>{step.step_number}</Text>
+            <Text style={s.stepText}>{step.text}</Text>
+          </View>
+        ))}
+
+        <Pressable
+          style={s.addBtn}
+          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
+        >
+          <Text style={s.addBtnText}>Add to Plan</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  content: { padding: theme.spacing.lg },
   title: {
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,

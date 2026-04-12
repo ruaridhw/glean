@@ -12,7 +12,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
+import { theme } from "@/theme";
 import type { PantryItem } from "@/types";
 
 export default function PantryScreen() {
@@ -66,7 +68,7 @@ export default function PantryScreen() {
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.heading}>Pantry</Text>
       <FlatList
         data={Object.entries(grouped)}
@@ -110,13 +112,18 @@ export default function PantryScreen() {
       <Pressable style={styles.fab} onPress={() => router.push("/(tabs)/pantry/add")}>
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  heading: { fontSize: 24, fontWeight: "700", padding: 16 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  heading: {
+    fontSize: theme.typography.title2.fontSize,
+    fontWeight: theme.typography.title2.fontWeight,
+    color: theme.colors.text,
+    padding: theme.spacing.lg,
+  },
   groupHeader: {
     fontSize: 11,
     fontWeight: "700",

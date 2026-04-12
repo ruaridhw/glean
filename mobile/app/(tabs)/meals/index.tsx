@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getSavedRecipes } from "@/db/recipes";
 import { theme } from "@/theme";
 import type { Recipe } from "@/types";
@@ -21,7 +22,7 @@ export default function MealsScreen() {
   );
 
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container} edges={["top"]}>
       <Text style={s.heading}>Meals</Text>
       <View style={s.tabs}>
         {(["saved", "search"] as const).map((t) => (
@@ -63,23 +64,24 @@ export default function MealsScreen() {
           />
         )
       ) : (
-        <Pressable style={s.discoverBtn} onPress={() => router.push("/(tabs)/meals/search")}>
-          <Text style={s.discoverText}>Search recipes →</Text>
-        </Pressable>
+        <>
+          <Pressable style={s.discoverBtn} onPress={() => router.push("/(tabs)/meals/search")}>
+            <Text style={s.discoverText}>Search recipes →</Text>
+          </Pressable>
+          <Pressable style={s.importBtn} onPress={() => router.push("/(tabs)/meals/import")}>
+            <Text style={s.importText}>Import from URL</Text>
+          </Pressable>
+        </>
       )}
-
-      <Pressable style={s.importBtn} onPress={() => router.push("/(tabs)/meals/search")}>
-        <Text style={s.importText}>Import from URL</Text>
-      </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   heading: {
-    fontSize: theme.typography.largeTitle.fontSize,
-    fontWeight: theme.typography.largeTitle.fontWeight,
+    fontSize: theme.typography.title2.fontSize,
+    fontWeight: theme.typography.title2.fontWeight,
     color: theme.colors.text,
     padding: theme.spacing.lg,
   },
