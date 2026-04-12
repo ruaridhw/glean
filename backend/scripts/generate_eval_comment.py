@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class TestResult:
+class EvalResult:
     name: str
     classname: str
     passed: bool
@@ -19,13 +19,13 @@ class TestResult:
 
 @dataclass
 class FeatureResults:
-    structural: list[TestResult] = field(default_factory=list)
-    heuristic: list[TestResult] = field(default_factory=list)
-    judge: list[TestResult] = field(default_factory=list)
+    structural: list[EvalResult] = field(default_factory=list)
+    heuristic: list[EvalResult] = field(default_factory=list)
+    judge: list[EvalResult] = field(default_factory=list)
 
 
-def parse_junit_xml(path: str) -> list[TestResult]:
-    results: list[TestResult] = []
+def parse_junit_xml(path: str) -> list[EvalResult]:
+    results: list[EvalResult] = []
     try:
         tree = ET.parse(path)  # noqa: S314
     except ET.ParseError, FileNotFoundError:
@@ -33,7 +33,7 @@ def parse_junit_xml(path: str) -> list[TestResult]:
     for testcase in tree.iter("testcase"):
         failure = testcase.find("failure")
         results.append(
-            TestResult(
+            EvalResult(
                 name=testcase.get("name", ""),
                 classname=testcase.get("classname", ""),
                 passed=failure is None,
@@ -43,7 +43,7 @@ def parse_junit_xml(path: str) -> list[TestResult]:
     return results
 
 
-def classify_results(results: list[TestResult]) -> dict[str, FeatureResults]:
+def classify_results(results: list[EvalResult]) -> dict[str, FeatureResults]:
     features: dict[str, FeatureResults] = {
         "receipt-scan": FeatureResults(),
         "suggestions": FeatureResults(),
@@ -69,7 +69,7 @@ def classify_results(results: list[TestResult]) -> dict[str, FeatureResults]:
     return features
 
 
-def _score(results: list[TestResult]) -> str:
+def _score(results: list[EvalResult]) -> str:
     if not results:
         return "\u2014"
     passed = sum(1 for r in results if r.passed)
@@ -77,20 +77,20 @@ def _score(results: list[TestResult]) -> str:
     return f"{passed}/{total}"
 
 
-def _pct(results: list[TestResult]) -> str:
+def _pct(results: list[EvalResult]) -> str:
     if not results:
         return "\u2014"
     passed = sum(1 for r in results if r.passed)
     return f"{100 * passed // len(results)}%"
 
 
-def _status_icon(results: list[TestResult]) -> str:
+def _status_icon(results: list[EvalResult]) -> str:
     if not results:
         return "\u2b1c"
     return "\u2705" if all(r.passed for r in results) else "\u274c"
 
 
-def _render_table(results: list[TestResult], pass_icon: str, fail_icon: str) -> list[str]:
+def _render_table(results: list[EvalResult], pass_icon: str, fail_icon: str) -> list[str]:
     lines = ["", "| Check | Status |", "|-------|--------|"]
     lines.extend(f"| {r.name} | {pass_icon if r.passed else fail_icon} |" for r in results)
     failures = [r for r in results if not r.passed]
@@ -143,8 +143,8 @@ def _detail_section(name: str, fr: FeatureResults) -> str:
 
 
 def generate_comment(
-    hard_results: list[TestResult],
-    soft_results: list[TestResult],
+    hard_results: list[EvalResult],
+    soft_results: list[EvalResult],
     model: str,
 ) -> str:
     all_results = hard_results + soft_results
