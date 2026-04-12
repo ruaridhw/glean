@@ -2,7 +2,16 @@
 
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
@@ -39,51 +48,57 @@ export default function ManualEntryScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Add item</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="Ingredient name"
-        testID="manualEntry.nameInput"
-        autoFocus
-      />
-      <View style={styles.row}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.keyboardView}
+    >
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Text style={styles.heading}>Add item</Text>
         <TextInput
-          style={[styles.input, { flex: 1, marginRight: 8 }]}
-          value={quantity}
-          onChangeText={setQuantity}
-          placeholder="Quantity"
-          testID="manualEntry.quantityInput"
-          keyboardType="numeric"
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="Ingredient name"
+          testID="manualEntry.nameInput"
+          autoFocus
         />
-        <View style={styles.unitRow}>
-          {UNITS.map((u) => (
-            <Pressable
-              key={u}
-              style={[styles.unitBtn, unit === u && styles.unitBtnActive]}
-              onPress={() => setUnit(u)}
-            >
-              <Text style={unit === u ? styles.unitTextActive : styles.unitText}>{u}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginRight: 8 }]}
+            value={quantity}
+            onChangeText={setQuantity}
+            placeholder="Quantity"
+            testID="manualEntry.quantityInput"
+            keyboardType="numeric"
+          />
+          <View style={styles.unitRow}>
+            {UNITS.map((u) => (
+              <Pressable
+                key={u}
+                style={[styles.unitBtn, unit === u && styles.unitBtnActive]}
+                onPress={() => setUnit(u)}
+              >
+                <Text style={unit === u ? styles.unitTextActive : styles.unitText}>{u}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
-      <Pressable
-        style={styles.button}
-        testID="manualEntry.saveButton"
-        onPress={save}
-        disabled={saving}
-      >
-        <Text style={styles.buttonText}>Add to Pantry</Text>
-      </Pressable>
-    </SafeAreaView>
+        <Pressable
+          style={styles.button}
+          testID="manualEntry.saveButton"
+          onPress={save}
+          disabled={saving}
+        >
+          <Text style={styles.buttonText}>Add to Pantry</Text>
+        </Pressable>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: theme.spacing.xl, backgroundColor: theme.colors.background },
+  keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, padding: theme.spacing.xl },
   heading: {
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,

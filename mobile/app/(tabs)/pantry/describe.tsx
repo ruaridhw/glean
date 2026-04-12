@@ -2,7 +2,15 @@
 
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDescribeReceipt } from "@/api/hooks";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -24,41 +32,49 @@ export default function DescribeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Describe your shop</Text>
-      <Text style={styles.subtitle}>e.g. "I bought a kilo of mince and two tins of tomatoes"</Text>
-      <TextInput
-        style={styles.input}
-        value={text}
-        onChangeText={setText}
-        placeholder="What did you buy?"
-        multiline
-        autoFocus
-      />
-      {describeMutation.isError && (
-        <ErrorState
-          testID="describe.error"
-          message='Could not understand that. Try being more specific, e.g. "500g chicken breast, 2 tins tomatoes".'
-          onRetry={() => describeMutation.reset()}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.keyboardView}
+    >
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Text style={styles.heading}>Describe your shop</Text>
+        <Text style={styles.subtitle}>
+          e.g. "I bought a kilo of mince and two tins of tomatoes"
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={setText}
+          placeholder="What did you buy?"
+          multiline
+          autoFocus
         />
-      )}
-      <Pressable
-        style={styles.button}
-        onPress={parse}
-        disabled={describeMutation.isPending || !text.trim()}
-      >
-        {describeMutation.isPending ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Parse →</Text>
+        {describeMutation.isError && (
+          <ErrorState
+            testID="describe.error"
+            message='Could not understand that. Try being more specific, e.g. "500g chicken breast, 2 tins tomatoes".'
+            onRetry={() => describeMutation.reset()}
+          />
         )}
-      </Pressable>
-    </SafeAreaView>
+        <Pressable
+          style={styles.button}
+          onPress={parse}
+          disabled={describeMutation.isPending || !text.trim()}
+        >
+          {describeMutation.isPending ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Parse →</Text>
+          )}
+        </Pressable>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
+  keyboardView: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, padding: 24 },
   heading: { fontSize: 22, fontWeight: "700", marginBottom: 8 },
   subtitle: { fontSize: 14, color: "#888", marginBottom: 20 },
   input: {
