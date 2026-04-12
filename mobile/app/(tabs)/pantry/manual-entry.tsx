@@ -3,6 +3,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 
@@ -35,7 +36,7 @@ export default function ManualEntryScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.heading}>Add item</Text>
       <TextInput
         style={styles.input}
@@ -67,7 +68,7 @@ export default function ManualEntryScreen() {
       <Pressable style={styles.button} onPress={save} disabled={saving}>
         <Text style={styles.buttonText}>Add to Pantry</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -5,6 +5,7 @@ import { File, Paths } from "expo-file-system";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import { signOut } from "@/auth/cognito";
 import { getUserConfig, saveUserConfig } from "@/db/config";
@@ -100,85 +101,89 @@ export default function SettingsScreen() {
   if (loading) return null;
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={{ padding: theme.spacing.lg }}>
-      <Text style={s.heading}>Settings</Text>
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <ScrollView contentContainerStyle={{ padding: theme.spacing.lg }}>
+        <Text style={s.heading}>Settings</Text>
 
-      <Text style={s.sectionHeading}>Purchase Tolerance</Text>
-      <Text style={s.description}>
-        {tolerance <= 0.2
-          ? "Strict: pantry ingredients only"
-          : tolerance <= 0.5
-            ? "Moderate: minor shopping OK"
-            : "Open: happy to buy new ingredients"}
-      </Text>
-      <Slider
-        style={{ height: 40 }}
-        minimumValue={0}
-        maximumValue={1}
-        step={0.1}
-        value={tolerance}
-        onValueChange={setTolerance}
-        minimumTrackTintColor={theme.colors.primary}
-        thumbTintColor={theme.colors.primary}
-      />
+        <Text style={s.sectionHeading}>Purchase Tolerance</Text>
+        <Text style={s.description}>
+          {tolerance <= 0.2
+            ? "Strict: pantry ingredients only"
+            : tolerance <= 0.5
+              ? "Moderate: minor shopping OK"
+              : "Open: happy to buy new ingredients"}
+        </Text>
+        <Slider
+          style={{ height: 40 }}
+          minimumValue={0}
+          maximumValue={1}
+          step={0.1}
+          value={tolerance}
+          onValueChange={setTolerance}
+          minimumTrackTintColor={theme.colors.primary}
+          thumbTintColor={theme.colors.primary}
+        />
 
-      <Text style={s.sectionHeading}>Meals per Week</Text>
-      <TextInput
-        style={s.input}
-        value={mealsPerWeek}
-        onChangeText={setMealsPerWeek}
-        keyboardType="number-pad"
-      />
+        <Text style={s.sectionHeading}>Meals per Week</Text>
+        <TextInput
+          style={s.input}
+          value={mealsPerWeek}
+          onChangeText={setMealsPerWeek}
+          keyboardType="number-pad"
+        />
 
-      <Text style={s.sectionHeading}>Default Servings</Text>
-      <TextInput
-        style={s.input}
-        value={servings}
-        onChangeText={setServings}
-        keyboardType="number-pad"
-      />
+        <Text style={s.sectionHeading}>Default Servings</Text>
+        <TextInput
+          style={s.input}
+          value={servings}
+          onChangeText={setServings}
+          keyboardType="number-pad"
+        />
 
-      <Text style={s.sectionHeading}>Max Active Cooking Time (minutes)</Text>
-      <TextInput
-        style={s.input}
-        value={maxTime}
-        onChangeText={setMaxTime}
-        keyboardType="number-pad"
-        placeholder="No limit"
-        placeholderTextColor={theme.colors.textDisabled}
-      />
+        <Text style={s.sectionHeading}>Max Active Cooking Time (minutes)</Text>
+        <TextInput
+          style={s.input}
+          value={maxTime}
+          onChangeText={setMaxTime}
+          keyboardType="number-pad"
+          placeholder="No limit"
+          placeholderTextColor={theme.colors.textDisabled}
+        />
 
-      <Text style={s.sectionHeading}>Dietary Preferences</Text>
-      <View style={s.flags}>
-        {DIETARY_FLAGS.map((flag) => (
-          <Pressable
-            key={flag}
-            style={[s.flagBtn, dietaryFlags.includes(flag) && s.flagBtnActive]}
-            onPress={() => toggleFlag(flag)}
-          >
-            <Text style={dietaryFlags.includes(flag) ? s.flagTextActive : s.flagText}>{flag}</Text>
-          </Pressable>
-        ))}
-      </View>
+        <Text style={s.sectionHeading}>Dietary Preferences</Text>
+        <View style={s.flags}>
+          {DIETARY_FLAGS.map((flag) => (
+            <Pressable
+              key={flag}
+              style={[s.flagBtn, dietaryFlags.includes(flag) && s.flagBtnActive]}
+              onPress={() => toggleFlag(flag)}
+            >
+              <Text style={dietaryFlags.includes(flag) ? s.flagTextActive : s.flagText}>
+                {flag}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <Pressable style={s.saveBtn} onPress={save}>
-        <Text style={s.saveBtnText}>Save Settings</Text>
-      </Pressable>
+        <Pressable style={s.saveBtn} onPress={save}>
+          <Text style={s.saveBtnText}>Save Settings</Text>
+        </Pressable>
 
-      <Text style={s.sectionHeading}>Account</Text>
-      <Pressable style={s.dangerBtn} onPress={handleSignOut}>
-        <Text style={s.dangerBtnText}>Sign out</Text>
-      </Pressable>
+        <Text style={s.sectionHeading}>Account</Text>
+        <Pressable style={s.dangerBtn} onPress={handleSignOut}>
+          <Text style={s.dangerBtnText}>Sign out</Text>
+        </Pressable>
 
-      {__DEV__ && (
-        <>
-          <Text style={s.sectionHeading}>Developer</Text>
-          <Pressable style={s.devBtn} onPress={exportDb}>
-            <Text style={s.devBtnText}>Export SQLite DB</Text>
-          </Pressable>
-        </>
-      )}
-    </ScrollView>
+        {__DEV__ && (
+          <>
+            <Text style={s.sectionHeading}>Developer</Text>
+            <Pressable style={s.devBtn} onPress={exportDb}>
+              <Text style={s.devBtnText}>Export SQLite DB</Text>
+            </Pressable>
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

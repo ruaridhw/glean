@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
 import type { SaveRecipeParams } from "@/db/recipes";
 import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
@@ -31,8 +32,6 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importUrl, setImportUrl] = useState("");
-  const [importing, setImporting] = useState(false);
 
   async function search() {
     if (!query.trim()) return;
@@ -64,24 +63,8 @@ export default function SearchScreen() {
     }
   }
 
-  async function importFromUrl() {
-    if (!importUrl.trim()) return;
-    setImporting(true);
-    try {
-      const detail = await apiClient.post<RecipeDetailResponse>("/recipes/import-url", {
-        url: importUrl.trim(),
-      });
-      const id = await saveRecipe({ ...detail, ingredients: detail.ingredients ?? [] });
-      router.push(`/(tabs)/meals/${id}`);
-    } catch {
-      Alert.alert("Import failed", "Could not parse the recipe. Try a different URL.");
-    } finally {
-      setImporting(false);
-    }
-  }
-
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container} edges={["top"]}>
       <Text style={s.heading}>Discover Recipes</Text>
 
       <View style={s.searchRow}>
@@ -121,27 +104,7 @@ export default function SearchScreen() {
           )}
         />
       )}
-
-      <View style={s.importSection}>
-        <Text style={s.importLabel}>Import from URL</Text>
-        <TextInput
-          style={s.importInput}
-          value={importUrl}
-          onChangeText={setImportUrl}
-          placeholder="https://..."
-          autoCapitalize="none"
-          keyboardType="url"
-          placeholderTextColor={theme.colors.textDisabled}
-        />
-        <Pressable style={s.importBtn} onPress={importFromUrl} disabled={importing}>
-          {importing ? (
-            <ActivityIndicator color={theme.colors.card} />
-          ) : (
-            <Text style={s.importBtnText}>Import</Text>
-          )}
-        </Pressable>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -183,33 +146,4 @@ const s = StyleSheet.create({
     color: theme.colors.text,
   },
   resultMeta: { fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary },
-  importSection: {
-    borderTopWidth: 1,
-    borderColor: theme.colors.border,
-    paddingTop: theme.spacing.lg,
-    marginTop: theme.spacing.sm,
-  },
-  importLabel: {
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "600",
-    marginBottom: theme.spacing.sm,
-    color: theme.colors.text,
-  },
-  importInput: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing.md,
-    fontSize: theme.typography.subhead.fontSize,
-    marginBottom: theme.spacing.sm,
-    color: theme.colors.text,
-    backgroundColor: theme.colors.card,
-  },
-  importBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing.md,
-    alignItems: "center",
-  },
-  importBtnText: { color: theme.colors.card, fontWeight: "600" },
 });

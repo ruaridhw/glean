@@ -37,6 +37,9 @@ backend/.ruff_cache/
 # Local infra secrets
 infra/.bootstrap-outputs
 
+# Local caches
+**/.cache/
+
 # macOS
 .DS_Store
 .DS_Store?
