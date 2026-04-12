@@ -15,9 +15,7 @@ from glean.suggestions.service import SUGGESTION_SYSTEM_PROMPT
 from .judges.rubrics import judge_suggestion
 
 
-def _invoke_suggestions(
-    model: BaseChatModel, input_data: dict[str, Any], *, example_idx: int
-) -> str:
+def _invoke_suggestions(model: BaseChatModel, input_data: dict[str, Any], *, example_idx: int) -> str:
     context = json.dumps(input_data, default=str)
     result = model.invoke(
         [
@@ -62,9 +60,7 @@ class TestSuggestionsStructural:
             content = _invoke_suggestions(eval_model, example["input"], example_idx=i)
             suggestions = json.loads(content)
             limit = example["input"]["meals_per_week"]
-            assert len(suggestions) <= limit, (
-                f"Example {i}: got {len(suggestions)} suggestions, limit is {limit}"
-            )
+            assert len(suggestions) <= limit, f"Example {i}: got {len(suggestions)} suggestions, limit is {limit}"
 
     def test_recipe_ids_are_integers(
         self,
@@ -74,9 +70,7 @@ class TestSuggestionsStructural:
         for i, example in enumerate(suggestions_dataset):
             content = _invoke_suggestions(eval_model, example["input"], example_idx=i)
             for item in json.loads(content):
-                assert isinstance(item["recipe_id"], int), (
-                    f"Example {i}: recipe_id {item['recipe_id']} is not an int"
-                )
+                assert isinstance(item["recipe_id"], int), f"Example {i}: recipe_id {item['recipe_id']} is not an int"
 
 
 @pytest.mark.soft_gate
@@ -96,9 +90,7 @@ class TestSuggestionsHeuristic:
             for s in suggestions:
                 overlap = {ing.lower() for ing in s.missing_ingredients} & pantry_names
                 if overlap:
-                    failures.append(
-                        f"Example {i}: '{s.title}' lists {overlap} as missing but they're in pantry"
-                    )
+                    failures.append(f"Example {i}: '{s.title}' lists {overlap} as missing but they're in pantry")
         assert not failures, "Missing ingredients check:\n" + "\n".join(failures)
 
     def test_recipe_ids_reference_known_recipes(
@@ -129,9 +121,7 @@ class TestSuggestionsHeuristic:
             suggestions = [SuggestedRecipe(**item) for item in json.loads(content)]
             for s in suggestions:
                 if len(s.reason) < 10:
-                    failures.append(
-                        f"Example {i}: '{s.title}' reason too short ({len(s.reason)} chars): '{s.reason}'"
-                    )
+                    failures.append(f"Example {i}: '{s.title}' reason too short ({len(s.reason)} chars): '{s.reason}'")
         assert not failures, "Reason length check:\n" + "\n".join(failures)
 
 

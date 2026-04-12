@@ -158,3 +158,6 @@ Switch recipe images to `expo-image` (or `Image` with `cachePolicy`). Built-in d
 - Store description and keywords
 - App icon variants (light/dark if dark mode is done)
 - Animated splash screen replacing the static one
+
+### 23. Real-time scan progress
+Replace timed frontend estimates with actual backend progress reporting. Architecture: split `/receipts/scan` into async job submission (`POST /receipts/scan` returns `{job_id}`) + status polling (`GET /receipts/scan/{job_id}`). Requires: DynamoDB table for job state with TTL auto-cleanup, SAM template additions (DynamoDB resource + IAM), Lambda function updated to write status transitions (uploading → ocr → extracting → done).

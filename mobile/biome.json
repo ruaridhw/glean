@@ -7,6 +7,9 @@
       }
     }
   },
+  "files": {
+    "includes": ["**", "!coverage"]
+  },
   "linter": {
     "enabled": true,
     "rules": { "recommended": true }

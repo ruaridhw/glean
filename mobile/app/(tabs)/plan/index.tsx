@@ -12,7 +12,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiClient } from "@/api/client";
+import { useSuggestMeals } from "@/api/hooks";
+import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
@@ -27,12 +30,13 @@ import { addShoppingGapsForRecipe } from "@/db/shopping";
 import { compressPantry } from "@/suggestions/compress";
 import { theme } from "@/theme";
 import type { MealPlanEntry } from "@/types";
+import { showSuccess } from "@/utils/toast";
 
 export default function PlanScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [mealsPerWeek, setMealsPerWeek] = useState(5);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const suggestMutation = useSuggestMeals();
   const params = useLocalSearchParams<{ add_recipe_id?: string }>();
 
   const load = useCallback(async () => {
@@ -52,6 +56,7 @@ export default function PlanScreen() {
       }
       await addMealPlanEntry(recipeId);
       await addShoppingGapsForRecipe(recipeId);
+      showSuccess("Meal planned");
       await load();
     },
     [mealsPerWeek, load],
@@ -94,50 +99,85 @@ export default function PlanScreen() {
       Alert.alert("Plan is full", "Remove some meals before generating.");
       return;
     }
-    setGenerating(true);
-    try {
-      const [pantryItems, recipes, config] = await Promise.all([
-        getPantryItems(),
-        getSavedRecipes(),
-        getUserConfig(),
-      ]);
 
-      const compressed = compressPantry(pantryItems as Parameters<typeof compressPantry>[0]);
-      const recipeHistory = recipes.map((r) => ({
-        recipe_id: r.id,
-        title: r.title,
-        last_cooked_at: r.last_cooked_at ?? null,
-        food_groups: [] as string[],
-      }));
+    const [pantryItems, recipes, config] = await Promise.all([
+      getPantryItems(),
+      getSavedRecipes(),
+      getUserConfig(),
+    ]);
 
-      const result = await apiClient.post<{ suggestions: Array<{ recipe_id: number }> }>(
-        "/suggestions",
-        {
-          pantry: compressed,
-          recipe_history: recipeHistory,
-          food_group_coverage: {},
-          purchase_tolerance: config.purchase_tolerance,
-          meals_per_week: emptySlots,
-          dietary_flags: config.dietary_flags,
-          max_active_time_mins: config.max_active_time_mins ?? null,
+    const compressed = compressPantry(pantryItems as Parameters<typeof compressPantry>[0]);
+    const recipeHistory = recipes.map((r) => ({
+      recipe_id: r.id,
+      title: r.title,
+      last_cooked_at: r.last_cooked_at ?? null,
+      food_groups: [] as string[],
+    }));
+
+    suggestMutation.mutate(
+      {
+        pantry: compressed,
+        recipe_history: recipeHistory,
+        food_group_coverage: {},
+        purchase_tolerance: config.purchase_tolerance,
+        meals_per_week: emptySlots,
+        dietary_flags: config.dietary_flags,
+        max_active_time_mins: config.max_active_time_mins ?? null,
+      },
+      {
+        onSuccess: async (result) => {
+          for (const suggestion of result.suggestions.slice(0, emptySlots)) {
+            await addMealPlanEntry(suggestion.recipe_id);
+            await addShoppingGapsForRecipe(suggestion.recipe_id);
+          }
+          showSuccess("Week generated");
+          await load();
         },
-      );
-
-      for (const suggestion of result.suggestions.slice(0, emptySlots)) {
-        await addMealPlanEntry(suggestion.recipe_id);
-        await addShoppingGapsForRecipe(suggestion.recipe_id);
-      }
-      await load();
-    } catch {
-      Alert.alert("Generation failed", "Could not generate suggestions. Try again.");
-    } finally {
-      setGenerating(false);
-    }
+      },
+    );
   }
 
   const emptySlots = Math.max(0, mealsPerWeek - entries.length);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  if (loading) return <PlanSkeleton rows={mealsPerWeek} />;
+
+  if (entries.length === 0) {
+    return (
+      <SafeAreaView style={s.container} edges={["top"]}>
+        <View style={s.header}>
+          <Text style={s.heading}>This Week</Text>
+          <Pressable
+            style={[s.generateBtn, suggestMutation.isPending && s.generateBtnDisabled]}
+            onPress={generateWeek}
+            disabled={suggestMutation.isPending}
+          >
+            {suggestMutation.isPending ? (
+              <ActivityIndicator size="small" color={theme.colors.card} />
+            ) : (
+              <Text style={s.generateBtnText}>Generate week</Text>
+            )}
+          </Pressable>
+        </View>
+        {suggestMutation.isError && (
+          <ErrorState
+            testID="plan.error"
+            message="Could not generate suggestions. Try again."
+            onRetry={() => suggestMutation.reset()}
+          />
+        )}
+        <EmptyState
+          testID="plan.emptyState"
+          icon="calendar-outline"
+          title="No meals planned this week"
+          message="Add recipes to your plan or let AI suggest a week."
+          actions={[
+            { label: "Browse recipes", onPress: () => router.push("/(tabs)/meals" as never) },
+            { label: "Generate plan", onPress: generateWeek },
+          ]}
+        />
+      </SafeAreaView>
+    );
+  }
 
   type ListItem = MealPlanEntry | { id: number; isEmpty: true };
 
@@ -146,17 +186,25 @@ export default function PlanScreen() {
       <View style={s.header}>
         <Text style={s.heading}>This Week</Text>
         <Pressable
-          style={[s.generateBtn, generating && s.generateBtnDisabled]}
+          style={[s.generateBtn, suggestMutation.isPending && s.generateBtnDisabled]}
           onPress={generateWeek}
-          disabled={generating}
+          disabled={suggestMutation.isPending}
         >
-          {generating ? (
+          {suggestMutation.isPending ? (
             <ActivityIndicator size="small" color={theme.colors.card} />
           ) : (
             <Text style={s.generateBtnText}>Generate week</Text>
           )}
         </Pressable>
       </View>
+
+      {suggestMutation.isError && (
+        <ErrorState
+          testID="plan.error"
+          message="Could not generate suggestions. Try again."
+          onRetry={() => suggestMutation.reset()}
+        />
+      )}
 
       <FlatList<ListItem>
         data={[

@@ -46,6 +46,6 @@ export const authStorage = {
     // biome-ignore lint/correctness/noConstantCondition: TODO restore __DEV__ guard once Cognito is deployed
     if (true) return true;
     const token = await SecureStore.getItemAsync(KEYS.accessToken);
-    return token !== null && token.length > 0;
+    return token !== null && (token?.length ?? 0) > 0;
   },
 };

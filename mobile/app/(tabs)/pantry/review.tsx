@@ -17,6 +17,8 @@ import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
 import { normalizeUnit } from "@/normalization/units";
+import { theme } from "@/theme";
+import { showSuccess } from "@/utils/toast";
 
 interface ReviewItem {
   name: string;
@@ -64,6 +66,7 @@ export default function ReviewScreen() {
       if (params.returnTo === "shop") {
         await completeCheckout();
       }
+      showSuccess(`Added ${items.length} item${items.length !== 1 ? "s" : ""} to pantry`);
       router.replace(params.returnTo === "shop" ? "/(tabs)/shop" : "/(tabs)/pantry");
     } catch {
       Alert.alert("Error", "Failed to save. Please try again.");
@@ -102,7 +105,7 @@ export default function ReviewScreen() {
       />
       <Pressable style={styles.confirmButton} onPress={confirm} disabled={saving}>
         {saving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.card} />
         ) : (
           <Text style={styles.confirmText}>
             Confirm {items.length} item{items.length !== 1 ? "s" : ""}
@@ -114,36 +117,65 @@ export default function ReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  heading: { fontSize: 22, fontWeight: "700", padding: 16 },
-  subtitle: { fontSize: 13, color: "#888", paddingHorizontal: 16, paddingBottom: 8 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  heading: {
+    fontSize: theme.typography.title2.fontSize,
+    fontWeight: theme.typography.title2.fontWeight,
+    color: theme.colors.text,
+    padding: theme.spacing.lg,
+  },
+  subtitle: {
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.textSecondary,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "#eee",
+    borderColor: theme.colors.border,
   },
-  flagged: { backgroundColor: "#fff8f0" },
-  flag: { color: "#f7a04a", fontSize: 11, marginRight: 6 },
-  nameInput: { flex: 1, fontSize: 14, borderBottomWidth: 1, borderColor: "#ddd", marginRight: 8 },
+  flagged: { backgroundColor: theme.colors.warningLight },
+  flag: { color: theme.colors.warning, fontSize: 11, marginRight: theme.spacing.xs + 2 },
+  nameInput: {
+    flex: 1,
+    fontSize: 14,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.border,
+    marginRight: theme.spacing.sm,
+    color: theme.colors.text,
+  },
   qtyInput: {
     width: 60,
     fontSize: 14,
     borderBottomWidth: 1,
-    borderColor: "#ddd",
-    marginRight: 4,
+    borderColor: theme.colors.border,
+    marginRight: theme.spacing.xs,
     textAlign: "right",
+    color: theme.colors.text,
   },
-  unit: { fontSize: 12, color: "#888", width: 30, marginRight: 8 },
-  remove: { color: "#ccc", fontSize: 16 },
+  unit: {
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.textSecondary,
+    width: 30,
+    marginRight: theme.spacing.sm,
+  },
+  remove: { color: theme.colors.textDisabled, fontSize: 16 },
   confirmButton: {
-    margin: 16,
-    backgroundColor: "#2a9d8f",
-    borderRadius: 8,
+    margin: theme.spacing.lg,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
     padding: 14,
     alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
   },
-  confirmText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  confirmText: {
+    color: theme.colors.card,
+    fontWeight: theme.typography.headline.fontWeight as "600",
+    fontSize: 16,
+  },
 });
