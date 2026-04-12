@@ -31,7 +31,7 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importUrl, setImportUrl] = useState("");
+  const [importUrl, setImportUrl] = useState("https://");
   const [importing, setImporting] = useState(false);
 
   async function search() {
@@ -61,6 +61,16 @@ export default function SearchScreen() {
       router.push(`/(tabs)/meals/${id}`);
     } catch {
       Alert.alert("Failed to fetch recipe details.");
+    }
+  }
+
+  function handleImportUrlChange(text: string) {
+    if (text.startsWith("https://https://")) {
+      setImportUrl(`https://${text.slice("https://https://".length)}`);
+    } else if (text.startsWith("http://https://")) {
+      setImportUrl(`https://${text.slice("http://https://".length)}`);
+    } else {
+      setImportUrl(text);
     }
   }
 
@@ -127,8 +137,7 @@ export default function SearchScreen() {
         <TextInput
           style={s.importInput}
           value={importUrl}
-          onChangeText={setImportUrl}
-          placeholder="https://..."
+          onChangeText={handleImportUrlChange}
           autoCapitalize="none"
           keyboardType="url"
           placeholderTextColor={theme.colors.textDisabled}

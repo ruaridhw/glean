@@ -39,10 +39,16 @@ class SuggestionRequest(BaseModel):
         description="0.0 = only suggest recipes using pantry ingredients; 1.0 = any recipe regardless of missing items",
     )
     meals_per_week: int = Field(
-        description="Number of suggestion slots to fill (may be less than full week if plan is partially filled)"
+        ge=1,
+        le=7,
+        description="Number of suggestion slots to fill (may be less than full week if plan is partially filled)",
     )
     dietary_flags: list[str] = Field(description="User dietary preferences to respect (e.g. ['vegan', 'gluten-free'])")
-    max_active_time_mins: int | None = Field(description="Maximum active cooking time in minutes; null means no limit")
+    max_active_time_mins: int | None = Field(
+        ge=1,
+        le=480,
+        description="Maximum active cooking time in minutes; null means no limit",
+    )
 
 
 class SuggestedRecipe(BaseModel):

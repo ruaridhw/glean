@@ -20,6 +20,13 @@ const DIETARY_FLAGS = [
   "Paleo",
 ];
 
+const MEALS_PER_WEEK_MIN = 1;
+const MEALS_PER_WEEK_MAX = 7;
+const SERVINGS_MIN = 1;
+const SERVINGS_MAX = 6;
+const MAX_TIME_MIN = 1;
+const MAX_TIME_MAX = 480;
+
 export default function SettingsScreen() {
   const [configId, setConfigId] = useState("");
   const [tolerance, setTolerance] = useState(0.5);
@@ -28,6 +35,9 @@ export default function SettingsScreen() {
   const [dietaryFlags, setDietaryFlags] = useState<string[]>([]);
   const [maxTime, setMaxTime] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mealsPerWeekError, setMealsPerWeekError] = useState<string | null>(null);
+  const [servingsError, setServingsError] = useState<string | null>(null);
+  const [maxTimeError, setMaxTimeError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -43,12 +53,56 @@ export default function SettingsScreen() {
     void load();
   }, []);
 
+  function handleMealsPerWeekChange(val: string) {
+    setMealsPerWeek(val);
+    if (!val) {
+      setMealsPerWeekError(`Required (${MEALS_PER_WEEK_MIN}–${MEALS_PER_WEEK_MAX})`);
+      return;
+    }
+    const n = parseInt(val, 10);
+    if (Number.isNaN(n) || n < MEALS_PER_WEEK_MIN || n > MEALS_PER_WEEK_MAX) {
+      setMealsPerWeekError(`Must be between ${MEALS_PER_WEEK_MIN} and ${MEALS_PER_WEEK_MAX}`);
+    } else {
+      setMealsPerWeekError(null);
+    }
+  }
+
+  function handleServingsChange(val: string) {
+    setServings(val);
+    if (!val) {
+      setServingsError(`Required (${SERVINGS_MIN}–${SERVINGS_MAX})`);
+      return;
+    }
+    const n = parseInt(val, 10);
+    if (Number.isNaN(n) || n < SERVINGS_MIN || n > SERVINGS_MAX) {
+      setServingsError(`Must be between ${SERVINGS_MIN} and ${SERVINGS_MAX}`);
+    } else {
+      setServingsError(null);
+    }
+  }
+
+  function handleMaxTimeChange(val: string) {
+    setMaxTime(val);
+    if (!val) {
+      setMaxTimeError(null);
+      return;
+    }
+    const n = parseInt(val, 10);
+    if (Number.isNaN(n) || n < MAX_TIME_MIN || n > MAX_TIME_MAX) {
+      setMaxTimeError(`Must be between ${MAX_TIME_MIN} and ${MAX_TIME_MAX} minutes`);
+    } else {
+      setMaxTimeError(null);
+    }
+  }
+
+  const hasErrors = !!mealsPerWeekError || !!servingsError || !!maxTimeError;
+
   async function save() {
     await saveUserConfig({
       id: configId,
       purchase_tolerance: tolerance,
-      preferred_servings: parseInt(servings, 10) || 2,
-      meals_per_week: parseInt(mealsPerWeek, 10) || 5,
+      preferred_servings: parseInt(servings, 10),
+      meals_per_week: parseInt(mealsPerWeek, 10),
       dietary_flags: dietaryFlags,
       max_active_time_mins: maxTime ? parseInt(maxTime, 10) : null,
     });
@@ -124,29 +178,32 @@ export default function SettingsScreen() {
 
       <Text style={s.sectionHeading}>Meals per Week</Text>
       <TextInput
-        style={s.input}
+        style={[s.input, mealsPerWeekError ? s.inputError : null]}
         value={mealsPerWeek}
-        onChangeText={setMealsPerWeek}
+        onChangeText={handleMealsPerWeekChange}
         keyboardType="number-pad"
       />
+      {mealsPerWeekError ? <Text style={s.errorText}>{mealsPerWeekError}</Text> : null}
 
       <Text style={s.sectionHeading}>Default Servings</Text>
       <TextInput
-        style={s.input}
+        style={[s.input, servingsError ? s.inputError : null]}
         value={servings}
-        onChangeText={setServings}
+        onChangeText={handleServingsChange}
         keyboardType="number-pad"
       />
+      {servingsError ? <Text style={s.errorText}>{servingsError}</Text> : null}
 
       <Text style={s.sectionHeading}>Max Active Cooking Time (minutes)</Text>
       <TextInput
-        style={s.input}
+        style={[s.input, maxTimeError ? s.inputError : null]}
         value={maxTime}
-        onChangeText={setMaxTime}
+        onChangeText={handleMaxTimeChange}
         keyboardType="number-pad"
         placeholder="No limit"
         placeholderTextColor={theme.colors.textDisabled}
       />
+      {maxTimeError ? <Text style={s.errorText}>{maxTimeError}</Text> : null}
 
       <Text style={s.sectionHeading}>Dietary Preferences</Text>
       <View style={s.flags}>
@@ -161,7 +218,11 @@ export default function SettingsScreen() {
         ))}
       </View>
 
-      <Pressable style={s.saveBtn} onPress={save}>
+      <Pressable
+        style={[s.saveBtn, hasErrors && s.saveBtnDisabled]}
+        onPress={save}
+        disabled={hasErrors}
+      >
         <Text style={s.saveBtnText}>Save Settings</Text>
       </Pressable>
 
@@ -212,6 +273,14 @@ const s = StyleSheet.create({
     fontSize: theme.typography.subhead.fontSize,
     color: theme.colors.text,
   },
+  inputError: {
+    borderColor: theme.colors.warning,
+  },
+  errorText: {
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.warning,
+    marginTop: theme.spacing.xs,
+  },
   flags: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
   flagBtn: {
     borderWidth: 1,
@@ -232,6 +301,9 @@ const s = StyleSheet.create({
     borderRadius: theme.radius.md,
     padding: 14,
     alignItems: "center",
+  },
+  saveBtnDisabled: {
+    opacity: 0.5,
   },
   saveBtnText: {
     color: theme.colors.card,
