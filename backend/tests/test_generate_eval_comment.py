@@ -6,13 +6,13 @@ from pathlib import Path
 # scripts/ is not a package — add it to sys.path for direct import
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from generate_eval_comment import TestResult, classify_results, generate_comment
+from generate_eval_comment import EvalResult, classify_results, generate_comment
 
 
 class TestGenerateEvalComment:
     def test_classify_receipt_structural(self) -> None:
         results = [
-            TestResult(
+            EvalResult(
                 name="test_valid_json",
                 classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=True,
@@ -24,7 +24,7 @@ class TestGenerateEvalComment:
 
     def test_classify_suggestions_heuristic(self) -> None:
         results = [
-            TestResult(
+            EvalResult(
                 name="test_missing_ingredients_not_in_pantry",
                 classname="tests.evals.test_suggestions.TestSuggestionsHeuristic",
                 passed=False,
@@ -37,14 +37,14 @@ class TestGenerateEvalComment:
 
     def test_generate_comment_has_summary_table(self) -> None:
         hard = [
-            TestResult(
+            EvalResult(
                 name="test_valid_json",
                 classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=True,
             ),
         ]
         soft = [
-            TestResult(
+            EvalResult(
                 name="test_names_lowercase",
                 classname="tests.evals.test_receipt_scan.TestReceiptScanHeuristic",
                 passed=True,
@@ -58,7 +58,7 @@ class TestGenerateEvalComment:
 
     def test_generate_comment_hard_gate_failure(self) -> None:
         hard = [
-            TestResult(
+            EvalResult(
                 name="test_valid_json",
                 classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=False,
