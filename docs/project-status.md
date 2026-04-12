@@ -26,7 +26,7 @@ End-to-end deployment pipeline. Current branch, not yet merged.
 **Backend changes**
 - `backend/template.yaml` — `Environment` parameter replaces hardcoded API key params; Secrets Manager IAM policy added
 - `backend/samconfig.toml` — SAM `prod` and `dev` environment configs
-- `backend/src/glean/config.py` — `SecretsManagerSource`: custom pydantic-settings source that fetches `anthropic_api_key` and `recipe_api_key` from AWS Secrets Manager at Lambda startup (no-op locally, uses `.env` as fallback)
+- `backend/src/glean/config.py` — `SecretsManagerSource`: custom pydantic-settings source that fetches `openrouter_api_key` and `recipe_api_key` from AWS Secrets Manager at Lambda startup (no-op locally, uses `.env` as fallback)
 
 **GitHub Actions**
 - `backend-ci.yml` — PR: ruff lint + pytest + SAM validate (parallel)
@@ -40,7 +40,7 @@ End-to-end deployment pipeline. Current branch, not yet merged.
 Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally to `infra/.bootstrap-outputs` (gitignored).
 
 **Secrets Manager** (eu-west-2):
-- `glean/prod/anthropic-api-key` ✅
+- `glean/prod/openrouter-api-key` ✅
 - `glean/prod/recipe-api-key` ✅
 
 **Still needed before first deploy:**
@@ -69,10 +69,10 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
 | Layer | Technology |
 |---|---|
 | Mobile | React Native (Expo 55), TypeScript, drizzle-orm, SQLite, Zustand, TanStack Query |
-| Backend | Python 3.14, FastAPI, Mangum, AWS Lambda, LangChain + Claude |
+| Backend | Python 3.14, FastAPI, Mangum, AWS Lambda, LangChain + OpenRouter |
 | Auth | AWS Cognito (JWT, RS256) |
-| AI | Anthropic Claude via LangChain |
-| OCR | AWS Textract |
+| AI | OpenRouter via LangChain (default model: claude-sonnet-4-6) |
+| OCR | AWS Textract (or vision model via OpenRouter) |
 | Storage | SQLite (mobile, local-first), S3 (receipt image buffer) |
 | Infra | AWS SAM, CloudFormation, CloudWatch, X-Ray |
 | CI/CD | GitHub Actions, OIDC, EAS |

@@ -114,17 +114,21 @@ in SQLite (Drizzle ORM + expo-sqlite). The backend is stateless — see `../back
 ```
 app/
 ├── _layout.tsx              # Root layout: DB init, auth check, Stack navigator
+├── index.tsx                # Redirect to /(tabs)
 ├── sign-in.tsx              # Sign-in / sign-up screen
 └── (tabs)/
     ├── _layout.tsx          # Tab bar (5 tabs + hidden sub-routes)
-    ├── pantry/              # Pantry management (index, add, scan, describe, review, manual-entry)
-    ├── meals/               # Recipe browsing (index, [id], search)
+    ├── pantry/              # Pantry management (index, add, scan, scan-progress, describe, review, manual-entry)
+    ├── meals/               # Recipe browsing (index, [id], search, import)
     ├── plan/                # Weekly meal plan (index)
     ├── shop/                # Shopping list (index)
     └── settings/            # User config + sign out (index)
 
 src/
-├── api/client.ts            # HTTP client with auth token injection + 401 refresh
+├── api/
+│   ├── client.ts            # HTTP client with auth token injection + 401 refresh
+│   ├── hooks.ts             # TanStack Query hooks (useRecipeSearch, useScanReceipt, etc.)
+│   └── types.ts             # API response types mirroring backend Pydantic schemas
 ├── auth/
 │   ├── cognito.ts           # Cognito sign-in/up/refresh (lazy-init, dev bypass)
 │   ├── storage.ts           # SecureStore token persistence (dev bypasses)
@@ -134,14 +138,27 @@ src/
 │   ├── schema.ts            # Drizzle table definitions (source of truth)
 │   ├── seed.ts              # Seed data (ingredient categories)
 │   ├── config.ts            # User config CRUD
+│   ├── ingredients.ts       # Ingredient lookup and upsert queries
 │   ├── pantry.ts            # Pantry item queries
 │   ├── recipes.ts           # Recipe + ingredient queries
 │   ├── plan.ts              # Meal plan queries
 │   └── shopping.ts          # Shopping list queries
+├── normalization/
+│   ├── units.ts             # Unit conversion table (volume, weight, countable)
+│   └── index.ts             # normalizeUnit() and related helpers
+├── suggestions/
+│   └── compress.ts          # Pantry data compression for AI suggestion payloads (urgency scoring)
 ├── screens/                 # Reusable screen components (SplashScreen)
-├── components/              # Shared UI components
-├── theme.ts                 # Design tokens (colors, spacing, typography)
-└── types.ts                 # Shared TypeScript interfaces
+├── components/
+│   ├── skeletons/           # Per-tab loading skeletons (Pantry, Meals, Plan, Shopping)
+│   ├── ui/                  # Shared UI primitives (EmptyState, ErrorState, OfflineBanner, Toast)
+│   └── PulsingDots.tsx      # Animated loading indicator
+├── utils/
+│   └── toast.ts             # Toast helper
+├── theme/
+│   └── index.ts             # Design tokens (colors, spacing, typography)
+└── types/
+    └── index.ts             # Shared TypeScript interfaces
 ```
 
 ### Key patterns
