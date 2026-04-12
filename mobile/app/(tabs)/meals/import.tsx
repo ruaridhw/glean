@@ -22,6 +22,16 @@ export default function ImportScreen() {
   const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
+  function handleUrlChange(text: string) {
+    if (text.startsWith("https://https://")) {
+      setUrl(`https://${text.slice("https://https://".length)}`);
+    } else if (text.startsWith("http://https://")) {
+      setUrl(`https://${text.slice("http://https://".length)}`);
+    } else {
+      setUrl(text);
+    }
+  }
+
   async function importFromUrl() {
     if (!url.trim()) return;
     setImporting(true);
@@ -49,7 +59,7 @@ export default function ImportScreen() {
         <TextInput
           style={s.input}
           value={url}
-          onChangeText={setUrl}
+          onChangeText={handleUrlChange}
           placeholder="https://..."
           autoFocus
           autoCapitalize="none"
