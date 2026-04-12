@@ -73,6 +73,9 @@ export default function ShopScreen() {
     const checkedCount = items.filter((i) => i.is_checked).length;
     const uncheckedCount = items.filter((i) => !i.is_checked).length;
 
+    const skipLabel =
+      checkedCount > 0 ? `Skip — clear ${checkedCount} checked` : "Skip — nothing to clear";
+
     Alert.alert(
       "Completed checkout",
       "Did you get a receipt? Scanning it will update your pantry automatically.",
@@ -84,8 +87,12 @@ export default function ShopScreen() {
           },
         },
         {
-          text: "Skip — just clear checked",
+          text: skipLabel,
           onPress: () => {
+            if (checkedCount === 0) {
+              showSuccess("Checkout complete");
+              return;
+            }
             Alert.alert(
               "Clear checked items?",
               `${checkedCount} checked item${checkedCount !== 1 ? "s" : ""} will be removed.${
@@ -123,7 +130,7 @@ export default function ShopScreen() {
       <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.header}>
           <Text style={s.heading}>Shopping List</Text>
-          {!loading && checked.length > 0 && (
+          {!loading && (
             <Pressable style={s.checkoutBtn} onPress={handleCompleteCheckout}>
               <Text style={s.checkoutBtnText}>Completed checkout</Text>
             </Pressable>
@@ -264,7 +271,9 @@ const s = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     justifyContent: "center",
+    minHeight: 44,
   },
   addBtnDisabled: { opacity: 0.5 },
   addBtnText: { color: theme.colors.card, fontWeight: "600" },
