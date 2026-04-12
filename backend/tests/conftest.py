@@ -1,3 +1,11 @@
+import os
+
+os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
+os.environ.setdefault("RECIPE_API_KEY", "test-key")
+os.environ.setdefault("COGNITO_USER_POOL_ID", "us-east-1_test")
+os.environ.setdefault("COGNITO_APP_CLIENT_ID", "test-client-id")
+os.environ.setdefault("S3_RECEIPTS_BUCKET", "test-bucket")
+
 import pytest
 from fastapi.testclient import TestClient
 
