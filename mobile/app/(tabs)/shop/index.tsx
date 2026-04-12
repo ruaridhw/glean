@@ -5,7 +5,9 @@ import { useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   LayoutAnimation,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -113,90 +115,91 @@ export default function ShopScreen() {
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
 
-  if (loading)
-    return (
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={s.keyboardView}
+    >
       <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.header}>
           <Text style={s.heading}>Shopping List</Text>
+          {!loading && checked.length > 0 && (
+            <Pressable style={s.checkoutBtn} onPress={handleCompleteCheckout}>
+              <Text style={s.checkoutBtnText}>Completed checkout</Text>
+            </Pressable>
+          )}
         </View>
-        <ShoppingSkeleton />
-      </SafeAreaView>
-    );
 
-  return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <View style={s.header}>
-        <Text style={s.heading}>Shopping List</Text>
-        {checked.length > 0 && (
-          <Pressable style={s.checkoutBtn} onPress={handleCompleteCheckout}>
-            <Text style={s.checkoutBtnText}>Completed checkout</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <FlatList
-        data={[...unchecked, ...checked]}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <View style={[s.itemRow, item.is_checked && s.checkedRow]}>
-            <Pressable style={s.checkbox} onPress={() => handleToggle(item)}>
-              <Text style={s.checkboxText}>{item.is_checked ? "☑" : "☐"}</Text>
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.itemName, item.is_checked && s.checkedText]}>{item.name}</Text>
-              {item.quantity != null && (
-                <Text style={s.itemQty}>
-                  {item.quantity}
-                  {item.unit}
-                </Text>
-              )}
-            </View>
-            <View style={s.sourceTag}>
-              <Text style={s.sourceTagText}>{item.source}</Text>
-            </View>
-            <Pressable onPress={() => handleDelete(item)}>
-              <Text style={s.deleteText}>✕</Text>
-            </Pressable>
-          </View>
-        )}
-        ListFooterComponent={
-          <View style={s.addRow}>
-            <TextInput
-              style={s.addInput}
-              value={newItemName}
-              onChangeText={setNewItemName}
-              placeholder="Add item…"
-              placeholderTextColor={theme.colors.textDisabled}
-              returnKeyType="done"
-              onSubmitEditing={handleAdd}
-            />
-            <Pressable
-              style={[s.addBtn, (!newItemName.trim() || adding) && s.addBtnDisabled]}
-              onPress={handleAdd}
-              disabled={adding || !newItemName.trim()}
-            >
-              <Text style={s.addBtnText}>Add</Text>
-            </Pressable>
-          </View>
-        }
-        ListEmptyComponent={
-          <EmptyState
-            testID="shop.emptyState"
-            icon="cart-outline"
-            title="Your shopping list is empty"
-            message="Plan some meals and we'll figure out what you need."
-            actions={[
-              { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
-            ]}
+        {loading ? (
+          <ShoppingSkeleton />
+        ) : (
+          <FlatList
+            data={[...unchecked, ...checked]}
+            keyExtractor={(item) => String(item.id)}
+            keyboardDismissMode="on-drag"
+            renderItem={({ item }) => (
+              <View style={[s.itemRow, item.is_checked && s.checkedRow]}>
+                <Pressable style={s.checkbox} onPress={() => handleToggle(item)}>
+                  <Text style={s.checkboxText}>{item.is_checked ? "☑" : "☐"}</Text>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.itemName, item.is_checked && s.checkedText]}>{item.name}</Text>
+                  {item.quantity != null && (
+                    <Text style={s.itemQty}>
+                      {item.quantity}
+                      {item.unit}
+                    </Text>
+                  )}
+                </View>
+                <View style={s.sourceTag}>
+                  <Text style={s.sourceTagText}>{item.source}</Text>
+                </View>
+                <Pressable onPress={() => handleDelete(item)}>
+                  <Text style={s.deleteText}>✕</Text>
+                </Pressable>
+              </View>
+            )}
+            ListFooterComponent={
+              <View style={s.addRow}>
+                <TextInput
+                  style={s.addInput}
+                  value={newItemName}
+                  onChangeText={setNewItemName}
+                  placeholder="Add item…"
+                  placeholderTextColor={theme.colors.textDisabled}
+                  returnKeyType="done"
+                  onSubmitEditing={handleAdd}
+                />
+                <Pressable
+                  style={[s.addBtn, (!newItemName.trim() || adding) && s.addBtnDisabled]}
+                  onPress={handleAdd}
+                  disabled={adding || !newItemName.trim()}
+                >
+                  <Text style={s.addBtnText}>Add</Text>
+                </Pressable>
+              </View>
+            }
+            ListEmptyComponent={
+              <EmptyState
+                testID="shop.emptyState"
+                icon="cart-outline"
+                title="Your shopping list is empty"
+                message="Plan some meals and we'll figure out what you need."
+                actions={[
+                  { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
+                ]}
+              />
+            }
           />
-        }
-      />
-    </SafeAreaView>
+        )}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
