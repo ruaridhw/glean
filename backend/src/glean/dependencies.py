@@ -14,8 +14,7 @@ security = HTTPBearer(auto_error=False)
 @lru_cache(maxsize=1)
 def _get_jwks() -> dict:
     url = (
-        f"https://cognito-idp.{settings.aws_region}.amazonaws.com"
-        f"/{settings.cognito_user_pool_id}/.well-known/jwks.json"
+        f"https://cognito-idp.{settings.aws_region}.amazonaws.com/{settings.cognito_user_pool_id}/.well-known/jwks.json"
     )
     with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310
         return json.loads(resp.read())
@@ -53,7 +52,7 @@ def verify_cognito_token(
             key,
             algorithms=["RS256"],
             audience=settings.cognito_app_client_id,
-            issuer=(f"https://cognito-idp.{settings.aws_region}.amazonaws.com" f"/{settings.cognito_user_pool_id}"),
+            issuer=(f"https://cognito-idp.{settings.aws_region}.amazonaws.com/{settings.cognito_user_pool_id}"),
         )
         user_sub: str = payload["sub"]
         request.state.user_sub = user_sub

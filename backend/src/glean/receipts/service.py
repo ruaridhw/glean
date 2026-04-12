@@ -94,9 +94,7 @@ def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel) -> ScanRespo
 @tracer.capture_method
 def _scan_via_vision(image_bytes: bytes) -> ScanResponse:
     """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
-    vision_model = create_chat_model(
-        settings.receipt_vision_model, api_key=settings.openrouter_api_key
-    )
+    vision_model = create_chat_model(settings.receipt_vision_model, api_key=settings.openrouter_api_key)
     b64 = base64.b64encode(image_bytes).decode()
     image_block = create_image_block(base64=b64, mime_type="image/jpeg")
     result = vision_model.invoke(

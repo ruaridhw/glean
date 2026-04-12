@@ -15,9 +15,7 @@ from glean.recipes.service import URL_PARSE_SYSTEM_PROMPT
 from .judges.rubrics import judge_recipe_import
 
 
-def _invoke_recipe_import(
-    model: BaseChatModel, html: str, *, example_idx: int
-) -> str:
+def _invoke_recipe_import(model: BaseChatModel, html: str, *, example_idx: int) -> str:
     result = model.invoke(
         [
             SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
