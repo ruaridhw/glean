@@ -23,7 +23,7 @@ def test_settings() -> _config.Settings:
         pytest.skip("No real OPENROUTER_API_KEY found in backend/.env (expected sk-or-... prefix)")
     return _config.Settings(
         openrouter_api_key=key,
-        llm_model="google/gemma-4-26b-a4b-it:free",
+        llm_model=_ENV.get("LLM_MODEL", "google/gemma-4-26b-a4b-it:free"),
         recipe_api_key=_ENV.get("RECIPE_API_KEY", "test-recipe_api_key"),
         cognito_user_pool_id=_ENV.get("COGNITO_USER_POOL_ID", "test-cognito_user_pool_id"),
         cognito_app_client_id=_ENV.get("COGNITO_APP_CLIENT_ID", "test-cognito_app_client_id"),

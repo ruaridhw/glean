@@ -30,6 +30,10 @@ def validate_model(model_id: str, *, api_key: str | None = None) -> None:
 
 
 def create_chat_model(model: str, *, api_key: str, **kwargs: object) -> BaseChatModel:
+    # Default max_retries=0: the OpenAI SDK respects Retry-After headers, so the default
+    # of 2 retries can cause indefinite hangs when OpenRouter returns a long Retry-After
+    # (e.g. free-models-per-day exhausted). Callers can override if retries are needed.
+    kwargs.setdefault("max_retries", 0)
     return ChatOpenRouter(model=model, openrouter_api_key=api_key, **kwargs)
 
 

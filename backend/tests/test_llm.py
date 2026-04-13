@@ -11,7 +11,9 @@ class TestCreateChatModel:
     def test_returns_chat_open_router(self) -> None:
         with patch("glean.llm.ChatOpenRouter") as mock_cls:
             model = create_chat_model("anthropic/claude-sonnet-4.6", api_key="test-key")
-            mock_cls.assert_called_once_with(model="anthropic/claude-sonnet-4.6", openrouter_api_key="test-key")
+            mock_cls.assert_called_once_with(
+                model="anthropic/claude-sonnet-4.6", openrouter_api_key="test-key", max_retries=0
+            )
             assert model is mock_cls.return_value
 
     def test_forwards_kwargs(self) -> None:
@@ -22,6 +24,16 @@ class TestCreateChatModel:
                 openrouter_api_key="test-key",
                 max_tokens=20,
                 temperature=0.5,
+                max_retries=0,
+            )
+
+    def test_caller_can_override_max_retries(self) -> None:
+        with patch("glean.llm.ChatOpenRouter") as mock_cls:
+            create_chat_model("anthropic/claude-sonnet-4.6", api_key="test-key", max_retries=2)
+            mock_cls.assert_called_once_with(
+                model="anthropic/claude-sonnet-4.6",
+                openrouter_api_key="test-key",
+                max_retries=2,
             )
 
 
