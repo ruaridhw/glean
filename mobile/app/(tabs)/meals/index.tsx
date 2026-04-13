@@ -135,7 +135,7 @@ const s = StyleSheet.create({
   discoverBtn: {
     margin: theme.spacing.lg,
     padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
     borderColor: theme.colors.primary,
     alignItems: "center",
@@ -145,7 +145,7 @@ const s = StyleSheet.create({
     marginHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
     padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.surface,
     alignItems: "center",
   },
