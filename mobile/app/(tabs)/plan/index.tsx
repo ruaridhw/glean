@@ -2,20 +2,11 @@
 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSuggestMeals } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorState } from "@/components/ui/ErrorState";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
@@ -30,7 +21,7 @@ import { addShoppingGapsForRecipe } from "@/db/shopping";
 import { compressPantry } from "@/suggestions/compress";
 import { theme } from "@/theme";
 import type { MealPlanEntry } from "@/types";
-import { showSuccess } from "@/utils/toast";
+import { showError, showSuccess } from "@/utils/toast";
 
 export default function PlanScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
@@ -68,7 +59,10 @@ export default function PlanScreen() {
       if (params.add_recipe_id) {
         handleAddRecipe(Number(params.add_recipe_id));
       }
-    }, [load, params.add_recipe_id, handleAddRecipe]),
+      return () => {
+        suggestMutation.reset();
+      };
+    }, [load, params.add_recipe_id, handleAddRecipe, suggestMutation]),
   );
 
   async function handleMarkCooked(entry: MealPlanEntry) {
@@ -133,6 +127,9 @@ export default function PlanScreen() {
           showSuccess("Week generated");
           await load();
         },
+        onError: () => {
+          showError("Could not generate suggestions");
+        },
       },
     );
   }
@@ -146,25 +143,7 @@ export default function PlanScreen() {
       <SafeAreaView style={s.container} edges={["top"]}>
         <View style={s.header}>
           <Text style={s.heading}>This Week</Text>
-          <Pressable
-            style={[s.generateBtn, suggestMutation.isPending && s.generateBtnDisabled]}
-            onPress={generateWeek}
-            disabled={suggestMutation.isPending}
-          >
-            {suggestMutation.isPending ? (
-              <ActivityIndicator size="small" color={theme.colors.card} />
-            ) : (
-              <Text style={s.generateBtnText}>Generate week</Text>
-            )}
-          </Pressable>
         </View>
-        {suggestMutation.isError && (
-          <ErrorState
-            testID="plan.error"
-            message="Could not generate suggestions. Try again."
-            onRetry={() => suggestMutation.reset()}
-          />
-        )}
         <EmptyState
           testID="plan.emptyState"
           icon="calendar-outline"
@@ -185,26 +164,7 @@ export default function PlanScreen() {
     <SafeAreaView style={s.container} edges={["top"]}>
       <View style={s.header}>
         <Text style={s.heading}>This Week</Text>
-        <Pressable
-          style={[s.generateBtn, suggestMutation.isPending && s.generateBtnDisabled]}
-          onPress={generateWeek}
-          disabled={suggestMutation.isPending}
-        >
-          {suggestMutation.isPending ? (
-            <ActivityIndicator size="small" color={theme.colors.card} />
-          ) : (
-            <Text style={s.generateBtnText}>Generate week</Text>
-          )}
-        </Pressable>
       </View>
-
-      {suggestMutation.isError && (
-        <ErrorState
-          testID="plan.error"
-          message="Could not generate suggestions. Try again."
-          onRetry={() => suggestMutation.reset()}
-        />
-      )}
 
       <FlatList<ListItem>
         data={[
@@ -266,20 +226,6 @@ const s = StyleSheet.create({
     fontSize: theme.typography.title2.fontSize,
     fontWeight: theme.typography.title2.fontWeight,
     color: theme.colors.text,
-  },
-  generateBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  generateBtnDisabled: {
-    opacity: 0.5,
-  },
-  generateBtnText: {
-    color: theme.colors.card,
-    fontWeight: theme.typography.headline.fontWeight,
-    fontSize: theme.typography.subhead.fontSize,
   },
   entryRow: {
     flexDirection: "row",
