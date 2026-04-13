@@ -62,7 +62,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "W", "C4", "C90", "PT", "RUF", "A", "T20", "PIE", "RET", "TCH", "ASYNC", "FLY", "PERF", "PLC", "PLE"]
-per-file-ignores = { "tests/**" = ["S101", "PERF401"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
+per-file-ignores = { "tests/**" = ["S101", "PERF401"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
 
 [tool.black]
 line-length = 120
