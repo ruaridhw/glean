@@ -29,8 +29,8 @@ def validate_model(model_id: str, *, api_key: str | None = None) -> None:
         )
 
 
-def create_chat_model(model: str, *, api_key: str) -> BaseChatModel:
-    return ChatOpenRouter(model=model, openrouter_api_key=api_key)
+def create_chat_model(model: str, *, api_key: str, **kwargs: object) -> BaseChatModel:
+    return ChatOpenRouter(model=model, openrouter_api_key=api_key, **kwargs)
 
 
 def get_default_model() -> BaseChatModel:

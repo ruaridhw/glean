@@ -38,8 +38,12 @@ setup-mobile:  ## Install mobile JS dependencies
 test: test-backend test-mobile  ## Run all tests
 
 .PHONY: test-backend
-test-backend:  ## Run backend tests with coverage
-	cd backend && uv run pytest
+test-backend:  ## Run backend unit tests with coverage (excludes integration tests)
+	cd backend && uv run pytest -m "not integration and not soft_gate"
+
+.PHONY: test-integration-backend
+test-integration-backend:  ## Run backend integration tests (requires real OPENROUTER_API_KEY in backend/.env)
+	cd backend && uv run pytest tests/test_openrouter_integration.py -v -m integration
 
 .PHONY: test-mobile
 test-mobile:  ## Run mobile Jest tests

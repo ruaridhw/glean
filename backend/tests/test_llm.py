@@ -14,6 +14,16 @@ class TestCreateChatModel:
             mock_cls.assert_called_once_with(model="anthropic/claude-sonnet-4.6", openrouter_api_key="test-key")
             assert model is mock_cls.return_value
 
+    def test_forwards_kwargs(self) -> None:
+        with patch("glean.llm.ChatOpenRouter") as mock_cls:
+            create_chat_model("anthropic/claude-sonnet-4.6", api_key="test-key", max_tokens=20, temperature=0.5)
+            mock_cls.assert_called_once_with(
+                model="anthropic/claude-sonnet-4.6",
+                openrouter_api_key="test-key",
+                max_tokens=20,
+                temperature=0.5,
+            )
+
 
 def _mock_model_objects(model_ids: list[str]) -> list[MagicMock]:
     return [MagicMock(id=mid) for mid in model_ids]
