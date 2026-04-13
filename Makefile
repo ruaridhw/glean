@@ -43,7 +43,7 @@ test-backend:  ## Run backend unit tests with coverage (excludes integration tes
 
 .PHONY: test-integration-backend
 test-integration-backend:  ## Run backend integration tests (requires real OPENROUTER_API_KEY in backend/.env)
-	cd backend && uv run pytest tests/test_openrouter_integration.py -v -m integration
+	cd backend && uv run pytest tests/integration/ -v
 
 .PHONY: test-mobile
 test-mobile:  ## Run mobile Jest tests

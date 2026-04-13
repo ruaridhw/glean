@@ -43,14 +43,14 @@ jobs:
       - name: Run structural evals (hard gate)
         id: hard_gate
         run: |
-          uv run pytest tests/evals/ -m "not soft_gate" -v --tb=short --no-cov \
+          uv run pytest tests/integration/evals/ -m "not soft_gate" -v --tb=short --no-cov \
             --junitxml=results/hard-gate.xml 2>&1 | tee results/hard-gate.txt
         continue-on-error: true
 
       - name: Run heuristic + judge evals (soft gate)
         id: soft_gate
         run: |
-          uv run pytest tests/evals/ -m "soft_gate" -v --tb=short --no-cov \
+          uv run pytest tests/integration/evals/ -m "soft_gate" -v --tb=short --no-cov \
             --junitxml=results/soft-gate.xml 2>&1 | tee results/soft-gate.txt
         continue-on-error: true
 

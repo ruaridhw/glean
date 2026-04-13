@@ -33,7 +33,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/evals"
+addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/integration"
 markers = [
     "soft_gate: marks tests as soft-gate evaluations (deselect with '-m \"not soft_gate\"')",
     "integration: marks tests that require real external service credentials (skipped in CI unless credentials are provided)",
