@@ -9,7 +9,7 @@ def _get_allowed_emails() -> set[str]:
     if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
         env = os.environ.get("ENVIRONMENT", "prod")
         try:
-            import boto3
+            import boto3  # noqa: PLC0415
 
             client = boto3.client("secretsmanager")
             resp = client.get_secret_value(SecretId=f"glean/{env}/allowed-emails")
