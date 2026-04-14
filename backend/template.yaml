@@ -9,9 +9,6 @@ Globals:
     Environment:
       Variables:
         ENVIRONMENT: !Ref Environment
-        COGNITO_USER_POOL_ID: !Ref GleanUserPool
-        COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
-        S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
         POWERTOOLS_SERVICE_NAME: glean
         LOG_LEVEL: INFO
 
@@ -20,6 +17,18 @@ Parameters:
     Type: String
     AllowedValues: [dev, prod]
     Default: dev
+
+  CognitoDomainPrefix:
+    Type: String
+    Default: glean-auth
+
+  GoogleClientId:
+    Type: String
+    NoEcho: true
+
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
 
 Resources:
   GleanUserPool:
@@ -35,9 +44,32 @@ Resources:
           RequireLowercase: true
           RequireNumbers: true
           RequireSymbols: false
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
+
+  GleanUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${CognitoDomainPrefix}-${Environment}"
+      UserPoolId: !Ref GleanUserPool
+
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref GleanUserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "openid email profile"
+      AttributeMapping:
+        email: email
+        username: sub
 
   GleanUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn: GoogleIdentityProvider
     Properties:
       ClientName: glean-mobile-client
       UserPoolId: !Ref GleanUserPool
@@ -45,6 +77,19 @@ Resources:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      SupportedIdentityProviders:
+        - Google
+      CallbackURLs:
+        - glean://auth/callback
+      LogoutURLs:
+        - glean://auth/logout
 
   GleanReceiptsBucket:
     Type: AWS::S3::Bucket
@@ -61,6 +106,11 @@ Resources:
       CodeUri: src/
       Handler: glean.main.handler
       Tracing: Active
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref GleanUserPool
+          COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
+          S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
       Policies:
         - AWSXrayWriteOnlyAccess
         - CloudWatchLogsFullAccess
@@ -78,6 +128,30 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+
+  PreSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: glean.triggers.pre_signup.handler
+      MemorySize: 128
+      Timeout: 5
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:glean/${Environment}/*"
+
+  PreSignUpPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt PreSignUpFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      # SourceArn omitted to avoid circular dependency:
+      # GleanUserPool -> PreSignUpFunction (LambdaConfig) -> GleanUserPool (SourceArn)
+      # All Cognito user pools in this account/region can invoke; acceptable for single-pool setup.
 
   GleanFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -108,3 +182,5 @@ Outputs:
     Value: !Ref GleanUserPool
   UserPoolClientId:
     Value: !Ref GleanUserPoolClient
+  CognitoDomain:
+    Value: !Sub "${CognitoDomainPrefix}-${Environment}.auth.eu-west-2.amazoncognito.com"
