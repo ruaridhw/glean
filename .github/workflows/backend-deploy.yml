@@ -5,14 +5,6 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: dev
-        type: choice
-        options: [dev]
 
 permissions:
   id-token: write
@@ -29,13 +21,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.14"
+          python-version: "3.13"
       - name: Run pytest
         run: uv run pytest --cov --cov-fail-under=80
 
   deploy-prod:
     name: Deploy (prod)
-    if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     environment: prod
@@ -46,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.14"
+          python-version: "3.13"
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
@@ -55,41 +46,20 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-2
+      - name: Fetch Google OAuth credentials
+        run: |
+          GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value --secret-id glean/prod/google-oauth-client-id --query SecretString --output text)
+          GOOGLE_CLIENT_SECRET=$(aws secretsmanager get-secret-value --secret-id glean/prod/google-oauth-client-secret --query SecretString --output text)
+          echo "::add-mask::$GOOGLE_CLIENT_ID"
+          echo "::add-mask::$GOOGLE_CLIENT_SECRET"
+          echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> "$GITHUB_ENV"
       - name: SAM build
         run: sam build
       - name: SAM deploy
         run: |
           sam deploy \
             --config-env prod \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset
-
-  deploy-dev:
-    name: Deploy (dev)
-    if: github.event_name == 'workflow_dispatch'
-    needs: test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-        with:
-          python-version: "3.14"
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
-          aws-region: eu-west-2
-      - name: SAM build
-        run: sam build
-      - name: SAM deploy
-        run: |
-          sam deploy \
-            --config-env dev \
+            --parameter-overrides "Environment=prod GoogleClientId=$GOOGLE_CLIENT_ID GoogleClientSecret=$GOOGLE_CLIENT_SECRET" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset

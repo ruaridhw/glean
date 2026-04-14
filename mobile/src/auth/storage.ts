@@ -29,6 +29,16 @@ export const authStorage = {
   },
   async getUserSub(): Promise<string | null> {
     if (__DEV__) return "dev-user-sub";
+    const ciIdToken = ciToken("ID_TOKEN");
+    if (ciIdToken) {
+      try {
+        const payload = ciIdToken.split(".")[1]!;
+        const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+        return (JSON.parse(json) as { sub: string }).sub;
+      } catch {
+        return null;
+      }
+    }
     return SecureStore.getItemAsync(KEYS.userSub);
   },
   async setTokens(params: {

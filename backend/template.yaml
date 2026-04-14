@@ -102,8 +102,10 @@ Resources:
 
   GleanFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
     Properties:
-      CodeUri: src/
+      CodeUri: .
       Handler: glean.main.handler
       Tracing: Active
       Environment:
@@ -131,8 +133,10 @@ Resources:
 
   PreSignUpFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
     Properties:
-      CodeUri: src/
+      CodeUri: .
       Handler: glean.triggers.pre_signup.handler
       MemorySize: 128
       Timeout: 5
