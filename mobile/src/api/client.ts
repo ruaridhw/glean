@@ -1,6 +1,6 @@
 // mobile/src/api/client.ts
 
-import { refreshTokens } from "@/auth/cognito";
+import { refreshTokens } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
