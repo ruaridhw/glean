@@ -34,8 +34,8 @@ def test_search_recipes_returns_results(client: TestClient) -> None:
     fixture = _load_fixture("recipe_search.json")
     mock_response = RecipeApiSearchResponse(**fixture)
 
-    with patch("glean.recipes.service.recipe_api_client") as mock_client:
-        mock_client.search.return_value = mock_response
+    with patch("glean.recipes.service.RecipeApiClient") as MockClient:
+        MockClient.return_value.search.return_value = mock_response
         resp = client.get("/recipes/search?q=carbonara")
 
     assert resp.status_code == 200
@@ -63,8 +63,8 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
         source_url="https://example.com/carbonara",
     )
 
-    with patch("glean.recipes.service.recipe_api_client") as mock_client:
-        mock_client.get_recipe.return_value = api_recipe
+    with patch("glean.recipes.service.RecipeApiClient") as MockClient:
+        MockClient.return_value.get_recipe.return_value = api_recipe
         resp = client.get("/recipes/abc-123")
 
     assert resp.status_code == 200
@@ -177,7 +177,7 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     with (
         patch("glean.recipes.service.socket.gethostbyname", return_value="93.184.216.34"),
         patch("glean.recipes.service.httpx.get", return_value=mock_http_response),
-        patch("glean.recipes.service.get_default_model", return_value=mock_llm),
+        patch("glean.recipes.router.create_chat_model", return_value=mock_llm),
     ):
         resp = client.post("/recipes/import-url", json={"url": "https://example.com/pasta"})
 

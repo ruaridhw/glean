@@ -514,10 +514,9 @@ class DescribeRequest(BaseModel):
 import json
 import boto3
 import anthropic
-from glean.config import settings
+from glean.config import get_settings
 from glean.observability import logger, tracer
 from glean.receipts.schemas import ParsedIngredient, ScanResponse, DescribeRequest
-
 
 NORMALISE_SYSTEM_PROMPT = """You are a grocery ingredient normaliser.
 Given a list of receipt line items (name, quantity, price), return a JSON array of objects with:
@@ -555,22 +554,22 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
 @tracer.capture_method
 def scan_receipt(image_bytes: bytes) -> ScanResponse:
     import uuid
-    s3 = boto3.client("s3", region_name=settings.aws_region)
+    s3 = boto3.client("s3", region_name=get_settings().aws_region)
     s3_key = f"receipts/tmp/{uuid.uuid4()}.jpg"
     logger.info("uploading receipt to s3", extra={"key": s3_key, "bytes": len(image_bytes)})
-    s3.put_object(Bucket=settings.s3_receipts_bucket, Key=s3_key, Body=image_bytes)
+    s3.put_object(Bucket=get_settings().s3_receipts_bucket, Key=s3_key, Body=image_bytes)
 
-    textract = boto3.client("textract", region_name=settings.aws_region)
+    textract = boto3.client("textract", region_name=get_settings().aws_region)
     try:
         textract_response = textract.analyze_expense(
-            Document={"S3Object": {"Bucket": settings.s3_receipts_bucket, "Name": s3_key}}
+            Document={"S3Object": {"Bucket": get_settings().s3_receipts_bucket, "Name": s3_key}}
         )
         lines = _extract_textract_lines(textract_response)
         logger.info("textract extracted lines", extra={"count": len(lines)})
     finally:
-        s3.delete_object(Bucket=settings.s3_receipts_bucket, Key=s3_key)
+        s3.delete_object(Bucket=get_settings().s3_receipts_bucket, Key=s3_key)
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1024,
@@ -586,7 +585,7 @@ def scan_receipt(image_bytes: bytes) -> ScanResponse:
 
 @tracer.capture_method
 def describe_purchase(request: DescribeRequest) -> ScanResponse:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1024,

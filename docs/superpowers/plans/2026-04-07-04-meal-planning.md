@@ -667,7 +667,7 @@ class SuggestionResponse(BaseModel):
 # backend/src/glean/suggestions/service.py
 import json
 import anthropic
-from glean.config import settings
+from glean.config import get_settings
 from glean.observability import logger, tracer
 from glean.suggestions.schemas import SuggestionRequest, SuggestionResponse, SuggestedRecipe
 
@@ -690,7 +690,7 @@ Respond with ONLY valid JSON. No markdown."""
 
 @tracer.capture_method
 def get_suggestions(request: SuggestionRequest) -> SuggestionResponse:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
 
     context = {
         "pantry": [item.model_dump() for item in request.pantry],

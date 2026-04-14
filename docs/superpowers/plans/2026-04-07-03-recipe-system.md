@@ -124,7 +124,7 @@ class RecipeApiSearchResponse(BaseModel):
 # backend/src/glean/recipe_api/client.py
 import re
 import httpx
-from glean.config import settings
+from glean.config import get_settings
 from glean.observability import logger, tracer
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 
@@ -143,19 +143,19 @@ def _iso_to_mins(iso: str | None) -> int | None:
 class RecipeApiClient:
     def __init__(self) -> None:
         self._client = httpx.Client(
-            base_url=settings.recipe_api_base_url,
-            headers={"X-API-Key": settings.recipe_api_key},
+            base_url=get_settings().recipe_api_base_url,
+            headers={"X-API-Key": get_settings().recipe_api_key},
             timeout=10.0,
         )
 
     @tracer.capture_method
     def search(
-        self,
-        q: str | None = None,
-        cuisine: str | None = None,
-        dietary: str | None = None,
-        page: int = 1,
-        per_page: int = 20,
+            self,
+            q: str | None = None,
+            cuisine: str | None = None,
+            dietary: str | None = None,
+            page: int = 1,
+            per_page: int = 20,
     ) -> RecipeApiSearchResponse:
         params = {k: v for k, v in {
             "q": q, "cuisine": cuisine, "dietary": dietary,
@@ -351,7 +351,7 @@ import anthropic
 import httpx
 from bs4 import BeautifulSoup
 
-from glean.config import settings
+from glean.config import get_settings
 from glean.observability import logger, tracer
 from glean.recipe_api.client import recipe_api_client, _iso_to_mins
 from glean.recipe_api.schemas import RecipeApiRecipe
@@ -503,10 +503,10 @@ def _api_recipe_to_out(api_recipe: RecipeApiRecipe, client: object) -> RecipeOut
 
 @tracer.capture_method
 def search_recipes(
-    q: str | None,
-    cuisine: str | None,
-    dietary: str | None,
-    page: int,
+        q: str | None,
+        cuisine: str | None,
+        dietary: str | None,
+        page: int,
 ) -> RecipeSearchResponse:
     api_resp = recipe_api_client.search(q=q, cuisine=cuisine, dietary=dietary, page=page)
     results = [
@@ -550,11 +550,12 @@ def import_recipe_from_url(request: ImportUrlRequest) -> RecipeOut:
 
     # Fallback: Claude fetch tool
     logger.info("schema.org not found, using Claude fetch fallback", extra={"url": url})
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2048,
-        tools=[{"type": "computer_20250124", "name": "str_replace_editor", "display_width_px": 1, "display_height_px": 1}],
+        tools=[
+            {"type": "computer_20250124", "name": "str_replace_editor", "display_width_px": 1, "display_height_px": 1}],
         system=URL_PARSE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"Parse the recipe at this URL: {url}"}],
     )

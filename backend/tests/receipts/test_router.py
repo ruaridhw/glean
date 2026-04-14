@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from glean.config import Settings, get_settings
 from glean.main import app
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -41,7 +42,7 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
 
     with (
         patch("boto3.client", side_effect=boto3_client_factory),
-        patch("glean.receipts.service.get_default_model") as mock_create,
+        patch("glean.receipts.router.create_chat_model") as mock_create,
     ):
         mock_create.return_value.invoke.return_value = mock_result
         response = client.post(
@@ -91,13 +92,17 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())
 
-    with (
-        patch("glean.receipts.service.settings") as mock_settings,
-        patch("glean.receipts.service.create_chat_model") as mock_create,
-    ):
-        mock_settings.receipt_ocr_mode = "vision"
-        mock_settings.receipt_vision_model = "anthropic/claude-sonnet-4.6"
-        mock_settings.openrouter_api_key = "test-key"
+    vision_settings = Settings(
+        openrouter_api_key="test-key",
+        recipe_api_key="test-recipe_api_key",
+        cognito_user_pool_id="test-cognito_user_pool_id",
+        cognito_app_client_id="test-cognito_app_client_id",
+        s3_receipts_bucket="test-s3_receipts_bucket",
+        receipt_ocr_mode="vision",
+        receipt_vision_model="anthropic/claude-sonnet-4.6",
+    )
+    app.dependency_overrides[get_settings] = lambda: vision_settings
+    with patch("glean.receipts.service.create_chat_model") as mock_create:
         mock_create.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/scan",
@@ -116,7 +121,7 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())
 
-    with patch("glean.receipts.service.get_default_model") as mock_create:
+    with patch("glean.receipts.router.create_chat_model") as mock_create:
         mock_create.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/describe",
