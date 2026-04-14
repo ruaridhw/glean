@@ -35,7 +35,15 @@ describe("authStorage", () => {
   });
 
   describe("getAccessToken", () => {
-    it("returns the stored access token", async () => {
+    it("returns CI token when EXPO_PUBLIC_CI_ACCESS_TOKEN is set", async () => {
+      process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN = "ci-token";
+      const result = await authStorage.getAccessToken();
+      expect(result).toBe("ci-token");
+      expect(mockGetItem).not.toHaveBeenCalled();
+      delete process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN;
+    });
+
+    it("returns the stored access token in production", async () => {
       mockGetItem.mockResolvedValue("my-token");
       const result = await authStorage.getAccessToken();
       expect(result).toBe("my-token");
@@ -55,6 +63,21 @@ describe("authStorage", () => {
     it("returns true in __DEV__ mode regardless of stored tokens", async () => {
       mockGetItem.mockResolvedValue(null);
       expect(await authStorage.hasTokens()).toBe(true);
+      expect(mockGetItem).not.toHaveBeenCalled();
+    });
+
+    it("returns true when CI tokens are set", async () => {
+      process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN = "ci-token";
+      const result = await authStorage.hasTokens();
+      expect(result).toBe(true);
+      delete process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN;
+    });
+  });
+
+  describe("getUserSub", () => {
+    it("returns dev-user-sub in __DEV__ mode", async () => {
+      const result = await authStorage.getUserSub();
+      expect(result).toBe("dev-user-sub");
       expect(mockGetItem).not.toHaveBeenCalled();
     });
   });

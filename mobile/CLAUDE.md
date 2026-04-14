@@ -127,9 +127,8 @@ src/
 │   ├── hooks.ts             # TanStack Query hooks (useRecipeSearch, useScanReceipt, etc.)
 │   └── types.ts             # API response types mirroring backend Pydantic schemas
 ├── auth/
-│   ├── cognito.ts           # Cognito sign-in/up/refresh (lazy-init, dev bypass)
-│   ├── storage.ts           # SecureStore token persistence (dev bypasses)
-│   └── async-storage-shim.ts # In-memory shim for Cognito's AsyncStorage dep
+│   ├── google.ts            # Google auth via expo-auth-session + Cognito Hosted UI
+│   └── storage.ts           # SecureStore token persistence (__DEV__ + CI bypasses)
 ├── db/
 │   ├── client.ts            # expo-sqlite + Drizzle setup, migration runner
 │   ├── schema.ts            # Drizzle table definitions (source of truth)
@@ -160,14 +159,17 @@ src/
 
 ### Key patterns
 
-- **Dev auth bypass:** In `__DEV__` mode, `hasTokens()` returns true, `getUserSub()`
-  returns `"dev-user-sub"`, and `signIn()` sets mock tokens without hitting Cognito.
+- **Dev auth bypass:** In `__DEV__` mode, `hasTokens()` returns true and `getUserSub()`
+  returns `"dev-user-sub"`. No Cognito calls are made locally.
+- **CI auth bypass:** When `EXPO_PUBLIC_CI_ACCESS_TOKEN` is set (CI builds only), tokens
+  are read from build-time env vars instead of SecureStore. The user sub is decoded
+  from the CI ID token. Production builds never have these env vars.
+- **Google auth flow:** `expo-auth-session` opens Cognito's Hosted UI with PKCE. After
+  the Google sign-in redirect, the auth code is exchanged for Cognito JWTs via
+  `handleAuthCode()`. Token refresh uses Cognito's `/oauth2/token` endpoint directly.
 - **SQL migrations:** Drizzle migrations in `drizzle/` are imported as inline strings
   via `babel-plugin-inline-import`. Metro needs `sourceExts: ["sql"]` and the babel
   plugin configured in `babel.config.js`.
-- **AsyncStorage shim:** `amazon-cognito-identity-js` imports `@react-native-async-storage/async-storage`
-  which can't be installed due to peer dep conflicts. Metro's `extraNodeModules` routes
-  the import to an in-memory Map-based shim in `src/auth/async-storage-shim.ts`.
 - **Expo SDK 54:** Pinned to SDK 54 with `legacy-peer-deps=true` in `.npmrc` to avoid
   peer dep conflicts with react-dom/react-native-web that expo-router pulls in.
 
