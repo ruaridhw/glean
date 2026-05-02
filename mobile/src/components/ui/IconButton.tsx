@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, type PressableProps } from "react-native";
+import { Pressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
 
-interface IconButtonProps extends Omit<PressableProps, "children"> {
+interface IconButtonProps extends Omit<PressableProps, "children" | "style"> {
   icon: keyof typeof Ionicons.glyphMap;
   accessibilityLabel: string;
   color?: string;
   backgroundColor?: string;
   size?: number;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function IconButton({
