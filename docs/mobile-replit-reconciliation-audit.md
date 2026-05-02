@@ -52,3 +52,17 @@ The Replit project uses a pnpm workspace because it manages generated artifacts,
 - Add component tests for reusable UI primitives.
 - Add a focused Pantry screen test with mocked DB functions.
 - Keep highest-level smoke/e2e coverage only; do not chase detailed e2e updates unless the smoke path breaks.
+
+## Pantry proof verification
+
+- Android manual check date: 2026-05-02
+- Android result: BLOCKED locally because `ANDROID_HOME` points to missing `/Users/ruaridhw/Library/Android/sdk` and `adb` is unavailable (`make start-android` exits with `spawn adb ENOENT`).
+- Highest-level smoke/e2e result: BLOCKED locally because the Maestro CLI is not installed (`npm run e2e -- e2e/smoke.yaml` exits with `maestro: command not found`).
+- Unit/integration result: PASS (`make test-mobile`: 23 suites, 92 tests passed).
+- Lint/typecheck result: PASS (`make lint-mobile`: Biome, TypeScript, and Knip exited 0; Knip emitted configuration hints only).
+- Follow-up items:
+  - Install or repair the Android SDK/`adb` path, then rerun `make start-android` and the Pantry manual checklist.
+  - Install Maestro, then rerun `cd mobile && npm run e2e -- e2e/smoke.yaml`.
+  - Evaluate Meals saved/suggested UX after Pantry visual direction is accepted.
+  - Revisit pnpm/workspace after a second screen or shared JS package need emerges.
+  - Evaluate blur/native tabs/glass effects in a separate platform-polish spike.
