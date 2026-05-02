@@ -32,7 +32,8 @@ export const authStorage = {
     const ciIdToken = ciToken("ID_TOKEN");
     if (ciIdToken) {
       try {
-        const payload = ciIdToken.split(".")[1]!;
+        const payload = ciIdToken.split(".")[1];
+        if (!payload) return null;
         const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
         return (JSON.parse(json) as { sub: string }).sub;
       } catch {
