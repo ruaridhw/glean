@@ -30,7 +30,9 @@ import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
 import type { PantryItem } from "@/types";
 
-function expiryToneToBadgeTone(tone: "expired" | "soon" | "later"): "danger" | "warning" | "neutral" {
+function expiryToneToBadgeTone(
+  tone: "expired" | "soon" | "later",
+): "danger" | "warning" | "neutral" {
   if (tone === "expired") return "danger";
   if (tone === "soon") return "warning";
   return "neutral";
@@ -116,7 +118,11 @@ function PantrySectionView({
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Ionicons name={section.meta.icon as keyof typeof Ionicons.glyphMap} size={16} color={section.meta.color} />
+        <Ionicons
+          name={section.meta.icon as keyof typeof Ionicons.glyphMap}
+          size={16}
+          color={section.meta.color}
+        />
         <Text style={styles.groupHeader}>{section.title}</Text>
       </View>
       {section.items.map((item) => (

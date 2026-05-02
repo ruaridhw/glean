@@ -17,7 +17,7 @@ export interface PantrySection {
   items: PantryItem[];
 }
 
-export interface ExpiryBadgeModel {
+interface ExpiryBadgeModel {
   label: string;
   tone: "expired" | "soon" | "later";
 }

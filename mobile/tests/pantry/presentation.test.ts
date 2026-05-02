@@ -1,10 +1,10 @@
-import type { PantryItem } from "@/types";
 import {
   formatPantryQuantity,
   getExpiryBadge,
   getPantryCategoryMeta,
   groupPantryItems,
 } from "@/pantry/presentation";
+import type { PantryItem } from "@/types";
 
 const baseItem: PantryItem = {
   id: 1,

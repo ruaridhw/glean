@@ -32,9 +32,8 @@ export async function handleAuthCode(code: string, codeVerifier: string): Promis
     { tokenEndpoint: TOKEN_ENDPOINT },
   );
 
-  const idToken = tokenResponse.idToken;
-  const refreshToken = tokenResponse.refreshToken;
-  if (!idToken || !refreshToken) throw new Error("Missing tokens from Cognito response");
+  const { idToken, refreshToken } = tokenResponse;
+  if (!idToken || !refreshToken) throw new Error("Token response missing required tokens");
 
   const { sub, email } = decodeIdTokenPayload(idToken);
 

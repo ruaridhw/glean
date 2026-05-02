@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import PantryScreen from "../../app/(tabs)/pantry";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
+import PantryScreen from "../../app/(tabs)/pantry";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");

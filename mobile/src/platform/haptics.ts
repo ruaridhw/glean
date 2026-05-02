@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 
-export type HapticImpact = "light" | "medium";
-export type HapticNotification = "success" | "warning";
+type HapticImpact = "light" | "medium";
+type HapticNotification = "success" | "warning";
 
 const impactMap: Record<HapticImpact, Haptics.ImpactFeedbackStyle> = {
   light: Haptics.ImpactFeedbackStyle.Light,
