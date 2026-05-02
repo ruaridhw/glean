@@ -4,7 +4,7 @@
 
 This project reconciles the working Replit mobile prototype in `mobile_replit/` with the real Expo app in `mobile/`.
 
-The Replit version is the target visual and UX direction. The real `mobile/` app remains canonical for data, backend integration, auth, routing depth, and production behavior. The goal is not to copy the prototype wholesale. The goal is to port the useful design, interaction polish, and product ideas onto the real app architecture, while using the comparison to improve questionable mobile app and build-chain decisions.
+The Replit version is the target visual and UX direction. The real `mobile/` app remains canonical for data, backend integration, and auth. Navigation depth, production flows, tests, e2e coverage, and build-chain choices are open to change after comparison. The goal is not to copy the prototype wholesale. The goal is to port the useful design, interaction polish, and product ideas onto the real app architecture, while using the comparison to improve questionable mobile app and build-chain decisions.
 
 The first implementation phase should be low-risk: produce an audit matrix, make explicit build-chain and dependency decisions, add a small shared UI foundation, and then port Pantry as the first proof screen.
 
@@ -16,7 +16,7 @@ The first implementation phase should be low-risk: produce an audit matrix, make
 - Identify Replit-only features and classify them as port now, adapt now, defer, or reject.
 - Evaluate build-chain choices such as npm vs pnpm, single app vs workspace, dependency resolution, scripts, and CI ergonomics without assuming the current chain must stay.
 - Add a small reusable visual foundation before changing screens.
-- Port Pantry first as the proof-of-port using real SQLite/Drizzle data and existing app flows.
+- Port Pantry first as the proof-of-port using real SQLite/Drizzle data and intentionally chosen flows after comparison.
 - Optimize Android and iOS as first-class platforms, with Android explicitly checked for adopted polish and web supported with graceful fallbacks.
 
 ## Non-goals
@@ -34,8 +34,15 @@ The first implementation phase should be low-risk: produce an audit matrix, make
 - SQLite + Drizzle schema and migrations.
 - FastAPI/backend integration.
 - Cognito auth flow.
-- Real app navigation depth and production flows.
-- Tests, e2e coverage, lint/typecheck/pre-commit expectations, unless the build-chain audit recommends changes.
+
+The following are not canonical by default and must be compared against the Replit prototype:
+
+- App navigation depth and production flows.
+- Test strategy and test coverage shape.
+- e2e coverage expectations.
+- Lint/typecheck/pre-commit/build-chain expectations.
+
+These areas may move toward the Replit version, stay closer to `mobile/`, or become a third better design after comparison. The implementation plan should not preserve them by inertia.
 
 `mobile_replit/` is canonical for:
 
@@ -102,7 +109,7 @@ The audit should compare:
 - Expo compatibility.
 - CI and local setup ergonomics.
 - Makefile integration.
-- Test, lint, typecheck, Knip, and Maestro workflows.
+- Test, lint, typecheck, Knip, and highest-level smoke/e2e strategy.
 - Whether a workspace would help future backend/mobile/shared package organization.
 
 If pnpm or a workspace materially improves reliability, speed, dependency hygiene, or future organization, the implementation plan may include migrating to it. If the current npm setup is simpler and equivalent for this repo, keep it and document why. The decision should come from explicit comparison, not inertia.
@@ -115,6 +122,7 @@ For each screen:
 
 - Current real app route and file path.
 - Replit prototype route and file path.
+- Navigation and flow differences.
 - Visual patterns to port.
 - Interaction patterns to port.
 - Features present in both.
@@ -158,11 +166,11 @@ Pantry is the first screen to port after the audit and foundation work.
 Pantry should:
 
 - Keep existing real pantry queries and mutation functions.
-- Preserve existing flows for scanning receipts, describing items, manual add, quantity edits, and deletion.
+- Compare existing flows for scanning receipts, describing items, manual add, quantity edits, deletion, and any Replit alternatives; preserve, adapt, or replace them intentionally.
 - Move toward Replit's visual treatment: large header, cards, category indicators, chips, polished actions, and modal/sheet presentation where appropriate.
 - Map real `food_group`, ingredient, quantity, and unit data to the Replit-style category presentation.
 - Add expiry badges only if supported by real data, or explicitly defer the required schema/API work.
-- Keep existing test IDs or update e2e tests deliberately when IDs change.
+- Preserve only the highest-level smoke/e2e coverage needed to prove the app still launches and core navigation works. Do not spend migration effort maintaining detailed e2e coverage screen by screen.
 - Validate Android behavior before treating the port as successful.
 
 ## Feature reconciliation rules
@@ -200,9 +208,9 @@ Preserve real-app behavior while improving presentation.
 
 The first implementation phase should include:
 
-- Unit tests for data mapping, date/expiry logic if introduced, and component state where practical.
-- Mobile Jest tests for shared primitives and key Pantry behavior.
-- Maestro smoke/e2e updates for changed navigation or test IDs.
+- Lower-level tests for data mapping, date/expiry logic if introduced, real DB integration boundaries, and component state where practical.
+- Mobile Jest or integration tests for shared primitives and key Pantry behavior when they catch meaningful regressions.
+- Highest-level smoke/e2e coverage only: verify the app launches and core navigation still works. Ignore detailed e2e migration work during this phase unless a smoke test is broken.
 - Android emulator verification for Pantry proof-of-port and any native polish dependency.
 - iOS verification for platform-specific enhancements when available.
 - Web fallback check if the changed code affects web execution.
