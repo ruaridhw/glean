@@ -1,9 +1,9 @@
 // mobile/app/(tabs)/pantry/index.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  Alert,
   FlatList,
   LayoutAnimation,
   Pressable,
@@ -12,12 +12,128 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
+import {
+  formatPantryQuantity,
+  getExpiryBadge,
+  getPantryCategoryMeta,
+  groupPantryItems,
+  type PantrySection,
+} from "@/pantry/presentation";
+import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
 import type { PantryItem } from "@/types";
+
+function expiryToneToBadgeTone(tone: "expired" | "soon" | "later"): "danger" | "warning" | "neutral" {
+  if (tone === "expired") return "danger";
+  if (tone === "soon") return "warning";
+  return "neutral";
+}
+
+interface PantryItemCardProps {
+  item: PantryItem;
+  editingId: number | null;
+  editQty: string;
+  onStartEdit: (item: PantryItem) => void;
+  onChangeEditQty: (quantity: string) => void;
+  onCommitEdit: (item: PantryItem) => void;
+  onDelete: (item: PantryItem) => void;
+}
+
+function PantryItemCard({
+  item,
+  editingId,
+  editQty,
+  onStartEdit,
+  onChangeEditQty,
+  onCommitEdit,
+  onDelete,
+}: PantryItemCardProps) {
+  const meta = getPantryCategoryMeta(item.food_group);
+  const expiryBadge = getExpiryBadge(item.expiry_date);
+  const isEditing = editingId === item.id;
+
+  return (
+    <Card style={styles.itemCard} testID={`pantry.item.${item.id}`}>
+      <View style={[styles.categoryDot, { backgroundColor: meta.color }]} />
+      <View style={styles.itemContent}>
+        <Text style={styles.itemName}>{item.canonical_name}</Text>
+        {isEditing ? (
+          <TextInput
+            style={styles.editInput}
+            value={editQty}
+            onChangeText={onChangeEditQty}
+            keyboardType="numeric"
+            onBlur={() => onCommitEdit(item)}
+            autoFocus
+          />
+        ) : (
+          <Pressable onPress={() => onStartEdit(item)} accessibilityRole="button">
+            <Text style={styles.itemQuantity}>{formatPantryQuantity(item)}</Text>
+          </Pressable>
+        )}
+      </View>
+      {expiryBadge ? (
+        <Badge label={expiryBadge.label} tone={expiryToneToBadgeTone(expiryBadge.tone)} />
+      ) : null}
+      <IconButton
+        icon="trash-outline"
+        accessibilityLabel={`Remove ${item.canonical_name}`}
+        color={theme.colors.textSecondary}
+        backgroundColor="transparent"
+        size={18}
+        onPress={() => onDelete(item)}
+      />
+    </Card>
+  );
+}
+
+interface PantrySectionViewProps {
+  section: PantrySection;
+  editingId: number | null;
+  editQty: string;
+  onStartEdit: (item: PantryItem) => void;
+  onChangeEditQty: (quantity: string) => void;
+  onCommitEdit: (item: PantryItem) => void;
+  onDelete: (item: PantryItem) => void;
+}
+
+function PantrySectionView({
+  section,
+  editingId,
+  editQty,
+  onStartEdit,
+  onChangeEditQty,
+  onCommitEdit,
+  onDelete,
+}: PantrySectionViewProps) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name={section.meta.icon as keyof typeof Ionicons.glyphMap} size={16} color={section.meta.color} />
+        <Text style={styles.groupHeader}>{section.title}</Text>
+      </View>
+      {section.items.map((item) => (
+        <PantryItemCard
+          key={item.id}
+          item={item}
+          editingId={editingId}
+          editQty={editQty}
+          onStartEdit={onStartEdit}
+          onChangeEditQty={onChangeEditQty}
+          onCommitEdit={onCommitEdit}
+          onDelete={onDelete}
+        />
+      ))}
+    </View>
+  );
+}
 
 export default function PantryScreen() {
   const [items, setItems] = useState<PantryItem[]>([]);
@@ -48,44 +164,39 @@ export default function PantryScreen() {
     await load();
   }
 
-  function confirmDelete(item: PantryItem) {
-    Alert.alert("Remove from pantry", `Remove ${item.canonical_name}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          await deletePantryItem(item.id);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          await load();
-        },
-      },
-    ]);
+  async function deleteItem(item: PantryItem) {
+    await hapticImpact("medium");
+    await deletePantryItem(item.id);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    await load();
   }
 
-  const grouped = items.reduce<Record<string, PantryItem[]>>((acc, item) => {
-    const group = item.food_group ?? "other";
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(item);
-    return acc;
-  }, {});
+  const sections = groupPantryItems(items);
 
-  if (loading)
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <Text testID="pantry.heading" style={styles.heading}>
-          Pantry
-        </Text>
+      <AppScreen title="Pantry" testID="pantry.screen">
         <PantrySkeleton />
-      </SafeAreaView>
+      </AppScreen>
     );
+  }
 
   if (items.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <Text style={styles.heading} testID="pantry.heading">
-          Pantry
-        </Text>
+      <AppScreen
+        title="Pantry"
+        subtitle="Reduce waste, eat what you have"
+        testID="pantry.screen"
+        actions={
+          <IconButton
+            icon="add"
+            accessibilityLabel="Add pantry item"
+            color={theme.colors.primaryForeground}
+            backgroundColor={theme.colors.primary}
+            onPress={() => router.push("/(tabs)/pantry/add")}
+          />
+        }
+      >
         <EmptyState
           testID="pantry.emptyState"
           icon="basket-outline"
@@ -96,123 +207,95 @@ export default function PantryScreen() {
             { label: "Describe items", onPress: () => router.push("/(tabs)/pantry/describe") },
           ]}
         />
-        <Pressable
-          style={styles.fab}
-          testID="pantry.fab"
-          onPress={() => router.push("/(tabs)/pantry/add")}
-        >
-          <Text style={styles.fabText}>＋</Text>
-        </Pressable>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading} testID="pantry.heading">
-        Pantry
-      </Text>
+    <AppScreen
+      title="Pantry"
+      subtitle={`${items.length} ${items.length === 1 ? "item" : "items"}`}
+      testID="pantry.screen"
+      actions={
+        <IconButton
+          icon="add"
+          accessibilityLabel="Add pantry item"
+          color={theme.colors.primaryForeground}
+          backgroundColor={theme.colors.primary}
+          onPress={() => router.push("/(tabs)/pantry/add")}
+        />
+      }
+    >
       <FlatList
         testID="pantry.list"
-        data={Object.entries(grouped)}
-        keyExtractor={([group]) => group}
-        renderItem={({ item: [group, groupItems] }) => (
-          <View>
-            <Text style={styles.groupHeader}>{group.toUpperCase()}</Text>
-            {groupItems.map((item) => (
-              <View key={item.id} style={styles.row}>
-                <Text style={styles.name}>{item.canonical_name}</Text>
-                {editingId === item.id ? (
-                  <TextInput
-                    style={styles.editInput}
-                    value={editQty}
-                    onChangeText={setEditQty}
-                    keyboardType="numeric"
-                    onBlur={() => commitEdit(item)}
-                    autoFocus
-                  />
-                ) : (
-                  <Pressable
-                    onPress={() => {
-                      setEditingId(item.id);
-                      setEditQty(String(item.quantity));
-                    }}
-                  >
-                    <Text style={styles.qty}>
-                      {item.quantity}
-                      {item.unit}
-                    </Text>
-                  </Pressable>
-                )}
-                <Pressable onPress={() => confirmDelete(item)}>
-                  <Text style={styles.delete}>✕</Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
+        data={sections}
+        keyExtractor={(section) => section.key}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
+          <PantrySectionView
+            section={item}
+            editingId={editingId}
+            editQty={editQty}
+            onStartEdit={(pantryItem) => {
+              setEditingId(pantryItem.id);
+              setEditQty(String(pantryItem.quantity));
+            }}
+            onChangeEditQty={setEditQty}
+            onCommitEdit={commitEdit}
+            onDelete={deleteItem}
+          />
         )}
       />
-      <Pressable
-        style={styles.fab}
-        testID="pantry.fab"
-        onPress={() => router.push("/(tabs)/pantry/add")}
-      >
-        <Text style={styles.fabText}>＋</Text>
-      </Pressable>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  heading: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
-    color: theme.colors.text,
-    padding: theme.spacing.lg,
+  listContent: { paddingBottom: theme.spacing.xl },
+  section: { marginBottom: theme.spacing.lg },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
   },
   groupHeader: {
     ...theme.typography.sectionLabel,
     color: theme.colors.textSecondary,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xs,
   },
-  row: {
-    flexDirection: "row",
+  itemCard: {
     alignItems: "center",
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
   },
-  name: { flex: 1, fontSize: theme.typography.subhead.fontSize, color: theme.colors.text },
-  qty: {
+  categoryDot: {
+    borderRadius: 5,
+    height: 10,
+    width: 10,
+  },
+  itemContent: { flex: 1 },
+  itemName: {
+    color: theme.colors.text,
+    fontSize: theme.typography.headline.fontSize,
+    fontWeight: theme.typography.headline.fontWeight,
+    marginBottom: 2,
+  },
+  itemQuantity: {
+    color: theme.colors.textSecondary,
     fontSize: theme.typography.subhead.fontSize,
-    color: theme.colors.primary,
-    marginRight: theme.spacing.md,
   },
   editInput: {
-    width: 80,
-    borderWidth: 1,
+    alignSelf: "flex-start",
     borderColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
-    padding: theme.spacing.xs,
+    borderWidth: 1,
+    color: theme.colors.text,
     fontSize: theme.typography.subhead.fontSize,
-    marginRight: theme.spacing.md,
+    minWidth: 72,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
-  delete: { color: theme.colors.textDisabled, fontSize: 16 },
-  fab: {
-    position: "absolute",
-    bottom: theme.spacing.xl,
-    right: theme.spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    ...theme.shadow.fab,
-  },
-  fabText: { color: theme.colors.card, fontSize: 28, lineHeight: 32 },
 });
