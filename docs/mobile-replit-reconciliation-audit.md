@@ -55,16 +55,16 @@ The Replit project uses a pnpm workspace because it manages generated artifacts,
 
 ## Pantry proof verification
 
-- Android manual check date: 2026-05-02
-- Android SDK/ADB setup: REPAIRED locally. `/Users/ruaridhw/Library/Android/sdk` now has platform tools, emulator, Android 35 platform/build tools, an Android 35 ARM system image, and a `glean_api35` AVD.
-- Android launch result: PARTIAL. `make start-android` now starts Metro, opens the emulator, installs Expo Go, and reaches the app launch step, but Expo CLI's `adb shell monkey` launcher exits with code 251 on this emulator. Direct `adb shell am start ... exp://10.0.2.2:8081` reaches the JS bundle.
-- Android manual Pantry result: DEFERRED. Further ADB/emulator runs were skipped for this pass; the latest emulator attempt exposed an Expo Go/native dependency mismatch around `ExpoCryptoAES`, so the package alignment was completed and verified by tests/lint, but the manual Pantry checklist still needs a fresh emulator pass.
+- Android manual check date: 2026-05-03
+- Android SDK/ADB setup: REPAIRED locally. `/Users/ruaridhw/Library/Android/sdk` now has platform tools, emulator, Android 35 platform/build tools, an Android 35 ARM system image, local command-line tools, and a `glean_api35` AVD.
+- Android launch result: PASS via the documented direct-launch workaround. `make start-android` still reaches the Expo CLI `adb shell monkey` step and exits 251 on this emulator, but a clean Metro session plus `adb shell am start ... exp://10.0.2.2:8081` launches the app and renders Pantry in Expo Go.
+- Android runtime result: PASS for the previous native-module blocker. `ExpoCryptoAES` no longer appears after restoring `expo-crypto` and aligning Expo SDK-managed packages.
+- Android manual Pantry result: PARTIAL PASS. Verified Pantry empty state, warm app shell, vector tab bar, Add action, and Manual Entry route on Android. Creating a manual item through ADB was not completed because `adb shell input text` did not update the focused React Native text fields on this emulator, so quantity +/- and delete interactions remain covered by unit/component tests rather than the manual Android pass.
 - Highest-level smoke/e2e result: BLOCKED locally because the Maestro CLI is not installed (`npm run e2e -- e2e/smoke.yaml` exits with `maestro: command not found`).
 - Unit/integration result: PASS (`make test-mobile`: 23 suites, 92 tests passed).
 - Lint/typecheck result: PASS (`make lint-mobile`: Biome, TypeScript, and Knip exited 0; Knip emitted configuration hints only).
 - Follow-up items:
-  - Restart Metro with a clean cache and relaunch Expo Go via `exp://10.0.2.2:8081`, then run the Pantry manual checklist.
-  - If `ExpoCryptoAES` still appears after package alignment, reinstall Expo Go on the emulator or use a development build with the app's native modules.
+  - If a fully scripted Android manual data-present pass is required, use a better input path than raw `adb shell input text` for React Native TextInput, or seed the Expo SQLite database through an app-level debug/fixture route.
   - Install Maestro, then rerun `cd mobile && npm run e2e -- e2e/smoke.yaml`.
   - Evaluate Meals saved/suggested UX after Pantry visual direction is accepted.
   - Revisit pnpm/workspace after a second screen or shared JS package need emerges.
