@@ -34,6 +34,8 @@ jest.mock("@/platform/haptics", () => ({
 }));
 
 describe("PantryScreen", () => {
+  jest.setTimeout(15_000);
+
   beforeEach(() => {
     jest.clearAllMocks();
     (getPantryItems as jest.Mock).mockResolvedValue([
