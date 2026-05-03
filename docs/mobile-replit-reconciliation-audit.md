@@ -56,12 +56,15 @@ The Replit project uses a pnpm workspace because it manages generated artifacts,
 ## Pantry proof verification
 
 - Android manual check date: 2026-05-02
-- Android result: BLOCKED locally because `ANDROID_HOME` points to missing `/Users/ruaridhw/Library/Android/sdk` and `adb` is unavailable (`make start-android` exits with `spawn adb ENOENT`).
+- Android SDK/ADB setup: REPAIRED locally. `/Users/ruaridhw/Library/Android/sdk` now has platform tools, emulator, Android 35 platform/build tools, an Android 35 ARM system image, and a `glean_api35` AVD.
+- Android launch result: PARTIAL. `make start-android` now starts Metro, opens the emulator, installs Expo Go, and reaches the app launch step, but Expo CLI's `adb shell monkey` launcher exits with code 251 on this emulator. Direct `adb shell am start ... exp://10.0.2.2:8081` reaches the JS bundle.
+- Android manual Pantry result: DEFERRED. Further ADB/emulator runs were skipped for this pass; the latest emulator attempt exposed an Expo Go/native dependency mismatch around `ExpoCryptoAES`, so the package alignment was completed and verified by tests/lint, but the manual Pantry checklist still needs a fresh emulator pass.
 - Highest-level smoke/e2e result: BLOCKED locally because the Maestro CLI is not installed (`npm run e2e -- e2e/smoke.yaml` exits with `maestro: command not found`).
 - Unit/integration result: PASS (`make test-mobile`: 23 suites, 92 tests passed).
 - Lint/typecheck result: PASS (`make lint-mobile`: Biome, TypeScript, and Knip exited 0; Knip emitted configuration hints only).
 - Follow-up items:
-  - Install or repair the Android SDK/`adb` path, then rerun `make start-android` and the Pantry manual checklist.
+  - Restart Metro with a clean cache and relaunch Expo Go via `exp://10.0.2.2:8081`, then run the Pantry manual checklist.
+  - If `ExpoCryptoAES` still appears after package alignment, reinstall Expo Go on the emulator or use a development build with the app's native modules.
   - Install Maestro, then rerun `cd mobile && npm run e2e -- e2e/smoke.yaml`.
   - Evaluate Meals saved/suggested UX after Pantry visual direction is accepted.
   - Revisit pnpm/workspace after a second screen or shared JS package need emerges.
