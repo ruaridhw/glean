@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View, type ViewProps } from "react-native";
 import { theme } from "@/theme";
 
-export interface StatsRowItem {
+interface StatsRowItem {
   value: ReactNode;
   label: string;
 }
@@ -15,10 +15,7 @@ export function StatsRow({ stats, style, ...props }: StatsRowProps) {
   return (
     <View style={[styles.container, style]} {...props}>
       {stats.map((stat, index) => (
-        <View
-          key={`${stat.label}-${index}`}
-          style={[styles.stat, index > 0 && styles.statDivider]}
-        >
+        <View key={stat.label} style={[styles.stat, index > 0 && styles.statDivider]}>
           {typeof stat.value === "string" || typeof stat.value === "number" ? (
             <Text style={styles.value}>{stat.value}</Text>
           ) : (

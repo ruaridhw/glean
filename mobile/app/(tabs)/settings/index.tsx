@@ -1,15 +1,15 @@
 // mobile/app/(tabs)/settings/index.tsx
 
-import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
+import Slider from "@react-native-community/slider";
 import { File, Paths } from "expo-file-system";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiClient } from "@/api/client";
 import { signOut } from "@/auth/google";
-import { Card } from "@/components/ui/Card";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatsRow } from "@/components/ui/StatsRow";
 import { getUserConfig, saveUserConfig } from "@/db/config";
@@ -17,8 +17,8 @@ import { hapticImpact } from "@/platform/haptics";
 import {
   DIETARY_OPTIONS,
   DINNERS_OPTIONS,
-  SERVINGS_OPTIONS,
   getToleranceLabel,
+  SERVINGS_OPTIONS,
   validateBoundedInteger,
 } from "@/settings/presentation";
 import { theme } from "@/theme";
@@ -42,7 +42,9 @@ function ChoiceChip({
       style={[styles.chip, selected && styles.chipSelected]}
       onPress={onPress}
     >
-      {selected ? <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} /> : null}
+      {selected ? (
+        <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
+      ) : null}
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );

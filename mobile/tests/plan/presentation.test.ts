@@ -1,10 +1,10 @@
-import type { MealPlanEntry } from "@/types";
 import {
   buildPlanSlots,
   formatPlanProgress,
   getCurrentWeekRangeLabel,
   getPlanSubtitle,
 } from "@/plan/presentation";
+import type { MealPlanEntry } from "@/types";
 
 const entry: MealPlanEntry = {
   id: 1,

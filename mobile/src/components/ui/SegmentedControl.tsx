@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
 
-export interface SegmentedControlOption<T extends string> {
+interface SegmentedControlOption<T extends string> {
   value: T;
   label: string;
   icon?: keyof typeof Ionicons.glyphMap;

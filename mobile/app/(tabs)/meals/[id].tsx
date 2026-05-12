@@ -9,11 +9,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatsRow } from "@/components/ui/StatsRow";
 import { getRecipeById, getRecipeIngredients } from "@/db/recipes";
-import {
-  formatRecipeIngredient,
-  getRecipeTags,
-  parseInstructionSteps,
-} from "@/meals/presentation";
+import { formatRecipeIngredient, getRecipeTags, parseInstructionSteps } from "@/meals/presentation";
 import { theme } from "@/theme";
 import type { Recipe, RecipeIngredient } from "@/types";
 
@@ -91,10 +87,7 @@ export default function RecipeDetailScreen() {
       <SectionHeader title="Ingredients" />
       <Card style={styles.sectionCard}>
         {ingredients.map((ingredient, index) => (
-          <View
-            key={ingredient.id}
-            style={[styles.ingredientRow, index > 0 && styles.dividedRow]}
-          >
+          <View key={ingredient.id} style={[styles.ingredientRow, index > 0 && styles.dividedRow]}>
             <View style={styles.dot} />
             <Text style={styles.ingredientText}>{formatRecipeIngredient(ingredient)}</Text>
           </View>
@@ -104,7 +97,10 @@ export default function RecipeDetailScreen() {
       <SectionHeader title="Instructions" />
       <Card style={styles.sectionCard}>
         {instructions.map((step, index) => (
-          <View key={`${step.number}-${index}`} style={[styles.stepRow, index > 0 && styles.stepGap]}>
+          <View
+            key={`${step.number}-${step.text}`}
+            style={[styles.stepRow, index > 0 && styles.stepGap]}
+          >
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>{step.number}</Text>
             </View>

@@ -1,8 +1,8 @@
 import {
   DIETARY_OPTIONS,
   DINNERS_OPTIONS,
-  SERVINGS_OPTIONS,
   getToleranceLabel,
+  SERVINGS_OPTIONS,
   validateBoundedInteger,
 } from "@/settings/presentation";
 

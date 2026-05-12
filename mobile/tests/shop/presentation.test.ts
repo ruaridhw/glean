@@ -1,5 +1,9 @@
+import {
+  formatShoppingQuantity,
+  getShoppingSourceLabel,
+  groupShoppingItems,
+} from "@/shop/presentation";
 import type { ShoppingListItem } from "@/types";
-import { formatShoppingQuantity, getShoppingSourceLabel, groupShoppingItems } from "@/shop/presentation";
 
 const item: ShoppingListItem = {
   id: 1,

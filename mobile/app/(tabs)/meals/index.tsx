@@ -119,7 +119,10 @@ export default function MealsScreen() {
             <Ionicons name="search-outline" size={24} color={theme.colors.primary} />
             <Text style={styles.actionTitle}>Discover Recipes</Text>
             <Text style={styles.actionText}>Search for recipes and save the ones you like.</Text>
-            <Pressable style={styles.primaryAction} onPress={() => router.push("/(tabs)/meals/search")}>
+            <Pressable
+              style={styles.primaryAction}
+              onPress={() => router.push("/(tabs)/meals/search")}
+            >
               <Text style={styles.primaryActionText}>Search recipes</Text>
             </Pressable>
           </Card>

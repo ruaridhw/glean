@@ -2,7 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSuggestMeals } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
@@ -144,14 +144,16 @@ export default function PlanScreen() {
     },
     [mealsPerWeek, load],
   );
+  const handleAddRecipeRef = useRef(handleAddRecipe);
+  handleAddRecipeRef.current = handleAddRecipe;
 
   useFocusEffect(
     useCallback(() => {
       void load();
       if (addRecipeId) {
-        void handleAddRecipe(Number(addRecipeId));
+        void handleAddRecipeRef.current(Number(addRecipeId));
       }
-    }, [load, addRecipeId, handleAddRecipe]),
+    }, [load, addRecipeId]),
   );
 
   async function handleMarkCooked(entry: MealPlanEntry) {

@@ -1,10 +1,10 @@
-import type { Recipe, RecipeIngredient } from "@/types";
 import {
   formatRecipeIngredient,
   getRecipeMeta,
   getRecipeTags,
   parseInstructionSteps,
 } from "@/meals/presentation";
+import type { Recipe, RecipeIngredient } from "@/types";
 
 const recipe: Recipe = {
   id: 7,

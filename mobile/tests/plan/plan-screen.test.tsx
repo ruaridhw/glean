@@ -1,18 +1,17 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import PlanScreen from "../../app/(tabs)/plan";
 import { useSuggestMeals } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
   addMealPlanEntry,
   deleteMealPlanEntry,
-  getMealPlanCount,
   getMealPlanEntries,
   markMealAsCooked,
 } from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
 import { addShoppingGapsForRecipe } from "@/db/shopping";
+import PlanScreen from "../../app/(tabs)/plan";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
@@ -45,7 +44,9 @@ jest.mock("@/db/plan", () => ({
   markMealAsCooked: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("@/db/recipes", () => ({ getSavedRecipes: jest.fn() }));
-jest.mock("@/db/shopping", () => ({ addShoppingGapsForRecipe: jest.fn().mockResolvedValue(undefined) }));
+jest.mock("@/db/shopping", () => ({
+  addShoppingGapsForRecipe: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("@/suggestions/compress", () => ({ compressPantry: jest.fn().mockReturnValue([]) }));
 jest.mock("@/utils/toast", () => ({ showError: jest.fn(), showSuccess: jest.fn() }));
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));

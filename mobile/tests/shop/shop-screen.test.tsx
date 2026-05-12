@@ -1,6 +1,5 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import ShopScreen from "../../app/(tabs)/shop";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -8,6 +7,7 @@ import {
   getShoppingListItems,
   toggleShoppingItem,
 } from "@/db/shopping";
+import ShopScreen from "../../app/(tabs)/shop";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");

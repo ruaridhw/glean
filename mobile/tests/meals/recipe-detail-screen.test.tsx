@@ -1,7 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import RecipeDetailScreen from "../../app/(tabs)/meals/[id]";
 import { getRecipeById, getRecipeIngredients } from "@/db/recipes";
+import RecipeDetailScreen from "../../app/(tabs)/meals/[id]";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");

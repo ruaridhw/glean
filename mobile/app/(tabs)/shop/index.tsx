@@ -3,7 +3,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { ShoppingSkeleton } from "@/components/skeletons/ShoppingSkeleton";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Badge } from "@/components/ui/Badge";
@@ -169,7 +177,10 @@ export default function ShopScreen() {
                   >
                     <Text style={styles.primaryActionText}>Scan receipt</Text>
                   </Pressable>
-                  <Pressable style={styles.secondaryAction} onPress={() => void handleClearChecked()}>
+                  <Pressable
+                    style={styles.secondaryAction}
+                    onPress={() => void handleClearChecked()}
+                  >
                     <Text style={styles.secondaryActionText}>Clear checked</Text>
                   </Pressable>
                 </View>
@@ -187,7 +198,10 @@ export default function ShopScreen() {
                 onSubmitEditing={handleAdd}
               />
               <Pressable
-                style={[styles.addButton, (!newItemName.trim() || adding) && styles.addButtonDisabled]}
+                style={[
+                  styles.addButton,
+                  (!newItemName.trim() || adding) && styles.addButtonDisabled,
+                ]}
                 onPress={handleAdd}
                 disabled={adding || !newItemName.trim()}
               >

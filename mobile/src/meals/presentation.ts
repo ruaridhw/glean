@@ -1,12 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import type { Ionicons } from "@expo/vector-icons";
 import type { Recipe, RecipeIngredient } from "@/types";
 
-export interface RecipeMetaItem {
+interface RecipeMetaItem {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
 }
 
-export interface InstructionStep {
+interface InstructionStep {
   number: number;
   text: string;
 }
@@ -15,7 +15,9 @@ type RawInstruction = string | { step_number?: number; text?: string };
 
 export function getRecipeMeta(recipe: Recipe): RecipeMetaItem[] {
   return [
-    recipe.total_time_mins ? { icon: "time-outline", label: `${recipe.total_time_mins} min` } : null,
+    recipe.total_time_mins
+      ? { icon: "time-outline", label: `${recipe.total_time_mins} min` }
+      : null,
     recipe.yield_count ? { icon: "people-outline", label: `${recipe.yield_count} servings` } : null,
     recipe.difficulty ? { icon: "speedometer-outline", label: recipe.difficulty } : null,
   ].filter((item): item is RecipeMetaItem => item != null);
@@ -38,7 +40,9 @@ export function formatRecipeIngredient(ingredient: RecipeIngredient): string {
 
 export function parseInstructionSteps(instructions: unknown): InstructionStep[] {
   const parsed =
-    typeof instructions === "string" ? (JSON.parse(instructions) as RawInstruction[]) : instructions;
+    typeof instructions === "string"
+      ? (JSON.parse(instructions) as RawInstruction[])
+      : instructions;
   if (!Array.isArray(parsed)) return [];
   return parsed.map((step, index) => {
     if (typeof step === "string") return { number: index + 1, text: step };

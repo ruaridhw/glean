@@ -1,8 +1,8 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import SettingsScreen from "../../app/(tabs)/settings";
 import { signOut } from "@/auth/google";
 import { getUserConfig, saveUserConfig } from "@/db/config";
+import SettingsScreen from "../../app/(tabs)/settings";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");

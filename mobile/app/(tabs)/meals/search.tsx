@@ -15,7 +15,13 @@ import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
-function SearchResultCard({ result, onPress }: { result: RecipeSearchResult; onPress: () => void }) {
+function SearchResultCard({
+  result,
+  onPress,
+}: {
+  result: RecipeSearchResult;
+  onPress: () => void;
+}) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.resultPressable}>
       <Card style={styles.resultCard}>

@@ -2,7 +2,7 @@ import type { MealPlanEntry } from "@/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export interface PlanProgress {
+interface PlanProgress {
   label: string;
   percent: number;
 }
