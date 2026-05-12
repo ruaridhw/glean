@@ -2,15 +2,26 @@ appId: ${APP_ID}
 ---
 - clearState: ${APP_ID}
 - launchApp: ${APP_ID}
-- runFlow:
-    when:
-      visible: "Enter URL manually"
-    file: open-dev-url.yaml
+# Always open the Metro dev URL. clearState wipes Expo Go's bundle cache, which
+# can cause expo-updates to crash before the UI renders (so the conditional
+# "Enter URL manually" handler never fires). An unconditional openLink sends an
+# Android intent that Expo Go handles from any state, including its error screen.
+- openLink: ${EXPO_URL}
+# Expo Go may show a project-load overlay with a "Continue" button after loading
+# the bundle. Wait for it, then dismiss. Optional: the overlay doesn't always
+# appear (e.g., hot reload, cached bundles).
 - extendedWaitUntil:
-    visible: "Glean"
+    visible: "Continue"
+    timeout: 20000
+    optional: true
+- waitForAnimationToEnd
+# In dev mode the developer menu may auto-open after the project overlay.
+# Swiping down dismisses the bottom sheet; harmless if nothing is showing.
+- swipe:
+    start: "50%,60%"
+    end: "50%,95%"
+- waitForAnimationToEnd
+# Final gate: app is loaded and interactive.
+- extendedWaitUntil:
+    visible: "Pantry"
     timeout: 30000
-    optional: true
-- tapOn:
-    point: 95%,67%
-    label: "Dismiss Expo Go dev menu"
-    optional: true

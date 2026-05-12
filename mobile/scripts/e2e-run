@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MOBILE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$HOME/.maestro/bin:$PATH"
+EMU_START_PID=""
+
+cleanup() {
+  if [ -n "$EMU_START_PID" ]; then
+    kill "$EMU_START_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+if ! command -v maestro >/dev/null 2>&1; then
+  echo "Maestro is not installed or is not on PATH." >&2
+  echo "Install it with: curl -fsSL https://get.maestro.mobile.dev | bash" >&2
+  exit 127
+fi
+
+if [ ! -x "$MOBILE_DIR/node_modules/.bin/expo" ]; then
+  echo "Expo CLI is missing. Run: make setup" >&2
+  exit 1
+fi
+
+# ── Restart Metro fresh ──────────────────────────────────────────────────────
+pkill -f "expo start" 2>/dev/null || true
+sleep 2
+
+"$MOBILE_DIR/scripts/emu-start" --no-open &
+EMU_START_PID=$!
+
+echo "Waiting for emulator and Metro..."
+for i in $(seq 1 180); do
+  if ! kill -0 "$EMU_START_PID" 2>/dev/null; then
+    wait "$EMU_START_PID"
+    exit $?
+  fi
+
+  if curl -s http://localhost:8081/status 2>/dev/null | grep -q "packager-status:running"; then
+    echo "Metro ready after ${i}s"
+    break
+  fi
+  sleep 1
+done
+
+if ! curl -s http://localhost:8081/status 2>/dev/null | grep -q "packager-status:running"; then
+  echo "Metro did not become ready on :8081." >&2
+  exit 1
+fi
+
+if ! adb shell pm list packages 2>/dev/null | grep -q host.exp.exponent; then
+  echo "Expo Go is not installed on the emulator." >&2
+  echo "Install Expo Go once, then rerun: make test-e2e" >&2
+  exit 1
+fi
+
+adb reverse tcp:8081 tcp:8081 >/dev/null
+
+export APP_ID="${APP_ID:-host.exp.exponent}"
+export EXPO_URL="${EXPO_URL:-exp://127.0.0.1:8081}"
+
+# ── Run Maestro tests ────────────────────────────────────────────────────────
+cd "$MOBILE_DIR"
+npm run e2e
