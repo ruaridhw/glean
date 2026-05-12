@@ -1,8 +1,19 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { IconButton } from "@/components/ui/IconButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { StatsRow } from "@/components/ui/StatsRow";
 import { getRecipeById, getRecipeIngredients } from "@/db/recipes";
+import {
+  formatRecipeIngredient,
+  getRecipeTags,
+  parseInstructionSteps,
+} from "@/meals/presentation";
 import { theme } from "@/theme";
 import type { Recipe, RecipeIngredient } from "@/types";
 
@@ -14,144 +25,193 @@ export default function RecipeDetailScreen() {
 
   useEffect(() => {
     async function load() {
-      const r = await getRecipeById(Number(id));
-      if (!r) {
+      setLoading(true);
+      const fetchedRecipe = await getRecipeById(Number(id));
+      if (!fetchedRecipe) {
         router.back();
         return;
       }
-      setRecipe(r);
-      setIngredients(await getRecipeIngredients(Number(id)));
+      const fetchedIngredients = await getRecipeIngredients(Number(id));
+      setRecipe(fetchedRecipe);
+      setIngredients(fetchedIngredients);
       setLoading(false);
     }
-    load();
+    void load();
   }, [id]);
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+  const actions = (
+    <IconButton
+      icon="chevron-back"
+      accessibilityLabel="Back to meals"
+      backgroundColor={theme.colors.muted}
+      onPress={() => router.back()}
+    />
+  );
+
+  if (loading) {
+    return (
+      <AppScreen title="Recipe" actions={actions} testID="recipe.detail">
+        <View style={styles.loading}>
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
+      </AppScreen>
+    );
+  }
+
   if (!recipe) return null;
 
-  const instructions =
-    typeof recipe.instructions === "string" ? JSON.parse(recipe.instructions) : recipe.instructions;
+  const tags = getRecipeTags(recipe);
+  const instructions = parseInstructionSteps(recipe.instructions);
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <ScrollView contentContainerStyle={s.content}>
-        <Text style={s.title}>{recipe.title}</Text>
-        <Text style={s.meta}>
-          {[
-            recipe.cuisine,
-            recipe.difficulty,
-            recipe.total_time_mins ? `${recipe.total_time_mins} min` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </Text>
-        {(recipe.dietary_flags?.length ?? 0) > 0 && (
-          <View style={s.flags}>
-            {recipe.dietary_flags?.map((f) => (
-              <View key={f} style={s.flag}>
-                <Text style={s.flagText}>{f}</Text>
-              </View>
+    <AppScreen title="Recipe" actions={actions} scroll testID="recipe.detail">
+      <Card style={styles.heroCard}>
+        <Text style={styles.title}>{recipe.title}</Text>
+        {tags.length > 0 ? (
+          <View style={styles.tagsRow}>
+            {tags.map((tag) => (
+              <Badge key={tag} label={tag} />
             ))}
           </View>
-        )}
+        ) : null}
+      </Card>
 
-        <Text style={s.sectionHeading}>Ingredients</Text>
-        {ingredients.map((ing) => (
-          <Text key={ing.id} style={s.ingredient}>
-            • {ing.quantity}
-            {ing.unit} {ing.ingredient?.canonical_name ?? ""}
-            {ing.preparation ? `, ${ing.preparation}` : ""}
-            {ing.is_optional ? " (optional)" : ""}
-          </Text>
-        ))}
+      <StatsRow
+        style={styles.stats}
+        stats={[
+          { value: recipe.total_time_mins ? `${recipe.total_time_mins} min` : "-", label: "Total" },
+          {
+            value: recipe.active_time_mins ? `${recipe.active_time_mins} min` : "-",
+            label: "Active",
+          },
+          { value: recipe.yield_count ? `${recipe.yield_count} servings` : "-", label: "Serves" },
+        ]}
+      />
 
-        <Text style={s.sectionHeading}>Instructions</Text>
-        {instructions.map((step: { step_number: number; phase: string; text: string }) => (
-          <View key={step.step_number} style={s.step}>
-            <Text style={s.stepNum}>{step.step_number}</Text>
-            <Text style={s.stepText}>{step.text}</Text>
+      <SectionHeader title="Ingredients" />
+      <Card style={styles.sectionCard}>
+        {ingredients.map((ingredient, index) => (
+          <View
+            key={ingredient.id}
+            style={[styles.ingredientRow, index > 0 && styles.dividedRow]}
+          >
+            <View style={styles.dot} />
+            <Text style={styles.ingredientText}>{formatRecipeIngredient(ingredient)}</Text>
           </View>
         ))}
+      </Card>
 
-        <Pressable
-          style={s.addBtn}
-          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
-        >
-          <Text style={s.addBtnText}>Add to Plan</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+      <SectionHeader title="Instructions" />
+      <Card style={styles.sectionCard}>
+        {instructions.map((step, index) => (
+          <View key={`${step.number}-${index}`} style={[styles.stepRow, index > 0 && styles.stepGap]}>
+            <View style={styles.stepNumber}>
+              <Text style={styles.stepNumberText}>{step.number}</Text>
+            </View>
+            <Text style={styles.stepText}>{step.text}</Text>
+          </View>
+        ))}
+      </Card>
+
+      <Pressable
+        accessibilityRole="button"
+        style={styles.addButton}
+        onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
+      >
+        <Ionicons name="calendar-outline" size={18} color={theme.colors.primaryForeground} />
+        <Text style={styles.addButtonText}>Add to Plan</Text>
+      </Pressable>
+    </AppScreen>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  content: { padding: theme.spacing.lg },
+const styles = StyleSheet.create({
+  loading: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+  },
+  heroCard: {
+    gap: theme.spacing.md,
+  },
   title: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
     color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    fontSize: 26,
+    fontWeight: "800",
+    lineHeight: 32,
   },
-  meta: {
-    fontSize: theme.typography.caption.fontSize,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.md,
-  },
-  flags: {
+  tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing.xs,
-    marginBottom: theme.spacing.lg,
   },
-  flag: {
-    backgroundColor: theme.colors.primaryLight,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 3,
+  stats: {
+    marginTop: theme.spacing.md,
   },
-  flagText: { fontSize: 11, color: theme.colors.primary },
-  sectionHeading: {
-    fontSize: theme.typography.headline.fontSize,
-    fontWeight: theme.typography.headline.fontWeight,
-    color: theme.colors.text,
-    marginTop: theme.spacing.xl,
-    marginBottom: theme.spacing.md,
+  sectionCard: {
+    gap: theme.spacing.sm,
   },
-  ingredient: {
-    fontSize: theme.typography.subhead.fontSize,
-    marginBottom: theme.spacing.xs,
-    color: theme.colors.text,
+  ingredientRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
-  step: { flexDirection: "row", marginBottom: theme.spacing.md, gap: theme.spacing.md },
-  stepNum: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  dividedRow: {
+    borderColor: theme.colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: theme.spacing.sm,
+  },
+  dot: {
     backgroundColor: theme.colors.primary,
-    color: theme.colors.card,
-    textAlign: "center",
-    lineHeight: 24,
-    fontWeight: "700",
-    fontSize: 12,
+    borderRadius: 3,
+    height: 6,
+    width: 6,
   },
-  stepText: {
+  ingredientText: {
+    color: theme.colors.text,
     flex: 1,
     fontSize: theme.typography.subhead.fontSize,
-    lineHeight: 20,
-    color: theme.colors.text,
   },
-  addBtn: {
-    marginTop: theme.spacing.xl,
-    marginBottom: theme.spacing.xxl,
+  stepRow: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  stepGap: {
+    marginTop: theme.spacing.md,
+  },
+  stepNumber: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 13,
+    height: 26,
+    justifyContent: "center",
+    width: 26,
+  },
+  stepNumberText: {
+    color: theme.colors.primaryForeground,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
+  },
+  stepText: {
+    color: theme.colors.text,
+    flex: 1,
+    fontSize: theme.typography.subhead.fontSize,
+    lineHeight: 22,
+  },
+  addButton: {
+    alignItems: "center",
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.md,
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    justifyContent: "center",
+    marginTop: theme.spacing.xl,
     padding: theme.spacing.md,
-    alignItems: "center",
   },
-  addBtnText: {
-    color: theme.colors.card,
-    fontWeight: "600",
+  addButtonText: {
+    color: theme.colors.primaryForeground,
     fontSize: theme.typography.body.fontSize,
+    fontWeight: "700",
   },
 });
