@@ -1,22 +1,16 @@
 // mobile/app/(tabs)/shop/index.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ShoppingSkeleton } from "@/components/skeletons/ShoppingSkeleton";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -24,9 +18,78 @@ import {
   getShoppingListItems,
   toggleShoppingItem,
 } from "@/db/shopping";
+import { hapticImpact } from "@/platform/haptics";
+import {
+  formatShoppingQuantity,
+  getShoppingSourceLabel,
+  groupShoppingItems,
+  type ShoppingSection,
+} from "@/shop/presentation";
 import { theme } from "@/theme";
 import type { ShoppingListItem } from "@/types";
 import { showSuccess } from "@/utils/toast";
+
+function ShoppingRow({
+  item,
+  onToggle,
+  onDelete,
+}: {
+  item: ShoppingListItem;
+  onToggle: (item: ShoppingListItem) => void;
+  onDelete: (item: ShoppingListItem) => void;
+}) {
+  const checked = item.is_checked;
+  return (
+    <Card style={[styles.itemCard, checked && styles.checkedItemCard]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${checked ? "Uncheck" : "Check"} ${item.name}`}
+        style={[styles.checkbox, checked && styles.checkboxChecked]}
+        onPress={() => onToggle(item)}
+      >
+        {checked ? (
+          <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
+        ) : null}
+      </Pressable>
+      <View style={styles.itemContent}>
+        <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
+        <View style={styles.itemMetaRow}>
+          <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
+          <Badge label={getShoppingSourceLabel(item.source)} />
+        </View>
+      </View>
+      <IconButton
+        icon="trash-outline"
+        accessibilityLabel={`Remove ${item.name}`}
+        color={theme.colors.textSecondary}
+        backgroundColor="transparent"
+        size={18}
+        onPress={() => onDelete(item)}
+      />
+    </Card>
+  );
+}
+
+function ShoppingSectionView({
+  section,
+  onToggle,
+  onDelete,
+}: {
+  section: ShoppingSection;
+  onToggle: (item: ShoppingListItem) => void;
+  onDelete: (item: ShoppingListItem) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={section.title} />
+      <View style={styles.sectionRows}>
+        {section.items.map((item) => (
+          <ShoppingRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 export default function ShopScreen() {
   const [items, setItems] = useState<ShoppingListItem[]>([]);
@@ -37,7 +100,6 @@ export default function ShopScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     const result = await getShoppingListItems();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setItems(result);
     setLoading(false);
   }, []);
@@ -49,18 +111,18 @@ export default function ShopScreen() {
   );
 
   async function handleAdd() {
-    if (!newItemName.trim()) return;
+    const name = newItemName.trim();
+    if (!name) return;
     setAdding(true);
-    await addManualShoppingItem({ name: newItemName.trim() });
+    await addManualShoppingItem({ name });
     setNewItemName("");
     setAdding(false);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 
   async function handleToggle(item: ShoppingListItem) {
+    await hapticImpact("light");
     await toggleShoppingItem(item.id, !item.is_checked);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     await load();
   }
 
@@ -69,117 +131,71 @@ export default function ShopScreen() {
     await load();
   }
 
-  function handleCompleteCheckout() {
-    const checkedCount = items.filter((i) => i.is_checked).length;
-    const uncheckedCount = items.filter((i) => !i.is_checked).length;
-
-    Alert.alert(
-      "Completed checkout",
-      "Did you get a receipt? Scanning it will update your pantry automatically.",
-      [
-        {
-          text: "Scan receipt",
-          onPress: () => {
-            router.push("/(tabs)/pantry/scan?returnTo=shop");
-          },
-        },
-        {
-          text: "Skip — just clear checked",
-          onPress: () => {
-            Alert.alert(
-              "Clear checked items?",
-              `${checkedCount} checked item${checkedCount !== 1 ? "s" : ""} will be removed.${
-                uncheckedCount > 0
-                  ? `\n\n${uncheckedCount} unchecked item${uncheckedCount !== 1 ? "s" : ""} will remain for next time.`
-                  : ""
-              }`,
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Clear",
-                  onPress: async () => {
-                    await completeCheckout();
-                    showSuccess("Checkout complete");
-                    await load();
-                  },
-                },
-              ],
-            );
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ],
-    );
+  async function handleClearChecked() {
+    await completeCheckout();
+    showSuccess("Checkout complete");
+    await load();
   }
 
-  const unchecked = items.filter((i) => !i.is_checked);
-  const checked = items.filter((i) => i.is_checked);
+  const unchecked = items.filter((item) => !item.is_checked);
+  const checked = items.filter((item) => item.is_checked);
+  const sections = groupShoppingItems(items);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={s.keyboardView}
+      style={styles.keyboardView}
     >
-      <SafeAreaView style={s.container} edges={["top"]}>
-        <View style={s.header}>
-          <Text style={s.heading}>Shopping List</Text>
-          {!loading && checked.length > 0 && (
-            <Pressable style={s.checkoutBtn} onPress={handleCompleteCheckout}>
-              <Text style={s.checkoutBtnText}>Completed checkout</Text>
-            </Pressable>
-          )}
-        </View>
-
+      <AppScreen
+        title="Shopping"
+        subtitle={`${unchecked.length} remaining · ${checked.length} checked`}
+        testID="shop.screen"
+        scroll
+      >
         {loading ? (
           <ShoppingSkeleton />
         ) : (
-          <FlatList
-            data={[...unchecked, ...checked]}
-            keyExtractor={(item) => String(item.id)}
-            keyboardDismissMode="on-drag"
-            renderItem={({ item }) => (
-              <View style={[s.itemRow, item.is_checked && s.checkedRow]}>
-                <Pressable style={s.checkbox} onPress={() => handleToggle(item)}>
-                  <Text style={s.checkboxText}>{item.is_checked ? "☑" : "☐"}</Text>
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.itemName, item.is_checked && s.checkedText]}>{item.name}</Text>
-                  {item.quantity != null && (
-                    <Text style={s.itemQty}>
-                      {item.quantity}
-                      {item.unit}
-                    </Text>
-                  )}
+          <>
+            {checked.length > 0 ? (
+              <Card style={styles.checkoutCard}>
+                <View style={styles.checkoutHeader}>
+                  <Text style={styles.checkoutTitle}>Completed checkout</Text>
+                  <Badge label={`${checked.length} checked`} tone="primary" />
                 </View>
-                <View style={s.sourceTag}>
-                  <Text style={s.sourceTagText}>{item.source}</Text>
+                <View style={styles.checkoutActions}>
+                  <Pressable
+                    style={styles.primaryAction}
+                    onPress={() => router.push("/(tabs)/pantry/scan?returnTo=shop")}
+                  >
+                    <Text style={styles.primaryActionText}>Scan receipt</Text>
+                  </Pressable>
+                  <Pressable style={styles.secondaryAction} onPress={() => void handleClearChecked()}>
+                    <Text style={styles.secondaryActionText}>Clear checked</Text>
+                  </Pressable>
                 </View>
-                <Pressable onPress={() => handleDelete(item)}>
-                  <Text style={s.deleteText}>✕</Text>
-                </Pressable>
-              </View>
-            )}
-            ListFooterComponent={
-              <View style={s.addRow}>
-                <TextInput
-                  style={s.addInput}
-                  value={newItemName}
-                  onChangeText={setNewItemName}
-                  placeholder="Add item…"
-                  placeholderTextColor={theme.colors.textDisabled}
-                  returnKeyType="done"
-                  onSubmitEditing={handleAdd}
-                />
-                <Pressable
-                  style={[s.addBtn, (!newItemName.trim() || adding) && s.addBtnDisabled]}
-                  onPress={handleAdd}
-                  disabled={adding || !newItemName.trim()}
-                >
-                  <Text style={s.addBtnText}>Add</Text>
-                </Pressable>
-              </View>
-            }
-            ListEmptyComponent={
+              </Card>
+            ) : null}
+
+            <Card style={styles.addCard}>
+              <TextInput
+                style={styles.addInput}
+                value={newItemName}
+                onChangeText={setNewItemName}
+                placeholder="Add item..."
+                placeholderTextColor={theme.colors.textDisabled}
+                returnKeyType="done"
+                onSubmitEditing={handleAdd}
+              />
+              <Pressable
+                style={[styles.addButton, (!newItemName.trim() || adding) && styles.addButtonDisabled]}
+                onPress={handleAdd}
+                disabled={adding || !newItemName.trim()}
+              >
+                <Text style={styles.addButtonText}>Add</Text>
+              </Pressable>
+            </Card>
+
+            {items.length === 0 ? (
               <EmptyState
                 testID="shop.emptyState"
                 icon="cart-outline"
@@ -189,89 +205,138 @@ export default function ShopScreen() {
                   { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
                 ]}
               />
-            }
-          />
+            ) : (
+              sections.map((section) => (
+                <ShoppingSectionView
+                  key={section.key}
+                  section={section}
+                  onToggle={(item) => void handleToggle(item)}
+                  onDelete={(item) => void handleDelete(item)}
+                />
+              ))
+            )}
+          </>
         )}
-      </SafeAreaView>
+      </AppScreen>
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   keyboardView: { flex: 1, backgroundColor: theme.colors.background },
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
+  checkoutCard: {
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  checkoutHeader: {
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
-    padding: theme.spacing.lg,
   },
-  heading: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
+  checkoutTitle: {
     color: theme.colors.text,
+    fontSize: theme.typography.headline.fontSize,
+    fontWeight: "700",
   },
-  checkoutBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  checkoutBtnText: { color: theme.colors.card, fontWeight: "600", fontSize: 13 },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-    gap: 10,
-  },
-  checkedRow: { opacity: 0.5 },
-  checkbox: { width: 24 },
-  checkboxText: { fontSize: 20, color: theme.colors.text },
-  itemName: { fontSize: theme.typography.subhead.fontSize, color: theme.colors.text },
-  checkedText: { textDecorationLine: "line-through" },
-  itemQty: {
-    fontSize: theme.typography.caption.fontSize,
-    color: theme.colors.textSecondary,
-    marginTop: 1,
-  },
-  sourceTag: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  sourceTagText: { fontSize: 10, color: theme.colors.textSecondary },
-  deleteText: { color: theme.colors.textDisabled, fontSize: 16 },
-  addRow: {
+  checkoutActions: {
     flexDirection: "row",
     gap: theme.spacing.sm,
-    padding: theme.spacing.lg,
-    borderTopWidth: 1,
-    borderColor: theme.colors.border,
+  },
+  primaryAction: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    flex: 1,
+    padding: theme.spacing.md,
+  },
+  primaryActionText: {
+    color: theme.colors.primaryForeground,
+    fontWeight: "700",
+  },
+  secondaryAction: {
+    alignItems: "center",
+    backgroundColor: theme.colors.muted,
+    borderRadius: theme.radius.md,
+    flex: 1,
+    padding: theme.spacing.md,
+  },
+  secondaryActionText: {
+    color: theme.colors.text,
+    fontWeight: "700",
+  },
+  addCard: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   addInput: {
-    flex: 1,
-    borderWidth: 1,
+    backgroundColor: theme.colors.muted,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.sm,
-    padding: 10,
-    fontSize: theme.typography.subhead.fontSize,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
     color: theme.colors.text,
+    flex: 1,
+    fontSize: theme.typography.subhead.fontSize,
+    padding: theme.spacing.md,
   },
-  addBtn: {
+  addButton: {
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.md,
     justifyContent: "center",
+    paddingHorizontal: theme.spacing.lg,
   },
-  addBtnDisabled: { opacity: 0.5 },
-  addBtnText: { color: theme.colors.card, fontWeight: "600" },
-  empty: {
-    textAlign: "center",
+  addButtonDisabled: { opacity: 0.5 },
+  addButtonText: {
+    color: theme.colors.primaryForeground,
+    fontWeight: "700",
+  },
+  section: {
+    marginBottom: theme.spacing.md,
+  },
+  sectionRows: {
+    gap: theme.spacing.sm,
+  },
+  itemCard: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  checkedItemCard: {
+    opacity: 0.65,
+  },
+  checkbox: {
+    alignItems: "center",
+    borderColor: theme.colors.border,
+    borderRadius: 11,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: "center",
+    width: 22,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  itemContent: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  itemName: {
+    color: theme.colors.text,
+    fontSize: theme.typography.subhead.fontSize,
+    fontWeight: "600",
+  },
+  checkedText: {
+    textDecorationLine: "line-through",
+  },
+  itemMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+  },
+  itemQuantity: {
     color: theme.colors.textSecondary,
-    marginTop: 40,
-    fontSize: 14,
+    fontSize: theme.typography.caption.fontSize,
   },
 });
