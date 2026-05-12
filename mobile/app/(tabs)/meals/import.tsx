@@ -42,7 +42,12 @@ export default function ImportScreen() {
   }
 
   return (
-    <AppScreen title="Import from URL" subtitle="Paste a recipe link" testID="meals.import">
+    <AppScreen
+      title="Import from URL"
+      subtitle="Paste a recipe link"
+      keyboardAvoiding
+      testID="meals.import"
+    >
       <Card style={styles.card}>
         <Ionicons name="link-outline" size={28} color={theme.colors.primary} />
         <Text style={styles.title}>Recipe link</Text>

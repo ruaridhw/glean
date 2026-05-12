@@ -78,6 +78,7 @@ export default function SearchScreen() {
           onPress={() => router.push("/(tabs)/meals/import")}
         />
       }
+      keyboardAvoiding
       testID="meals.search"
     >
       <Card style={styles.searchCard}>

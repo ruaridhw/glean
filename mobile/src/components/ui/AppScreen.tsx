@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  type ScrollViewProps,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/theme";
 
@@ -9,6 +17,8 @@ interface AppScreenProps {
   actions?: ReactNode;
   children: ReactNode;
   scroll?: boolean;
+  keyboardAvoiding?: boolean;
+  keyboardDismissMode?: ScrollViewProps["keyboardDismissMode"];
   testID?: string;
 }
 
@@ -18,6 +28,8 @@ export function AppScreen({
   actions,
   children,
   scroll = false,
+  keyboardAvoiding = false,
+  keyboardDismissMode = "on-drag",
   testID,
 }: AppScreenProps) {
   const insets = useSafeAreaInsets();
@@ -26,6 +38,8 @@ export function AppScreen({
   const body = scroll ? (
     <ScrollView
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
+      keyboardDismissMode={keyboardDismissMode}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
       {children}
@@ -34,7 +48,7 @@ export function AppScreen({
     <View style={[styles.body, { paddingBottom: bottomPadding }]}>{children}</View>
   );
 
-  return (
+  const screen = (
     <SafeAreaView style={styles.container} edges={["top"]} testID={testID}>
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -45,6 +59,17 @@ export function AppScreen({
       </View>
       {body}
     </SafeAreaView>
+  );
+
+  if (!keyboardAvoiding) return screen;
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      {screen}
+    </KeyboardAvoidingView>
   );
 }
 

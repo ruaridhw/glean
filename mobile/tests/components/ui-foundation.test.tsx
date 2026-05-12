@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { KeyboardAvoidingView, ScrollView, Text } from "react-native";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
@@ -34,6 +34,18 @@ describe("UI foundation", () => {
     expect(screen.getByText("Pantry")).toBeTruthy();
     expect(screen.getByText("4 items")).toBeTruthy();
     expect(screen.getByText("Body")).toBeTruthy();
+  });
+
+  it("can wrap scrollable screens in keyboard handling", () => {
+    const screen = render(
+      <AppScreen title="Settings" scroll keyboardAvoiding>
+        <Text>Form body</Text>
+      </AppScreen>,
+    );
+
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy();
+    expect(screen.UNSAFE_getByType(ScrollView).props.keyboardDismissMode).toBe("on-drag");
+    expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe("handled");
   });
 
   it("renders cards and badges", () => {
