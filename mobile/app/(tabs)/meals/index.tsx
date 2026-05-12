@@ -1,153 +1,258 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { getSavedRecipes } from "@/db/recipes";
+import { getRecipeMeta, getRecipeTags } from "@/meals/presentation";
 import { theme } from "@/theme";
 import type { Recipe } from "@/types";
 
-export default function MealsScreen() {
-  const [tab, setTab] = useState<"saved" | "search">("saved");
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [loading, setLoading] = useState(true);
+type MealsTab = "saved" | "search";
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      void getSavedRecipes().then((r) => {
-        setRecipes(r);
-        setLoading(false);
-      });
-    }, []),
-  );
+function RecipeCard({ recipe }: { recipe: Recipe }) {
+  const meta = getRecipeMeta(recipe);
+  const tags = getRecipeTags(recipe);
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <Text style={s.heading}>Meals</Text>
-      <View style={s.tabs}>
-        {(["saved", "search"] as const).map((t) => (
-          <Pressable key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-            <Text style={tab === t ? s.tabTextActive : s.tabText}>
-              {t === "saved" ? "My Recipes" : "Discover"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(`/(tabs)/meals/${recipe.id}`)}
+      style={styles.cardPressable}
+    >
+      <Card style={styles.recipeCard}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.recipeTitle} numberOfLines={2}>
+            {recipe.title}
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.textDisabled} />
+        </View>
 
-      {tab === "saved" ? (
-        loading ? (
-          <MealsSkeleton />
-        ) : (
-          <FlatList
-            data={recipes}
-            keyExtractor={(r) => String(r.id)}
-            renderItem={({ item }) => (
-              <Pressable style={s.row} onPress={() => router.push(`/(tabs)/meals/${item.id}`)}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.rowTitle}>{item.title}</Text>
-                  <Text style={s.rowMeta}>
-                    {[
-                      item.cuisine,
-                      item.difficulty,
-                      item.total_time_mins ? `${item.total_time_mins}min` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </Text>
-                </View>
-                <Text style={s.chevron}>›</Text>
-              </Pressable>
-            )}
-            ListEmptyComponent={
-              <EmptyState
-                testID="meals.emptyState"
-                icon="restaurant-outline"
-                title="No recipes yet"
-                message="Discover recipes or import one from a URL."
-                actions={[
-                  { label: "Search recipes", onPress: () => router.push("/(tabs)/meals/search") },
-                ]}
-              />
-            }
-          />
-        )
-      ) : (
-        <>
-          <Pressable style={s.discoverBtn} onPress={() => router.push("/(tabs)/meals/search")}>
-            <Text style={s.discoverText}>Search recipes →</Text>
-          </Pressable>
-          <Pressable style={s.importBtn} onPress={() => router.push("/(tabs)/meals/import")}>
-            <Text style={s.importText}>Import from URL</Text>
-          </Pressable>
-        </>
-      )}
-    </SafeAreaView>
+        {meta.length > 0 ? (
+          <View style={styles.metaRow}>
+            {meta.map((item) => (
+              <View key={item.label} style={styles.metaItem}>
+                <Ionicons name={item.icon} size={14} color={theme.colors.mutedForeground} />
+                <Text style={styles.metaText}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {tags.length > 0 ? (
+          <View style={styles.tagsRow}>
+            {tags.map((tag) => (
+              <Badge key={tag} label={tag} />
+            ))}
+          </View>
+        ) : null}
+      </Card>
+    </Pressable>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  heading: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
-    color: theme.colors.text,
-    padding: theme.spacing.lg,
+export default function MealsScreen() {
+  const [tab, setTab] = useState<MealsTab>("saved");
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const result = await getSavedRecipes();
+    setRecipes(result);
+    setLoading(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const actions = (
+    <IconButton
+      icon="search-outline"
+      accessibilityLabel="Search recipes"
+      color={theme.colors.primaryForeground}
+      backgroundColor={theme.colors.primary}
+      onPress={() => router.push("/(tabs)/meals/search")}
+    />
+  );
+
+  const segment = (
+    <SegmentedControl<MealsTab>
+      value={tab}
+      onChange={setTab}
+      options={[
+        { value: "saved", label: `Saved (${recipes.length})`, icon: "bookmark" },
+        { value: "search", label: "Search", icon: "search-outline" },
+      ]}
+    />
+  );
+
+  if (loading) {
+    return (
+      <AppScreen title="Meals" actions={actions} testID="meals.screen">
+        {segment}
+        <MealsSkeleton />
+      </AppScreen>
+    );
+  }
+
+  if (tab === "search") {
+    return (
+      <AppScreen
+        title="Meals"
+        subtitle={`${recipes.length} saved ${recipes.length === 1 ? "recipe" : "recipes"}`}
+        actions={actions}
+        testID="meals.screen"
+      >
+        {segment}
+        <View style={styles.actionGrid}>
+          <Card style={styles.actionCard}>
+            <Ionicons name="search-outline" size={24} color={theme.colors.primary} />
+            <Text style={styles.actionTitle}>Discover Recipes</Text>
+            <Text style={styles.actionText}>Search for recipes and save the ones you like.</Text>
+            <Pressable style={styles.primaryAction} onPress={() => router.push("/(tabs)/meals/search")}>
+              <Text style={styles.primaryActionText}>Search recipes</Text>
+            </Pressable>
+          </Card>
+          <Card style={styles.actionCard}>
+            <Ionicons name="link-outline" size={24} color={theme.colors.primary} />
+            <Text style={styles.actionTitle}>Import from URL</Text>
+            <Text style={styles.actionText}>Paste a recipe link and Glean will parse it.</Text>
+            <Pressable
+              style={styles.secondaryAction}
+              onPress={() => router.push("/(tabs)/meals/import")}
+            >
+              <Text style={styles.secondaryActionText}>Import from URL</Text>
+            </Pressable>
+          </Card>
+        </View>
+      </AppScreen>
+    );
+  }
+
+  return (
+    <AppScreen
+      title="Meals"
+      subtitle={`${recipes.length} saved ${recipes.length === 1 ? "recipe" : "recipes"}`}
+      actions={actions}
+      testID="meals.screen"
+    >
+      <FlatList
+        data={recipes}
+        keyExtractor={(recipe) => String(recipe.id)}
+        ListHeaderComponent={segment}
+        ListHeaderComponentStyle={styles.listHeader}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => <RecipeCard recipe={item} />}
+        ListEmptyComponent={
+          <EmptyState
+            testID="meals.emptyState"
+            icon="restaurant-outline"
+            title="No saved recipes"
+            message="Search for recipes or import one from a URL."
+            actions={[
+              { label: "Search recipes", onPress: () => router.push("/(tabs)/meals/search") },
+              { label: "Import from URL", onPress: () => router.push("/(tabs)/meals/import") },
+            ]}
+          />
+        }
+      />
+    </AppScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  listHeader: {
+    marginBottom: theme.spacing.md,
   },
-  tabs: {
-    flexDirection: "row",
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+  listContent: {
+    paddingBottom: theme.spacing.xl,
+  },
+  cardPressable: {
+    marginBottom: theme.spacing.md,
+  },
+  recipeCard: {
     gap: theme.spacing.sm,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surface,
-    alignItems: "center",
-  },
-  tabActive: { backgroundColor: theme.colors.primary },
-  tabText: { color: theme.colors.textSecondary, fontWeight: "600" },
-  tabTextActive: { color: theme.colors.card, fontWeight: "600" },
-  row: {
+  cardHeader: {
+    alignItems: "flex-start",
     flexDirection: "row",
-    alignItems: "center",
-    padding: theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
+    gap: theme.spacing.sm,
+    justifyContent: "space-between",
   },
-  rowTitle: {
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "600",
-    marginBottom: 2,
+  recipeTitle: {
     color: theme.colors.text,
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 24,
   },
-  rowMeta: { fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary },
-  chevron: { fontSize: 20, color: theme.colors.textDisabled },
-  empty: {
-    textAlign: "center",
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.md,
+  },
+  metaItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+  },
+  metaText: {
+    color: theme.colors.mutedForeground,
+    fontSize: theme.typography.caption.fontSize,
+  },
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.xs,
+  },
+  actionGrid: {
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  actionCard: {
+    gap: theme.spacing.sm,
+  },
+  actionTitle: {
+    color: theme.colors.text,
+    fontSize: theme.typography.headline.fontSize,
+    fontWeight: theme.typography.headline.fontWeight,
+  },
+  actionText: {
     color: theme.colors.textSecondary,
-    marginTop: 40,
     fontSize: theme.typography.subhead.fontSize,
+    lineHeight: 21,
   },
-  discoverBtn: {
-    margin: theme.spacing.lg,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
+  primaryAction: {
     alignItems: "center",
-  },
-  discoverText: { color: theme.colors.primary, fontWeight: "600" },
-  importBtn: {
-    marginHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    marginTop: theme.spacing.xs,
     padding: theme.spacing.md,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surface,
-    alignItems: "center",
   },
-  importText: { color: theme.colors.text, fontWeight: "600" },
+  primaryActionText: {
+    color: theme.colors.primaryForeground,
+    fontWeight: "700",
+  },
+  secondaryAction: {
+    alignItems: "center",
+    backgroundColor: theme.colors.muted,
+    borderRadius: theme.radius.md,
+    marginTop: theme.spacing.xs,
+    padding: theme.spacing.md,
+  },
+  secondaryActionText: {
+    color: theme.colors.text,
+    fontWeight: "700",
+  },
 });
