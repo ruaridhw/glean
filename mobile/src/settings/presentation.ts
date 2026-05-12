@@ -8,8 +8,20 @@ export const DIETARY_OPTIONS = [
   "Paleo",
 ] as const;
 
-export const SERVINGS_OPTIONS = [1, 2, 3, 4, 6] as const;
-export const DINNERS_OPTIONS = [3, 4, 5, 6, 7] as const;
+interface IntegerRange {
+  min: number;
+  max: number;
+}
+
+export const SETTINGS_OPTION_RANGES = {
+  dinnersPerWeek: { min: 1, max: 7 },
+  defaultServings: { min: 1, max: 6 },
+  maxActiveTimeMins: { min: 1, max: 480 },
+} as const satisfies Record<string, IntegerRange>;
+
+export function buildIntegerOptions({ min, max }: IntegerRange): number[] {
+  return Array.from({ length: max - min + 1 }, (_, index) => min + index);
+}
 
 export function getToleranceLabel(tolerance: number): string {
   if (tolerance <= 0.2) return "Strict: pantry ingredients only";

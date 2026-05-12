@@ -1,15 +1,17 @@
 import {
+  buildIntegerOptions,
   DIETARY_OPTIONS,
-  DINNERS_OPTIONS,
   getToleranceLabel,
-  SERVINGS_OPTIONS,
+  SETTINGS_OPTION_RANGES,
   validateBoundedInteger,
 } from "@/settings/presentation";
 
 describe("settings presentation", () => {
-  it("exports settings option lists used by the migrated UI", () => {
-    expect(DINNERS_OPTIONS).toEqual([3, 4, 5, 6, 7]);
-    expect(SERVINGS_OPTIONS).toEqual([1, 2, 3, 4, 6]);
+  it("derives numeric settings options from the original model ranges", () => {
+    expect(buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek)).toEqual([
+      1, 2, 3, 4, 5, 6, 7,
+    ]);
+    expect(buildIntegerOptions(SETTINGS_OPTION_RANGES.defaultServings)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(DIETARY_OPTIONS).toContain("Vegetarian");
   });
 

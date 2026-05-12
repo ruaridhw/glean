@@ -54,11 +54,12 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Sign out")).toBeTruthy();
   });
 
-  it("saves selected config values through existing config persistence", async () => {
+  it("saves selected config values across the original supported ranges", async () => {
     const screen = render(<SettingsScreen />);
 
     await waitFor(() => expect(screen.getByText("Save Settings")).toBeTruthy());
-    fireEvent.press(screen.getByText("6"));
+    fireEvent.press(screen.getByLabelText("1 dinners per week"));
+    fireEvent.press(screen.getByLabelText("5 default servings"));
     fireEvent.press(screen.getByText("Vegan"));
     fireEvent.press(screen.getByText("Save Settings"));
 
@@ -66,8 +67,8 @@ describe("SettingsScreen", () => {
       expect(saveUserConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "user",
-          meals_per_week: 6,
-          preferred_servings: 2,
+          meals_per_week: 1,
+          preferred_servings: 5,
           dietary_flags: ["Vegetarian", "Vegan"],
         }),
       ),

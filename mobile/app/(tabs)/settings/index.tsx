@@ -15,29 +15,32 @@ import { StatsRow } from "@/components/ui/StatsRow";
 import { getUserConfig, saveUserConfig } from "@/db/config";
 import { hapticImpact } from "@/platform/haptics";
 import {
+  buildIntegerOptions,
   DIETARY_OPTIONS,
-  DINNERS_OPTIONS,
   getToleranceLabel,
-  SERVINGS_OPTIONS,
+  SETTINGS_OPTION_RANGES,
   validateBoundedInteger,
 } from "@/settings/presentation";
 import { theme } from "@/theme";
 
-const MAX_TIME_MIN = 1;
-const MAX_TIME_MAX = 480;
+const dinnerOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek);
+const servingOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.defaultServings);
 
 function ChoiceChip({
   label,
+  accessibilityLabel,
   selected,
   onPress,
 }: {
   label: string;
+  accessibilityLabel?: string;
   selected: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected }}
       style={[styles.chip, selected && styles.chipSelected]}
       onPress={onPress}
@@ -80,7 +83,14 @@ export default function SettingsScreen() {
       setMaxTimeError(null);
       return;
     }
-    setMaxTimeError(validateBoundedInteger(value, MAX_TIME_MIN, MAX_TIME_MAX, "Max active time"));
+    setMaxTimeError(
+      validateBoundedInteger(
+        value,
+        SETTINGS_OPTION_RANGES.maxActiveTimeMins.min,
+        SETTINGS_OPTION_RANGES.maxActiveTimeMins.max,
+        "Max active time",
+      ),
+    );
   }
 
   function toggleFlag(flag: string) {
@@ -132,7 +142,13 @@ export default function SettingsScreen() {
 
   if (loading) {
     return (
-      <AppScreen title="Settings" subtitle="Loading preferences" scroll testID="settings.screen">
+      <AppScreen
+        title="Settings"
+        subtitle="Loading preferences"
+        scroll
+        keyboardAvoiding
+        testID="settings.screen"
+      >
         <Card>
           <Text style={styles.loadingText}>Loading settings...</Text>
         </Card>
@@ -141,7 +157,13 @@ export default function SettingsScreen() {
   }
 
   return (
-    <AppScreen title="Settings" subtitle="Preferences and account" scroll testID="settings.screen">
+    <AppScreen
+      title="Settings"
+      subtitle="Preferences and account"
+      scroll
+      keyboardAvoiding
+      testID="settings.screen"
+    >
       <StatsRow
         stats={[
           { value: String(mealsPerWeek), label: "Dinners" },
@@ -171,10 +193,11 @@ export default function SettingsScreen() {
       <Card style={styles.sectionCard}>
         <Text style={styles.fieldTitle}>Dinners per week</Text>
         <View style={styles.chipRow}>
-          {DINNERS_OPTIONS.map((option) => (
+          {dinnerOptions.map((option) => (
             <ChoiceChip
               key={option}
               label={String(option)}
+              accessibilityLabel={`${option} dinners per week`}
               selected={mealsPerWeek === option}
               onPress={() => {
                 void hapticImpact("light");
@@ -188,10 +211,11 @@ export default function SettingsScreen() {
       <Card style={styles.sectionCard}>
         <Text style={styles.fieldTitle}>Default servings</Text>
         <View style={styles.chipRow}>
-          {SERVINGS_OPTIONS.map((option) => (
+          {servingOptions.map((option) => (
             <ChoiceChip
               key={option}
               label={`${option} servings`}
+              accessibilityLabel={`${option} default servings`}
               selected={servings === option}
               onPress={() => {
                 void hapticImpact("light");
