@@ -91,10 +91,10 @@ fi
 echo
 echo "SDK Compatibility:"
 SDK_CHECK=$("$MOBILE_DIR/node_modules/.bin/expo" install --check 2>&1 || true)
-if echo "$SDK_CHECK" | grep -q "expo-auth-session\|expo-crypto"; then
+if echo "$SDK_CHECK" | grep -q "expo-auth-session"; then
   fail "SDK version mismatch detected:"
-  echo "$SDK_CHECK" | grep -E 'expo-auth-session|expo-crypto' | sed 's/^/       /'
-  echo "       Fix with: cd mobile && ./node_modules/.bin/expo install expo-auth-session expo-crypto --fix"
+  echo "$SDK_CHECK" | grep -E 'expo-auth-session' | sed 's/^/       /'
+  echo "       Fix with: cd mobile && ./node_modules/.bin/expo install expo-auth-session --fix"
 else
   pass "No critical SDK mismatches"
 fi
