@@ -15,7 +15,13 @@ import sys
 import time
 from pathlib import Path
 
+import httpx
 from dotenv import dotenv_values
+from langchain_core.messages import HumanMessage
+from langchain_openrouter import ChatOpenRouter
+from openrouter import OpenRouter
+
+from glean.llm import create_chat_model
 
 _ENV = dotenv_values(Path(__file__).parent.parent / ".env")
 API_KEY = _ENV.get("OPENROUTER_API_KEY", "")
@@ -40,7 +46,6 @@ def _run_single(n: int) -> None:
     """Run test N and print a single result line."""
 
     if n == 1:
-        from openrouter import OpenRouter
         client = OpenRouter(api_key=API_KEY)
         resp = client.chat.send(
             model=MODEL,
@@ -49,29 +54,22 @@ def _run_single(n: int) -> None:
         print(resp.choices[0].message.content, flush=True)
 
     elif n == 2:
-        from langchain_core.messages import HumanMessage
-        from glean.llm import create_chat_model
         model = create_chat_model(MODEL, api_key=API_KEY)
         print(f"[type={type(model).__name__}]", flush=True)
         response = model.invoke([HumanMessage(content=PROMPT)])
         print(response.content, flush=True)
 
     elif n == 3:
-        from langchain_core.messages import HumanMessage
-        from langchain_openrouter import ChatOpenRouter
         model = ChatOpenRouter(model=MODEL, openrouter_api_key=API_KEY)
         response = model.invoke([HumanMessage(content=PROMPT)])
         print(response.content, flush=True)
 
     elif n == 4:
-        from langchain_core.messages import HumanMessage
-        from langchain_openrouter import ChatOpenRouter
         model = ChatOpenRouter(model=MODEL, openrouter_api_key=API_KEY, streaming=False)
         response = model.invoke([HumanMessage(content=PROMPT)])
         print(response.content, flush=True)
 
     elif n == 5:
-        import httpx
         r = httpx.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
@@ -82,14 +80,11 @@ def _run_single(n: int) -> None:
         print(r.json()["choices"][0]["message"]["content"], flush=True)
 
     elif n == 6:
-        from langchain_core.messages import HumanMessage
-        from langchain_openrouter import ChatOpenRouter
         model = ChatOpenRouter(model=MODEL, openrouter_api_key=API_KEY, max_retries=0)
         response = model.invoke([HumanMessage(content=PROMPT)])
         print(response.content, flush=True)
 
     elif n == 7:
-        from openrouter import OpenRouter
         client = OpenRouter(api_key=API_KEY)
         models = client.models.list()
         ids = [m.id for m in models.data[:3]]
@@ -100,7 +95,7 @@ def _run_single(n: int) -> None:
 
 def _run_all(tests: list[int]) -> None:
     if not API_KEY.startswith("sk-or-"):
-        print(f"ERROR: no real OPENROUTER_API_KEY in backend/.env", flush=True)
+        print("ERROR: no real OPENROUTER_API_KEY in backend/.env", flush=True)
         sys.exit(1)
 
     print(f"Model : {MODEL}", flush=True)
@@ -115,7 +110,7 @@ def _run_all(tests: list[int]) -> None:
         print(f"{'─' * 60}", flush=True)
         t0 = time.perf_counter()
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 [sys.executable, str(script), "--test", str(n)],
                 capture_output=True,
                 text=True,

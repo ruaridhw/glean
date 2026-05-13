@@ -23,7 +23,8 @@ def _mock_claude_response() -> list[dict]:
 
 
 @pytest.fixture
-def unauth_client() -> TestClient:
+def unauth_client(test_settings: Settings) -> TestClient:
+    app.dependency_overrides[get_settings] = lambda: test_settings
     return TestClient(app)
 
 

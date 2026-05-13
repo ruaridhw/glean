@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
 from glean.main import app
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
@@ -15,7 +16,8 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(test_settings: Settings) -> TestClient:
+    app.dependency_overrides[get_settings] = lambda: test_settings
     app.dependency_overrides[verify_cognito_token] = lambda: "test-user"
     yield TestClient(app)
     app.dependency_overrides.clear()
@@ -80,12 +82,14 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_search_requires_auth() -> None:
+def test_search_requires_auth(test_settings: Settings) -> None:
     # No override — real auth dependency will reject missing token
     app.dependency_overrides.clear()
+    app.dependency_overrides[get_settings] = lambda: test_settings
     plain_client = TestClient(app)
     resp = plain_client.get("/recipes/search?q=test")
     assert resp.status_code in (401, 403)
+    app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------

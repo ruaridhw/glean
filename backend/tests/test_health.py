@@ -3,6 +3,7 @@ from io import BytesIO
 
 from fastapi.testclient import TestClient
 
+from glean.config import Settings, get_settings
 from glean.main import app
 
 
@@ -12,11 +13,13 @@ def test_health_returns_ok(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_protected_requires_token() -> None:
+def test_protected_requires_token(test_settings: Settings) -> None:
     """Endpoint protected by verify_cognito_token returns 401 with no token."""
+    app.dependency_overrides[get_settings] = lambda: test_settings
     bare_client = TestClient(app)
     response = bare_client.post("/dev/export-db")
     assert response.status_code == 401
+    app.dependency_overrides.clear()
 
 
 def test_protected_succeeds_with_valid_token(client: TestClient, auth_headers: dict) -> None:
