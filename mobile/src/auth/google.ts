@@ -9,10 +9,10 @@ const REDIRECT_URI = "glean://auth/callback";
 const TOKEN_ENDPOINT = `https://${COGNITO_DOMAIN}/oauth2/token`;
 
 export const AUTHORIZE_URL = `https://${COGNITO_DOMAIN}/oauth2/authorize`;
-export const LOGOUT_URL = `https://${COGNITO_DOMAIN}/logout`;
 
 function decodeIdTokenPayload(idToken: string): { sub: string; email: string } {
-  const payload = idToken.split(".")[1]!;
+  const payload = idToken.split(".")[1];
+  if (!payload) throw new Error("Invalid ID token");
   // Use Buffer in Node/test environments; atob works in React Native's Hermes engine
   const json =
     typeof Buffer !== "undefined"
@@ -32,12 +32,16 @@ export async function handleAuthCode(code: string, codeVerifier: string): Promis
     { tokenEndpoint: TOKEN_ENDPOINT },
   );
 
-  const { sub, email } = decodeIdTokenPayload(tokenResponse.idToken!);
+  const idToken = tokenResponse.idToken;
+  const refreshToken = tokenResponse.refreshToken;
+  if (!idToken || !refreshToken) throw new Error("Missing tokens from Cognito response");
+
+  const { sub, email } = decodeIdTokenPayload(idToken);
 
   await authStorage.setTokens({
     access: tokenResponse.accessToken,
-    refresh: tokenResponse.refreshToken!,
-    id: tokenResponse.idToken!,
+    refresh: refreshToken,
+    id: idToken,
     email,
     userSub: sub,
   });

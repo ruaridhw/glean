@@ -28,7 +28,7 @@ export default function SignInScreen() {
 
   useEffect(() => {
     if (response?.type !== "success") return;
-    const code = response.params["code"];
+    const code = response.params.code;
     const codeVerifier = request?.codeVerifier;
     if (!code || !codeVerifier) return;
 
@@ -45,11 +45,7 @@ export default function SignInScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Glean</Text>
       <Text style={styles.subtitle}>Waste less. Cook better.</Text>
-      <Pressable
-        style={styles.button}
-        onPress={() => promptAsync()}
-        disabled={!request || loading}
-      >
+      <Pressable style={styles.button} onPress={() => promptAsync()} disabled={!request || loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (

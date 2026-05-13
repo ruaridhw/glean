@@ -18,8 +18,8 @@ jest.mock("@/auth/storage", () => ({
 }));
 
 import { exchangeCodeAsync } from "expo-auth-session";
-import { authStorage } from "@/auth/storage";
 import { handleAuthCode, refreshTokens, signOut } from "@/auth/google";
+import { authStorage } from "@/auth/storage";
 
 const mockExchangeCode = exchangeCodeAsync as jest.Mock;
 
