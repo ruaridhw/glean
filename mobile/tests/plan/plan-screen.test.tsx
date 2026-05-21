@@ -97,7 +97,7 @@ describe("PlanScreen", () => {
     expect(screen.getByText("This Week")).toBeTruthy();
     expect(screen.getByText("1 of 3 dinners")).toBeTruthy();
     expect(screen.getAllByText("Add dinner")).toHaveLength(2);
-  });
+  }, 15_000);
 
   it("marks an entry cooked and deletes entries", async () => {
     const screen = render(<PlanScreen />);

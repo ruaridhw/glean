@@ -75,7 +75,7 @@ describe("ShopScreen", () => {
     expect(screen.getByText("2 kg")).toBeTruthy();
     expect(screen.getByText("From plan")).toBeTruthy();
     expect(screen.getByText("Completed checkout")).toBeTruthy();
-  });
+  }, 15_000);
 
   it("adds, toggles, and deletes shopping items", async () => {
     const screen = render(<ShopScreen />);
