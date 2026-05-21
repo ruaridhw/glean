@@ -1,4 +1,4 @@
-appId: com.ruaridhw.glean
+appId: ${APP_ID}
 name: "Toast: success message after pantry item added"
 ---
 - runFlow: helpers/launch.yaml
@@ -6,9 +6,8 @@ name: "Toast: success message after pantry item added"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: pantry
-- tapOn:
-    id: "pantry.fab"
+      tab: Pantry
+- tapOn: "Add pantry item"
 - assertVisible: "Manual Entry"
 - tapOn: "Manual Entry"
 

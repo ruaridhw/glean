@@ -9,7 +9,7 @@ name: "Screens: all main screens render key elements"
     env:
       tab: Pantry
 - assertVisible: "Pantry"
-- assertVisible: "＋"
+- assertVisible: "Add pantry item"
 
 # Meals: heading and tab toggles
 - runFlow:
@@ -17,8 +17,8 @@ name: "Screens: all main screens render key elements"
     env:
       tab: Meals
 - assertVisible: "Meals"
-- assertVisible: "My Recipes"
-- assertVisible: "Discover"
+- assertVisible: "Saved (0)"
+- assertVisible: "Search"
 
 # Plan: heading and generate button
 - runFlow:
@@ -26,14 +26,14 @@ name: "Screens: all main screens render key elements"
     env:
       tab: Plan
 - assertVisible: "This Week"
-- assertVisible: "Generate week"
+- assertVisible: "Generate plan"
 
 # Shop: heading
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
       tab: Shop
-- assertVisible: "Shopping List"
+- assertVisible: "Shopping"
 
 # Settings: heading
 - runFlow:

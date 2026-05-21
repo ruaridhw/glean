@@ -7,7 +7,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "e2e": "maestro test --env APP_ID=${APP_ID:-host.exp.exponent} --env EXPO_URL=${EXPO_URL:-exp://localhost:8081} e2e/",
+    "e2e": "for flow in e2e/*.yaml; do maestro test --env APP_ID=${APP_ID:-host.exp.exponent} --env EXPO_URL=${EXPO_URL:-exp://localhost:8081} \"$flow\" || exit 1; done",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",

@@ -1,4 +1,4 @@
-appId: com.ruaridhw.glean
+appId: ${APP_ID}
 name: "Scan Progress: scan screen loads"
 ---
 - runFlow: helpers/launch.yaml
@@ -6,11 +6,10 @@ name: "Scan Progress: scan screen loads"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: pantry
+      tab: Pantry
 
 # Navigate to scan — try FAB route (works whether pantry is empty or not)
-- tapOn:
-    id: "pantry.fab"
+- tapOn: "Add pantry item"
 - tapOn: "Scan Receipt"
 
 # Grant camera permission if prompted (Android system dialog)
