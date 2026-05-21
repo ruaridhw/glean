@@ -92,6 +92,7 @@ locale = "en-gb"
 [tool.typos.default.extend-words]
 # Standard spellings in HTTP headers, AWS APIs, and OAuth specs
 Authorization = "Authorization"
+authorize = "authorize"
 # FastAPI/Starlette constant name — cannot be changed
 Unauthorized = "Unauthorized"
 # boto3 Textract API uses American spelling — cannot be changed to match en-gb locale
