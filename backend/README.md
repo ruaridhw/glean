@@ -34,7 +34,7 @@ From the repo root:
 make start-backend-docker
 ```
 
-This builds the backend image and starts FastAPI on `http://localhost:8000`, bound to all interfaces inside the container. The Compose service loads `backend/.env` when present and sets `ENVIRONMENT=dev` for local auth bypass.
+This builds the production backend image and starts FastAPI on `http://localhost:8000`, bound to all interfaces inside the container. The image installs only runtime dependencies, runs as a non-root user, and starts with `uvicorn`. The Compose service loads `backend/.env` when present and sets `ENVIRONMENT=dev` for local auth bypass.
 
 ### Testing
 

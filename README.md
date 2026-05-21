@@ -42,7 +42,7 @@ Start the backend without Docker:
 make start-backend
 ```
 
-Start the backend with Docker:
+Start the backend with the production Docker image:
 
 ```bash
 make start-backend-docker
@@ -58,7 +58,7 @@ The default mobile API URL is `http://localhost:8000`, which works for iOS Simul
 
 ## Test on a Phone Over Wi-Fi
 
-A physical phone cannot reach your laptop's `localhost`. Start the Docker backend, find your laptop's Wi-Fi IP, then pass it to the existing mobile start command through `API_HOST`.
+A physical phone cannot reach your laptop's `localhost`. Start the Dockerized backend, find your laptop's Wi-Fi IP, then pass it to the existing mobile start command through `API_HOST`.
 
 ```bash
 make start-backend-docker

@@ -8,3 +8,8 @@ __pycache__/
 *.pyo
 .aws-sam/
 .env
+tests/
+scripts/
+README.md
+template.yaml
+vulture_whitelist.py

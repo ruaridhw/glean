@@ -8,7 +8,7 @@
 #   make test            — run all tests
 #   make lint            — lint + format everything
 #   make start-backend   — FastAPI dev server on :8000
-#   make start-backend-docker — Dockerized FastAPI dev server on :8000
+#   make start-backend-docker — Dockerized FastAPI server on :8000
 #   make start-mobile    — Expo dev server; optional API_HOST=192.168.1.42 for phones
 #   make worktree BRANCH=feature/foo — isolated worktree for a new branch
 
@@ -84,7 +84,7 @@ start-backend:  ## Start FastAPI dev server on :8000 (hot reload)
 	cd backend && uv run fastapi dev src/glean/main.py
 
 .PHONY: start-backend-docker
-start-backend-docker:  ## Start Dockerized FastAPI dev server on :8000 (hot reload)
+start-backend-docker:  ## Start Dockerized FastAPI server on :8000
 	docker compose up --build backend
 
 .PHONY: start-mobile
