@@ -5,6 +5,8 @@ import type {
   DescribeResponse,
   RecipeSearchResponse,
   ScanResponse,
+  ShoppingParseRequest,
+  ShoppingParseResponse,
   SuggestionResponse,
 } from "@/api/types";
 
@@ -27,6 +29,13 @@ export function useScanReceipt() {
 export function useDescribeReceipt() {
   return useMutation({
     mutationFn: (text: string) => apiClient.post<DescribeResponse>("/receipts/describe", { text }),
+  });
+}
+
+export function useParseShoppingDescription() {
+  return useMutation({
+    mutationFn: (body: ShoppingParseRequest) =>
+      apiClient.post<ShoppingParseResponse>("/shopping/parse-description", body),
   });
 }
 

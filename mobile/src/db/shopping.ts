@@ -3,6 +3,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { ShoppingListItem } from "@/types";
 import { drizzleDb } from "./client";
+import { resolveOrCreateIngredient } from "./ingredients";
 import { ingredients, pantryItems, recipeIngredients, shoppingListItems } from "./schema";
 
 export async function getShoppingListItems(): Promise<ShoppingListItem[]> {
@@ -98,6 +99,43 @@ export async function addManualShoppingItem(params: {
     unit: params.unit ?? null,
     source: "manual",
   });
+}
+
+export async function addAiShoppingItems(
+  items: readonly {
+    name: string;
+    quantity: number;
+    unit: string;
+    api_ingredient_id?: string | null;
+    category?: string | null;
+  }[],
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const rows: {
+    ingredient_id: number;
+    name: string;
+    quantity: number;
+    unit: string;
+    source: "ai";
+  }[] = [];
+
+  for (const item of items) {
+    const ingredientId = await resolveOrCreateIngredient({
+      canonical_name: item.name,
+      api_ingredient_id: item.api_ingredient_id ?? null,
+      category: item.category ?? null,
+    });
+    rows.push({
+      ingredient_id: ingredientId,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      source: "ai",
+    });
+  }
+
+  await drizzleDb.insert(shoppingListItems).values(rows);
 }
 
 export async function toggleShoppingItem(id: number, checked: boolean): Promise<void> {

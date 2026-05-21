@@ -207,6 +207,13 @@ export default function ShopScreen() {
               >
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
+              <Pressable
+                style={styles.describeButton}
+                onPress={() => router.push("/(tabs)/shop/describe" as never)}
+              >
+                <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
+                <Text style={styles.describeButtonText}>Describe</Text>
+              </Pressable>
             </Card>
 
             {items.length === 0 ? (
@@ -302,6 +309,20 @@ const styles = StyleSheet.create({
   addButtonDisabled: { opacity: 0.5 },
   addButtonText: {
     color: theme.colors.primaryForeground,
+    fontWeight: "700",
+  },
+  describeButton: {
+    alignItems: "center",
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.md,
+  },
+  describeButtonText: {
+    color: theme.colors.primary,
     fontWeight: "700",
   },
   section: {
