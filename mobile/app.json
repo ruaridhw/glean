@@ -5,12 +5,14 @@
     "version": "0.1.5",
     "scheme": "glean",
     "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "package": "com.ruaridhw.glean",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2a9d8f"
       },
       "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
@@ -29,7 +31,11 @@
       "enabled": false
     },
     "splash": {
+      "image": "./assets/splash-icon.png",
       "backgroundColor": "#fdfaf6"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }
