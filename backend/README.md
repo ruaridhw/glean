@@ -26,6 +26,16 @@ The server starts at `http://localhost:8000` with hot reload.
 
 When `ENVIRONMENT=dev` (set in `.env`), Cognito JWT validation is bypassed and all requests authenticate as `local-dev-user`. This lets you hit the API without a real Cognito token.
 
+### Running with Docker
+
+From the repo root:
+
+```bash
+make start-backend-docker
+```
+
+This builds the backend image and starts FastAPI on `http://localhost:8000`, bound to all interfaces inside the container. The Compose service loads `backend/.env` when present and sets `ENVIRONMENT=dev` for local auth bypass.
+
 ### Testing
 
 ```bash
@@ -72,10 +82,10 @@ Press **i** for iOS Simulator or **a** for Android Emulator. Both can reach the 
 
 A physical device can't reach `localhost`, so you need to bind the backend to your Mac's LAN IP and tell the mobile app where to find it.
 
-1. Start the backend on all interfaces:
+1. Start the Dockerized backend from the repo root:
 
    ```bash
-   uv run fastapi dev src/glean/main.py --host 0.0.0.0
+   make start-backend-docker
    ```
 
 2. Find your Mac's LAN IP:
@@ -87,7 +97,7 @@ A physical device can't reach `localhost`, so you need to bind the backend to yo
 3. Start Expo with the API URL override:
 
    ```bash
-   EXPO_PUBLIC_API_URL=http://192.168.1.42:8000 npx expo start
+   make start-mobile API_HOST=192.168.1.42
    ```
 
 4. Scan the QR code with Expo Go, or press **a** if connected via USB/ADB.

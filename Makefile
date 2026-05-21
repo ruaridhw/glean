@@ -8,7 +8,8 @@
 #   make test            — run all tests
 #   make lint            — lint + format everything
 #   make start-backend   — FastAPI dev server on :8000
-#   make start-mobile    — Expo dev server
+#   make start-backend-docker — Dockerized FastAPI dev server on :8000
+#   make start-mobile    — Expo dev server; optional API_HOST=192.168.1.42 for phones
 #   make worktree BRANCH=feature/foo — isolated worktree for a new branch
 
 .DEFAULT_GOAL := help
@@ -18,6 +19,9 @@ SHELL         := /bin/bash
 WORKTREE_DIR  := .worktrees
 BRANCH        ?=
 _LEAF         = $(notdir $(BRANCH))
+API_HOST      ?=
+API_PORT      ?= 8000
+API_URL_ENV   = $(if $(API_HOST),EXPO_PUBLIC_API_URL=http://$(API_HOST):$(API_PORT),)
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -79,9 +83,13 @@ pre-commit:  ## Run all pre-commit hooks across the repo
 start-backend:  ## Start FastAPI dev server on :8000 (hot reload)
 	cd backend && uv run fastapi dev src/glean/main.py
 
+.PHONY: start-backend-docker
+start-backend-docker:  ## Start Dockerized FastAPI dev server on :8000 (hot reload)
+	docker compose up --build backend
+
 .PHONY: start-mobile
-start-mobile:  ## Start Expo dev server (choose platform in browser)
-	cd mobile && npm start
+start-mobile:  ## Start Expo dev server; optional API_HOST=192.168.1.42 for phones
+	cd mobile && $(API_URL_ENV) npm start
 
 .PHONY: start-ios
 start-ios:  ## Start Expo on iOS simulator

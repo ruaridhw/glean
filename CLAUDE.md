@@ -29,7 +29,8 @@ make lint             # lint + format everything
 make pre-commit       # run all pre-commit hooks
 
 make start-backend    # FastAPI dev server on :8000 (hot reload)
-make start-mobile     # Expo dev server (choose platform in browser)
+make start-backend-docker # Dockerized FastAPI dev server on :8000 (hot reload)
+make start-mobile     # Expo dev server; add API_HOST=192.168.1.42 for phone testing
 make start-ios        # Expo on iOS simulator
 make start-android    # Expo on Android emulator (wraps mobile/scripts/emu-start)
 ```
