@@ -62,9 +62,8 @@ class TestRecipeImportStructural:
             assert isinstance(raw["ingredients"], list), f"Example {i}: ingredients is not a list"
             assert isinstance(raw["instructions"], list), f"Example {i}: instructions is not a list"
             assert len(raw["ingredients"]) > 0, f"Example {i}: ingredients list is empty"
-            assert (
-                len(raw["instructions"]) >= 2
-            ), f"Example {i}: instructions has {len(raw['instructions'])} steps, expected >= 2"
+            message = f"Example {i}: instructions has {len(raw['instructions'])} steps, expected >= 2"
+            assert len(raw["instructions"]) >= 2, message
 
     def test_title_is_nonempty_string(
         self,
