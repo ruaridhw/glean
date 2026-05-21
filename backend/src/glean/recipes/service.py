@@ -11,7 +11,7 @@ import httpx
 from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.llm import Feature
+from glean.llm import Feature, message_content_as_text
 from glean.observability import logger
 from glean.recipe_api.client import RecipeApiClient, _iso_to_mins
 from glean.recipes.schemas import (
@@ -26,6 +26,7 @@ from glean.recipes.schemas import (
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+    from pydantic import SecretStr
 
     from glean.recipe_api.schemas import RecipeApiRecipe
 
@@ -195,14 +196,14 @@ def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
 def search_recipes(
     *,
     recipe_api_base_url: str,
-    recipe_api_key: str,
+    recipe_api_key: SecretStr,
     q: str | None = None,
     cuisine: str | None = None,
     dietary: str | None = None,
     page: int = 1,
     per_page: int = 20,
 ) -> RecipeSearchResponse:
-    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key)
+    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
     api_response = client.search(q=q, cuisine=cuisine, dietary=dietary, page=page, per_page=per_page)
     results = [
         RecipeSearchResult(
@@ -218,8 +219,8 @@ def search_recipes(
     return RecipeSearchResponse(results=results, total=api_response.total)
 
 
-def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: str) -> RecipeOut:
-    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key)
+def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: SecretStr) -> RecipeOut:
+    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
     api_recipe = client.get_recipe(recipe_id)
     return _api_recipe_to_out(api_recipe)
 
@@ -280,5 +281,5 @@ def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -
         ],
         config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
     )
-    data = json.loads(response.content)
+    data = json.loads(message_content_as_text(response.content))
     return _llm_json_to_recipe_out(data, request.url)

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
 from glean.main import app
@@ -115,7 +116,7 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     items = response.json()["items"]
     assert len(items) == 2
     assert items[0]["name"] == "chicken breast"
-    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key="test-key")
+    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key=SecretStr("test-key"))
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:

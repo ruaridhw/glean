@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.llm import Feature
+from glean.llm import Feature, message_content_as_text
 from glean.observability import logger, tracer
 from glean.suggestions.schemas import SuggestedRecipe, SuggestionRequest, SuggestionResponse
 
@@ -57,7 +57,7 @@ def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel) -> Sugg
         ],
         config={"metadata": {"feature": Feature.SUGGESTIONS}},
     )
-    raw = json.loads(result.content)
+    raw = json.loads(message_content_as_text(result.content))
     logger.info("suggestions received", extra={"count": len(raw)})
 
     suggestions = [SuggestedRecipe(**item) for item in raw]

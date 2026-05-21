@@ -4,6 +4,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from aws_lambda_powertools.utilities import parameters
+from pydantic import SecretStr  # noqa: TC002 - Pydantic needs this annotation type at runtime.
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 if TYPE_CHECKING:
@@ -31,8 +32,8 @@ class SecretsManagerSource(PydanticBaseSettingsSource):
 
 
 class Settings(BaseSettings):
-    openrouter_api_key: str
-    recipe_api_key: str
+    openrouter_api_key: SecretStr
+    recipe_api_key: SecretStr
     recipe_api_base_url: str = "https://recipe-api.com/api/v1"
     aws_region: str = "eu-west-2"
     cognito_user_pool_id: str
@@ -66,4 +67,4 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    return Settings()  # type: ignore[call-arg]
+    return Settings()  # ty: ignore[missing-argument]

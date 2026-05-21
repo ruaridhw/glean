@@ -8,6 +8,7 @@ Run from backend/:
 Each test runs in its own subprocess (via --test N) so a hang in one doesn't
 block the rest. All prints are flushed immediately.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -41,6 +42,7 @@ TESTS = {
 
 
 # ── Single-test execution (called by subprocess) ─────────────────────────────
+
 
 def _run_single(n: int) -> None:
     """Run test N and print a single result line."""
@@ -92,6 +94,7 @@ def _run_single(n: int) -> None:
 
 
 # ── Orchestrator ─────────────────────────────────────────────────────────────
+
 
 def _run_all(tests: list[int]) -> None:
     if not API_KEY.startswith("sk-or-"):
