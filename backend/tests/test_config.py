@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from glean.config import SecretsManagerSource, Settings
+from glean.config import SecretsManagerSource, Settings, get_settings
 
 
 class TestSecretsManagerSourceOutsideLambda:
@@ -53,3 +53,28 @@ class TestSecretsManagerSourceInLambda:
                 source = SecretsManagerSource(Settings)
                 with pytest.raises(KeyError):
                     source()
+
+
+class TestGetSettings:
+    def test_caches_lambda_secret_fetches(self) -> None:
+        if hasattr(get_settings, "cache_clear"):
+            get_settings.cache_clear()
+
+        lambda_env = {
+            "AWS_LAMBDA_FUNCTION_NAME": "glean-api-prod",
+            "ENVIRONMENT": "prod",
+            "COGNITO_USER_POOL_ID": "pool-id",
+            "COGNITO_APP_CLIENT_ID": "client-id",
+            "S3_RECEIPTS_BUCKET": "receipts-bucket",
+        }
+        with patch.dict(os.environ, lambda_env, clear=True), patch("glean.config.parameters.get_secret") as mock_get:
+            mock_get.side_effect = lambda name: f"val:{name}"
+
+            first = get_settings()
+            second = get_settings()
+
+        assert first is second
+        assert mock_get.call_count == 2
+
+        if hasattr(get_settings, "cache_clear"):
+            get_settings.cache_clear()
