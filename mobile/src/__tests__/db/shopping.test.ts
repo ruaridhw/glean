@@ -50,7 +50,7 @@ describe("addAiShoppingItems", () => {
     jest.clearAllMocks();
   });
 
-  it("resolves accepted AI proposals and inserts them with source ai", async () => {
+  it("resolves accepted AI proposals, dropping categories not present in seed data", async () => {
     const mockValues = jest.fn().mockResolvedValue({});
     const mockInsert = jest.fn(() => ({ values: mockValues }));
     (drizzleDb as unknown as { insert: jest.Mock }).insert = mockInsert;
@@ -76,7 +76,7 @@ describe("addAiShoppingItems", () => {
     expect(mockResolveOrCreateIngredient).toHaveBeenNthCalledWith(1, {
       canonical_name: "taco shells",
       api_ingredient_id: "taco-shells",
-      category: "bakery",
+      category: null,
     });
     expect(mockResolveOrCreateIngredient).toHaveBeenNthCalledWith(2, {
       canonical_name: "whole milk",

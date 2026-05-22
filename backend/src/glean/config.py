@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from aws_lambda_powertools.utilities import parameters
@@ -66,5 +67,6 @@ class Settings(BaseSettings):
         )
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()  # ty: ignore[missing-argument]
