@@ -22,7 +22,9 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1
 
 RUN groupadd --system glean \
-    && useradd --system --gid glean --home-dir /app --no-create-home glean
+    && useradd --system --gid glean --home-dir /app --no-create-home glean \
+    && mkdir -p /app/.cache/glean_recipe_cache \
+    && chown -R glean:glean /app/.cache
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app/src ./src

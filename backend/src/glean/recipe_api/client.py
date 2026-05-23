@@ -11,7 +11,7 @@ import httpx
 from glean.observability import logger, tracer
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 
-CACHE_DIR = Path("/tmp/glean_recipe_cache")  # noqa: S108
+CACHE_DIR = Path(".cache/glean_recipe_cache")
 SEARCH_TTL_SECS = 86_400  # 24h
 DETAIL_TTL_SECS = 604_800  # 7 days
 
