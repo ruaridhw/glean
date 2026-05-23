@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 from glean.observability import logger, tracer
-from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
+from glean.recipe_api.schemas import RecipeApiDetailResponse, RecipeApiRecipe, RecipeApiSearchResponse
 
 CACHE_DIR = Path(".cache/glean_recipe_cache")
 SEARCH_TTL_SECS = 86_400  # 24h
@@ -81,8 +81,13 @@ class RecipeApiClient:
         resp = self._client.get("/recipes", params=params)
         resp.raise_for_status()
         result = resp.json()
-        _cache_write(cache_key, result)
-        return RecipeApiSearchResponse(**result)
+        logger.info(
+            "recipe api search response",
+            extra={"meta": result.get("meta"), "result_count": len(result.get("data", []))},
+        )
+        parsed = RecipeApiSearchResponse(**result)
+        _cache_write(cache_key, parsed.model_dump())
+        return parsed
 
     @tracer.capture_method
     def get_recipe(self, recipe_id: str) -> RecipeApiRecipe:
@@ -94,8 +99,9 @@ class RecipeApiClient:
         resp = self._client.get(f"/recipes/{recipe_id}")
         resp.raise_for_status()
         result = resp.json()
-        _cache_write(cache_key, result)
-        return RecipeApiRecipe(**result)
+        parsed = RecipeApiDetailResponse(**result)
+        _cache_write(cache_key, parsed.data.model_dump())
+        return parsed.data
 
     def active_time_mins(self, recipe: RecipeApiRecipe) -> int | None:
         return _iso_to_mins(recipe.meta.active_time)

@@ -11,7 +11,7 @@ class ShoppingParseRequest(BaseModel):
 
 class ShoppingProposalItem(ParsedIngredient):
     api_ingredient_id: str | None = None
-    category: str | None = None
+    category: str | None = None  # noqa: F841,RUF100
 
 
 class ShoppingParseResponse(BaseModel):

@@ -1,7 +1,45 @@
 {
-  "results": [
-    {"id": "abc-123", "name": "Spaghetti Carbonara", "cuisine": "Italian", "difficulty": "Easy", "total_time": "PT20M", "flags": []},
-    {"id": "def-456", "name": "Chicken Tikka Masala", "cuisine": "Indian", "difficulty": "Intermediate", "total_time": "PT45M", "flags": ["Gluten-Free"]}
+  "data": [
+    {
+      "id": "abc-123",
+      "name": "Spaghetti Carbonara",
+      "description": "A classic pasta dinner.",
+      "category": "Dinner",
+      "cuisine": "Italian",
+      "difficulty": "Easy",
+      "tags": ["Pasta", "Dinner"],
+      "meta": {
+        "active_time": "PT20M",
+        "passive_time": "PT0M",
+        "total_time": "PT20M",
+        "overnight_required": false,
+        "yields": "2 servings",
+        "yield_count": 2,
+        "serving_size_g": 350
+      },
+      "dietary": {"flags": [], "not_suitable_for": []},
+      "nutrition_summary": {"calories": 600, "protein_g": 25, "carbohydrates_g": 70, "fat_g": 22}
+    },
+    {
+      "id": "def-456",
+      "name": "Chicken Tikka Masala",
+      "description": "A creamy curry dinner.",
+      "category": "Dinner",
+      "cuisine": "Indian",
+      "difficulty": "Intermediate",
+      "tags": ["Chicken", "Curry"],
+      "meta": {
+        "active_time": "PT25M",
+        "passive_time": "PT20M",
+        "total_time": "PT45M",
+        "overnight_required": false,
+        "yields": "4 servings",
+        "yield_count": 4,
+        "serving_size_g": 400
+      },
+      "dietary": {"flags": ["Gluten-Free"], "not_suitable_for": []},
+      "nutrition_summary": {"calories": 523.75, "protein_g": 39.48, "carbohydrates_g": 36.6, "fat_g": 24.81}
+    }
   ],
-  "total": 2
+  "meta": {"total": 2, "page": 1, "per_page": 20, "total_capped": false}
 }

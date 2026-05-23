@@ -60,8 +60,21 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
         name="Spaghetti Carbonara",
         cuisine="Italian",
         difficulty="Easy",
-        flags=[],
-        not_suitable_for=[],
+        dietary={"flags": ["Gluten-Free"], "not_suitable_for": ["Vegan diets"]},
+        nutrition={"per_serving": {"calories": 487.22, "protein_g": 35.75}},
+        ingredients=[
+            {
+                "group_name": "Pasta",
+                "items": [
+                    {
+                        "ingredient_id": "spaghetti",
+                        "name": "spaghetti",
+                        "quantity": 200,
+                        "unit": "g",
+                    }
+                ],
+            }
+        ],
         source_url="https://example.com/carbonara",
     )
 
@@ -74,6 +87,12 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
     assert data["external_id"] == "abc-123"
     assert data["title"] == "Spaghetti Carbonara"
     assert data["cuisine"] == "Italian"
+    assert data["dietary_flags"] == ["Gluten-Free"]
+    assert data["not_suitable_for"] == ["Vegan diets"]
+    assert data["nutrition"]["calories"] == pytest.approx(487.22)
+    assert data["nutrition"]["protein_g"] == pytest.approx(35.75)
+    assert data["ingredients"][0]["canonical_name"] == "spaghetti"
+    assert data["ingredients"][0]["quantity"] == pytest.approx(200)
     assert data["source_url"] == "https://example.com/carbonara"
 
 

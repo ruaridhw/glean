@@ -151,6 +151,7 @@ def _schema_org_to_recipe_out(data: dict, url: str) -> RecipeOut:
 
 def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
     """Convert a recipe-api.com response to our internal RecipeOut shape."""
+    nutrition_source = api_recipe.nutrition.per_serving
     instructions = [
         InstructionOut(step_number=instr.step_number, phase=instr.phase, text=instr.text)
         for instr in api_recipe.instructions
@@ -165,16 +166,17 @@ def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
             is_optional=ing.is_optional,
             substitutions=ing.substitutions,
         )
-        for ing in api_recipe.ingredients
+        for group in api_recipe.ingredients
+        for ing in group.items
     ]
     nutrition = NutritionOut(
-        calories=api_recipe.nutrition.calories,
-        protein_g=api_recipe.nutrition.protein_g,
-        carbohydrates_g=api_recipe.nutrition.carbohydrates_g,
-        fat_g=api_recipe.nutrition.fat_g,
-        fibre_g=api_recipe.nutrition.fibre_g,
-        sugar_g=api_recipe.nutrition.sugar_g,
-        sodium_mg=api_recipe.nutrition.sodium_mg,
+        calories=nutrition_source.calories,
+        protein_g=nutrition_source.protein_g,
+        carbohydrates_g=nutrition_source.carbohydrates_g,
+        fat_g=nutrition_source.fat_g,
+        fibre_g=nutrition_source.fibre_g,
+        sugar_g=nutrition_source.sugar_g,
+        sodium_mg=nutrition_source.sodium_mg,
     )
     return RecipeOut(
         external_id=api_recipe.id,
@@ -184,8 +186,8 @@ def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
         difficulty=api_recipe.difficulty,
         active_time_mins=_iso_to_mins(api_recipe.meta.active_time),
         total_time_mins=_iso_to_mins(api_recipe.meta.total_time),
-        dietary_flags=api_recipe.flags,
-        not_suitable_for=api_recipe.not_suitable_for,
+        dietary_flags=api_recipe.dietary.flags,
+        not_suitable_for=api_recipe.dietary.not_suitable_for,
         yield_count=api_recipe.meta.yield_count,
         nutrition=nutrition,
         instructions=instructions,
@@ -211,12 +213,12 @@ def search_recipes(
             title=r.name,
             cuisine=r.cuisine,
             difficulty=r.difficulty,
-            total_time_mins=_iso_to_mins(r.total_time),
-            dietary_flags=r.flags,
+            total_time_mins=_iso_to_mins(r.meta.total_time),
+            dietary_flags=r.dietary.flags,
         )
-        for r in api_response.results
+        for r in api_response.data
     ]
-    return RecipeSearchResponse(results=results, total=api_response.total)
+    return RecipeSearchResponse(results=results, total=api_response.meta.total)
 
 
 def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: SecretStr) -> RecipeOut:
