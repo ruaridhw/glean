@@ -3,6 +3,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { ShoppingListItem } from "@/types";
 import { drizzleDb } from "./client";
+import { normaliseIngredientCategory } from "./ingredient-categories";
 import { resolveOrCreateIngredient } from "./ingredients";
 import { ingredients, pantryItems, recipeIngredients, shoppingListItems } from "./schema";
 
@@ -124,7 +125,7 @@ export async function addAiShoppingItems(
     const ingredientId = await resolveOrCreateIngredient({
       canonical_name: item.name,
       api_ingredient_id: item.api_ingredient_id ?? null,
-      category: item.category ?? null,
+      category: normaliseIngredientCategory(item.category),
     });
     rows.push({
       ingredient_id: ingredientId,
