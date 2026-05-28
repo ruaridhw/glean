@@ -61,6 +61,8 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen name="shop/describe" options={{ href: null }} />
+      <Tabs.Screen name="shop/review" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -19,6 +19,22 @@ export interface DescribeResponse {
   items: ParsedIngredient[];
 }
 
+// --- Shopping ---
+
+export interface ShoppingProposalItem extends ParsedIngredient {
+  api_ingredient_id: string | null;
+  category: string | null;
+}
+
+export interface ShoppingParseRequest {
+  text: string;
+}
+
+export interface ShoppingParseResponse {
+  items: ShoppingProposalItem[];
+  clarifying_questions: string[];
+}
+
 // --- Recipes ---
 
 export interface RecipeIngredientOut {
