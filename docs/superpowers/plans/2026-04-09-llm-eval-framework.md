@@ -188,17 +188,19 @@ git commit -m "🏗️ feat: add model-agnostic LLM factory with provider switch
 Replace the ChatAnthropic import and usages:
 
 In `backend/src/glean/receipts/service.py`, replace:
+
 ```python
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 ```
 with:
+
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 from glean.llm import create_chat_model
 ```
 
@@ -255,17 +257,19 @@ with:
 - [ ] **Step 2: Refactor suggestions/service.py**
 
 In `backend/src/glean/suggestions/service.py`, replace:
+
 ```python
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 ```
 with:
+
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 from glean.llm import create_chat_model
 ```
 
@@ -301,17 +305,19 @@ with:
 - [ ] **Step 3: Refactor recipes/service.py**
 
 In `backend/src/glean/recipes/service.py`, replace:
+
 ```python
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 ```
 with:
+
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.config import settings
+from glean.config import get_settings
 from glean.llm import create_chat_model
 ```
 

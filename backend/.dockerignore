@@ -1,0 +1,15 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+__pycache__/
+*.pyc
+*.pyo
+.aws-sam/
+.env
+tests/
+scripts/
+README.md
+template.yaml
+vulture_whitelist.py

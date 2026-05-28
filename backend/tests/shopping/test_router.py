@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from glean.config import Settings, get_settings
+from glean.main import app
+
+
+@pytest.fixture
+def unauth_client(test_settings: Settings) -> TestClient:
+    app.dependency_overrides[get_settings] = lambda: test_settings
+    return TestClient(app)
+
+
+def test_parse_shopping_description_returns_items(client: TestClient, auth_headers: dict[str, str]) -> None:
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(
+        {
+            "items": [
+                {
+                    "name": "taco shells",
+                    "quantity": 1,
+                    "unit": "pack",
+                    "unit_price": None,
+                    "api_ingredient_id": "taco-shells",
+                    "category": "bakery",
+                    "confidence": 0.82,
+                }
+            ],
+            "clarifying_questions": ["What kind of salsa do you want?"],
+        }
+    )
+
+    with patch("glean.shopping.router.create_chat_model") as mock_create:
+        mock_create.return_value.invoke.return_value = mock_result
+        response = client.post(
+            "/shopping/parse-description",
+            headers=auth_headers,
+            json={"text": "stuff for tacos"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == [
+        {
+            "name": "taco shells",
+            "quantity": 1.0,
+            "unit": "pack",
+            "unit_price": None,
+            "confidence": 0.82,
+            "api_ingredient_id": "taco-shells",
+            "category": "bakery",
+        }
+    ]
+    assert body["clarifying_questions"] == ["What kind of salsa do you want?"]
+    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key=SecretStr("test-openrouter_api_key"))
+
+
+def test_parse_shopping_description_requires_auth(test_settings: Settings) -> None:
+    app.dependency_overrides[get_settings] = lambda: test_settings
+    unauthenticated = TestClient(app)
+
+    response = unauthenticated.post(
+        "/shopping/parse-description",
+        json={"text": "milk and bananas"},
+    )
+
+    assert response.status_code == 401
+    app.dependency_overrides.clear()
+
+
+def test_parse_shopping_description_rejects_empty_text(client: TestClient, auth_headers: dict[str, str]) -> None:
+    response = client.post(
+        "/shopping/parse-description",
+        headers=auth_headers,
+        json={"text": ""},
+    )
+
+    assert response.status_code == 422

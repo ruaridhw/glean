@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Glean adaptive icon foreground">
+  <defs>
+    <linearGradient id="leaf" x1="444" y1="482" x2="706" y2="770" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f4fff0"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#003f25" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="none"/>
+  <g filter="url(#shadow)">
+    <path
+      d="M703 332c-77-92-221-112-322-43-105 72-136 210-71 319 35 59 90 99 151 116"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="96"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path d="M705 306l44 166-168-23z" fill="#ffffff"/>
+    <path
+      d="M472 760c-28-98-5-190 72-263 78-74 174-89 287-109-3 105-35 197-103 267-71 73-154 106-256 105z"
+      fill="url(#leaf)"
+    />
+    <path
+      d="M752 482c-123 75-209 159-258 270"
+      fill="none"
+      stroke="#0c7b3f"
+      stroke-width="34"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>

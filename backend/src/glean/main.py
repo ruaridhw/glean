@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+
+    from starlette.types import ExceptionHandler
 
 from fastapi import FastAPI, Request
 from mangum import Mangum
@@ -19,6 +21,7 @@ from glean.health.router import router as health_router
 from glean.observability import logger
 from glean.receipts.router import router as receipts_router
 from glean.recipes.router import router as recipes_router
+from glean.shopping.router import router as shopping_router
 from glean.suggestions.router import router as suggestions_router
 
 
@@ -37,12 +40,13 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
 
 app = FastAPI(title="Glean API", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, cast("ExceptionHandler", _rate_limit_exceeded_handler))
 
 app.include_router(health_router)
 app.include_router(dev_router)
 app.include_router(receipts_router)
 app.include_router(recipes_router)
+app.include_router(shopping_router)
 app.include_router(suggestions_router)
 
 if os.environ.get("ENVIRONMENT") == "dev":

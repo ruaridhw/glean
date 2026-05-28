@@ -1,22 +1,16 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code when working in the Glean backend.
-
-## Preferred tools
-
-- Use `rg` for fast text and file search
-- Use `rtk` when reading large files, listing directories, or running noisy commands
+See `../CLAUDE.md` for repo-wide Makefile targets and preferred tools.
 
 ## Commands
 
+Prefer `make test-backend` / `make lint-backend` from the repo root. Use the commands
+below for targeted runs within this directory:
+
 ```bash
-uv run pytest                          # all tests with coverage
 uv run pytest tests/test_health.py -v  # single file
 uv run pytest -k "test_name"           # single test by name
-uv run ruff check src/ tests/ --fix    # lint (auto-fix where possible)
-uv run black src/ tests/               # formatting
-uv run ty check src/                   # type checking
-pre-commit run                         # lint + format (run after staging changes)
 ```
 
 ## Architecture

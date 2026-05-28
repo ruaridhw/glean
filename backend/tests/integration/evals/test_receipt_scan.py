@@ -60,9 +60,8 @@ class TestReceiptScanStructural:
             content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
             items = [ParsedIngredient(**item) for item in json.loads(content)]
             for item in items:
-                assert item.unit in ALLOWED_UNITS, (
-                    f"Example {i}: item '{item.name}' has unit '{item.unit}', expected one of {ALLOWED_UNITS}"
-                )
+                message = f"Example {i}: item '{item.name}' has unit '{item.unit}', expected one of {ALLOWED_UNITS}"
+                assert item.unit in ALLOWED_UNITS, message
 
     def test_output_count_matches_input_count(
         self,

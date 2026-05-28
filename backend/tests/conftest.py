@@ -1,20 +1,29 @@
-import os
-
-os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
-os.environ.setdefault("RECIPE_API_KEY", "test-key")
-os.environ.setdefault("COGNITO_USER_POOL_ID", "us-east-1_test")
-os.environ.setdefault("COGNITO_APP_CLIENT_ID", "test-client-id")
-os.environ.setdefault("S3_RECEIPTS_BUCKET", "test-bucket")
+from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
+from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
 from glean.main import app
+
+_TEST_SETTINGS = Settings(
+    openrouter_api_key="test-openrouter_api_key",
+    recipe_api_key="test-recipe_api_key",
+    cognito_user_pool_id="test-cognito_user_pool_id",
+    cognito_app_client_id="test-cognito_app_client_id",
+    s3_receipts_bucket="test-s3_receipts_bucket",
+)
+
+
+@pytest.fixture(scope="session")
+def test_settings() -> Settings:
+    return _TEST_SETTINGS
 
 
 @pytest.fixture
 def client() -> TestClient:
+    app.dependency_overrides[get_settings] = lambda: _TEST_SETTINGS
     app.dependency_overrides[verify_cognito_token] = lambda: "test-user-sub"
     yield TestClient(app)
     app.dependency_overrides.clear()

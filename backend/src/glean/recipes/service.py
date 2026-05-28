@@ -11,9 +11,9 @@ import httpx
 from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.llm import Feature, get_default_model
+from glean.llm import Feature, message_content_as_text
 from glean.observability import logger
-from glean.recipe_api.client import _iso_to_mins, recipe_api_client
+from glean.recipe_api.client import RecipeApiClient, _iso_to_mins
 from glean.recipes.schemas import (
     ImportUrlRequest,
     InstructionOut,
@@ -26,6 +26,7 @@ from glean.recipes.schemas import (
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+    from pydantic import SecretStr
 
     from glean.recipe_api.schemas import RecipeApiRecipe
 
@@ -193,13 +194,17 @@ def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
 
 
 def search_recipes(
+    *,
+    recipe_api_base_url: str,
+    recipe_api_key: SecretStr,
     q: str | None = None,
     cuisine: str | None = None,
     dietary: str | None = None,
     page: int = 1,
     per_page: int = 20,
 ) -> RecipeSearchResponse:
-    api_response = recipe_api_client.search(q=q, cuisine=cuisine, dietary=dietary, page=page, per_page=per_page)
+    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
+    api_response = client.search(q=q, cuisine=cuisine, dietary=dietary, page=page, per_page=per_page)
     results = [
         RecipeSearchResult(
             external_id=r.id,
@@ -214,8 +219,9 @@ def search_recipes(
     return RecipeSearchResponse(results=results, total=api_response.total)
 
 
-def get_recipe(recipe_id: str) -> RecipeOut:
-    api_recipe = recipe_api_client.get_recipe(recipe_id)
+def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: SecretStr) -> RecipeOut:
+    client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
+    api_recipe = client.get_recipe(recipe_id)
     return _api_recipe_to_out(api_recipe)
 
 
@@ -256,7 +262,7 @@ def _llm_json_to_recipe_out(data: dict, url: str) -> RecipeOut:
     )
 
 
-def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel | None = None) -> RecipeOut:
+def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -> RecipeOut:
     _validate_url_ssrf(request.url)
 
     html = httpx.get(request.url, follow_redirects=True, timeout=10.0).text
@@ -267,7 +273,7 @@ def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel | 
         return _schema_org_to_recipe_out(schema_data, request.url)
 
     logger.info("recipe import via LangChain/Claude fallback", extra={"url": request.url})
-    llm = model or get_default_model()
+    llm = model
     response = llm.invoke(
         [
             SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
@@ -275,5 +281,5 @@ def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel | 
         ],
         config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
     )
-    data = json.loads(response.content)
+    data = json.loads(message_content_as_text(response.content))
     return _llm_json_to_recipe_out(data, request.url)

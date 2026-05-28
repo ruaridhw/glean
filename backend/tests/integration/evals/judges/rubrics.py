@@ -44,7 +44,7 @@ Respond with ONLY a single integer 1-5. No explanation."""
 
 
 def _parse_score(content: str) -> int:
-    """Extract integer score from LLM response, defaulting to 1 if unparseable."""
+    """Extract integer score from LLM response, defaulting to 1 if unparsable."""
     match = re.search(r"[1-5]", content)
     return int(match.group()) if match else 1
 

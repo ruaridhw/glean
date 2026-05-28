@@ -19,22 +19,18 @@ def _load_fixture(name: str) -> list[dict[str, Any]]:
     return json.loads((FIXTURES / name).read_text())
 
 
-def _make_model() -> BaseChatModel:
-    model = os.environ.get("GLEAN_LLM_MODEL", "google/gemma-4-26b-a4b-it:free")
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    return create_chat_model(model, api_key=api_key)
+@pytest.fixture(scope="session")
+def eval_model(openrouter_api_key: str, llm_model: str) -> BaseChatModel:
+    """LLM for eval runs. Key + model flow from tests/integration/conftest.py."""
+    model_id = os.environ.get("GLEAN_LLM_MODEL", llm_model)
+    return create_chat_model(model_id, api_key=openrouter_api_key)
 
 
 @pytest.fixture(scope="session")
-def eval_model() -> BaseChatModel:
-    """Create the LLM used for eval runs. Defaults to google/gemma-3."""
-    return _make_model()
-
-
-@pytest.fixture(scope="session")
-def judge_model() -> BaseChatModel:
-    """Create the LLM used for LLM-as-judge scoring. Defaults to google/gemma-3."""
-    return _make_model()
+def judge_model(openrouter_api_key: str, llm_model: str) -> BaseChatModel:
+    """LLM for judge scoring. Same credentials as eval_model."""
+    model_id = os.environ.get("GLEAN_LLM_MODEL", llm_model)
+    return create_chat_model(model_id, api_key=openrouter_api_key)
 
 
 @pytest.fixture(scope="session")

@@ -8,7 +8,6 @@ from pathlib import Path
 
 import httpx
 
-from glean.config import settings
 from glean.observability import logger, tracer
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 
@@ -53,10 +52,10 @@ def _cache_write(key: str, data: dict) -> None:
 
 
 class RecipeApiClient:
-    def __init__(self) -> None:
+    def __init__(self, *, base_url: str, api_key: str) -> None:
         self._client = httpx.Client(
-            base_url=settings.recipe_api_base_url,
-            headers={"X-API-Key": settings.recipe_api_key},
+            base_url=base_url,
+            headers={"X-API-Key": api_key},
             timeout=10.0,
         )
 
@@ -103,6 +102,3 @@ class RecipeApiClient:
 
     def total_time_mins(self, recipe: RecipeApiRecipe) -> int | None:
         return _iso_to_mins(recipe.meta.total_time)
-
-
-recipe_api_client = RecipeApiClient()

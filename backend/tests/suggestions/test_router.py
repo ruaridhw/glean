@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from glean.config import Settings, get_settings
 from glean.main import app
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -46,7 +47,7 @@ def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: d
     mock_result = MagicMock()
     mock_result.content = json.dumps(fixture)
 
-    with patch("glean.suggestions.service.get_default_model") as mock_create:
+    with patch("glean.suggestions.router.create_chat_model") as mock_create:
         mock_create.return_value.invoke.return_value = mock_result
         response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
 
@@ -58,7 +59,9 @@ def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: d
     assert suggestions[1]["missing_ingredients"] == []
 
 
-def test_get_suggestions_requires_auth() -> None:
+def test_get_suggestions_requires_auth(test_settings: Settings) -> None:
+    app.dependency_overrides[get_settings] = lambda: test_settings
     unauthenticated = TestClient(app)
     response = unauthenticated.post("/suggestions", json=SAMPLE_REQUEST)
     assert response.status_code == 401
+    app.dependency_overrides.clear()

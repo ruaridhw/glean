@@ -14,7 +14,7 @@ class TestGenerateEvalComment:
         results = [
             EvalResult(
                 name="test_valid_json",
-                classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
+                classname="tests.integration.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=True,
             ),
         ]
@@ -26,7 +26,7 @@ class TestGenerateEvalComment:
         results = [
             EvalResult(
                 name="test_missing_ingredients_not_in_pantry",
-                classname="tests.evals.test_suggestions.TestSuggestionsHeuristic",
+                classname="tests.integration.evals.test_suggestions.TestSuggestionsHeuristic",
                 passed=False,
                 failure_message="rice was in pantry",
             ),
@@ -39,14 +39,14 @@ class TestGenerateEvalComment:
         hard = [
             EvalResult(
                 name="test_valid_json",
-                classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
+                classname="tests.integration.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=True,
             ),
         ]
         soft = [
             EvalResult(
                 name="test_names_lowercase",
-                classname="tests.evals.test_receipt_scan.TestReceiptScanHeuristic",
+                classname="tests.integration.evals.test_receipt_scan.TestReceiptScanHeuristic",
                 passed=True,
             ),
         ]
@@ -60,7 +60,7 @@ class TestGenerateEvalComment:
         hard = [
             EvalResult(
                 name="test_valid_json",
-                classname="tests.evals.test_receipt_scan.TestReceiptScanStructural",
+                classname="tests.integration.evals.test_receipt_scan.TestReceiptScanStructural",
                 passed=False,
                 failure_message="Expected list, got str",
             ),

@@ -16,6 +16,7 @@ dependencies = [
     "langchain-openrouter>=0.2.0,<1",
     "langsmith>=0.7.0,<1",
     "beautifulsoup4>=4.14.3,<5",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]
@@ -28,13 +29,15 @@ dev = [
     "vulture>=2.16,<3",
     "typos>=1.45.0,<2",
     "ty>=0.0.29,<1",
-
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/evals"
-markers = ["soft_gate: marks tests as soft-gate evaluations (deselect with '-m \"not soft_gate\"')"]
+addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/integration"
+markers = [
+    "soft_gate: marks tests as soft-gate evaluations (deselect with '-m \"not soft_gate\"')",
+    "integration: marks tests that require real external service credentials (skipped in CI unless credentials are provided)",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -59,7 +62,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "W", "C4", "C90", "PT", "RUF", "A", "T20", "PIE", "RET", "TCH", "ASYNC", "FLY", "PERF", "PLC", "PLE"]
-per-file-ignores = { "tests/**" = ["S101", "PERF401"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
+per-file-ignores = { "tests/**" = ["S101", "PERF401"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
 
 [tool.black]
 line-length = 120

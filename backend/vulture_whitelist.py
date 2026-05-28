@@ -7,6 +7,8 @@ tracer  # AWS X-Ray PowerTools, used via @tracer.capture_lambda_handler
 export_db  # FastAPI route handler, registered by @router.post()
 health  # FastAPI route handler, registered by @router.get()
 anthropic_api_key  # Pydantic Settings field
+langchain_project  # Pydantic Settings field, read by LangSmith SDK via env var
+validate_model  # called from integration tests (tests/ excluded from vulture scan)
 recipe_api_key  # Pydantic Settings field
 recipe_api_base_url  # Pydantic Settings field
 log_level  # Pydantic Settings field
@@ -38,3 +40,5 @@ get_suggestions  # FastAPI route handler
 get_field_value  # PydanticBaseSettingsSource abstract method implementation
 settings_customise_sources  # pydantic-settings hook, called by BaseSettings metaclass
 cls  # classmethod first argument (settings_customise_sources)
+ExceptionHandler  # Starlette exception handler type used only for static cast
+clarifying_questions  # ShoppingParseResponse Pydantic field
