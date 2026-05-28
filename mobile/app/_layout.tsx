@@ -12,7 +12,15 @@ import { seedDatabase } from "@/db/seed";
 import SplashScreen from "@/screens/SplashScreen";
 import { theme } from "@/theme";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+const isFabricEnabled = Boolean(
+  (globalThis as typeof globalThis & { nativeFabricUIManager?: unknown }).nativeFabricUIManager,
+);
+
+if (
+  Platform.OS === "android" &&
+  !isFabricEnabled &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 

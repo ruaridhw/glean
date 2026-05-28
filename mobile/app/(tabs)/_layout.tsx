@@ -1,6 +1,6 @@
 // mobile/app/(tabs)/_layout.tsx
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
 import { theme } from "@/theme";
 
 export default function TabsLayout() {
@@ -26,7 +26,7 @@ export default function TabsLayout() {
         options={{
           title: "Pantry",
           tabBarButtonTestID: "tabs.pantry",
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🥬</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="leaf-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -34,7 +34,7 @@ export default function TabsLayout() {
         options={{
           title: "Meals",
           tabBarButtonTestID: "tabs.meals",
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🍽️</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="restaurant-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -42,7 +42,7 @@ export default function TabsLayout() {
         options={{
           title: "Plan",
           tabBarButtonTestID: "tabs.plan",
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>📅</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -50,7 +50,7 @@ export default function TabsLayout() {
         options={{
           title: "Shop",
           tabBarButtonTestID: "tabs.shop",
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🛒</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -58,18 +58,9 @@ export default function TabsLayout() {
         options={{
           title: "Settings",
           tabBarButtonTestID: "tabs.settings",
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>⚙️</Text>,
+          tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
         }}
       />
-      {/* Sub-screens — hide from tab bar */}
-      <Tabs.Screen name="pantry/add" options={{ href: null }} />
-      <Tabs.Screen name="pantry/describe" options={{ href: null }} />
-      <Tabs.Screen name="pantry/manual-entry" options={{ href: null }} />
-      <Tabs.Screen name="pantry/review" options={{ href: null }} />
-      <Tabs.Screen name="pantry/scan" options={{ href: null }} />
-      <Tabs.Screen name="pantry/scan-progress" options={{ href: null }} />
-      <Tabs.Screen name="meals/search" options={{ href: null }} />
-      <Tabs.Screen name="meals/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

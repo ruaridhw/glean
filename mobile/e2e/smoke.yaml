@@ -28,7 +28,7 @@ name: "Smoke: launch, tab navigation, and CRUD"
     file: helpers/navigate-tab.yaml
     env:
       tab: Shop
-- assertVisible: "Shopping List"
+- assertVisible: "Shopping"
 
 - runFlow:
     file: helpers/navigate-tab.yaml
@@ -43,8 +43,8 @@ name: "Smoke: launch, tab navigation, and CRUD"
 - assertVisible: "Pantry"
 
 # --- Add item via manual entry ---
-- tapOn: "＋"
-- assertVisible: "Manual Entry"
+- tapOn: "Add pantry item"
+- assertVisible: "Add to Pantry"
 - tapOn: "Manual Entry"
 
 - tapOn: "Ingredient name"

@@ -1,12 +1,16 @@
 // mobile/app/(tabs)/plan/index.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useCallback, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSuggestMeals } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
+import { AppScreen } from "@/components/ui/AppScreen";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
@@ -18,17 +22,105 @@ import {
 } from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
 import { addShoppingGapsForRecipe } from "@/db/shopping";
+import {
+  buildPlanSlots,
+  formatPlanProgress,
+  getCurrentWeekRangeLabel,
+  getPlanSubtitle,
+  type PlanSlot,
+} from "@/plan/presentation";
+import { hapticImpact } from "@/platform/haptics";
 import { compressPantry } from "@/suggestions/compress";
 import { theme } from "@/theme";
 import type { MealPlanEntry } from "@/types";
 import { showError, showSuccess } from "@/utils/toast";
+
+function ProgressCard({ planned, target }: { planned: number; target: number }) {
+  const progress = formatPlanProgress(planned, target);
+  return (
+    <Card style={styles.progressCard}>
+      <View style={styles.progressHeader}>
+        <View>
+          <Text style={styles.progressLabel}>Dinner progress</Text>
+          <Text style={styles.weekRange}>{getCurrentWeekRangeLabel()}</Text>
+        </View>
+        <Ionicons name="calendar-outline" size={22} color={theme.colors.primary} />
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
+      </View>
+    </Card>
+  );
+}
+
+function PlanSlotCard({
+  slot,
+  onCooked,
+  onDelete,
+}: {
+  slot: PlanSlot;
+  onCooked: (entry: MealPlanEntry) => void;
+  onDelete: (entry: MealPlanEntry) => void;
+}) {
+  const entry = slot.entry;
+
+  if (!entry) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/(tabs)/meals/search")}
+        style={styles.slotPressable}
+      >
+        <Card style={[styles.slotCard, styles.emptySlotCard]}>
+          <View style={styles.slotBadgeMuted}>
+            <Text style={styles.slotBadgeMutedText}>{slot.slotNumber}</Text>
+          </View>
+          <Text style={styles.addDinnerText}>Add dinner</Text>
+          <Ionicons name="add" size={18} color={theme.colors.primary} />
+        </Card>
+      </Pressable>
+    );
+  }
+
+  const cooked = entry.cooked_at != null;
+
+  return (
+    <Card style={[styles.slotCard, cooked && styles.cookedCard]}>
+      <View style={cooked ? styles.slotBadgeMuted : styles.slotBadge}>
+        <Text style={cooked ? styles.slotBadgeMutedText : styles.slotBadgeText}>
+          {slot.slotNumber}
+        </Text>
+      </View>
+      <View style={styles.slotContent}>
+        <Text style={[styles.recipeTitle, cooked && styles.cookedTitle]}>{entry.recipe_title}</Text>
+        <Text style={styles.recipeMeta}>
+          {entry.servings} {entry.servings === 1 ? "serving" : "servings"}
+          {cooked ? " · Cooked" : ""}
+        </Text>
+      </View>
+      {!cooked ? (
+        <Pressable style={styles.cookedButton} onPress={() => onCooked(entry)}>
+          <Text style={styles.cookedButtonText}>Cooked</Text>
+        </Pressable>
+      ) : null}
+      <IconButton
+        icon="close-circle"
+        accessibilityLabel={`Remove ${entry.recipe_title}`}
+        backgroundColor="transparent"
+        color={theme.colors.textSecondary}
+        size={20}
+        onPress={() => onDelete(entry)}
+      />
+    </Card>
+  );
+}
 
 export default function PlanScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [mealsPerWeek, setMealsPerWeek] = useState(5);
   const [loading, setLoading] = useState(true);
   const suggestMutation = useSuggestMeals();
-  const params = useLocalSearchParams<{ add_recipe_id?: string }>();
+  const { add_recipe_id: addRecipeId } = useLocalSearchParams<{ add_recipe_id?: string }>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,34 +144,22 @@ export default function PlanScreen() {
     },
     [mealsPerWeek, load],
   );
+  const handleAddRecipeRef = useRef(handleAddRecipe);
+  handleAddRecipeRef.current = handleAddRecipe;
 
   useFocusEffect(
     useCallback(() => {
-      load();
-      if (params.add_recipe_id) {
-        handleAddRecipe(Number(params.add_recipe_id));
+      void load();
+      if (addRecipeId) {
+        void handleAddRecipeRef.current(Number(addRecipeId));
       }
-      return () => {
-        suggestMutation.reset();
-      };
-    }, [load, params.add_recipe_id, handleAddRecipe, suggestMutation]),
+    }, [load, addRecipeId]),
   );
 
   async function handleMarkCooked(entry: MealPlanEntry) {
-    Alert.alert(
-      "Mark as cooked?",
-      `This will decrement pantry quantities for "${entry.recipe_title}".`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Mark Cooked",
-          onPress: async () => {
-            await markMealAsCooked(entry.id);
-            await load();
-          },
-        },
-      ],
-    );
+    await hapticImpact("medium");
+    await markMealAsCooked(entry.id);
+    await load();
   }
 
   async function handleDelete(entry: MealPlanEntry) {
@@ -101,10 +181,10 @@ export default function PlanScreen() {
     ]);
 
     const compressed = compressPantry(pantryItems as Parameters<typeof compressPantry>[0]);
-    const recipeHistory = recipes.map((r) => ({
-      recipe_id: r.id,
-      title: r.title,
-      last_cooked_at: r.last_cooked_at ?? null,
+    const recipeHistory = recipes.map((recipe) => ({
+      recipe_id: recipe.id,
+      title: recipe.title,
+      last_cooked_at: recipe.last_cooked_at ?? null,
       food_groups: [] as string[],
     }));
 
@@ -134,16 +214,34 @@ export default function PlanScreen() {
     );
   }
 
-  const emptySlots = Math.max(0, mealsPerWeek - entries.length);
+  const slots = buildPlanSlots(entries, mealsPerWeek);
+  const subtitle = getPlanSubtitle(entries, mealsPerWeek);
 
-  if (loading) return <PlanSkeleton rows={mealsPerWeek} />;
+  if (loading) {
+    return (
+      <AppScreen title="This Week" subtitle={subtitle} testID="plan.screen">
+        <PlanSkeleton rows={mealsPerWeek} />
+      </AppScreen>
+    );
+  }
 
   if (entries.length === 0) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
-        <View style={s.header}>
-          <Text style={s.heading}>This Week</Text>
-        </View>
+      <AppScreen
+        title="This Week"
+        subtitle={subtitle}
+        actions={
+          <IconButton
+            icon="sparkles-outline"
+            accessibilityLabel="Generate plan"
+            color={theme.colors.primaryForeground}
+            backgroundColor={theme.colors.primary}
+            onPress={() => void generateWeek()}
+          />
+        }
+        testID="plan.screen"
+      >
+        <ProgressCard planned={entries.length} target={mealsPerWeek} />
         <EmptyState
           testID="plan.emptyState"
           icon="calendar-outline"
@@ -154,129 +252,160 @@ export default function PlanScreen() {
             { label: "Generate plan", onPress: generateWeek },
           ]}
         />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
-  type ListItem = MealPlanEntry | { id: number; isEmpty: true };
-
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <View style={s.header}>
-        <Text style={s.heading}>This Week</Text>
+    <AppScreen
+      title="This Week"
+      subtitle={subtitle}
+      actions={
+        <Pressable style={styles.generateButton} onPress={() => void generateWeek()}>
+          <Ionicons name="sparkles-outline" size={15} color={theme.colors.primaryForeground} />
+          <Text style={styles.generateButtonText}>
+            {suggestMutation.isPending ? "Generating" : "Generate plan"}
+          </Text>
+        </Pressable>
+      }
+      scroll
+      testID="plan.screen"
+    >
+      <ProgressCard planned={entries.length} target={mealsPerWeek} />
+      <SectionHeader title="Dinners" subtitle="Plan meals and send gaps to shopping" />
+      <View style={styles.slotList}>
+        {slots.map((slot) => (
+          <PlanSlotCard
+            key={slot.key}
+            slot={slot}
+            onCooked={(entry) => void handleMarkCooked(entry)}
+            onDelete={(entry) => void handleDelete(entry)}
+          />
+        ))}
       </View>
-
-      <FlatList<ListItem>
-        data={[
-          ...entries,
-          ...Array.from(
-            { length: emptySlots },
-            (_, i): ListItem => ({ id: -(i + 1), isEmpty: true }),
-          ),
-        ]}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => {
-          if ("isEmpty" in item) {
-            return (
-              <Pressable
-                style={s.emptySlot}
-                onPress={() => router.push("/(tabs)/meals/search" as never)}
-              >
-                <Text style={s.emptySlotText}>+ Add a meal</Text>
-              </Pressable>
-            );
-          }
-          const entry = item as MealPlanEntry;
-          return (
-            <View style={[s.entryRow, entry.cooked_at != null && s.cookedRow]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.entryTitle, entry.cooked_at != null && s.cookedTitle]}>
-                  {entry.recipe_title}
-                </Text>
-                {entry.cooked_at != null && <Text style={s.cookedLabel}>Cooked ✓</Text>}
-              </View>
-              {entry.cooked_at == null && (
-                <Pressable style={s.cookBtn} onPress={() => handleMarkCooked(entry)}>
-                  <Text style={s.cookBtnText}>Cooked</Text>
-                </Pressable>
-              )}
-              <Pressable onPress={() => handleDelete(entry)} style={s.deleteBtn}>
-                <Text style={s.deleteBtnText}>✕</Text>
-              </Pressable>
-            </View>
-          );
-        }}
-      />
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
+const styles = StyleSheet.create({
+  progressCard: {
+    gap: theme.spacing.md,
   },
-  header: {
-    flexDirection: "row",
+  progressHeader: {
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
-    padding: theme.spacing.lg,
   },
-  heading: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
+  progressLabel: {
     color: theme.colors.text,
+    fontSize: theme.typography.headline.fontSize,
+    fontWeight: "700",
   },
-  entryRow: {
-    flexDirection: "row",
+  weekRange: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.typography.caption.fontSize,
+    marginTop: 2,
+  },
+  progressTrack: {
+    backgroundColor: theme.colors.muted,
+    borderRadius: 2,
+    height: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 2,
+    height: "100%",
+  },
+  generateButton: {
     alignItems: "center",
-    padding: theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    flexDirection: "row",
+    gap: theme.spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: theme.spacing.md,
   },
-  cookedRow: {
-    opacity: 0.6,
+  generateButtonText: {
+    color: theme.colors.primaryForeground,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
   },
-  entryTitle: {
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: theme.typography.headline.fontWeight,
+  slotList: {
+    gap: theme.spacing.sm,
+  },
+  slotPressable: {
+    marginBottom: theme.spacing.xs,
+  },
+  slotCard: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  emptySlotCard: {
+    borderStyle: "dashed",
+  },
+  cookedCard: {
+    opacity: 0.65,
+  },
+  slotBadge: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: 14,
+    height: 28,
+    justifyContent: "center",
+    width: 28,
+  },
+  slotBadgeText: {
+    color: theme.colors.primaryForeground,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
+  },
+  slotBadgeMuted: {
+    alignItems: "center",
+    backgroundColor: theme.colors.muted,
+    borderRadius: 14,
+    height: 28,
+    justifyContent: "center",
+    width: 28,
+  },
+  slotBadgeMutedText: {
+    color: theme.colors.mutedForeground,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
+  },
+  slotContent: {
+    flex: 1,
+  },
+  recipeTitle: {
     color: theme.colors.text,
+    fontSize: theme.typography.subhead.fontSize,
+    fontWeight: "700",
   },
   cookedTitle: {
     textDecorationLine: "line-through",
   },
-  cookedLabel: {
-    fontSize: theme.typography.caption.fontSize,
-    color: theme.colors.primary,
-    marginTop: theme.spacing.xs,
-  },
-  cookBtn: {
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.sm + 2,
-    paddingVertical: theme.spacing.xs,
-    marginRight: theme.spacing.sm,
-  },
-  cookBtnText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.caption.fontSize,
-  },
-  deleteBtn: {
-    padding: theme.spacing.xs,
-  },
-  deleteBtnText: {
-    color: theme.colors.textDisabled,
-    fontSize: theme.typography.body.fontSize,
-  },
-  emptySlot: {
-    padding: theme.spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-    borderStyle: "dashed",
-  },
-  emptySlotText: {
+  recipeMeta: {
     color: theme.colors.textSecondary,
+    fontSize: theme.typography.caption.fontSize,
+    marginTop: 2,
+  },
+  cookedButton: {
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  cookedButtonText: {
+    color: theme.colors.primary,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
+  },
+  addDinnerText: {
+    color: theme.colors.textSecondary,
+    flex: 1,
     fontSize: theme.typography.subhead.fontSize,
+    fontWeight: "600",
   },
 });
