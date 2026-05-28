@@ -54,8 +54,8 @@ test-mobile:  ## Run mobile Jest tests
 	cd mobile && npm test
 
 .PHONY: test-e2e
-test-e2e:  ## Run Maestro e2e tests against a running Expo dev server
-	cd mobile && npm run e2e
+test-e2e:  ## Run Maestro e2e tests (restarts Metro, ensures emulator, then runs)
+	cd mobile && ./scripts/e2e-run
 
 # ── Lint & Format ─────────────────────────────────────────────────────────────
 

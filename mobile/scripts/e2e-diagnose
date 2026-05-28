@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Diagnose common Maestro e2e test issues with Expo Go on Android emulator.
+set -uo pipefail
+
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+ADB="$ANDROID_HOME/platform-tools/adb"
+MOBILE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+pass() { echo -e "  ${GREEN}✓${NC} $1"; }
+fail() { echo -e "  ${RED}✗${NC} $1"; ISSUES=$((ISSUES + 1)); }
+warn() { echo -e "  ${YELLOW}!${NC} $1"; }
+
+ISSUES=0
+HAS_EMULATOR=0
+
+echo "=== Maestro E2E Diagnostics ==="
+echo
+
+# 1. Emulator
+echo "Emulator:"
+if $ADB devices 2>/dev/null | grep -q 'emulator'; then
+  HAS_EMULATOR=1
+  pass "Emulator connected"
+  BOOT=$($ADB shell getprop sys.boot_completed 2>/dev/null)
+  if [ "$BOOT" = "1" ]; then
+    pass "Emulator booted"
+  else
+    fail "Emulator not fully booted (sys.boot_completed=$BOOT)"
+  fi
+else
+  fail "No emulator running"
+  echo "       Start with: \$HOME/Library/Android/sdk/emulator/emulator -avd \$(emulator -list-avds | head -1) &"
+fi
+
+# 2. Expo Go
+echo
+echo "Expo Go:"
+if [ "$HAS_EMULATOR" -eq 0 ]; then
+  warn "Skipped because no emulator is connected"
+elif $ADB shell pm list packages 2>/dev/null | grep -q host.exp.exponent; then
+  pass "Expo Go installed"
+  PID=$($ADB shell pidof host.exp.exponent 2>/dev/null)
+  if [ -n "$PID" ]; then
+    pass "Expo Go running (PID $PID)"
+  else
+    warn "Expo Go not running"
+  fi
+  TOP=$($ADB shell dumpsys activity top 2>/dev/null | grep 'ACTIVITY' | head -1)
+  if echo "$TOP" | grep -q 'host.exp.exponent'; then
+    pass "Expo Go is foreground activity"
+  else
+    ACTIVITY=$(echo "$TOP" | sed 's/.*ACTIVITY //' | cut -d' ' -f1)
+    fail "Expo Go is NOT in foreground (current: ${ACTIVITY:-unknown})"
+  fi
+else
+  fail "Expo Go not installed"
+fi
+
+# 3. Metro
+echo
+echo "Metro:"
+STATUS=$(curl -s http://localhost:8081/status 2>/dev/null)
+if echo "$STATUS" | grep -q "packager-status:running"; then
+  pass "Metro running on :8081"
+else
+  fail "Metro not running on :8081"
+  echo "       Start with: cd mobile && npx expo start --clear"
+fi
+
+EXPO_PROCS=$(pgrep -fl "expo start" 2>/dev/null | grep -v grep || true)
+if [ -n "$EXPO_PROCS" ]; then
+  if echo "$EXPO_PROCS" | grep -q "\-\-android"; then
+    fail "Metro started with --android (will fight Maestro for app foreground)"
+    echo "       Kill with: pkill -f 'expo start'"
+    echo "       Restart with: cd mobile && npx expo start --clear"
+  else
+    pass "Metro started without --android"
+  fi
+fi
+
+if [ -n "$EXPO_PROCS" ] && echo "$EXPO_PROCS" | grep -q "\-\-no-dev"; then
+  warn "Metro started with --no-dev (__DEV__=false, dev auth bypass disabled)"
+fi
+
+# 4. SDK version compatibility
+echo
+echo "SDK Compatibility:"
+SDK_CHECK=$("$MOBILE_DIR/node_modules/.bin/expo" install --check 2>&1 || true)
+if echo "$SDK_CHECK" | grep -q "expo-auth-session\|expo-crypto"; then
+  fail "SDK version mismatch detected:"
+  echo "$SDK_CHECK" | grep -E 'expo-auth-session|expo-crypto' | sed 's/^/       /'
+  echo "       Fix with: cd mobile && ./node_modules/.bin/expo install expo-auth-session expo-crypto --fix"
+else
+  pass "No critical SDK mismatches"
+fi
+
+# 5. Maestro
+echo
+echo "Maestro:"
+if command -v maestro &>/dev/null; then
+  pass "Maestro installed ($(maestro --version 2>/dev/null || echo 'unknown version'))"
+else
+  fail "Maestro not found in PATH"
+fi
+
+# 6. JS errors
+echo
+echo "Recent JS Errors:"
+ERRORS=$($ADB logcat -d -t 20 '*:E' 2>/dev/null | grep -i 'ReactNative\|expo\|fatal' | tail -5)
+if [ -n "$ERRORS" ]; then
+  warn "Found recent errors in logcat:"
+  echo "$ERRORS" | sed 's/^/       /'
+else
+  pass "No recent ReactNative/Expo errors in logcat"
+fi
+
+# Summary
+echo
+if [ $ISSUES -eq 0 ]; then
+  echo -e "${GREEN}All checks passed.${NC} Ready to run: make test-e2e"
+else
+  echo -e "${RED}$ISSUES issue(s) found.${NC} Fix them before running tests."
+fi

@@ -1,5 +1,74 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 MOBILE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-exec "$MOBILE_DIR/node_modules/.bin/expo" start --android --clear "$@"
+OPEN_APP=1
+EXPO_ARGS=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-open)
+      OPEN_APP=0
+      ;;
+    *)
+      EXPO_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+if ! adb devices 2>/dev/null | grep -q 'emulator'; then
+  echo "Starting emulator..."
+  AVD=$(emulator -list-avds | head -1)
+  if [ -z "$AVD" ]; then
+    echo "No Android Virtual Device found. Create one in Android Studio first." >&2
+    exit 1
+  fi
+  emulator -avd "$AVD" -no-snapshot-load >/dev/null 2>&1 &
+  adb wait-for-device
+  while [ "$(adb shell getprop sys.boot_completed 2>/dev/null)" != "1" ]; do
+    sleep 1
+  done
+  echo "Emulator booted."
+fi
+
+DEVICE=$(adb devices | awk '/\tdevice$/ {print $1; exit}')
+if [ -z "$DEVICE" ]; then
+  echo "No Android device or emulator is available." >&2
+  exit 1
+fi
+
+if [ "${#EXPO_ARGS[@]}" -eq 0 ]; then
+  (cd "$MOBILE_DIR" && "$MOBILE_DIR/node_modules/.bin/expo" start --clear) &
+else
+  (cd "$MOBILE_DIR" && "$MOBILE_DIR/node_modules/.bin/expo" start --clear "${EXPO_ARGS[@]}") &
+fi
+METRO_PID=$!
+
+cleanup() {
+  kill "$METRO_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+echo "Waiting for Metro..."
+for i in $(seq 1 60); do
+  if curl -s http://localhost:8081/status 2>/dev/null | grep -q "packager-status:running"; then
+    echo "Metro ready after ${i}s"
+    break
+  fi
+  sleep 1
+done
+
+if ! curl -s http://localhost:8081/status 2>/dev/null | grep -q "packager-status:running"; then
+  echo "Metro did not become ready on :8081." >&2
+  exit 1
+fi
+
+adb -s "$DEVICE" reverse tcp:8081 tcp:8081 >/dev/null
+
+if [ "$OPEN_APP" -eq 1 ]; then
+  adb -s "$DEVICE" shell am start -a android.intent.action.VIEW -d exp://127.0.0.1:8081
+fi
+
+wait "$METRO_PID"
