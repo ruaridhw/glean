@@ -34,6 +34,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+  const [redirectToSignIn, setRedirectToSignIn] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +47,7 @@ export default function RootLayout() {
         const authenticated = await authStorage.hasTokens();
         console.log("[layout] authenticated:", authenticated);
         if (!authenticated) {
-          router.replace("/sign-in");
+          setRedirectToSignIn(true);
         }
       } catch (e) {
         console.error("[layout] init error:", e);
@@ -55,6 +56,12 @@ export default function RootLayout() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (ready && redirectToSignIn) {
+      router.replace("/sign-in");
+    }
+  }, [ready, redirectToSignIn]);
 
   if (!ready) return <SplashScreen />;
 
