@@ -2,7 +2,7 @@
   "expo": {
     "name": "Glean",
     "slug": "glean",
-    "version": "0.1.9",
+    "version": "0.1.10",
     "scheme": "glean",
     "platforms": ["ios", "android"],
     "icon": "./assets/icon.png",
