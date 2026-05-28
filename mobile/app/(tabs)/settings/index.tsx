@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiClient } from "@/api/client";
-import { signOut } from "@/auth/cognito";
+import { signOut } from "@/auth/google";
 import { getUserConfig, saveUserConfig } from "@/db/config";
 import { theme } from "@/theme";
 

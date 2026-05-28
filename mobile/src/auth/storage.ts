@@ -9,19 +9,37 @@ const KEYS = {
   userSub: "glean_user_sub",
 };
 
+function ciToken(name: string): string | undefined {
+  return process.env[`EXPO_PUBLIC_CI_${name}`];
+}
+
 export const authStorage = {
   async getAccessToken(): Promise<string | null> {
+    const ci = ciToken("ACCESS_TOKEN");
+    if (ci) return ci;
     return SecureStore.getItemAsync(KEYS.accessToken);
   },
   async getRefreshToken(): Promise<string | null> {
+    const ci = ciToken("REFRESH_TOKEN");
+    if (ci) return ci;
     return SecureStore.getItemAsync(KEYS.refreshToken);
   },
   async getEmail(): Promise<string | null> {
     return SecureStore.getItemAsync(KEYS.email);
   },
   async getUserSub(): Promise<string | null> {
-    // biome-ignore lint/correctness/noConstantCondition: TODO restore __DEV__ guard once Cognito is deployed
-    if (true) return "dev-user-sub";
+    if (__DEV__) return "dev-user-sub";
+    const ciIdToken = ciToken("ID_TOKEN");
+    if (ciIdToken) {
+      try {
+        const payload = ciIdToken.split(".")[1];
+        if (!payload) return null;
+        const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+        return (JSON.parse(json) as { sub: string }).sub;
+      } catch {
+        return null;
+      }
+    }
     return SecureStore.getItemAsync(KEYS.userSub);
   },
   async setTokens(params: {
@@ -43,8 +61,7 @@ export const authStorage = {
     );
   },
   async hasTokens(): Promise<boolean> {
-    // biome-ignore lint/correctness/noConstantCondition: TODO restore __DEV__ guard once Cognito is deployed
-    if (true) return true;
+    if (__DEV__ || ciToken("ACCESS_TOKEN")) return true;
     const token = await SecureStore.getItemAsync(KEYS.accessToken);
     return token !== null && (token?.length ?? 0) > 0;
   },

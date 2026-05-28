@@ -5,12 +5,12 @@ jest.mock("@/auth/storage", () => ({
   },
 }));
 
-jest.mock("@/auth/cognito", () => ({
+jest.mock("@/auth/google", () => ({
   refreshTokens: jest.fn(),
 }));
 
 import { ApiError, apiClient } from "@/api/client";
-import { refreshTokens } from "@/auth/cognito";
+import { refreshTokens } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
 
 const mockGetAccessToken = authStorage.getAccessToken as jest.Mock;

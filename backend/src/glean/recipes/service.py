@@ -78,7 +78,7 @@ def _parse_schema_org(html: str) -> dict | None:
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
-        except json.JSONDecodeError, TypeError:
+        except (json.JSONDecodeError, TypeError):
             continue
 
         # Handle both single objects and @graph arrays

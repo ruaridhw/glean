@@ -5,11 +5,11 @@ stack_name = "glean-api-prod"
 s3_bucket = "glean-sam-artefacts-prod"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=prod"
+parameter_overrides = "Environment=\"prod\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\""
 
 [dev.deploy.parameters]
 stack_name = "glean-api-dev"
 s3_bucket = "glean-sam-artefacts-dev"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=dev"
+parameter_overrides = "Environment=\"dev\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\""

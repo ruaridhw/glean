@@ -28,7 +28,7 @@ def parse_junit_xml(path: str) -> list[EvalResult]:
     results: list[EvalResult] = []
     try:
         tree = ET.parse(path)  # noqa: S314
-    except ET.ParseError, FileNotFoundError:
+    except (ET.ParseError, FileNotFoundError):
         return results
     for testcase in tree.iter("testcase"):
         failure = testcase.find("failure")
