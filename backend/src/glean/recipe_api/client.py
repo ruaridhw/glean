@@ -8,12 +8,12 @@ from pathlib import Path
 
 import httpx
 
-from glean.observability import logger, tracer
+from glean.observability import tracer
 from glean.recipe_api.schemas import RecipeApiDetailResponse, RecipeApiRecipe, RecipeApiSearchResponse
 
 CACHE_DIR = Path(".cache/glean_recipe_cache")
 SEARCH_TTL_SECS = 86_400  # 24h
-DETAIL_TTL_SECS = 604_800  # 7 days
+DETAIL_TTL_SECS = float("inf")
 
 
 def _iso_to_mins(iso: str | None) -> int | None:
@@ -75,16 +75,10 @@ class RecipeApiClient:
         }
         cache_key = _cache_key_search(params)
         if cached := _cache_read(cache_key, SEARCH_TTL_SECS):
-            logger.info("recipe api search cache hit", extra={"params": params})
             return RecipeApiSearchResponse(**cached)
-        logger.info("recipe api search", extra={"params": params})
         resp = self._client.get("/recipes", params=params)
         resp.raise_for_status()
         result = resp.json()
-        logger.info(
-            "recipe api search response",
-            extra={"meta": result.get("meta"), "result_count": len(result.get("data", []))},
-        )
         parsed = RecipeApiSearchResponse(**result)
         _cache_write(cache_key, parsed.model_dump())
         return parsed
@@ -93,9 +87,7 @@ class RecipeApiClient:
     def get_recipe(self, recipe_id: str) -> RecipeApiRecipe:
         cache_key = f"detail_{recipe_id}"
         if cached := _cache_read(cache_key, DETAIL_TTL_SECS):
-            logger.info("recipe api detail cache hit", extra={"id": recipe_id})
             return RecipeApiRecipe(**cached)
-        logger.info("recipe api fetch", extra={"id": recipe_id})
         resp = self._client.get(f"/recipes/{recipe_id}")
         resp.raise_for_status()
         result = resp.json()

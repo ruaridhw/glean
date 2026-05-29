@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from glean.recipe_api.client import (
+    DETAIL_TTL_SECS,
     SEARCH_TTL_SECS,
     RecipeApiClient,
     _cache_key_search,
@@ -86,6 +87,18 @@ def test_cache_read_returns_none_when_expired(tmp_path: Path) -> None:
         cache_file.write_text(json.dumps(raw))
         result = _cache_read("test_key", SEARCH_TTL_SECS)
     assert result is None
+
+
+def test_cache_read_keeps_detail_cache_indefinitely(tmp_path: Path) -> None:
+    data = {"id": "abc-123", "name": "Spaghetti Carbonara"}
+    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+        _cache_write("detail_abc-123", data)
+        cache_file = tmp_path / "detail_abc-123.json"
+        raw = json.loads(cache_file.read_text())
+        raw["cached_at"] = 0
+        cache_file.write_text(json.dumps(raw))
+        result = _cache_read("detail_abc-123", DETAIL_TTL_SECS)
+    assert result == data
 
 
 def test_cache_read_returns_none_on_corrupt_file(tmp_path: Path) -> None:
