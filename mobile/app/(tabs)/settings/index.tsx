@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import { File, Paths } from "expo-file-system";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiClient } from "@/api/client";
 import { signOut } from "@/auth/google";
@@ -23,6 +23,7 @@ import {
   validateBoundedInteger,
 } from "@/settings/presentation";
 import { theme } from "@/theme";
+import { showError } from "@/utils/toast";
 
 const dinnerOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek);
 const servingOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.defaultServings);
@@ -64,8 +65,9 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [maxTimeError, setMaxTimeError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
+  const loadConfig = useCallback(async () => {
+    setLoading(true);
+    try {
       const config = await getUserConfig();
       setConfigId(config.id);
       setTolerance(config.purchase_tolerance);
@@ -73,10 +75,17 @@ export default function SettingsScreen() {
       setMealsPerWeek(config.meals_per_week);
       setDietaryFlags(config.dietary_flags);
       setMaxTime(config.max_active_time_mins ? String(config.max_active_time_mins) : "");
+    } catch (error) {
+      console.error("[settings] config load failed:", error);
+      showError("Could not load settings.");
+    } finally {
       setLoading(false);
     }
-    void load();
   }, []);
+
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
 
   function handleMaxTimeChange(value: string) {
     setMaxTime(value);
@@ -103,7 +112,7 @@ export default function SettingsScreen() {
   }
 
   async function save() {
-    if (maxTimeError) return;
+    if (loading || !configId || maxTimeError) return;
     const normalizedMaxTime = toRequiredSubmittedText(maxTime);
     await saveUserConfig({
       id: configId,
