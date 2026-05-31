@@ -1,7 +1,7 @@
 // mobile/app/_layout.tsx
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, UIManager } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -57,19 +57,16 @@ export default function RootLayout() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (ready && redirectToSignIn) {
-      router.replace("/sign-in");
-    }
-  }, [ready, redirectToSignIn]);
-
   if (!ready) return <SplashScreen />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <OfflineBanner />
-        <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+        <Stack
+          initialRouteName={redirectToSignIn ? "sign-in" : "index"}
+          screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
