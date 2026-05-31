@@ -60,6 +60,6 @@ jobs:
         run: |
           sam deploy \
             --config-env prod \
-            --parameter-overrides "Environment=prod GoogleClientId=$GOOGLE_CLIENT_ID GoogleClientSecret=$GOOGLE_CLIENT_SECRET" \
+            --parameter-overrides "Environment=prod GoogleClientId=$GOOGLE_CLIENT_ID GoogleClientSecret=$GOOGLE_CLIENT_SECRET CognitoDomainPrefix=glean-auth-040396448697" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset

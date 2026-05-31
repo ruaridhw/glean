@@ -94,7 +94,7 @@ Resources:
   GleanReceiptsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "glean-receipts-${AWS::AccountId}"
+      BucketName: !Sub "glean-receipts-${Environment}-${AWS::AccountId}"
       LifecycleConfiguration:
         Rules:
           - Status: Enabled
@@ -166,7 +166,7 @@ Resources:
   ErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: glean-lambda-errors
+      AlarmName: !Sub "glean-${Environment}-lambda-errors"
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
