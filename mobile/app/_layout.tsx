@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { router, Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, UIManager } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { authStorage } from "@/auth/storage";
 import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { Toast, toastConfig } from "@/components/ui/Toast";
@@ -58,14 +59,16 @@ export default function RootLayout() {
   if (!ready) return <SplashScreen />;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <OfflineBanner />
-      <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      </Stack>
-      <Toast config={toastConfig} position="bottom" bottomOffset={80} />
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <OfflineBanner />
+        <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack>
+        <Toast config={toastConfig} position="bottom" bottomOffset={80} />
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

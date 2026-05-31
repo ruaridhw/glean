@@ -1,6 +1,5 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import { SectionList } from "react-native";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -20,6 +19,41 @@ jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+jest.mock("react-native-gesture-handler", () => {
+  const React = require("react");
+
+  return {
+    Gesture: {
+      Pan: () => {
+        const gesture: {
+          __triggerEnd?: (event: unknown) => void;
+          activeOffsetX: jest.Mock;
+          failOffsetY: jest.Mock;
+          onEnd: jest.Mock;
+          runOnJS: jest.Mock;
+        } = {
+          activeOffsetX: jest.fn(() => gesture),
+          failOffsetY: jest.fn(() => gesture),
+          onEnd: jest.fn((callback: (event: unknown) => void) => {
+            gesture.__triggerEnd = callback;
+            return gesture;
+          }),
+          runOnJS: jest.fn(() => gesture),
+        };
+
+        return gesture;
+      },
+    },
+    GestureDetector: ({
+      children,
+      gesture,
+    }: {
+      children: React.ReactElement;
+      gesture: { __triggerEnd?: (event: unknown) => void };
+    }) => React.cloneElement(children, { onGestureEnd: gesture.__triggerEnd }),
+  };
+});
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -92,7 +126,6 @@ describe("ShopScreen", () => {
 
     await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
     const textOrder = collectRenderedText(screen.toJSON());
-    const sectionList = screen.UNSAFE_getByType(SectionList);
 
     expect(textOrder.indexOf("Add")).toBeGreaterThanOrEqual(0);
     expect(textOrder.indexOf("Checked")).toBeGreaterThan(textOrder.indexOf("Add"));
@@ -100,13 +133,9 @@ describe("ShopScreen", () => {
     expect(textOrder.indexOf("Remaining")).toBeGreaterThan(textOrder.indexOf("milk"));
     expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Remaining"));
     expect(screen.getByTestId("shop.pinnedCheckoutActions")).toBeTruthy();
-    expect(sectionList.props.sections.map((section: { key: string }) => section.key)).toEqual([
-      "checked",
-      "remaining",
-    ]);
   });
 
-  it("adds, toggles, and deletes shopping items", async () => {
+  it("adds and toggles shopping items", async () => {
     const screen = render(<ShopScreen />);
 
     await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
@@ -116,9 +145,6 @@ describe("ShopScreen", () => {
 
     fireEvent.press(screen.getByLabelText("Check tomatoes"));
     await waitFor(() => expect(toggleShoppingItem).toHaveBeenCalledWith(1, true));
-
-    fireEvent.press(screen.getByLabelText("Remove tomatoes"));
-    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
   });
 
   it("toggles a shopping item when tapping the row content", async () => {
@@ -130,44 +156,24 @@ describe("ShopScreen", () => {
     await waitFor(() => expect(toggleShoppingItem).toHaveBeenCalledWith(1, true));
   });
 
-  it("deletes a shopping item when swiping the row left", async () => {
+  it("deletes a shopping item from the trash action", async () => {
     const screen = render(<ShopScreen />);
 
     await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    const row = screen.getByTestId("shopping-row-tomatoes");
-    const startTouchHistory = {
-      indexOfSingleActiveTouch: 0,
-      mostRecentTimeStamp: 1,
-      numberActiveTouches: 1,
-      touchBank: [
-        {
-          currentPageX: 200,
-          currentPageY: 20,
-          currentTimeStamp: 1,
-          previousPageX: 200,
-          previousPageY: 20,
-          touchActive: true,
-        },
-      ],
-    };
-    const moveTouchHistory = {
-      ...startTouchHistory,
-      mostRecentTimeStamp: 2,
-      touchBank: [
-        {
-          currentPageX: 104,
-          currentPageY: 24,
-          currentTimeStamp: 2,
-          previousPageX: 200,
-          previousPageY: 20,
-          touchActive: true,
-        },
-      ],
-    };
+    fireEvent.press(screen.getByLabelText("Remove tomatoes"));
 
-    row.props.onResponderGrant({ nativeEvent: {}, touchHistory: startTouchHistory });
-    row.props.onResponderMove({ nativeEvent: {}, touchHistory: moveTouchHistory });
-    row.props.onResponderRelease({ nativeEvent: {}, touchHistory: moveTouchHistory });
+    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
+  });
+
+  it("deletes a shopping item from a qualifying left swipe", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+
+    fireEvent(screen.getByTestId("shopping-row-1"), "gestureEnd", {
+      translationX: -64,
+      translationY: 8,
+    });
 
     await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
   });
