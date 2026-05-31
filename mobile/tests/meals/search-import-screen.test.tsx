@@ -84,6 +84,20 @@ describe("Meals search and import screens", () => {
     expect(router.push).toHaveBeenCalledWith("/(tabs)/meals/12");
   });
 
+  it("does not describe backend recipe search failures as connection problems", () => {
+    (useRecipeSearch as jest.Mock).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { status: 500, message: "Internal Server Error" },
+      refetch: jest.fn(),
+    });
+
+    const screen = render(<SearchScreen />);
+
+    expect(screen.getByText("Search failed because the server returned an error.")).toBeTruthy();
+  });
+
   it("imports a recipe URL through the real import endpoint", async () => {
     const screen = render(<ImportScreen />);
 

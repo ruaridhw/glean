@@ -10,3 +10,5 @@ services:
       ENVIRONMENT: dev
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/.cache/glean_recipe_cache:/app/.cache/glean_recipe_cache

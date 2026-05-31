@@ -1,6 +1,6 @@
 # Glean — Project Status
 
-Last updated: 2026-04-09
+Last updated: 2026-05-21
 
 ## What's been built
 
@@ -15,6 +15,18 @@ recipe-api.com integration for browsing and searching recipes, URL import via Cl
 
 ### Plan 04 — Meal Planning (`feat/plan-04-*`)
 Plan tab with N configurable meal slots, single-slot AI suggestions, full-week generation via Claude, mark-as-cooked with pantry decrement, shopping list auto-population. Also: Expo 55 upgrade, Python package upgrades, design system theme tokens applied throughout.
+
+### Plan 05 — Shopping List and Settings (`feat/plan-05-*`)
+Shop tab with local SQLite shopping-list state, manual additions, checked/unchecked grouping, checkout actions, and receipt-scan handoff. Settings reads and writes user preferences including meal count, servings, dietary flags, purchase tolerance, and max active cooking time.
+
+### Mobile Replit Full-Family Migration (`feature/mobile-replit-full-family-migration`)
+Current integration base for the migrated Meals, Plan, Shop, and Settings screen families. Preserves production SQLite, auth, and backend contracts while applying the Replit-inspired visual system and focused presentation helpers.
+
+### Local-First AI Shopping List (`feature/local-first-ai-shopping-list`)
+Natural-language shopping list workflow implemented on a separate branch and rebased onto `feature/mobile-replit-full-family-migration`. The branch adds the Shop describe/review screens, mobile API hook/types, AI proposal insertion into local SQLite, and focused tests. PR #45 is open against the full-family migration branch.
+
+### Remaining User Workflows
+Tracked in `docs/superpowers/specs/2026-05-21-remaining-user-workflows-design.md`. Remaining work excludes the AI shopping-list branch and focuses on onboarding, checked-shopping-to-pantry, destructive confirmations/undo, real receipt scan progress, pull-to-refresh, swipe delete, and notification preferences.
 
 ### Plan 06 — Deployment & CI/CD (`feat/plan-06-deploy`)
 End-to-end deployment pipeline. Current branch, not yet merged.
@@ -59,7 +71,8 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
 | Branch | Status | Notes |
 |---|---|---|
 | `main` | Active | Design system + pre-commit setup |
-| `feat/plan-04-mobile` | Complete | Latest merged feature work |
+| `feature/mobile-replit-full-family-migration` | Active base | Migrated screen families and current PR base |
+| `feature/local-first-ai-shopping-list` | PR open | Natural-language shopping workflow in PR #45 |
 | `feat/plan-06-deploy` | In progress | CI/CD pipeline, ready to merge |
 
 ---

@@ -20,9 +20,6 @@ quantity  # Pydantic field (ParsedIngredient, CompressedPantryItem)
 unit  # Pydantic field (ParsedIngredient, CompressedPantryItem)
 unit_price  # ParsedIngredient Pydantic field
 confidence  # ParsedIngredient Pydantic field
-# recipe_api/schemas.py Pydantic fields
-description  # RecipeApiIngredient field
-category  # RecipeApiIngredient field
 # recipes/schemas.py Pydantic fields
 api_ingredient_id  # RecipeIngredientOut field
 canonical_name  # RecipeIngredientOut field

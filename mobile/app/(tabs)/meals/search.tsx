@@ -39,11 +39,24 @@ function SearchResultCard({
   );
 }
 
+function getRecipeSearchErrorMessage(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number" &&
+    error.status >= 500
+  ) {
+    return "Search failed because the server returned an error.";
+  }
+  return "Search failed. Check your connection and try again.";
+}
+
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
 
-  const { data, isLoading, isError, refetch } = useRecipeSearch(submittedQuery);
+  const { data, isLoading, isError, error, refetch } = useRecipeSearch(submittedQuery);
   const results = data?.results ?? [];
 
   function handleSearch() {
@@ -104,7 +117,7 @@ export default function SearchScreen() {
       ) : isError ? (
         <ErrorState
           testID="search.error"
-          message="Search failed. Check your connection and try again."
+          message={getRecipeSearchErrorMessage(error)}
           onRetry={refetch}
         />
       ) : (

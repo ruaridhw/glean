@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from dotenv import dotenv_values, find_dotenv
 
 import glean.config as _config
+
+if TYPE_CHECKING:
+    from pydantic import SecretStr
 
 pytestmark = pytest.mark.integration
 
@@ -32,7 +37,7 @@ def test_settings() -> _config.Settings:
 
 
 @pytest.fixture(scope="session")
-def openrouter_api_key(test_settings: _config.Settings) -> str:
+def openrouter_api_key(test_settings: _config.Settings) -> SecretStr:
     return test_settings.openrouter_api_key
 
 
