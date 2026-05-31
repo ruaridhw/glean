@@ -39,6 +39,15 @@ jest.mock("@/db/shopping", () => ({
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("@/utils/toast", () => ({ showSuccess: jest.fn() }));
 
+type RenderedTree = string | null | { children?: RenderedTree[] | null } | RenderedTree[];
+
+function collectRenderedText(node: RenderedTree): string[] {
+  if (node === null) return [];
+  if (typeof node === "string") return [node];
+  if (Array.isArray(node)) return node.flatMap(collectRenderedText);
+  return node.children?.flatMap(collectRenderedText) ?? [];
+}
+
 describe("ShopScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,6 +86,17 @@ describe("ShopScreen", () => {
     expect(screen.getByText("Completed checkout")).toBeTruthy();
   }, 15_000);
 
+  it("renders item rows after add controls and before completed checkout actions", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    const textOrder = collectRenderedText(screen.toJSON());
+
+    expect(textOrder.indexOf("Add")).toBeGreaterThanOrEqual(0);
+    expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Add"));
+    expect(textOrder.indexOf("Completed checkout")).toBeGreaterThan(textOrder.indexOf("tomatoes"));
+  });
+
   it("adds, toggles, and deletes shopping items", async () => {
     const screen = render(<ShopScreen />);
 
@@ -89,6 +109,57 @@ describe("ShopScreen", () => {
     await waitFor(() => expect(toggleShoppingItem).toHaveBeenCalledWith(1, true));
 
     fireEvent.press(screen.getByLabelText("Remove tomatoes"));
+    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
+  });
+
+  it("toggles a shopping item when tapping the row content", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    fireEvent.press(screen.getByText("tomatoes"));
+
+    await waitFor(() => expect(toggleShoppingItem).toHaveBeenCalledWith(1, true));
+  });
+
+  it("deletes a shopping item when swiping the row left", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    const row = screen.getByTestId("shopping-row-tomatoes");
+    const startTouchHistory = {
+      indexOfSingleActiveTouch: 0,
+      mostRecentTimeStamp: 1,
+      numberActiveTouches: 1,
+      touchBank: [
+        {
+          currentPageX: 200,
+          currentPageY: 20,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousPageY: 20,
+          touchActive: true,
+        },
+      ],
+    };
+    const moveTouchHistory = {
+      ...startTouchHistory,
+      mostRecentTimeStamp: 2,
+      touchBank: [
+        {
+          currentPageX: 104,
+          currentPageY: 24,
+          currentTimeStamp: 2,
+          previousPageX: 200,
+          previousPageY: 20,
+          touchActive: true,
+        },
+      ],
+    };
+
+    row.props.onResponderGrant({ nativeEvent: {}, touchHistory: startTouchHistory });
+    row.props.onResponderMove({ nativeEvent: {}, touchHistory: moveTouchHistory });
+    row.props.onResponderRelease({ nativeEvent: {}, touchHistory: moveTouchHistory });
+
     await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
   });
 

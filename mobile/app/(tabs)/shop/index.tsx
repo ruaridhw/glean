@@ -2,11 +2,13 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -48,25 +50,46 @@ function ShoppingRow({
   onDelete: (item: ShoppingListItem) => void;
 }) {
   const checked = item.is_checked;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 16 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -48 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy)) {
+            onDelete(item);
+          }
+        },
+        onPanResponderTerminationRequest: () => true,
+      }),
+    [item, onDelete],
+  );
+
   return (
-    <Card style={[styles.itemCard, checked && styles.checkedItemCard]}>
+    <Card
+      testID={`shopping-row-${item.name}`}
+      style={[styles.itemCard, checked && styles.checkedItemCard]}
+      {...panResponder.panHandlers}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${checked ? "Uncheck" : "Check"} ${item.name}`}
-        style={[styles.checkbox, checked && styles.checkboxChecked]}
+        style={styles.itemPressable}
         onPress={() => onToggle(item)}
       >
-        {checked ? (
-          <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
-        ) : null}
-      </Pressable>
-      <View style={styles.itemContent}>
-        <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
-        <View style={styles.itemMetaRow}>
-          <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
-          <Badge label={getShoppingSourceLabel(item.source)} />
+        <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+          {checked ? (
+            <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
+          ) : null}
         </View>
-      </View>
+        <View style={styles.itemContent}>
+          <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
+          <View style={styles.itemMetaRow}>
+            <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
+            <Badge label={getShoppingSourceLabel(item.source)} />
+          </View>
+        </View>
+      </Pressable>
       <IconButton
         icon="trash-outline"
         accessibilityLabel={`Remove ${item.name}`}
@@ -76,27 +99,6 @@ function ShoppingRow({
         onPress={() => onDelete(item)}
       />
     </Card>
-  );
-}
-
-function ShoppingSectionView({
-  section,
-  onToggle,
-  onDelete,
-}: {
-  section: ShoppingSection;
-  onToggle: (item: ShoppingListItem) => void;
-  onDelete: (item: ShoppingListItem) => void;
-}) {
-  return (
-    <View style={styles.section}>
-      <SectionHeader title={section.title} />
-      <View style={styles.sectionRows}>
-        {section.items.map((item) => (
-          <ShoppingRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} />
-        ))}
-      </View>
-    </View>
   );
 }
 
@@ -151,6 +153,58 @@ export default function ShopScreen() {
   const sections = groupShoppingItems(items);
   const canAddItem = Boolean(toRequiredSubmittedText(newItemName));
 
+  const renderAddControls = () => (
+    <Card style={styles.addCard}>
+      <TextInput
+        style={styles.addInput}
+        value={newItemName}
+        onChangeText={setNewItemName}
+        placeholder="Add item..."
+        placeholderTextColor={theme.colors.textDisabled}
+        returnKeyType="done"
+        onSubmitEditing={handleAdd}
+      />
+      <Pressable
+        style={[styles.addButton, (!canAddItem || adding) && styles.addButtonDisabled]}
+        onPress={handleAdd}
+        disabled={adding || !canAddItem}
+      >
+        <Text style={styles.addButtonText}>Add</Text>
+      </Pressable>
+      <Pressable
+        style={styles.describeButton}
+        onPress={() => router.push("/(tabs)/shop/describe" as never)}
+      >
+        <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
+        <Text style={styles.describeButtonText}>Describe</Text>
+      </Pressable>
+    </Card>
+  );
+
+  const checkoutActions =
+    checked.length > 0 ? (
+      <Card testID="shop.pinnedCheckoutActions" style={styles.checkoutCard}>
+        <View style={styles.checkoutHeader}>
+          <View style={styles.checkoutTitleRow}>
+            <Ionicons name="checkmark-done-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.checkoutTitle}>Completed checkout</Text>
+          </View>
+          <Badge label={`${checked.length} checked`} tone="primary" />
+        </View>
+        <View style={styles.checkoutActions}>
+          <Pressable
+            style={styles.primaryAction}
+            onPress={() => router.push("/(tabs)/pantry/scan?returnTo=shop")}
+          >
+            <Text style={styles.primaryActionText}>Scan receipt</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryAction} onPress={() => void handleClearChecked()}>
+            <Text style={styles.secondaryActionText}>Clear checked</Text>
+          </Pressable>
+        </View>
+      </Card>
+    ) : null;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -160,82 +214,55 @@ export default function ShopScreen() {
         title="Shopping"
         subtitle={`${unchecked.length} remaining · ${checked.length} checked`}
         testID="shop.screen"
-        scroll
       >
         {loading ? (
           <ShoppingSkeleton />
         ) : (
-          <>
-            {checked.length > 0 ? (
-              <Card style={styles.checkoutCard}>
-                <View style={styles.checkoutHeader}>
-                  <Text style={styles.checkoutTitle}>Completed checkout</Text>
-                  <Badge label={`${checked.length} checked`} tone="primary" />
-                </View>
-                <View style={styles.checkoutActions}>
-                  <Pressable
-                    style={styles.primaryAction}
-                    onPress={() => router.push("/(tabs)/pantry/scan?returnTo=shop")}
-                  >
-                    <Text style={styles.primaryActionText}>Scan receipt</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.secondaryAction}
-                    onPress={() => void handleClearChecked()}
-                  >
-                    <Text style={styles.secondaryActionText}>Clear checked</Text>
-                  </Pressable>
-                </View>
-              </Card>
-            ) : null}
-
-            <Card style={styles.addCard}>
-              <TextInput
-                style={styles.addInput}
-                value={newItemName}
-                onChangeText={setNewItemName}
-                placeholder="Add item..."
-                placeholderTextColor={theme.colors.textDisabled}
-                returnKeyType="done"
-                onSubmitEditing={handleAdd}
-              />
-              <Pressable
-                style={[styles.addButton, (!canAddItem || adding) && styles.addButtonDisabled]}
-                onPress={handleAdd}
-                disabled={adding || !canAddItem}
-              >
-                <Text style={styles.addButtonText}>Add</Text>
-              </Pressable>
-              <Pressable
-                style={styles.describeButton}
-                onPress={() => router.push("/(tabs)/shop/describe" as never)}
-              >
-                <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
-                <Text style={styles.describeButtonText}>Describe</Text>
-              </Pressable>
-            </Card>
-
+          <View style={styles.screenContent}>
             {items.length === 0 ? (
-              <EmptyState
-                testID="shop.emptyState"
-                icon="cart-outline"
-                title="Your shopping list is empty"
-                message="Plan some meals and we'll figure out what you need."
-                actions={[
-                  { label: "Go to meal plan", onPress: () => router.push("/(tabs)/plan" as never) },
-                ]}
-              />
-            ) : (
-              sections.map((section) => (
-                <ShoppingSectionView
-                  key={section.key}
-                  section={section}
-                  onToggle={(item) => void handleToggle(item)}
-                  onDelete={(item) => void handleDelete(item)}
+              <>
+                {renderAddControls()}
+                <EmptyState
+                  testID="shop.emptyState"
+                  icon="cart-outline"
+                  title="Your shopping list is empty"
+                  message="Plan some meals and we'll figure out what you need."
+                  actions={[
+                    {
+                      label: "Go to meal plan",
+                      onPress: () => router.push("/(tabs)/plan" as never),
+                    },
+                  ]}
                 />
-              ))
+              </>
+            ) : (
+              <SectionList<ShoppingListItem, ShoppingSection>
+                sections={sections}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <ShoppingRow
+                    item={item}
+                    onToggle={(shoppingItem) => void handleToggle(shoppingItem)}
+                    onDelete={(shoppingItem) => void handleDelete(shoppingItem)}
+                  />
+                )}
+                renderSectionHeader={({ section }) => (
+                  <View style={styles.sectionHeader}>
+                    <SectionHeader title={section.title} />
+                  </View>
+                )}
+                ListHeaderComponent={renderAddControls}
+                contentContainerStyle={[
+                  styles.listContent,
+                  checkoutActions ? styles.listContentWithCheckout : null,
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                stickySectionHeadersEnabled={false}
+              />
             )}
-          </>
+            {checkoutActions}
+          </View>
         )}
       </AppScreen>
     </KeyboardAvoidingView>
@@ -244,9 +271,11 @@ export default function ShopScreen() {
 
 const styles = StyleSheet.create({
   keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  screenContent: {
+    flex: 1,
+  },
   checkoutCard: {
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   checkoutHeader: {
     alignItems: "center",
@@ -255,8 +284,13 @@ const styles = StyleSheet.create({
   },
   checkoutTitle: {
     color: theme.colors.text,
-    fontSize: theme.typography.headline.fontSize,
+    fontSize: theme.typography.subhead.fontSize,
     fontWeight: "700",
+  },
+  checkoutTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.xs,
   },
   checkoutActions: {
     flexDirection: "row",
@@ -324,14 +358,24 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: "700",
   },
-  section: {
-    marginBottom: theme.spacing.md,
-  },
-  sectionRows: {
+  listContent: {
     gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  listContentWithCheckout: {
+    paddingBottom: theme.spacing.xl,
+  },
+  sectionHeader: {
+    marginTop: theme.spacing.xs,
   },
   itemCard: {
     alignItems: "center",
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  itemPressable: {
+    alignItems: "center",
+    flex: 1,
     flexDirection: "row",
     gap: theme.spacing.md,
   },
