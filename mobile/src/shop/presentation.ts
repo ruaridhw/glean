@@ -3,7 +3,7 @@ import type { ShoppingListItem } from "@/types";
 export interface ShoppingSection {
   key: "remaining" | "checked";
   title: string;
-  items: ShoppingListItem[];
+  data: ShoppingListItem[];
 }
 
 export function formatShoppingQuantity(item: Pick<ShoppingListItem, "quantity" | "unit">): string {
@@ -21,7 +21,7 @@ export function groupShoppingItems(items: ShoppingListItem[]): ShoppingSection[]
   const remaining = items.filter((item) => !item.is_checked);
   const checked = items.filter((item) => item.is_checked);
   return [
-    { key: "remaining" as const, title: "Remaining", items: remaining },
-    { key: "checked" as const, title: "Checked", items: checked },
-  ].filter((section) => section.items.length > 0);
+    { key: "checked" as const, title: "Checked", data: checked },
+    { key: "remaining" as const, title: "Remaining", data: remaining },
+  ].filter((section) => section.data.length > 0);
 }

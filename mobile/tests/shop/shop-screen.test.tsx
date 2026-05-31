@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
+import { SectionList } from "react-native";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -86,15 +87,23 @@ describe("ShopScreen", () => {
     expect(screen.getByText("Completed checkout")).toBeTruthy();
   }, 15_000);
 
-  it("renders item rows after add controls and before completed checkout actions", async () => {
+  it("renders checked rows first, remaining rows second, and checkout pinned below the list", async () => {
     const screen = render(<ShopScreen />);
 
     await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
     const textOrder = collectRenderedText(screen.toJSON());
+    const sectionList = screen.UNSAFE_getByType(SectionList);
 
     expect(textOrder.indexOf("Add")).toBeGreaterThanOrEqual(0);
-    expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Add"));
-    expect(textOrder.indexOf("Completed checkout")).toBeGreaterThan(textOrder.indexOf("tomatoes"));
+    expect(textOrder.indexOf("Checked")).toBeGreaterThan(textOrder.indexOf("Add"));
+    expect(textOrder.indexOf("milk")).toBeGreaterThan(textOrder.indexOf("Checked"));
+    expect(textOrder.indexOf("Remaining")).toBeGreaterThan(textOrder.indexOf("milk"));
+    expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Remaining"));
+    expect(screen.getByTestId("shop.pinnedCheckoutActions")).toBeTruthy();
+    expect(sectionList.props.sections.map((section: { key: string }) => section.key)).toEqual([
+      "checked",
+      "remaining",
+    ]);
   });
 
   it("adds, toggles, and deletes shopping items", async () => {
