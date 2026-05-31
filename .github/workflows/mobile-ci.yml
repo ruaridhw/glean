@@ -113,7 +113,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (inputs.build_ci_apk || inputs.run_e2e)
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
     defaults:
       run:
@@ -137,16 +136,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
-          aws-region: eu-west-2
-
       - name: Get CI auth tokens
         run: |
-          TOKENS=$(aws cognito-idp admin-initiate-auth \
-            --user-pool-id "${{ secrets.COGNITO_USER_POOL_ID }}" \
+          TOKENS=$(aws cognito-idp initiate-auth \
+            --no-sign-request \
+            --region eu-west-2 \
             --client-id "${{ secrets.COGNITO_APP_CLIENT_ID }}" \
             --auth-flow USER_PASSWORD_AUTH \
             --auth-parameters "USERNAME=${{ secrets.CI_TEST_USER_EMAIL }},PASSWORD=${{ secrets.CI_TEST_USER_PASSWORD }}")
