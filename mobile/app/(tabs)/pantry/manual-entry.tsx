@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
@@ -28,14 +29,15 @@ export default function ManualEntryScreen() {
 
   async function save() {
     const qty = parseFloat(quantity);
-    if (!name.trim() || Number.isNaN(qty) || qty <= 0) {
+    const normalizedName = toRequiredSubmittedText(name);
+    if (!normalizedName || Number.isNaN(qty) || qty <= 0) {
       Alert.alert("Please enter a name and valid quantity.");
       return;
     }
     setSaving(true);
     try {
       const ingredientId = await resolveOrCreateIngredient({
-        canonical_name: name.trim().toLowerCase(),
+        canonical_name: normalizedName.toLowerCase(),
       });
       await upsertPantryItem({ ingredient_id: ingredientId, quantity: qty, unit });
       showSuccess("Added to pantry");

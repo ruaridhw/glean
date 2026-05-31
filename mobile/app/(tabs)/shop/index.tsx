@@ -26,6 +26,7 @@ import {
   getShoppingListItems,
   toggleShoppingItem,
 } from "@/db/shopping";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { hapticImpact } from "@/platform/haptics";
 import {
   formatShoppingQuantity,
@@ -119,7 +120,7 @@ export default function ShopScreen() {
   );
 
   async function handleAdd() {
-    const name = newItemName.trim();
+    const name = toRequiredSubmittedText(newItemName);
     if (!name) return;
     setAdding(true);
     await addManualShoppingItem({ name });
@@ -148,6 +149,7 @@ export default function ShopScreen() {
   const unchecked = items.filter((item) => !item.is_checked);
   const checked = items.filter((item) => item.is_checked);
   const sections = groupShoppingItems(items);
+  const canAddItem = Boolean(toRequiredSubmittedText(newItemName));
 
   return (
     <KeyboardAvoidingView
@@ -198,12 +200,9 @@ export default function ShopScreen() {
                 onSubmitEditing={handleAdd}
               />
               <Pressable
-                style={[
-                  styles.addButton,
-                  (!newItemName.trim() || adding) && styles.addButtonDisabled,
-                ]}
+                style={[styles.addButton, (!canAddItem || adding) && styles.addButtonDisabled]}
                 onPress={handleAdd}
-                disabled={adding || !newItemName.trim()}
+                disabled={adding || !canAddItem}
               >
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>

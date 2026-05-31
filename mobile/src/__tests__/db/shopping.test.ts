@@ -21,7 +21,7 @@ jest.mock("@/db/ingredients", () => ({
 }));
 
 import { drizzleDb } from "@/db/client";
-import { addAiShoppingItems, checkOffByIngredientIds } from "@/db/shopping";
+import { addAiShoppingItems, addManualShoppingItem, checkOffByIngredientIds } from "@/db/shopping";
 
 describe("checkOffByIngredientIds", () => {
   beforeEach(() => {
@@ -110,5 +110,36 @@ describe("addAiShoppingItems", () => {
 
     expect(mockInsert).not.toHaveBeenCalled();
     expect(mockResolveOrCreateIngredient).not.toHaveBeenCalled();
+  });
+});
+
+describe("addManualShoppingItem", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("trims manual item names before inserting them", async () => {
+    const mockValues = jest.fn().mockResolvedValue({});
+    const mockInsert = jest.fn(() => ({ values: mockValues }));
+    (drizzleDb as unknown as { insert: jest.Mock }).insert = mockInsert;
+
+    await addManualShoppingItem({ name: " \n  sourdough bread  \t" });
+
+    expect(mockValues).toHaveBeenCalledWith({
+      ingredient_id: null,
+      name: "sourdough bread",
+      quantity: null,
+      unit: null,
+      source: "manual",
+    });
+  });
+
+  it("does not insert manual items that are empty after trimming", async () => {
+    const mockInsert = jest.fn();
+    (drizzleDb as unknown as { insert: jest.Mock }).insert = mockInsert;
+
+    await addManualShoppingItem({ name: " \n\t  " });
+
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });

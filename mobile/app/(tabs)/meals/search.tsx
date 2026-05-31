@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { IconButton } from "@/components/ui/IconButton";
 import { getRecipeByExternalId, saveRecipe } from "@/db/recipes";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
@@ -60,8 +61,9 @@ export default function SearchScreen() {
   const results = data?.results ?? [];
 
   function handleSearch() {
-    if (!query.trim()) return;
-    setSubmittedQuery(query.trim());
+    const normalizedQuery = toRequiredSubmittedText(query);
+    if (!normalizedQuery) return;
+    setSubmittedQuery(normalizedQuery);
   }
 
   async function addRecipe(result: RecipeSearchResult) {

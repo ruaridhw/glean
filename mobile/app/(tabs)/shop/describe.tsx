@@ -5,6 +5,7 @@ import { useParseShoppingDescription } from "@/api/hooks";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 
 export default function ShoppingDescribeScreen() {
@@ -12,7 +13,7 @@ export default function ShoppingDescribeScreen() {
   const parseMutation = useParseShoppingDescription();
 
   function parse() {
-    const description = text.trim();
+    const description = toRequiredSubmittedText(text);
     if (!description || parseMutation.isPending) return;
 
     parseMutation.mutate(
@@ -30,6 +31,8 @@ export default function ShoppingDescribeScreen() {
       },
     );
   }
+
+  const canSubmit = Boolean(toRequiredSubmittedText(text));
 
   return (
     <AppScreen
@@ -56,12 +59,9 @@ export default function ShoppingDescribeScreen() {
           />
         ) : null}
         <Pressable
-          style={[
-            styles.button,
-            (!text.trim() || parseMutation.isPending) && styles.buttonDisabled,
-          ]}
+          style={[styles.button, (!canSubmit || parseMutation.isPending) && styles.buttonDisabled]}
           onPress={parse}
-          disabled={parseMutation.isPending || !text.trim()}
+          disabled={parseMutation.isPending || !canSubmit}
         >
           {parseMutation.isPending ? (
             <ActivityIndicator color={theme.colors.primaryForeground} />

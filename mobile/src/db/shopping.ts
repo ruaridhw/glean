@@ -1,6 +1,7 @@
 // mobile/src/db/shopping.ts
 
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 import type { ShoppingListItem } from "@/types";
 import { drizzleDb } from "./client";
 import { normaliseIngredientCategory } from "./ingredient-categories";
@@ -93,11 +94,14 @@ export async function addManualShoppingItem(params: {
   unit?: string | null;
   ingredient_id?: number | null;
 }): Promise<void> {
+  const name = toRequiredSubmittedText(params.name);
+  if (!name) return;
+
   await drizzleDb.insert(shoppingListItems).values({
     ingredient_id: params.ingredient_id ?? null,
-    name: params.name,
+    name,
     quantity: params.quantity ?? null,
-    unit: params.unit ?? null,
+    unit: params.unit ? normalizeSubmittedText(params.unit) || null : null,
     source: "manual",
   });
 }
@@ -122,19 +126,25 @@ export async function addAiShoppingItems(
   }[] = [];
 
   for (const item of items) {
+    const name = toRequiredSubmittedText(item.name);
+    if (!name) continue;
+
+    const unit = normalizeSubmittedText(item.unit) || "units";
     const ingredientId = await resolveOrCreateIngredient({
-      canonical_name: item.name,
+      canonical_name: name,
       api_ingredient_id: item.api_ingredient_id ?? null,
       category: normaliseIngredientCategory(item.category),
     });
     rows.push({
       ingredient_id: ingredientId,
-      name: item.name,
+      name,
       quantity: item.quantity,
-      unit: item.unit,
+      unit,
       source: "ai",
     });
   }
+
+  if (rows.length === 0) return;
 
   await drizzleDb.insert(shoppingListItems).values(rows);
 }
