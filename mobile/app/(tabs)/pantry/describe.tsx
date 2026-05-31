@@ -14,14 +14,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDescribeReceipt } from "@/api/hooks";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 
 export default function DescribeScreen() {
   const [text, setText] = useState("");
   const describeMutation = useDescribeReceipt();
 
   function parse() {
-    if (!text.trim() || describeMutation.isPending) return;
-    describeMutation.mutate(text, {
+    const description = toRequiredSubmittedText(text);
+    if (!description || describeMutation.isPending) return;
+    describeMutation.mutate(description, {
       onSuccess: (result) => {
         router.push({
           pathname: "/(tabs)/pantry/review",
@@ -30,6 +32,8 @@ export default function DescribeScreen() {
       },
     });
   }
+
+  const canSubmit = Boolean(toRequiredSubmittedText(text));
 
   return (
     <KeyboardAvoidingView
@@ -59,7 +63,7 @@ export default function DescribeScreen() {
         <Pressable
           style={styles.button}
           onPress={parse}
-          disabled={describeMutation.isPending || !text.trim()}
+          disabled={describeMutation.isPending || !canSubmit}
         >
           {describeMutation.isPending ? (
             <ActivityIndicator color="#fff" />

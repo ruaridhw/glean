@@ -15,6 +15,7 @@ import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { addAiShoppingItems } from "@/db/shopping";
+import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
@@ -60,11 +61,11 @@ export default function ShoppingReviewScreen() {
     setSaving(true);
     try {
       const accepted = items
-        .filter((item) => item.name.trim().length > 0)
+        .filter((item) => toRequiredSubmittedText(item.name))
         .map((item) => ({
-          name: item.name.trim(),
+          name: toRequiredSubmittedText(item.name) as string,
           quantity: item.quantity,
-          unit: item.unit,
+          unit: normalizeSubmittedText(item.unit) || "units",
           api_ingredient_id: item.api_ingredient_id,
           category: item.category,
         }));
@@ -77,6 +78,8 @@ export default function ShoppingReviewScreen() {
       setSaving(false);
     }
   }
+
+  const acceptedCount = items.filter((item) => toRequiredSubmittedText(item.name)).length;
 
   return (
     <AppScreen
@@ -125,14 +128,16 @@ export default function ShoppingReviewScreen() {
                 style={styles.quantityInput}
                 value={String(item.quantity)}
                 onChangeText={(value) =>
-                  updateItem(index, { quantity: value.trim() ? Number(value) : 1 })
+                  updateItem(index, {
+                    quantity: toRequiredSubmittedText(value) ? Number(value) : 1,
+                  })
                 }
                 keyboardType="numeric"
               />
               <TextInput
                 style={styles.unitInput}
                 value={item.unit}
-                onChangeText={(value) => updateItem(index, { unit: value.trim() || "units" })}
+                onChangeText={(value) => updateItem(index, { unit: value })}
               />
             </View>
           </Card>
@@ -140,15 +145,15 @@ export default function ShoppingReviewScreen() {
       </View>
 
       <Pressable
-        style={[styles.confirmButton, (saving || items.length === 0) && styles.confirmDisabled]}
+        style={[styles.confirmButton, (saving || acceptedCount === 0) && styles.confirmDisabled]}
         onPress={() => void confirm()}
-        disabled={saving || items.length === 0}
+        disabled={saving || acceptedCount === 0}
       >
         {saving ? (
           <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
           <Text style={styles.confirmText}>
-            Add {items.length} item{items.length !== 1 ? "s" : ""}
+            Add {acceptedCount} item{acceptedCount !== 1 ? "s" : ""}
           </Text>
         )}
       </Pressable>

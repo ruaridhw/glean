@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import {
   formatPantryQuantity,
   getExpiryBadge,
@@ -162,7 +163,8 @@ export default function PantryScreen() {
   );
 
   async function commitEdit(item: PantryItem) {
-    const qty = parseFloat(editQty);
+    const normalizedQty = toRequiredSubmittedText(editQty);
+    const qty = normalizedQty ? parseFloat(normalizedQty) : Number.NaN;
     if (!Number.isNaN(qty) && qty > 0) {
       await updatePantryQuantity(item.id, qty);
     }

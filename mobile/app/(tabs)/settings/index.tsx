@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatsRow } from "@/components/ui/StatsRow";
 import { getUserConfig, saveUserConfig } from "@/db/config";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { hapticImpact } from "@/platform/haptics";
 import {
   buildIntegerOptions,
@@ -79,13 +80,14 @@ export default function SettingsScreen() {
 
   function handleMaxTimeChange(value: string) {
     setMaxTime(value);
-    if (!value) {
+    const normalizedValue = toRequiredSubmittedText(value);
+    if (!normalizedValue) {
       setMaxTimeError(null);
       return;
     }
     setMaxTimeError(
       validateBoundedInteger(
-        value,
+        normalizedValue,
         SETTINGS_OPTION_RANGES.maxActiveTimeMins.min,
         SETTINGS_OPTION_RANGES.maxActiveTimeMins.max,
         "Max active time",
@@ -102,13 +104,14 @@ export default function SettingsScreen() {
 
   async function save() {
     if (maxTimeError) return;
+    const normalizedMaxTime = toRequiredSubmittedText(maxTime);
     await saveUserConfig({
       id: configId,
       purchase_tolerance: tolerance,
       preferred_servings: servings,
       meals_per_week: mealsPerWeek,
       dietary_flags: dietaryFlags,
-      max_active_time_mins: maxTime ? parseInt(maxTime, 10) : null,
+      max_active_time_mins: normalizedMaxTime ? parseInt(normalizedMaxTime, 10) : null,
     });
     Alert.alert("Saved");
   }

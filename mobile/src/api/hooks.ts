@@ -9,13 +9,17 @@ import type {
   ShoppingParseResponse,
   SuggestionResponse,
 } from "@/api/types";
+import { requireSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 
 export function useRecipeSearch(query: string) {
+  const normalizedQuery = toRequiredSubmittedText(query);
   return useQuery({
-    queryKey: ["recipeSearch", query],
+    queryKey: ["recipeSearch", normalizedQuery],
     queryFn: () =>
-      apiClient.get<RecipeSearchResponse>(`/recipes/search?q=${encodeURIComponent(query)}`),
-    enabled: query.trim().length > 0,
+      apiClient.get<RecipeSearchResponse>(
+        `/recipes/search?q=${encodeURIComponent(normalizedQuery ?? "")}`,
+      ),
+    enabled: Boolean(normalizedQuery),
   });
 }
 
@@ -28,14 +32,20 @@ export function useScanReceipt() {
 
 export function useDescribeReceipt() {
   return useMutation({
-    mutationFn: (text: string) => apiClient.post<DescribeResponse>("/receipts/describe", { text }),
+    mutationFn: async (text: string) =>
+      apiClient.post<DescribeResponse>("/receipts/describe", {
+        text: requireSubmittedText(text),
+      }),
   });
 }
 
 export function useParseShoppingDescription() {
   return useMutation({
-    mutationFn: (body: ShoppingParseRequest) =>
-      apiClient.post<ShoppingParseResponse>("/shopping/parse-description", body),
+    mutationFn: async (body: ShoppingParseRequest) =>
+      apiClient.post<ShoppingParseResponse>("/shopping/parse-description", {
+        ...body,
+        text: requireSubmittedText(body.text),
+      }),
   });
 }
 

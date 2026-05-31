@@ -7,6 +7,7 @@ import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
 import type { SaveRecipeParams } from "@/db/recipes";
 import { saveRecipe } from "@/db/recipes";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 
 type RecipeDetailResponse = SaveRecipeParams;
@@ -26,11 +27,12 @@ export default function ImportScreen() {
   }
 
   async function importFromUrl() {
-    if (!url.trim()) return;
+    const normalizedUrl = toRequiredSubmittedText(url);
+    if (!normalizedUrl) return;
     setImporting(true);
     try {
       const detail = await apiClient.post<RecipeDetailResponse>("/recipes/import-url", {
-        url: url.trim(),
+        url: normalizedUrl,
       });
       const id = await saveRecipe({ ...detail, ingredients: detail.ingredients ?? [] });
       router.push(`/(tabs)/meals/${id}`);
@@ -40,6 +42,8 @@ export default function ImportScreen() {
       setImporting(false);
     }
   }
+
+  const canImport = Boolean(toRequiredSubmittedText(url));
 
   return (
     <AppScreen
@@ -65,9 +69,9 @@ export default function ImportScreen() {
           placeholderTextColor={theme.colors.textDisabled}
         />
         <Pressable
-          style={[styles.button, (importing || !url.trim()) && styles.buttonDisabled]}
+          style={[styles.button, (importing || !canImport) && styles.buttonDisabled]}
           onPress={importFromUrl}
-          disabled={importing || !url.trim()}
+          disabled={importing || !canImport}
         >
           {importing ? (
             <ActivityIndicator color={theme.colors.primaryForeground} />

@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
+import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 import { normalizeUnit } from "@/normalization/units";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
@@ -45,19 +46,22 @@ export default function ReviewScreen() {
     setSaving(true);
     try {
       const resolvedIds: number[] = [];
-      for (const item of items) {
-        const ingredientId = await resolveOrCreateIngredient({ canonical_name: item.name });
+      const acceptedItems = items.filter((item) => toRequiredSubmittedText(item.name));
+      for (const item of acceptedItems) {
+        const name = toRequiredSubmittedText(item.name) as string;
+        const unit = normalizeSubmittedText(item.unit) || "units";
+        const ingredientId = await resolveOrCreateIngredient({ canonical_name: name });
         const ingredient = await getIngredientById(ingredientId);
         const normalized = normalizeUnit({
           quantity: item.quantity,
-          unit: item.unit,
+          unit,
           canonicalUnit: ingredient?.canonical_unit ?? null,
-          canonicalName: item.name,
+          canonicalName: name,
         });
         await upsertPantryItem({
           ingredient_id: ingredientId,
           quantity: normalized?.quantity ?? item.quantity,
-          unit: normalized?.unit ?? item.unit,
+          unit: normalized?.unit ?? unit,
           unit_price: item.unit_price ?? null,
         });
         resolvedIds.push(ingredientId);
@@ -66,7 +70,9 @@ export default function ReviewScreen() {
       if (params.returnTo === "shop") {
         await completeCheckout();
       }
-      showSuccess(`Added ${items.length} item${items.length !== 1 ? "s" : ""} to pantry`);
+      showSuccess(
+        `Added ${acceptedItems.length} item${acceptedItems.length !== 1 ? "s" : ""} to pantry`,
+      );
       router.replace(params.returnTo === "shop" ? "/(tabs)/shop" : "/(tabs)/pantry");
     } catch {
       Alert.alert("Error", "Failed to save. Please try again.");
@@ -74,6 +80,8 @@ export default function ReviewScreen() {
       setSaving(false);
     }
   }
+
+  const acceptedCount = items.filter((item) => toRequiredSubmittedText(item.name)).length;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -103,12 +111,16 @@ export default function ReviewScreen() {
           </View>
         )}
       />
-      <Pressable style={styles.confirmButton} onPress={confirm} disabled={saving}>
+      <Pressable
+        style={[styles.confirmButton, (saving || acceptedCount === 0) && styles.confirmDisabled]}
+        onPress={confirm}
+        disabled={saving || acceptedCount === 0}
+      >
         {saving ? (
           <ActivityIndicator color={theme.colors.card} />
         ) : (
           <Text style={styles.confirmText}>
-            Confirm {items.length} item{items.length !== 1 ? "s" : ""}
+            Confirm {acceptedCount} item{acceptedCount !== 1 ? "s" : ""}
           </Text>
         )}
       </Pressable>
@@ -173,6 +185,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
   },
+  confirmDisabled: { opacity: 0.5 },
   confirmText: {
     color: theme.colors.card,
     fontWeight: theme.typography.headline.fontWeight as "600",
