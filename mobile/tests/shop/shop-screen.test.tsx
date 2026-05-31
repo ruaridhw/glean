@@ -102,4 +102,13 @@ describe("ShopScreen", () => {
     fireEvent.press(screen.getByText("Clear checked"));
     await waitFor(() => expect(completeCheckout).toHaveBeenCalled());
   });
+
+  it("opens the nested describe screen from the Shop list", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    fireEvent.press(screen.getByText("Describe"));
+
+    expect(router.push).toHaveBeenCalledWith("/(tabs)/shop/describe");
+  });
 });

@@ -46,7 +46,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="shop/index"
+        name="shop"
         options={{
           title: "Shop",
           tabBarButtonTestID: "tabs.shop",
@@ -61,8 +61,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
         }}
       />
-      <Tabs.Screen name="shop/describe" options={{ href: null }} />
-      <Tabs.Screen name="shop/review" options={{ href: null }} />
     </Tabs>
   );
 }
