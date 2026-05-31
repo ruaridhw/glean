@@ -2,14 +2,14 @@ version = 0.1
 
 [prod.deploy.parameters]
 stack_name = "glean-api-prod"
-s3_bucket = "glean-sam-artefacts-prod"
+s3_bucket = "glean-sam-artefacts-prod-040396448697"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"prod\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\""
+parameter_overrides = "Environment=\"prod\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\" CognitoDomainPrefix=\"glean-auth-040396448697\""
 
 [dev.deploy.parameters]
 stack_name = "glean-api-dev"
-s3_bucket = "glean-sam-artefacts-dev"
+s3_bucket = "glean-sam-artefacts-dev-040396448697"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"dev\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\""
+parameter_overrides = "Environment=\"dev\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\" CognitoDomainPrefix=\"glean-auth-040396448697\""
