@@ -9,6 +9,17 @@ on:
     paths:
       - 'mobile/**'
   workflow_dispatch:
+    inputs:
+      build_ci_apk:
+        description: Build the CI APK with seeded auth tokens
+        required: false
+        type: boolean
+        default: false
+      run_e2e:
+        description: Run Maestro E2E against the CI APK
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -99,7 +110,7 @@ jobs:
 
   build-ci:
     name: Build CI APK (E2E)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.build_ci_apk || inputs.run_e2e)
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -179,7 +190,7 @@ jobs:
   e2e:
     name: E2E
     needs: build-ci
-    if: github.event_name == 'workflow_dispatch' && needs.build-ci.result == 'success'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_e2e && needs.build-ci.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
