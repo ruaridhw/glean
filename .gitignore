@@ -41,6 +41,13 @@ infra/.bootstrap-outputs
 # Local caches
 **/.cache/
 
+# Local agent tooling and generated plans
+.agents/
+.claude/
+skills-lock.json
+docs/
+plans/
+
 # macOS
 .DS_Store
 .DS_Store?
