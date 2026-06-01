@@ -1,34 +1,18 @@
-import { useMemo } from "react";
-import { Gesture } from "react-native-gesture-handler";
-
 const DEFAULT_ACTION_THRESHOLD = 48;
+const DEFAULT_VELOCITY_THRESHOLD = 0.75;
 
 interface SwipeTranslation {
   translationX: number;
   translationY: number;
+  velocityX?: number;
 }
 
 export function shouldRunSwipeAction(
-  { translationX, translationY }: SwipeTranslation,
+  { translationX, translationY, velocityX = 0 }: SwipeTranslation,
   threshold = DEFAULT_ACTION_THRESHOLD,
 ): boolean {
-  return translationX <= -threshold && Math.abs(translationX) > Math.abs(translationY);
-}
-
-export function useSwipeAction(onSwipeLeft: () => void) {
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-16, 16])
-        .failOffsetY([-24, 24])
-        .runOnJS(true)
-        .onEnd((event: SwipeTranslation) => {
-          if (shouldRunSwipeAction(event)) {
-            onSwipeLeft();
-          }
-        }),
-    [onSwipeLeft],
-  );
-
-  return gesture;
+  const isMostlyHorizontal = Math.abs(translationX) > Math.abs(translationY);
+  const hasDistance = translationX <= -threshold;
+  const hasMomentum = translationX < 0 && velocityX <= -DEFAULT_VELOCITY_THRESHOLD;
+  return isMostlyHorizontal && (hasDistance || hasMomentum);
 }

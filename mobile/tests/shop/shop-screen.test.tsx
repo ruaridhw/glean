@@ -1,5 +1,6 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
+import { StyleSheet } from "react-native";
 import {
   addManualShoppingItem,
   completeCheckout,
@@ -12,48 +13,15 @@ import ShopScreen from "../../app/(tabs)/shop";
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
   const { Text } = require("react-native");
-  return { Ionicons: ({ name }: { name: string }) => React.createElement(Text, null, name) };
+  return {
+    Ionicons: ({ name, ...props }: { name: string }) => React.createElement(Text, props, name),
+  };
 });
 
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-
-jest.mock("react-native-gesture-handler", () => {
-  const React = require("react");
-
-  return {
-    Gesture: {
-      Pan: () => {
-        const gesture: {
-          __triggerEnd?: (event: unknown) => void;
-          activeOffsetX: jest.Mock;
-          failOffsetY: jest.Mock;
-          onEnd: jest.Mock;
-          runOnJS: jest.Mock;
-        } = {
-          activeOffsetX: jest.fn(() => gesture),
-          failOffsetY: jest.fn(() => gesture),
-          onEnd: jest.fn((callback: (event: unknown) => void) => {
-            gesture.__triggerEnd = callback;
-            return gesture;
-          }),
-          runOnJS: jest.fn(() => gesture),
-        };
-
-        return gesture;
-      },
-    },
-    GestureDetector: ({
-      children,
-      gesture,
-    }: {
-      children: React.ReactElement;
-      gesture: { __triggerEnd?: (event: unknown) => void };
-    }) => React.cloneElement(children, { onGestureEnd: gesture.__triggerEnd }),
-  };
-});
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -81,6 +49,39 @@ function collectRenderedText(node: RenderedTree): string[] {
   if (typeof node === "string") return [node];
   if (Array.isArray(node)) return node.flatMap(collectRenderedText);
   return node.children?.flatMap(collectRenderedText) ?? [];
+}
+
+function createTouchHistory({
+  currentPageX,
+  currentPageY = 20,
+  currentTimeStamp,
+  previousPageX,
+  previousPageY = 20,
+  previousTimeStamp,
+}: {
+  currentPageX: number;
+  currentPageY?: number;
+  currentTimeStamp: number;
+  previousPageX: number;
+  previousPageY?: number;
+  previousTimeStamp: number;
+}) {
+  return {
+    indexOfSingleActiveTouch: 0,
+    mostRecentTimeStamp: currentTimeStamp,
+    numberActiveTouches: 1,
+    touchBank: [
+      {
+        currentPageX,
+        currentPageY,
+        currentTimeStamp,
+        previousPageX,
+        previousPageY,
+        previousTimeStamp,
+        touchActive: true,
+      },
+    ],
+  };
 }
 
 describe("ShopScreen", () => {
@@ -132,6 +133,9 @@ describe("ShopScreen", () => {
     expect(textOrder.indexOf("milk")).toBeGreaterThan(textOrder.indexOf("Checked"));
     expect(textOrder.indexOf("Remaining")).toBeGreaterThan(textOrder.indexOf("milk"));
     expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Remaining"));
+    expect(StyleSheet.flatten(screen.getByTestId("shop.shoppingList").props.style)).toEqual(
+      expect.objectContaining({ flex: 1 }),
+    );
     expect(screen.getByTestId("shop.pinnedCheckoutActions")).toBeTruthy();
   });
 
@@ -169,10 +173,108 @@ describe("ShopScreen", () => {
     const screen = render(<ShopScreen />);
 
     await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    const row = screen.getByTestId("shopping-row-1");
 
-    fireEvent(screen.getByTestId("shopping-row-1"), "gestureEnd", {
-      translationX: -64,
-      translationY: 8,
+    await act(async () => {
+      row.props.onResponderGrant({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 200,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderMove({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 128,
+          currentTimeStamp: 64,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderRelease({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 128,
+          currentTimeStamp: 64,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+    });
+
+    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
+  });
+
+  it("highlights the delete affordance while swiping an item left", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    const row = screen.getByTestId("shopping-row-1");
+
+    act(() => {
+      row.props.onResponderGrant({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 200,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderMove({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 168,
+          currentTimeStamp: 32,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+    });
+
+    expect(screen.getByTestId("shopping-row-delete-action-1").props.style).toContainEqual(
+      expect.objectContaining({ backgroundColor: "#FEE2E2" }),
+    );
+    expect(screen.getByTestId("shopping-row-delete-icon-1").props.color).toBe("#EF4444");
+  });
+
+  it("deletes a shopping item from a fast left flick", async () => {
+    const screen = render(<ShopScreen />);
+
+    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    const row = screen.getByTestId("shopping-row-1");
+
+    await act(async () => {
+      row.props.onResponderGrant({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 200,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderMove({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 172,
+          currentTimeStamp: 12,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderRelease({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 172,
+          currentTimeStamp: 12,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
     });
 
     await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));

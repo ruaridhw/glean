@@ -110,6 +110,7 @@ export default function ShopScreen() {
       <AppScreen
         title="Shopping"
         subtitle={`${unchecked.length} remaining · ${checked.length} checked`}
+        contentPaddingBottom={0}
         testID="shop.screen"
       >
         {loading ? (

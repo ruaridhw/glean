@@ -1,17 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { ReactElement } from "react";
-import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
-import { GestureDetector } from "react-native-gesture-handler";
+import { type ReactElement, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  Easing,
+  PanResponder,
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { IconButton } from "@/components/ui/IconButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import {
   formatShoppingQuantity,
   getShoppingSourceLabel,
   type ShoppingSection,
 } from "@/shop/presentation";
-import { useSwipeAction } from "@/shop/use-swipe-action";
+import { shouldRunSwipeAction } from "@/shop/use-swipe-action";
 import { theme } from "@/theme";
 import type { ShoppingListItem } from "@/types";
 
@@ -109,6 +118,8 @@ export function ShoppingList({
 }: ShoppingListProps) {
   return (
     <SectionList<ShoppingListItem, ShoppingSection>
+      testID="shop.shoppingList"
+      style={styles.shoppingList}
       sections={sections}
       keyExtractor={(item) => String(item.id)}
       renderItem={({ item }) => <ShoppingRow item={item} onToggle={onToggle} onDelete={onDelete} />}
@@ -137,45 +148,113 @@ interface ShoppingRowProps {
 
 function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
   const checked = item.is_checked;
-  const gesture = useSwipeAction(() => onDelete(item));
+  const { width: screenWidth } = useWindowDimensions();
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const [deleteActive, setDeleteActive] = useState(false);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 16 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderGrant: () => {
+          swipeX.stopAnimation();
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextX = Math.max(Math.min(gestureState.dx, 0), -160);
+          swipeX.setValue(nextX);
+          setDeleteActive(nextX <= -24 || gestureState.vx <= -0.75);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (
+            shouldRunSwipeAction({
+              translationX: gestureState.dx,
+              translationY: gestureState.dy,
+              velocityX: gestureState.vx,
+            })
+          ) {
+            setDeleteActive(true);
+            const exitTarget = -(screenWidth + 32);
+            const duration = Math.max(140, 240 - Math.min(Math.abs(gestureState.vx) * 40, 100));
+            Animated.timing(swipeX, {
+              toValue: exitTarget,
+              duration,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }).start(() => onDelete(item));
+            return;
+          }
+
+          Animated.spring(swipeX, {
+            toValue: 0,
+            velocity: gestureState.vx,
+            useNativeDriver: true,
+          }).start(() => setDeleteActive(false));
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start(() => setDeleteActive(false));
+        },
+        onPanResponderTerminationRequest: () => true,
+      }),
+    [item, onDelete, screenWidth, swipeX],
+  );
 
   return (
-    <GestureDetector gesture={gesture}>
-      <Card
-        testID={`shopping-row-${item.id}`}
-        style={[styles.itemCard, checked && styles.checkedItemCard]}
+    <View style={styles.swipeContainer}>
+      <View
+        testID={`shopping-row-delete-action-${item.id}`}
+        style={[styles.swipeDeleteAction, deleteActive && styles.swipeDeleteActionActive]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${checked ? "Uncheck" : "Check"} ${item.name}`}
-          style={styles.itemPressable}
-          onPress={() => onToggle(item)}
-        >
-          <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-            {checked ? (
-              <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
-            ) : null}
-          </View>
-          <View style={styles.itemContent}>
-            <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
-            <View style={styles.itemMetaRow}>
-              <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
-              <Badge label={getShoppingSourceLabel(item.source)} />
+        <Ionicons
+          testID={`shopping-row-delete-icon-${item.id}`}
+          name="trash-outline"
+          size={20}
+          color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+        />
+      </View>
+      <Animated.View
+        testID={`shopping-row-${item.id}`}
+        style={[{ transform: [{ translateX: swipeX }] }]}
+        {...panResponder.panHandlers}
+      >
+        <Card style={[styles.itemCard, checked && styles.checkedItemCard]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${checked ? "Uncheck" : "Check"} ${item.name}`}
+            style={styles.itemPressable}
+            onPress={() => onToggle(item)}
+          >
+            <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+              {checked ? (
+                <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
+              ) : null}
             </View>
-          </View>
-        </Pressable>
-        <View style={styles.deleteAction}>
-          <IconButton
-            icon="trash-outline"
+            <View style={styles.itemContent}>
+              <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
+              <View style={styles.itemMetaRow}>
+                <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
+                <Badge label={getShoppingSourceLabel(item.source)} />
+              </View>
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel={`Remove ${item.name}`}
-            color={theme.colors.textSecondary}
-            backgroundColor="transparent"
-            size={18}
+            hitSlop={8}
+            style={[styles.deleteButton, deleteActive && styles.deleteButtonActive]}
             onPress={() => onDelete(item)}
-          />
-        </View>
-      </Card>
-    </GestureDetector>
+          >
+            <Ionicons
+              name="trash-outline"
+              size={18}
+              color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+            />
+          </Pressable>
+        </Card>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -271,8 +350,30 @@ const styles = StyleSheet.create({
   listContentWithCheckout: {
     paddingBottom: theme.spacing.xl,
   },
+  shoppingList: {
+    flex: 1,
+  },
   sectionHeader: {
     marginTop: theme.spacing.xs,
+  },
+  swipeContainer: {
+    borderRadius: theme.radius.lg,
+    overflow: "hidden",
+  },
+  swipeDeleteAction: {
+    backgroundColor: "transparent",
+    borderRadius: theme.radius.lg,
+    bottom: 0,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    left: 0,
+    paddingRight: theme.spacing.lg,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  swipeDeleteActionActive: {
+    backgroundColor: "#FEE2E2",
   },
   itemCard: {
     alignItems: "center",
@@ -323,7 +424,14 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.typography.caption.fontSize,
   },
-  deleteAction: {
+  deleteButton: {
+    alignItems: "center",
     borderRadius: theme.radius.pill,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  deleteButtonActive: {
+    backgroundColor: "#FEE2E2",
   },
 });

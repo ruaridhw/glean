@@ -19,6 +19,7 @@ interface AppScreenProps {
   scroll?: boolean;
   keyboardAvoiding?: boolean;
   keyboardDismissMode?: ScrollViewProps["keyboardDismissMode"];
+  contentPaddingBottom?: number;
   testID?: string;
 }
 
@@ -30,14 +31,16 @@ export function AppScreen({
   scroll = false,
   keyboardAvoiding = false,
   keyboardDismissMode = "on-drag",
+  contentPaddingBottom,
   testID,
 }: AppScreenProps) {
   const insets = useSafeAreaInsets();
   const bottomPadding = insets.bottom + (Platform.OS === "web" ? 100 : 90);
+  const resolvedBottomPadding = contentPaddingBottom ?? bottomPadding;
 
   const body = scroll ? (
     <ScrollView
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: resolvedBottomPadding }]}
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -45,7 +48,7 @@ export function AppScreen({
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.body, { paddingBottom: bottomPadding }]}>{children}</View>
+    <View style={[styles.body, { paddingBottom: resolvedBottomPadding }]}>{children}</View>
   );
 
   const screen = (

@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { KeyboardAvoidingView, ScrollView, Text } from "react-native";
+import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
@@ -46,6 +46,27 @@ describe("UI foundation", () => {
     expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy();
     expect(screen.UNSAFE_getByType(ScrollView).props.keyboardDismissMode).toBe("on-drag");
     expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe("handled");
+  });
+
+  it("can remove reserved bottom padding for screens with pinned bottom actions", () => {
+    const screen = render(
+      <AppScreen title="Shop" contentPaddingBottom={0}>
+        <Text>Body</Text>
+      </AppScreen>,
+    );
+
+    const body = screen
+      .UNSAFE_getAllByType(View)
+      .find((view) =>
+        Array.isArray(view.props.style)
+          ? view.props.style.some(
+              (style: unknown) =>
+                typeof style === "object" && style !== null && "paddingBottom" in style,
+            )
+          : false,
+      );
+
+    expect(body?.props.style).toContainEqual({ paddingBottom: 0 });
   });
 
   it("renders cards and badges", () => {
