@@ -1,7 +1,7 @@
 // mobile/app/_layout.tsx
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, UIManager } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -34,6 +34,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+  const [redirectToSignIn, setRedirectToSignIn] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +47,7 @@ export default function RootLayout() {
         const authenticated = await authStorage.hasTokens();
         console.log("[layout] authenticated:", authenticated);
         if (!authenticated) {
-          router.replace("/sign-in");
+          setRedirectToSignIn(true);
         }
       } catch (e) {
         console.error("[layout] init error:", e);
@@ -62,7 +63,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <OfflineBanner />
-        <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+        <Stack
+          initialRouteName={redirectToSignIn ? "sign-in" : "index"}
+          screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />

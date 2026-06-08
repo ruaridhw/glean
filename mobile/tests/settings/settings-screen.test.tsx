@@ -2,6 +2,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { signOut } from "@/auth/google";
 import { getUserConfig, saveUserConfig } from "@/db/config";
+import { showError } from "@/utils/toast";
 import SettingsScreen from "../../app/(tabs)/settings";
 
 jest.mock("@expo/vector-icons", () => {
@@ -28,6 +29,7 @@ jest.mock("@/db/config", () => ({
   saveUserConfig: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
+jest.mock("@/utils/toast", () => ({ showError: jest.fn() }));
 
 describe("SettingsScreen", () => {
   beforeEach(() => {
@@ -82,5 +84,21 @@ describe("SettingsScreen", () => {
     fireEvent.press(screen.getByText("Sign out"));
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     expect(router.replace).toHaveBeenCalledWith("/sign-in");
+  });
+
+  it("clears loading and shows a toast when config loading fails", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    (getUserConfig as jest.Mock).mockRejectedValueOnce(new Error("Not authenticated"));
+
+    const screen = render(<SettingsScreen />);
+
+    await waitFor(() => expect(screen.queryByText("Loading settings...")).toBeNull());
+    expect(showError).toHaveBeenCalledWith("Could not load settings.");
+    expect(consoleError).toHaveBeenCalledWith("[settings] config load failed:", expect.any(Error));
+    expect(screen.queryByText("Could not load settings.")).toBeNull();
+    expect(screen.queryByText("Try again")).toBeNull();
+    expect(screen.getByText("Save Settings")).toBeTruthy();
+    expect(screen.getByText("Preferences")).toBeTruthy();
+    consoleError.mockRestore();
   });
 });

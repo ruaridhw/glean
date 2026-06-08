@@ -9,6 +9,17 @@ on:
     paths:
       - 'mobile/**'
   workflow_dispatch:
+    inputs:
+      build_ci_apk:
+        description: Build the CI APK with seeded auth tokens
+        required: false
+        type: boolean
+        default: false
+      run_e2e:
+        description: Run Maestro E2E against the CI APK
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -84,6 +95,10 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build release APK
+        env:
+          EXPO_PUBLIC_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          EXPO_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_APP_CLIENT_ID }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.PROD_API_URL }}
         run: cd android && ./gradlew assembleRelease
 
       - name: Upload APK
@@ -95,10 +110,9 @@ jobs:
 
   build-ci:
     name: Build CI APK (E2E)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.build_ci_apk || inputs.run_e2e)
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
     defaults:
       run:
@@ -122,16 +136,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
-          aws-region: eu-west-2
-
       - name: Get CI auth tokens
         run: |
-          TOKENS=$(aws cognito-idp admin-initiate-auth \
-            --user-pool-id "${{ secrets.COGNITO_USER_POOL_ID }}" \
+          TOKENS=$(aws cognito-idp initiate-auth \
+            --no-sign-request \
+            --region eu-west-2 \
             --client-id "${{ secrets.COGNITO_APP_CLIENT_ID }}" \
             --auth-flow USER_PASSWORD_AUTH \
             --auth-parameters "USERNAME=${{ secrets.CI_TEST_USER_EMAIL }},PASSWORD=${{ secrets.CI_TEST_USER_PASSWORD }}")
@@ -157,6 +166,9 @@ jobs:
 
       - name: Build CI APK
         env:
+          EXPO_PUBLIC_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          EXPO_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_APP_CLIENT_ID }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.PROD_API_URL }}
           EXPO_PUBLIC_CI_ACCESS_TOKEN: ${{ env.EXPO_PUBLIC_CI_ACCESS_TOKEN }}
           EXPO_PUBLIC_CI_REFRESH_TOKEN: ${{ env.EXPO_PUBLIC_CI_REFRESH_TOKEN }}
           EXPO_PUBLIC_CI_ID_TOKEN: ${{ env.EXPO_PUBLIC_CI_ID_TOKEN }}
@@ -172,7 +184,7 @@ jobs:
   e2e:
     name: E2E
     needs: build-ci
-    if: github.event_name == 'workflow_dispatch' && needs.build-ci.result == 'success'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_e2e && needs.build-ci.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
