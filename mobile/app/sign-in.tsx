@@ -1,12 +1,11 @@
 // mobile/app/sign-in.tsx
-import { makeRedirectUri, useAuthRequest } from "expo-auth-session";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useAuthRequest } from "expo-auth-session";
+import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { AUTHORIZE_URL, handleAuthCode } from "@/auth/google";
+import { AUTH_REDIRECT_URI, AUTHORIZE_URL } from "@/auth/google";
+import { authStorage } from "@/auth/storage";
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
-const REDIRECT_URI = makeRedirectUri({ scheme: "glean", path: "auth/callback" });
 
 const discovery = {
   authorizationEndpoint: AUTHORIZE_URL,
@@ -15,10 +14,10 @@ const discovery = {
 export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
 
-  const [request, response, promptAsync] = useAuthRequest(
+  const [request, , promptAsync] = useAuthRequest(
     {
       clientId: CLIENT_ID,
-      redirectUri: REDIRECT_URI,
+      redirectUri: AUTH_REDIRECT_URI,
       scopes: ["openid", "email", "profile"],
       extraParams: { identity_provider: "Google" },
       usePKCE: true,
@@ -26,26 +25,32 @@ export default function SignInScreen() {
     discovery,
   );
 
-  useEffect(() => {
-    if (response?.type !== "success") return;
-    const code = response.params.code;
-    const codeVerifier = request?.codeVerifier;
-    if (!code || !codeVerifier) return;
-
-    setLoading(true);
-    handleAuthCode(code, codeVerifier)
-      .then(() => router.replace("/(tabs)/pantry"))
-      .catch((e: unknown) => {
-        Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
-      })
-      .finally(() => setLoading(false));
-  }, [response, request]);
+  async function startSignIn() {
+    if (!request || loading) return;
+    try {
+      if (!request.codeVerifier) throw new Error("Missing sign-in verifier. Please try again.");
+      await authStorage.setPendingAuthRequest({
+        codeVerifier: request.codeVerifier,
+        state: request.state,
+      });
+      setLoading(true);
+      await promptAsync();
+    } catch (e: unknown) {
+      Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Glean</Text>
       <Text style={styles.subtitle}>Waste less. Cook better.</Text>
-      <Pressable style={styles.button} onPress={() => promptAsync()} disabled={!request || loading}>
+      <Pressable
+        style={styles.button}
+        onPress={() => void startSignIn()}
+        disabled={!request || loading}
+      >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
