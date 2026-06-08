@@ -59,6 +59,43 @@ describe("authStorage", () => {
     });
   });
 
+  describe("pending auth request", () => {
+    it("stores the PKCE verifier and state", async () => {
+      mockSetItem.mockResolvedValue(undefined);
+
+      await authStorage.setPendingAuthRequest({
+        codeVerifier: "verifier-123",
+        state: "state-abc",
+      });
+
+      expect(mockSetItem).toHaveBeenCalledWith("glean_pending_auth_code_verifier", "verifier-123");
+      expect(mockSetItem).toHaveBeenCalledWith("glean_pending_auth_state", "state-abc");
+    });
+
+    it("returns the verifier when the callback state matches", async () => {
+      mockGetItem.mockResolvedValueOnce("verifier-123").mockResolvedValueOnce("state-abc");
+
+      await expect(authStorage.getPendingAuthCodeVerifier("state-abc")).resolves.toBe(
+        "verifier-123",
+      );
+    });
+
+    it("does not return the verifier when the callback state does not match", async () => {
+      mockGetItem.mockResolvedValueOnce("verifier-123").mockResolvedValueOnce("state-abc");
+
+      await expect(authStorage.getPendingAuthCodeVerifier("other-state")).resolves.toBeNull();
+    });
+
+    it("clears the pending verifier and state", async () => {
+      mockDeleteItem.mockResolvedValue(undefined);
+
+      await authStorage.clearPendingAuthRequest();
+
+      expect(mockDeleteItem).toHaveBeenCalledWith("glean_pending_auth_code_verifier");
+      expect(mockDeleteItem).toHaveBeenCalledWith("glean_pending_auth_state");
+    });
+  });
+
   describe("hasTokens", () => {
     it("returns true in __DEV__ mode regardless of stored tokens", async () => {
       mockGetItem.mockResolvedValue(null);

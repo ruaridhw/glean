@@ -7,6 +7,8 @@ const KEYS = {
   idToken: "glean_id_token",
   email: "glean_email",
   userSub: "glean_user_sub",
+  pendingAuthCodeVerifier: "glean_pending_auth_code_verifier",
+  pendingAuthState: "glean_pending_auth_state",
 };
 
 function ciToken(name: string): string | undefined {
@@ -57,7 +59,34 @@ export const authStorage = {
   },
   async clearTokens(): Promise<void> {
     await Promise.all(
-      Object.values(KEYS).map((k) => SecureStore.deleteItemAsync(k).catch(() => {})),
+      [KEYS.accessToken, KEYS.refreshToken, KEYS.idToken, KEYS.email, KEYS.userSub].map((k) =>
+        SecureStore.deleteItemAsync(k).catch(() => {}),
+      ),
+    );
+  },
+  async setPendingAuthRequest(params: { codeVerifier: string; state?: string }): Promise<void> {
+    await SecureStore.setItemAsync(KEYS.pendingAuthCodeVerifier, params.codeVerifier);
+    if (params.state) {
+      await SecureStore.setItemAsync(KEYS.pendingAuthState, params.state);
+    } else {
+      await SecureStore.deleteItemAsync(KEYS.pendingAuthState).catch(() => {});
+    }
+  },
+  async getPendingAuthCodeVerifier(state?: string): Promise<string | null> {
+    const codeVerifier = await SecureStore.getItemAsync(KEYS.pendingAuthCodeVerifier);
+    if (!codeVerifier) return null;
+
+    const expectedState = await SecureStore.getItemAsync(KEYS.pendingAuthState);
+    if (expectedState && expectedState !== state) return null;
+    if (!expectedState && state) return null;
+
+    return codeVerifier;
+  },
+  async clearPendingAuthRequest(): Promise<void> {
+    await Promise.all(
+      [KEYS.pendingAuthCodeVerifier, KEYS.pendingAuthState].map((k) =>
+        SecureStore.deleteItemAsync(k).catch(() => {}),
+      ),
     );
   },
   async hasTokens(): Promise<boolean> {
