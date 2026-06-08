@@ -1,6 +1,7 @@
 import { render, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import { handleAuthCode } from "@/auth/google";
+import { useAuthSession } from "@/auth/session";
 import { authStorage } from "@/auth/storage";
 import AuthCallbackScreen from "../../app/auth/callback";
 
@@ -23,6 +24,10 @@ jest.mock("@/auth/storage", () => ({
   },
 }));
 
+jest.mock("@/auth/session", () => ({
+  useAuthSession: jest.fn(),
+}));
+
 describe("AuthCallbackScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -30,6 +35,9 @@ describe("AuthCallbackScreen", () => {
     jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     (authStorage.getPendingAuthCodeVerifier as jest.Mock).mockResolvedValue("verifier-123");
     (handleAuthCode as jest.Mock).mockResolvedValue(undefined);
+    (useAuthSession as jest.Mock).mockReturnValue({
+      refresh: jest.fn().mockResolvedValue(undefined),
+    });
   });
 
   afterEach(() => {
@@ -44,6 +52,7 @@ describe("AuthCallbackScreen", () => {
     await waitFor(() => {
       expect(handleAuthCode).toHaveBeenCalledWith("auth-code-123", "verifier-123");
     });
+    expect(useAuthSession().refresh).toHaveBeenCalledTimes(1);
     expect(authStorage.getPendingAuthCodeVerifier).toHaveBeenCalledWith("state-abc");
     expect(authStorage.clearPendingAuthRequest).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/pantry");
