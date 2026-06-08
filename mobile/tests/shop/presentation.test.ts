@@ -24,12 +24,12 @@ describe("shop presentation", () => {
     expect(getShoppingSourceLabel("ai")).toBe("AI");
   });
 
-  it("groups unchecked and checked items", () => {
+  it("groups checked items before remaining items", () => {
     const checked = { ...item, id: 2, name: "milk", is_checked: true };
     const grouped = groupShoppingItems([item, checked]);
     expect(grouped).toEqual([
-      { key: "remaining", title: "Remaining", items: [item] },
-      { key: "checked", title: "Checked", items: [checked] },
+      { key: "checked", title: "Checked", data: [checked] },
+      { key: "remaining", title: "Remaining", data: [item] },
     ]);
   });
 });
