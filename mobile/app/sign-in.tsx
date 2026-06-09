@@ -1,12 +1,12 @@
 // mobile/app/sign-in.tsx
-import { makeRedirectUri, useAuthRequest } from "expo-auth-session";
+import { useAuthRequest } from "expo-auth-session";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { AUTHORIZE_URL, handleAuthCode } from "@/auth/google";
+import { AUTH_REDIRECT_URI, AUTHORIZE_URL, handleAuthCode } from "@/auth/google";
+import { authStorage } from "@/auth/storage";
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
-const REDIRECT_URI = makeRedirectUri({ scheme: "glean", path: "auth/callback" });
 
 const discovery = {
   authorizationEndpoint: AUTHORIZE_URL,
@@ -18,7 +18,7 @@ export default function SignInScreen() {
   const [request, response, promptAsync] = useAuthRequest(
     {
       clientId: CLIENT_ID,
-      redirectUri: REDIRECT_URI,
+      redirectUri: AUTH_REDIRECT_URI,
       scopes: ["openid", "email", "profile"],
       extraParams: { identity_provider: "Google" },
       usePKCE: true,
@@ -38,14 +38,35 @@ export default function SignInScreen() {
       .catch((e: unknown) => {
         Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        void authStorage.clearPendingAuthRequest();
+        setLoading(false);
+      });
   }, [response, request]);
+
+  async function startSignIn() {
+    if (!request || loading) return;
+    try {
+      if (!request.codeVerifier) throw new Error("Missing sign-in verifier. Please try again.");
+      await authStorage.setPendingAuthRequest({
+        codeVerifier: request.codeVerifier,
+        state: request.state,
+      });
+      await promptAsync();
+    } catch (e: unknown) {
+      Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
+    }
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Glean</Text>
       <Text style={styles.subtitle}>Waste less. Cook better.</Text>
-      <Pressable style={styles.button} onPress={() => promptAsync()} disabled={!request || loading}>
+      <Pressable
+        style={styles.button}
+        onPress={() => void startSignIn()}
+        disabled={!request || loading}
+      >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (

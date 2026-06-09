@@ -4,7 +4,7 @@ import { authStorage } from "./storage";
 
 const COGNITO_DOMAIN = process.env.EXPO_PUBLIC_COGNITO_DOMAIN ?? "";
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
-const REDIRECT_URI = "glean://auth/callback";
+export const AUTH_REDIRECT_URI = "glean://auth/callback";
 
 const TOKEN_ENDPOINT = `https://${COGNITO_DOMAIN}/oauth2/token`;
 
@@ -26,7 +26,7 @@ export async function handleAuthCode(code: string, codeVerifier: string): Promis
     {
       code,
       clientId: CLIENT_ID,
-      redirectUri: REDIRECT_URI,
+      redirectUri: AUTH_REDIRECT_URI,
       extraParams: { code_verifier: codeVerifier },
     },
     { tokenEndpoint: TOKEN_ENDPOINT },
