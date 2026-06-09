@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { handleAuthCode } from "@/auth/google";
+import { useAuthSession } from "@/auth/session";
 import { authStorage } from "@/auth/storage";
 import { theme } from "@/theme";
 
@@ -46,6 +47,7 @@ function fail(message: string) {
 
 export default function AuthCallbackScreen() {
   const params = useLocalSearchParams<CallbackParams>();
+  const { refresh } = useAuthSession();
 
   useEffect(() => {
     async function completeSignIn() {
@@ -76,6 +78,7 @@ export default function AuthCallbackScreen() {
 
         await handleAuthCode(code, codeVerifier);
         await authStorage.clearPendingAuthRequest();
+        await refresh();
         router.replace("/(tabs)/pantry");
       } catch (e: unknown) {
         await authStorage.clearPendingAuthRequest();
@@ -84,7 +87,7 @@ export default function AuthCallbackScreen() {
     }
 
     void completeSignIn();
-  }, [params]);
+  }, [params, refresh]);
 
   return (
     <View style={styles.container}>

@@ -7,7 +7,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiClient } from "@/api/client";
-import { signOut } from "@/auth/google";
+import { useAuthSession } from "@/auth/session";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -56,6 +56,7 @@ function ChoiceChip({
 }
 
 export default function SettingsScreen() {
+  const { signOut } = useAuthSession();
   const [configId, setConfigId] = useState("");
   const [tolerance, setTolerance] = useState(0.5);
   const [servings, setServings] = useState(2);
@@ -63,10 +64,12 @@ export default function SettingsScreen() {
   const [dietaryFlags, setDietaryFlags] = useState<string[]>([]);
   const [maxTime, setMaxTime] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [maxTimeError, setMaxTimeError] = useState<string | null>(null);
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const config = await getUserConfig();
       setConfigId(config.id);
@@ -77,6 +80,7 @@ export default function SettingsScreen() {
       setMaxTime(config.max_active_time_mins ? String(config.max_active_time_mins) : "");
     } catch (error) {
       console.error("[settings] config load failed:", error);
+      setLoadFailed(true);
       showError("Could not load settings.");
     } finally {
       setLoading(false);
@@ -163,6 +167,26 @@ export default function SettingsScreen() {
       >
         <Card>
           <Text style={styles.loadingText}>Loading settings...</Text>
+        </Card>
+      </AppScreen>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <AppScreen
+        title="Settings"
+        subtitle="Preferences and account"
+        scroll
+        keyboardAvoiding
+        testID="settings.screen"
+      >
+        <Card style={styles.sectionCard}>
+          <Text style={styles.fieldTitle}>Could not load settings.</Text>
+          <Text style={styles.description}>Check your connection and try again.</Text>
+          <Pressable accessibilityRole="button" style={styles.retryButton} onPress={loadConfig}>
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
         </Card>
       </AppScreen>
     );
@@ -374,6 +398,17 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   saveButtonText: {
+    color: theme.colors.primaryForeground,
+    fontSize: theme.typography.body.fontSize,
+    fontWeight: "700",
+  },
+  retryButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+  },
+  retryButtonText: {
     color: theme.colors.primaryForeground,
     fontSize: theme.typography.body.fontSize,
     fontWeight: "700",

@@ -35,11 +35,14 @@ describe("authStorage", () => {
   });
 
   describe("getAccessToken", () => {
-    it("returns CI token when EXPO_PUBLIC_CI_ACCESS_TOKEN is set", async () => {
-      process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN = "ci-token";
+    it("reads the stored access token instead of using CI token environment variables", async () => {
+      process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN = "legacy-ci-token";
+      mockGetItem.mockResolvedValue("stored-token");
+
       const result = await authStorage.getAccessToken();
-      expect(result).toBe("ci-token");
-      expect(mockGetItem).not.toHaveBeenCalled();
+
+      expect(result).toBe("stored-token");
+      expect(mockGetItem).toHaveBeenCalledWith("glean_access_token");
       delete process.env.EXPO_PUBLIC_CI_ACCESS_TOKEN;
     });
 

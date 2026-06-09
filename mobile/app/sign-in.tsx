@@ -1,9 +1,8 @@
 // mobile/app/sign-in.tsx
 import { useAuthRequest } from "expo-auth-session";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { AUTH_REDIRECT_URI, AUTHORIZE_URL, handleAuthCode } from "@/auth/google";
+import { AUTH_REDIRECT_URI, AUTHORIZE_URL } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
@@ -15,7 +14,7 @@ const discovery = {
 export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
 
-  const [request, response, promptAsync] = useAuthRequest(
+  const [request, , promptAsync] = useAuthRequest(
     {
       clientId: CLIENT_ID,
       redirectUri: AUTH_REDIRECT_URI,
@@ -26,24 +25,6 @@ export default function SignInScreen() {
     discovery,
   );
 
-  useEffect(() => {
-    if (response?.type !== "success") return;
-    const code = response.params.code;
-    const codeVerifier = request?.codeVerifier;
-    if (!code || !codeVerifier) return;
-
-    setLoading(true);
-    handleAuthCode(code, codeVerifier)
-      .then(() => router.replace("/(tabs)/pantry"))
-      .catch((e: unknown) => {
-        Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
-      })
-      .finally(() => {
-        void authStorage.clearPendingAuthRequest();
-        setLoading(false);
-      });
-  }, [response, request]);
-
   async function startSignIn() {
     if (!request || loading) return;
     try {
@@ -52,9 +33,12 @@ export default function SignInScreen() {
         codeVerifier: request.codeVerifier,
         state: request.state,
       });
+      setLoading(true);
       await promptAsync();
     } catch (e: unknown) {
       Alert.alert("Sign in failed", e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
     }
   }
 

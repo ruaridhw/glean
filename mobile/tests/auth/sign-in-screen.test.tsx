@@ -1,10 +1,11 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { AUTH_REDIRECT_URI } from "@/auth/google";
+import { AUTH_REDIRECT_URI, handleAuthCode } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
 import SignInScreen from "../../app/sign-in";
 
 const mockPromptAsync = jest.fn();
 const mockUseAuthRequest = jest.fn();
+const mockRouterReplace = jest.fn();
 
 jest.mock("expo-auth-session", () => ({
   makeRedirectUri: jest.fn(() => "glean://auth/callback"),
@@ -12,7 +13,7 @@ jest.mock("expo-auth-session", () => ({
 }));
 
 jest.mock("expo-router", () => ({
-  router: { replace: jest.fn() },
+  router: { replace: (...args: unknown[]) => mockRouterReplace(...args) },
 }));
 
 jest.mock("@/auth/storage", () => ({
@@ -60,5 +61,19 @@ describe("SignInScreen", () => {
       });
     });
     expect(mockPromptAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exchange an AuthSession success response because the callback route owns token exchange", () => {
+    mockUseAuthRequest.mockReturnValue([
+      { codeVerifier: "verifier-123", state: "state-abc" },
+      { type: "success", params: { code: "auth-code-123" } },
+      mockPromptAsync,
+    ]);
+
+    render(<SignInScreen />);
+
+    expect(handleAuthCode).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(authStorage.setPendingAuthRequest).not.toHaveBeenCalled();
   });
 });

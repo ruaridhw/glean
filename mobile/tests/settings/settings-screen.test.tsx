@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import { signOut } from "@/auth/google";
+import { useAuthSession } from "@/auth/session";
 import { getUserConfig, saveUserConfig } from "@/db/config";
 import { showError } from "@/utils/toast";
 import SettingsScreen from "../../app/(tabs)/settings";
@@ -23,7 +23,7 @@ jest.mock("expo-file-system", () => ({
   Paths: { document: "document" },
 }));
 jest.mock("@/api/client", () => ({ apiClient: { postForm: jest.fn() } }));
-jest.mock("@/auth/google", () => ({ signOut: jest.fn().mockResolvedValue(undefined) }));
+jest.mock("@/auth/session", () => ({ useAuthSession: jest.fn() }));
 jest.mock("@/db/config", () => ({
   getUserConfig: jest.fn(),
   saveUserConfig: jest.fn().mockResolvedValue(undefined),
@@ -34,6 +34,9 @@ jest.mock("@/utils/toast", () => ({ showError: jest.fn() }));
 describe("SettingsScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useAuthSession as jest.Mock).mockReturnValue({
+      signOut: jest.fn().mockResolvedValue(undefined),
+    });
     (getUserConfig as jest.Mock).mockResolvedValue({
       id: "user",
       purchase_tolerance: 0.5,
@@ -82,11 +85,11 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Sign out")).toBeTruthy());
     fireEvent.press(screen.getByText("Sign out"));
-    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(useAuthSession().signOut).toHaveBeenCalled());
     expect(router.replace).toHaveBeenCalledWith("/sign-in");
   });
 
-  it("clears loading and shows a toast when config loading fails", async () => {
+  it("shows a retryable error state instead of editable defaults when config loading fails", async () => {
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
     (getUserConfig as jest.Mock).mockRejectedValueOnce(new Error("Not authenticated"));
 
@@ -95,10 +98,34 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(screen.queryByText("Loading settings...")).toBeNull());
     expect(showError).toHaveBeenCalledWith("Could not load settings.");
     expect(consoleError).toHaveBeenCalledWith("[settings] config load failed:", expect.any(Error));
-    expect(screen.queryByText("Could not load settings.")).toBeNull();
-    expect(screen.queryByText("Try again")).toBeNull();
-    expect(screen.getByText("Save Settings")).toBeTruthy();
-    expect(screen.getByText("Preferences")).toBeTruthy();
+    expect(screen.getByText("Could not load settings.")).toBeTruthy();
+    expect(screen.getByText("Try again")).toBeTruthy();
+    expect(screen.queryByText("Save Settings")).toBeNull();
+    expect(screen.queryByText("Preferences")).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it("reloads settings from the retryable error state", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    (getUserConfig as jest.Mock)
+      .mockRejectedValueOnce(new Error("Temporary failure"))
+      .mockResolvedValueOnce({
+        id: "user",
+        purchase_tolerance: 0.7,
+        preferred_servings: 4,
+        meals_per_week: 3,
+        dietary_flags: ["Vegan"],
+        max_active_time_mins: 45,
+      });
+
+    const screen = render(<SettingsScreen />);
+
+    await waitFor(() => expect(screen.getByText("Try again")).toBeTruthy());
+    fireEvent.press(screen.getByText("Try again"));
+
+    await waitFor(() => expect(screen.getByText("Save Settings")).toBeTruthy());
+    expect(screen.getByText("Vegan")).toBeTruthy();
+    expect(saveUserConfig).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 });
