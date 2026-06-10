@@ -1,6 +1,31 @@
 # Glean
 
-Glean is a local-first Expo app with a stateless FastAPI backend. The mobile app stores user state on device with SQLite, while the backend handles AI-assisted receipt parsing, recipe import, meal suggestions, auth validation, and rate limiting.
+Glean helps a household turn the food it already has into meals and a focused
+shopping list.
+
+The mobile app is local-first: pantry, recipes, meal plans, and shopping state
+live on device in SQLite. The backend stays stateless and handles the heavier
+AI-assisted work: receipt parsing, recipe import, meal suggestions, auth
+validation, and rate limiting.
+
+## Product Loop
+
+| Scan | Plan | Shop |
+| --- | --- | --- |
+| ![Scan a receipt](mobile/assets/onboarding/scan.png) | ![Plan meals](mobile/assets/onboarding/plan.png) | ![Shop missing items](mobile/assets/onboarding/shop.png) |
+| Scan receipts or describe food to stock the pantry. | Plan dinners around what is already at home. | Let missing ingredients become the shopping list. |
+
+## What It Does
+
+- **Pantry tracking:** keep quantities, categories, and expiry dates on device.
+- **Receipt and text intake:** parse a receipt scan or a natural-language food
+  description into reviewable pantry items.
+- **Recipe discovery:** search or import recipes, then save the ones worth
+  cooking again.
+- **Meal planning:** build a weekly dinner plan from saved recipes and pantry
+  context.
+- **Shopping gap fill:** add missing ingredients to the shopping list and check
+  them off when they enter the pantry.
 
 ## Project Layout
 
@@ -9,6 +34,24 @@ backend/   FastAPI backend, managed with uv, deployed with Mangum on AWS Lambda
 mobile/    Expo / React Native app, managed with npm
 Makefile   Common setup, test, lint, and dev-server commands
 ```
+
+## Architecture
+
+```text
+Expo app
+  ├─ SQLite local state: pantry, recipes, plan, shopping list
+  ├─ Expo Router tabs: Pantry, Meals, Plan, Shop, Settings
+  └─ Native device flows: camera, auth callback, local persistence
+
+FastAPI backend
+  ├─ Receipt and text parsing
+  ├─ Recipe search/import
+  ├─ Meal suggestions
+  └─ Cognito/JWT validation and rate limiting
+```
+
+The intended product contract is review-before-write: AI can propose pantry or
+shopping items, but users confirm the result before local state changes.
 
 ## Prerequisites
 
