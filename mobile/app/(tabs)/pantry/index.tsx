@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
+import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -63,37 +64,46 @@ function PantryItemCard({
   const isEditing = editingId === item.id;
 
   return (
-    <Card style={styles.itemCard} testID={`pantry.item.${item.id}`}>
-      <View style={[styles.categoryDot, { backgroundColor: meta.color }]} />
-      <View style={styles.itemContent}>
-        <Text style={styles.itemName}>{item.canonical_name}</Text>
-        {isEditing ? (
-          <TextInput
-            style={styles.editInput}
-            value={editQty}
-            onChangeText={onChangeEditQty}
-            keyboardType="numeric"
-            onBlur={() => onCommitEdit(item)}
-            autoFocus
+    <SwipeDeleteRow
+      actionTestID={`pantry-row-delete-action-${item.id}`}
+      iconTestID={`pantry-row-delete-icon-${item.id}`}
+      rowTestID={`pantry-row-${item.id}`}
+      onDelete={() => onDelete(item)}
+    >
+      {(deleteActive) => (
+        <Card style={styles.itemCard} testID={`pantry.item.${item.id}`}>
+          <View style={[styles.categoryDot, { backgroundColor: meta.color }]} />
+          <View style={styles.itemContent}>
+            <Text style={styles.itemName}>{item.canonical_name}</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.editInput}
+                value={editQty}
+                onChangeText={onChangeEditQty}
+                keyboardType="numeric"
+                onBlur={() => onCommitEdit(item)}
+                autoFocus
+              />
+            ) : (
+              <Pressable onPress={() => onStartEdit(item)} accessibilityRole="button">
+                <Text style={styles.itemQuantity}>{formatPantryQuantity(item)}</Text>
+              </Pressable>
+            )}
+          </View>
+          {expiryBadge ? (
+            <Badge label={expiryBadge.label} tone={expiryToneToBadgeTone(expiryBadge.tone)} />
+          ) : null}
+          <IconButton
+            icon="trash-outline"
+            accessibilityLabel={`Remove ${item.canonical_name}`}
+            color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+            backgroundColor={deleteActive ? "#FEE2E2" : "transparent"}
+            size={18}
+            onPress={() => onDelete(item)}
           />
-        ) : (
-          <Pressable onPress={() => onStartEdit(item)} accessibilityRole="button">
-            <Text style={styles.itemQuantity}>{formatPantryQuantity(item)}</Text>
-          </Pressable>
-        )}
-      </View>
-      {expiryBadge ? (
-        <Badge label={expiryBadge.label} tone={expiryToneToBadgeTone(expiryBadge.tone)} />
-      ) : null}
-      <IconButton
-        icon="trash-outline"
-        accessibilityLabel={`Remove ${item.canonical_name}`}
-        color={theme.colors.textSecondary}
-        backgroundColor="transparent"
-        size={18}
-        onPress={() => onDelete(item)}
-      />
-    </Card>
+        </Card>
+      )}
+    </SwipeDeleteRow>
   );
 }
 
