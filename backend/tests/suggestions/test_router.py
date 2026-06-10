@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings
 from glean.main import app
+from glean.suggestions.schemas import SuggestionRequest
+from glean.suggestions.service import get_suggestions
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -65,3 +67,26 @@ def test_get_suggestions_requires_auth(test_settings: Settings) -> None:
     response = unauthenticated.post("/suggestions", json=SAMPLE_REQUEST)
     assert response.status_code == 401
     app.dependency_overrides.clear()
+
+
+def test_get_suggestions_uses_meal_plan_feature_metadata() -> None:
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(
+        [
+            {
+                "recipe_id": 1,
+                "title": "Chicken Stir Fry",
+                "reason": "Uses the chicken breast already in the pantry.",
+                "missing_ingredients": [],
+            }
+        ]
+    )
+    model = MagicMock()
+    model.invoke.return_value = mock_result
+
+    response = get_suggestions(SuggestionRequest(**SAMPLE_REQUEST), model=model)
+
+    assert response.suggestions[0].recipe_id == 1
+    model.invoke.assert_called_once()
+    _, kwargs = model.invoke.call_args
+    assert kwargs["config"] == {"metadata": {"feature": "meal-plan-generation"}}

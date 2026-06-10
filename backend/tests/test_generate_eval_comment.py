@@ -22,7 +22,7 @@ class TestGenerateEvalComment:
         assert len(features["receipt-scan"].structural) == 1
         assert features["receipt-scan"].structural[0].passed
 
-    def test_classify_suggestions_heuristic(self) -> None:
+    def test_classify_meal_plan_heuristic_from_existing_suggestions_suite(self) -> None:
         results = [
             EvalResult(
                 name="test_missing_ingredients_not_in_pantry",
@@ -32,8 +32,30 @@ class TestGenerateEvalComment:
             ),
         ]
         features = classify_results(results)
-        assert len(features["suggestions"].heuristic) == 1
-        assert not features["suggestions"].heuristic[0].passed
+        assert len(features["meal-plan-generation"].heuristic) == 1
+        assert not features["meal-plan-generation"].heuristic[0].passed
+
+    def test_classify_purchase_description_structural(self) -> None:
+        results = [
+            EvalResult(
+                name="test_all_examples_conform_to_schema",
+                classname="tests.integration.evals.test_purchase_description.TestPurchaseDescriptionStructural",
+                passed=True,
+            ),
+        ]
+        features = classify_results(results)
+        assert len(features["pantry-purchase-description"].structural) == 1
+
+    def test_classify_shopping_list_description_judge(self) -> None:
+        results = [
+            EvalResult(
+                name="test_judge_scores_above_threshold",
+                classname="tests.integration.evals.test_shopping_list_description.TestShoppingListDescriptionJudge",
+                passed=True,
+            ),
+        ]
+        features = classify_results(results)
+        assert len(features["shopping-list-description"].judge) == 1
 
     def test_generate_comment_has_summary_table(self) -> None:
         hard = [
@@ -54,6 +76,7 @@ class TestGenerateEvalComment:
         assert "Eval Results" in comment
         assert "google/gemma-3" in comment
         assert "| receipt-scan" in comment
+        assert "LangSmith: `glean` project" in comment
         assert "Hard gate:" in comment
 
     def test_generate_comment_hard_gate_failure(self) -> None:

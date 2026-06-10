@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from glean.llm import create_chat_model, message_content_as_text, validate_model
+from glean.llm import Feature, create_chat_model, message_content_as_text, validate_model
 
 
 class TestCreateChatModel:
@@ -39,6 +39,15 @@ class TestCreateChatModel:
                 openrouter_api_key=api_key,
                 max_retries=2,
             )
+
+
+class TestFeatureMetadata:
+    def test_ai_workflow_feature_values_match_langsmith_tags(self) -> None:
+        assert Feature.RECEIPT_SCAN == "receipt-scan"
+        assert Feature.PANTRY_PURCHASE_DESCRIPTION == "pantry-purchase-description"
+        assert Feature.MEAL_PLAN_GENERATION == "meal-plan-generation"
+        assert Feature.SHOPPING_LIST_DESCRIPTION == "shopping-list-description"
+        assert Feature.RECIPE_IMPORT == "recipe-import"
 
 
 class TestMessageContentAsText:

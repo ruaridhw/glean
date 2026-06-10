@@ -24,7 +24,7 @@ jobs:
       GLEAN_LLM_MODEL: ${{ inputs.model }}
       LANGCHAIN_TRACING_V2: "true"
       LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
-      LANGCHAIN_PROJECT: glean-evals
+      LANGCHAIN_PROJECT: glean
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
     steps:

@@ -1,0 +1,29 @@
+[
+  {
+    "input": {
+      "text": "I bought 1kg chicken breast, two litres of whole milk, and a dozen eggs."
+    },
+    "expected": {
+      "count": 3,
+      "names": ["chicken breast", "whole milk", "eggs"]
+    }
+  },
+  {
+    "input": {
+      "text": "Picked up 500g spaghetti, a 400g tin of chopped tomatoes, and one basil plant."
+    },
+    "expected": {
+      "count": 3,
+      "names": ["spaghetti", "chopped tomatoes", "basil"]
+    }
+  },
+  {
+    "input": {
+      "text": "Restocked with 2 packs tofu, 750g potatoes, and 6 bananas."
+    },
+    "expected": {
+      "count": 3,
+      "names": ["tofu", "potatoes", "bananas"]
+    }
+  }
+]

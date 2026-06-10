@@ -67,7 +67,7 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert response.items[0].confidence == 0.82
     assert response.items[1].name == "whole milk"
     assert response.clarifying_questions == ["What lunchbox snacks do you want?"]
-    assert model.config == {"metadata": {"feature": "shopping-list"}}
+    assert model.config == {"metadata": {"feature": "shopping-list-description"}}
 
 
 def test_parse_shopping_description_allows_vague_items() -> None:

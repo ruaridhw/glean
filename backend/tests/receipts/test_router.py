@@ -7,10 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
 from glean.main import app
+from glean.receipts.schemas import DescribeRequest
+from glean.receipts.service import describe_purchase
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -133,3 +136,19 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
 
     assert response.status_code == 200
     assert len(response.json()["items"]) == 2
+
+
+def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
+    mock_result = MagicMock()
+    mock_result.content = json.dumps(_mock_claude_response())
+    model = MagicMock()
+    model.invoke.return_value = mock_result
+
+    response = describe_purchase(DescribeRequest(text="I bought chicken and milk"), model=model)
+
+    assert len(response.items) == 2
+    model.invoke.assert_called_once()
+    messages, kwargs = model.invoke.call_args
+    assert isinstance(messages[0][0], SystemMessage)
+    assert isinstance(messages[0][1], HumanMessage)
+    assert kwargs["config"] == {"metadata": {"feature": "pantry-purchase-description"}}
