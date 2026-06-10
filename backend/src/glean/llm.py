@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 class Feature(StrEnum):
     RECEIPT_SCAN = "receipt-scan"
-    SUGGESTIONS = "suggestions"
+    MEAL_PLAN_GENERATION = "meal-plan-generation"
     RECIPE_IMPORT = "recipe-import"
     SHOPPING_LIST = "shopping-list"
 

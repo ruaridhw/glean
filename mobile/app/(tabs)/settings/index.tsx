@@ -209,7 +209,7 @@ export default function SettingsScreen() {
         ]}
       />
 
-      <SectionHeader title="Preferences" subtitle="Used for suggestions" />
+      <SectionHeader title="Preferences" subtitle="Used for meal planning" />
 
       <Card style={styles.sectionCard}>
         <Text style={styles.fieldTitle}>Purchase tolerance</Text>

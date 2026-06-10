@@ -93,15 +93,15 @@ export interface RecipeSearchResponse {
   total: number;
 }
 
-// --- Suggestions ---
+// --- Meal plan generation ---
 
-export interface SuggestedRecipe {
+export interface MealPlanRecipe {
   recipe_id: number;
   title: string;
   reason: string;
   missing_ingredients: string[];
 }
 
-export interface SuggestionResponse {
-  suggestions: SuggestedRecipe[];
+export interface MealPlanResponse {
+  suggestions: MealPlanRecipe[];
 }

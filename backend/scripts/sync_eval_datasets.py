@@ -12,7 +12,7 @@ FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "evals" / "fixtures"
 
 DATASETS = {
     "receipt_scan.json": "glean-receipt-scan",
-    "suggestions.json": "glean-suggestions",
+    "meal_plan_generation.json": "glean-meal-plan-generation",
     "recipe_import.json": "glean-recipe-import",
 }
 

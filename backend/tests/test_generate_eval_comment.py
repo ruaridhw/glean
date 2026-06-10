@@ -22,18 +22,18 @@ class TestGenerateEvalComment:
         assert len(features["receipt-scan"].structural) == 1
         assert features["receipt-scan"].structural[0].passed
 
-    def test_classify_suggestions_heuristic(self) -> None:
+    def test_classify_meal_plan_generation_heuristic(self) -> None:
         results = [
             EvalResult(
                 name="test_missing_ingredients_not_in_pantry",
-                classname="tests.integration.evals.test_suggestions.TestSuggestionsHeuristic",
+                classname="tests.integration.evals.test_meal_plan_generation.TestMealPlanGenerationHeuristic",
                 passed=False,
                 failure_message="rice was in pantry",
             ),
         ]
         features = classify_results(results)
-        assert len(features["suggestions"].heuristic) == 1
-        assert not features["suggestions"].heuristic[0].passed
+        assert len(features["meal-plan-generation"].heuristic) == 1
+        assert not features["meal-plan-generation"].heuristic[0].passed
 
     def test_generate_comment_has_summary_table(self) -> None:
         hard = [

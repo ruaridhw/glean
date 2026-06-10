@@ -144,8 +144,8 @@ src/
 ├── normalization/
 │   ├── units.ts             # Unit conversion table (volume, weight, countable)
 │   └── index.ts             # normalizeUnit() and related helpers
-├── suggestions/
-│   └── compress.ts          # Pantry data compression for AI suggestion payloads (urgency scoring)
+├── meal-plan/
+│   └── compress.ts          # Pantry data compression for AI meal-plan payloads (urgency scoring)
 ├── screens/                 # Reusable screen components (SplashScreen)
 ├── components/
 │   ├── skeletons/           # Per-tab loading skeletons (Pantry, Meals, Plan, Shopping)

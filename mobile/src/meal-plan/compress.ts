@@ -1,4 +1,4 @@
-// mobile/src/suggestions/compress.ts
+// mobile/src/meal-plan/compress.ts
 
 export interface PantryItemForCompression {
   ingredient_id: number;

@@ -23,7 +23,7 @@ class RecipeHistoryItem(BaseModel):
     food_groups: list[str] = Field(description="Food groups this recipe covers (e.g. ['protein', 'veg'])")
 
 
-class SuggestionRequest(BaseModel):
+class MealPlanRequest(BaseModel):
     pantry: list[CompressedPantryItem] = Field(
         description="Top-N urgency-scored pantry items (staples and zero-quantity items excluded)"
     )
@@ -41,7 +41,7 @@ class SuggestionRequest(BaseModel):
     meals_per_week: int = Field(
         ge=1,
         le=7,
-        description="Number of suggestion slots to fill (may be less than full week if plan is partially filled)",
+        description="Number of meal-plan slots to fill (may be less than full week if plan is partially filled)",
     )
     dietary_flags: list[str] = Field(description="User dietary preferences to respect (e.g. ['vegan', 'gluten-free'])")
     max_active_time_mins: int | None = Field(
@@ -51,14 +51,14 @@ class SuggestionRequest(BaseModel):
     )
 
 
-class SuggestedRecipe(BaseModel):
+class MealPlanRecipe(BaseModel):
     recipe_id: int
     title: str
-    reason: str = Field(description="Human-readable explanation of why this recipe was suggested")
+    reason: str = Field(description="Human-readable explanation of why this recipe belongs in the meal plan")
     missing_ingredients: list[str] = Field(
         description="Ingredient names not currently in the pantry that would need purchasing"
     )
 
 
-class SuggestionResponse(BaseModel):
-    suggestions: list[SuggestedRecipe]
+class MealPlanResponse(BaseModel):
+    suggestions: list[MealPlanRecipe]

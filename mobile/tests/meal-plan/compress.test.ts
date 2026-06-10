@@ -1,7 +1,7 @@
-// mobile/tests/suggestions/compress.test.ts
+// mobile/tests/meal-plan/compress.test.ts
 
-import type { PantryItemForCompression } from "@/suggestions/compress";
-import { compressPantry, scorePantryItem } from "@/suggestions/compress";
+import type { PantryItemForCompression } from "@/meal-plan/compress";
+import { compressPantry, scorePantryItem } from "@/meal-plan/compress";
 
 const baseItem: PantryItemForCompression = {
   ingredient_id: 1,

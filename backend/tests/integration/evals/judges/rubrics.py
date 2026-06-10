@@ -20,11 +20,11 @@ Given a raw receipt line item name and the system's normalised output, rate the 
 
 Respond with ONLY a single integer 1-5. No explanation."""
 
-SUGGESTIONS_RUBRIC = """You are evaluating a meal suggestion system.
-Given a user's pantry state, dietary flags, and the system's suggestion, rate the quality 1-5:
+MEAL_PLAN_RUBRIC = """You are evaluating a meal-plan generation system.
+Given a user's pantry state, dietary flags, and the generated meal-plan recipe, rate the quality 1-5:
 
 5 = Excellent — uses expiring/urgent pantry items, reason is specific and references actual pantry data
-4 = Good — reasonable suggestion, reason references pantry items by name
+4 = Good — reasonable recipe, reason references pantry items by name
 3 = Acceptable — valid recipe but reason is generic (e.g. "good for dinner")
 2 = Poor — ignores pantry priorities or reason is vague/irrelevant
 1 = Bad — violates dietary flags or completely irrelevant to pantry state
@@ -68,7 +68,7 @@ def judge_receipt_scan(
     return _parse_score(result.content)
 
 
-def judge_suggestion(
+def judge_meal_plan_recipe(
     model: BaseChatModel,
     pantry_summary: str,
     dietary_flags: list[str],
@@ -78,12 +78,12 @@ def judge_suggestion(
     prompt = (
         f"Pantry state:\n{pantry_summary}\n\n"
         f"Dietary flags: {dietary_flags}\n\n"
-        f'Suggested recipe: "{title}"\n'
+        f'Meal-plan recipe: "{title}"\n'
         f'Reason: "{reason}"'
     )
     result = model.invoke(
-        [SystemMessage(content=SUGGESTIONS_RUBRIC), HumanMessage(content=prompt)],
-        config={"metadata": {"feature": "eval-judge-suggestions"}},
+        [SystemMessage(content=MEAL_PLAN_RUBRIC), HumanMessage(content=prompt)],
+        config={"metadata": {"feature": "eval-judge-meal-plan-generation"}},
     )
     return _parse_score(result.content)
 

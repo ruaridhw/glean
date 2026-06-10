@@ -42,26 +42,26 @@ SAMPLE_REQUEST = {
 }
 
 
-def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: dict[str, str]) -> None:
-    fixture = json.loads((FIXTURES / "suggestion_claude.json").read_text())
+def test_generate_meal_plan_returns_ranked_list(client: TestClient, auth_headers: dict[str, str]) -> None:
+    fixture = json.loads((FIXTURES / "meal_plan_claude.json").read_text())
     mock_result = MagicMock()
     mock_result.content = json.dumps(fixture)
 
-    with patch("glean.suggestions.router.create_chat_model") as mock_create:
+    with patch("glean.meal_plan.router.create_chat_model") as mock_create:
         mock_create.return_value.invoke.return_value = mock_result
-        response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
+        response = client.post("/meal-plan", headers=auth_headers, json=SAMPLE_REQUEST)
 
     assert response.status_code == 200
-    suggestions = response.json()["suggestions"]
-    assert len(suggestions) == 2
-    assert suggestions[0]["title"] == "Chicken Stir Fry"
-    assert "expiring" in suggestions[0]["reason"]
-    assert suggestions[1]["missing_ingredients"] == []
+    planned_recipes = response.json()["suggestions"]
+    assert len(planned_recipes) == 2
+    assert planned_recipes[0]["title"] == "Chicken Stir Fry"
+    assert "expiring" in planned_recipes[0]["reason"]
+    assert planned_recipes[1]["missing_ingredients"] == []
 
 
-def test_get_suggestions_requires_auth(test_settings: Settings) -> None:
+def test_generate_meal_plan_requires_auth(test_settings: Settings) -> None:
     app.dependency_overrides[get_settings] = lambda: test_settings
     unauthenticated = TestClient(app)
-    response = unauthenticated.post("/suggestions", json=SAMPLE_REQUEST)
+    response = unauthenticated.post("/meal-plan", json=SAMPLE_REQUEST)
     assert response.status_code == 401
     app.dependency_overrides.clear()
