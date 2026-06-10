@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSuggestMeals } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
+import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -85,33 +86,44 @@ function PlanSlotCard({
   const cooked = entry.cooked_at != null;
 
   return (
-    <Card style={[styles.slotCard, cooked && styles.cookedCard]}>
-      <View style={cooked ? styles.slotBadgeMuted : styles.slotBadge}>
-        <Text style={cooked ? styles.slotBadgeMutedText : styles.slotBadgeText}>
-          {slot.slotNumber}
-        </Text>
-      </View>
-      <View style={styles.slotContent}>
-        <Text style={[styles.recipeTitle, cooked && styles.cookedTitle]}>{entry.recipe_title}</Text>
-        <Text style={styles.recipeMeta}>
-          {entry.servings} {entry.servings === 1 ? "serving" : "servings"}
-          {cooked ? " · Cooked" : ""}
-        </Text>
-      </View>
-      {!cooked ? (
-        <Pressable style={styles.cookedButton} onPress={() => onCooked(entry)}>
-          <Text style={styles.cookedButtonText}>Cooked</Text>
-        </Pressable>
-      ) : null}
-      <IconButton
-        icon="close-circle"
-        accessibilityLabel={`Remove ${entry.recipe_title}`}
-        backgroundColor="transparent"
-        color={theme.colors.textSecondary}
-        size={20}
-        onPress={() => onDelete(entry)}
-      />
-    </Card>
+    <SwipeDeleteRow
+      actionTestID={`plan-slot-delete-action-${entry.id}`}
+      iconTestID={`plan-slot-delete-icon-${entry.id}`}
+      rowTestID={`plan-slot-row-${entry.id}`}
+      onDelete={() => onDelete(entry)}
+    >
+      {(deleteActive) => (
+        <Card style={[styles.slotCard, cooked && styles.cookedCard]}>
+          <View style={cooked ? styles.slotBadgeMuted : styles.slotBadge}>
+            <Text style={cooked ? styles.slotBadgeMutedText : styles.slotBadgeText}>
+              {slot.slotNumber}
+            </Text>
+          </View>
+          <View style={styles.slotContent}>
+            <Text style={[styles.recipeTitle, cooked && styles.cookedTitle]}>
+              {entry.recipe_title}
+            </Text>
+            <Text style={styles.recipeMeta}>
+              {entry.servings} {entry.servings === 1 ? "serving" : "servings"}
+              {cooked ? " · Cooked" : ""}
+            </Text>
+          </View>
+          {!cooked ? (
+            <Pressable style={styles.cookedButton} onPress={() => onCooked(entry)}>
+              <Text style={styles.cookedButtonText}>Cooked</Text>
+            </Pressable>
+          ) : null}
+          <IconButton
+            icon="close-circle"
+            accessibilityLabel={`Remove ${entry.recipe_title}`}
+            backgroundColor={deleteActive ? "#FEE2E2" : "transparent"}
+            color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+            size={20}
+            onPress={() => onDelete(entry)}
+          />
+        </Card>
+      )}
+    </SwipeDeleteRow>
   );
 }
 

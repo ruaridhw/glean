@@ -1,5 +1,6 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
+import { StyleSheet } from "react-native";
 import { useSuggestMeals } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
@@ -16,7 +17,9 @@ import PlanScreen from "../../app/(tabs)/plan";
 jest.mock("@expo/vector-icons", () => {
   const React = require("react");
   const { Text } = require("react-native");
-  return { Ionicons: ({ name }: { name: string }) => React.createElement(Text, null, name) };
+  return {
+    Ionicons: ({ name, ...props }: { name: string }) => React.createElement(Text, props, name),
+  };
 });
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -50,6 +53,39 @@ jest.mock("@/db/shopping", () => ({
 jest.mock("@/suggestions/compress", () => ({ compressPantry: jest.fn().mockReturnValue([]) }));
 jest.mock("@/utils/toast", () => ({ showError: jest.fn(), showSuccess: jest.fn() }));
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
+
+function createTouchHistory({
+  currentPageX,
+  currentPageY = 20,
+  currentTimeStamp,
+  previousPageX,
+  previousPageY = 20,
+  previousTimeStamp,
+}: {
+  currentPageX: number;
+  currentPageY?: number;
+  currentTimeStamp: number;
+  previousPageX: number;
+  previousPageY?: number;
+  previousTimeStamp: number;
+}) {
+  return {
+    indexOfSingleActiveTouch: 0,
+    mostRecentTimeStamp: currentTimeStamp,
+    numberActiveTouches: 1,
+    touchBank: [
+      {
+        currentPageX,
+        currentPageY,
+        currentTimeStamp,
+        previousPageX,
+        previousPageY,
+        previousTimeStamp,
+        touchActive: true,
+      },
+    ],
+  };
+}
 
 describe("PlanScreen", () => {
   const mutate = jest.fn();
@@ -108,6 +144,78 @@ describe("PlanScreen", () => {
 
     fireEvent.press(screen.getByLabelText("Remove Tomato Pasta"));
     await waitFor(() => expect(deleteMealPlanEntry).toHaveBeenCalledWith(1));
+  });
+
+  it("deletes a planned meal from a qualifying left swipe", async () => {
+    const screen = render(<PlanScreen />);
+
+    await waitFor(() => expect(screen.getByText("Tomato Pasta")).toBeTruthy());
+    const row = screen.getByTestId("plan-slot-row-1");
+
+    await act(async () => {
+      row.props.onResponderGrant({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 200,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderMove({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 128,
+          currentTimeStamp: 64,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderRelease({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 128,
+          currentTimeStamp: 64,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+    });
+
+    await waitFor(() => expect(deleteMealPlanEntry).toHaveBeenCalledWith(1));
+  });
+
+  it("highlights the planned meal delete affordance while swiping left", async () => {
+    const screen = render(<PlanScreen />);
+
+    await waitFor(() => expect(screen.getByText("Tomato Pasta")).toBeTruthy());
+    const row = screen.getByTestId("plan-slot-row-1");
+
+    act(() => {
+      row.props.onResponderGrant({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 200,
+          currentTimeStamp: 1,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+      row.props.onResponderMove({
+        nativeEvent: {},
+        touchHistory: createTouchHistory({
+          currentPageX: 168,
+          currentTimeStamp: 32,
+          previousPageX: 200,
+          previousTimeStamp: 1,
+        }),
+      });
+    });
+
+    expect(StyleSheet.flatten(screen.getByTestId("plan-slot-delete-action-1").props.style)).toEqual(
+      expect.objectContaining({ backgroundColor: "#FEE2E2" }),
+    );
+    expect(screen.getByTestId("plan-slot-delete-icon-1").props.color).toBe("#EF4444");
   });
 
   it("generates a week using existing suggestion and shopping gap flow", async () => {
