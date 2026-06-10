@@ -32,7 +32,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "scripts/tests"]
 addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/integration"
 markers = [
     "soft_gate: marks tests as soft-gate evaluations (deselect with '-m \"not soft_gate\"')",
@@ -62,7 +62,7 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "W", "C4", "C90", "PT", "RUF", "A", "T20", "PIE", "RET", "TCH", "ASYNC", "FLY", "PERF", "PLC", "PLE"]
-per-file-ignores = { "tests/**" = ["S101", "PERF401"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
+per-file-ignores = { "tests/**" = ["S101", "PERF401"], "scripts/tests/**" = ["S101"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"] }
 
 [tool.black]
 line-length = 120
