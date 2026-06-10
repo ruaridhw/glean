@@ -25,18 +25,19 @@ confidence  # ParsedIngredient Pydantic field
 api_ingredient_id  # RecipeIngredientOut field
 canonical_name  # RecipeIngredientOut field
 external_id  # RecipeOut / RecipeSearchResult field
-title  # Pydantic field (RecipeOut, RecipeSearchResult, SuggestedRecipe)
+title  # Pydantic field (RecipeOut, RecipeSearchResult, MealPlanRecipe)
 dietary_flags  # RecipeOut / RecipeSearchResult field
-# suggestions schemas — fields accessed via Pydantic model_dump / FastAPI serialisation
+# meal_plan schemas — fields accessed via Pydantic model_dump / FastAPI serialisation
 id  # CompressedPantryItem
 food_group  # CompressedPantryItem
 urgency_score  # CompressedPantryItem
-recipe_id  # RecipeHistoryItem / SuggestedRecipe
+recipe_id  # RecipeHistoryItem / MealPlanRecipe
 last_cooked_at  # RecipeHistoryItem
 food_groups  # RecipeHistoryItem
-reason  # SuggestedRecipe
-missing_ingredients  # SuggestedRecipe
-get_suggestions  # FastAPI route handler
+reason  # MealPlanRecipe
+missing_ingredients  # MealPlanRecipe
+suggestions  # MealPlanResponse compatibility field
+generate_meal_plan  # FastAPI route handler
 parse_description  # FastAPI route handler
 get_field_value  # PydanticBaseSettingsSource abstract method implementation
 field  # PydanticBaseSettingsSource abstract method implementation argument

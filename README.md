@@ -1,6 +1,6 @@
 # Glean
 
-Glean is a local-first Expo app with a stateless FastAPI backend. The mobile app stores user state on device with SQLite, while the backend handles AI-assisted receipt parsing, recipe import, meal suggestions, auth validation, and rate limiting.
+Glean is a local-first Expo app with a stateless FastAPI backend. The mobile app stores user state on device with SQLite, while the backend handles AI-assisted receipt parsing, recipe import, meal-plan generation, auth validation, and rate limiting.
 
 ## Project Layout
 

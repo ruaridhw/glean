@@ -1,7 +1,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { StyleSheet } from "react-native";
-import { useSuggestMeals } from "@/api/hooks";
+import { useGenerateMealPlan } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
 import {
@@ -36,7 +36,7 @@ jest.mock("expo-router", () => {
   };
 });
 
-jest.mock("@/api/hooks", () => ({ useSuggestMeals: jest.fn() }));
+jest.mock("@/api/hooks", () => ({ useGenerateMealPlan: jest.fn() }));
 jest.mock("@/db/config", () => ({ getUserConfig: jest.fn() }));
 jest.mock("@/db/pantry", () => ({ getPantryItems: jest.fn() }));
 jest.mock("@/db/plan", () => ({
@@ -50,7 +50,7 @@ jest.mock("@/db/recipes", () => ({ getSavedRecipes: jest.fn() }));
 jest.mock("@/db/shopping", () => ({
   addShoppingGapsForRecipe: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("@/suggestions/compress", () => ({ compressPantry: jest.fn().mockReturnValue([]) }));
+jest.mock("@/meal-plan/compress", () => ({ compressPantry: jest.fn().mockReturnValue([]) }));
 jest.mock("@/utils/toast", () => ({ showError: jest.fn(), showSuccess: jest.fn() }));
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
 
@@ -95,7 +95,11 @@ describe("PlanScreen", () => {
     mutate.mockImplementation((_payload, callbacks) => {
       callbacks.onSuccess({ suggestions: [{ recipe_id: 10 }] });
     });
-    (useSuggestMeals as jest.Mock).mockReturnValue({ mutate, reset: jest.fn(), isPending: false });
+    (useGenerateMealPlan as jest.Mock).mockReturnValue({
+      mutate,
+      reset: jest.fn(),
+      isPending: false,
+    });
     (getMealPlanEntries as jest.Mock).mockResolvedValue([
       {
         id: 1,
@@ -217,7 +221,7 @@ describe("PlanScreen", () => {
     expect(screen.getByTestId("plan-slot-delete-icon-1").props.color).toBe("#EF4444");
   });
 
-  it("generates a week using existing suggestion and shopping gap flow", async () => {
+  it("generates a week using existing meal-plan and shopping gap flow", async () => {
     const screen = render(<PlanScreen />);
 
     await waitFor(() => expect(screen.getByText("Generate plan")).toBeTruthy());
@@ -226,6 +230,14 @@ describe("PlanScreen", () => {
     await waitFor(() => expect(mutate).toHaveBeenCalled());
     expect(addMealPlanEntry).toHaveBeenCalledWith(10);
     expect(addShoppingGapsForRecipe).toHaveBeenCalledWith(10);
+  });
+
+  it("uses meal-plan copy in the empty state", async () => {
+    (getMealPlanEntries as jest.Mock).mockResolvedValueOnce([]);
+    const screen = render(<PlanScreen />);
+
+    await waitFor(() => expect(screen.getByText("No meals planned this week")).toBeTruthy());
+    expect(screen.getByText("Add recipes to your plan or generate a meal plan.")).toBeTruthy();
   });
 
   it("navigates empty slots to recipe search", async () => {

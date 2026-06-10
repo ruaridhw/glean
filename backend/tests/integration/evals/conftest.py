@@ -73,8 +73,8 @@ def purchase_description_dataset() -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
-def suggestions_dataset() -> list[dict[str, Any]]:
-    return _load_fixture("suggestions.json")
+def meal_plan_generation_dataset() -> list[dict[str, Any]]:
+    return _load_fixture("meal_plan_generation.json")
 
 
 @pytest.fixture(scope="session")

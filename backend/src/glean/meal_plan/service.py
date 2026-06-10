@@ -9,23 +9,39 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 from glean.llm import Feature, invoke_structured
+from glean.meal_plan.schemas import MealPlanRequest, MealPlanResponse
 from glean.observability import logger, tracer
-from glean.suggestions.schemas import SuggestionRequest, SuggestionResponse
 
-SUGGESTION_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
-Given a user's pantry, recipe history, and preferences, suggest meals to cook this week.
+MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
+Given a user's pantry, recipe history, and preferences, choose meals to cook this week.
 
 Rules:
 - Prioritise recipes that use pantry items with high urgency scores (expiring soon, unused long)
 - Balance food group coverage across the week
-- Respect dietary flags (never suggest recipes incompatible with user's dietary_flags)
+- Respect dietary flags (never choose recipes incompatible with user's dietary_flags)
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Prefer recipes not cooked recently (further last_cooked_at = higher priority)
+<<<<<<< HEAD:backend/src/glean/suggestions/service.py
 - Return up to meals_per_week suggestions"""
+=======
+- Return up to meals_per_week planned meals
+
+Respond with structured data containing a suggestions array of objects:
+{
+  "suggestions": [
+    {
+      "recipe_id": <int>,
+      "title": <str>,
+      "reason": <str>,
+      "missing_ingredients": [<ingredient names not in pantry>]
+    }
+  ]
+}"""
+>>>>>>> a8591a9 (🏷️ Rename suggestions domain to meal plan on LLM router):backend/src/glean/meal_plan/service.py
 
 
 @tracer.capture_method
-def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel) -> SuggestionResponse:
+def generate_meal_plan(request: MealPlanRequest, *, model: BaseChatModel) -> MealPlanResponse:
 
     context = {
         "pantry": [item.model_dump() for item in request.pantry],
@@ -38,7 +54,7 @@ def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel) -> Sugg
     }
 
     logger.info(
-        "requesting suggestions",
+        "generating meal plan",
         extra={
             "pantry_items": len(request.pantry),
             "recipes": len(request.recipe_history),
@@ -47,12 +63,12 @@ def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel) -> Sugg
 
     response = invoke_structured(
         model,
-        SuggestionResponse,
+        MealPlanResponse,
         [
-            SystemMessage(content=SUGGESTION_SYSTEM_PROMPT),
+            SystemMessage(content=MEAL_PLAN_SYSTEM_PROMPT),
             HumanMessage(content=json.dumps(context, default=str)),
         ],
         config={"metadata": {"feature": Feature.MEAL_PLAN_GENERATION}},
     )
-    logger.info("suggestions received", extra={"count": len(response.suggestions)})
+    logger.info("meal plan generated", extra={"count": len(response.suggestions)})
     return response

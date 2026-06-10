@@ -8,8 +8,8 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
-from glean.suggestions.schemas import SuggestedRecipe, SuggestionRequest, SuggestionResponse
-from glean.suggestions.service import get_suggestions
+from glean.meal_plan.schemas import MealPlanRecipe, MealPlanRequest, MealPlanResponse
+from glean.meal_plan.service import generate_meal_plan
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -46,37 +46,37 @@ SAMPLE_REQUEST = {
 }
 
 
-def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: dict[str, str]) -> None:
-    fixture = json.loads((FIXTURES / "suggestion_claude.json").read_text())
-    structured_response = SuggestionResponse(suggestions=[SuggestedRecipe(**item) for item in fixture])
+def test_generate_meal_plan_returns_ranked_list(client: TestClient, auth_headers: dict[str, str]) -> None:
+    fixture = json.loads((FIXTURES / "meal_plan_claude.json").read_text())
+    structured_response = MealPlanResponse(suggestions=[MealPlanRecipe(**item) for item in fixture])
 
     llm_router = MagicMock()
     llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
     llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = structured_response
     app.dependency_overrides[get_llm_router] = lambda: llm_router
-    response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
+    response = client.post("/meal-plan", headers=auth_headers, json=SAMPLE_REQUEST)
 
     assert response.status_code == 200
-    suggestions = response.json()["suggestions"]
-    assert len(suggestions) == 2
-    assert suggestions[0]["title"] == "Chicken Stir Fry"
-    assert "expiring" in suggestions[0]["reason"]
-    assert suggestions[1]["missing_ingredients"] == []
+    planned_recipes = response.json()["suggestions"]
+    assert len(planned_recipes) == 2
+    assert planned_recipes[0]["title"] == "Chicken Stir Fry"
+    assert "expiring" in planned_recipes[0]["reason"]
+    assert planned_recipes[1]["missing_ingredients"] == []
     llm_router.chat_model.assert_called_once_with(Feature.MEAL_PLAN_GENERATION)
 
 
-def test_get_suggestions_requires_auth(test_settings: Settings) -> None:
+def test_generate_meal_plan_requires_auth(test_settings: Settings) -> None:
     app.dependency_overrides[get_settings] = lambda: test_settings
     unauthenticated = TestClient(app)
-    response = unauthenticated.post("/suggestions", json=SAMPLE_REQUEST)
+    response = unauthenticated.post("/meal-plan", json=SAMPLE_REQUEST)
     assert response.status_code == 401
     app.dependency_overrides.clear()
 
 
-def test_get_suggestions_uses_meal_plan_feature_metadata() -> None:
+def test_generate_meal_plan_uses_meal_plan_feature_metadata() -> None:
     model = MagicMock()
     model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    model.with_structured_output.return_value.invoke.return_value = SuggestionResponse(
+    model.with_structured_output.return_value.invoke.return_value = MealPlanResponse(
         suggestions=[
             {
                 "recipe_id": 1,
@@ -87,7 +87,7 @@ def test_get_suggestions_uses_meal_plan_feature_metadata() -> None:
         ]
     )
 
-    response = get_suggestions(SuggestionRequest(**SAMPLE_REQUEST), model=model)
+    response = generate_meal_plan(MealPlanRequest(**SAMPLE_REQUEST), model=model)
 
     assert response.suggestions[0].recipe_id == 1
     model.invoke.assert_not_called()

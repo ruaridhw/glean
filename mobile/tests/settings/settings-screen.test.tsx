@@ -52,6 +52,7 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Settings")).toBeTruthy());
     expect(screen.getByText("Preferences")).toBeTruthy();
+    expect(screen.getByText("Used for meal planning")).toBeTruthy();
     expect(screen.getByText("Dinners per week")).toBeTruthy();
     expect(screen.getByText("Default servings")).toBeTruthy();
     expect(screen.getByText("Dietary preferences")).toBeTruthy();

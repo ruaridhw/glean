@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSuggestMeals } from "@/api/hooks";
+import { useGenerateMealPlan } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen } from "@/components/ui/AppScreen";
@@ -23,6 +23,7 @@ import {
 } from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
 import { addShoppingGapsForRecipe } from "@/db/shopping";
+import { compressPantry } from "@/meal-plan/compress";
 import {
   buildPlanSlots,
   formatPlanProgress,
@@ -31,7 +32,6 @@ import {
   type PlanSlot,
 } from "@/plan/presentation";
 import { hapticImpact } from "@/platform/haptics";
-import { compressPantry } from "@/suggestions/compress";
 import { theme } from "@/theme";
 import type { MealPlanEntry } from "@/types";
 import { showError, showSuccess } from "@/utils/toast";
@@ -131,7 +131,7 @@ export default function PlanScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [mealsPerWeek, setMealsPerWeek] = useState(5);
   const [loading, setLoading] = useState(true);
-  const suggestMutation = useSuggestMeals();
+  const mealPlanMutation = useGenerateMealPlan();
   const { add_recipe_id: addRecipeId } = useLocalSearchParams<{ add_recipe_id?: string }>();
 
   const load = useCallback(async () => {
@@ -200,7 +200,7 @@ export default function PlanScreen() {
       food_groups: [] as string[],
     }));
 
-    suggestMutation.mutate(
+    mealPlanMutation.mutate(
       {
         pantry: compressed,
         recipe_history: recipeHistory,
@@ -212,15 +212,15 @@ export default function PlanScreen() {
       },
       {
         onSuccess: async (result) => {
-          for (const suggestion of result.suggestions.slice(0, emptySlots)) {
-            await addMealPlanEntry(suggestion.recipe_id);
-            await addShoppingGapsForRecipe(suggestion.recipe_id);
+          for (const plannedRecipe of result.suggestions.slice(0, emptySlots)) {
+            await addMealPlanEntry(plannedRecipe.recipe_id);
+            await addShoppingGapsForRecipe(plannedRecipe.recipe_id);
           }
           showSuccess("Week generated");
           await load();
         },
         onError: () => {
-          showError("Could not generate suggestions");
+          showError("Could not generate meal plan");
         },
       },
     );
@@ -258,7 +258,7 @@ export default function PlanScreen() {
           testID="plan.emptyState"
           icon="calendar-outline"
           title="No meals planned this week"
-          message="Add recipes to your plan or let AI suggest a week."
+          message="Add recipes to your plan or generate a meal plan."
           actions={[
             { label: "Browse recipes", onPress: () => router.push("/(tabs)/meals" as never) },
             { label: "Generate plan", onPress: generateWeek },
@@ -276,7 +276,7 @@ export default function PlanScreen() {
         <Pressable style={styles.generateButton} onPress={() => void generateWeek()}>
           <Ionicons name="sparkles-outline" size={15} color={theme.colors.primaryForeground} />
           <Text style={styles.generateButtonText}>
-            {suggestMutation.isPending ? "Generating" : "Generate plan"}
+            {mealPlanMutation.isPending ? "Generating" : "Generate plan"}
           </Text>
         </Pressable>
       }

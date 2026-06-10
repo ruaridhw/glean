@@ -3,11 +3,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import type {
   DescribeResponse,
+  MealPlanResponse,
   RecipeSearchResponse,
   ScanResponse,
   ShoppingParseRequest,
   ShoppingParseResponse,
-  SuggestionResponse,
 } from "@/api/types";
 import { requireSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 
@@ -49,7 +49,7 @@ export function useParseShoppingDescription() {
   });
 }
 
-export function useSuggestMeals() {
+export function useGenerateMealPlan() {
   return useMutation({
     mutationFn: (body: {
       pantry: unknown;
@@ -59,6 +59,6 @@ export function useSuggestMeals() {
       meals_per_week: number;
       dietary_flags: string[];
       max_active_time_mins: number | null;
-    }) => apiClient.post<SuggestionResponse>("/suggestions", body),
+    }) => apiClient.post<MealPlanResponse>("/meal-plan", body),
   });
 }

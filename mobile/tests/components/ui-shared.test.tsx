@@ -25,15 +25,15 @@ describe("shared UI primitives", () => {
         onChange={onChange}
         options={[
           { value: "saved", label: "Saved", icon: "bookmark" },
-          { value: "suggested", label: "Suggested", icon: "bulb-outline" },
+          { value: "planned", label: "Planned", icon: "calendar-outline" },
         ]}
       />,
     );
 
     expect(screen.getByText("Saved")).toBeTruthy();
-    expect(screen.getByText("Suggested")).toBeTruthy();
-    fireEvent.press(screen.getByText("Suggested"));
-    expect(onChange).toHaveBeenCalledWith("suggested");
+    expect(screen.getByText("Planned")).toBeTruthy();
+    fireEvent.press(screen.getByText("Planned"));
+    expect(onChange).toHaveBeenCalledWith("planned");
   });
 
   it("renders section header with optional action", () => {
@@ -41,14 +41,14 @@ describe("shared UI primitives", () => {
     const screen = render(
       <SectionHeader
         title="Preferences"
-        subtitle="Used for suggestions"
+        subtitle="Used for meal planning"
         actionLabel="Edit"
         onAction={onPress}
       />,
     );
 
     expect(screen.getByText("Preferences")).toBeTruthy();
-    expect(screen.getByText("Used for suggestions")).toBeTruthy();
+    expect(screen.getByText("Used for meal planning")).toBeTruthy();
     fireEvent.press(screen.getByText("Edit"));
     expect(onPress).toHaveBeenCalledTimes(1);
   });

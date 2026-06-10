@@ -59,7 +59,7 @@ def classify_results(results: list[EvalResult]) -> dict[str, FeatureResults]:
             feature = "shopping-list-description"
         elif "receipt" in classname_lower:
             feature = "receipt-scan"
-        elif "suggestion" in classname_lower:
+        elif "meal_plan" in classname_lower or "meal-plan" in classname_lower:
             feature = "meal-plan-generation"
         elif "recipe" in classname_lower:
             feature = "recipe-import"
