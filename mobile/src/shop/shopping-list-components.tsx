@@ -1,17 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type ReactElement, useMemo, useRef, useState } from "react";
-import {
-  Animated,
-  Easing,
-  PanResponder,
-  Pressable,
-  SectionList,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import type { ReactElement } from "react";
+import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
+import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -20,7 +10,6 @@ import {
   getShoppingSourceLabel,
   type ShoppingSection,
 } from "@/shop/presentation";
-import { shouldRunSwipeAction } from "@/shop/use-swipe-action";
 import { theme } from "@/theme";
 import type { ShoppingListItem } from "@/types";
 
@@ -148,77 +137,15 @@ interface ShoppingRowProps {
 
 function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
   const checked = item.is_checked;
-  const { width: screenWidth } = useWindowDimensions();
-  const swipeX = useRef(new Animated.Value(0)).current;
-  const [deleteActive, setDeleteActive] = useState(false);
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > 16 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
-        onPanResponderGrant: () => {
-          swipeX.stopAnimation();
-        },
-        onPanResponderMove: (_, gestureState) => {
-          const nextX = Math.max(Math.min(gestureState.dx, 0), -160);
-          swipeX.setValue(nextX);
-          setDeleteActive(nextX <= -24 || gestureState.vx <= -0.75);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (
-            shouldRunSwipeAction({
-              translationX: gestureState.dx,
-              translationY: gestureState.dy,
-              velocityX: gestureState.vx,
-            })
-          ) {
-            setDeleteActive(true);
-            const exitTarget = -(screenWidth + 32);
-            const duration = Math.max(140, 240 - Math.min(Math.abs(gestureState.vx) * 40, 100));
-            Animated.timing(swipeX, {
-              toValue: exitTarget,
-              duration,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }).start(() => onDelete(item));
-            return;
-          }
-
-          Animated.spring(swipeX, {
-            toValue: 0,
-            velocity: gestureState.vx,
-            useNativeDriver: true,
-          }).start(() => setDeleteActive(false));
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(swipeX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start(() => setDeleteActive(false));
-        },
-        onPanResponderTerminationRequest: () => true,
-      }),
-    [item, onDelete, screenWidth, swipeX],
-  );
 
   return (
-    <View style={styles.swipeContainer}>
-      <View
-        testID={`shopping-row-delete-action-${item.id}`}
-        style={[styles.swipeDeleteAction, deleteActive && styles.swipeDeleteActionActive]}
-      >
-        <Ionicons
-          testID={`shopping-row-delete-icon-${item.id}`}
-          name="trash-outline"
-          size={20}
-          color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
-        />
-      </View>
-      <Animated.View
-        testID={`shopping-row-${item.id}`}
-        style={[{ transform: [{ translateX: swipeX }] }]}
-        {...panResponder.panHandlers}
-      >
+    <SwipeDeleteRow
+      actionTestID={`shopping-row-delete-action-${item.id}`}
+      iconTestID={`shopping-row-delete-icon-${item.id}`}
+      rowTestID={`shopping-row-${item.id}`}
+      onDelete={() => onDelete(item)}
+    >
+      {(deleteActive) => (
         <Card style={[styles.itemCard, checked && styles.checkedItemCard]}>
           <Pressable
             accessibilityRole="button"
@@ -253,8 +180,8 @@ function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
             />
           </Pressable>
         </Card>
-      </Animated.View>
-    </View>
+      )}
+    </SwipeDeleteRow>
   );
 }
 
@@ -355,25 +282,6 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     marginTop: theme.spacing.xs,
-  },
-  swipeContainer: {
-    borderRadius: theme.radius.lg,
-    overflow: "hidden",
-  },
-  swipeDeleteAction: {
-    backgroundColor: "transparent",
-    borderRadius: theme.radius.lg,
-    bottom: 0,
-    alignItems: "flex-end",
-    justifyContent: "center",
-    left: 0,
-    paddingRight: theme.spacing.lg,
-    position: "absolute",
-    right: 0,
-    top: 0,
-  },
-  swipeDeleteActionActive: {
-    backgroundColor: "#FEE2E2",
   },
   itemCard: {
     alignItems: "center",
