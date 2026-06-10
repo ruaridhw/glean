@@ -8,11 +8,11 @@ from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import BaseModel, ValidationError
 
 from glean.llm import invoke_structured
+from glean.meal_plan.schemas import MealPlanResponse
 from glean.receipts.schemas import ScanResponse
 from glean.recipes.stored import RecipeLlmResponse
 from glean.shopping.schemas import ShoppingParseResponse, ShoppingProposalItem
 from glean.shopping.service import SHOPPING_PARSE_SYSTEM_PROMPT
-from glean.suggestions.schemas import SuggestionResponse
 from tests.integration.evals.judges.rubrics import JudgeScoreResponse
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ STRUCTURED_LLM_RESPONSE_SCHEMAS: tuple[type[BaseModel], ...] = (
     ScanResponse,
     ShoppingParseResponse,
     RecipeLlmResponse,
-    SuggestionResponse,
+    MealPlanResponse,
     JudgeScoreResponse,
 )
 

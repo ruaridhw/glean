@@ -104,7 +104,7 @@ def test_describe_purchase_live_http_returns_pantry_items(live_client: TestClien
 
 
 def test_generate_meal_plan_live_http_returns_bounded_candidates(live_client: TestClient) -> None:
-    response = live_client.post("/suggestions", headers=AUTH_HEADERS, json=MEAL_PLAN_REQUEST)
+    response = live_client.post("/meal-plan", headers=AUTH_HEADERS, json=MEAL_PLAN_REQUEST)
 
     assert response.status_code == 200
     suggestions = response.json()["suggestions"]

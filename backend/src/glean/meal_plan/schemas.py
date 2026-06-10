@@ -23,7 +23,7 @@ class RecipeHistoryItem(BaseModel):
     food_groups: list[str] = Field(description="Food groups this recipe covers (e.g. ['protein', 'veg'])")
 
 
-class SuggestionRequest(BaseModel):
+class MealPlanRequest(BaseModel):
     pantry: list[CompressedPantryItem] = Field(
         description="Top-N urgency-scored pantry items (staples and zero-quantity items excluded)"
     )
@@ -41,7 +41,7 @@ class SuggestionRequest(BaseModel):
     meals_per_week: int = Field(
         ge=1,
         le=7,
-        description="Number of suggestion slots to fill (may be less than full week if plan is partially filled)",
+        description="Number of meal-plan slots to fill (may be less than full week if plan is partially filled)",
     )
     dietary_flags: list[str] = Field(description="User dietary preferences to respect (e.g. ['vegan', 'gluten-free'])")
     max_active_time_mins: int | None = Field(
@@ -51,24 +51,22 @@ class SuggestionRequest(BaseModel):
     )
 
 
-class SuggestedRecipe(BaseModel):
-    """A recipe suggestion selected for the user's current pantry and preferences."""
+class MealPlanRecipe(BaseModel):
+    """A recipe selected for the user's current pantry and preferences."""
 
     model_config = ConfigDict(extra="forbid")
 
-    recipe_id: int = Field(description="Stable saved recipe ID to suggest.")
+    recipe_id: int = Field(description="Stable saved recipe ID to include in the plan.")
     title: str = Field(description="Human-readable recipe title to show the user.")
-    reason: str = Field(description="Human-readable explanation of why this recipe was suggested")
+    reason: str = Field(description="Human-readable explanation of why this recipe belongs in the meal plan")
     missing_ingredients: list[str] = Field(
         description="Ingredient names not currently in the pantry that would need purchasing"
     )
 
 
-class SuggestionResponse(BaseModel):
-    """Meal-planning suggestions returned by the LLM."""
+class MealPlanResponse(BaseModel):
+    """Meal-planning recipes returned by the LLM."""
 
     model_config = ConfigDict(extra="forbid")
 
-    suggestions: list[SuggestedRecipe] = Field(
-        description="Ranked recipe suggestions that satisfy the request constraints."
-    )
+    suggestions: list[MealPlanRecipe] = Field(description="Ranked recipes that satisfy the request constraints.")

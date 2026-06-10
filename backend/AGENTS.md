@@ -18,7 +18,7 @@ uv run pytest -k "test_name"           # single test by name
 
 Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device (SQLite via expo-sqlite). The backend is responsible for:
 
-- **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal suggestions — all LLM calls go through OpenRouter via LangChain and the feature-specific `LLMRouter` policy from `get_llm_router`.
+- **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal-plan generation — all LLM calls go through OpenRouter via LangChain and the feature-specific `LLMRouter` policy from `get_llm_router`.
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
 - **Rate limiting:** Per-user token bucket via slowapi (20 AI requests/hour)
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
@@ -40,7 +40,7 @@ src/glean/
 ├── recipe_api/       # External recipe-api.com HTTP client with /tmp caching
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
-└── suggestions/      # POST /suggestions — LLM meal planning suggestions
+└── meal_plan/        # POST /meal-plan — LLM meal-plan generation
 ```
 
 ### Auth
