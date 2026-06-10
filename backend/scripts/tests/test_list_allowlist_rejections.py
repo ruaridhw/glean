@@ -10,7 +10,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from list_allowlist_rejections import (
+    DEFAULT_SINCE,
     LogEvent,
+    build_parser,
     fetch_allowlist_rejections,
     format_event,
     parse_since,
@@ -38,6 +40,13 @@ class FakeLogsClient:
 
 
 class TestParseSince:
+    def test_default_recent_horizon_is_one_month(self) -> None:
+        args = build_parser().parse_args([])
+
+        assert DEFAULT_SINCE == "30d"
+        assert args.since == "30d"
+        assert parse_since(args.since) == timedelta(days=30)
+
     @pytest.mark.parametrize(
         ("value", "expected"),
         [

@@ -13,7 +13,7 @@ import boto3
 
 DEFAULT_REGION = "eu-west-2"
 DEFAULT_STACK_NAME = "glean-api-prod"
-DEFAULT_SINCE = "2h"
+DEFAULT_SINCE = "30d"
 FILTER_PATTERN = '"not in the allowlist"'
 
 _SINCE_PATTERN = re.compile(r"^(?P<amount>[1-9]\d*)(?P<unit>[mhd])$")
