@@ -22,7 +22,7 @@ repos:
       - id: commit-msg-policy
         name: commit message policy
         language: system
-        entry: uv run --project backend python backend/scripts/check_commit_msg.py
+        entry: python3 scripts/check_commit_msg.py
         pass_filenames: true
         stages: [commit-msg]
       - id: vulture
