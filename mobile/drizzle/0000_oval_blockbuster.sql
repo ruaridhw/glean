@@ -69,8 +69,7 @@ CREATE TABLE `recipes` (
 	`yield_count` integer,
 	`nutrition` text,
 	`instructions` text DEFAULT '[]' NOT NULL,
-	`last_cooked_at` text,
-	`is_ai_generated` integer DEFAULT false NOT NULL
+	`last_cooked_at` text
 );
 --> statement-breakpoint
 CREATE TABLE `shopping_list_items` (

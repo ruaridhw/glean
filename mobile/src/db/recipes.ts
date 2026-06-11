@@ -44,7 +44,6 @@ export interface SaveRecipeParams {
   yield_count?: number | null;
   nutrition?: object | null;
   instructions?: Array<{ step_number: number; phase: string; text: string }>;
-  is_ai_generated?: boolean;
   ingredients: Array<{
     api_ingredient_id?: string | null;
     canonical_name: string;
@@ -69,7 +68,6 @@ export async function saveRecipe(params: SaveRecipeParams): Promise<number> {
     yield_count: params.yield_count ?? null,
     nutrition: params.nutrition ? JSON.stringify(params.nutrition) : null,
     instructions: JSON.stringify(params.instructions ?? []),
-    is_ai_generated: params.is_ai_generated ?? false,
   });
 
   const recipeId = result.lastInsertRowId as number;

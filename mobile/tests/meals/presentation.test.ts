@@ -23,7 +23,6 @@ const recipe: Recipe = {
     { step_number: 2, phase: "cook", text: "Boil pasta" } as never,
   ],
   last_cooked_at: null,
-  is_ai_generated: false,
   dietary_flags: ["Vegetarian"],
 };
 
@@ -52,8 +51,8 @@ describe("meals presentation", () => {
     ]);
   });
 
-  it("derives tags without persisted prototype fields", () => {
-    expect(getRecipeTags(recipe)).toEqual(["Italian", "Vegetarian", "AI ready"]);
+  it("derives tags from cuisine and dietary flags", () => {
+    expect(getRecipeTags(recipe)).toEqual(["Italian", "Vegetarian"]);
   });
 
   it("formats ingredients with preparation and optional marker", () => {

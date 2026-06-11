@@ -39,7 +39,6 @@ export interface Recipe {
   nutrition?: string | null; // JSON string
   instructions: string[]; // JSON array, serialised as text in DB
   last_cooked_at?: string | null;
-  is_ai_generated: boolean;
   // Populated at query time from recipe_dietary_flags join
   dietary_flags?: string[];
 }

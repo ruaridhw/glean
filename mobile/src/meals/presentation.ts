@@ -25,11 +25,9 @@ export function getRecipeMeta(recipe: Recipe): RecipeMetaItem[] {
 }
 
 export function getRecipeTags(recipe: Recipe): string[] {
-  return [
-    recipe.cuisine,
-    ...(recipe.dietary_flags ?? []),
-    recipe.is_ai_generated ? "AI generated" : "AI ready",
-  ].filter((tag): tag is string => Boolean(tag));
+  return [recipe.cuisine, ...(recipe.dietary_flags ?? [])].filter((tag): tag is string =>
+    Boolean(tag),
+  );
 }
 
 export function formatRecipeIngredient(ingredient: RecipeIngredient): string {
