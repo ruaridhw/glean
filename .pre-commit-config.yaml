@@ -19,6 +19,12 @@ repos:
         files: ^backend/
   - repo: local
     hooks:
+      - id: commit-msg-policy
+        name: commit message policy
+        language: system
+        entry: python3 scripts/check_commit_msg.py
+        pass_filenames: true
+        stages: [commit-msg]
       - id: vulture
         name: vulture (dead code)
         language: system
