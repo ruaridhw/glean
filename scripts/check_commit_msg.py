@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Glean commit messages for gitmoji subjects and explanatory bodies."""
+"""Validate commit messages for gitmoji subjects and explanatory bodies."""
 
 from __future__ import annotations
 
