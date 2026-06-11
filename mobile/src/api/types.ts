@@ -38,7 +38,7 @@ export interface ShoppingParseResponse {
 // --- Recipes ---
 
 export interface RecipeIngredientOut {
-  api_ingredient_id: string;
+  api_ingredient_id: string | null;
   canonical_name: string;
   quantity: number;
   unit: string;
@@ -74,7 +74,7 @@ export interface RecipeOut {
   dietary_flags: string[];
   not_suitable_for: string[];
   yield_count: number | null;
-  nutrition: NutritionOut;
+  nutrition: NutritionOut | null;
   instructions: InstructionOut[];
   ingredients: RecipeIngredientOut[];
 }
