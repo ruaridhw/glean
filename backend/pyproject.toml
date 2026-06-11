@@ -97,3 +97,15 @@ authorize = "authorize"
 Unauthorized = "Unauthorized"
 # boto3 Textract API uses American spelling — cannot be changed to match en-gb locale
 analyze = "analyze"
+# Recipe names may refer to chile peppers, not the British spelling of the country.
+Chile = "Chile"
+# Import code mirrors provider/API spelling and mobile's existing normalization module name.
+normalization = "normalization"
+milliliter = "milliliter"
+milliliters = "milliliters"
+liter = "liter"
+liters = "liters"
+centimeter = "centimeter"
+centimeters = "centimeters"
+fiber = "fiber"
+fiberContent = "fiberContent"
