@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from glean.recipes.offline import RecipeNameImportResult
+from glean.recipes.offline import OfflineRecipeImportResult
 from glean.recipes.stored import StoredIngredient, StoredNutrition, StoredRecipe
 
 _TRADEMARK_SYMBOL_PATTERN = re.compile(r"[®™℠©]")
@@ -16,9 +16,8 @@ _COMPACT_QUANTITY_LEAK_PATTERN = re.compile(r"^\s*\d+(?:\.\d+)?[A-Za-z]")
 
 @dataclass(frozen=True)
 class CorpusJob:
-    provider: str
     name: str
-    url: str | None = None
+    url: str
 
 
 @dataclass(frozen=True)
@@ -30,7 +29,7 @@ class AuditIssue:
 
 @dataclass(frozen=True)
 class AuditReport:
-    provider_counts: dict[str, int]
+    recipe_count: int
     issues: list[AuditIssue]
 
 
@@ -63,18 +62,12 @@ def audit_corpus(cache_root: Path) -> AuditReport:
         if recipe.external_id not in active_recipe_ids
     )
 
-    provider_counts: dict[str, int] = {}
-    for recipe in recipes:
-        provider_counts[recipe.provider] = provider_counts.get(recipe.provider, 0) + 1
-
-    return AuditReport(provider_counts=dict(sorted(provider_counts.items())), issues=issues)
+    return AuditReport(recipe_count=len(recipes), issues=issues)
 
 
 def print_report(report: AuditReport) -> None:
     print("Recipe corpus audit")
-    print("Provider counts:")
-    for provider, count in report.provider_counts.items():
-        print(f"  {provider}: {count}")
+    print(f"Recipes: {report.recipe_count}")
     print(f"Issues: {len(report.issues)}")
     for issue in report.issues:
         recipe_id = issue.recipe_id or "-"
@@ -101,7 +94,6 @@ def _load_recipes(cache_root: Path) -> list[StoredRecipe]:
             recipes.append(
                 StoredRecipe(
                     external_id=f"invalid:{path.relative_to(cache_root)}",
-                    provider="invalid",
                     title=f"Invalid recipe JSON: {path.name}",
                     ingredients=[],
                     instructions=[],
@@ -215,24 +207,23 @@ def _read_jobs(path: Path) -> list[CorpusJob]:
         reader = csv.DictReader(jobs_file)
         return [
             CorpusJob(
-                provider=(row.get("provider") or "").strip(),
                 name=(row.get("name") or "").strip(),
-                url=((row.get("url") or "").strip() or None),
+                url=(row.get("url") or "").strip(),
             )
             for row in reader
-            if (row.get("provider") or "").strip() and (row.get("name") or "").strip()
+            if (row.get("name") or "").strip() and (row.get("url") or "").strip()
         ]
 
 
-def _read_manifest(path: Path) -> list[RecipeNameImportResult]:
+def _read_manifest(path: Path) -> list[OfflineRecipeImportResult]:
     if not path.exists():
         return []
-    entries: list[RecipeNameImportResult] = []
+    entries: list[OfflineRecipeImportResult] = []
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
         try:
-            entries.append(RecipeNameImportResult.model_validate_json(line))
+            entries.append(OfflineRecipeImportResult.model_validate_json(line))
         except ValueError:
             continue
     return entries
@@ -240,7 +231,7 @@ def _read_manifest(path: Path) -> list[RecipeNameImportResult]:
 
 def _active_recipe_ids(
     jobs: list[CorpusJob],
-    manifest_entries: list[RecipeNameImportResult],
+    manifest_entries: list[OfflineRecipeImportResult],
     cached_recipe_ids: set[str],
     issues: list[AuditIssue],
 ) -> set[str]:
@@ -258,7 +249,7 @@ def _active_recipe_ids(
                 AuditIssue(
                     category="active_job_missing_cache",
                     recipe_id=None,
-                    detail=f"{job.provider}/{job.name} has no cached imported recipe",
+                    detail=f"{job.name} has no cached imported recipe",
                 )
             )
             continue
@@ -267,12 +258,8 @@ def _active_recipe_ids(
     return active_recipe_ids
 
 
-def _manifest_entry_matches_job(entry: RecipeNameImportResult, job: CorpusJob) -> bool:
-    if entry.provider != job.provider:
-        return False
-    if job.url:
-        return entry.source_url == job.url
-    return entry.name == job.name
+def _manifest_entry_matches_job(entry: OfflineRecipeImportResult, job: CorpusJob) -> bool:
+    return entry.source_url == job.url
 
 
 def _contains_presentation_markup(text: str) -> bool:

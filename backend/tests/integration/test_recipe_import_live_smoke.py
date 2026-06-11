@@ -7,7 +7,7 @@ import pytest
 
 from glean.recipes import providers
 from glean.recipes.corpus import RecipeCorpusStore
-from glean.recipes.providers import FetchedPage, ProviderRegistry, import_url_to_canonical
+from glean.recipes.providers import FetchedPage, import_url_to_canonical
 from glean.recipes.stored import RecipeParseResult, StoredRecipe
 
 pytestmark = pytest.mark.integration
@@ -38,9 +38,7 @@ def test_direct_url_import_parses_neutral_recipe_fixtures_without_llm(monkeypatc
 
     monkeypatch.setattr(providers, "fetch_public_https", fetch_fixture)
 
-    results = [
-        import_url_to_canonical(url, model=model, registry=ProviderRegistry.default()) for url in WEB_RECIPE_URLS
-    ]
+    results = [import_url_to_canonical(url, model=model) for url in WEB_RECIPE_URLS]
 
     recipes = [
         _assert_imported_recipe(
@@ -66,7 +64,7 @@ def test_direct_url_import_saves_neutral_recipe_fixtures(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(providers, "fetch_public_https", lambda url, **_: FetchedPage(url=url, text=html))
 
-    result = import_url_to_canonical(WEB_RECIPE_URLS[0], model=model, registry=ProviderRegistry.default())
+    result = import_url_to_canonical(WEB_RECIPE_URLS[0], model=model)
     recipe = _assert_imported_recipe(
         result,
         title_contains="Crispy Bean Tacos",
@@ -79,7 +77,6 @@ def test_direct_url_import_saves_neutral_recipe_fixtures(monkeypatch: pytest.Mon
     assert loaded is not None
     assert isinstance(loaded, StoredRecipe)
     assert loaded.title == "Crispy Bean Tacos"
-    assert loaded.provider == "web"
     assert model.calls == 0
 
 
@@ -100,14 +97,11 @@ def _assert_imported_recipe(
     min_instructions: int,
 ) -> StoredRecipe:
     assert result.recipe is not None
-    assert result.provider == "web"
     assert result.parser == "schema.org"
     recipe = result.recipe
     assert isinstance(recipe, StoredRecipe)
-    assert recipe.provider == "web"
     assert title_contains in recipe.title
     assert recipe.provenance is not None
-    assert recipe.provenance.provider == "web"
     assert recipe.provenance.parser == "schema.org"
     assert len(recipe.ingredients) >= min_ingredients
     assert len(recipe.instructions) >= min_instructions

@@ -164,7 +164,6 @@ def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -
         "recipe import completed",
         extra={
             "url": request.url,
-            "provider": result.provider,
             "parser": result.parser,
         },
     )

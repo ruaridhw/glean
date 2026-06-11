@@ -46,7 +46,6 @@ def test_recipe_api_mapping_preserves_recipe_fields() -> None:
     recipe_out = stored_to_recipe_out(recipe)
 
     assert recipe.external_id == "recipeapi:abc-123"
-    assert recipe.provider == "recipeapi"
     assert recipe.title == "Spaghetti Carbonara"
     assert recipe.source_url == "https://example.com/carbonara"
     assert recipe.dietary_flags == ["high-protein"]
@@ -93,10 +92,9 @@ def test_schema_org_conversion_handles_instruction_and_ingredient_shapes() -> No
             ],
         },
         source_url="https://example.com/tomato-soup",
-        provider="schema",
     )
 
-    assert recipe.external_id.startswith("schema:")
+    assert recipe.external_id == "ab559dc41bdddf0d"
     assert recipe.title == "Tomato Soup"
     assert recipe.cuisine == "British"
     assert recipe.active_time_mins == 10
@@ -129,7 +127,6 @@ def test_schema_org_conversion_strips_instruction_html_entities_and_markdown() -
             ],
         },
         source_url="https://recipes.example.test/recipes/chicken-curry",
-        provider="web",
     )
 
     assert [instruction.text for instruction in recipe.instructions] == [
@@ -153,7 +150,6 @@ def test_schema_org_conversion_strips_marketing_suffix_from_title() -> None:
             ],
         },
         source_url="https://recipes.example.test/recipes/sweet-chilli-chicken-sarnie",
-        provider="schema",
     )
 
     assert recipe.title == "Sweet Chilli Chicken Sarnie"
@@ -181,7 +177,6 @@ def test_schema_org_conversion_clears_implausible_total_time() -> None:
             "recipeInstructions": ["Prep the ingredients.", "Cook until ready."],
         },
         source_url="https://www.recipes.example.test/recipes/chicken-pantry-dinner",
-        provider="schema",
     )
 
     assert recipe.total_time_mins is None
@@ -203,7 +198,6 @@ def test_schema_org_recipe_without_nutrition_returns_unknown_nutrition() -> None
             "recipeInstructions": ["Boil pasta.", "Serve pasta."],
         },
         source_url="https://example.com/simple-pasta",
-        provider="schema",
     )
 
     assert recipe.nutrition is None
@@ -226,10 +220,9 @@ def test_llm_json_conversion_handles_time_yield_and_ingredient_strings() -> None
             "not_suitable_for": ["gluten-free"],
         },
         source_url="https://example.com/pasta?utm=1",
-        provider="llm",
     )
 
-    assert recipe.external_id.startswith("llm:")
+    assert recipe.external_id == "28425e008f393138"
     assert recipe.source_url == "https://example.com/pasta"
     assert recipe.active_time_mins == 10
     assert recipe.total_time_mins == 30
@@ -244,7 +237,6 @@ def test_llm_json_conversion_handles_time_yield_and_ingredient_strings() -> None
 def test_recipe_parse_result_allows_failed_result_without_recipe() -> None:
     result = RecipeParseResult(
         recipe=None,
-        provider="schema",
         parser="schema.org",
         source_url="https://example.com/missing",
         failure_category="fetch_failed",
@@ -285,6 +277,6 @@ def test_recipe_parse_result_allows_failed_result_without_recipe() -> None:
 )
 def test_validation_failures_report_exact_categories(data: dict, expected_category: str) -> None:
     with pytest.raises(RecipeImportError) as exc_info:
-        stored_from_schema_org(data, source_url="https://example.com/omelette", provider="schema")
+        stored_from_schema_org(data, source_url="https://example.com/omelette")
 
     assert exc_info.value.category == expected_category

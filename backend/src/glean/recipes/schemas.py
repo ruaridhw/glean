@@ -2,7 +2,7 @@
 
 These `*Out` models are response DTOs for FastAPI and the mobile client. They
 describe what leaves the backend, not how imported recipes are stored or where
-they came from. Provider/provenance/cache metadata belongs in `StoredRecipe`.
+they came from. Provenance/cache metadata belongs in `StoredRecipe`.
 """
 
 from pydantic import BaseModel

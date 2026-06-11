@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from html import unescape
 from typing import Any
@@ -84,26 +83,6 @@ def nutrition_values_from_mapping(raw_nutrition: Any) -> dict[str, float] | None
     return values
 
 
-def nutrition_values_from_embedded_next_data(html: str) -> dict[str, float] | None:
-    soup = BeautifulSoup(html, "html.parser")
-    script = soup.find("script", id="__NEXT_DATA__")
-    if script is None:
-        return None
-
-    try:
-        data = json.loads(script.get_text() or "")
-    except json.JSONDecodeError:
-        return None
-
-    recipe = _nested_dict(data, "props", "pageProps", "recipe")
-    if recipe is None:
-        return None
-    nested_nutrition = recipe.get("nutrition")
-    if isinstance(nested_nutrition, dict):
-        return nutrition_values_from_mapping(nested_nutrition)
-    return nutrition_values_from_mapping(recipe)
-
-
 def _looks_like_title_metadata_suffix(value: str) -> bool:
     return any(pattern.search(value) for pattern in _TITLE_SUFFIX_PATTERNS)
 
@@ -132,12 +111,3 @@ def _numeric_value(value: Any) -> float | None:
 
 def _uses_gram_unit(value: str) -> bool:
     return bool(re.search(r"(?<![A-Za-z])g(?:rams?)?\b", value, flags=re.IGNORECASE))
-
-
-def _nested_dict(data: Any, *keys: str) -> dict[str, Any] | None:
-    current = data
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current if isinstance(current, dict) else None

@@ -9,39 +9,12 @@ import httpx
 import pytest
 
 from glean.recipes.providers import (
-    ProviderRegistry,
     SchemaOrgThenLlmParser,
     discover_first_recipe_url,
     fetch_public_https,
     import_url_to_canonical,
 )
 from glean.recipes.stored import RecipeImportError
-
-
-def test_provider_registry_routes_arbitrary_recipe_urls_to_web() -> None:
-    registry = ProviderRegistry.default()
-
-    provider = registry.provider_for_url("https://recipes.example.test/recipes/creamy-tomato-risotto")
-
-    assert provider.name == "web"
-
-
-def test_web_provider_does_not_support_recipe_name_search() -> None:
-    provider = ProviderRegistry.default().provider_by_name("web")
-
-    with pytest.raises(RecipeImportError) as exc_info:
-        provider.search_url("chicken soup")
-
-    assert exc_info.value.category == "unsupported_provider_search"
-
-
-def test_recipe_api_provider_does_not_support_offline_scrape_search() -> None:
-    provider = ProviderRegistry.default().provider_by_name("recipeapi")
-
-    with pytest.raises(RecipeImportError) as exc_info:
-        provider.search_url("chicken soup")
-
-    assert exc_info.value.category == "unsupported_provider_search"
 
 
 def test_schema_org_then_llm_parser_returns_stored_recipe_without_calling_llm() -> None:
@@ -71,16 +44,13 @@ def test_schema_org_then_llm_parser_returns_stored_recipe_without_calling_llm() 
         html,
         source_url="https://recipes.example.test/miso-noodles",
         model=model,
-        provider="web",
     )
 
     assert result.recipe is not None
-    assert result.provider == "web"
     assert result.parser == "schema.org"
     assert result.source_url == "https://recipes.example.test/miso-noodles"
     assert result.fetched_url == "https://recipes.example.test/miso-noodles"
     assert result.recipe.title == "Miso Noodles"
-    assert result.recipe.provider == "web"
     assert result.recipe.total_time_mins == 25
     assert [
         (ingredient.canonical_name, ingredient.quantity, ingredient.unit) for ingredient in result.recipe.ingredients
@@ -120,7 +90,6 @@ def test_schema_org_parser_reads_embedded_nutrition_mapping() -> None:
         html,
         source_url="https://recipes.example.test/green-lentil-bowl",
         model=model,
-        provider="web",
     )
 
     assert result.recipe is not None
@@ -155,7 +124,6 @@ def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_re
         "<html><body><h1>Tacos</h1></body></html>",
         source_url="https://recipes.example.test/tacos",
         model=model,
-        provider="web",
     )
 
     assert result.recipe is not None
@@ -306,7 +274,7 @@ def test_fetch_public_https_retries_browser_challenge_once(monkeypatch: pytest.M
     ]
 
 
-def test_import_url_to_canonical_uses_generic_web_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_url_to_canonical_uses_direct_url_parser(monkeypatch: pytest.MonkeyPatch) -> None:
     html = _schema_org_html(
         {
             "@type": "Recipe",
@@ -333,9 +301,7 @@ def test_import_url_to_canonical_uses_generic_web_provider(monkeypatch: pytest.M
     result = import_url_to_canonical("https://recipes.example.test/lemon-pasta", model=MagicMock())
 
     assert result.recipe is not None
-    assert result.provider == "web"
     assert result.parser == "schema.org"
-    assert result.recipe.provider == "web"
     assert result.recipe.title == "Lemon Pasta"
 
 
@@ -347,9 +313,7 @@ def test_generic_search_html_selects_first_plausible_recipe_url() -> None:
       <a href="https://recipes.example.test/recipes/salmon-tacos">Salmon tacos</a>
     </body></html>
     """
-    provider = ProviderRegistry.default().provider_by_name("web")
-
-    url = discover_first_recipe_url(html, base_url="https://search.example.test/?q=katsu", provider=provider)
+    url = discover_first_recipe_url(html, base_url="https://search.example.test/?q=katsu")
 
     assert url == "https://recipes.example.test/recipes/chicken-katsu"
 

@@ -58,9 +58,9 @@ def test_get_by_source_url_finds_recipe_saved_from_import_url(tmp_path) -> None:
 
 def test_get_returns_none_for_corrupt_json(tmp_path) -> None:
     store = RecipeCorpusStore(root=tmp_path)
-    provider_dir = tmp_path / "import"
-    provider_dir.mkdir()
-    (provider_dir / "broken.json").write_text("{not valid json")
+    namespace_dir = tmp_path / "import"
+    namespace_dir.mkdir()
+    (namespace_dir / "broken.json").write_text("{not valid json")
 
     assert store.get("import:broken") is None
 
@@ -120,7 +120,6 @@ def _recipe(
 ) -> StoredRecipe:
     return StoredRecipe(
         external_id=external_id,
-        provider="import",
         title=title,
         source_url=source_url,
         cuisine=cuisine,
@@ -140,7 +139,6 @@ def _recipe(
             StoredInstruction(step_number=2, phase="main", text="Cook and serve."),
         ],
         provenance=RecipeProvenance(
-            provider="import",
             source_url=source_url or "",
             parser="test",
         ),

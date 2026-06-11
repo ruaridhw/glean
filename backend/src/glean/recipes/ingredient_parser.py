@@ -69,7 +69,7 @@ _COMPACT_PREFIX_UNIT_PATTERN = "|".join(
 )
 
 
-def parse_ingredient_text(raw: object, *, provider: str, ingredient_index: int) -> StoredIngredient | None:
+def parse_ingredient_text(raw: object) -> StoredIngredient | None:
     text = _normalise_label(raw)
     if not text:
         return None

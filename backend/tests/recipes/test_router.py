@@ -491,7 +491,6 @@ def _stored_recipe(
 ) -> StoredRecipe:
     return StoredRecipe(
         external_id=external_id,
-        provider="import",
         title=title,
         source_url=source_url,
         cuisine=cuisine,
@@ -511,7 +510,6 @@ def _stored_recipe(
             StoredInstruction(step_number=2, phase="main", text="Cook and serve."),
         ],
         provenance=RecipeProvenance(
-            provider="import",
             source_url=source_url or "",
             parser="test",
         ),

@@ -104,11 +104,11 @@ class RecipeCorpusStore:
             return None
 
     def _path_for(self, recipe_id: str) -> Path:
-        provider, separator, provider_recipe_id = recipe_id.partition(":")
+        namespace, separator, namespaced_recipe_id = recipe_id.partition(":")
         if not separator:
-            provider = "_unknown"
-            provider_recipe_id = recipe_id
-        return self.root / quote(provider, safe="") / f"{quote(provider_recipe_id, safe='')}.json"
+            namespace = "_unknown"
+            namespaced_recipe_id = recipe_id
+        return self.root / quote(namespace, safe="") / f"{quote(namespaced_recipe_id, safe='')}.json"
 
     @staticmethod
     def _matches_query(recipe: StoredRecipe, query: str) -> bool:

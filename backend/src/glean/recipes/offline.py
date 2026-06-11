@@ -3,19 +3,13 @@ from __future__ import annotations
 import json
 import time
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
-from glean.recipes.providers import (
-    ProviderRegistry,
-    discover_first_recipe_url,
-    fetch_public_https,
-    import_url_to_canonical,
-)
+from glean.recipes.providers import import_url_to_canonical
 from glean.recipes.stored import RecipeImportError
 
-__all__ = ["RecipeNameImportJob", "RecipeNameImportResult", "import_recipe_names"]
+__all__ = ["OfflineRecipeImportJob", "OfflineRecipeImportResult", "import_offline_recipes"]
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -26,13 +20,12 @@ if TYPE_CHECKING:
     from glean.recipes.corpus import RecipeCorpusStore
 
 
-class RecipeNameImportJob(BaseModel):
-    provider: str
+class OfflineRecipeImportJob(BaseModel):
     name: str
+    url: str
 
 
-class RecipeNameImportResult(BaseModel):
-    provider: str
+class OfflineRecipeImportResult(BaseModel):
     name: str
     status: str
     source_url: str | None = None
@@ -43,31 +36,29 @@ class RecipeNameImportResult(BaseModel):
 
 if TYPE_CHECKING:
     _vulture_pydantic_field_references = (
-        RecipeNameImportResult.error_category,
-        RecipeNameImportResult.error_message,
+        OfflineRecipeImportResult.error_category,
+        OfflineRecipeImportResult.error_message,
     )
 
 
-def import_recipe_names(
-    jobs: Iterable[RecipeNameImportJob],
+def import_offline_recipes(
+    jobs: Iterable[OfflineRecipeImportJob],
     *,
     model: BaseChatModel,
     corpus: RecipeCorpusStore,
-    registry: ProviderRegistry,
     manifest_path: Path,
     rate_limit_seconds: float = 0.0,
-) -> list[RecipeNameImportResult]:
+) -> list[OfflineRecipeImportResult]:
     existing_imports = _load_imported_manifest_entries(manifest_path, corpus=corpus)
-    results: list[RecipeNameImportResult] = []
+    results: list[OfflineRecipeImportResult] = []
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     has_processed_non_skipped_job = False
 
     for job in jobs:
-        existing_result = existing_imports.get((job.provider, job.name))
+        existing_result = existing_imports.get(job.url)
         if existing_result is not None:
             results.append(
-                RecipeNameImportResult(
-                    provider=job.provider,
+                OfflineRecipeImportResult(
                     name=job.name,
                     status="skipped",
                     source_url=existing_result.source_url,
@@ -79,12 +70,12 @@ def import_recipe_names(
         if has_processed_non_skipped_job and rate_limit_seconds > 0:
             time.sleep(rate_limit_seconds)
 
-        result = _import_recipe_name(job, model=model, corpus=corpus, registry=registry)
+        result = _import_recipe_url(job, model=model, corpus=corpus)
         _append_manifest_entry(manifest_path, result)
         results.append(result)
         has_processed_non_skipped_job = True
-        if result.status == "imported" and result.recipe_id is not None:
-            existing_imports[(result.provider, result.name)] = result
+        if result.status == "imported" and result.recipe_id is not None and result.source_url is not None:
+            existing_imports[result.source_url] = result
 
     return results
 
@@ -93,91 +84,79 @@ def _load_imported_manifest_entries(
     manifest_path: Path,
     *,
     corpus: RecipeCorpusStore,
-) -> dict[tuple[str, str], RecipeNameImportResult]:
+) -> dict[str, OfflineRecipeImportResult]:
     if not manifest_path.exists():
         return {}
 
-    imported: dict[tuple[str, str], RecipeNameImportResult] = {}
+    imported: dict[str, OfflineRecipeImportResult] = {}
     for line in manifest_path.read_text().splitlines():
         if not line.strip():
             continue
         try:
-            result = RecipeNameImportResult.model_validate_json(line)
+            result = OfflineRecipeImportResult.model_validate_json(line)
         except ValueError:
             continue
-        if result.status == "imported" and result.recipe_id and corpus.get(result.recipe_id) is not None:
-            imported[(result.provider, result.name)] = result
+        if (
+            result.status == "imported"
+            and result.source_url
+            and result.recipe_id
+            and corpus.get(result.recipe_id) is not None
+        ):
+            imported[result.source_url] = result
     return imported
 
 
-def _import_recipe_name(
-    job: RecipeNameImportJob,
+def _import_recipe_url(
+    job: OfflineRecipeImportJob,
     *,
     model: BaseChatModel,
     corpus: RecipeCorpusStore,
-    registry: ProviderRegistry,
-) -> RecipeNameImportResult:
+) -> OfflineRecipeImportResult:
+    if existing_recipe := corpus.get_by_source_url(job.url):
+        return OfflineRecipeImportResult(
+            name=job.name,
+            status="skipped",
+            source_url=job.url,
+            recipe_id=existing_recipe.external_id,
+        )
+
     try:
-        provider = registry.provider_by_name(job.provider)
-        search_url = provider.search_url(job.name)
-        if urlparse(search_url).scheme.lower() != "https":
-            return RecipeNameImportResult(
-                provider=job.provider,
-                name=job.name,
-                status="failed",
-                error_category="unsupported_provider_search",
-                error_message=f"Provider search URL must use HTTPS: {search_url}",
-            )
-
-        search_page = fetch_public_https(search_url)
-        source_url = discover_first_recipe_url(search_page.text, base_url=search_url, provider=provider)
-        if source_url is None:
-            return RecipeNameImportResult(
-                provider=job.provider,
-                name=job.name,
-                status="failed",
-                error_category="search_no_result",
-                error_message="No recipe result found in provider search",
-            )
-
-        parse_result = import_url_to_canonical(source_url, model=model, registry=registry)
+        parse_result = import_url_to_canonical(job.url, model=model)
         if parse_result.recipe is None:
-            return RecipeNameImportResult(
-                provider=job.provider,
+            return OfflineRecipeImportResult(
                 name=job.name,
                 status="failed",
-                source_url=source_url,
+                source_url=job.url,
                 error_category=parse_result.failure_category or "import_failed",
                 error_message="Recipe import did not return a recipe",
             )
 
         recipe = corpus.save(parse_result.recipe)
-        return RecipeNameImportResult(
-            provider=job.provider,
+        return OfflineRecipeImportResult(
             name=job.name,
             status="imported",
-            source_url=source_url,
+            source_url=job.url,
             recipe_id=recipe.external_id,
         )
     except RecipeImportError as exc:
-        return RecipeNameImportResult(
-            provider=job.provider,
+        return OfflineRecipeImportResult(
             name=job.name,
             status="failed",
+            source_url=job.url,
             error_category=exc.category,
             error_message=exc.message,
         )
     except Exception as exc:
-        return RecipeNameImportResult(
-            provider=job.provider,
+        return OfflineRecipeImportResult(
             name=job.name,
             status="failed",
+            source_url=job.url,
             error_category="unexpected_error",
             error_message=str(exc),
         )
 
 
-def _append_manifest_entry(manifest_path: Path, result: RecipeNameImportResult) -> None:
+def _append_manifest_entry(manifest_path: Path, result: OfflineRecipeImportResult) -> None:
     with manifest_path.open("a", encoding="utf-8") as manifest_file:
         manifest_file.write(json.dumps(result.model_dump(mode="json"), sort_keys=True) + "\n")
         manifest_file.flush()

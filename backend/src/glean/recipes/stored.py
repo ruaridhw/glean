@@ -74,7 +74,6 @@ class StoredInstruction(BaseModel):
 
 
 class RecipeProvenance(BaseModel):
-    provider: str
     source_url: str
     parser: str
     fetched_url: str | None = None
@@ -83,16 +82,14 @@ class RecipeProvenance(BaseModel):
 
 
 class StoredRecipe(BaseModel):
-    """Provider-aware recipe record used by imports, offline scraping, and corpus cache.
+    """Recipe record used by imports, offline jobs, and corpus cache.
 
-    `StoredRecipe` is the internal persistence shape. It keeps provider identity,
-    provenance, parser metadata, and provider-prefixed IDs intact so the import
-    pipeline can reason about where a recipe came from. Convert it to
-    `RecipeOut` only at the API boundary.
+    `StoredRecipe` is the internal persistence shape. It keeps parser metadata
+    and source provenance for the import pipeline. Convert it to `RecipeOut` only
+    at the API boundary.
     """
 
     external_id: str
-    provider: str
     title: str
     source_url: str | None = None
     cuisine: str | None = None
@@ -112,7 +109,6 @@ class RecipeParseResult(BaseModel):
     """Envelope returned by import parsers, including failure metadata when parsing fails."""
 
     recipe: StoredRecipe | None = None
-    provider: str
     parser: str
     source_url: str
     fetched_url: str | None = None
@@ -149,7 +145,6 @@ def stored_from_recipe_api(api_recipe: RecipeApiRecipe) -> StoredRecipe:
 
     return StoredRecipe(
         external_id=f"recipeapi:{api_recipe.id}",
-        provider="recipeapi",
         title=api_recipe.name,
         source_url=api_recipe.source_url,
         cuisine=api_recipe.cuisine,
@@ -186,21 +181,19 @@ def stored_from_recipe_api(api_recipe: RecipeApiRecipe) -> StoredRecipe:
             for ingredient in group.items
         ],
         provenance=RecipeProvenance(
-            provider="recipeapi",
             source_url=api_recipe.source_url or "",
             parser="recipeapi",
         ),
     )
 
 
-def stored_from_schema_org(data: dict, *, source_url: str, provider: str) -> StoredRecipe:
+def stored_from_schema_org(data: dict, *, source_url: str) -> StoredRecipe:
     raw_instructions = data.get("recipeInstructions", [])
     raw_ingredients = data.get("recipeIngredient", [])
 
     return validate_importable_recipe(
         StoredRecipe(
-            external_id=_url_external_id(provider, source_url),
-            provider=provider,
+            external_id=_url_external_id(source_url),
             title=clean_recipe_title(data.get("name")),
             source_url=source_url,
             cuisine=_string_value(data.get("recipeCuisine")) or None,
@@ -214,19 +207,18 @@ def stored_from_schema_org(data: dict, *, source_url: str, provider: str) -> Sto
             yield_count=_parse_yield_count(data.get("recipeYield")),
             nutrition=_stored_nutrition_from_values(nutrition_values_from_mapping(data.get("nutrition"))),
             instructions=_instructions_from_schema_org(raw_instructions),
-            ingredients=_ingredient_strings(raw_ingredients, provider),
-            provenance=RecipeProvenance(provider=provider, source_url=source_url, parser="schema.org"),
+            ingredients=_ingredient_strings(raw_ingredients),
+            provenance=RecipeProvenance(source_url=source_url, parser="schema.org"),
         )
     )
 
 
-def stored_from_llm_json(data: dict, *, source_url: str, provider: str) -> StoredRecipe:
+def stored_from_llm_json(data: dict, *, source_url: str) -> StoredRecipe:
     recipe_source_url = _string_value(data.get("source_url")) or source_url
 
     return validate_importable_recipe(
         StoredRecipe(
-            external_id=_url_external_id(provider, source_url),
-            provider=provider,
+            external_id=_url_external_id(source_url),
             title=clean_recipe_title(data.get("title") or data.get("name")),
             source_url=recipe_source_url,
             cuisine=_string_value(data.get("cuisine")) or None,
@@ -240,8 +232,8 @@ def stored_from_llm_json(data: dict, *, source_url: str, provider: str) -> Store
             yield_count=_parse_yield_count(data.get("yield") or data.get("recipeYield")),
             nutrition=None,
             instructions=_instruction_strings(data.get("instructions", [])),
-            ingredients=_ingredient_strings(data.get("ingredients", []), provider),
-            provenance=RecipeProvenance(provider=provider, source_url=source_url, parser="llm"),
+            ingredients=_ingredient_strings(data.get("ingredients", [])),
+            provenance=RecipeProvenance(source_url=source_url, parser="llm"),
         )
     )
 
@@ -282,9 +274,8 @@ def stored_to_recipe_out(recipe: StoredRecipe) -> RecipeOut:
     )
 
 
-def _url_external_id(provider: str, source_url: str) -> str:
-    digest = hashlib.sha256(source_url.encode()).hexdigest()[:16]
-    return f"{provider}:{digest}"
+def _url_external_id(source_url: str) -> str:
+    return hashlib.sha256(source_url.encode()).hexdigest()[:16]
 
 
 def _stored_nutrition_from_values(values: dict[str, float] | None) -> StoredNutrition | None:
@@ -314,7 +305,7 @@ def _parse_yield_count(raw_yield: Any) -> int | None:
     return int(match.group()) if match else None
 
 
-def _ingredient_strings(raw_ingredients: Any, provider: str) -> list[StoredIngredient]:
+def _ingredient_strings(raw_ingredients: Any) -> list[StoredIngredient]:
     # Local import avoids a cycle: the shared parser constructs StoredIngredient.
     from glean.recipes.ingredient_parser import parse_ingredient_text  # noqa: PLC0415
 
@@ -322,8 +313,8 @@ def _ingredient_strings(raw_ingredients: Any, provider: str) -> list[StoredIngre
         raw_ingredients = [raw_ingredients] if raw_ingredients else []
 
     ingredients: list[StoredIngredient] = []
-    for index, ingredient in enumerate(raw_ingredients, start=1):
-        parsed = parse_ingredient_text(_string_value(ingredient), provider=provider, ingredient_index=index)
+    for ingredient in raw_ingredients:
+        parsed = parse_ingredient_text(_string_value(ingredient))
         if parsed is not None:
             ingredients.append(parsed)
     return ingredients

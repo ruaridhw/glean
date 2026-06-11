@@ -1,7 +1,7 @@
 // mobile/src/normalization/units.ts
 
 // Keep this aligned with backend recipe-import unit parsing in
-// backend/src/glean/recipes/providers.py and the planned ingredient_parser.py.
+// backend/src/glean/recipes/ingredient_parser.py.
 // Recipe imports and meal-plan pantry math must agree on canonical units.
 // Deterministic lookup: source_unit -> { factor to apply, target unit }
 const UNIT_CONVERSIONS: Record<string, { factor: number; to: string }> = {

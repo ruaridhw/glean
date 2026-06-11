@@ -4,7 +4,7 @@ import ipaddress
 import json
 import socket
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NoReturn, Protocol
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
@@ -56,25 +56,15 @@ class FetchedPage:
     text: str
 
 
-class RecipeProvider(Protocol):
-    name: str
-    domains: tuple[str, ...]
-
-    def search_url(self, query: str) -> str: ...
-
-    def parse(self, html: str, source_url: str, model: BaseChatModel) -> RecipeParseResult: ...
-
-
 class SchemaOrgThenLlmParser:
     """Extract a stored recipe from arbitrary recipe-page HTML."""
 
-    def parse(self, html: str, *, source_url: str, model: BaseChatModel, provider: str) -> RecipeParseResult:
+    def parse(self, html: str, *, source_url: str, model: BaseChatModel) -> RecipeParseResult:
         schema_data = _parse_schema_org_recipe(html)
         if schema_data and schema_data.get("recipeIngredient"):
-            recipe = stored_from_schema_org(schema_data, source_url=source_url, provider=provider)
+            recipe = stored_from_schema_org(schema_data, source_url=source_url)
             return RecipeParseResult(
                 recipe=recipe,
-                provider=provider,
                 parser="schema.org",
                 source_url=source_url,
                 fetched_url=source_url,
@@ -101,13 +91,12 @@ class SchemaOrgThenLlmParser:
             raise RecipeImportError("invalid_llm_json", "Recipe extraction model must return a JSON object")
 
         try:
-            recipe = stored_from_llm_json(data, source_url=source_url, provider=provider)
+            recipe = stored_from_llm_json(data, source_url=source_url)
         except RecipeImportError as exc:
             raise RecipeImportError("invalid_recipe", exc.message) from exc
 
         return RecipeParseResult(
             recipe=recipe,
-            provider=provider,
             parser="llm",
             source_url=source_url,
             fetched_url=source_url,
@@ -115,64 +104,14 @@ class SchemaOrgThenLlmParser:
         )
 
 
-class GenericRecipePageProvider:
-    name = "web"
-    domains: tuple[str, ...] = ()
-
-    def __init__(self, parser: SchemaOrgThenLlmParser | None = None) -> None:
-        self._parser = parser or SchemaOrgThenLlmParser()
-
-    def search_url(self, query: str) -> str:
-        return _raise_unsupported_search(self.name, query)
-
-    def parse(self, html: str, source_url: str, model: BaseChatModel) -> RecipeParseResult:
-        return self._parser.parse(html, source_url=source_url, model=model, provider=self.name)
-
-
-class RecipeApiProvider(GenericRecipePageProvider):
-    name = "recipeapi"
-    domains: tuple[str, ...] = ()
-
-    def search_url(self, query: str) -> str:
-        return _raise_unsupported_search(self.name, query)
-
-
-class ProviderRegistry:
-    def __init__(self, providers: list[RecipeProvider]) -> None:
-        self._providers = providers
-        self._providers_by_name = {provider.name: provider for provider in providers}
-
-    @classmethod
-    def default(cls) -> ProviderRegistry:
-        return cls([GenericRecipePageProvider(), RecipeApiProvider()])
-
-    def provider_for_url(self, url: str) -> RecipeProvider:
-        hostname = urlparse(url).hostname or ""
-        generic = self.provider_by_name("web")
-        for provider in self._providers:
-            if provider.name == "web":
-                continue
-            if _hostname_matches_domains(hostname, provider.domains):
-                return provider
-        return generic
-
-    def provider_by_name(self, name: str) -> RecipeProvider:
-        try:
-            return self._providers_by_name[name]
-        except KeyError as exc:
-            raise RecipeImportError("unknown_provider", f"Unknown recipe provider: {name}") from exc
-
-
 def import_url_to_canonical(
     url: str,
     *,
     model: BaseChatModel,
-    registry: ProviderRegistry | None = None,
+    parser: SchemaOrgThenLlmParser | None = None,
 ) -> RecipeParseResult:
-    provider_registry = registry or ProviderRegistry.default()
     fetched = fetch_public_https(url)
-    provider = provider_registry.provider_for_url(fetched.url)
-    result = provider.parse(fetched.text, source_url=fetched.url, model=model)
+    result = (parser or SchemaOrgThenLlmParser()).parse(fetched.text, source_url=fetched.url, model=model)
     result.source_url = url
     result.fetched_url = fetched.url
     if result.recipe and result.recipe.provenance:
@@ -186,13 +125,11 @@ def import_html_to_canonical(
     html: str,
     *,
     model: BaseChatModel,
-    registry: ProviderRegistry | None = None,
+    parser: SchemaOrgThenLlmParser | None = None,
     fetched_url: str | None = None,
 ) -> RecipeParseResult:
-    provider_registry = registry or ProviderRegistry.default()
     resolved_url = fetched_url or url
-    provider = provider_registry.provider_for_url(resolved_url)
-    result = provider.parse(html, source_url=resolved_url, model=model)
+    result = (parser or SchemaOrgThenLlmParser()).parse(html, source_url=resolved_url, model=model)
     result.source_url = url
     result.fetched_url = resolved_url
     if result.recipe and result.recipe.provenance:
@@ -281,7 +218,7 @@ def _looks_like_browser_challenge(body: bytes) -> bool:
     return "Enable JavaScript and cookies to continue" in text or "<title>Simple Page</title>" in text
 
 
-def discover_first_recipe_url(search_html: str, *, base_url: str, provider: RecipeProvider) -> str | None:
+def discover_first_recipe_url(search_html: str, *, base_url: str) -> str | None:
     soup = BeautifulSoup(search_html, "html.parser")
     for anchor in soup.find_all("a", href=True):
         href = str(anchor["href"]).strip()
@@ -289,7 +226,7 @@ def discover_first_recipe_url(search_html: str, *, base_url: str, provider: Reci
             continue
 
         for candidate in _candidate_urls_from_href(href, base_url):
-            if _is_plausible_recipe_link(candidate, provider):
+            if _is_plausible_recipe_link(candidate):
                 return candidate
     return None
 
@@ -364,16 +301,9 @@ def _is_redirect(response: httpx.Response) -> bool:
     return 300 <= response.status_code < 400
 
 
-def _hostname_matches_domains(hostname: str, domains: tuple[str, ...]) -> bool:
-    normalised_hostname = hostname.lower().rstrip(".")
-    return any(normalised_hostname == domain or normalised_hostname.endswith(f".{domain}") for domain in domains)
-
-
-def _is_plausible_recipe_link(url: str, provider: RecipeProvider) -> bool:
+def _is_plausible_recipe_link(url: str) -> bool:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        return False
-    if provider.domains and not _hostname_matches_domains(parsed.hostname, provider.domains):
         return False
     return parsed.path.rstrip("/") not in {"", "/"}
 
@@ -387,17 +317,5 @@ def _candidate_urls_from_href(href: str, base_url: str) -> list[str]:
     return [direct_candidate]
 
 
-def _raise_unsupported_search(provider_name: str, query: str) -> NoReturn:
-    raise RecipeImportError(
-        "unsupported_provider_search",
-        f"Provider {provider_name} does not support recipe-name search for: {query}",
-    )
-
-
 if TYPE_CHECKING:
-    _vulture_provider_references = (
-        RecipeProvider.search_url,
-        GenericRecipePageProvider.search_url,
-        RecipeApiProvider.search_url,
-        discover_first_recipe_url,
-    )
+    _vulture_recipe_link_references = (discover_first_recipe_url,)

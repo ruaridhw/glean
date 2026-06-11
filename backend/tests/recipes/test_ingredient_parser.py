@@ -39,7 +39,7 @@ def test_parse_ingredient_text_extracts_quantity_unit_name_and_package(
     expected_unit: str,
     expected_preparation: str | None,
 ) -> None:
-    parsed = parse_ingredient_text(raw, provider="web", ingredient_index=1)
+    parsed = parse_ingredient_text(raw)
 
     assert parsed is not None
     assert parsed.api_ingredient_id is None

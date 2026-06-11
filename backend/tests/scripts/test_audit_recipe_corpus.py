@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from scripts import audit_recipe_corpus
 
-from glean.recipes.offline import RecipeNameImportResult
+from glean.recipes.offline import OfflineRecipeImportResult
 from glean.recipes.stored import (
     StoredIngredient,
     StoredInstruction,
@@ -22,44 +22,40 @@ def test_audit_corpus_reports_quality_and_metadata_issues(tmp_path: Path) -> Non
     _write_jobs(
         cache_root,
         [
-            ("generic", "Bad Recipe", "https://example.com/bad"),
-            ("web", "Web Recipe", "https://recipes.example.test/recipes/web-recipe"),
-            ("generic", "Missing Recipe", "https://example.com/missing"),
+            ("Bad Recipe", "https://example.com/bad"),
+            ("Web Recipe", "https://recipes.example.test/recipes/web-recipe"),
+            ("Missing Recipe", "https://example.com/missing"),
         ],
     )
     _write_manifest(
         cache_root,
         [
-            RecipeNameImportResult(
-                provider="generic",
+            OfflineRecipeImportResult(
                 name="Bad Recipe",
                 status="imported",
                 source_url="https://example.com/bad",
-                recipe_id="generic:bad",
+                recipe_id="bad",
             ),
-            RecipeNameImportResult(
-                provider="web",
+            OfflineRecipeImportResult(
                 name="Web Recipe",
                 status="imported",
                 source_url="https://recipes.example.test/recipes/web-recipe",
-                recipe_id="web:bad",
+                recipe_id="web-bad",
             ),
         ],
     )
     _write_recipe(
         cache_root,
-        "generic",
-        "bad.json",
+        "recipes",
+        "web-bad.json",
         _recipe(
-            external_id="generic:bad",
-            provider="generic",
+            external_id="bad",
             title="Bad Recipe",
             source_url="https://example.com/bad",
             total_time_mins=1440,
             nutrition=StoredNutrition(),
             ingredients=[
                 StoredIngredient(
-                    api_ingredient_id="generic:ingredient:1",
                     canonical_name="240g beef mince",
                     quantity=0,
                     unit="",
@@ -73,17 +69,15 @@ def test_audit_corpus_reports_quality_and_metadata_issues(tmp_path: Path) -> Non
     )
     _write_recipe(
         cache_root,
-        "web",
+        "recipes",
         "bad.json",
         _recipe(
-            external_id="web:bad",
-            provider="web",
+            external_id="web-bad",
             title="Web Recipe",
             source_url="https://recipes.example.test/recipes/web-recipe",
             nutrition=StoredNutrition(calories=605),
             ingredients=[
                 StoredIngredient(
-                    api_ingredient_id="web:ingredient:1",
                     canonical_name="Chicken breast",
                     quantity=0,
                     unit="",
@@ -93,11 +87,10 @@ def test_audit_corpus_reports_quality_and_metadata_issues(tmp_path: Path) -> Non
     )
     _write_recipe(
         cache_root,
-        "generic",
+        "recipes",
         "orphan.json",
         _recipe(
-            external_id="generic:orphan",
-            provider="generic",
+            external_id="orphan",
             title="Orphan Recipe",
             source_url="https://example.com/orphan",
             nutrition=None,
@@ -114,12 +107,12 @@ def test_audit_corpus_reports_quality_and_metadata_issues(tmp_path: Path) -> Non
         "invalid_total_time",
         "unknown_nutrition_as_zero",
     ]
-    assert report.provider_counts == {"generic": 2, "web": 1}
+    assert report.recipe_count == 3
 
 
 def test_main_returns_non_zero_when_fail_on_issues(tmp_path: Path, capsys) -> None:
     cache_root = tmp_path / "recipes"
-    _write_jobs(cache_root, [("generic", "Missing Recipe", "https://example.com/missing")])
+    _write_jobs(cache_root, [("Missing Recipe", "https://example.com/missing")])
     _write_manifest(cache_root, [])
 
     result = audit_recipe_corpus.main(["--cache-root", str(cache_root), "--fail-on-issues"])
@@ -130,26 +123,24 @@ def test_main_returns_non_zero_when_fail_on_issues(tmp_path: Path, capsys) -> No
 
 def test_audit_allows_web_store_cupboard_basics_without_quantities(tmp_path: Path) -> None:
     cache_root = tmp_path / "recipes"
-    _write_jobs(cache_root, [("web", "Web Recipe", "https://recipes.example.test/recipes/web-recipe")])
+    _write_jobs(cache_root, [("Web Recipe", "https://recipes.example.test/recipes/web-recipe")])
     _write_manifest(
         cache_root,
         [
-            RecipeNameImportResult(
-                provider="web",
+            OfflineRecipeImportResult(
                 name="Web Recipe",
                 status="imported",
                 source_url="https://recipes.example.test/recipes/web-recipe",
-                recipe_id="web:basics",
+                recipe_id="basics",
             )
         ],
     )
     _write_recipe(
         cache_root,
-        "web",
+        "recipes",
         "basics.json",
         _recipe(
-            external_id="web:basics",
-            provider="web",
+            external_id="basics",
             title="Web Recipe",
             source_url="https://recipes.example.test/recipes/web-recipe",
             nutrition=StoredNutrition(calories=605),
@@ -172,26 +163,24 @@ def test_audit_allows_web_store_cupboard_basics_without_quantities(tmp_path: Pat
 
 def test_audit_reports_compact_quantity_leaks_and_trademark_symbols(tmp_path: Path) -> None:
     cache_root = tmp_path / "recipes"
-    _write_jobs(cache_root, [("web", "Web Recipe", "https://www.recipes.example.test/recipes/web-recipe")])
+    _write_jobs(cache_root, [("Web Recipe", "https://www.recipes.example.test/recipes/web-recipe")])
     _write_manifest(
         cache_root,
         [
-            RecipeNameImportResult(
-                provider="web",
+            OfflineRecipeImportResult(
                 name="Web Recipe",
                 status="imported",
                 source_url="https://www.recipes.example.test/recipes/web-recipe",
-                recipe_id="web:bad",
+                recipe_id="web-bad",
             )
         ],
     )
     _write_recipe(
         cache_root,
-        "web",
+        "recipes",
         "bad.json",
         _recipe(
-            external_id="web:bad",
-            provider="web",
+            external_id="web-bad",
             title="Web Recipe",
             source_url="https://www.recipes.example.test/recipes/web-recipe",
             nutrition=StoredNutrition(calories=400),
@@ -210,29 +199,28 @@ def test_audit_reports_compact_quantity_leaks_and_trademark_symbols(tmp_path: Pa
     ]
 
 
-def _write_jobs(cache_root: Path, rows: list[tuple[str, str, str]]) -> None:
+def _write_jobs(cache_root: Path, rows: list[tuple[str, str]]) -> None:
     cache_root.mkdir(parents=True, exist_ok=True)
-    lines = ["provider,name,url", *(f"{provider},{name},{url}" for provider, name, url in rows)]
+    lines = ["name,url", *(f"{name},{url}" for name, url in rows)]
     (cache_root / "jobs.csv").write_text("\n".join(lines) + "\n")
 
 
-def _write_manifest(cache_root: Path, results: list[RecipeNameImportResult]) -> None:
+def _write_manifest(cache_root: Path, results: list[OfflineRecipeImportResult]) -> None:
     cache_root.mkdir(parents=True, exist_ok=True)
     (cache_root / "manifest.jsonl").write_text(
         "".join(json.dumps(result.model_dump(mode="json"), sort_keys=True) + "\n" for result in results)
     )
 
 
-def _write_recipe(cache_root: Path, provider: str, filename: str, recipe: StoredRecipe) -> None:
-    provider_dir = cache_root / "corpus" / provider
-    provider_dir.mkdir(parents=True, exist_ok=True)
-    (provider_dir / filename).write_text(recipe.model_dump_json(indent=2))
+def _write_recipe(cache_root: Path, shard: str, filename: str, recipe: StoredRecipe) -> None:
+    shard_dir = cache_root / "corpus" / shard
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    (shard_dir / filename).write_text(recipe.model_dump_json(indent=2))
 
 
 def _recipe(
     *,
     external_id: str,
-    provider: str,
     title: str,
     source_url: str,
     nutrition: StoredNutrition | None,
@@ -242,7 +230,6 @@ def _recipe(
 ) -> StoredRecipe:
     return StoredRecipe(
         external_id=external_id,
-        provider=provider,
         title=title,
         source_url=source_url,
         total_time_mins=total_time_mins,
@@ -250,7 +237,6 @@ def _recipe(
         ingredients=ingredients
         or [
             StoredIngredient(
-                api_ingredient_id=f"{external_id}:ingredient:1",
                 canonical_name="Pasta",
                 quantity=200,
                 unit="g",
