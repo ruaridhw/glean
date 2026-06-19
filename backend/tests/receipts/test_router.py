@@ -13,7 +13,7 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
-from glean.receipts.schemas import DescribeRequest
+from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
 from glean.receipts.service import describe_purchase
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -27,6 +27,10 @@ def _mock_claude_response() -> list[dict]:
     return json.loads((FIXTURES / "receipt_claude.json").read_text())["items"]
 
 
+def _mock_scan_response() -> ScanResponse:
+    return ScanResponse(items=[ParsedIngredient(**item) for item in _mock_claude_response()])
+
+
 @pytest.fixture
 def unauth_client(test_settings: Settings) -> TestClient:
     app.dependency_overrides[get_settings] = lambda: test_settings
@@ -38,16 +42,14 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     mock_textract = MagicMock()
     mock_textract.analyze_expense.return_value = _mock_textract_response()
 
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(_mock_claude_response())
-
     def boto3_client_factory(service_name: str, **kwargs):
         if service_name == "s3":
             return mock_s3
         return mock_textract
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     with patch("boto3.client", side_effect=boto3_client_factory):
         response = client.post(
@@ -95,9 +97,6 @@ def test_scan_receipt_rejects_oversized(client: TestClient, auth_headers: dict[s
 
 
 def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, str]) -> None:
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(_mock_claude_response())
-
     vision_settings = Settings(
         openrouter_api_key="test-key",
         recipe_api_key="test-recipe_api_key",
@@ -108,7 +107,8 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     )
     app.dependency_overrides[get_settings] = lambda: vision_settings
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/receipts/scan",
@@ -124,11 +124,9 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(_mock_claude_response())
-
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/receipts/describe",
@@ -142,16 +140,15 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
 
 
 def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(_mock_claude_response())
     model = MagicMock()
-    model.invoke.return_value = mock_result
+    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    model.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
 
     response = describe_purchase(DescribeRequest(text="I bought chicken and milk"), model=model)
 
     assert len(response.items) == 2
-    model.invoke.assert_called_once()
-    messages, kwargs = model.invoke.call_args
+    model.invoke.assert_not_called()
+    messages, kwargs = model.with_structured_output.return_value.invoke.call_args
     assert isinstance(messages[0][0], SystemMessage)
     assert isinstance(messages[0][1], HumanMessage)
     assert kwargs["config"] == {"metadata": {"feature": "pantry-purchase-description"}}

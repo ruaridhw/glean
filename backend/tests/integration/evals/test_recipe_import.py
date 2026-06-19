@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -10,20 +9,23 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
+from glean.llm import invoke_structured
 from glean.recipes.service import URL_PARSE_SYSTEM_PROMPT
+from glean.recipes.stored import RecipeLlmResponse
 
 from .judges.rubrics import judge_recipe_import
 
 
-def _invoke_recipe_import(model: BaseChatModel, html: str, *, example_idx: int) -> str:
-    result = model.invoke(
+def _invoke_recipe_import(model: BaseChatModel, html: str, *, example_idx: int) -> RecipeLlmResponse:
+    return invoke_structured(
+        model,
+        RecipeLlmResponse,
         [
             SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
         ],
         config={"metadata": {"feature": "eval-recipe-import", "example_idx": example_idx}},
     )
-    return result.content
 
 
 class TestRecipeImportStructural:
@@ -35,9 +37,8 @@ class TestRecipeImportStructural:
         recipe_import_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            assert isinstance(raw, dict), f"Example {i}: expected dict, got {type(raw).__name__}"
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            assert isinstance(response, RecipeLlmResponse), f"Example {i}: expected RecipeLlmResponse"
 
     def test_all_examples_have_required_fields(
         self,
@@ -46,9 +47,8 @@ class TestRecipeImportStructural:
     ) -> None:
         required_fields = {"title", "ingredients", "instructions"}
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            missing = required_fields - set(raw.keys())
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            missing = required_fields - set(response.model_dump(by_alias=True).keys())
             assert not missing, f"Example {i}: missing required fields: {missing}"
 
     def test_ingredients_and_instructions_are_lists(
@@ -57,13 +57,10 @@ class TestRecipeImportStructural:
         recipe_import_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            assert isinstance(raw["ingredients"], list), f"Example {i}: ingredients is not a list"
-            assert isinstance(raw["instructions"], list), f"Example {i}: instructions is not a list"
-            assert len(raw["ingredients"]) > 0, f"Example {i}: ingredients list is empty"
-            message = f"Example {i}: instructions has {len(raw['instructions'])} steps, expected >= 2"
-            assert len(raw["instructions"]) >= 2, message
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            assert len(response.ingredients) > 0, f"Example {i}: ingredients list is empty"
+            message = f"Example {i}: instructions has {len(response.instructions)} steps, expected >= 2"
+            assert len(response.instructions) >= 2, message
 
     def test_title_is_nonempty_string(
         self,
@@ -71,10 +68,8 @@ class TestRecipeImportStructural:
         recipe_import_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            assert isinstance(raw["title"], str), f"Example {i}: title is not a string"
-            assert len(raw["title"].strip()) > 0, f"Example {i}: title is empty"
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            assert len(response.title.strip()) > 0, f"Example {i}: title is empty"
 
 
 @pytest.mark.soft_gate
@@ -88,9 +83,8 @@ class TestRecipeImportHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            for j, step in enumerate(raw.get("instructions", [])):
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            for j, step in enumerate(response.instructions):
                 if not step or not step.strip():
                     failures.append(f"Example {i}: instruction step {j + 1} is empty")
         assert not failures, "Empty instruction check:\n" + "\n".join(failures)
@@ -103,9 +97,8 @@ class TestRecipeImportHeuristic:
         iso_pattern = re.compile(r"^PT(\d+H)?(\d+M)?(\d+S)?$")
         failures = []
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            total_time = raw.get("total_time")
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            total_time = response.total_time
             if total_time and not iso_pattern.match(total_time):
                 failures.append(f"Example {i}: total_time '{total_time}' is not valid ISO 8601 duration")
         assert not failures, "ISO 8601 duration check:\n" + "\n".join(failures)
@@ -117,9 +110,8 @@ class TestRecipeImportHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            for j, ing in enumerate(raw.get("ingredients", [])):
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            for j, ing in enumerate(response.ingredients):
                 if not ing or not ing.strip():
                     failures.append(f"Example {i}: ingredient {j + 1} is empty")
         assert not failures, "Empty ingredient check:\n" + "\n".join(failures)
@@ -131,9 +123,8 @@ class TestRecipeImportHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
-            for flag in raw.get("dietary_flags", []):
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
+            for flag in response.dietary_flags:
                 if not isinstance(flag, str):
                     failures.append(f"Example {i}: dietary_flag {flag} is not a string")
         assert not failures, "Dietary flags type check:\n" + "\n".join(failures)
@@ -151,12 +142,11 @@ class TestRecipeImportJudge:
     ) -> None:
         scores: list[int] = []
         for i, example in enumerate(recipe_import_dataset):
-            content = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
-            raw = json.loads(content)
+            response = _invoke_recipe_import(eval_model, example["input"]["html"], example_idx=i)
             score = judge_recipe_import(
                 model=judge_model,
                 html_snippet=example["input"]["html"],
-                extracted_json=raw,
+                extracted_json=response.model_dump(by_alias=True),
             )
             scores.append(score)
 

@@ -4,7 +4,7 @@ import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from glean.recipe_api.client import _iso_to_mins
 from glean.recipes.import_normalization import (
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "RecipeImportError",
+    "RecipeLlmResponse",
     "RecipeParseResult",
     "RecipeProvenance",
     "StoredIngredient",
@@ -27,6 +28,7 @@ __all__ = [
     "StoredNutrition",
     "StoredRecipe",
     "stored_from_llm_json",
+    "stored_from_llm_response",
     "stored_from_recipe_api",
     "stored_from_schema_org",
     "stored_to_recipe_out",
@@ -79,6 +81,35 @@ class RecipeProvenance(BaseModel):
     fetched_url: str | None = None
     confidence: float = 1.0
     warnings: list[str] = Field(default_factory=list)
+
+
+class RecipeLlmResponse(BaseModel):
+    """Structured response expected from the recipe extraction LLM."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    title: str
+    source_url: str | None = None
+    cuisine: str | None = None
+    difficulty: str | None = None
+    total_time: str | None = None
+    prep_time: str | None = None
+    active_time: str | None = None
+    yield_: str | int | list[str | int] | None = Field(default=None, alias="yield")
+    recipe_yield: str | int | list[str | int] | None = Field(default=None, alias="recipeYield")
+    ingredients: list[str]
+    instructions: list[str]
+    dietary_flags: list[str] = Field(default_factory=list)
+    not_suitable_for: list[str] = Field(default_factory=list)
+
+    @field_validator("total_time", "prep_time", "active_time")
+    @classmethod
+    def _validate_iso_duration(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if _iso_to_mins(value) is None:
+            raise ValueError("must be an ISO-8601 duration like PT30M")
+        return value
 
 
 class StoredRecipe(BaseModel):
@@ -214,25 +245,32 @@ def stored_from_schema_org(data: dict, *, source_url: str) -> StoredRecipe:
 
 
 def stored_from_llm_json(data: dict, *, source_url: str) -> StoredRecipe:
-    recipe_source_url = _string_value(data.get("source_url")) or source_url
+    try:
+        llm_response = RecipeLlmResponse.model_validate(data)
+    except ValidationError as exc:
+        raise RecipeImportError("invalid_llm_json", "Recipe extraction model returned malformed fields") from exc
+
+    return stored_from_llm_response(llm_response, source_url=source_url)
+
+
+def stored_from_llm_response(data: RecipeLlmResponse, *, source_url: str) -> StoredRecipe:
+    recipe_source_url = _string_value(data.source_url) or source_url
 
     return validate_importable_recipe(
         StoredRecipe(
             external_id=_url_external_id(source_url),
-            title=clean_recipe_title(data.get("title") or data.get("name")),
+            title=clean_recipe_title(data.title),
             source_url=recipe_source_url,
-            cuisine=_string_value(data.get("cuisine")) or None,
-            difficulty=_string_value(data.get("difficulty")) or None,
-            active_time_mins=sane_import_time_mins(
-                _iso_to_mins(_string_value(data.get("prep_time") or data.get("active_time")))
-            ),
-            total_time_mins=sane_import_time_mins(_iso_to_mins(_string_value(data.get("total_time")))),
-            dietary_flags=list(data.get("dietary_flags") or []),
-            not_suitable_for=list(data.get("not_suitable_for") or []),
-            yield_count=_parse_yield_count(data.get("yield") or data.get("recipeYield")),
+            cuisine=_string_value(data.cuisine) or None,
+            difficulty=_string_value(data.difficulty) or None,
+            active_time_mins=sane_import_time_mins(_iso_to_mins(data.prep_time or data.active_time)),
+            total_time_mins=sane_import_time_mins(_iso_to_mins(data.total_time)),
+            dietary_flags=_string_list(data.dietary_flags),
+            not_suitable_for=_string_list(data.not_suitable_for),
+            yield_count=_parse_yield_count(data.yield_ or data.recipe_yield),
             nutrition=None,
-            instructions=_instruction_strings(data.get("instructions", [])),
-            ingredients=_ingredient_strings(data.get("ingredients", [])),
+            instructions=_instruction_strings(data.instructions),
+            ingredients=_ingredient_strings(data.ingredients),
             provenance=RecipeProvenance(source_url=source_url, parser="llm"),
         )
     )
@@ -357,3 +395,7 @@ def _instruction_strings(raw_instructions: Any) -> list[StoredInstruction]:
 
 def _string_value(value: Any) -> str:
     return normalise_public_text(value)
+
+
+def _string_list(values: list[str]) -> list[str]:
+    return [text for value in values if (text := _string_value(value))]

@@ -8,7 +8,7 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
-from glean.suggestions.schemas import SuggestionRequest
+from glean.suggestions.schemas import SuggestedRecipe, SuggestionRequest, SuggestionResponse
 from glean.suggestions.service import get_suggestions
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -48,11 +48,11 @@ SAMPLE_REQUEST = {
 
 def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: dict[str, str]) -> None:
     fixture = json.loads((FIXTURES / "suggestion_claude.json").read_text())
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(fixture)
+    structured_response = SuggestionResponse(suggestions=[SuggestedRecipe(**item) for item in fixture])
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = structured_response
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
 
@@ -74,9 +74,10 @@ def test_get_suggestions_requires_auth(test_settings: Settings) -> None:
 
 
 def test_get_suggestions_uses_meal_plan_feature_metadata() -> None:
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(
-        [
+    model = MagicMock()
+    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    model.with_structured_output.return_value.invoke.return_value = SuggestionResponse(
+        suggestions=[
             {
                 "recipe_id": 1,
                 "title": "Chicken Stir Fry",
@@ -85,12 +86,10 @@ def test_get_suggestions_uses_meal_plan_feature_metadata() -> None:
             }
         ]
     )
-    model = MagicMock()
-    model.invoke.return_value = mock_result
 
     response = get_suggestions(SuggestionRequest(**SAMPLE_REQUEST), model=model)
 
     assert response.suggestions[0].recipe_id == 1
-    model.invoke.assert_called_once()
-    _, kwargs = model.invoke.call_args
+    model.invoke.assert_not_called()
+    _, kwargs = model.with_structured_output.return_value.invoke.call_args
     assert kwargs["config"] == {"metadata": {"feature": "meal-plan-generation"}}

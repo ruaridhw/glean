@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+
+from glean.llm import invoke_structured
 
 RECEIPT_SCAN_RUBRIC = """You are evaluating a grocery receipt normalisation system.
 Given a raw receipt line item name and the system's normalised output, rate the quality 1-5:
@@ -18,7 +20,7 @@ Given a raw receipt line item name and the system's normalised output, rate the 
 2 = Significant error (wrong unit type, major quantity error)
 1 = Wrong (completely misidentified item)
 
-Respond with ONLY a single integer 1-5. No explanation."""
+Return structured data with a single score field from 1 to 5."""
 
 SUGGESTIONS_RUBRIC = """You are evaluating a meal suggestion system.
 Given a user's pantry state, dietary flags, and the system's suggestion, rate the quality 1-5:
@@ -29,7 +31,7 @@ Given a user's pantry state, dietary flags, and the system's suggestion, rate th
 2 = Poor — ignores pantry priorities or reason is vague/irrelevant
 1 = Bad — violates dietary flags or completely irrelevant to pantry state
 
-Respond with ONLY a single integer 1-5. No explanation."""
+Return structured data with a single score field from 1 to 5."""
 
 RECIPE_IMPORT_RUBRIC = """You are evaluating a recipe extraction system.
 Given source HTML and the system's extracted recipe JSON, rate the extraction quality 1-5:
@@ -40,7 +42,7 @@ Given source HTML and the system's extracted recipe JSON, rate the extraction qu
 2 = Significant errors (wrong title, missing most ingredients)
 1 = Completely wrong extraction
 
-Respond with ONLY a single integer 1-5. No explanation."""
+Return structured data with a single score field from 1 to 5."""
 
 PURCHASE_DESCRIPTION_RUBRIC = """You are evaluating a grocery purchase description parser.
 Given a user's free-text grocery purchase and the system's parsed pantry items, rate the quality 1-5:
@@ -51,7 +53,7 @@ Given a user's free-text grocery purchase and the system's parsed pantry items, 
 2 = Poor - misses important items or uses unsuitable units
 1 = Bad - mostly wrong or not useful for updating a pantry
 
-Respond with ONLY a single integer 1-5. No explanation."""
+Return structured data with a single score field from 1 to 5."""
 
 SHOPPING_LIST_DESCRIPTION_RUBRIC = """You are evaluating a grocery shopping list parser.
 Given a user's free-text shopping list and the system's structured shopping proposal, rate the quality 1-5:
@@ -62,13 +64,13 @@ Given a user's free-text shopping list and the system's structured shopping prop
 2 = Poor - misses important items or invents items not implied by the request
 1 = Bad - mostly wrong or not useful for building a shopping list
 
-Respond with ONLY a single integer 1-5. No explanation."""
+Return structured data with a single score field from 1 to 5."""
 
 
-def _parse_score(content: str) -> int:
-    """Extract integer score from LLM response, defaulting to 1 if unparsable."""
-    match = re.search(r"[1-5]", content)
-    return int(match.group()) if match else 1
+class JudgeScoreResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    score: int = Field(ge=1, le=5)
 
 
 def judge_receipt_scan(
@@ -83,11 +85,13 @@ def judge_receipt_scan(
         f'Raw receipt item: "{raw_name}"\n'
         f'Normalised to: "{normalised_name}", quantity={quantity}{unit}, unit_price={unit_price}/{unit}'
     )
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        JudgeScoreResponse,
         [SystemMessage(content=RECEIPT_SCAN_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-receipt"}},
     )
-    return _parse_score(result.content)
+    return response.score
 
 
 def judge_suggestion(
@@ -103,11 +107,13 @@ def judge_suggestion(
         f'Suggested recipe: "{title}"\n'
         f'Reason: "{reason}"'
     )
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        JudgeScoreResponse,
         [SystemMessage(content=SUGGESTIONS_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-meal-plan-generation"}},
     )
-    return _parse_score(result.content)
+    return response.score
 
 
 def judge_recipe_import(
@@ -119,11 +125,13 @@ def judge_recipe_import(
         f"Source HTML (first 2000 chars):\n{html_snippet[:2000]}\n\n"
         f"Extracted recipe:\n{json.dumps(extracted_json, indent=2)}"
     )
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        JudgeScoreResponse,
         [SystemMessage(content=RECIPE_IMPORT_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-recipe-import"}},
     )
-    return _parse_score(result.content)
+    return response.score
 
 
 def judge_purchase_description(
@@ -132,11 +140,13 @@ def judge_purchase_description(
     parsed_items: list[dict],
 ) -> int:
     prompt = f"Purchase description:\n{purchase_text}\n\n" f"Parsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        JudgeScoreResponse,
         [SystemMessage(content=PURCHASE_DESCRIPTION_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-pantry-purchase-description"}},
     )
-    return _parse_score(result.content)
+    return response.score
 
 
 def judge_shopping_list_description(
@@ -148,8 +158,10 @@ def judge_shopping_list_description(
         f"Shopping list description:\n{shopping_text}\n\n"
         f"Parsed shopping proposal:\n{json.dumps(parsed_response, indent=2)}"
     )
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        JudgeScoreResponse,
         [SystemMessage(content=SHOPPING_LIST_DESCRIPTION_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-shopping-list-description"}},
     )
-    return _parse_score(result.content)
+    return response.score

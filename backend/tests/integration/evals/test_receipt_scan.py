@@ -9,7 +9,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.receipts.schemas import ParsedIngredient
+from glean.llm import invoke_structured
+from glean.receipts.schemas import ScanResponse
 from glean.receipts.service import NORMALISE_SYSTEM_PROMPT
 
 from .judges.rubrics import judge_receipt_scan
@@ -17,15 +18,16 @@ from .judges.rubrics import judge_receipt_scan
 ALLOWED_UNITS = {"g", "ml", "units"}
 
 
-def _invoke_receipt_scan(model: BaseChatModel, line_items: list[dict], *, example_idx: int) -> str:
-    result = model.invoke(
+def _invoke_receipt_scan(model: BaseChatModel, line_items: list[dict], *, example_idx: int) -> ScanResponse:
+    return invoke_structured(
+        model,
+        ScanResponse,
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=json.dumps(line_items)),
         ],
         config={"metadata": {"feature": "eval-receipt-scan", "example_idx": example_idx}},
     )
-    return result.content
 
 
 class TestReceiptScanStructural:
@@ -37,9 +39,8 @@ class TestReceiptScanStructural:
         receipt_scan_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            raw = json.loads(content)
-            assert isinstance(raw, list), f"Example {i}: expected list, got {type(raw).__name__}"
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            assert isinstance(response, ScanResponse), f"Example {i}: expected ScanResponse"
 
     def test_all_examples_conform_to_schema(
         self,
@@ -47,9 +48,8 @@ class TestReceiptScanStructural:
         receipt_scan_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            assert len(items) > 0, f"Example {i}: returned empty list"
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            assert len(response.items) > 0, f"Example {i}: returned empty list"
 
     def test_all_items_have_valid_units(
         self,
@@ -57,9 +57,8 @@ class TestReceiptScanStructural:
         receipt_scan_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item in response.items:
                 message = f"Example {i}: item '{item.name}' has unit '{item.unit}', expected one of {ALLOWED_UNITS}"
                 assert item.unit in ALLOWED_UNITS, message
 
@@ -69,10 +68,11 @@ class TestReceiptScanStructural:
         receipt_scan_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = json.loads(content)
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
             expected_count = len(example["input"]["line_items"])
-            assert len(items) == expected_count, f"Example {i}: expected {expected_count} items, got {len(items)}"
+            assert (
+                len(response.items) == expected_count
+            ), f"Example {i}: expected {expected_count} items, got {len(response.items)}"
 
 
 @pytest.mark.soft_gate
@@ -86,9 +86,8 @@ class TestReceiptScanHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item in response.items:
                 if item.name != item.name.lower():
                     failures.append(f"Example {i}: '{item.name}' is not lowercase")
         assert not failures, "Lowercase check failures:\n" + "\n".join(failures)
@@ -101,9 +100,8 @@ class TestReceiptScanHeuristic:
         abbreviations = {"bnls", "chkn", "whl", "org", "brst", "flts", "sml", "lrg", "med", "pck"}
         failures = []
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item in response.items:
                 words = set(item.name.lower().split())
                 found = words & abbreviations
                 if found:
@@ -117,9 +115,8 @@ class TestReceiptScanHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item in response.items:
                 if item.quantity <= 0:
                     failures.append(f"Example {i}: '{item.name}' has quantity {item.quantity}")
                 if item.unit_price is not None and item.unit_price <= 0:
@@ -133,9 +130,8 @@ class TestReceiptScanHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item in response.items:
                 if not (0.0 <= item.confidence <= 1.0):
                     failures.append(f"Example {i}: '{item.name}' has confidence {item.confidence}")
         assert not failures, "Confidence range check failures:\n" + "\n".join(failures)
@@ -153,9 +149,8 @@ class TestReceiptScanJudge:
     ) -> None:
         scores: list[int] = []
         for i, example in enumerate(receipt_scan_dataset):
-            content = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item, raw_input in zip(items, example["input"]["line_items"], strict=True):
+            response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
+            for item, raw_input in zip(response.items, example["input"]["line_items"], strict=True):
                 score = judge_receipt_scan(
                     model=judge_model,
                     raw_name=raw_input["name"],

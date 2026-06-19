@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr, ValidationError
 
 from glean.config import Settings
 from glean.llm import (
@@ -13,9 +13,14 @@ from glean.llm import (
     LLMRouter,
     ModelPurpose,
     create_chat_model,
-    message_content_as_text,
+    invoke_structured,
     validate_model,
 )
+
+
+class _StructuredTestResponse(BaseModel):
+    name: str
+    values: list[str]
 
 
 class TestCreateChatModel:
@@ -146,13 +151,37 @@ class TestLLMRouter:
         assert router.model_id_for(Feature.RECEIPT_SCAN) == "google/gemini-3.1-flash-lite"
 
 
-class TestMessageContentAsText:
-    def test_returns_text_content(self) -> None:
-        assert message_content_as_text('{"items": []}') == '{"items": []}'
+class TestInvokeStructured:
+    def test_invokes_model_with_schema_and_validates_dict_response(self) -> None:
+        model = MagicMock()
+        model.with_structured_output.return_value.invoke.return_value = {
+            "name": "Pantry",
+            "values": ["milk", "eggs"],
+        }
 
-    def test_rejects_structured_content(self) -> None:
-        with pytest.raises(TypeError, match="Expected text content"):
-            message_content_as_text([{"type": "text", "text": "not plain text"}])
+        response = invoke_structured(
+            model,
+            _StructuredTestResponse,
+            ["message"],
+            config={"metadata": {"feature": "shopping-list-description"}},
+        )
+
+        assert response == _StructuredTestResponse(name="Pantry", values=["milk", "eggs"])
+        model.with_structured_output.assert_called_once_with(_StructuredTestResponse)
+        model.with_structured_output.return_value.invoke.assert_called_once_with(
+            ["message"],
+            config={"metadata": {"feature": "shopping-list-description"}},
+        )
+
+    def test_rejects_malformed_dict_response(self) -> None:
+        model = MagicMock()
+        model.with_structured_output.return_value.invoke.return_value = {
+            "name": "Pantry",
+            "values": "milk",
+        }
+
+        with pytest.raises(ValidationError):
+            invoke_structured(model, _StructuredTestResponse, ["message"])
 
 
 def _mock_model_objects(model_ids: list[str]) -> list[MagicMock]:

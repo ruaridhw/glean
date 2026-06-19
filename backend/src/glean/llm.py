@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_openrouter import ChatOpenRouter
 from openrouter import OpenRouter
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from langchain_core.language_models import BaseChatModel
+    from langchain_core.language_models import BaseChatModel, LanguageModelInput
+    from langchain_core.runnables import RunnableConfig
     from pydantic import SecretStr
 
 
@@ -100,10 +102,19 @@ def validate_model(model_id: str, *, api_key: SecretStr) -> None:
         )
 
 
-def message_content_as_text(content: object) -> str:
-    if not isinstance(content, str):
-        raise TypeError(f"Expected text content from LLM response, got {type(content).__name__}")
-    return content
+def invoke_structured[StructuredResponseT: BaseModel](
+    model: BaseChatModel,
+    schema: type[StructuredResponseT],
+    messages: LanguageModelInput,
+    *,
+    config: RunnableConfig | None = None,
+) -> StructuredResponseT:
+    """Invoke an LLM through LangChain structured output and validate the result."""
+    structured_model = model.with_structured_output(schema)
+    result = structured_model.invoke(messages, config=config)
+    if isinstance(result, schema):
+        return result
+    return schema.model_validate(result)
 
 
 def create_chat_model(model: str, *, api_key: SecretStr, **kwargs: Any) -> BaseChatModel:

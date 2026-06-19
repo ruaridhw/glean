@@ -10,12 +10,14 @@ from urllib.parse import parse_qs, urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import ValidationError
 
-from glean.llm import Feature, message_content_as_text
+from glean.llm import Feature, invoke_structured
 from glean.recipes.stored import (
     RecipeImportError,
+    RecipeLlmResponse,
     RecipeParseResult,
-    stored_from_llm_json,
+    stored_from_llm_response,
     stored_from_schema_org,
 )
 
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 URL_PARSE_SYSTEM_PROMPT = """You are a recipe extraction assistant. Given HTML from a recipe page,
-extract the recipe details and return ONLY valid JSON with this exact structure (no markdown, no commentary):
+extract the recipe details and return structured data with this exact shape:
 {
   "title": "Recipe Name",
   "source_url": "https://...",
@@ -37,7 +39,8 @@ extract the recipe details and return ONLY valid JSON with this exact structure 
   "dietary_flags": [],
   "not_suitable_for": []
 }
-Return null values for fields that cannot be determined. Return ONLY the JSON object."""
+Use null for optional scalar fields that cannot be determined. Use empty arrays for list fields when none are present.
+Do not include commentary."""
 
 _DEFAULT_MAX_REDIRECTS = 5
 _BROWSER_HEADERS = {
@@ -71,27 +74,25 @@ class SchemaOrgThenLlmParser:
                 confidence=1.0,
             )
 
+        messages = [
+            SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
+            HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
+        ]
+
         try:
-            response = model.invoke(
-                [
-                    SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
-                    HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
-                ],
+            llm_response = invoke_structured(
+                model,
+                RecipeLlmResponse,
+                messages,
                 config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
             )
+        except ValidationError as exc:
+            raise RecipeImportError("invalid_llm_json", "Recipe extraction model returned malformed fields") from exc
         except Exception as exc:
             raise RecipeImportError("llm_failed", "Recipe extraction model failed") from exc
 
         try:
-            data = json.loads(message_content_as_text(response.content))
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise RecipeImportError("invalid_llm_json", "Recipe extraction model returned invalid JSON") from exc
-
-        if not isinstance(data, dict):
-            raise RecipeImportError("invalid_llm_json", "Recipe extraction model must return a JSON object")
-
-        try:
-            recipe = stored_from_llm_json(data, source_url=source_url)
+            recipe = stored_from_llm_response(llm_response, source_url=source_url)
         except RecipeImportError as exc:
             raise RecipeImportError("invalid_recipe", exc.message) from exc
 

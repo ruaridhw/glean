@@ -13,29 +13,25 @@ from langchain_core.messages.content import create_image_block, create_text_bloc
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.llm import Feature, message_content_as_text
+from glean.llm import Feature, invoke_structured
 from glean.observability import logger, tracer
-from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
+from glean.receipts.schemas import DescribeRequest, ScanResponse
 
 NORMALISE_SYSTEM_PROMPT = """You are a grocery ingredient normaliser.
-Given a list of receipt line items (name, quantity, price), return a JSON array of objects with:
+Given a list of receipt line items (name, quantity, price), return structured items with:
 - name: canonical lowercase ingredient name (e.g. "chicken breast", "whole milk")
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
-- confidence: 0.0-1.0 reflecting how certain you are about the normalisation
-
-Respond with ONLY valid JSON. No markdown, no explanation."""
+- confidence: 0.0-1.0 reflecting how certain you are about the normalisation"""
 
 VISION_SYSTEM_PROMPT = """You are a grocery receipt scanner and ingredient normaliser.
-Given an image of a grocery receipt, extract all line items and return a JSON array of objects with:
+Given an image of a grocery receipt, extract all line items and return structured items with:
 - name: canonical lowercase ingredient name (e.g. "chicken breast", "whole milk")
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
-- confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation
-
-Respond with ONLY valid JSON. No markdown, no explanation."""
+- confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation"""
 
 
 def _extract_textract_lines(textract_response: dict) -> list[dict]:
@@ -60,10 +56,6 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
     return lines
 
 
-def _normalise_items(raw_content: str) -> list[ParsedIngredient]:
-    return [ParsedIngredient(**item) for item in json.loads(raw_content)]
-
-
 @tracer.capture_method
 def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel, aws_region: str, s3_bucket: str) -> ScanResponse:
     """OCR via AWS Textract, then normalise extracted text with the LLM."""
@@ -80,12 +72,14 @@ def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel, aws_region: 
     finally:
         s3.delete_object(Bucket=s3_bucket, Key=s3_key)
 
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        ScanResponse,
         [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
         config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
     logger.info("llm normalised items")
-    return ScanResponse(items=_normalise_items(message_content_as_text(result.content)))
+    return response
 
 
 @tracer.capture_method
@@ -93,7 +87,9 @@ def _scan_via_vision(image_bytes: bytes, *, model: BaseChatModel) -> ScanRespons
     """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
     b64 = base64.b64encode(image_bytes).decode()
     image_block = create_image_block(base64=b64, mime_type="image/jpeg")
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        ScanResponse,
         [
             SystemMessage(content=VISION_SYSTEM_PROMPT),
             HumanMessage(
@@ -106,7 +102,7 @@ def _scan_via_vision(image_bytes: bytes, *, model: BaseChatModel) -> ScanRespons
         config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
     logger.info("vision model scanned receipt")
-    return ScanResponse(items=_normalise_items(message_content_as_text(result.content)))
+    return response
 
 
 @tracer.capture_method
@@ -126,11 +122,12 @@ def scan_receipt(
 
 @tracer.capture_method
 def describe_purchase(request: DescribeRequest, *, model: BaseChatModel) -> ScanResponse:
-    result = model.invoke(
+    return invoke_structured(
+        model,
+        ScanResponse,
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
         ],
         config={"metadata": {"feature": Feature.PANTRY_PURCHASE_DESCRIPTION}},
     )
-    return ScanResponse(items=_normalise_items(message_content_as_text(result.content)))

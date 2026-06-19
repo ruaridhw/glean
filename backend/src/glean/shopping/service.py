@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.llm import Feature, message_content_as_text
+from glean.llm import Feature, invoke_structured
 from glean.observability import logger, tracer
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 
@@ -52,13 +51,14 @@ def parse_shopping_description(
     model: BaseChatModel,
 ) -> ShoppingParseResponse:
     logger.info("parsing shopping description", extra={"text_length": len(request.text)})
-    result = model.invoke(
+    response = invoke_structured(
+        model,
+        ShoppingParseResponse,
         [
             SystemMessage(content=SHOPPING_PARSE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this shopping list description: {request.text}"),
         ],
         config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
     )
-    response = ShoppingParseResponse(**json.loads(message_content_as_text(result.content)))
     logger.info("shopping description parsed", extra={"items": len(response.items)})
     return response
