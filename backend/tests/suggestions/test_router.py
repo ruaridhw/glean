@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings
+from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
 from glean.suggestions.schemas import SuggestionRequest
@@ -50,10 +51,10 @@ def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: d
     mock_result = MagicMock()
     mock_result.content = json.dumps(fixture)
 
-    with patch("glean.suggestions.router.LLMRouter") as MockRouter:
-        router = MockRouter.from_settings.return_value
-        router.chat_model.return_value.invoke.return_value = mock_result
-        response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
+    llm_router = MagicMock()
+    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    response = client.post("/suggestions", headers=auth_headers, json=SAMPLE_REQUEST)
 
     assert response.status_code == 200
     suggestions = response.json()["suggestions"]
@@ -61,8 +62,7 @@ def test_get_suggestions_returns_ranked_list(client: TestClient, auth_headers: d
     assert suggestions[0]["title"] == "Chicken Stir Fry"
     assert "expiring" in suggestions[0]["reason"]
     assert suggestions[1]["missing_ingredients"] == []
-    MockRouter.from_settings.assert_called_once()
-    router.chat_model.assert_called_once_with(Feature.MEAL_PLAN_GENERATION)
+    llm_router.chat_model.assert_called_once_with(Feature.MEAL_PLAN_GENERATION)
 
 
 def test_get_suggestions_requires_auth(test_settings: Settings) -> None:

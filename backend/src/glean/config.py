@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from aws_lambda_powertools.utilities import parameters
-from pydantic import Field, SecretStr
+from pydantic import SecretStr  # noqa: TC002 - Pydantic resolves this field type at runtime.
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from glean.llm import Feature, LLMModelPolicy  # noqa: TC001 - Pydantic resolves these field types at runtime.
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     s3_receipts_bucket: str
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
-    llm_model_policy_overrides: dict[Feature, LLMModelPolicy] = Field(default_factory=dict)
+    llm_model_policy_overrides: dict[Feature, LLMModelPolicy] | None = None
     receipt_ocr_mode: str = "textract"  # "textract" (AWS) or "vision" (OpenRouter vision model)
     langchain_project: str = "glean-dev"
 

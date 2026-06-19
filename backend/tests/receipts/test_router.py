@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import Settings, get_settings
+from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
 from glean.receipts.schemas import DescribeRequest
@@ -45,12 +46,10 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
             return mock_s3
         return mock_textract
 
-    with (
-        patch("boto3.client", side_effect=boto3_client_factory),
-        patch("glean.receipts.router.LLMRouter") as MockRouter,
-    ):
-        router = MockRouter.from_settings.return_value
-        router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router = MagicMock()
+    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    with patch("boto3.client", side_effect=boto3_client_factory):
         response = client.post(
             "/receipts/scan",
             headers=auth_headers,
@@ -66,7 +65,7 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     assert items[0]["unit_price"] == pytest.approx(0.007)
     mock_s3.put_object.assert_called_once()
     mock_s3.delete_object.assert_called_once()
-    router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
+    llm_router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
 
 
 def test_scan_receipt_requires_auth(unauth_client: TestClient) -> None:
@@ -108,39 +107,38 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
         receipt_ocr_mode="vision",
     )
     app.dependency_overrides[get_settings] = lambda: vision_settings
-    with patch("glean.receipts.router.LLMRouter") as MockRouter:
-        router = MockRouter.from_settings.return_value
-        router.chat_model.return_value.invoke.return_value = mock_result
-        response = client.post(
-            "/receipts/scan",
-            headers=auth_headers,
-            files={"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")},
-        )
+    llm_router = MagicMock()
+    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    response = client.post(
+        "/receipts/scan",
+        headers=auth_headers,
+        files={"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
 
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) == 2
     assert items[0]["name"] == "chicken breast"
-    MockRouter.from_settings.assert_called_once()
-    router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
+    llm_router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())
 
-    with patch("glean.receipts.router.LLMRouter") as MockRouter:
-        router = MockRouter.from_settings.return_value
-        router.chat_model.return_value.invoke.return_value = mock_result
-        response = client.post(
-            "/receipts/describe",
-            headers=auth_headers,
-            json={"text": "I bought a kilo of chicken and 2 litres of milk"},
-        )
+    llm_router = MagicMock()
+    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    response = client.post(
+        "/receipts/describe",
+        headers=auth_headers,
+        json={"text": "I bought a kilo of chicken and 2 litres of milk"},
+    )
 
     assert response.status_code == 200
     assert len(response.json()["items"]) == 2
-    router.chat_model.assert_called_once_with(Feature.PANTRY_PURCHASE_DESCRIPTION)
+    llm_router.chat_model.assert_called_once_with(Feature.PANTRY_PURCHASE_DESCRIPTION)
 
 
 def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:

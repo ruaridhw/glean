@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from glean.config import Settings, get_settings
-from glean.dependencies import verify_cognito_token
+from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.llm import Feature, LLMRouter
 from glean.receipts import service
 from glean.receipts.schemas import DescribeRequest, ScanResponse
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/receipts", tags=["receipts"])
 @router.post("/scan", response_model=ScanResponse, dependencies=[Depends(verify_cognito_token)])
 async def scan_receipt(
     file: Annotated[UploadFile, File()],
+    llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
     settings: Settings = Depends(get_settings),  # noqa: B008
 ) -> ScanResponse:
     if file.content_type not in ("image/jpeg", "image/png"):
@@ -24,7 +25,6 @@ async def scan_receipt(
     image_bytes = await file.read()
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image must be under 10MB")
-    llm_router = LLMRouter.from_settings(settings)
     model = llm_router.chat_model(Feature.RECEIPT_SCAN)
     return service.scan_receipt(
         image_bytes,
@@ -39,7 +39,7 @@ async def scan_receipt(
 @router.post("/describe", response_model=ScanResponse, dependencies=[Depends(verify_cognito_token)])
 def describe_purchase(
     request: DescribeRequest,
-    settings: Settings = Depends(get_settings),  # noqa: B008
+    llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
 ) -> ScanResponse:
-    model = LLMRouter.from_settings(settings).chat_model(Feature.PANTRY_PURCHASE_DESCRIPTION)
+    model = llm_router.chat_model(Feature.PANTRY_PURCHASE_DESCRIPTION)
     return service.describe_purchase(request, model=model)
