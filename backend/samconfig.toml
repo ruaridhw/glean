@@ -5,7 +5,7 @@ stack_name = "glean-api-prod"
 s3_bucket = "glean-sam-artefacts-prod-040396448697"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"prod\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\" CognitoDomainPrefix=\"glean-auth-040396448697\""
+parameter_overrides = "Environment=\"prod\" GoogleClientId=\"PLACEHOLDER\" GoogleClientSecret=\"PLACEHOLDER\" CognitoDomainPrefix=\"glean-auth-040396448697\" LangSmithTracing=\"true\""
 
 [dev.deploy.parameters]
 stack_name = "glean-api-dev"

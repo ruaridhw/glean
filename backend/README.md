@@ -26,6 +26,22 @@ The server starts at `http://localhost:8000` with hot reload.
 
 When `ENVIRONMENT=dev` (set in `.env`), Cognito JWT validation is bypassed and all requests authenticate as `local-dev-user`. This lets you hit the API without a real Cognito token.
 
+### LangSmith Tracing
+
+LangChain calls can be traced to LangSmith by setting these values in `.env`:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=glean
+LANGCHAIN_CALLBACKS_BACKGROUND=false
+```
+
+Deployed Lambda tracing is off by default. Enable it by deploying with
+`LangSmithTracing="true"` and storing the API key in Secrets Manager at
+`glean/{env}/langsmith-api-key`. The backend reads that secret at runtime and
+sets `LANGSMITH_API_KEY` in-process before LangChain calls are created.
+
 ### Running with Docker
 
 From the repo root:

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class SecretsManagerSource(PydanticBaseSettingsSource):
-    """Fetches openrouter_api_key and recipe_api_key from AWS Secrets Manager.
+    """Fetches runtime API keys from AWS Secrets Manager.
 
     Only active when running inside Lambda (AWS_LAMBDA_FUNCTION_NAME is set).
     Falls back to a no-op outside Lambda so local .env continues to work.
@@ -28,10 +28,13 @@ class SecretsManagerSource(PydanticBaseSettingsSource):
         if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
             return {}
         env = os.environ["ENVIRONMENT"]
-        return {
+        values = {
             "openrouter_api_key": parameters.get_secret(f"glean/{env}/openrouter-api-key"),
             "recipe_api_key": parameters.get_secret(f"glean/{env}/recipe-api-key"),
         }
+        if _env_flag_enabled(os.environ.get("LANGSMITH_TRACING")) and not os.environ.get("LANGSMITH_API_KEY"):
+            values["langsmith_api_key"] = parameters.get_secret(f"glean/{env}/langsmith-api-key")
+        return values
 
 
 class Settings(BaseSettings):
@@ -46,7 +49,10 @@ class Settings(BaseSettings):
     rate_limit_per_hour: int = 20
     llm_model_policy_overrides: dict[Feature, LLMModelPolicy] | None = None
     receipt_ocr_mode: str = "textract"  # "textract" (AWS) or "vision" (OpenRouter vision model)
-    langchain_project: str = "glean-dev"
+    langsmith_tracing: bool = False
+    langsmith_api_key: SecretStr | None = None
+    langsmith_project: str = "glean"
+    langsmith_endpoint: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -68,6 +74,42 @@ class Settings(BaseSettings):
         )
 
 
+def _env_flag_enabled(value: str | None) -> bool:
+    return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _secret_value(secret: SecretStr | None) -> str | None:
+    if secret is None:
+        return None
+    value = secret.get_secret_value()
+    return value or None
+
+
+def _set_optional_env(name: str, value: str | None) -> None:
+    if value:
+        os.environ[name] = value
+    else:
+        os.environ.pop(name, None)
+
+
+def configure_langsmith_environment(settings: Settings) -> None:
+    tracing_enabled = "true" if settings.langsmith_tracing else "false"
+    os.environ["LANGSMITH_TRACING"] = tracing_enabled
+    os.environ["LANGCHAIN_TRACING_V2"] = tracing_enabled
+
+    if not settings.langsmith_tracing:
+        return
+
+    _set_optional_env("LANGSMITH_API_KEY", _secret_value(settings.langsmith_api_key))
+    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+    _set_optional_env("LANGSMITH_ENDPOINT", settings.langsmith_endpoint)
+
+    if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        os.environ.setdefault("LANGCHAIN_CALLBACKS_BACKGROUND", "false")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()  # ty: ignore[missing-argument]
+    settings = Settings()  # ty: ignore[missing-argument]
+    configure_langsmith_environment(settings)
+    return settings
