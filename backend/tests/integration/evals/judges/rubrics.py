@@ -68,9 +68,11 @@ Return structured data with a single score field from 1 to 5."""
 
 
 class JudgeScoreResponse(BaseModel):
+    """Single rubric score assigned by an LLM judge."""
+
     model_config = ConfigDict(extra="forbid")
 
-    score: int = Field(ge=1, le=5)
+    score: int = Field(ge=1, le=5, description="Integer rubric score from 1 (bad) to 5 (perfect).")
 
 
 def judge_receipt_scan(

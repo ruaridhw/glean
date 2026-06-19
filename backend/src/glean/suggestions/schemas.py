@@ -52,10 +52,12 @@ class SuggestionRequest(BaseModel):
 
 
 class SuggestedRecipe(BaseModel):
+    """A recipe suggestion selected for the user's current pantry and preferences."""
+
     model_config = ConfigDict(extra="forbid")
 
-    recipe_id: int
-    title: str
+    recipe_id: int = Field(description="Stable saved recipe ID to suggest.")
+    title: str = Field(description="Human-readable recipe title to show the user.")
     reason: str = Field(description="Human-readable explanation of why this recipe was suggested")
     missing_ingredients: list[str] = Field(
         description="Ingredient names not currently in the pantry that would need purchasing"
@@ -63,6 +65,10 @@ class SuggestedRecipe(BaseModel):
 
 
 class SuggestionResponse(BaseModel):
+    """Meal-planning suggestions returned by the LLM."""
+
     model_config = ConfigDict(extra="forbid")
 
-    suggestions: list[SuggestedRecipe]
+    suggestions: list[SuggestedRecipe] = Field(
+        description="Ranked recipe suggestions that satisfy the request constraints."
+    )

@@ -88,19 +88,45 @@ class RecipeLlmResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    title: str
-    source_url: str | None = None
-    cuisine: str | None = None
-    difficulty: str | None = None
-    total_time: str | None = None
-    prep_time: str | None = None
-    active_time: str | None = None
-    yield_: str | int | list[str | int] | None = Field(default=None, alias="yield")
-    recipe_yield: str | int | list[str | int] | None = Field(default=None, alias="recipeYield")
-    ingredients: list[str]
-    instructions: list[str]
-    dietary_flags: list[str] = Field(default_factory=list)
-    not_suitable_for: list[str] = Field(default_factory=list)
+    title: str = Field(description="Recipe title as written on the source page, cleaned of site boilerplate.")
+    source_url: str | None = Field(
+        default=None,
+        description="Canonical recipe URL from the page when explicitly present; importer pins the trusted fetch URL.",
+    )
+    cuisine: str | None = Field(default=None, description="Cuisine label when the page clearly provides one.")
+    difficulty: str | None = Field(default=None, description="Difficulty label when the page clearly provides one.")
+    total_time: str | None = Field(
+        default=None,
+        description='Total recipe time as an ISO-8601 duration such as "PT30M"; null when unavailable.',
+    )
+    prep_time: str | None = Field(
+        default=None,
+        description='Preparation time as an ISO-8601 duration such as "PT10M"; null when unavailable.',
+    )
+    active_time: str | None = Field(
+        default=None,
+        description='Active cooking time as an ISO-8601 duration such as "PT20M"; null when unavailable.',
+    )
+    yield_: str | int | list[str | int] | None = Field(
+        default=None,
+        alias="yield",
+        description='Serving yield as written on the page, such as "4 servings"; null when unavailable.',
+    )
+    recipe_yield: str | int | list[str | int] | None = Field(
+        default=None,
+        alias="recipeYield",
+        description="Schema.org recipeYield value when available; use yield for plain serving text.",
+    )
+    ingredients: list[str] = Field(description="Ingredient lines exactly detailed enough to parse into quantities.")
+    instructions: list[str] = Field(description="Ordered cooking instruction steps as concise plain text.")
+    dietary_flags: list[str] = Field(
+        default_factory=list,
+        description="Positive dietary labels clearly supported by the page, such as vegan or gluten-free.",
+    )
+    not_suitable_for: list[str] = Field(
+        default_factory=list,
+        description="Dietary exclusions clearly implied by the page, such as contains nuts.",
+    )
 
     @field_validator("total_time", "prep_time", "active_time")
     @classmethod

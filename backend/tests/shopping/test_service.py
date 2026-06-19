@@ -36,7 +36,6 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
                     "quantity": 1,
                     "unit": "pack",
                     "unit_price": None,
-                    "api_ingredient_id": "taco-shells",
                     "category": "bakery",
                     "confidence": 0.82,
                 },
@@ -45,7 +44,6 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
                     "quantity": 1,
                     "unit": "bottle",
                     "unit_price": None,
-                    "api_ingredient_id": None,
                     "category": "dairy",
                     "confidence": 0.91,
                 },
@@ -64,7 +62,7 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert response.items[0].quantity == 1
     assert response.items[0].unit == "pack"
     assert response.items[0].unit_price is None
-    assert response.items[0].api_ingredient_id == "taco-shells"
+    assert response.items[0].api_ingredient_id is None
     assert response.items[0].category == "bakery"
     assert response.items[0].confidence == 0.82
     assert response.items[1].name == "whole milk"
@@ -82,7 +80,6 @@ def test_parse_shopping_description_allows_vague_items() -> None:
                     "quantity": 1,
                     "unit": "units",
                     "unit_price": None,
-                    "api_ingredient_id": None,
                     "category": "snacks",
                     "confidence": 0.55,
                 }
