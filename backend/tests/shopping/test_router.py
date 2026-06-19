@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
+from glean.llm import Feature
 from glean.main import app
 
 
@@ -36,8 +37,9 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
         }
     )
 
-    with patch("glean.shopping.router.create_chat_model") as mock_create:
-        mock_create.return_value.invoke.return_value = mock_result
+    with patch("glean.shopping.router.LLMRouter") as MockRouter:
+        router = MockRouter.from_settings.return_value
+        router.chat_model.return_value.invoke.return_value = mock_result
         response = client.post(
             "/shopping/parse-description",
             headers=auth_headers,
@@ -58,7 +60,9 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
         }
     ]
     assert body["clarifying_questions"] == ["What kind of salsa do you want?"]
-    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key=SecretStr("test-openrouter_api_key"))
+    MockRouter.from_settings.assert_called_once()
+    assert MockRouter.from_settings.call_args.args[0].openrouter_api_key == SecretStr("test-openrouter_api_key")
+    router.chat_model.assert_called_once_with(Feature.SHOPPING_LIST_DESCRIPTION)
 
 
 def test_parse_shopping_description_requires_auth(test_settings: Settings) -> None:

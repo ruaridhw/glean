@@ -13,6 +13,7 @@ from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
+from glean.llm import Feature
 from glean.main import app
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 from glean.recipes import service
@@ -258,8 +259,9 @@ def test_import_url_uses_schema_org(client: TestClient) -> None:
         patch("glean.recipes.service.RecipeCorpusStore", return_value=_empty_corpus_store()),
         patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
         patch("glean.recipes.providers.httpx.Client", lambda **_: client_response),
-        patch("glean.recipes.router.create_chat_model", return_value=mock_llm),
+        patch("glean.recipes.router.LLMRouter") as MockRouter,
     ):
+        MockRouter.from_settings.return_value.chat_model.return_value = mock_llm
         resp = client.post("/recipes/import-url", json={"url": "https://example.com/carbonara"})
 
     assert resp.status_code == 200
@@ -269,6 +271,7 @@ def test_import_url_uses_schema_org(client: TestClient) -> None:
     assert len(data["instructions"]) == 2
     assert data["total_time_mins"] == 20
     mock_llm.invoke.assert_not_called()
+    MockRouter.from_settings.return_value.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 
 def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None:
@@ -293,8 +296,9 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
         patch("glean.recipes.service.RecipeCorpusStore", return_value=_empty_corpus_store()),
         patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"www.allrecipes.com": "151.101.2.137"})),
         patch("glean.recipes.service.recipe_providers.import_url_to_canonical") as import_url_to_canonical,
-        patch("glean.recipes.router.create_chat_model", return_value=mock_llm),
+        patch("glean.recipes.router.LLMRouter") as MockRouter,
     ):
+        MockRouter.from_settings.return_value.chat_model.return_value = mock_llm
         resp = client.post(
             "/recipes/import-url",
             json={
@@ -314,6 +318,7 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     assert len(data["instructions"]) == 2
     mock_llm.invoke.assert_not_called()
     import_url_to_canonical.assert_not_called()
+    MockRouter.from_settings.return_value.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 
 def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pipeline() -> None:
@@ -431,8 +436,9 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
         patch("glean.recipes.service.RecipeCorpusStore", return_value=_empty_corpus_store()),
         patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
         patch("glean.recipes.providers.httpx.Client", lambda **_: client_response),
-        patch("glean.recipes.router.create_chat_model", return_value=mock_llm),
+        patch("glean.recipes.router.LLMRouter") as MockRouter,
     ):
+        MockRouter.from_settings.return_value.chat_model.return_value = mock_llm
         resp = client.post("/recipes/import-url", json={"url": "https://example.com/pasta"})
 
     assert resp.status_code == 200
@@ -442,6 +448,7 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     assert len(data["ingredients"]) == 3
     assert len(data["instructions"]) == 3
     assert data["dietary_flags"] == ["Vegan"]
+    MockRouter.from_settings.return_value.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 
 class _FakeClient:

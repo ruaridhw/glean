@@ -12,9 +12,8 @@ from langchain_core.messages.content import create_image_block, create_text_bloc
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-    from pydantic import SecretStr
 
-from glean.llm import Feature, create_chat_model, message_content_as_text
+from glean.llm import Feature, message_content_as_text
 from glean.observability import logger, tracer
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
 
@@ -90,9 +89,8 @@ def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel, aws_region: 
 
 
 @tracer.capture_method
-def _scan_via_vision(image_bytes: bytes, *, vision_model: str, api_key: SecretStr) -> ScanResponse:
+def _scan_via_vision(image_bytes: bytes, *, model: BaseChatModel) -> ScanResponse:
     """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
-    model = create_chat_model(vision_model, api_key=api_key)
     b64 = base64.b64encode(image_bytes).decode()
     image_block = create_image_block(base64=b64, mime_type="image/jpeg")
     result = model.invoke(
@@ -119,11 +117,10 @@ def scan_receipt(
     model: BaseChatModel,
     aws_region: str,
     s3_bucket: str,
-    vision_model: str,
-    api_key: SecretStr,
+    vision_model: BaseChatModel,
 ) -> ScanResponse:
     if ocr_mode == "vision":
-        return _scan_via_vision(image_bytes, vision_model=vision_model, api_key=api_key)
+        return _scan_via_vision(image_bytes, model=vision_model)
     return _scan_via_textract(image_bytes, model=model, aws_region=aws_region, s3_bucket=s3_bucket)
 
 

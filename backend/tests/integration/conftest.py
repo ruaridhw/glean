@@ -6,6 +6,7 @@ import pytest
 from dotenv import dotenv_values, find_dotenv
 
 import glean.config as _config
+from glean.llm import Feature, LLMRouter
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
@@ -30,7 +31,6 @@ def test_settings() -> _config.Settings:
         pytest.skip("No real OPENROUTER_API_KEY found in backend/.env (expected sk-or-... prefix)")
     return _config.Settings(
         openrouter_api_key=key,
-        llm_model=_ENV.get("LLM_MODEL", "google/gemma-4-26b-a4b-it:free"),
         recipe_api_key=_ENV.get("RECIPE_API_KEY", "test-recipe_api_key"),
         cognito_user_pool_id=_ENV.get("COGNITO_USER_POOL_ID", "test-cognito_user_pool_id"),
         cognito_app_client_id=_ENV.get("COGNITO_APP_CLIENT_ID", "test-cognito_app_client_id"),
@@ -44,5 +44,5 @@ def openrouter_api_key(test_settings: _config.Settings) -> SecretStr:
 
 
 @pytest.fixture(scope="session")
-def llm_model(test_settings: _config.Settings) -> str:
-    return test_settings.llm_model
+def openrouter_smoke_model(test_settings: _config.Settings) -> str:
+    return LLMRouter.from_settings(test_settings).model_id_for(Feature.SHOPPING_LIST_DESCRIPTION)

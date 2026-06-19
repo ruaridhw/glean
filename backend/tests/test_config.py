@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from glean.config import SecretsManagerSource, Settings, get_settings
+from glean.llm import Feature
 
 
 class TestSecretsManagerSourceOutsideLambda:
@@ -59,6 +60,27 @@ class TestGetSettings:
     def test_caches_lambda_secret_fetches(self) -> None:
         if hasattr(get_settings, "cache_clear"):
             get_settings.cache_clear()
+
+
+class TestLlmModelPolicyOverrides:
+    def test_parses_feature_policy_overrides_from_environment(self) -> None:
+        env = {
+            "OPENROUTER_API_KEY": "test-key",
+            "RECIPE_API_KEY": "test-recipe-api-key",
+            "COGNITO_USER_POOL_ID": "pool-id",
+            "COGNITO_APP_CLIENT_ID": "client-id",
+            "S3_RECEIPTS_BUCKET": "receipts-bucket",
+            "LLM_MODEL_POLICY_OVERRIDES": (
+                '{"recipe-import":{"production_model":"custom/recipe-prod","eval_model":"custom/recipe-eval"}}'
+            ),
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            settings = Settings()
+
+        override = settings.llm_model_policy_overrides[Feature.RECIPE_IMPORT]
+        assert override.production_model == "custom/recipe-prod"
+        assert override.eval_model == "custom/recipe-eval"
 
         lambda_env = {
             "AWS_LAMBDA_FUNCTION_NAME": "glean-api-prod",

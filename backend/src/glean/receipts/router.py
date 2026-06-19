@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
-from glean.llm import create_chat_model
+from glean.llm import Feature, LLMRouter
 from glean.receipts import service
 from glean.receipts.schemas import DescribeRequest, ScanResponse
 
@@ -24,15 +24,15 @@ async def scan_receipt(
     image_bytes = await file.read()
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image must be under 10MB")
-    model = create_chat_model(settings.llm_model, api_key=settings.openrouter_api_key)
+    llm_router = LLMRouter.from_settings(settings)
+    model = llm_router.chat_model(Feature.RECEIPT_SCAN)
     return service.scan_receipt(
         image_bytes,
         ocr_mode=settings.receipt_ocr_mode,
         model=model,
         aws_region=settings.aws_region,
         s3_bucket=settings.s3_receipts_bucket,
-        vision_model=settings.receipt_vision_model,
-        api_key=settings.openrouter_api_key,
+        vision_model=model,
     )
 
 
@@ -41,5 +41,5 @@ def describe_purchase(
     request: DescribeRequest,
     settings: Settings = Depends(get_settings),  # noqa: B008
 ) -> ScanResponse:
-    model = create_chat_model(settings.llm_model, api_key=settings.openrouter_api_key)
+    model = LLMRouter.from_settings(settings).chat_model(Feature.PANTRY_PURCHASE_DESCRIPTION)
     return service.describe_purchase(request, model=model)
