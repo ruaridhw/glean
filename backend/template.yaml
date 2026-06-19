@@ -22,6 +22,15 @@ Parameters:
     Type: String
     Default: glean-auth
 
+  LangSmithTracing:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+
+  LangSmithEndpoint:
+    Type: String
+    Default: ""
+
   GoogleClientId:
     Type: String
     NoEcho: true
@@ -113,6 +122,11 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref GleanUserPool
           COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
           S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
+          LANGSMITH_TRACING: !Ref LangSmithTracing
+          LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
+          LANGSMITH_PROJECT: glean
+          LANGSMITH_ENDPOINT: !Ref LangSmithEndpoint
+          LANGCHAIN_CALLBACKS_BACKGROUND: "false"
       Policies:
         - AWSXrayWriteOnlyAccess
         - CloudWatchLogsFullAccess
