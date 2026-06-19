@@ -5,7 +5,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from glean.llm import Feature, create_chat_model, message_content_as_text, validate_model
+from glean.config import Settings
+from glean.llm import (
+    DEFAULT_LLM_MODEL_POLICY,
+    Feature,
+    LLMModelPolicy,
+    LLMRouter,
+    ModelPurpose,
+    create_chat_model,
+    message_content_as_text,
+    validate_model,
+)
 
 
 class TestCreateChatModel:
@@ -48,6 +58,63 @@ class TestFeatureMetadata:
         assert Feature.MEAL_PLAN_GENERATION == "meal-plan-generation"
         assert Feature.SHOPPING_LIST_DESCRIPTION == "shopping-list-description"
         assert Feature.RECIPE_IMPORT == "recipe-import"
+
+
+class TestLLMRouter:
+    def test_default_policy_matches_issue_77_model_choices(self) -> None:
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.SHOPPING_LIST_DESCRIPTION].production_model == (
+            "google/gemini-2.5-flash-lite"
+        )
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.SHOPPING_LIST_DESCRIPTION].eval_model == (
+            "google/gemini-3.1-flash-lite"
+        )
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.PANTRY_PURCHASE_DESCRIPTION].production_model == (
+            "google/gemini-2.5-flash-lite"
+        )
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.PANTRY_PURCHASE_DESCRIPTION].eval_model == (
+            "google/gemini-3.1-flash-lite"
+        )
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.RECEIPT_SCAN].production_model == "google/gemini-3.1-flash-lite"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.RECEIPT_SCAN].eval_model == "google/gemini-3.5-flash"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.RECIPE_IMPORT].production_model == "qwen/qwen3.7-plus"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.RECIPE_IMPORT].eval_model == "z-ai/glm-5.2"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].production_model == "qwen/qwen3.7-plus"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].eval_model == "z-ai/glm-5.2"
+
+    def test_creates_chat_model_for_feature_and_purpose(self) -> None:
+        api_key = SecretStr("test-key")
+        router = LLMRouter(api_key=api_key)
+
+        with patch("glean.llm.ChatOpenRouter") as mock_cls:
+            model = router.chat_model(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL)
+
+        mock_cls.assert_called_once_with(
+            model="z-ai/glm-5.2",
+            openrouter_api_key=api_key,
+            max_retries=0,
+        )
+        assert model is mock_cls.return_value
+
+    def test_from_settings_applies_feature_policy_overrides(self) -> None:
+        settings = Settings(
+            openrouter_api_key="test-key",
+            recipe_api_key="test-recipe_api_key",
+            cognito_user_pool_id="test-cognito_user_pool_id",
+            cognito_app_client_id="test-cognito_app_client_id",
+            s3_receipts_bucket="test-s3_receipts_bucket",
+            llm_model_policy_overrides={
+                Feature.RECIPE_IMPORT: LLMModelPolicy(
+                    production_model="custom/recipe-prod",
+                    eval_model="custom/recipe-eval",
+                )
+            },
+        )
+
+        router = LLMRouter.from_settings(settings)
+
+        assert router.model_id_for(Feature.RECIPE_IMPORT) == "custom/recipe-prod"
+        assert router.model_id_for(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL) == "custom/recipe-eval"
+        assert router.model_id_for(Feature.MEAL_PLAN_GENERATION) == "qwen/qwen3.7-plus"
 
 
 class TestMessageContentAsText:

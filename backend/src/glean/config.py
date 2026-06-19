@@ -5,8 +5,10 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from aws_lambda_powertools.utilities import parameters
-from pydantic import SecretStr  # noqa: TC002 - Pydantic needs this annotation type at runtime.
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from glean.llm import Feature, LLMModelPolicy  # noqa: TC001 - Pydantic resolves these field types at runtime.
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -42,9 +44,8 @@ class Settings(BaseSettings):
     s3_receipts_bucket: str
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
-    llm_model: str = "anthropic/claude-sonnet-4.6"
+    llm_model_policy_overrides: dict[Feature, LLMModelPolicy] = Field(default_factory=dict)
     receipt_ocr_mode: str = "textract"  # "textract" (AWS) or "vision" (OpenRouter vision model)
-    receipt_vision_model: str = "anthropic/claude-sonnet-4.6"
     langchain_project: str = "glean-dev"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

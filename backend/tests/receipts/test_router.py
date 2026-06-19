@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
+from glean.llm import Feature
 from glean.main import app
 from glean.receipts.schemas import DescribeRequest
 from glean.receipts.service import describe_purchase
@@ -47,9 +47,10 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
 
     with (
         patch("boto3.client", side_effect=boto3_client_factory),
-        patch("glean.receipts.router.create_chat_model") as mock_create,
+        patch("glean.receipts.router.LLMRouter") as MockRouter,
     ):
-        mock_create.return_value.invoke.return_value = mock_result
+        router = MockRouter.from_settings.return_value
+        router.chat_model.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/scan",
             headers=auth_headers,
@@ -65,6 +66,7 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     assert items[0]["unit_price"] == pytest.approx(0.007)
     mock_s3.put_object.assert_called_once()
     mock_s3.delete_object.assert_called_once()
+    router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
 
 
 def test_scan_receipt_requires_auth(unauth_client: TestClient) -> None:
@@ -104,11 +106,11 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
         cognito_app_client_id="test-cognito_app_client_id",
         s3_receipts_bucket="test-s3_receipts_bucket",
         receipt_ocr_mode="vision",
-        receipt_vision_model="anthropic/claude-sonnet-4.6",
     )
     app.dependency_overrides[get_settings] = lambda: vision_settings
-    with patch("glean.receipts.service.create_chat_model") as mock_create:
-        mock_create.return_value.invoke.return_value = mock_result
+    with patch("glean.receipts.router.LLMRouter") as MockRouter:
+        router = MockRouter.from_settings.return_value
+        router.chat_model.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/scan",
             headers=auth_headers,
@@ -119,15 +121,17 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     items = response.json()["items"]
     assert len(items) == 2
     assert items[0]["name"] == "chicken breast"
-    mock_create.assert_called_once_with("anthropic/claude-sonnet-4.6", api_key=SecretStr("test-key"))
+    MockRouter.from_settings.assert_called_once()
+    router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
     mock_result = MagicMock()
     mock_result.content = json.dumps(_mock_claude_response())
 
-    with patch("glean.receipts.router.create_chat_model") as mock_create:
-        mock_create.return_value.invoke.return_value = mock_result
+    with patch("glean.receipts.router.LLMRouter") as MockRouter:
+        router = MockRouter.from_settings.return_value
+        router.chat_model.return_value.invoke.return_value = mock_result
         response = client.post(
             "/receipts/describe",
             headers=auth_headers,
@@ -136,6 +140,7 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
 
     assert response.status_code == 200
     assert len(response.json()["items"]) == 2
+    router.chat_model.assert_called_once_with(Feature.PANTRY_PURCHASE_DESCRIPTION)
 
 
 def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:

@@ -18,7 +18,7 @@ uv run pytest -k "test_name"           # single test by name
 
 Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device (SQLite via expo-sqlite). The backend is responsible for:
 
-- **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal suggestions — all LLM calls go through OpenRouter via LangChain (default model: `anthropic/claude-sonnet-4-6`)
+- **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal suggestions — all LLM calls go through OpenRouter via LangChain and feature-specific `LLMRouter` policy.
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
 - **Rate limiting:** Per-user token bucket via slowapi (20 AI requests/hour)
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
@@ -31,7 +31,7 @@ src/glean/
 ├── main.py           # FastAPI app + Mangum handler + rate limiter setup
 ├── config.py         # Pydantic BaseSettings (reads from .env / Secrets Manager in Lambda)
 ├── dependencies.py   # verify_cognito_token — JWKS fetch + jwt.decode
-├── llm.py            # OpenRouter LangChain client; Feature enum; model factory helpers
+├── llm.py            # OpenRouter LangChain client; Feature enum; LLMRouter policy
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3
@@ -55,7 +55,7 @@ src/glean/
 
 Controlled by `receipt_ocr_mode` in config (env var `RECEIPT_OCR_MODE`):
 - `"textract"` (default): upload image to S3 → AWS Textract expense analysis → LLM normalisation via OpenRouter
-- `"vision"`: send image directly to a vision-capable OpenRouter model (configured by `receipt_vision_model`, default `anthropic/claude-sonnet-4-6`)
+- `"vision"`: send image directly to a vision-capable OpenRouter model selected by `LLMRouter` for `Feature.RECEIPT_SCAN`
 
 ### Testing
 
