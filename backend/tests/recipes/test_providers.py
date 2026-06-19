@@ -14,7 +14,7 @@ from glean.recipes.providers import (
     fetch_public_https,
     import_url_to_canonical,
 )
-from glean.recipes.stored import RecipeImportError
+from glean.recipes.stored import RecipeImportError, RecipeLlmResponse
 
 
 def test_schema_org_then_llm_parser_returns_stored_recipe_without_calling_llm() -> None:
@@ -104,21 +104,20 @@ def test_schema_org_parser_reads_embedded_nutrition_mapping() -> None:
 
 
 def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_recipe() -> None:
-    llm_json = json.dumps(
-        {
-            "title": "Black Bean Tacos",
-            "source_url": "https://recipes.example.test/tacos",
-            "total_time": "PT20M",
-            "prep_time": "PT5M",
-            "yield": "3 servings",
-            "ingredients": ["6 tortillas", "400g black beans", "1 lime"],
-            "instructions": ["Warm the tortillas.", "Fill with beans and lime."],
-            "dietary_flags": ["vegetarian"],
-            "not_suitable_for": [],
-        }
+    llm_recipe = RecipeLlmResponse(
+        title="Black Bean Tacos",
+        source_url="https://recipes.example.test/tacos",
+        total_time="PT20M",
+        prep_time="PT5M",
+        yield_="3 servings",
+        ingredients=["6 tortillas", "400g black beans", "1 lime"],
+        instructions=["Warm the tortillas.", "Fill with beans and lime."],
+        dietary_flags=["vegetarian"],
+        not_suitable_for=[],
     )
     model = MagicMock()
-    model.invoke.return_value.content = llm_json
+    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    model.with_structured_output.return_value.invoke.return_value = llm_recipe
 
     result = SchemaOrgThenLlmParser().parse(
         "<html><body><h1>Tacos</h1></body></html>",
@@ -134,7 +133,8 @@ def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_re
         "Warm the tortillas.",
         "Fill with beans and lime.",
     ]
-    model.invoke.assert_called_once()
+    model.invoke.assert_not_called()
+    model.with_structured_output.assert_called_once_with(RecipeLlmResponse)
 
 
 def test_redirect_target_validation_rejects_private_ip(monkeypatch: pytest.MonkeyPatch) -> None:

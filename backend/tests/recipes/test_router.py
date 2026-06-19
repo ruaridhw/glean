@@ -18,7 +18,7 @@ from glean.main import app
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 from glean.recipes import service
 from glean.recipes.schemas import ImportUrlRequest
-from glean.recipes.stored import RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
+from glean.recipes.stored import RecipeLlmResponse, RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -412,27 +412,23 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
         ]
     )
 
-    llm_json = json.dumps(
-        {
-            "title": "Pasta Primavera",
-            "source_url": "https://example.com/pasta",
-            "cuisine": "Italian",
-            "difficulty": None,
-            "total_time": "PT30M",
-            "prep_time": "PT10M",
-            "yield": "4 servings",
-            "ingredients": ["200g pasta", "1 courgette", "2 tbsp olive oil"],
-            "instructions": ["Boil pasta.", "Sauté vegetables.", "Combine and serve."],
-            "dietary_flags": ["Vegan"],
-            "not_suitable_for": [],
-        }
+    llm_recipe = RecipeLlmResponse(
+        title="Pasta Primavera",
+        source_url="https://example.com/pasta",
+        cuisine="Italian",
+        difficulty=None,
+        total_time="PT30M",
+        prep_time="PT10M",
+        yield_="4 servings",
+        ingredients=["200g pasta", "1 courgette", "2 tbsp olive oil"],
+        instructions=["Boil pasta.", "Sauté vegetables.", "Combine and serve."],
+        dietary_flags=["Vegan"],
+        not_suitable_for=[],
     )
 
-    mock_llm_response = MagicMock()
-    mock_llm_response.content = llm_json
-
     mock_llm = MagicMock()
-    mock_llm.invoke.return_value = mock_llm_response
+    mock_llm.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    mock_llm.with_structured_output.return_value.invoke.return_value = llm_recipe
     llm_router = MagicMock()
     llm_router.chat_model.return_value = mock_llm
     app.dependency_overrides[get_llm_router] = lambda: llm_router
@@ -451,6 +447,8 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     assert len(data["ingredients"]) == 3
     assert len(data["instructions"]) == 3
     assert data["dietary_flags"] == ["Vegan"]
+    mock_llm.invoke.assert_not_called()
+    mock_llm.with_structured_output.assert_called_once_with(RecipeLlmResponse)
     llm_router.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 

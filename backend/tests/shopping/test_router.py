@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +9,7 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
+from glean.shopping.schemas import ShoppingParseResponse
 
 
 @pytest.fixture
@@ -19,26 +19,24 @@ def unauth_client(test_settings: Settings) -> TestClient:
 
 
 def test_parse_shopping_description_returns_items(client: TestClient, auth_headers: dict[str, str]) -> None:
-    mock_result = MagicMock()
-    mock_result.content = json.dumps(
-        {
-            "items": [
-                {
-                    "name": "taco shells",
-                    "quantity": 1,
-                    "unit": "pack",
-                    "unit_price": None,
-                    "api_ingredient_id": "taco-shells",
-                    "category": "bakery",
-                    "confidence": 0.82,
-                }
-            ],
-            "clarifying_questions": ["What kind of salsa do you want?"],
-        }
+    structured_response = ShoppingParseResponse(
+        items=[
+            {
+                "name": "taco shells",
+                "quantity": 1,
+                "unit": "pack",
+                "unit_price": None,
+                "api_ingredient_id": "taco-shells",
+                "category": "bakery",
+                "confidence": 0.82,
+            }
+        ],
+        clarifying_questions=["What kind of salsa do you want?"],
     )
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.return_value = mock_result
+    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
+    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = structured_response
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/shopping/parse-description",

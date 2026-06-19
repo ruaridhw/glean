@@ -1,54 +1,56 @@
 from __future__ import annotations
 
-import json
-
-from glean.shopping.schemas import ShoppingParseRequest
+from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 from glean.shopping.service import parse_shopping_description
 
 
-class _ModelResult:
-    def __init__(self, content: str) -> None:
-        self.content = content
+class _StructuredInvoker:
+    def __init__(self, parent: _FakeModel, response: ShoppingParseResponse) -> None:
+        self.parent = parent
+        self.response = response
+
+    def invoke(self, messages: list[object], config: dict | None = None) -> ShoppingParseResponse:
+        self.parent.messages = messages
+        self.parent.config = config
+        return self.response
 
 
 class _FakeModel:
-    def __init__(self, content: str) -> None:
-        self.content = content
+    def __init__(self, response: ShoppingParseResponse) -> None:
+        self.response = response
         self.messages: list[object] = []
         self.config: dict | None = None
+        self.schema: type[object] | None = None
 
-    def invoke(self, messages: list[object], config: dict | None = None) -> _ModelResult:
-        self.messages = messages
-        self.config = config
-        return _ModelResult(self.content)
+    def with_structured_output(self, schema: type[object]) -> _StructuredInvoker:
+        self.schema = schema
+        return _StructuredInvoker(self, self.response)
 
 
 def test_parse_shopping_description_returns_proposed_items() -> None:
     model = _FakeModel(
-        json.dumps(
-            {
-                "items": [
-                    {
-                        "name": "taco shells",
-                        "quantity": 1,
-                        "unit": "pack",
-                        "unit_price": None,
-                        "api_ingredient_id": "taco-shells",
-                        "category": "bakery",
-                        "confidence": 0.82,
-                    },
-                    {
-                        "name": "whole milk",
-                        "quantity": 1,
-                        "unit": "bottle",
-                        "unit_price": None,
-                        "api_ingredient_id": None,
-                        "category": "dairy",
-                        "confidence": 0.91,
-                    },
-                ],
-                "clarifying_questions": ["What lunchbox snacks do you want?"],
-            }
+        ShoppingParseResponse(
+            items=[
+                {
+                    "name": "taco shells",
+                    "quantity": 1,
+                    "unit": "pack",
+                    "unit_price": None,
+                    "api_ingredient_id": "taco-shells",
+                    "category": "bakery",
+                    "confidence": 0.82,
+                },
+                {
+                    "name": "whole milk",
+                    "quantity": 1,
+                    "unit": "bottle",
+                    "unit_price": None,
+                    "api_ingredient_id": None,
+                    "category": "dairy",
+                    "confidence": 0.91,
+                },
+            ],
+            clarifying_questions=["What lunchbox snacks do you want?"],
         )
     )
 
@@ -68,25 +70,24 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert response.items[1].name == "whole milk"
     assert response.clarifying_questions == ["What lunchbox snacks do you want?"]
     assert model.config == {"metadata": {"feature": "shopping-list-description"}}
+    assert model.schema is ShoppingParseResponse
 
 
 def test_parse_shopping_description_allows_vague_items() -> None:
     model = _FakeModel(
-        json.dumps(
-            {
-                "items": [
-                    {
-                        "name": "lunchbox snacks",
-                        "quantity": 1,
-                        "unit": "units",
-                        "unit_price": None,
-                        "api_ingredient_id": None,
-                        "category": "snacks",
-                        "confidence": 0.55,
-                    }
-                ],
-                "clarifying_questions": [],
-            }
+        ShoppingParseResponse(
+            items=[
+                {
+                    "name": "lunchbox snacks",
+                    "quantity": 1,
+                    "unit": "units",
+                    "unit_price": None,
+                    "api_ingredient_id": None,
+                    "category": "snacks",
+                    "confidence": 0.55,
+                }
+            ],
+            clarifying_questions=[],
         )
     )
 
