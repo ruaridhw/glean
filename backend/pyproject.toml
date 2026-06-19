@@ -103,6 +103,7 @@ ARTIFACTS = "ARTIFACTS"
 Chile = "Chile"
 # Import code mirrors upstream/API spelling and mobile's existing normalization module name.
 normalization = "normalization"
+serialization = "serialization"
 milliliter = "milliliter"
 milliliters = "milliliters"
 liter = "liter"

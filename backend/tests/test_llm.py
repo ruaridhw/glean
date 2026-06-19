@@ -173,12 +173,30 @@ class TestInvokeStructured:
             config={"metadata": {"feature": "shopping-list-description"}},
         )
 
+    def test_accepts_already_validated_model_response(self) -> None:
+        model = MagicMock()
+        model.with_structured_output.return_value.invoke.return_value = _StructuredTestResponse(
+            name="Pantry",
+            values=["milk", "eggs"],
+        )
+
+        response = invoke_structured(model, _StructuredTestResponse, ["message"])
+
+        assert response == _StructuredTestResponse(name="Pantry", values=["milk", "eggs"])
+
     def test_rejects_malformed_dict_response(self) -> None:
         model = MagicMock()
         model.with_structured_output.return_value.invoke.return_value = {
             "name": "Pantry",
             "values": "milk",
         }
+
+        with pytest.raises(ValidationError):
+            invoke_structured(model, _StructuredTestResponse, ["message"])
+
+    def test_rejects_unstructured_text_response(self) -> None:
+        model = MagicMock()
+        model.with_structured_output.return_value.invoke.return_value = "not structured output"
 
         with pytest.raises(ValidationError):
             invoke_structured(model, _StructuredTestResponse, ["message"])

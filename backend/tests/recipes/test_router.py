@@ -334,6 +334,7 @@ def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pip
 
     with (
         patch("glean.recipes.service.RecipeCorpusStore", return_value=corpus_store),
+        patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
         patch("glean.recipes.service.recipe_providers.import_url_to_canonical") as import_url_to_canonical,
     ):
         response = service.import_recipe_from_url(

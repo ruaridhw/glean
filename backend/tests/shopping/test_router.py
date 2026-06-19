@@ -26,7 +26,6 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
                 "quantity": 1,
                 "unit": "pack",
                 "unit_price": None,
-                "api_ingredient_id": "taco-shells",
                 "category": "bakery",
                 "confidence": 0.82,
             }
@@ -53,7 +52,7 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
             "unit": "pack",
             "unit_price": None,
             "confidence": 0.82,
-            "api_ingredient_id": "taco-shells",
+            "api_ingredient_id": None,
             "category": "bakery",
         }
     ]
