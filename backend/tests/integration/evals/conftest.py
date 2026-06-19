@@ -12,9 +12,7 @@ if TYPE_CHECKING:
     from pydantic import SecretStr
 
 from glean.llm import (
-    DEFAULT_LLM_MODEL_POLICY,
     Feature,
-    LLMModelPolicy,
     LLMRouter,
     ModelPurpose,
     create_chat_model,
@@ -40,42 +38,28 @@ def _eval_feature_for_request(request: pytest.FixtureRequest) -> Feature:
     return _EVAL_FEATURES_BY_MODULE[module_name]
 
 
-def _model_override_for(feature: Feature, *, purpose: ModelPurpose) -> str | None:
-    specific_env = f"GLEAN_{feature.name}_{purpose.value.upper()}_MODEL"
-    return os.environ.get(specific_env) or os.environ.get(f"GLEAN_{purpose.value.upper()}_MODEL")
+def _eval_model_id_for(feature: Feature, router: LLMRouter) -> str:
+    return os.environ.get("GLEAN_EVAL_MODEL") or router.model_id_for(feature)
 
 
-def _router_for_eval(openrouter_api_key: SecretStr) -> LLMRouter:
-    policy_overrides: dict[Feature, LLMModelPolicy] = {}
-    for feature in Feature:
-        production_model = _model_override_for(feature, purpose=ModelPurpose.PRODUCTION)
-        eval_model = _model_override_for(feature, purpose=ModelPurpose.EVAL)
-        if production_model or eval_model:
-            default_policy = DEFAULT_LLM_MODEL_POLICY[feature]
-            policy_overrides[feature] = LLMModelPolicy(
-                production_model=production_model or default_policy.production_model,
-                eval_model=eval_model or default_policy.eval_model,
-            )
-    return LLMRouter(api_key=openrouter_api_key, policy=DEFAULT_LLM_MODEL_POLICY | policy_overrides)
+def _judge_model_id_for(feature: Feature, router: LLMRouter) -> str:
+    return os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(feature, purpose=ModelPurpose.EVAL)
 
 
 @pytest.fixture(scope="module")
 def eval_model(request: pytest.FixtureRequest, openrouter_api_key: SecretStr) -> BaseChatModel:
     """Feature-specific LLM for eval runs."""
     feature = _eval_feature_for_request(request)
-    if model_id := _model_override_for(feature, purpose=ModelPurpose.EVAL):
-        return create_chat_model(model_id, api_key=openrouter_api_key)
-    return _router_for_eval(openrouter_api_key).chat_model(feature, purpose=ModelPurpose.EVAL)
+    model_id = _eval_model_id_for(feature, LLMRouter(api_key=openrouter_api_key))
+    return create_chat_model(model_id, api_key=openrouter_api_key)
 
 
 @pytest.fixture(scope="module")
 def judge_model(request: pytest.FixtureRequest, openrouter_api_key: SecretStr) -> BaseChatModel:
     """Feature-specific LLM for judge scoring."""
     feature = _eval_feature_for_request(request)
-    model_id = os.environ.get("GLEAN_JUDGE_MODEL") or _model_override_for(feature, purpose=ModelPurpose.EVAL)
-    if model_id:
-        return create_chat_model(model_id, api_key=openrouter_api_key)
-    return _router_for_eval(openrouter_api_key).chat_model(feature, purpose=ModelPurpose.EVAL)
+    model_id = _judge_model_id_for(feature, LLMRouter(api_key=openrouter_api_key))
+    return create_chat_model(model_id, api_key=openrouter_api_key)
 
 
 @pytest.fixture(scope="session")

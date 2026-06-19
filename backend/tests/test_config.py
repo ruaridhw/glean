@@ -78,6 +78,7 @@ class TestLlmModelPolicyOverrides:
         with patch.dict(os.environ, env, clear=True):
             settings = Settings()
 
+        assert settings.llm_model_policy_overrides is not None
         override = settings.llm_model_policy_overrides[Feature.RECIPE_IMPORT]
         assert override.production_model == "custom/recipe-prod"
         assert override.eval_model == "custom/recipe-eval"

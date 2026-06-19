@@ -62,15 +62,16 @@ class LLMRouter:
         self,
         *,
         api_key: SecretStr,
-        policy: Mapping[Feature, LLMModelPolicy] = DEFAULT_LLM_MODEL_POLICY,
+        policy_overrides: Mapping[Feature, LLMModelPolicy] | None = None,
     ) -> None:
         self.api_key = api_key
-        self.policy = policy
+        self.policy = dict(DEFAULT_LLM_MODEL_POLICY)
+        if policy_overrides:
+            self.policy.update(policy_overrides)
 
     @classmethod
     def from_settings(cls, settings: Any) -> LLMRouter:
-        policy = DEFAULT_LLM_MODEL_POLICY | settings.llm_model_policy_overrides
-        return cls(api_key=settings.openrouter_api_key, policy=policy)
+        return cls(api_key=settings.openrouter_api_key, policy_overrides=settings.llm_model_policy_overrides)
 
     def model_id_for(self, feature: Feature, *, purpose: ModelPurpose = ModelPurpose.PRODUCTION) -> str:
         feature_policy = self.policy[feature]

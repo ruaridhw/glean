@@ -1,14 +1,20 @@
 import json
 import urllib.request
 from functools import lru_cache
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from glean.config import Settings, get_settings
+from glean.llm import LLMRouter
 
 security = HTTPBearer(auto_error=False)
+
+
+def get_llm_router(settings: Annotated[Settings, Depends(get_settings)]) -> LLMRouter:
+    return LLMRouter.from_settings(settings)
 
 
 @lru_cache(maxsize=1)

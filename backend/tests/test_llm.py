@@ -116,6 +116,35 @@ class TestLLMRouter:
         assert router.model_id_for(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL) == "custom/recipe-eval"
         assert router.model_id_for(Feature.MEAL_PLAN_GENERATION) == "qwen/qwen3.7-plus"
 
+    def test_constructor_applies_partial_policy_overrides(self) -> None:
+        router = LLMRouter(
+            api_key=SecretStr("test-key"),
+            policy_overrides={
+                Feature.RECIPE_IMPORT: LLMModelPolicy(
+                    production_model="custom/recipe-prod",
+                    eval_model="custom/recipe-judge",
+                )
+            },
+        )
+
+        assert router.model_id_for(Feature.RECIPE_IMPORT) == "custom/recipe-prod"
+        assert router.model_id_for(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL) == "custom/recipe-judge"
+        assert router.model_id_for(Feature.SHOPPING_LIST_DESCRIPTION) == "google/gemini-2.5-flash-lite"
+
+    def test_from_settings_allows_no_policy_overrides(self) -> None:
+        settings = Settings(
+            openrouter_api_key="test-key",
+            recipe_api_key="test-recipe_api_key",
+            cognito_user_pool_id="test-cognito_user_pool_id",
+            cognito_app_client_id="test-cognito_app_client_id",
+            s3_receipts_bucket="test-s3_receipts_bucket",
+            llm_model_policy_overrides=None,
+        )
+
+        router = LLMRouter.from_settings(settings)
+
+        assert router.model_id_for(Feature.RECEIPT_SCAN) == "google/gemini-3.1-flash-lite"
+
 
 class TestMessageContentAsText:
     def test_returns_text_content(self) -> None:
