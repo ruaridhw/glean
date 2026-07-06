@@ -13,9 +13,10 @@ if TYPE_CHECKING:
 
 class Feature(StrEnum):
     RECEIPT_SCAN = "receipt-scan"
-    SUGGESTIONS = "suggestions"
+    PANTRY_PURCHASE_DESCRIPTION = "pantry-purchase-description"
+    MEAL_PLAN_GENERATION = "meal-plan-generation"
     RECIPE_IMPORT = "recipe-import"
-    SHOPPING_LIST = "shopping-list"
+    SHOPPING_LIST_DESCRIPTION = "shopping-list-description"
 
 
 def validate_model(model_id: str, *, api_key: SecretStr) -> None:

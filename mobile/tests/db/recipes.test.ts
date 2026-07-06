@@ -83,7 +83,7 @@ describe("saveRecipe", () => {
     expect(drizzleDb.insert).toHaveBeenCalledTimes(4);
   });
 
-  it("does not include dietary_flags in the recipe row values", async () => {
+  it("does not include derived tag fields in the recipe row values", async () => {
     let recipeValues: Record<string, unknown> | null = null;
     let callCount = 0;
     (drizzleDb.insert as jest.Mock).mockImplementation(() => {
@@ -108,8 +108,19 @@ describe("saveRecipe", () => {
       ingredients: [{ canonical_name: "rice pasta", quantity: 200, unit: "g" }],
     });
 
-    expect(recipeValues).not.toBeNull();
-    expect(recipeValues).not.toHaveProperty("dietary_flags");
+    expect(Object.keys(recipeValues ?? {}).sort()).toEqual([
+      "active_time_mins",
+      "cuisine",
+      "difficulty",
+      "external_id",
+      "instructions",
+      "not_suitable_for",
+      "nutrition",
+      "source_url",
+      "title",
+      "total_time_mins",
+      "yield_count",
+    ]);
     expect(recipeValues).toHaveProperty("title", "GF Pasta");
   });
 });

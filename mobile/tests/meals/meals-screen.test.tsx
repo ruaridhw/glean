@@ -46,7 +46,6 @@ describe("MealsScreen", () => {
         nutrition: null,
         instructions: [],
         last_cooked_at: null,
-        is_ai_generated: false,
         dietary_flags: ["Vegetarian"],
       },
     ]);

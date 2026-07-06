@@ -39,8 +39,18 @@ def receipt_scan_dataset() -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
+def purchase_description_dataset() -> list[dict[str, Any]]:
+    return _load_fixture("purchase_description.json")
+
+
+@pytest.fixture(scope="session")
 def suggestions_dataset() -> list[dict[str, Any]]:
     return _load_fixture("suggestions.json")
+
+
+@pytest.fixture(scope="session")
+def shopping_list_description_dataset() -> list[dict[str, Any]]:
+    return _load_fixture("shopping_list_description.json")
 
 
 @pytest.fixture(scope="session")

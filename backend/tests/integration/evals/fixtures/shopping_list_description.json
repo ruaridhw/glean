@@ -1,0 +1,29 @@
+[
+  {
+    "input": {
+      "text": "Need taco shells, whole milk, limes, and something crunchy for lunchboxes."
+    },
+    "expected": {
+      "count": 4,
+      "names": ["taco shells", "whole milk", "limes", "lunchbox snacks"]
+    }
+  },
+  {
+    "input": {
+      "text": "Add 500g pasta, two tins of chopped tomatoes, parmesan, and a bag of spinach."
+    },
+    "expected": {
+      "count": 4,
+      "names": ["pasta", "chopped tomatoes", "parmesan", "spinach"]
+    }
+  },
+  {
+    "input": {
+      "text": "For breakfast: oats, Greek yogurt, blueberries, and a bottle of orange juice."
+    },
+    "expected": {
+      "count": 4,
+      "names": ["oats", "greek yogurt", "blueberries", "orange juice"]
+    }
+  }
+]

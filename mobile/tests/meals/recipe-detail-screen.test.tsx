@@ -43,7 +43,6 @@ describe("RecipeDetailScreen", () => {
       nutrition: null,
       instructions: [{ step_number: 1, phase: "cook", text: "Boil pasta" }],
       last_cooked_at: null,
-      is_ai_generated: false,
       dietary_flags: ["Vegetarian"],
     });
     (getRecipeIngredients as jest.Mock).mockResolvedValue([

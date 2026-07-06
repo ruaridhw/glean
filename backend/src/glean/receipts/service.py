@@ -134,6 +134,6 @@ def describe_purchase(request: DescribeRequest, *, model: BaseChatModel) -> Scan
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
         ],
-        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
+        config={"metadata": {"feature": Feature.PANTRY_PURCHASE_DESCRIPTION}},
     )
     return ScanResponse(items=_normalise_items(message_content_as_text(result.content)))

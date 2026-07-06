@@ -55,7 +55,7 @@ def get_suggestions(request: SuggestionRequest, *, model: BaseChatModel) -> Sugg
             SystemMessage(content=SUGGESTION_SYSTEM_PROMPT),
             HumanMessage(content=json.dumps(context, default=str)),
         ],
-        config={"metadata": {"feature": Feature.SUGGESTIONS}},
+        config={"metadata": {"feature": Feature.MEAL_PLAN_GENERATION}},
     )
     raw = json.loads(message_content_as_text(result.content))
     logger.info("suggestions received", extra={"count": len(raw)})

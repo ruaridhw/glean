@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import ipaddress
-import json
-import re
-import socket
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
-import httpx
-from bs4 import BeautifulSoup
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from glean.llm import Feature, message_content_as_text
 from glean.observability import logger
 from glean.recipe_api.client import RecipeApiClient, _iso_to_mins
+from glean.recipes import providers as recipe_providers
+from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.schemas import (
     ImportUrlRequest,
     InstructionOut,
@@ -23,130 +15,15 @@ from glean.recipes.schemas import (
     RecipeSearchResponse,
     RecipeSearchResult,
 )
+from glean.recipes.stored import RecipeImportError, stored_to_recipe_out
+
+URL_PARSE_SYSTEM_PROMPT = recipe_providers.URL_PARSE_SYSTEM_PROMPT
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from pydantic import SecretStr
 
     from glean.recipe_api.schemas import RecipeApiRecipe
-
-URL_PARSE_SYSTEM_PROMPT = """You are a recipe extraction assistant. Given HTML from a recipe page,
-extract the recipe details and return ONLY valid JSON with this exact structure (no markdown, no commentary):
-{
-  "title": "Recipe Name",
-  "source_url": "https://...",
-  "cuisine": null,
-  "difficulty": null,
-  "total_time": "PT30M",
-  "prep_time": "PT10M",
-  "yield": "4 servings",
-  "ingredients": ["200g pasta", "2 eggs"],
-  "instructions": ["Step 1 text", "Step 2 text"],
-  "dietary_flags": [],
-  "not_suitable_for": []
-}
-Return null values for fields that cannot be determined. Return ONLY the JSON object."""
-
-
-def _validate_url_ssrf(url: str) -> None:
-    """Reject non-HTTPS URLs and those resolving to private/loopback/link-local IPs."""
-    if not url.startswith("https://"):
-        raise ValueError("Only HTTPS URLs are allowed")
-
-    parsed = urlparse(url)
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError("Invalid URL: no hostname")
-
-    try:
-        resolved_ip = socket.gethostbyname(hostname)
-    except socket.gaierror as exc:
-        raise ValueError(f"Cannot resolve hostname: {hostname}") from exc
-
-    try:
-        addr = ipaddress.ip_address(resolved_ip)
-    except ValueError as exc:
-        raise ValueError(f"Invalid IP address resolved: {resolved_ip}") from exc
-
-    if addr.is_private or addr.is_loopback or addr.is_link_local:
-        raise ValueError(f"URL resolves to a disallowed IP address: {resolved_ip}")
-
-
-def _parse_schema_org(html: str) -> dict | None:
-    """Parse <script type='application/ld+json'> blocks and find @type == 'Recipe'."""
-    soup = BeautifulSoup(html, "html.parser")
-    for script in soup.find_all("script", type="application/ld+json"):
-        try:
-            data = json.loads(script.string or "")
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        # Handle both single objects and @graph arrays
-        if isinstance(data, list):
-            candidates = data
-        elif isinstance(data, dict) and "@graph" in data:
-            candidates = data["@graph"]
-        else:
-            candidates = [data]
-
-        for item in candidates:
-            if isinstance(item, dict) and item.get("@type") == "Recipe":
-                return item
-
-    return None
-
-
-def _parse_yield_count(yield_str: str | None) -> int | None:
-    """Extract numeric yield from strings like '4 servings' or '2'."""
-    if not yield_str:
-        return None
-    match = re.search(r"\d+", str(yield_str))
-    return int(match.group()) if match else None
-
-
-def _schema_org_to_recipe_out(data: dict, url: str) -> RecipeOut:
-    """Convert a schema.org Recipe dict to our RecipeOut shape."""
-    raw_instructions = data.get("recipeInstructions", [])
-    instructions: list[InstructionOut] = []
-    for i, step in enumerate(raw_instructions, start=1):
-        if isinstance(step, str):
-            text = step
-        elif isinstance(step, dict):
-            text = step.get("text", "")
-        else:
-            text = str(step)
-        instructions.append(InstructionOut(step_number=i, phase="main", text=text))
-
-    raw_ingredients = data.get("recipeIngredient", [])
-    ingredients: list[RecipeIngredientOut] = [
-        RecipeIngredientOut(
-            api_ingredient_id=f"schema-{i}",
-            canonical_name=ing,
-            quantity=0.0,
-            unit="",
-        )
-        for i, ing in enumerate(raw_ingredients, start=1)
-    ]
-
-    total_time_mins = _iso_to_mins(data.get("totalTime"))
-    active_time_mins = _iso_to_mins(data.get("prepTime") or data.get("cookTime"))
-    yield_count = _parse_yield_count(data.get("recipeYield"))
-
-    return RecipeOut(
-        external_id=url,
-        title=data.get("name", ""),
-        source_url=url,
-        cuisine=data.get("recipeCuisine"),
-        difficulty=None,
-        active_time_mins=active_time_mins,
-        total_time_mins=total_time_mins,
-        dietary_flags=[],
-        not_suitable_for=[],
-        yield_count=yield_count,
-        nutrition=NutritionOut(),
-        instructions=instructions,
-        ingredients=ingredients,
-    )
 
 
 def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
@@ -205,6 +82,29 @@ def search_recipes(
     page: int = 1,
     per_page: int = 20,
 ) -> RecipeSearchResponse:
+    corpus_results, corpus_total = RecipeCorpusStore().search(
+        q=q,
+        cuisine=cuisine,
+        dietary=dietary,
+        page=page,
+        per_page=per_page,
+    )
+    if corpus_total > 0:
+        return RecipeSearchResponse(
+            results=[
+                RecipeSearchResult(
+                    external_id=stored_to_recipe_out(recipe).external_id,
+                    title=recipe.title,
+                    cuisine=recipe.cuisine,
+                    difficulty=recipe.difficulty,
+                    total_time_mins=recipe.total_time_mins,
+                    dietary_flags=recipe.dietary_flags,
+                )
+                for recipe in corpus_results
+            ],
+            total=corpus_total,
+        )
+
     client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
     api_response = client.search(q=q, cuisine=cuisine, dietary=dietary, page=page, per_page=per_page)
     results = [
@@ -222,66 +122,50 @@ def search_recipes(
 
 
 def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: SecretStr) -> RecipeOut:
+    corpus_store = RecipeCorpusStore()
+    corpus_recipe = corpus_store.get(recipe_id)
+    if corpus_recipe is None and ":" not in recipe_id:
+        corpus_recipe = corpus_store.get(f"recipeapi:{recipe_id}")
+    if corpus_recipe is not None:
+        return stored_to_recipe_out(corpus_recipe)
+
     client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
     api_recipe = client.get_recipe(recipe_id)
     return _api_recipe_to_out(api_recipe)
 
 
-def _llm_json_to_recipe_out(data: dict, url: str) -> RecipeOut:
-    """Convert LLM-extracted JSON to RecipeOut."""
-    raw_instructions = data.get("instructions", [])
-    instructions = [
-        InstructionOut(step_number=i, phase="main", text=step) for i, step in enumerate(raw_instructions, start=1)
-    ]
-    raw_ingredients = data.get("ingredients", [])
-    ingredients = [
-        RecipeIngredientOut(
-            api_ingredient_id=f"llm-{i}",
-            canonical_name=ing,
-            quantity=0.0,
-            unit="",
-        )
-        for i, ing in enumerate(raw_ingredients, start=1)
-    ]
-    total_time_mins = _iso_to_mins(data.get("total_time"))
-    active_time_mins = _iso_to_mins(data.get("prep_time"))
-    yield_count = _parse_yield_count(data.get("yield"))
-
-    return RecipeOut(
-        external_id=url,
-        title=data.get("title", ""),
-        source_url=data.get("source_url") or url,
-        cuisine=data.get("cuisine"),
-        difficulty=data.get("difficulty"),
-        active_time_mins=active_time_mins,
-        total_time_mins=total_time_mins,
-        dietary_flags=data.get("dietary_flags", []),
-        not_suitable_for=data.get("not_suitable_for", []),
-        yield_count=yield_count,
-        nutrition=NutritionOut(),
-        instructions=instructions,
-        ingredients=ingredients,
-    )
-
-
 def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -> RecipeOut:
-    _validate_url_ssrf(request.url)
+    try:
+        recipe_providers.validate_public_https_url(request.url)
+    except RecipeImportError as exc:
+        raise ValueError(exc.message) from exc
 
-    html = httpx.get(request.url, follow_redirects=True, timeout=10.0).text
+    corpus_store = RecipeCorpusStore()
+    if corpus_recipe := corpus_store.get_by_source_url(request.url):
+        return stored_to_recipe_out(corpus_recipe)
 
-    schema_data = _parse_schema_org(html)
-    if schema_data and schema_data.get("recipeIngredient"):
-        logger.info("recipe import via schema.org", extra={"url": request.url})
-        return _schema_org_to_recipe_out(schema_data, request.url)
+    try:
+        if request.rendered_html is not None:
+            result = recipe_providers.import_html_to_canonical(
+                request.url,
+                request.rendered_html,
+                model=model,
+                fetched_url=request.fetched_url,
+            )
+        else:
+            result = recipe_providers.import_url_to_canonical(request.url, model=model)
+    except RecipeImportError as exc:
+        raise ValueError(exc.message) from exc
 
-    logger.info("recipe import via LangChain/Claude fallback", extra={"url": request.url})
-    llm = model
-    response = llm.invoke(
-        [
-            SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
-            HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
-        ],
-        config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
+    if result.recipe is None:
+        raise ValueError(result.failure_category or "Recipe import failed")
+
+    logger.info(
+        "recipe import completed",
+        extra={
+            "url": request.url,
+            "parser": result.parser,
+        },
     )
-    data = json.loads(message_content_as_text(response.content))
-    return _llm_json_to_recipe_out(data, request.url)
+    corpus_store.save(result.recipe)
+    return stored_to_recipe_out(result.recipe)

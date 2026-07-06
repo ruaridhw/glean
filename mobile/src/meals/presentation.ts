@@ -12,6 +12,7 @@ interface InstructionStep {
 }
 
 type RawInstruction = string | { step_number?: number; text?: string };
+const COMPACT_UNITS = new Set(["g", "kg", "ml", "l", "tsp", "tbsp", "cm"]);
 
 export function getRecipeMeta(recipe: Recipe): RecipeMetaItem[] {
   return [
@@ -24,18 +25,26 @@ export function getRecipeMeta(recipe: Recipe): RecipeMetaItem[] {
 }
 
 export function getRecipeTags(recipe: Recipe): string[] {
-  return [
-    recipe.cuisine,
-    ...(recipe.dietary_flags ?? []),
-    recipe.is_ai_generated ? "AI generated" : "AI ready",
-  ].filter((tag): tag is string => Boolean(tag));
+  return [recipe.cuisine, ...(recipe.dietary_flags ?? [])].filter((tag): tag is string =>
+    Boolean(tag),
+  );
 }
 
 export function formatRecipeIngredient(ingredient: RecipeIngredient): string {
   const name = ingredient.ingredient?.canonical_name ?? "";
   const preparation = ingredient.preparation ? `, ${ingredient.preparation}` : "";
   const optional = ingredient.is_optional ? " (optional)" : "";
-  return `${ingredient.quantity} ${ingredient.unit} ${name}${preparation}${optional}`.trim();
+  const quantity = formatQuantity(ingredient.quantity);
+  if (!ingredient.quantity && !ingredient.unit) {
+    return `${name}${preparation}${optional}`.trim();
+  }
+  if (ingredient.unit === "pcs") {
+    return `${quantity}x ${name}${preparation}${optional}`.trim();
+  }
+  if (COMPACT_UNITS.has(ingredient.unit)) {
+    return `${quantity}${ingredient.unit} ${name}${preparation}${optional}`.trim();
+  }
+  return `${quantity} ${ingredient.unit} ${name}${preparation}${optional}`.trim();
 }
 
 export function parseInstructionSteps(instructions: unknown): InstructionStep[] {
@@ -48,4 +57,8 @@ export function parseInstructionSteps(instructions: unknown): InstructionStep[] 
     if (typeof step === "string") return { number: index + 1, text: step };
     return { number: step.step_number ?? index + 1, text: step.text ?? "" };
   });
+}
+
+function formatQuantity(quantity: number): string {
+  return Number.isInteger(quantity) ? quantity.toFixed(0) : `${quantity}`;
 }

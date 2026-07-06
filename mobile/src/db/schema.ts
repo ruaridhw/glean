@@ -45,7 +45,6 @@ export const recipes = sqliteTable("recipes", {
   nutrition: text("nutrition"),
   instructions: text("instructions").notNull().default("[]"),
   last_cooked_at: text("last_cooked_at"),
-  is_ai_generated: integer("is_ai_generated", { mode: "boolean" }).notNull().default(false),
 });
 
 export const recipeDietaryFlags = sqliteTable(

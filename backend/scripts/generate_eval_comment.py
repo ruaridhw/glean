@@ -46,15 +46,21 @@ def parse_junit_xml(path: str) -> list[EvalResult]:
 def classify_results(results: list[EvalResult]) -> dict[str, FeatureResults]:
     features: dict[str, FeatureResults] = {
         "receipt-scan": FeatureResults(),
-        "suggestions": FeatureResults(),
+        "pantry-purchase-description": FeatureResults(),
+        "meal-plan-generation": FeatureResults(),
+        "shopping-list-description": FeatureResults(),
         "recipe-import": FeatureResults(),
     }
     for r in results:
         classname_lower = r.classname.lower()
-        if "receipt" in classname_lower:
+        if "purchase_description" in classname_lower:
+            feature = "pantry-purchase-description"
+        elif "shopping_list_description" in classname_lower:
+            feature = "shopping-list-description"
+        elif "receipt" in classname_lower:
             feature = "receipt-scan"
         elif "suggestion" in classname_lower:
-            feature = "suggestions"
+            feature = "meal-plan-generation"
         elif "recipe" in classname_lower:
             feature = "recipe-import"
         else:
@@ -184,7 +190,7 @@ def generate_comment(
 
     lines.append("---")
     lines.append("")
-    lines.append("\U0001f517 View traces in LangSmith: `glean-evals` project")
+    lines.append("\U0001f517 View traces in LangSmith: `glean` project")
 
     return "\n".join(lines)
 

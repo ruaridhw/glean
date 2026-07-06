@@ -57,7 +57,7 @@ def parse_shopping_description(
             SystemMessage(content=SHOPPING_PARSE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this shopping list description: {request.text}"),
         ],
-        config={"metadata": {"feature": Feature.SHOPPING_LIST}},
+        config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
     )
     response = ShoppingParseResponse(**json.loads(message_content_as_text(result.content)))
     logger.info("shopping description parsed", extra={"items": len(response.items)})

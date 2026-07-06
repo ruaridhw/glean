@@ -1,6 +1,9 @@
 // mobile/src/normalization/units.ts
 
-// Deterministic lookup: source_unit → { factor to apply, target unit }
+// Keep this aligned with backend recipe-import unit parsing in
+// backend/src/glean/recipes/ingredient_parser.py.
+// Recipe imports and meal-plan pantry math must agree on canonical units.
+// Deterministic lookup: source_unit -> { factor to apply, target unit }
 const UNIT_CONVERSIONS: Record<string, { factor: number; to: string }> = {
   // Volume → ml
   l: { factor: 1000, to: "ml" },

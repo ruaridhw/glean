@@ -42,6 +42,28 @@ Given source HTML and the system's extracted recipe JSON, rate the extraction qu
 
 Respond with ONLY a single integer 1-5. No explanation."""
 
+PURCHASE_DESCRIPTION_RUBRIC = """You are evaluating a grocery purchase description parser.
+Given a user's free-text grocery purchase and the system's parsed pantry items, rate the quality 1-5:
+
+5 = Excellent - all concrete purchased items are captured with sensible names, quantities, and units
+4 = Good - captures the important items with only minor quantity or naming issues
+3 = Acceptable - most items are present but at least one quantity or name is imprecise
+2 = Poor - misses important items or uses unsuitable units
+1 = Bad - mostly wrong or not useful for updating a pantry
+
+Respond with ONLY a single integer 1-5. No explanation."""
+
+SHOPPING_LIST_DESCRIPTION_RUBRIC = """You are evaluating a grocery shopping list parser.
+Given a user's free-text shopping list and the system's structured shopping proposal, rate the quality 1-5:
+
+5 = Excellent - all requested items are captured with practical shopping names, quantities, units, and categories
+4 = Good - captures the important items with minor naming, category, or quantity issues
+3 = Acceptable - most items are present but vague or incomplete
+2 = Poor - misses important items or invents items not implied by the request
+1 = Bad - mostly wrong or not useful for building a shopping list
+
+Respond with ONLY a single integer 1-5. No explanation."""
+
 
 def _parse_score(content: str) -> int:
     """Extract integer score from LLM response, defaulting to 1 if unparsable."""
@@ -83,7 +105,7 @@ def judge_suggestion(
     )
     result = model.invoke(
         [SystemMessage(content=SUGGESTIONS_RUBRIC), HumanMessage(content=prompt)],
-        config={"metadata": {"feature": "eval-judge-suggestions"}},
+        config={"metadata": {"feature": "eval-judge-meal-plan-generation"}},
     )
     return _parse_score(result.content)
 
@@ -100,5 +122,34 @@ def judge_recipe_import(
     result = model.invoke(
         [SystemMessage(content=RECIPE_IMPORT_RUBRIC), HumanMessage(content=prompt)],
         config={"metadata": {"feature": "eval-judge-recipe-import"}},
+    )
+    return _parse_score(result.content)
+
+
+def judge_purchase_description(
+    model: BaseChatModel,
+    purchase_text: str,
+    parsed_items: list[dict],
+) -> int:
+    prompt = f"Purchase description:\n{purchase_text}\n\n" f"Parsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
+    result = model.invoke(
+        [SystemMessage(content=PURCHASE_DESCRIPTION_RUBRIC), HumanMessage(content=prompt)],
+        config={"metadata": {"feature": "eval-judge-pantry-purchase-description"}},
+    )
+    return _parse_score(result.content)
+
+
+def judge_shopping_list_description(
+    model: BaseChatModel,
+    shopping_text: str,
+    parsed_response: dict,
+) -> int:
+    prompt = (
+        f"Shopping list description:\n{shopping_text}\n\n"
+        f"Parsed shopping proposal:\n{json.dumps(parsed_response, indent=2)}"
+    )
+    result = model.invoke(
+        [SystemMessage(content=SHOPPING_LIST_DESCRIPTION_RUBRIC), HumanMessage(content=prompt)],
+        config={"metadata": {"feature": "eval-judge-shopping-list-description"}},
     )
     return _parse_score(result.content)

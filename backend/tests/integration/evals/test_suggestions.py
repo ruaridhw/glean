@@ -22,7 +22,7 @@ def _invoke_suggestions(model: BaseChatModel, input_data: dict[str, Any], *, exa
             SystemMessage(content=SUGGESTION_SYSTEM_PROMPT),
             HumanMessage(content=context),
         ],
-        config={"metadata": {"feature": "eval-suggestions", "example_idx": example_idx}},
+        config={"metadata": {"feature": "eval-meal-plan-generation", "example_idx": example_idx}},
     )
     return result.content
 

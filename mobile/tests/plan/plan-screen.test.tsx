@@ -121,7 +121,6 @@ describe("PlanScreen", () => {
         title: "Miso Soup",
         not_suitable_for: [],
         instructions: [],
-        is_ai_generated: false,
       },
     ]);
   });

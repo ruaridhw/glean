@@ -12,8 +12,10 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.integration
 
-# find_dotenv() walks upward from cwd (backend/) and finds backend/.env.
-_ENV = dotenv_values(find_dotenv(raise_error_if_not_found=True))
+# find_dotenv() walks upward from cwd (backend/) and finds backend/.env when
+# credentialed integration tests need it.
+_ENV_PATH = find_dotenv()
+_ENV = dotenv_values(_ENV_PATH) if _ENV_PATH else {}
 
 
 @pytest.fixture(scope="session")

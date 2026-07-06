@@ -99,3 +99,15 @@ Unauthorized = "Unauthorized"
 analyze = "analyze"
 # AWS SAM sets this environment variable name when building Lambda functions
 ARTIFACTS = "ARTIFACTS"
+# Recipe names may refer to chile peppers, not the British spelling of the country.
+Chile = "Chile"
+# Import code mirrors upstream/API spelling and mobile's existing normalization module name.
+normalization = "normalization"
+milliliter = "milliliter"
+milliliters = "milliliters"
+liter = "liter"
+liters = "liters"
+centimeter = "centimeter"
+centimeters = "centimeters"
+fiber = "fiber"
+fiberContent = "fiberContent"
