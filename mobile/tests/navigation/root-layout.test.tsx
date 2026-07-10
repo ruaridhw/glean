@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { authStorage } from "@/auth/storage";
 import { getDb } from "@/db/client";
 import { seedDatabase } from "@/db/seed";
+import { hasCompletedOnboarding } from "@/onboarding/storage";
 import RootLayout from "../../app/_layout";
 
 const mockStackScreens: string[] = [];
@@ -43,6 +44,10 @@ jest.mock("@/db/seed", () => ({
   seedDatabase: jest.fn(),
 }));
 
+jest.mock("@/onboarding/storage", () => ({
+  hasCompletedOnboarding: jest.fn(),
+}));
+
 jest.mock("@/components/ui/OfflineBanner", () => ({
   OfflineBanner: () => null,
 }));
@@ -77,6 +82,7 @@ describe("RootLayout", () => {
     (seedDatabase as jest.Mock).mockResolvedValue(undefined);
     (authStorage.hasTokens as jest.Mock).mockResolvedValue(false);
     (authStorage.getUserSub as jest.Mock).mockResolvedValue(null);
+    (hasCompletedOnboarding as jest.Mock).mockResolvedValue(true);
   });
 
   it("wraps the app stack in a gesture handler root view", async () => {
@@ -110,6 +116,7 @@ describe("RootLayout", () => {
   it("opens the protected app stack for authenticated users", async () => {
     (authStorage.hasTokens as jest.Mock).mockResolvedValue(true);
     (authStorage.getUserSub as jest.Mock).mockResolvedValue("user-sub-123");
+    (hasCompletedOnboarding as jest.Mock).mockResolvedValue(true);
 
     render(<RootLayout />);
 
@@ -119,5 +126,19 @@ describe("RootLayout", () => {
     expect(mockStackScreens).toContain("index");
     expect(mockStackScreens).toContain("(tabs)");
     expect(mockStackScreens).not.toContain("sign-in");
+    expect(router.replace).not.toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("redirects first-time authenticated users to onboarding", async () => {
+    (authStorage.hasTokens as jest.Mock).mockResolvedValue(true);
+    (authStorage.getUserSub as jest.Mock).mockResolvedValue("user-sub-123");
+    (hasCompletedOnboarding as jest.Mock).mockResolvedValue(false);
+
+    render(<RootLayout />);
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/onboarding"));
+
+    expect(mockStackScreens).toContain("onboarding");
+    expect(mockStackScreens).toContain("(tabs)");
   });
 });

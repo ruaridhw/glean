@@ -18,6 +18,7 @@ import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
 import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 import { normalizeUnit } from "@/normalization/units";
+import { completeOnboarding } from "@/onboarding/storage";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
@@ -30,7 +31,7 @@ interface ReviewItem {
 }
 
 export default function ReviewScreen() {
-  const params = useLocalSearchParams<{ items: string; returnTo?: string }>();
+  const params = useLocalSearchParams<{ items: string; onboarding?: string; returnTo?: string }>();
   const [items, setItems] = useState<ReviewItem[]>(JSON.parse(params.items ?? "[]"));
   const [saving, setSaving] = useState(false);
 
@@ -69,6 +70,9 @@ export default function ReviewScreen() {
       await checkOffByIngredientIds(resolvedIds);
       if (params.returnTo === "shop") {
         await completeCheckout();
+      }
+      if (params.onboarding === "true") {
+        await completeOnboarding();
       }
       showSuccess(
         `Added ${acceptedItems.length} item${acceptedItems.length !== 1 ? "s" : ""} to pantry`,

@@ -1,6 +1,34 @@
 # Glean
 
-Glean is a local-first Expo app with a stateless FastAPI backend. The mobile app stores user state on device with SQLite, while the backend handles AI-assisted receipt parsing, recipe import, meal suggestions, auth validation, and rate limiting.
+Glean turns the food you already have into dinners you can actually make.
+Scan a receipt or describe what is in the kitchen to stock your pantry, plan
+your week around those ingredients, then shop only for the gaps.
+
+Stop starting from scratch before every food shop. Glean gives you one calm
+place to answer three everyday questions: what do I have, what can I cook, and
+what do I need to buy?
+
+## Stock Your Pantry. Plan Your Week. Shop The Gaps.
+
+| Scan | Plan | Shop |
+| --- | --- | --- |
+| ![Scan a receipt](mobile/assets/onboarding/scan.png) | ![Plan meals](mobile/assets/onboarding/plan.png) | ![Shop missing items](mobile/assets/onboarding/shop.png) |
+| Scan receipts or describe food to stock your pantry. | Plan dinners around what you already have at home. | Let missing ingredients become your shopping list. |
+
+## What It Does
+
+- **Stock your pantry fast:** parse a receipt scan or natural-language food
+  description into reviewable pantry items.
+- **Know what you have:** track quantities, categories, and expiry dates.
+- **Find meals worth cooking:** search or import recipes, then save the ones worth
+  cooking again.
+- **Plan around your kitchen:** build a weekly dinner plan from saved recipes and pantry
+  context.
+- **Shop with purpose:** add missing ingredients to the shopping list and check
+  them off when they enter the pantry.
+
+Ready to try it locally? Set up the backend and mobile app below, then stock
+your pantry from the first receipt.
 
 ## Project Layout
 
@@ -9,6 +37,29 @@ backend/   FastAPI backend, managed with uv, deployed with Mangum on AWS Lambda
 mobile/    Expo / React Native app, managed with npm
 Makefile   Common setup, test, lint, and dev-server commands
 ```
+
+The mobile app is local-first: pantry, recipes, meal plans, and shopping state
+live on device in SQLite. The backend stays stateless and handles AI-assisted
+receipt parsing, recipe import, meal suggestions, auth validation, and rate
+limiting.
+
+## Architecture
+
+```text
+Expo app
+  ├─ SQLite local state: pantry, recipes, plan, shopping list
+  ├─ Expo Router tabs: Pantry, Meals, Plan, Shop, Settings
+  └─ Native device flows: camera, auth callback, local persistence
+
+FastAPI backend
+  ├─ Receipt and text parsing
+  ├─ Recipe search/import
+  ├─ Meal suggestions
+  └─ Cognito/JWT validation and rate limiting
+```
+
+The intended product contract is review-before-write: AI can propose pantry or
+shopping items, but users confirm the result before local state changes.
 
 ## Prerequisites
 
