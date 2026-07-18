@@ -1,4 +1,5 @@
-import { Image, View } from "react-native";
+import { Text, View } from "react-native";
+import { GleanMark } from "@/components/GleanMark";
 import PulsingDots from "@/components/PulsingDots";
 import { theme } from "@/theme";
 
@@ -8,23 +9,27 @@ export default function SplashScreen() {
       testID="splash-container"
       style={{
         flex: 1,
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.primary,
         justifyContent: "center",
         alignItems: "center",
         gap: theme.spacing.xxl,
       }}
     >
-      <Image
-        testID="splash-logo"
-        source={require("../../assets/glean-logo.png")}
-        style={{
-          width: 180,
-          height: 180,
-          resizeMode: "contain",
-        }}
-      />
+      <View testID="splash-logo" style={{ alignItems: "center", gap: theme.spacing.md }}>
+        <GleanMark size={116} color="#fff" secondaryColor="#d8f2e0" />
+        <Text
+          style={{
+            fontFamily: theme.fontFamily.extrabold,
+            fontSize: 34,
+            letterSpacing: -1,
+            color: "#fff",
+          }}
+        >
+          glean
+        </Text>
+      </View>
       <View testID="pulsing-dots-container">
-        <PulsingDots color={theme.colors.primary} />
+        <PulsingDots color="#fff" />
       </View>
     </View>
   );

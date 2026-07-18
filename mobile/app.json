@@ -13,7 +13,7 @@
       "package": "com.ruaridhw.glean",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2a9d8f"
+        "backgroundColor": "#2e9d63"
       },
       "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
     },
@@ -25,14 +25,15 @@
         {
           "cameraPermission": "Allow Glean to scan receipts."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "updates": {
       "enabled": false
     },
     "splash": {
       "image": "./assets/splash-icon.png",
-      "backgroundColor": "#fdfaf6"
+      "backgroundColor": "#2e9d63"
     },
     "web": {
       "favicon": "./assets/favicon.png"
