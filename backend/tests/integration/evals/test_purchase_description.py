@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -9,7 +8,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.receipts.schemas import ParsedIngredient
+from glean.llm import invoke_structured
+from glean.receipts.schemas import ScanResponse
 from glean.receipts.service import NORMALISE_SYSTEM_PROMPT
 
 from .judges.rubrics import judge_purchase_description
@@ -17,15 +17,16 @@ from .judges.rubrics import judge_purchase_description
 ALLOWED_UNITS = {"g", "ml", "units"}
 
 
-def _invoke_purchase_description(model: BaseChatModel, text: str, *, example_idx: int) -> str:
-    result = model.invoke(
+def _invoke_purchase_description(model: BaseChatModel, text: str, *, example_idx: int) -> ScanResponse:
+    return invoke_structured(
+        model,
+        ScanResponse,
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this grocery purchase description: {text}"),
         ],
         config={"metadata": {"feature": "eval-pantry-purchase-description", "example_idx": example_idx}},
     )
-    return result.content
 
 
 class TestPurchaseDescriptionStructural:
@@ -35,9 +36,8 @@ class TestPurchaseDescriptionStructural:
         purchase_description_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(purchase_description_dataset):
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            raw = json.loads(content)
-            assert isinstance(raw, list), f"Example {i}: expected list, got {type(raw).__name__}"
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
+            assert isinstance(response, ScanResponse), f"Example {i}: expected ScanResponse"
 
     def test_all_examples_conform_to_schema(
         self,
@@ -45,9 +45,8 @@ class TestPurchaseDescriptionStructural:
         purchase_description_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(purchase_description_dataset):
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            assert len(items) == example["expected"]["count"], f"Example {i}: returned {len(items)} items"
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
+            assert len(response.items) == example["expected"]["count"], f"Example {i}: returned {len(response.items)}"
 
     def test_all_items_have_valid_units(
         self,
@@ -55,9 +54,8 @@ class TestPurchaseDescriptionStructural:
         purchase_description_dataset: list[dict[str, Any]],
     ) -> None:
         for i, example in enumerate(purchase_description_dataset):
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
+            for item in response.items:
                 assert item.unit in ALLOWED_UNITS, f"Example {i}: '{item.name}' has invalid unit '{item.unit}'"
 
 
@@ -71,8 +69,8 @@ class TestPurchaseDescriptionHeuristic:
         failures = []
         for i, example in enumerate(purchase_description_dataset):
             expected_names = set(example["expected"]["names"])
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            actual_names = {ParsedIngredient(**item).name for item in json.loads(content)}
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
+            actual_names = {item.name for item in response.items}
             missing = expected_names - actual_names
             if missing:
                 failures.append(f"Example {i}: missing names {sorted(missing)} from {sorted(actual_names)}")
@@ -85,9 +83,8 @@ class TestPurchaseDescriptionHeuristic:
     ) -> None:
         failures = []
         for i, example in enumerate(purchase_description_dataset):
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
-            for item in items:
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
+            for item in response.items:
                 if item.quantity <= 0:
                     failures.append(f"Example {i}: '{item.name}' has quantity {item.quantity}")
                 if not (0.0 <= item.confidence <= 1.0):
@@ -105,12 +102,11 @@ class TestPurchaseDescriptionJudge:
     ) -> None:
         scores: list[int] = []
         for i, example in enumerate(purchase_description_dataset):
-            content = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
-            items = [ParsedIngredient(**item) for item in json.loads(content)]
+            response = _invoke_purchase_description(eval_model, example["input"]["text"], example_idx=i)
             score = judge_purchase_description(
                 model=judge_model,
                 purchase_text=example["input"]["text"],
-                parsed_items=[item.model_dump() for item in items],
+                parsed_items=[item.model_dump() for item in response.items],
             )
             scores.append(score)
 

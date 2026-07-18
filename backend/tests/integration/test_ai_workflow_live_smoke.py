@@ -156,7 +156,8 @@ def test_receipt_scan_vision_live_http_returns_items(vision_live_client: TestCli
 
 
 def test_recipe_search_live_http_returns_results(live_client: TestClient, test_settings: Settings) -> None:
-    if test_settings.recipe_api_key.get_secret_value().startswith("test-"):
+    recipe_api_key = test_settings.recipe_api_key.get_secret_value()
+    if not recipe_api_key or recipe_api_key.startswith("test-"):
         pytest.skip("Set a real RECIPE_API_KEY in backend/.env for recipe search smoke")
 
     response = live_client.get("/recipes/search", headers=AUTH_HEADERS, params={"q": "carbonara", "per_page": 5})
