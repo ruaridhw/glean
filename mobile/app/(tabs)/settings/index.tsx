@@ -8,7 +8,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiClient } from "@/api/client";
 import { useAuthSession } from "@/auth/session";
+import { GleanMark } from "@/components/GleanMark";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatsRow } from "@/components/ui/StatsRow";
@@ -16,7 +18,6 @@ import { getUserConfig, saveUserConfig } from "@/db/config";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { hapticImpact } from "@/platform/haptics";
 import {
-  buildIntegerOptions,
   DIETARY_OPTIONS,
   getToleranceLabel,
   SETTINGS_OPTION_RANGES,
@@ -25,8 +26,9 @@ import {
 import { theme } from "@/theme";
 import { showError } from "@/utils/toast";
 
-const dinnerOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek);
-const servingOptions = buildIntegerOptions(SETTINGS_OPTION_RANGES.defaultServings);
+const DINNERS_RANGE = SETTINGS_OPTION_RANGES.dinnersPerWeek;
+const SERVINGS_RANGE = SETTINGS_OPTION_RANGES.defaultServings;
+const MAX_TIME_RANGE = SETTINGS_OPTION_RANGES.maxActiveTimeMins;
 
 function ChoiceChip({
   label,
@@ -101,8 +103,8 @@ export default function SettingsScreen() {
     setMaxTimeError(
       validateBoundedInteger(
         normalizedValue,
-        SETTINGS_OPTION_RANGES.maxActiveTimeMins.min,
-        SETTINGS_OPTION_RANGES.maxActiveTimeMins.max,
+        MAX_TIME_RANGE.min,
+        MAX_TIME_RANGE.max,
         "Max active time",
       ),
     );
@@ -161,6 +163,7 @@ export default function SettingsScreen() {
       <AppScreen
         title="Settings"
         subtitle="Loading preferences"
+        actions={<GleanMark size={36} />}
         scroll
         keyboardAvoiding
         testID="settings.screen"
@@ -177,6 +180,7 @@ export default function SettingsScreen() {
       <AppScreen
         title="Settings"
         subtitle="Preferences and account"
+        actions={<GleanMark size={36} />}
         scroll
         keyboardAvoiding
         testID="settings.screen"
@@ -196,6 +200,7 @@ export default function SettingsScreen() {
     <AppScreen
       title="Settings"
       subtitle="Preferences and account"
+      actions={<GleanMark size={36} />}
       scroll
       keyboardAvoiding
       testID="settings.screen"
@@ -209,12 +214,16 @@ export default function SettingsScreen() {
         ]}
       />
 
-      <SectionHeader title="Preferences" subtitle="Used for meal planning" />
+      <SectionHeader title="Preferences" />
 
       <Card style={styles.sectionCard}>
-        <Text style={styles.fieldTitle}>Purchase tolerance</Text>
+        <View style={styles.fieldHeader}>
+          <Text style={styles.fieldTitle}>Purchase tolerance</Text>
+          <Badge tone="primary" label={`${Math.round(tolerance * 100)}%`} />
+        </View>
         <Text style={styles.description}>{getToleranceLabel(tolerance)}</Text>
         <Slider
+          testID="settings.toleranceSlider"
           style={styles.slider}
           minimumValue={0}
           maximumValue={1}
@@ -227,38 +236,46 @@ export default function SettingsScreen() {
       </Card>
 
       <Card style={styles.sectionCard}>
-        <Text style={styles.fieldTitle}>Dinners per week</Text>
-        <View style={styles.chipRow}>
-          {dinnerOptions.map((option) => (
-            <ChoiceChip
-              key={option}
-              label={String(option)}
-              accessibilityLabel={`${option} dinners per week`}
-              selected={mealsPerWeek === option}
-              onPress={() => {
-                void hapticImpact("light");
-                setMealsPerWeek(option);
-              }}
-            />
-          ))}
+        <View style={styles.fieldHeader}>
+          <Text style={styles.fieldTitle}>Dinners per week</Text>
+          <Badge tone="primary" label={String(mealsPerWeek)} />
+        </View>
+        <Slider
+          testID="settings.dinnersSlider"
+          style={styles.slider}
+          minimumValue={DINNERS_RANGE.min}
+          maximumValue={DINNERS_RANGE.max}
+          step={1}
+          value={mealsPerWeek}
+          onValueChange={(value) => setMealsPerWeek(Math.round(value))}
+          minimumTrackTintColor={theme.colors.primary}
+          thumbTintColor={theme.colors.primary}
+        />
+        <View style={styles.sliderScale}>
+          <Text style={styles.sliderScaleText}>{DINNERS_RANGE.min}</Text>
+          <Text style={styles.sliderScaleText}>{DINNERS_RANGE.max}</Text>
         </View>
       </Card>
 
       <Card style={styles.sectionCard}>
-        <Text style={styles.fieldTitle}>Default servings</Text>
-        <View style={styles.chipRow}>
-          {servingOptions.map((option) => (
-            <ChoiceChip
-              key={option}
-              label={`${option} servings`}
-              accessibilityLabel={`${option} default servings`}
-              selected={servings === option}
-              onPress={() => {
-                void hapticImpact("light");
-                setServings(option);
-              }}
-            />
-          ))}
+        <View style={styles.fieldHeader}>
+          <Text style={styles.fieldTitle}>Default servings</Text>
+          <Badge tone="primary" label={String(servings)} />
+        </View>
+        <Slider
+          testID="settings.servingsSlider"
+          style={styles.slider}
+          minimumValue={SERVINGS_RANGE.min}
+          maximumValue={SERVINGS_RANGE.max}
+          step={1}
+          value={servings}
+          onValueChange={(value) => setServings(Math.round(value))}
+          minimumTrackTintColor={theme.colors.primary}
+          thumbTintColor={theme.colors.primary}
+        />
+        <View style={styles.sliderScale}>
+          <Text style={styles.sliderScaleText}>{SERVINGS_RANGE.min}</Text>
+          <Text style={styles.sliderScaleText}>{SERVINGS_RANGE.max}</Text>
         </View>
       </Card>
 
@@ -295,7 +312,7 @@ export default function SettingsScreen() {
         onPress={save}
         disabled={Boolean(maxTimeError)}
       >
-        <Text style={styles.saveButtonText}>Save Settings</Text>
+        <Text style={styles.saveButtonText}>Save settings</Text>
       </Pressable>
 
       <SectionHeader title="Account" />
@@ -325,23 +342,60 @@ const styles = StyleSheet.create({
   loadingText: {
     color: theme.colors.textSecondary,
     fontSize: theme.typography.subhead.fontSize,
+    fontFamily: theme.fontFamily.semibold,
   },
   sectionCard: {
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
   },
+  fieldHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   fieldTitle: {
     color: theme.colors.text,
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   description: {
     color: theme.colors.textSecondary,
     fontSize: theme.typography.caption.fontSize,
+    fontFamily: theme.fontFamily.semibold,
     lineHeight: 18,
   },
   slider: {
     height: 40,
+  },
+  sliderScale: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: -theme.spacing.sm,
+  },
+  sliderScaleText: {
+    color: theme.colors.mutedForeground,
+    fontSize: theme.typography.caption.fontSize,
+    fontWeight: "700",
+    fontFamily: theme.fontFamily.bold,
+  },
+  input: {
+    backgroundColor: theme.colors.muted,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    color: theme.colors.text,
+    fontSize: theme.typography.body.fontSize,
+    fontFamily: theme.fontFamily.regular,
+    padding: theme.spacing.md,
+  },
+  inputError: {
+    borderColor: theme.colors.warning,
+  },
+  errorText: {
+    color: theme.colors.warning,
+    fontSize: theme.typography.caption.fontSize,
+    fontFamily: theme.fontFamily.semibold,
   },
   chipRow: {
     flexDirection: "row",
@@ -367,51 +421,39 @@ const styles = StyleSheet.create({
     color: theme.colors.mutedForeground,
     fontSize: theme.typography.caption.fontSize,
     fontWeight: "700",
+    fontFamily: theme.fontFamily.bold,
   },
   chipTextSelected: {
     color: theme.colors.primaryForeground,
   },
-  input: {
-    backgroundColor: theme.colors.muted,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    color: theme.colors.text,
-    fontSize: theme.typography.body.fontSize,
-    padding: theme.spacing.md,
-  },
-  inputError: {
-    borderColor: theme.colors.warning,
-  },
-  errorText: {
-    color: theme.colors.warning,
-    fontSize: theme.typography.caption.fontSize,
-  },
   saveButton: {
     alignItems: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     marginTop: theme.spacing.sm,
-    padding: theme.spacing.md,
+    padding: theme.spacing.lg,
+    ...theme.shadow.fab,
   },
   saveButtonDisabled: {
     opacity: 0.5,
   },
   saveButtonText: {
     color: theme.colors.primaryForeground,
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   retryButton: {
     alignItems: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     padding: theme.spacing.md,
   },
   retryButtonText: {
     color: theme.colors.primaryForeground,
     fontSize: theme.typography.body.fontSize,
     fontWeight: "700",
+    fontFamily: theme.fontFamily.bold,
   },
   rowAction: {
     alignItems: "center",
@@ -422,11 +464,13 @@ const styles = StyleSheet.create({
   dangerText: {
     color: theme.colors.danger,
     fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "700",
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   warningText: {
     color: theme.colors.warning,
     fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "700",
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
 });

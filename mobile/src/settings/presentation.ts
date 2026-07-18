@@ -14,7 +14,8 @@ interface IntegerRange {
 }
 
 export const SETTINGS_OPTION_RANGES = {
-  dinnersPerWeek: { min: 1, max: 7 },
+  // Dinners per week is a 3–7 slider in the redesign (chips are reserved for dietary flags).
+  dinnersPerWeek: { min: 3, max: 7 },
   defaultServings: { min: 1, max: 6 },
   maxActiveTimeMins: { min: 1, max: 480 },
 } as const satisfies Record<string, IntegerRange>;
