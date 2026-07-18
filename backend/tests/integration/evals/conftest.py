@@ -25,7 +25,7 @@ _EVAL_FEATURES_BY_MODULE = {
     "test_receipt_scan": Feature.RECEIPT_SCAN,
     "test_recipe_import": Feature.RECIPE_IMPORT,
     "test_shopping_list_description": Feature.SHOPPING_LIST_DESCRIPTION,
-    "test_suggestions": Feature.MEAL_PLAN_GENERATION,
+    "test_meal_plan_generation": Feature.MEAL_PLAN_GENERATION,
 }
 
 
