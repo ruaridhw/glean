@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH_REDIRECT_URI, AUTHORIZE_URL } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
+import { GleanMark } from "@/components/GleanMark";
+import { theme } from "@/theme";
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
 
@@ -42,35 +44,81 @@ export default function SignInScreen() {
     }
   }
 
+  const disabled = !request || loading;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Glean</Text>
-      <Text style={styles.subtitle}>Waste less. Cook better.</Text>
+      <View style={styles.iconTile}>
+        <GleanMark size={40} />
+      </View>
+
+      <Text style={styles.title}>Waste less.{"\n"}Cook better.</Text>
+
       <Pressable
-        style={styles.button}
+        style={[styles.button, disabled && styles.buttonDisabled]}
         onPress={() => void startSignIn()}
-        disabled={!request || loading}
+        disabled={disabled}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
           <Text style={styles.buttonText}>Sign in with Google</Text>
         )}
       </Pressable>
+
+      <Text style={styles.legal}>
+        By continuing you agree to our Terms of Service and Privacy Policy.
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#fff" },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#2a9d8f",
-    textAlign: "center",
-    marginBottom: 4,
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "flex-start",
+    padding: theme.spacing.xl,
+    backgroundColor: theme.colors.background,
   },
-  subtitle: { fontSize: 16, color: "#888", textAlign: "center", marginBottom: 32 },
-  button: { backgroundColor: "#2a9d8f", borderRadius: 8, padding: 14, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  iconTile: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.radius.xl,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: theme.spacing.xl,
+  },
+  title: {
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.6,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xxl,
+  },
+  button: {
+    alignSelf: "stretch",
+    backgroundColor: theme.colors.ink,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: 16,
+    color: theme.colors.primaryForeground,
+  },
+  legal: {
+    fontFamily: theme.fontFamily.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.colors.textDisabled,
+    marginTop: theme.spacing.lg,
+  },
 });

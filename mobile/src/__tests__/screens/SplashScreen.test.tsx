@@ -8,7 +8,7 @@ describe("SplashScreen", () => {
   it("renders the app background color", () => {
     const { getByTestId } = render(<SplashScreen />);
     const container = getByTestId("splash-container");
-    expect(container.props.style.backgroundColor).toBe("#fdfaf6");
+    expect(container.props.style.backgroundColor).toBe("#2e9d63");
   });
 
   it("renders the logo image", () => {
