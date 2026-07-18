@@ -3,6 +3,7 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "@/theme";
 
 export default function AddScreen() {
   return (
@@ -34,19 +35,34 @@ export default function AddScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: "#fff" },
-  heading: { fontSize: 22, fontWeight: "700", marginBottom: 24 },
+  container: { flex: 1, padding: theme.spacing.xl, backgroundColor: theme.colors.background },
+  heading: {
+    ...theme.typography.title2,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xl,
+  },
   option: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 12,
-    marginBottom: 12,
+    gap: theme.spacing.lg,
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    marginBottom: theme.spacing.md,
+    ...theme.shadow.card,
   },
   icon: { fontSize: 28 },
-  label: { fontSize: 16, fontWeight: "600", marginBottom: 2 },
-  sub: { fontSize: 13, color: "#888" },
+  label: {
+    fontSize: 16,
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  sub: {
+    fontSize: 13,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
+    color: theme.colors.textSecondary,
+  },
 });

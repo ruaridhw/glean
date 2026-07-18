@@ -6,7 +6,12 @@ type CategoryKey = keyof typeof theme.categoryColors;
 export interface PantryCategoryMeta {
   key: CategoryKey;
   label: string;
-  color: string;
+  /** Short category name for filter chips (e.g. "Veg" for "Veg & Fruit"). */
+  shortLabel: string;
+  /** Tinted chip background for the category. */
+  bg: string;
+  /** Icon / foreground colour for the category. */
+  fg: string;
   icon: string;
 }
 
@@ -22,16 +27,16 @@ interface ExpiryBadgeModel {
   tone: "expired" | "soon" | "later";
 }
 
-const categoryMeta: Record<CategoryKey, Omit<PantryCategoryMeta, "key" | "color">> = {
-  vegetables: { label: "Veg & Fruit", icon: "leaf-outline" },
-  fruit: { label: "Veg & Fruit", icon: "leaf-outline" },
-  protein: { label: "Meat & Fish", icon: "fish-outline" },
-  dairy: { label: "Dairy", icon: "water-outline" },
-  carbohydrates: { label: "Cupboard", icon: "cube-outline" },
-  fats: { label: "Cupboard", icon: "cube-outline" },
-  condiments: { label: "Cupboard", icon: "cube-outline" },
-  frozen: { label: "Frozen", icon: "snow-outline" },
-  other: { label: "Other", icon: "cube-outline" },
+const categoryMeta: Record<CategoryKey, Omit<PantryCategoryMeta, "key" | "bg" | "fg">> = {
+  vegetables: { label: "Veg & Fruit", shortLabel: "Veg", icon: "leaf-outline" },
+  fruit: { label: "Veg & Fruit", shortLabel: "Veg", icon: "leaf-outline" },
+  protein: { label: "Meat & Fish", shortLabel: "Meat", icon: "fish-outline" },
+  dairy: { label: "Dairy", shortLabel: "Dairy", icon: "water-outline" },
+  carbohydrates: { label: "Cupboard", shortLabel: "Cupboard", icon: "cube-outline" },
+  fats: { label: "Cupboard", shortLabel: "Cupboard", icon: "cube-outline" },
+  condiments: { label: "Cupboard", shortLabel: "Cupboard", icon: "cube-outline" },
+  frozen: { label: "Frozen", shortLabel: "Frozen", icon: "snow-outline" },
+  other: { label: "Other", shortLabel: "Other", icon: "cube-outline" },
 };
 
 function isCategoryKey(value: string | null | undefined): value is CategoryKey {
@@ -43,7 +48,9 @@ export function getPantryCategoryMeta(foodGroup: string | null | undefined): Pan
   return {
     key,
     label: categoryMeta[key].label,
-    color: theme.categoryColors[key],
+    shortLabel: categoryMeta[key].shortLabel,
+    bg: theme.categoryColors[key].bg,
+    fg: theme.categoryColors[key].fg,
     icon: categoryMeta[key].icon,
   };
 }
@@ -88,4 +95,14 @@ export function getExpiryBadge(
   if (days === 0) return { label: "Today", tone: "expired" };
   if (days <= 2) return { label: `${days}d left`, tone: "soon" };
   return { label: `${days}d left`, tone: "later" };
+}
+
+/**
+ * Whether an item is near-term urgent — its expiry badge is `expired` or `soon`
+ * (within a couple of days). Shared by the pantry "expiring" count and the plan
+ * "needs using up" nudge so both stay in lockstep.
+ */
+export function isExpiringSoon(item: PantryItem, now: Date = new Date()): boolean {
+  const badge = getExpiryBadge(item.expiry_date, now);
+  return badge?.tone === "expired" || badge?.tone === "soon";
 }

@@ -1,5 +1,6 @@
 // mobile/app/(tabs)/pantry/review.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
@@ -13,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Badge } from "@/components/ui/Badge";
 import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
@@ -85,31 +87,49 @@ export default function ReviewScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Review Items</Text>
-      <Text style={styles.subtitle}>Edit or remove any items before confirming.</Text>
+      <View style={styles.header}>
+        <Text style={styles.heading}>Review items</Text>
+        <Text style={styles.subtitle}>Edit or remove anything before it goes in the pantry.</Text>
+      </View>
       <FlatList
         data={items}
         keyExtractor={(_, i) => String(i)}
-        renderItem={({ item, index }) => (
-          <View style={[styles.row, item.confidence < 0.7 && styles.flagged]}>
-            {item.confidence < 0.7 && <Text style={styles.flag}>⚠ Check</Text>}
-            <TextInput
-              style={styles.nameInput}
-              value={item.name}
-              onChangeText={(v) => updateItem(index, { name: v })}
-            />
-            <TextInput
-              style={styles.qtyInput}
-              value={String(item.quantity)}
-              onChangeText={(v) => updateItem(index, { quantity: parseFloat(v) || 0 })}
-              keyboardType="numeric"
-            />
-            <Text style={styles.unit}>{item.unit}</Text>
-            <Pressable onPress={() => removeItem(index)}>
-              <Text style={styles.remove}>✕</Text>
-            </Pressable>
-          </View>
-        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item, index }) => {
+          const flagged = item.confidence < 0.7;
+          return (
+            <View style={[styles.row, flagged && styles.rowFlagged]}>
+              {flagged ? (
+                <Badge
+                  label="CHECK"
+                  backgroundColor={theme.colors.accent}
+                  color={theme.colors.primaryForeground}
+                />
+              ) : null}
+              <TextInput
+                style={styles.nameInput}
+                value={item.name}
+                onChangeText={(v) => updateItem(index, { name: v })}
+              />
+              <TextInput
+                style={styles.qtyInput}
+                value={String(item.quantity)}
+                onChangeText={(v) => updateItem(index, { quantity: parseFloat(v) || 0 })}
+                keyboardType="numeric"
+              />
+              <Text style={styles.unit}>{item.unit}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.name}`}
+                hitSlop={8}
+                onPress={() => removeItem(index)}
+              >
+                <Ionicons name="close" size={18} color={theme.colors.textDisabled} />
+              </Pressable>
+            </View>
+          );
+        }}
       />
       <Pressable
         style={[styles.confirmButton, (saving || acceptedCount === 0) && styles.confirmDisabled]}
@@ -117,7 +137,7 @@ export default function ReviewScreen() {
         disabled={saving || acceptedCount === 0}
       >
         {saving ? (
-          <ActivityIndicator color={theme.colors.card} />
+          <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
           <Text style={styles.confirmText}>
             Confirm {acceptedCount} item{acceptedCount !== 1 ? "s" : ""}
@@ -130,65 +150,84 @@ export default function ReviewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
+  header: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.xs,
+  },
   heading: {
-    fontSize: theme.typography.title2.fontSize,
-    fontWeight: theme.typography.title2.fontWeight,
+    fontSize: 24,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+    letterSpacing: -0.5,
     color: theme.colors.text,
-    padding: theme.spacing.lg,
   },
   subtitle: {
-    fontSize: theme.typography.caption.fontSize,
+    fontSize: 13,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
     color: theme.colors.textSecondary,
+    marginTop: 4,
+  },
+  listContent: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
+    gap: 10,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing.md,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
+    paddingVertical: 14,
+    ...theme.shadow.card,
   },
-  flagged: { backgroundColor: theme.colors.warningLight },
-  flag: { color: theme.colors.warning, fontSize: 11, marginRight: theme.spacing.xs + 2 },
+  rowFlagged: { backgroundColor: theme.colors.warningLight },
   nameInput: {
     flex: 1,
-    fontSize: 14,
-    borderBottomWidth: 1,
+    fontSize: 15,
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
+    borderBottomWidth: 1.5,
     borderColor: theme.colors.border,
-    marginRight: theme.spacing.sm,
+    paddingBottom: 3,
     color: theme.colors.text,
   },
   qtyInput: {
-    width: 60,
+    width: 56,
     fontSize: 14,
-    borderBottomWidth: 1,
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
+    borderBottomWidth: 1.5,
     borderColor: theme.colors.border,
-    marginRight: theme.spacing.xs,
+    paddingBottom: 3,
     textAlign: "right",
     color: theme.colors.text,
   },
   unit: {
-    fontSize: theme.typography.caption.fontSize,
-    color: theme.colors.textSecondary,
     width: 30,
-    marginRight: theme.spacing.sm,
+    fontSize: 12,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
+    color: theme.colors.textSecondary,
   },
-  remove: { color: theme.colors.textDisabled, fontSize: 16 },
   confirmButton: {
     margin: theme.spacing.lg,
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    padding: 14,
+    borderRadius: theme.radius.pill,
+    padding: 15,
     alignItems: "center",
-    minHeight: 44,
     justifyContent: "center",
+    minHeight: 44,
+    ...theme.shadow.fab,
   },
   confirmDisabled: { opacity: 0.5 },
   confirmText: {
-    color: theme.colors.card,
-    fontWeight: theme.typography.headline.fontWeight as "600",
-    fontSize: 16,
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+    fontSize: 15,
   },
 });

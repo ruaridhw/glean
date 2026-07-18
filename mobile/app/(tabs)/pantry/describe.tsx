@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useDescribeReceipt } from "@/api/hooks";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
+import { theme } from "@/theme";
 
 export default function DescribeScreen() {
   const [text, setText] = useState("");
@@ -66,7 +67,7 @@ export default function DescribeScreen() {
           disabled={describeMutation.isPending || !canSubmit}
         >
           {describeMutation.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.colors.primaryForeground} />
           ) : (
             <Text style={styles.buttonText}>Parse →</Text>
           )}
@@ -77,20 +78,46 @@ export default function DescribeScreen() {
 }
 
 const styles = StyleSheet.create({
-  keyboardView: { flex: 1, backgroundColor: "#fff" },
-  container: { flex: 1, padding: 24 },
-  heading: { fontSize: 22, fontWeight: "700", marginBottom: 8 },
-  subtitle: { fontSize: 14, color: "#888", marginBottom: 20 },
+  keyboardView: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, padding: theme.spacing.xl },
+  heading: {
+    ...theme.typography.title2,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
+    color: theme.colors.textSecondary,
+    marginBottom: 20,
+  },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
     fontSize: 16,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.card,
     minHeight: 100,
     textAlignVertical: "top",
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
-  button: { backgroundColor: "#2a9d8f", borderRadius: 8, padding: 14, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  button: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    padding: 14,
+    alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
+    ...theme.shadow.fab,
+  },
+  buttonText: {
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+    fontSize: 16,
+  },
 });
