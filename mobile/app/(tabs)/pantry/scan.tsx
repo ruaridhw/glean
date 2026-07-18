@@ -1,9 +1,11 @@
 // mobile/app/(tabs)/pantry/scan.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { theme } from "@/theme";
 
 export default function ScanScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
@@ -14,7 +16,7 @@ export default function ScanScreen() {
   if (!permission) return <View style={styles.container} />;
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.permission]}>
         <Text style={styles.message}>Camera permission is needed to scan receipts.</Text>
         <Pressable style={styles.button} onPress={requestPermission}>
           <Text style={styles.buttonText}>Grant Permission</Text>
@@ -41,28 +43,97 @@ export default function ScanScreen() {
   return (
     <View style={styles.container}>
       <CameraView testID="scan.camera" ref={cameraRef} style={styles.camera} facing="back" />
-      <View style={styles.controls}>
-        <Pressable style={styles.shutterButton} onPress={capture} disabled={capturing}>
-          <View style={styles.shutterInner} />
+
+      <View pointerEvents="box-none" style={styles.overlay}>
+        <View style={styles.frame} pointerEvents="none" />
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close camera"
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="chevron-back" size={20} color={theme.colors.primaryForeground} />
         </Pressable>
+
+        <View style={styles.controls} pointerEvents="box-none">
+          <Text style={styles.hint}>Line the receipt up inside the frame</Text>
+          <Pressable style={styles.shutterButton} onPress={capture} disabled={capturing}>
+            <View style={styles.shutterInner} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  message: { color: "#fff", textAlign: "center", margin: 24, fontSize: 16 },
-  button: {
-    margin: 24,
-    backgroundColor: "#2a9d8f",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
+  container: { flex: 1, backgroundColor: "#111511" },
+  permission: { justifyContent: "center", alignItems: "center", padding: theme.spacing.xl },
+  message: {
+    color: theme.colors.primaryForeground,
+    textAlign: "center",
+    marginBottom: theme.spacing.lg,
+    fontSize: 16,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
   },
-  buttonText: { color: "#fff", fontWeight: "600" },
-  camera: { flex: 1 },
-  controls: { position: "absolute", bottom: 40, width: "100%", alignItems: "center" },
+  button: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: 14,
+    alignItems: "center",
+    ...theme.shadow.fab,
+  },
+  buttonText: {
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  camera: { ...StyleSheet.absoluteFillObject },
+  overlay: { ...StyleSheet.absoluteFillObject },
+  frame: {
+    position: "absolute",
+    left: 36,
+    right: 36,
+    top: 80,
+    bottom: 120,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.75)",
+    borderRadius: theme.radius.xl,
+  },
+  backButton: {
+    position: "absolute",
+    top: 24,
+    left: 20,
+    width: 44,
+    height: 44,
+    borderRadius: theme.radius.pill,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  controls: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 36,
+    alignItems: "center",
+    gap: 18,
+  },
+  hint: {
+    backgroundColor: "rgba(0,0,0,0.45)",
+    color: theme.colors.primaryForeground,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    fontSize: 13,
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
+    overflow: "hidden",
+  },
   shutterButton: {
     width: 72,
     height: 72,
@@ -72,14 +143,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   shutterInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#fff" },
-  errorOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    padding: 16,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
 });

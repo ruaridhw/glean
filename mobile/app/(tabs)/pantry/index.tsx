@@ -14,18 +14,19 @@ import {
 } from "react-native";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
-import { AppScreen } from "@/components/ui/AppScreen";
+import { AppScreen, type AppScreenChip } from "@/components/ui/AppScreen";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import {
   formatPantryQuantity,
   getExpiryBadge,
-  getPantryCategoryMeta,
   groupPantryItems,
+  isExpiringSoon,
   type PantrySection,
 } from "@/pantry/presentation";
 import { hapticImpact } from "@/platform/haptics";
@@ -38,6 +39,72 @@ function expiryToneToBadgeTone(
   if (tone === "expired") return "danger";
   if (tone === "soon") return "warning";
   return "neutral";
+}
+
+/** Items whose expiry badge is near-term (expired or within a couple of days). */
+function countExpiring(items: PantryItem[]): number {
+  return items.filter((item) => isExpiringSoon(item)).length;
+}
+
+const ALL_FILTER = "all";
+
+interface PantryFilter {
+  key: string;
+  label: string;
+}
+
+function ScanButton() {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Scan receipt"
+      style={styles.scanButton}
+      onPress={() => {
+        void hapticImpact("light");
+        router.push("/(tabs)/pantry/scan");
+      }}
+    >
+      <Ionicons name="camera-outline" size={18} color={theme.colors.primaryForeground} />
+      <Text style={styles.scanButtonText}>Scan</Text>
+    </Pressable>
+  );
+}
+
+interface FilterChipRowProps {
+  filters: PantryFilter[];
+  active: string;
+  onSelect: (key: string) => void;
+}
+
+function FilterChipRow({ filters, active, onSelect }: FilterChipRowProps) {
+  return (
+    <View style={styles.filterRow}>
+      {filters.map((filter) => {
+        const selected = filter.key === active;
+        return (
+          <Pressable
+            key={filter.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onSelect(filter.key)}
+            style={[
+              styles.filterChip,
+              selected ? styles.filterChipSelected : styles.filterChipIdle,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterChipLabel,
+                { color: selected ? theme.colors.primaryForeground : theme.colors.text },
+              ]}
+            >
+              {filter.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
 interface PantryItemCardProps {
@@ -59,7 +126,6 @@ function PantryItemCard({
   onCommitEdit,
   onDelete,
 }: PantryItemCardProps) {
-  const meta = getPantryCategoryMeta(item.food_group);
   const expiryBadge = getExpiryBadge(item.expiry_date);
   const isEditing = editingId === item.id;
 
@@ -72,7 +138,6 @@ function PantryItemCard({
     >
       {(deleteActive) => (
         <Card style={styles.itemCard} testID={`pantry.item.${item.id}`}>
-          <View style={[styles.categoryDot, { backgroundColor: meta.color }]} />
           <View style={styles.itemContent}>
             <Text style={styles.itemName}>{item.canonical_name}</Text>
             {isEditing ? (
@@ -96,8 +161,8 @@ function PantryItemCard({
           <IconButton
             icon="trash-outline"
             accessibilityLabel={`Remove ${item.canonical_name}`}
-            color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
-            backgroundColor={deleteActive ? "#FEE2E2" : "transparent"}
+            color={deleteActive ? theme.colors.danger : theme.colors.textDisabled}
+            backgroundColor={deleteActive ? theme.colors.dangerLight : "transparent"}
             size={18}
             onPress={() => onDelete(item)}
           />
@@ -128,14 +193,13 @@ function PantrySectionView({
 }: PantrySectionViewProps) {
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Ionicons
-          name={section.meta.icon as keyof typeof Ionicons.glyphMap}
-          size={16}
-          color={section.meta.color}
-        />
-        <Text style={styles.groupHeader}>{section.title}</Text>
-      </View>
+      <SectionHeader
+        title={section.title}
+        icon={section.meta.icon as keyof typeof Ionicons.glyphMap}
+        iconColor={section.meta.fg}
+        iconBackground={section.meta.bg}
+        count={section.items.length}
+      />
       {section.items.map((item) => (
         <PantryItemCard
           key={item.id}
@@ -157,6 +221,7 @@ export default function PantryScreen() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editQty, setEditQty] = useState("");
+  const [filter, setFilter] = useState<string>(ALL_FILTER);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,7 +254,7 @@ export default function PantryScreen() {
     await load();
   }
 
-  const sections = groupPantryItems(items);
+  const allSections = groupPantryItems(items);
 
   if (loading) {
     return (
@@ -205,15 +270,7 @@ export default function PantryScreen() {
         title="Pantry"
         subtitle="Reduce waste, eat what you have"
         testID="pantry.screen"
-        actions={
-          <IconButton
-            icon="add"
-            accessibilityLabel="Add pantry item"
-            color={theme.colors.primaryForeground}
-            backgroundColor={theme.colors.primary}
-            onPress={() => router.push("/(tabs)/pantry/add")}
-          />
-        }
+        actions={<ScanButton />}
       >
         <EmptyState
           testID="pantry.emptyState"
@@ -229,24 +286,31 @@ export default function PantryScreen() {
     );
   }
 
+  const expiringCount = countExpiring(items);
+  const chips: AppScreenChip[] = [
+    { label: `${items.length} ${items.length === 1 ? "item" : "items"}`, tone: "primary" },
+  ];
+  if (expiringCount > 0) {
+    chips.push({ label: `${expiringCount} expiring`, tone: "warning" });
+  }
+
+  const filters: PantryFilter[] = [
+    { key: ALL_FILTER, label: `All · ${items.length}` },
+    ...allSections.map((section) => ({
+      key: section.key,
+      label: `${section.meta.shortLabel} ${section.items.length}`,
+    })),
+  ];
+
+  const visibleSections =
+    filter === ALL_FILTER ? allSections : allSections.filter((section) => section.key === filter);
+
   return (
-    <AppScreen
-      title="Pantry"
-      subtitle={`${items.length} ${items.length === 1 ? "item" : "items"}`}
-      testID="pantry.screen"
-      actions={
-        <IconButton
-          icon="add"
-          accessibilityLabel="Add pantry item"
-          color={theme.colors.primaryForeground}
-          backgroundColor={theme.colors.primary}
-          onPress={() => router.push("/(tabs)/pantry/add")}
-        />
-      }
-    >
+    <AppScreen title="Pantry" chips={chips} testID="pantry.screen" actions={<ScanButton />}>
+      <FilterChipRow filters={filters} active={filter} onSelect={setFilter} />
       <FlatList
         testID="pantry.list"
-        data={sections}
+        data={visibleSections}
         keyExtractor={(section) => section.key}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -270,40 +334,70 @@ export default function PantryScreen() {
 }
 
 const styles = StyleSheet.create({
+  scanButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    flexDirection: "row",
+    gap: 6,
+    height: 44,
+    paddingHorizontal: theme.spacing.lg,
+    ...theme.shadow.fab,
+  },
+  scanButtonText: {
+    color: theme.colors.primaryForeground,
+    fontSize: 13,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+  },
+  filterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  filterChip: {
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  filterChipSelected: {
+    backgroundColor: theme.colors.ink,
+    borderColor: theme.colors.ink,
+  },
+  filterChipIdle: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+  },
+  filterChipLabel: {
+    fontSize: 13,
+    fontFamily: theme.fontFamily.extrabold,
+    fontWeight: "800",
+  },
   listContent: { paddingBottom: theme.spacing.xl },
   section: { marginBottom: theme.spacing.lg },
-  sectionHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
-  },
-  groupHeader: {
-    ...theme.typography.sectionLabel,
-    color: theme.colors.textSecondary,
-  },
   itemCard: {
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing.md,
     marginBottom: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
-  },
-  categoryDot: {
-    borderRadius: 5,
-    height: 10,
-    width: 10,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 14,
   },
   itemContent: { flex: 1 },
   itemName: {
     color: theme.colors.text,
-    fontSize: theme.typography.headline.fontSize,
-    fontWeight: theme.typography.headline.fontWeight,
+    fontSize: 16,
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
     marginBottom: 2,
   },
   itemQuantity: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.typography.subhead.fontSize,
+    color: theme.colors.mutedForeground,
+    fontSize: 14,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
   },
   editInput: {
     alignSelf: "flex-start",
@@ -311,7 +405,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
     borderWidth: 1,
     color: theme.colors.text,
-    fontSize: theme.typography.subhead.fontSize,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: 14,
     minWidth: 72,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,

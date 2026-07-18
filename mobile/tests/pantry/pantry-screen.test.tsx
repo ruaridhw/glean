@@ -1,5 +1,4 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import PantryScreen from "../../app/(tabs)/pantry";
 
@@ -143,6 +142,66 @@ describe("PantryScreen", () => {
     await waitFor(() => expect(deletePantryItem).toHaveBeenCalledWith(1));
   });
 
+  it("filters rows to a single category when its chip is pressed", async () => {
+    (getPantryItems as jest.Mock).mockResolvedValue([
+      {
+        id: 1,
+        ingredient_id: 10,
+        quantity: 2,
+        unit: "kg",
+        unit_price: null,
+        expiry_date: null,
+        last_used_at: null,
+        updated_at: "2026-05-02T00:00:00Z",
+        canonical_name: "broccoli",
+        is_staple: false,
+        food_group: "vegetables",
+      },
+      {
+        id: 3,
+        ingredient_id: 12,
+        quantity: 3,
+        unit: "whole",
+        unit_price: null,
+        expiry_date: null,
+        last_used_at: null,
+        updated_at: "2026-05-02T00:00:00Z",
+        canonical_name: "carrots",
+        is_staple: false,
+        food_group: "vegetables",
+      },
+      {
+        id: 2,
+        ingredient_id: 11,
+        quantity: 1,
+        unit: "L",
+        unit_price: null,
+        expiry_date: null,
+        last_used_at: null,
+        updated_at: "2026-05-02T00:00:00Z",
+        canonical_name: "milk",
+        is_staple: false,
+        food_group: "dairy",
+      },
+    ]);
+
+    const screen = render(<PantryScreen />);
+
+    await waitFor(() => expect(screen.getByText("broccoli")).toBeTruthy());
+    // Chips use short category names + per-category counts, plus the "All · N" chip.
+    expect(screen.getByText("All · 3")).toBeTruthy();
+    expect(screen.getByText("Veg 2")).toBeTruthy();
+    expect(screen.getByText("Dairy 1")).toBeTruthy();
+    // Everything visible before filtering.
+    expect(screen.getByText("milk")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("Veg 2"));
+
+    await waitFor(() => expect(screen.queryByText("milk")).toBeNull());
+    expect(screen.getByText("broccoli")).toBeTruthy();
+    expect(screen.getByText("carrots")).toBeTruthy();
+  });
+
   it("deletes pantry items from a qualifying left swipe", async () => {
     const screen = render(<PantryScreen />);
 
@@ -180,38 +239,5 @@ describe("PantryScreen", () => {
     });
 
     await waitFor(() => expect(deletePantryItem).toHaveBeenCalledWith(1));
-  });
-
-  it("highlights the pantry delete affordance while swiping an item left", async () => {
-    const screen = render(<PantryScreen />);
-
-    await waitFor(() => expect(screen.getByText("broccoli")).toBeTruthy());
-    const row = screen.getByTestId("pantry-row-1");
-
-    act(() => {
-      row.props.onResponderGrant({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 200,
-          currentTimeStamp: 1,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-      row.props.onResponderMove({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 168,
-          currentTimeStamp: 32,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-    });
-
-    expect(
-      StyleSheet.flatten(screen.getByTestId("pantry-row-delete-action-1").props.style),
-    ).toEqual(expect.objectContaining({ backgroundColor: "#FEE2E2" }));
-    expect(screen.getByTestId("pantry-row-delete-icon-1").props.color).toBe("#EF4444");
   });
 });

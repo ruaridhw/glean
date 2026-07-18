@@ -5,11 +5,17 @@ import { SkeletonBox } from "./SkeletonBox";
 export function PantrySkeleton() {
   return (
     <View testID="pantry.skeleton" style={styles.container}>
-      {Array.from({ length: 5 }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows never reorder
-        <View key={i} style={styles.row}>
-          <SkeletonBox width={20} height={20} style={styles.circle} />
-          <SkeletonBox width="70%" height={15} />
+      {Array.from({ length: 2 }, (_, section) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton never reorders
+        <View key={section} style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <SkeletonBox width={26} height={26} style={styles.chip} />
+            <SkeletonBox width="35%" height={12} />
+          </View>
+          {Array.from({ length: 3 }, (_, row) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton never reorders
+            <SkeletonBox key={row} width="100%" height={64} style={styles.card} />
+          ))}
         </View>
       ))}
     </View>
@@ -18,16 +24,22 @@ export function PantrySkeleton() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    gap: theme.spacing.lg,
   },
-  row: {
+  section: {
+    gap: theme.spacing.sm,
+  },
+  sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
-  circle: {
-    borderRadius: 10,
+  chip: {
+    borderRadius: theme.radius.sm,
+  },
+  card: {
+    borderRadius: theme.radius.lg,
   },
 });

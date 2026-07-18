@@ -25,7 +25,9 @@ describe("pantry presentation", () => {
     expect(getPantryCategoryMeta("vegetables")).toEqual({
       key: "vegetables",
       label: "Veg & Fruit",
-      color: "#4CAF50",
+      shortLabel: "Veg",
+      bg: "#e3f2e7",
+      fg: "#1c6b41",
       icon: "leaf-outline",
     });
   });
@@ -34,7 +36,9 @@ describe("pantry presentation", () => {
     expect(getPantryCategoryMeta(null)).toEqual({
       key: "other",
       label: "Other",
-      color: "#64748B",
+      shortLabel: "Other",
+      bg: "#efece1",
+      fg: "#85806f",
       icon: "cube-outline",
     });
   });

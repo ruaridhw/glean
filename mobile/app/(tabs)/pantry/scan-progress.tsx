@@ -115,7 +115,7 @@ export default function ScanProgressScreen() {
                   isComplete
                     ? theme.colors.success
                     : isActive
-                      ? theme.colors.primary
+                      ? theme.colors.text
                       : theme.colors.textDisabled
                 }
               />
@@ -164,17 +164,26 @@ const s = StyleSheet.create({
     gap: theme.spacing.lg,
   },
   stepLabel: {
-    fontSize: theme.typography.body.fontSize,
+    fontSize: 16,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
     color: theme.colors.textDisabled,
   },
   stepLabelActive: {
     color: theme.colors.text,
-    fontWeight: theme.typography.headline.fontWeight as "600",
+    fontFamily: theme.fontFamily.bold,
+    fontWeight: "700",
   },
-  stepLabelComplete: { color: theme.colors.success },
+  stepLabelComplete: {
+    color: theme.colors.success,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
+  },
   almostDone: {
     marginTop: theme.spacing.xl,
     fontSize: theme.typography.caption.fontSize,
+    fontFamily: theme.fontFamily.semibold,
+    fontWeight: "600",
     color: theme.colors.textSecondary,
   },
 });
