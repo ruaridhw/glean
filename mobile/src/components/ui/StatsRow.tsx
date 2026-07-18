@@ -31,9 +31,7 @@ export function StatsRow({ stats, style, ...props }: StatsRowProps) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
-    borderWidth: 1,
     flexDirection: "row",
     overflow: "hidden",
     ...theme.shadow.card,
@@ -51,9 +49,11 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: 22,
     fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   label: {
     color: theme.colors.mutedForeground,
+    fontFamily: theme.fontFamily.semibold,
     fontSize: theme.typography.caption.fontSize,
     marginTop: 2,
     textAlign: "center",

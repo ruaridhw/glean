@@ -17,10 +17,8 @@ export function Card({ children, style, ...props }: CardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
     borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    padding: theme.spacing.md,
+    padding: theme.spacing.lg,
     ...theme.shadow.card,
   },
 });

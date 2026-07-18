@@ -41,7 +41,7 @@ export function SegmentedControl<T extends string>({
               <Ionicons
                 name={option.icon}
                 size={16}
-                color={selected ? theme.colors.primary : theme.colors.mutedForeground}
+                color={selected ? theme.colors.primaryDark : theme.colors.mutedForeground}
               />
             ) : null}
             <Text style={[styles.label, selected && styles.labelSelected]}>{option.label}</Text>
@@ -55,19 +55,19 @@ export function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: theme.colors.muted,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     flexDirection: "row",
     gap: theme.spacing.xs,
     padding: theme.spacing.xs,
   },
   option: {
     alignItems: "center",
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.pill,
     flex: 1,
     flexDirection: "row",
-    gap: theme.spacing.xs,
+    gap: 6,
     justifyContent: "center",
-    minHeight: 40,
+    minHeight: 42,
   },
   optionSelected: {
     backgroundColor: theme.colors.card,
@@ -75,10 +75,11 @@ const styles = StyleSheet.create({
   },
   label: {
     color: theme.colors.mutedForeground,
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: theme.typography.headline.fontWeight,
+    fontSize: 14,
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   labelSelected: {
-    color: theme.colors.primary,
+    color: theme.colors.primaryDark,
   },
 });
