@@ -2,8 +2,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
 import { useScanReceipt } from "@/api/hooks";
+import { AppText } from "@/components/ui/AppText";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { theme } from "@/theme";
 
@@ -119,7 +120,7 @@ export default function ScanProgressScreen() {
                       : theme.colors.textDisabled
                 }
               />
-              <Text
+              <AppText
                 style={[
                   s.stepLabel,
                   isActive && s.stepLabelActive,
@@ -128,14 +129,14 @@ export default function ScanProgressScreen() {
               >
                 {step.label}
                 {isActive && !isComplete && activeStep === STEPS.length - 1 && !apiDone ? "…" : ""}
-              </Text>
+              </AppText>
             </View>
           );
         })}
       </View>
 
       {activeStep === STEPS.length - 1 && !apiDone && (
-        <Text style={s.almostDone}>Almost done...</Text>
+        <AppText style={s.almostDone}>Almost done...</AppText>
       )}
     </View>
   );

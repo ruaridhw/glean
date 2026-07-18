@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet } from "react-native";
 import { apiClient } from "@/api/client";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Card } from "@/components/ui/Card";
 import type { SaveRecipeParams } from "@/db/recipes";
 import { saveRecipe } from "@/db/recipes";
@@ -54,9 +56,11 @@ export default function ImportScreen() {
     >
       <Card style={styles.card}>
         <Ionicons name="link-outline" size={28} color={theme.colors.primary} />
-        <Text style={styles.title}>Recipe link</Text>
-        <Text style={styles.subtitle}>Paste a recipe URL and Glean will extract the details.</Text>
-        <TextInput
+        <AppText style={styles.title}>Recipe link</AppText>
+        <AppText style={styles.subtitle}>
+          Paste a recipe URL and Glean will extract the details.
+        </AppText>
+        <AppTextInput
           style={styles.input}
           value={url}
           onChangeText={handleUrlChange}
@@ -66,7 +70,6 @@ export default function ImportScreen() {
           keyboardType="url"
           returnKeyType="go"
           onSubmitEditing={importFromUrl}
-          placeholderTextColor={theme.colors.textDisabled}
         />
         <Pressable
           style={[styles.button, (importing || !canImport) && styles.buttonDisabled]}
@@ -76,7 +79,7 @@ export default function ImportScreen() {
           {importing ? (
             <ActivityIndicator color={theme.colors.primaryForeground} />
           ) : (
-            <Text style={styles.buttonText}>Import</Text>
+            <AppText style={styles.buttonText}>Import</AppText>
           )}
         </Pressable>
       </Card>

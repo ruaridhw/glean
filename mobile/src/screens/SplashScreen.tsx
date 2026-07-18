@@ -1,6 +1,7 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { GleanMark } from "@/components/GleanMark";
 import PulsingDots from "@/components/PulsingDots";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 export default function SplashScreen() {
@@ -17,7 +18,7 @@ export default function SplashScreen() {
     >
       <View testID="splash-logo" style={{ alignItems: "center", gap: theme.spacing.md }}>
         <GleanMark size={116} color="#fff" secondaryColor="#d8f2e0" />
-        <Text
+        <AppText
           style={{
             fontFamily: theme.fontFamily.extrabold,
             fontSize: 34,
@@ -26,7 +27,7 @@ export default function SplashScreen() {
           }}
         >
           glean
-        </Text>
+        </AppText>
       </View>
       <View testID="pulsing-dots-container">
         <PulsingDots color="#fff" />

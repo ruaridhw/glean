@@ -3,12 +3,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useGenerateMealPlan } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -64,11 +65,11 @@ function ProgressCard({ planned, target }: { planned: number; target: number }) 
             transform={`rotate(-90 ${ring.center} ${ring.center})`}
           />
         </Svg>
-        <Text style={styles.ringLabel}>{ring.ratioLabel}</Text>
+        <AppText style={styles.ringLabel}>{ring.ratioLabel}</AppText>
       </View>
       <View style={styles.progressText}>
-        <Text style={styles.progressTitle}>Dinner progress</Text>
-        <Text style={styles.progressHint}>{getPlanHint(planned, target)}</Text>
+        <AppText style={styles.progressTitle}>Dinner progress</AppText>
+        <AppText style={styles.progressHint}>{getPlanHint(planned, target)}</AppText>
       </View>
     </Card>
   );
@@ -81,8 +82,8 @@ function ExpiryNudgeBanner({ nudge }: { nudge: PlanExpiryNudge }) {
         <Ionicons name="time-outline" size={16} color={theme.colors.warning} />
       </View>
       <View style={styles.nudgeText}>
-        <Text style={styles.nudgeTitle}>{nudge.title}</Text>
-        <Text style={styles.nudgeMessage}>{nudge.message}</Text>
+        <AppText style={styles.nudgeTitle}>{nudge.title}</AppText>
+        <AppText style={styles.nudgeMessage}>{nudge.message}</AppText>
       </View>
     </View>
   );
@@ -107,9 +108,9 @@ function PlanSlotCard({
         style={styles.emptySlot}
       >
         <View style={styles.slotCircleMuted}>
-          <Text style={styles.slotCircleMutedText}>{slot.slotNumber}</Text>
+          <AppText style={styles.slotCircleMutedText}>{slot.slotNumber}</AppText>
         </View>
-        <Text style={styles.addDinnerText}>Add a dinner</Text>
+        <AppText style={styles.addDinnerText}>Add a dinner</AppText>
         <Ionicons name="add" size={20} color={theme.colors.primary} />
       </Pressable>
     );
@@ -132,21 +133,21 @@ function PlanSlotCard({
             </View>
           ) : (
             <View style={styles.slotCircle}>
-              <Text style={styles.slotCircleText}>{slot.slotNumber}</Text>
+              <AppText style={styles.slotCircleText}>{slot.slotNumber}</AppText>
             </View>
           )}
           <View style={styles.slotContent}>
-            <Text style={[styles.recipeTitle, cooked && styles.cookedTitle]}>
+            <AppText style={[styles.recipeTitle, cooked && styles.cookedTitle]}>
               {entry.recipe_title}
-            </Text>
-            <Text style={styles.recipeMeta}>
+            </AppText>
+            <AppText style={styles.recipeMeta}>
               {entry.servings} {entry.servings === 1 ? "serving" : "servings"}
               {cooked ? " · Cooked" : ""}
-            </Text>
+            </AppText>
           </View>
           {!cooked ? (
             <Pressable style={styles.cookedButton} onPress={() => onCooked(entry)}>
-              <Text style={styles.cookedButtonText}>Cooked?</Text>
+              <AppText style={styles.cookedButtonText}>Cooked?</AppText>
             </Pressable>
           ) : null}
           <IconButton
@@ -291,9 +292,9 @@ export default function PlanScreen() {
           onPress={() => void generateWeek()}
         >
           <Ionicons name="sparkles-outline" size={15} color={theme.colors.primaryForeground} />
-          <Text style={styles.generateButtonText}>
+          <AppText style={styles.generateButtonText}>
             {mealPlanMutation.isPending ? "Generating" : "Generate"}
-          </Text>
+          </AppText>
         </Pressable>
       }
       scroll

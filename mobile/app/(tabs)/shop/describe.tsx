@@ -1,8 +1,10 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 import { useParseShoppingDescription } from "@/api/hooks";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
@@ -42,12 +44,11 @@ export default function ShoppingDescribeScreen() {
       keyboardAvoiding
     >
       <Card style={styles.card}>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           value={text}
           onChangeText={setText}
           placeholder="Stuff for tacos, milk, bananas, and lunchbox snacks"
-          placeholderTextColor={theme.colors.textDisabled}
           multiline
           autoFocus
         />
@@ -66,7 +67,7 @@ export default function ShoppingDescribeScreen() {
           {parseMutation.isPending ? (
             <ActivityIndicator color={theme.colors.primaryForeground} />
           ) : (
-            <Text style={styles.buttonText}>Review items</Text>
+            <AppText style={styles.buttonText}>Review items</AppText>
           )}
         </Pressable>
       </Card>

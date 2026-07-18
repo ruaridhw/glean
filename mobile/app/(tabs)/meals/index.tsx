@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,9 +29,9 @@ function RecipeCard({ recipe, match }: { recipe: Recipe; match: PantryMatch | un
     <Pressable accessibilityRole="button" onPress={() => router.push(`/(tabs)/meals/${recipe.id}`)}>
       <Card style={styles.recipeCard}>
         <View style={styles.cardHeader}>
-          <Text style={styles.recipeTitle} numberOfLines={2}>
+          <AppText style={styles.recipeTitle} numberOfLines={2}>
             {recipe.title}
-          </Text>
+          </AppText>
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textDisabled} />
         </View>
 
@@ -39,13 +40,13 @@ function RecipeCard({ recipe, match }: { recipe: Recipe; match: PantryMatch | un
             {recipe.total_time_mins ? (
               <View style={styles.metaItem}>
                 <Ionicons name="time-outline" size={14} color={theme.colors.mutedForeground} />
-                <Text style={styles.metaText}>{recipe.total_time_mins} min</Text>
+                <AppText style={styles.metaText}>{recipe.total_time_mins} min</AppText>
               </View>
             ) : null}
             {showMatch ? (
               <View style={styles.metaItem}>
                 <Ionicons name="leaf-outline" size={14} color={theme.colors.primaryDark} />
-                <Text style={styles.matchText}>{formatPantryMatch(match)}</Text>
+                <AppText style={styles.matchText}>{formatPantryMatch(match)}</AppText>
               </View>
             ) : null}
           </View>
@@ -113,7 +114,7 @@ export default function MealsScreen() {
           onPress={() => router.push("/(tabs)/meals/search")}
         >
           <Ionicons name="search-outline" size={18} color={theme.colors.textDisabled} />
-          <Text style={styles.searchPillText}>Search recipes…</Text>
+          <AppText style={styles.searchPillText}>Search recipes…</AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -121,8 +122,8 @@ export default function MealsScreen() {
           onPress={() => router.push("/(tabs)/meals/import")}
         >
           <Ionicons name="link-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.importText}>Paste a recipe URL — Glean will import it</Text>
-          <Text style={styles.importAction}>Import</Text>
+          <AppText style={styles.importText}>Paste a recipe URL — Glean will import it</AppText>
+          <AppText style={styles.importAction}>Import</AppText>
         </Pressable>
       </View>
     );

@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { apiClient } from "@/api/client";
 import { useRecipeSearch } from "@/api/hooks";
 import type { RecipeOut, RecipeSearchResult } from "@/api/types";
 import { MealsSkeleton } from "@/components/skeletons/MealsSkeleton";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -27,7 +29,7 @@ function SearchResultCard({
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.resultPressable}>
       <Card style={styles.resultCard}>
         <View style={styles.resultHeader}>
-          <Text style={styles.resultTitle}>{result.title}</Text>
+          <AppText style={styles.resultTitle}>{result.title}</AppText>
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textDisabled} />
         </View>
         <View style={styles.badgeRow}>
@@ -98,18 +100,17 @@ export default function SearchScreen() {
     >
       <Card style={styles.searchCard}>
         <View style={styles.searchRow}>
-          <TextInput
+          <AppTextInput
             style={styles.searchInput}
             value={query}
             onChangeText={setQuery}
             placeholder="Search recipes..."
             returnKeyType="search"
             onSubmitEditing={handleSearch}
-            placeholderTextColor={theme.colors.textDisabled}
             autoFocus
           />
           <Pressable style={styles.searchBtn} onPress={handleSearch}>
-            <Text style={styles.searchBtnText}>Go</Text>
+            <AppText style={styles.searchBtnText}>Go</AppText>
           </Pressable>
         </View>
       </Card>

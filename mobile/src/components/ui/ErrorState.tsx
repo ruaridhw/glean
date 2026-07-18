@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 interface ErrorStateProps {
   message?: string;
@@ -16,13 +17,13 @@ export function ErrorState({
   return (
     <View style={s.container} testID={testID}>
       <Ionicons name="alert-circle-outline" size={48} color={theme.colors.warning} style={s.icon} />
-      <Text style={s.message}>{message}</Text>
+      <AppText style={s.message}>{message}</AppText>
       <Pressable
         style={({ pressed }) => [s.retryBtn, pressed && s.retryBtnPressed]}
         onPress={onRetry}
         testID={testID ? `${testID}.retry` : undefined}
       >
-        <Text style={s.retryText}>Try again</Text>
+        <AppText style={s.retryText}>Try again</AppText>
       </Pressable>
     </View>
   );

@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { handleAuthCode } from "@/auth/google";
 import { useAuthSession } from "@/auth/session";
 import { authStorage } from "@/auth/storage";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 type CallbackParams = {
@@ -92,7 +93,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator color={theme.colors.primary} />
-      <Text style={styles.text}>Completing sign in...</Text>
+      <AppText style={styles.text}>Completing sign in...</AppText>
     </View>
   );
 }

@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppText } from "@/components/ui/AppText";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -53,7 +54,7 @@ export default function RecipeDetailScreen() {
       >
         <Ionicons name="chevron-back" size={20} color={theme.colors.ink} />
       </Pressable>
-      <Text style={styles.headerTitle}>Recipe</Text>
+      <AppText style={styles.headerTitle}>Recipe</AppText>
       <View style={styles.headerButton}>
         <Ionicons name="bookmark" size={18} color={theme.colors.ink} />
       </View>
@@ -82,7 +83,7 @@ export default function RecipeDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Card style={styles.heroCard}>
-          <Text style={styles.title}>{recipe.title}</Text>
+          <AppText style={styles.title}>{recipe.title}</AppText>
           {tags.length > 0 ? (
             <View style={styles.tagsRow}>
               {tags.map((tag) => (
@@ -120,7 +121,9 @@ export default function RecipeDetailScreen() {
                 style={[styles.ingredientRow, index < ingredients.length - 1 && styles.dividedRow]}
               >
                 <View style={styles.dot} />
-                <Text style={styles.ingredientText}>{formatRecipeIngredient(ingredient)}</Text>
+                <AppText style={styles.ingredientText}>
+                  {formatRecipeIngredient(ingredient)}
+                </AppText>
                 {pantryIds !== null ? (
                   <Badge
                     label={inPantry ? "in pantry" : "to buy"}
@@ -140,9 +143,9 @@ export default function RecipeDetailScreen() {
               style={[styles.stepRow, index > 0 && styles.stepGap]}
             >
               <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>{step.number}</Text>
+                <AppText style={styles.stepNumberText}>{step.number}</AppText>
               </View>
-              <Text style={styles.stepText}>{step.text}</Text>
+              <AppText style={styles.stepText}>{step.text}</AppText>
             </View>
           ))}
         </Card>
@@ -153,7 +156,7 @@ export default function RecipeDetailScreen() {
           onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
         >
           <Ionicons name="calendar-outline" size={18} color={theme.colors.primaryForeground} />
-          <Text style={styles.addButtonText}>Add to plan</Text>
+          <AppText style={styles.addButtonText}>Add to plan</AppText>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

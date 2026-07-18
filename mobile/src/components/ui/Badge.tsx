@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View, type ViewProps } from "react-native";
+import { StyleSheet, View, type ViewProps } from "react-native";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 type BadgeTone = "neutral" | "primary" | "warning" | "danger";
 
@@ -34,7 +35,7 @@ export function Badge({
       style={[styles.badge, { backgroundColor: backgroundColor ?? colors.backgroundColor }, style]}
       {...props}
     >
-      <Text style={[styles.text, { color: color ?? colors.color }]}>{label}</Text>
+      <AppText style={[styles.text, { color: color ?? colors.color }]}>{label}</AppText>
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 interface EmptyStateAction {
   label: string;
@@ -19,13 +20,13 @@ export function EmptyState({ icon, title, message, actions, testID }: EmptyState
   return (
     <View style={s.container} testID={testID}>
       <Ionicons name={icon} size={64} color={theme.colors.textDisabled} style={s.icon} />
-      <Text style={s.title}>{title}</Text>
-      <Text style={s.message}>{message}</Text>
+      <AppText style={s.title}>{title}</AppText>
+      <AppText style={s.message}>{message}</AppText>
       {actions && actions.length > 0 && (
         <View style={s.actions}>
           {actions.map((action) => (
             <Pressable key={action.label} style={s.actionBtn} onPress={action.onPress}>
-              <Text style={s.actionText}>{action.label}</Text>
+              <AppText style={s.actionText}>{action.label}</AppText>
             </Pressable>
           ))}
         </View>
