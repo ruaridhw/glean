@@ -122,4 +122,8 @@ def create_chat_model(model: str, *, api_key: SecretStr, **kwargs: Any) -> BaseC
     # of 2 retries can cause indefinite hangs when OpenRouter returns a long Retry-After
     # (e.g. free-models-per-day exhausted). Callers can override if retries are needed.
     kwargs.setdefault("max_retries", 0)
+    # Bound stalled calls: without a timeout a single request blocks until OpenRouter's
+    # ~600s server cap. Value is milliseconds (ChatOpenRouter.request_timeout -> SDK
+    # timeout_ms). Caller-overridable for slower reasoning models.
+    kwargs.setdefault("request_timeout", 10_000)
     return ChatOpenRouter(model=model, openrouter_api_key=api_key, **kwargs)
