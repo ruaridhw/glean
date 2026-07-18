@@ -70,9 +70,9 @@ class TestReceiptScanStructural:
         for i, example in enumerate(receipt_scan_dataset):
             response = _invoke_receipt_scan(eval_model, example["input"]["line_items"], example_idx=i)
             expected_count = len(example["input"]["line_items"])
-            assert (
-                len(response.items) == expected_count
-            ), f"Example {i}: expected {expected_count} items, got {len(response.items)}"
+            assert len(response.items) == expected_count, (
+                f"Example {i}: expected {expected_count} items, got {len(response.items)}"
+            )
 
 
 @pytest.mark.soft_gate

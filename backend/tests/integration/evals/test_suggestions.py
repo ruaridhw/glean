@@ -58,9 +58,9 @@ class TestSuggestionsStructural:
         for i, example in enumerate(suggestions_dataset):
             response = _invoke_suggestions(eval_model, example["input"], example_idx=i)
             limit = example["input"]["meals_per_week"]
-            assert (
-                len(response.suggestions) <= limit
-            ), f"Example {i}: got {len(response.suggestions)} suggestions, limit is {limit}"
+            assert len(response.suggestions) <= limit, (
+                f"Example {i}: got {len(response.suggestions)} suggestions, limit is {limit}"
+            )
 
     def test_recipe_ids_are_integers(
         self,
@@ -70,9 +70,9 @@ class TestSuggestionsStructural:
         for i, example in enumerate(suggestions_dataset):
             response = _invoke_suggestions(eval_model, example["input"], example_idx=i)
             for suggestion in response.suggestions:
-                assert isinstance(
-                    suggestion.recipe_id, int
-                ), f"Example {i}: recipe_id {suggestion.recipe_id} is not an int"
+                assert isinstance(suggestion.recipe_id, int), (
+                    f"Example {i}: recipe_id {suggestion.recipe_id} is not an int"
+                )
 
 
 @pytest.mark.soft_gate

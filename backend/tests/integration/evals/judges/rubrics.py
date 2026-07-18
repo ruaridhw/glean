@@ -141,7 +141,7 @@ def judge_purchase_description(
     purchase_text: str,
     parsed_items: list[dict],
 ) -> int:
-    prompt = f"Purchase description:\n{purchase_text}\n\n" f"Parsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
+    prompt = f"Purchase description:\n{purchase_text}\n\nParsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
     response = invoke_structured(
         model,
         JudgeScoreResponse,

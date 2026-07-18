@@ -235,7 +235,7 @@ def test_streaming_response_aborts_as_soon_as_max_bytes_exceeded(monkeypatch: py
 
 def test_fetch_public_https_retries_browser_challenge_once(monkeypatch: pytest.MonkeyPatch) -> None:
     challenge_html = (
-        "<html><head><title>Simple Page</title></head>" "<body>Enable JavaScript and cookies to continue</body></html>"
+        "<html><head><title>Simple Page</title></head><body>Enable JavaScript and cookies to continue</body></html>"
     )
     recipe_html = _schema_org_html(
         {

@@ -6,11 +6,7 @@ repos:
       - id: ruff
         args: [--fix]
         files: ^backend/
-  - repo: https://github.com/psf/black
-    rev: 26.3.1
-    hooks:
-      - id: black
-        args: [--fast]
+      - id: ruff-format
         files: ^backend/
   - repo: https://github.com/crate-ci/typos
     rev: v1.45.0
