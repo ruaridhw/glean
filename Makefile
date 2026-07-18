@@ -63,9 +63,9 @@ test-e2e:  ## Run Maestro e2e tests (restarts Metro, ensures emulator, then runs
 lint: lint-backend lint-mobile  ## Lint and format all code
 
 .PHONY: lint-backend
-lint-backend:  ## ruff + black + ty + vulture
+lint-backend:  ## ruff + ty + vulture
 	cd backend && uv run ruff check src/ tests/ --fix
-	cd backend && uv run black src/ tests/
+	cd backend && uv run ruff format src/ tests/
 	cd backend && uv run ty check src/
 	cd backend && uv run vulture src/ vulture_whitelist.py
 

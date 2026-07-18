@@ -34,9 +34,7 @@ def main() -> int:
     skipped_count = sum(result.status == "skipped" for result in results)
     failed_count = sum(result.status == "failed" for result in results)
 
-    print(
-        "Recipe corpus import complete: " f"{imported_count} imported, {skipped_count} skipped, {failed_count} failed"
-    )
+    print(f"Recipe corpus import complete: {imported_count} imported, {skipped_count} skipped, {failed_count} failed")
     return 1 if failed_count else 0
 
 

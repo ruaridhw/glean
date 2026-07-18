@@ -65,7 +65,7 @@ uv run pytest -k "test_name"           # by name
 ```bash
 pre-commit run          # after staging changes
 uv run ruff check src/ tests/ --fix
-uv run black src/ tests/
+uv run ruff format src/ tests/
 ```
 
 ## Running the Mobile App Locally
