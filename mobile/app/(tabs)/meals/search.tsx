@@ -148,21 +148,24 @@ const styles = StyleSheet.create({
   searchInput: {
     backgroundColor: theme.colors.muted,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
     color: theme.colors.text,
     flex: 1,
+    fontFamily: theme.fontFamily.regular,
     fontSize: theme.typography.body.fontSize,
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
   searchBtn: {
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     justifyContent: "center",
     paddingHorizontal: theme.spacing.lg,
   },
   searchBtnText: {
     color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.bold,
     fontWeight: "700",
   },
   listContent: {
@@ -182,6 +185,7 @@ const styles = StyleSheet.create({
   resultTitle: {
     color: theme.colors.text,
     flex: 1,
+    fontFamily: theme.fontFamily.bold,
     fontSize: theme.typography.headline.fontSize,
     fontWeight: "700",
   },

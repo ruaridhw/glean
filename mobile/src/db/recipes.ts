@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { Recipe, RecipeIngredient } from "@/types";
 import { drizzleDb } from "./client";
 import { resolveOrCreateIngredient } from "./ingredients";
@@ -12,14 +12,38 @@ function parseRecipe(row: typeof recipes.$inferSelect): Recipe {
   };
 }
 
+// Dietary flags live in a separate table; attach them so tag badges render from
+// real data (getRecipeTags reads recipe.dietary_flags).
+async function attachDietaryFlags(rows: Recipe[]): Promise<Recipe[]> {
+  if (rows.length === 0) return rows;
+  const flagRows = await drizzleDb
+    .select({ recipe_id: recipeDietaryFlags.recipe_id, flag: recipeDietaryFlags.flag })
+    .from(recipeDietaryFlags)
+    .where(
+      inArray(
+        recipeDietaryFlags.recipe_id,
+        rows.map((row) => row.id),
+      ),
+    );
+  const byRecipe = new Map<number, string[]>();
+  for (const { recipe_id, flag } of flagRows) {
+    const list = byRecipe.get(recipe_id);
+    if (list) list.push(flag);
+    else byRecipe.set(recipe_id, [flag]);
+  }
+  return rows.map((row) => ({ ...row, dietary_flags: byRecipe.get(row.id) ?? [] }));
+}
+
 export async function getSavedRecipes(): Promise<Recipe[]> {
   const rows = await drizzleDb.select().from(recipes).orderBy(desc(recipes.id));
-  return rows.map(parseRecipe);
+  return attachDietaryFlags(rows.map(parseRecipe));
 }
 
 export async function getRecipeById(id: number): Promise<Recipe | null> {
   const [row] = await drizzleDb.select().from(recipes).where(eq(recipes.id, id)).limit(1);
-  return row ? parseRecipe(row) : null;
+  if (!row) return null;
+  const [withFlags] = await attachDietaryFlags([parseRecipe(row)]);
+  return withFlags ?? null;
 }
 
 export async function getRecipeByExternalId(externalId: string): Promise<Recipe | null> {

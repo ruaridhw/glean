@@ -1,6 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { getSavedRecipes } from "@/db/recipes";
+import { getPantryMatchesForRecipes } from "@/meals/pantry-match";
 import MealsScreen from "../../app/(tabs)/meals";
 
 jest.mock("@expo/vector-icons", () => {
@@ -26,6 +27,11 @@ jest.mock("@/db/recipes", () => ({
   getSavedRecipes: jest.fn(),
 }));
 
+jest.mock("@/meals/pantry-match", () => ({
+  getPantryMatchesForRecipes: jest.fn(),
+  formatPantryMatch: ({ n, m }: { n: number; m: number }) => `${n} of ${m} in pantry`,
+}));
+
 jest.mock("@/platform/haptics", () => ({
   hapticImpact: jest.fn().mockResolvedValue(undefined),
 }));
@@ -33,6 +39,7 @@ jest.mock("@/platform/haptics", () => ({
 describe("MealsScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (getPantryMatchesForRecipes as jest.Mock).mockResolvedValue(new Map([[7, { n: 2, m: 3 }]]));
     (getSavedRecipes as jest.Mock).mockResolvedValue([
       {
         id: 7,
@@ -59,7 +66,7 @@ describe("MealsScreen", () => {
     expect(screen.getByText("Saved (1)")).toBeTruthy();
     expect(screen.getByText("Search")).toBeTruthy();
     expect(screen.getByText("30 min")).toBeTruthy();
-    expect(screen.getByText("4 servings")).toBeTruthy();
+    expect(screen.getByText("2 of 3 in pantry")).toBeTruthy();
     expect(screen.getByText("Italian")).toBeTruthy();
   });
 
