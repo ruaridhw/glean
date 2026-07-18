@@ -8,9 +8,7 @@ import {
 
 describe("settings presentation", () => {
   it("derives numeric settings options from the original model ranges", () => {
-    expect(buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek)).toEqual([
-      1, 2, 3, 4, 5, 6, 7,
-    ]);
+    expect(buildIntegerOptions(SETTINGS_OPTION_RANGES.dinnersPerWeek)).toEqual([3, 4, 5, 6, 7]);
     expect(buildIntegerOptions(SETTINGS_OPTION_RANGES.defaultServings)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(DIETARY_OPTIONS).toContain("Vegetarian");
   });

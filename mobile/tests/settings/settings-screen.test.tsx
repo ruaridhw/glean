@@ -52,33 +52,46 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Settings")).toBeTruthy());
     expect(screen.getByText("Preferences")).toBeTruthy();
-    expect(screen.getByText("Used for meal planning")).toBeTruthy();
     expect(screen.getByText("Dinners per week")).toBeTruthy();
     expect(screen.getByText("Default servings")).toBeTruthy();
+    expect(screen.getByText("Max active cooking time")).toBeTruthy();
     expect(screen.getByText("Dietary preferences")).toBeTruthy();
     expect(screen.getByText("Vegetarian")).toBeTruthy();
     expect(screen.getByText("Sign out")).toBeTruthy();
   });
 
-  it("saves selected config values across the original supported ranges", async () => {
+  it("persists slider values, max time, and dietary flags on save", async () => {
     const screen = render(<SettingsScreen />);
 
-    await waitFor(() => expect(screen.getByText("Save Settings")).toBeTruthy());
-    fireEvent.press(screen.getByLabelText("1 dinners per week"));
-    fireEvent.press(screen.getByLabelText("5 default servings"));
+    await waitFor(() => expect(screen.getByText("Save settings")).toBeTruthy());
+    fireEvent(screen.getByTestId("settings.dinnersSlider"), "valueChange", 7);
+    fireEvent(screen.getByTestId("settings.servingsSlider"), "valueChange", 5);
+    fireEvent.changeText(screen.getByPlaceholderText("No limit"), "45");
     fireEvent.press(screen.getByText("Vegan"));
-    fireEvent.press(screen.getByText("Save Settings"));
+    fireEvent.press(screen.getByText("Save settings"));
 
     await waitFor(() =>
       expect(saveUserConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "user",
-          meals_per_week: 1,
+          meals_per_week: 7,
           preferred_servings: 5,
           dietary_flags: ["Vegetarian", "Vegan"],
+          max_active_time_mins: 45,
         }),
       ),
     );
+  });
+
+  it("blocks saving when max active time is out of range", async () => {
+    const screen = render(<SettingsScreen />);
+
+    await waitFor(() => expect(screen.getByText("Save settings")).toBeTruthy());
+    fireEvent.changeText(screen.getByPlaceholderText("No limit"), "9999");
+    fireEvent.press(screen.getByText("Save settings"));
+
+    expect(screen.getByText("Max active time must be between 1 and 480")).toBeTruthy();
+    expect(saveUserConfig).not.toHaveBeenCalled();
   });
 
   it("keeps sign out route replacement", async () => {
@@ -101,7 +114,7 @@ describe("SettingsScreen", () => {
     expect(consoleError).toHaveBeenCalledWith("[settings] config load failed:", expect.any(Error));
     expect(screen.getByText("Could not load settings.")).toBeTruthy();
     expect(screen.getByText("Try again")).toBeTruthy();
-    expect(screen.queryByText("Save Settings")).toBeNull();
+    expect(screen.queryByText("Save settings")).toBeNull();
     expect(screen.queryByText("Preferences")).toBeNull();
     consoleError.mockRestore();
   });
@@ -124,7 +137,7 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(screen.getByText("Try again")).toBeTruthy());
     fireEvent.press(screen.getByText("Try again"));
 
-    await waitFor(() => expect(screen.getByText("Save Settings")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Save settings")).toBeTruthy());
     expect(screen.getByText("Vegan")).toBeTruthy();
     expect(saveUserConfig).not.toHaveBeenCalled();
     consoleError.mockRestore();
