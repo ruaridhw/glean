@@ -3,17 +3,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
@@ -88,8 +81,10 @@ export default function ReviewScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.heading}>Review items</Text>
-        <Text style={styles.subtitle}>Edit or remove anything before it goes in the pantry.</Text>
+        <AppText style={styles.heading}>Review items</AppText>
+        <AppText style={styles.subtitle}>
+          Edit or remove anything before it goes in the pantry.
+        </AppText>
       </View>
       <FlatList
         data={items}
@@ -107,18 +102,18 @@ export default function ReviewScreen() {
                   color={theme.colors.primaryForeground}
                 />
               ) : null}
-              <TextInput
+              <AppTextInput
                 style={styles.nameInput}
                 value={item.name}
                 onChangeText={(v) => updateItem(index, { name: v })}
               />
-              <TextInput
+              <AppTextInput
                 style={styles.qtyInput}
                 value={String(item.quantity)}
                 onChangeText={(v) => updateItem(index, { quantity: parseFloat(v) || 0 })}
                 keyboardType="numeric"
               />
-              <Text style={styles.unit}>{item.unit}</Text>
+              <AppText style={styles.unit}>{item.unit}</AppText>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${item.name}`}
@@ -139,9 +134,9 @@ export default function ReviewScreen() {
         {saving ? (
           <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
-          <Text style={styles.confirmText}>
+          <AppText style={styles.confirmText}>
             Confirm {acceptedCount} item{acceptedCount !== 1 ? "s" : ""}
-          </Text>
+          </AppText>
         )}
       </Pressable>
     </SafeAreaView>

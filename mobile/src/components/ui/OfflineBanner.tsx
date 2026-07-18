@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Network from "expo-network";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 export function OfflineBanner() {
   const insets = useSafeAreaInsets();
@@ -30,7 +31,7 @@ export function OfflineBanner() {
   return (
     <View style={[s.banner, { paddingTop: insets.top + theme.spacing.sm }]} testID="offlineBanner">
       <Ionicons name="cloud-offline-outline" size={14} color={theme.colors.warning} />
-      <Text style={s.text}>You're offline. Some features need internet.</Text>
+      <AppText style={s.text}>You're offline. Some features need internet.</AppText>
     </View>
   );
 }

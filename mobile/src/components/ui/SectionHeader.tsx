@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 interface SectionHeaderProps {
   title: string;
@@ -38,16 +39,16 @@ export function SectionHeader({
           </View>
         ) : null}
         <View style={styles.textGroup}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          <AppText style={styles.title}>{title}</AppText>
+          {subtitle ? <AppText style={styles.subtitle}>{subtitle}</AppText> : null}
         </View>
       </View>
       {actionLabel && onAction ? (
         <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}>
-          <Text style={styles.action}>{actionLabel}</Text>
+          <AppText style={styles.action}>{actionLabel}</AppText>
         </Pressable>
       ) : count !== undefined ? (
-        <Text style={styles.count}>{count}</Text>
+        <AppText style={styles.count}>{count}</AppText>
       ) : null}
     </View>
   );

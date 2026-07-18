@@ -1,33 +1,34 @@
 // mobile/app/(tabs)/pantry/add.tsx
 
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 export default function AddScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Add to Pantry</Text>
+      <AppText style={styles.heading}>Add to Pantry</AppText>
       <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/scan")}>
-        <Text style={styles.icon}>🧾</Text>
+        <AppText style={styles.icon}>🧾</AppText>
         <View>
-          <Text style={styles.label}>Scan Receipt</Text>
-          <Text style={styles.sub}>Take a photo of your receipt</Text>
+          <AppText style={styles.label}>Scan Receipt</AppText>
+          <AppText style={styles.sub}>Take a photo of your receipt</AppText>
         </View>
       </Pressable>
       <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/describe")}>
-        <Text style={styles.icon}>💬</Text>
+        <AppText style={styles.icon}>💬</AppText>
         <View>
-          <Text style={styles.label}>Describe Purchase</Text>
-          <Text style={styles.sub}>Type what you bought</Text>
+          <AppText style={styles.label}>Describe Purchase</AppText>
+          <AppText style={styles.sub}>Type what you bought</AppText>
         </View>
       </Pressable>
       <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/manual-entry")}>
-        <Text style={styles.icon}>✏️</Text>
+        <AppText style={styles.icon}>✏️</AppText>
         <View>
-          <Text style={styles.label}>Manual Entry</Text>
-          <Text style={styles.sub}>Add a single item</Text>
+          <AppText style={styles.label}>Manual Entry</AppText>
+          <AppText style={styles.sub}>Add a single item</AppText>
         </View>
       </Pressable>
     </SafeAreaView>

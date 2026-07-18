@@ -2,17 +2,10 @@
 
 import { router } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { resolveOrCreateIngredient } from "@/db/ingredients";
 import { upsertPantryItem } from "@/db/pantry";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
@@ -55,8 +48,8 @@ export default function ManualEntryScreen() {
       style={styles.keyboardView}
     >
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <Text style={styles.heading}>Add item</Text>
-        <TextInput
+        <AppText style={styles.heading}>Add item</AppText>
+        <AppTextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
@@ -65,7 +58,7 @@ export default function ManualEntryScreen() {
           autoFocus
         />
         <View style={styles.row}>
-          <TextInput
+          <AppTextInput
             style={[styles.input, { flex: 1, marginRight: 8 }]}
             value={quantity}
             onChangeText={setQuantity}
@@ -80,7 +73,7 @@ export default function ManualEntryScreen() {
                 style={[styles.unitBtn, unit === u && styles.unitBtnActive]}
                 onPress={() => setUnit(u)}
               >
-                <Text style={unit === u ? styles.unitTextActive : styles.unitText}>{u}</Text>
+                <AppText style={unit === u ? styles.unitTextActive : styles.unitText}>{u}</AppText>
               </Pressable>
             ))}
           </View>
@@ -91,7 +84,7 @@ export default function ManualEntryScreen() {
           onPress={save}
           disabled={saving}
         >
-          <Text style={styles.buttonText}>Add to Pantry</Text>
+          <AppText style={styles.buttonText}>Add to Pantry</AppText>
         </Pressable>
       </SafeAreaView>
     </KeyboardAvoidingView>

@@ -8,11 +8,11 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDescribeReceipt } from "@/api/hooks";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
@@ -42,11 +42,11 @@ export default function DescribeScreen() {
       style={styles.keyboardView}
     >
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <Text style={styles.heading}>Describe your shop</Text>
-        <Text style={styles.subtitle}>
+        <AppText style={styles.heading}>Describe your shop</AppText>
+        <AppText style={styles.subtitle}>
           e.g. "I bought a kilo of mince and two tins of tomatoes"
-        </Text>
-        <TextInput
+        </AppText>
+        <AppTextInput
           style={styles.input}
           value={text}
           onChangeText={setText}
@@ -69,7 +69,7 @@ export default function DescribeScreen() {
           {describeMutation.isPending ? (
             <ActivityIndicator color={theme.colors.primaryForeground} />
           ) : (
-            <Text style={styles.buttonText}>Parse →</Text>
+            <AppText style={styles.buttonText}>Parse →</AppText>
           )}
         </Pressable>
       </SafeAreaView>

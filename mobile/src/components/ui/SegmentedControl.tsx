@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 
 interface SegmentedControlOption<T extends string> {
   value: T;
@@ -44,7 +45,9 @@ export function SegmentedControl<T extends string>({
                 color={selected ? theme.colors.primaryDark : theme.colors.mutedForeground}
               />
             ) : null}
-            <Text style={[styles.label, selected && styles.labelSelected]}>{option.label}</Text>
+            <AppText style={[styles.label, selected && styles.labelSelected]}>
+              {option.label}
+            </AppText>
           </Pressable>
         );
       })}

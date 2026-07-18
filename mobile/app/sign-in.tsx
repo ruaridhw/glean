@@ -1,10 +1,11 @@
 // mobile/app/sign-in.tsx
 import { useAuthRequest } from "expo-auth-session";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
 import { AUTH_REDIRECT_URI, AUTHORIZE_URL } from "@/auth/google";
 import { authStorage } from "@/auth/storage";
 import { GleanMark } from "@/components/GleanMark";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID ?? "";
@@ -52,7 +53,7 @@ export default function SignInScreen() {
         <GleanMark size={40} />
       </View>
 
-      <Text style={styles.title}>Waste less.{"\n"}Cook better.</Text>
+      <AppText style={styles.title}>Waste less.{"\n"}Cook better.</AppText>
 
       <Pressable
         style={[styles.button, disabled && styles.buttonDisabled]}
@@ -62,13 +63,13 @@ export default function SignInScreen() {
         {loading ? (
           <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
-          <Text style={styles.buttonText}>Sign in with Google</Text>
+          <AppText style={styles.buttonText}>Sign in with Google</AppText>
         )}
       </Pressable>
 
-      <Text style={styles.legal}>
+      <AppText style={styles.legal}>
         By continuing you agree to our Terms of Service and Privacy Policy.
-      </Text>
+      </AppText>
     </View>
   );
 }

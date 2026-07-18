@@ -1,6 +1,10 @@
+import type { TextStyle } from "react-native";
+
 // Plus Jakarta Sans — loaded in app/_layout.tsx via @expo-google-fonts/plus-jakarta-sans.
-// React Native picks the weight from the family name, so styles must set the family
-// (not just fontWeight). Access via `theme.fontFamily.*` or spread a `theme.typography.*` token.
+// React Native picks the weight from the family NAME, not `fontWeight`, so a Text style
+// with only fontWeight/fontSize silently renders the system font. The AppText primitive
+// (src/components/ui/AppText.tsx) applies a family on every path via `fontForWeight`;
+// prefer <AppText> over raw <Text> so this can't be forgotten.
 const fontFamily = {
   regular: "PlusJakartaSans_400Regular",
   medium: "PlusJakartaSans_500Medium",
@@ -8,6 +12,24 @@ const fontFamily = {
   bold: "PlusJakartaSans_700Bold",
   extrabold: "PlusJakartaSans_800ExtraBold",
 } as const;
+
+/** Map a fontWeight to the matching Plus Jakarta Sans family (RN resolves weight by family name). */
+export function fontForWeight(weight: TextStyle["fontWeight"]): string {
+  switch (weight) {
+    case "800":
+    case "900":
+    case "bold":
+      return fontFamily.extrabold;
+    case "700":
+      return fontFamily.bold;
+    case "600":
+      return fontFamily.semibold;
+    case "500":
+      return fontFamily.medium;
+    default:
+      return fontFamily.regular;
+  }
+}
 
 export const theme = {
   fontFamily,

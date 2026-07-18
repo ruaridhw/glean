@@ -4,7 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 export default function ScanScreen() {
@@ -17,9 +18,9 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.permission]}>
-        <Text style={styles.message}>Camera permission is needed to scan receipts.</Text>
+        <AppText style={styles.message}>Camera permission is needed to scan receipts.</AppText>
         <Pressable style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
+          <AppText style={styles.buttonText}>Grant Permission</AppText>
         </Pressable>
       </View>
     );
@@ -57,7 +58,7 @@ export default function ScanScreen() {
         </Pressable>
 
         <View style={styles.controls} pointerEvents="box-none">
-          <Text style={styles.hint}>Line the receipt up inside the frame</Text>
+          <AppText style={styles.hint}>Line the receipt up inside the frame</AppText>
           <Pressable style={styles.shutterButton} onPress={capture} disabled={capturing}>
             <View style={styles.shutterInner} />
           </Pressable>

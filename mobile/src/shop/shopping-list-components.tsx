@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactElement } from "react";
-import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, SectionList, StyleSheet, View } from "react-native";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -31,12 +33,11 @@ export function ShoppingAddControls({
 }: ShoppingAddControlsProps) {
   return (
     <View style={styles.addRow}>
-      <TextInput
+      <AppTextInput
         style={styles.addInput}
         value={newItemName}
         onChangeText={onChangeNewItemName}
         placeholder="Add item…"
-        placeholderTextColor={theme.colors.textDisabled}
         returnKeyType="done"
         onSubmitEditing={onAdd}
       />
@@ -65,13 +66,13 @@ export function CheckoutBar({ checkedCount, onScanReceipt }: CheckoutBarProps) {
   return (
     <View testID="shop.pinnedCheckoutActions" style={styles.checkoutBar}>
       <View style={styles.checkoutText}>
-        <Text style={styles.checkoutTitle}>
+        <AppText style={styles.checkoutTitle}>
           {checkedCount} item{checkedCount === 1 ? "" : "s"} in cart
-        </Text>
-        <Text style={styles.checkoutSubtitle}>Scan the receipt to restock your pantry</Text>
+        </AppText>
+        <AppText style={styles.checkoutSubtitle}>Scan the receipt to restock your pantry</AppText>
       </View>
       <Pressable accessibilityRole="button" style={styles.scanPill} onPress={onScanReceipt}>
-        <Text style={styles.scanPillText}>Scan receipt</Text>
+        <AppText style={styles.scanPillText}>Scan receipt</AppText>
       </Pressable>
     </View>
   );
@@ -131,9 +132,9 @@ function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
                 <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
               ) : null}
             </View>
-            <Text style={[styles.itemLabel, checked && styles.checkedText]} numberOfLines={2}>
+            <AppText style={[styles.itemLabel, checked && styles.checkedText]} numberOfLines={2}>
               {formatShoppingItemLabel(item)}
-            </Text>
+            </AppText>
           </Pressable>
           {checked ? (
             <Pressable

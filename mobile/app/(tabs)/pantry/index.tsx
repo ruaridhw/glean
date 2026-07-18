@@ -3,18 +3,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  FlatList,
-  LayoutAnimation,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { FlatList, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen, type AppScreenChip } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -65,7 +59,7 @@ function ScanButton() {
       }}
     >
       <Ionicons name="camera-outline" size={18} color={theme.colors.primaryForeground} />
-      <Text style={styles.scanButtonText}>Scan</Text>
+      <AppText style={styles.scanButtonText}>Scan</AppText>
     </Pressable>
   );
 }
@@ -92,14 +86,14 @@ function FilterChipRow({ filters, active, onSelect }: FilterChipRowProps) {
               selected ? styles.filterChipSelected : styles.filterChipIdle,
             ]}
           >
-            <Text
+            <AppText
               style={[
                 styles.filterChipLabel,
                 { color: selected ? theme.colors.primaryForeground : theme.colors.text },
               ]}
             >
               {filter.label}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -139,9 +133,9 @@ function PantryItemCard({
       {(deleteActive) => (
         <Card style={styles.itemCard} testID={`pantry.item.${item.id}`}>
           <View style={styles.itemContent}>
-            <Text style={styles.itemName}>{item.canonical_name}</Text>
+            <AppText style={styles.itemName}>{item.canonical_name}</AppText>
             {isEditing ? (
-              <TextInput
+              <AppTextInput
                 style={styles.editInput}
                 value={editQty}
                 onChangeText={onChangeEditQty}
@@ -151,7 +145,7 @@ function PantryItemCard({
               />
             ) : (
               <Pressable onPress={() => onStartEdit(item)} accessibilityRole="button">
-                <Text style={styles.itemQuantity}>{formatPantryQuantity(item)}</Text>
+                <AppText style={styles.itemQuantity}>{formatPantryQuantity(item)}</AppText>
               </Pressable>
             )}
           </View>

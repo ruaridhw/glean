@@ -5,11 +5,13 @@ import Slider from "@react-native-community/slider";
 import { File, Paths } from "expo-file-system";
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { apiClient } from "@/api/client";
 import { useAuthSession } from "@/auth/session";
 import { GleanMark } from "@/components/GleanMark";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -52,7 +54,7 @@ function ChoiceChip({
       {selected ? (
         <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
       ) : null}
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</AppText>
     </Pressable>
   );
 }
@@ -169,7 +171,7 @@ export default function SettingsScreen() {
         testID="settings.screen"
       >
         <Card>
-          <Text style={styles.loadingText}>Loading settings...</Text>
+          <AppText style={styles.loadingText}>Loading settings...</AppText>
         </Card>
       </AppScreen>
     );
@@ -186,10 +188,10 @@ export default function SettingsScreen() {
         testID="settings.screen"
       >
         <Card style={styles.sectionCard}>
-          <Text style={styles.fieldTitle}>Could not load settings.</Text>
-          <Text style={styles.description}>Check your connection and try again.</Text>
+          <AppText style={styles.fieldTitle}>Could not load settings.</AppText>
+          <AppText style={styles.description}>Check your connection and try again.</AppText>
           <Pressable accessibilityRole="button" style={styles.retryButton} onPress={loadConfig}>
-            <Text style={styles.retryButtonText}>Try again</Text>
+            <AppText style={styles.retryButtonText}>Try again</AppText>
           </Pressable>
         </Card>
       </AppScreen>
@@ -218,10 +220,10 @@ export default function SettingsScreen() {
 
       <Card style={styles.sectionCard}>
         <View style={styles.fieldHeader}>
-          <Text style={styles.fieldTitle}>Purchase tolerance</Text>
+          <AppText style={styles.fieldTitle}>Purchase tolerance</AppText>
           <Badge tone="primary" label={`${Math.round(tolerance * 100)}%`} />
         </View>
-        <Text style={styles.description}>{getToleranceLabel(tolerance)}</Text>
+        <AppText style={styles.description}>{getToleranceLabel(tolerance)}</AppText>
         <Slider
           testID="settings.toleranceSlider"
           style={styles.slider}
@@ -237,7 +239,7 @@ export default function SettingsScreen() {
 
       <Card style={styles.sectionCard}>
         <View style={styles.fieldHeader}>
-          <Text style={styles.fieldTitle}>Dinners per week</Text>
+          <AppText style={styles.fieldTitle}>Dinners per week</AppText>
           <Badge tone="primary" label={String(mealsPerWeek)} />
         </View>
         <Slider
@@ -252,14 +254,14 @@ export default function SettingsScreen() {
           thumbTintColor={theme.colors.primary}
         />
         <View style={styles.sliderScale}>
-          <Text style={styles.sliderScaleText}>{DINNERS_RANGE.min}</Text>
-          <Text style={styles.sliderScaleText}>{DINNERS_RANGE.max}</Text>
+          <AppText style={styles.sliderScaleText}>{DINNERS_RANGE.min}</AppText>
+          <AppText style={styles.sliderScaleText}>{DINNERS_RANGE.max}</AppText>
         </View>
       </Card>
 
       <Card style={styles.sectionCard}>
         <View style={styles.fieldHeader}>
-          <Text style={styles.fieldTitle}>Default servings</Text>
+          <AppText style={styles.fieldTitle}>Default servings</AppText>
           <Badge tone="primary" label={String(servings)} />
         </View>
         <Slider
@@ -274,22 +276,21 @@ export default function SettingsScreen() {
           thumbTintColor={theme.colors.primary}
         />
         <View style={styles.sliderScale}>
-          <Text style={styles.sliderScaleText}>{SERVINGS_RANGE.min}</Text>
-          <Text style={styles.sliderScaleText}>{SERVINGS_RANGE.max}</Text>
+          <AppText style={styles.sliderScaleText}>{SERVINGS_RANGE.min}</AppText>
+          <AppText style={styles.sliderScaleText}>{SERVINGS_RANGE.max}</AppText>
         </View>
       </Card>
 
       <Card style={styles.sectionCard}>
-        <Text style={styles.fieldTitle}>Max active cooking time</Text>
-        <TextInput
+        <AppText style={styles.fieldTitle}>Max active cooking time</AppText>
+        <AppTextInput
           style={[styles.input, maxTimeError ? styles.inputError : null]}
           value={maxTime}
           onChangeText={handleMaxTimeChange}
           keyboardType="number-pad"
           placeholder="No limit"
-          placeholderTextColor={theme.colors.textDisabled}
         />
-        {maxTimeError ? <Text style={styles.errorText}>{maxTimeError}</Text> : null}
+        {maxTimeError ? <AppText style={styles.errorText}>{maxTimeError}</AppText> : null}
       </Card>
 
       <SectionHeader title="Dietary preferences" />
@@ -312,14 +313,14 @@ export default function SettingsScreen() {
         onPress={save}
         disabled={Boolean(maxTimeError)}
       >
-        <Text style={styles.saveButtonText}>Save settings</Text>
+        <AppText style={styles.saveButtonText}>Save settings</AppText>
       </Pressable>
 
       <SectionHeader title="Account" />
       <Card style={styles.sectionCard}>
         <Pressable style={styles.rowAction} onPress={() => void handleSignOut()}>
           <Ionicons name="log-out-outline" size={18} color={theme.colors.danger} />
-          <Text style={styles.dangerText}>Sign out</Text>
+          <AppText style={styles.dangerText}>Sign out</AppText>
         </Pressable>
       </Card>
 
@@ -329,7 +330,7 @@ export default function SettingsScreen() {
           <Card style={styles.sectionCard}>
             <Pressable style={styles.rowAction} onPress={() => void exportDb()}>
               <Ionicons name="cloud-upload-outline" size={18} color={theme.colors.warning} />
-              <Text style={styles.warningText}>Export SQLite DB</Text>
+              <AppText style={styles.warningText}>Export SQLite DB</AppText>
             </Pressable>
           </Card>
         </>

@@ -1,17 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
 import type { ShoppingProposalItem } from "@/api/types";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppText } from "@/components/ui/AppText";
+import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 import { addAiShoppingItems } from "@/db/shopping";
@@ -92,9 +86,9 @@ export default function ShoppingReviewScreen() {
       {questions.length > 0 ? (
         <Card style={styles.questionsCard}>
           {questions.map((question) => (
-            <Text key={question} style={styles.questionText}>
+            <AppText key={question} style={styles.questionText}>
               {question}
-            </Text>
+            </AppText>
           ))}
         </Card>
       ) : null}
@@ -106,7 +100,7 @@ export default function ShoppingReviewScreen() {
               {item.confidence < 0.7 ? (
                 <View style={styles.flag}>
                   <Ionicons name="warning-outline" size={14} color={theme.colors.warning} />
-                  <Text style={styles.flagText}>Check</Text>
+                  <AppText style={styles.flagText}>Check</AppText>
                 </View>
               ) : null}
               <IconButton
@@ -118,13 +112,13 @@ export default function ShoppingReviewScreen() {
                 onPress={() => removeItem(index)}
               />
             </View>
-            <TextInput
+            <AppTextInput
               style={styles.nameInput}
               value={item.name}
               onChangeText={(value) => updateItem(index, { name: value })}
             />
             <View style={styles.detailRow}>
-              <TextInput
+              <AppTextInput
                 style={styles.quantityInput}
                 value={String(item.quantity)}
                 onChangeText={(value) =>
@@ -134,7 +128,7 @@ export default function ShoppingReviewScreen() {
                 }
                 keyboardType="numeric"
               />
-              <TextInput
+              <AppTextInput
                 style={styles.unitInput}
                 value={item.unit}
                 onChangeText={(value) => updateItem(index, { unit: value })}
@@ -152,9 +146,9 @@ export default function ShoppingReviewScreen() {
         {saving ? (
           <ActivityIndicator color={theme.colors.primaryForeground} />
         ) : (
-          <Text style={styles.confirmText}>
+          <AppText style={styles.confirmText}>
             Add {acceptedCount} item{acceptedCount !== 1 ? "s" : ""}
-          </Text>
+          </AppText>
         )}
       </Pressable>
     </AppScreen>

@@ -5,11 +5,11 @@ import {
   ScrollView,
   type ScrollViewProps,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/theme";
+import { AppText } from "./AppText";
 import { Badge } from "./Badge";
 
 export interface AppScreenChip {
@@ -64,7 +64,7 @@ export function AppScreen({
     <SafeAreaView style={styles.container} edges={["top"]} testID={testID}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{title}</Text>
+          <AppText style={styles.title}>{title}</AppText>
           {chips && chips.length > 0 ? (
             <View style={styles.chips}>
               {chips.map((chip) => (
@@ -72,7 +72,7 @@ export function AppScreen({
               ))}
             </View>
           ) : subtitle ? (
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <AppText style={styles.subtitle}>{subtitle}</AppText>
           ) : null}
         </View>
         {actions ? <View style={styles.actions}>{actions}</View> : null}

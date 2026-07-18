@@ -1,7 +1,8 @@
 // mobile/app/(tabs)/_layout.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -21,7 +22,9 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 
 function TabLabel({ label, focused }: { label: string; focused: boolean }) {
   return (
-    <Text style={[styles.label, focused ? styles.labelActive : styles.labelInactive]}>{label}</Text>
+    <AppText style={[styles.label, focused ? styles.labelActive : styles.labelInactive]}>
+      {label}
+    </AppText>
   );
 }
 
