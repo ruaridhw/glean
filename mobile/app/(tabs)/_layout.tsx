@@ -1,66 +1,89 @@
 // mobile/app/(tabs)/_layout.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 import { theme } from "@/theme";
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+function TabIcon({ name, focused }: { name: string; focused: boolean }) {
+  const iconName = (focused ? name : `${name}-outline`) as IconName;
+  return (
+    <View style={[styles.pill, focused && styles.pillActive]}>
+      <Ionicons
+        name={iconName}
+        size={22}
+        color={focused ? theme.colors.primaryDark : theme.colors.textDisabled}
+      />
+    </View>
+  );
+}
+
+function TabLabel({ label, focused }: { label: string; focused: boolean }) {
+  return (
+    <Text style={[styles.label, focused ? styles.labelActive : styles.labelInactive]}>{label}</Text>
+  );
+}
+
+function tabOptions(title: string, testID: string, icon: string) {
+  return {
+    title,
+    tabBarButtonTestID: testID,
+    tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name={icon} focused={focused} />,
+    tabBarLabel: ({ focused }: { focused: boolean }) => (
+      <TabLabel label={title} focused={focused} />
+    ),
+  };
+}
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textDisabled,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
-          borderTopWidth: 0.5,
+          borderTopWidth: 1,
+          height: 64,
+          paddingTop: 8,
+          paddingBottom: 10,
         },
-        tabBarLabelStyle: {
-          fontSize: theme.typography.sectionLabel.fontSize,
-          fontWeight: theme.typography.headline.fontWeight,
-        },
+        tabBarItemStyle: { gap: 2 },
       }}
     >
-      <Tabs.Screen
-        name="pantry"
-        options={{
-          title: "Pantry",
-          tabBarButtonTestID: "tabs.pantry",
-          tabBarIcon: ({ color }) => <Ionicons name="leaf-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="meals"
-        options={{
-          title: "Meals",
-          tabBarButtonTestID: "tabs.meals",
-          tabBarIcon: ({ color }) => <Ionicons name="restaurant-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="plan/index"
-        options={{
-          title: "Plan",
-          tabBarButtonTestID: "tabs.plan",
-          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="shop"
-        options={{
-          title: "Shop",
-          tabBarButtonTestID: "tabs.shop",
-          tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={22} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="pantry" options={tabOptions("Pantry", "tabs.pantry", "leaf")} />
+      <Tabs.Screen name="meals" options={tabOptions("Meals", "tabs.meals", "restaurant")} />
+      <Tabs.Screen name="plan/index" options={tabOptions("Plan", "tabs.plan", "calendar")} />
+      <Tabs.Screen name="shop" options={tabOptions("Shop", "tabs.shop", "cart")} />
       <Tabs.Screen
         name="settings/index"
-        options={{
-          title: "Settings",
-          tabBarButtonTestID: "tabs.settings",
-          tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
-        }}
+        options={tabOptions("Settings", "tabs.settings", "settings")}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  pill: {
+    alignItems: "center",
+    borderRadius: theme.radius.pill,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  pillActive: {
+    backgroundColor: theme.colors.primaryLight,
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: theme.fontFamily.bold,
+  },
+  labelActive: {
+    color: theme.colors.primaryDark,
+    fontFamily: theme.fontFamily.extrabold,
+  },
+  labelInactive: {
+    color: theme.colors.textDisabled,
+  },
+});

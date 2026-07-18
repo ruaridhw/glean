@@ -1,5 +1,13 @@
 // mobile/app/_layout.tsx
 
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+  useFonts,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
@@ -53,6 +61,13 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +91,7 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!ready) return <SplashScreen />;
+  if (!ready || !fontsLoaded) return <SplashScreen />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

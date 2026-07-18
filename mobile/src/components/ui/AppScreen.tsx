@@ -10,10 +10,18 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/theme";
+import { Badge } from "./Badge";
+
+export interface AppScreenChip {
+  label: string;
+  tone?: "neutral" | "primary" | "warning" | "danger";
+}
 
 interface AppScreenProps {
   title: string;
   subtitle?: string;
+  /** Pill chips shown under the title (e.g. count / expiring). Replaces subtitle when set. */
+  chips?: AppScreenChip[];
   actions?: ReactNode;
   children: ReactNode;
   scroll?: boolean;
@@ -26,6 +34,7 @@ interface AppScreenProps {
 export function AppScreen({
   title,
   subtitle,
+  chips,
   actions,
   children,
   scroll = false,
@@ -56,7 +65,15 @@ export function AppScreen({
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          {chips && chips.length > 0 ? (
+            <View style={styles.chips}>
+              {chips.map((chip) => (
+                <Badge key={chip.label} label={chip.label} tone={chip.tone ?? "primary"} />
+              ))}
+            </View>
+          ) : subtitle ? (
+            <Text style={styles.subtitle}>{subtitle}</Text>
+          ) : null}
         </View>
         {actions ? <View style={styles.actions}>{actions}</View> : null}
       </View>
@@ -87,9 +104,10 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
     backgroundColor: theme.colors.background,
   },
-  headerText: { flex: 1 },
+  headerText: { flex: 1, gap: 6 },
   title: { ...theme.typography.largeTitle, color: theme.colors.text },
-  subtitle: { ...theme.typography.subhead, color: theme.colors.textSecondary, marginTop: 2 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  subtitle: { ...theme.typography.subhead, color: theme.colors.textSecondary },
   actions: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   body: { flex: 1, paddingHorizontal: theme.spacing.lg },
   scrollContent: { paddingHorizontal: theme.spacing.lg },

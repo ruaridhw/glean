@@ -6,20 +6,35 @@ type BadgeTone = "neutral" | "primary" | "warning" | "danger";
 interface BadgeProps extends ViewProps {
   label: string;
   tone?: BadgeTone;
+  /** Override the tinted background (e.g. category colour pairs). */
+  backgroundColor?: string;
+  /** Override the text colour. */
+  color?: string;
 }
 
+// Tinted pairs — soft background + dark foreground.
 const toneStyles: Record<BadgeTone, { backgroundColor: string; color: string }> = {
   neutral: { backgroundColor: theme.colors.muted, color: theme.colors.mutedForeground },
-  primary: { backgroundColor: theme.colors.primary, color: theme.colors.primaryForeground },
-  warning: { backgroundColor: theme.colors.warning, color: theme.colors.primaryForeground },
-  danger: { backgroundColor: theme.colors.danger, color: theme.colors.primaryForeground },
+  primary: { backgroundColor: theme.colors.primaryLight, color: theme.colors.primaryDark },
+  warning: { backgroundColor: theme.colors.warningLight, color: theme.colors.warning },
+  danger: { backgroundColor: theme.colors.dangerLight, color: theme.colors.danger },
 };
 
-export function Badge({ label, tone = "neutral", style, ...props }: BadgeProps) {
+export function Badge({
+  label,
+  tone = "neutral",
+  backgroundColor,
+  color,
+  style,
+  ...props
+}: BadgeProps) {
   const colors = toneStyles[tone];
   return (
-    <View style={[styles.badge, { backgroundColor: colors.backgroundColor }, style]} {...props}>
-      <Text style={[styles.text, { color: colors.color }]}>{label}</Text>
+    <View
+      style={[styles.badge, { backgroundColor: backgroundColor ?? colors.backgroundColor }, style]}
+      {...props}
+    >
+      <Text style={[styles.text, { color: color ?? colors.color }]}>{label}</Text>
     </View>
   );
 }
@@ -28,8 +43,8 @@ const styles = StyleSheet.create({
   badge: {
     alignSelf: "flex-start",
     borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  text: { fontSize: theme.typography.caption.fontSize, fontWeight: "700" },
+  text: { fontSize: 12, fontWeight: "700", fontFamily: theme.fontFamily.bold },
 });
