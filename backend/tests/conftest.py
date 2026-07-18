@@ -8,6 +8,7 @@ from glean.dependencies import verify_cognito_token
 from glean.main import app
 
 _TEST_SETTINGS = Settings(
+    _env_file=None,
     openrouter_api_key="test-openrouter_api_key",
     recipe_api_key="test-recipe_api_key",
     cognito_user_pool_id="test-cognito_user_pool_id",

@@ -29,7 +29,10 @@ class TestCreateChatModel:
         with patch("glean.llm.ChatOpenRouter") as mock_cls:
             model = create_chat_model("anthropic/claude-sonnet-4.6", api_key=api_key)
             mock_cls.assert_called_once_with(
-                model="anthropic/claude-sonnet-4.6", openrouter_api_key=api_key, max_retries=0
+                model="anthropic/claude-sonnet-4.6",
+                openrouter_api_key=api_key,
+                max_retries=0,
+                request_timeout=10_000,
             )
             assert model is mock_cls.return_value
 
@@ -43,6 +46,7 @@ class TestCreateChatModel:
                 max_tokens=20,
                 temperature=0.5,
                 max_retries=0,
+                request_timeout=10_000,
             )
 
     def test_caller_can_override_max_retries(self) -> None:
@@ -53,6 +57,7 @@ class TestCreateChatModel:
                 model="anthropic/claude-sonnet-4.6",
                 openrouter_api_key=api_key,
                 max_retries=2,
+                request_timeout=10_000,
             )
 
 
@@ -97,11 +102,13 @@ class TestLLMRouter:
             model="z-ai/glm-5.2",
             openrouter_api_key=api_key,
             max_retries=0,
+            request_timeout=10_000,
         )
         assert model is mock_cls.return_value
 
     def test_from_settings_applies_feature_policy_overrides(self) -> None:
         settings = Settings(
+            _env_file=None,
             openrouter_api_key="test-key",
             recipe_api_key="test-recipe_api_key",
             cognito_user_pool_id="test-cognito_user_pool_id",
@@ -138,6 +145,7 @@ class TestLLMRouter:
 
     def test_from_settings_allows_no_policy_overrides(self) -> None:
         settings = Settings(
+            _env_file=None,
             openrouter_api_key="test-key",
             recipe_api_key="test-recipe_api_key",
             cognito_user_pool_id="test-cognito_user_pool_id",
