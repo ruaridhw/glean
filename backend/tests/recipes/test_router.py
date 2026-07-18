@@ -449,7 +449,7 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     assert len(data["instructions"]) == 3
     assert data["dietary_flags"] == ["Vegan"]
     mock_llm.invoke.assert_not_called()
-    mock_llm.with_structured_output.assert_called_once_with(RecipeLlmResponse)
+    mock_llm.with_structured_output.assert_called_once_with(RecipeLlmResponse, method="json_schema")
     llm_router.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 

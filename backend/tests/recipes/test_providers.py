@@ -134,7 +134,7 @@ def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_re
         "Fill with beans and lime.",
     ]
     model.invoke.assert_not_called()
-    model.with_structured_output.assert_called_once_with(RecipeLlmResponse)
+    model.with_structured_output.assert_called_once_with(RecipeLlmResponse, method="json_schema")
 
 
 def test_redirect_target_validation_rejects_private_ip(monkeypatch: pytest.MonkeyPatch) -> None:
