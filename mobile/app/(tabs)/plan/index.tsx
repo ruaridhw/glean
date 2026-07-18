@@ -4,12 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 import { useGenerateMealPlan } from "@/api/hooks";
 import { PlanSkeleton } from "@/components/skeletons/PlanSkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getUserConfig } from "@/db/config";
@@ -26,31 +26,65 @@ import { addShoppingGapsForRecipe } from "@/db/shopping";
 import { compressPantry } from "@/meal-plan/compress";
 import {
   buildPlanSlots,
-  formatPlanProgress,
   getCurrentWeekRangeLabel,
-  getPlanSubtitle,
+  getPlanExpiryNudge,
+  getPlanHint,
+  getPlanRingModel,
+  type PlanExpiryNudge,
   type PlanSlot,
 } from "@/plan/presentation";
 import { hapticImpact } from "@/platform/haptics";
 import { theme } from "@/theme";
-import type { MealPlanEntry } from "@/types";
+import type { MealPlanEntry, PantryItem } from "@/types";
 import { showError, showSuccess } from "@/utils/toast";
 
 function ProgressCard({ planned, target }: { planned: number; target: number }) {
-  const progress = formatPlanProgress(planned, target);
+  const ring = getPlanRingModel(planned, target);
   return (
     <Card style={styles.progressCard}>
-      <View style={styles.progressHeader}>
-        <View>
-          <Text style={styles.progressLabel}>Dinner progress</Text>
-          <Text style={styles.weekRange}>{getCurrentWeekRangeLabel()}</Text>
-        </View>
-        <Ionicons name="calendar-outline" size={22} color={theme.colors.primary} />
+      <View style={styles.ring}>
+        <Svg width={ring.size} height={ring.size} viewBox={`0 0 ${ring.size} ${ring.size}`}>
+          <Circle
+            cx={ring.center}
+            cy={ring.center}
+            r={ring.radius}
+            fill="none"
+            stroke={theme.colors.muted}
+            strokeWidth={ring.strokeWidth}
+          />
+          <Circle
+            cx={ring.center}
+            cy={ring.center}
+            r={ring.radius}
+            fill="none"
+            stroke={theme.colors.primary}
+            strokeWidth={ring.strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={ring.dashArray}
+            transform={`rotate(-90 ${ring.center} ${ring.center})`}
+          />
+        </Svg>
+        <Text style={styles.ringLabel}>{ring.ratioLabel}</Text>
       </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
+      <View style={styles.progressText}>
+        <Text style={styles.progressTitle}>Dinner progress</Text>
+        <Text style={styles.progressHint}>{getPlanHint(planned, target)}</Text>
       </View>
     </Card>
+  );
+}
+
+function ExpiryNudgeBanner({ nudge }: { nudge: PlanExpiryNudge }) {
+  return (
+    <View style={styles.nudge} testID="plan.expiryNudge">
+      <View style={styles.nudgeIcon}>
+        <Ionicons name="time-outline" size={16} color={theme.colors.warning} />
+      </View>
+      <View style={styles.nudgeText}>
+        <Text style={styles.nudgeTitle}>{nudge.title}</Text>
+        <Text style={styles.nudgeMessage}>{nudge.message}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -70,15 +104,13 @@ function PlanSlotCard({
       <Pressable
         accessibilityRole="button"
         onPress={() => router.push("/(tabs)/meals/search")}
-        style={styles.slotPressable}
+        style={styles.emptySlot}
       >
-        <Card style={[styles.slotCard, styles.emptySlotCard]}>
-          <View style={styles.slotBadgeMuted}>
-            <Text style={styles.slotBadgeMutedText}>{slot.slotNumber}</Text>
-          </View>
-          <Text style={styles.addDinnerText}>Add dinner</Text>
-          <Ionicons name="add" size={18} color={theme.colors.primary} />
-        </Card>
+        <View style={styles.slotCircleMuted}>
+          <Text style={styles.slotCircleMutedText}>{slot.slotNumber}</Text>
+        </View>
+        <Text style={styles.addDinnerText}>Add a dinner</Text>
+        <Ionicons name="add" size={20} color={theme.colors.primary} />
       </Pressable>
     );
   }
@@ -93,12 +125,16 @@ function PlanSlotCard({
       onDelete={() => onDelete(entry)}
     >
       {(deleteActive) => (
-        <Card style={[styles.slotCard, cooked && styles.cookedCard]}>
-          <View style={cooked ? styles.slotBadgeMuted : styles.slotBadge}>
-            <Text style={cooked ? styles.slotBadgeMutedText : styles.slotBadgeText}>
-              {slot.slotNumber}
-            </Text>
-          </View>
+        <Card style={styles.slotCard}>
+          {cooked ? (
+            <View style={styles.slotCircleCooked}>
+              <Ionicons name="checkmark" size={16} color={theme.colors.primaryDark} />
+            </View>
+          ) : (
+            <View style={styles.slotCircle}>
+              <Text style={styles.slotCircleText}>{slot.slotNumber}</Text>
+            </View>
+          )}
           <View style={styles.slotContent}>
             <Text style={[styles.recipeTitle, cooked && styles.cookedTitle]}>
               {entry.recipe_title}
@@ -110,14 +146,14 @@ function PlanSlotCard({
           </View>
           {!cooked ? (
             <Pressable style={styles.cookedButton} onPress={() => onCooked(entry)}>
-              <Text style={styles.cookedButtonText}>Cooked</Text>
+              <Text style={styles.cookedButtonText}>Cooked?</Text>
             </Pressable>
           ) : null}
           <IconButton
             icon="close-circle"
             accessibilityLabel={`Remove ${entry.recipe_title}`}
-            backgroundColor={deleteActive ? "#FEE2E2" : "transparent"}
-            color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+            backgroundColor={deleteActive ? theme.colors.dangerLight : "transparent"}
+            color={deleteActive ? theme.colors.danger : theme.colors.textDisabled}
             size={20}
             onPress={() => onDelete(entry)}
           />
@@ -129,6 +165,7 @@ function PlanSlotCard({
 
 export default function PlanScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [mealsPerWeek, setMealsPerWeek] = useState(5);
   const [loading, setLoading] = useState(true);
   const mealPlanMutation = useGenerateMealPlan();
@@ -136,9 +173,14 @@ export default function PlanScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [fetchedEntries, config] = await Promise.all([getMealPlanEntries(), getUserConfig()]);
+    const [fetchedEntries, config, fetchedPantry] = await Promise.all([
+      getMealPlanEntries(),
+      getUserConfig(),
+      getPantryItems(),
+    ]);
     setEntries(fetchedEntries);
     setMealsPerWeek(config.meals_per_week);
+    setPantryItems(fetchedPantry);
     setLoading(false);
   }, []);
 
@@ -186,13 +228,13 @@ export default function PlanScreen() {
       return;
     }
 
-    const [pantryItems, recipes, config] = await Promise.all([
+    const [pantry, recipes, config] = await Promise.all([
       getPantryItems(),
       getSavedRecipes(),
       getUserConfig(),
     ]);
 
-    const compressed = compressPantry(pantryItems as Parameters<typeof compressPantry>[0]);
+    const compressed = compressPantry(pantry as Parameters<typeof compressPantry>[0]);
     const recipeHistory = recipes.map((recipe) => ({
       recipe_id: recipe.id,
       title: recipe.title,
@@ -212,9 +254,9 @@ export default function PlanScreen() {
       },
       {
         onSuccess: async (result) => {
-          for (const plannedRecipe of result.suggestions.slice(0, emptySlots)) {
-            await addMealPlanEntry(plannedRecipe.recipe_id);
-            await addShoppingGapsForRecipe(plannedRecipe.recipe_id);
+          for (const suggestion of result.suggestions.slice(0, emptySlots)) {
+            await addMealPlanEntry(suggestion.recipe_id);
+            await addShoppingGapsForRecipe(suggestion.recipe_id);
           }
           showSuccess("Week generated");
           await load();
@@ -227,43 +269,13 @@ export default function PlanScreen() {
   }
 
   const slots = buildPlanSlots(entries, mealsPerWeek);
-  const subtitle = getPlanSubtitle(entries, mealsPerWeek);
+  const weekRange = getCurrentWeekRangeLabel();
+  const expiryNudge = getPlanExpiryNudge(pantryItems);
 
   if (loading) {
     return (
-      <AppScreen title="This Week" subtitle={subtitle} testID="plan.screen">
+      <AppScreen title="This Week" subtitle={weekRange} testID="plan.screen">
         <PlanSkeleton rows={mealsPerWeek} />
-      </AppScreen>
-    );
-  }
-
-  if (entries.length === 0) {
-    return (
-      <AppScreen
-        title="This Week"
-        subtitle={subtitle}
-        actions={
-          <IconButton
-            icon="sparkles-outline"
-            accessibilityLabel="Generate plan"
-            color={theme.colors.primaryForeground}
-            backgroundColor={theme.colors.primary}
-            onPress={() => void generateWeek()}
-          />
-        }
-        testID="plan.screen"
-      >
-        <ProgressCard planned={entries.length} target={mealsPerWeek} />
-        <EmptyState
-          testID="plan.emptyState"
-          icon="calendar-outline"
-          title="No meals planned this week"
-          message="Add recipes to your plan or generate a meal plan."
-          actions={[
-            { label: "Browse recipes", onPress: () => router.push("/(tabs)/meals" as never) },
-            { label: "Generate plan", onPress: generateWeek },
-          ]}
-        />
       </AppScreen>
     );
   }
@@ -271,12 +283,16 @@ export default function PlanScreen() {
   return (
     <AppScreen
       title="This Week"
-      subtitle={subtitle}
+      subtitle={weekRange}
       actions={
-        <Pressable style={styles.generateButton} onPress={() => void generateWeek()}>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.generateButton}
+          onPress={() => void generateWeek()}
+        >
           <Ionicons name="sparkles-outline" size={15} color={theme.colors.primaryForeground} />
           <Text style={styles.generateButtonText}>
-            {mealPlanMutation.isPending ? "Generating" : "Generate plan"}
+            {mealPlanMutation.isPending ? "Generating" : "Generate"}
           </Text>
         </Pressable>
       }
@@ -284,7 +300,7 @@ export default function PlanScreen() {
       testID="plan.screen"
     >
       <ProgressCard planned={entries.length} target={mealsPerWeek} />
-      <SectionHeader title="Dinners" subtitle="Plan meals and send gaps to shopping" />
+      <SectionHeader title="Dinners" />
       <View style={styles.slotList}>
         {slots.map((slot) => (
           <PlanSlotCard
@@ -295,39 +311,44 @@ export default function PlanScreen() {
           />
         ))}
       </View>
+      {expiryNudge ? <ExpiryNudgeBanner nudge={expiryNudge} /> : null}
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
   progressCard: {
-    gap: theme.spacing.md,
-  },
-  progressHeader: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
+    gap: theme.spacing.lg,
   },
-  progressLabel: {
+  ring: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringLabel: {
+    ...theme.typography.caption,
     color: theme.colors.text,
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 15,
+    fontWeight: "800",
+    position: "absolute",
+  },
+  progressText: {
+    flex: 1,
+    gap: 2,
+  },
+  progressTitle: {
+    color: theme.colors.text,
+    fontFamily: theme.fontFamily.bold,
     fontSize: theme.typography.headline.fontSize,
     fontWeight: "700",
   },
-  weekRange: {
+  progressHint: {
     color: theme.colors.textSecondary,
+    fontFamily: theme.fontFamily.semibold,
     fontSize: theme.typography.caption.fontSize,
-    marginTop: 2,
-  },
-  progressTrack: {
-    backgroundColor: theme.colors.muted,
-    borderRadius: 2,
-    height: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 2,
-    height: "100%",
+    fontWeight: "600",
   },
   generateButton: {
     alignItems: "center",
@@ -335,89 +356,142 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     flexDirection: "row",
     gap: theme.spacing.xs,
-    minHeight: 40,
-    paddingHorizontal: theme.spacing.md,
+    minHeight: 44,
+    paddingHorizontal: theme.spacing.lg,
+    ...theme.shadow.fab,
   },
   generateButtonText: {
     color: theme.colors.primaryForeground,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: "700",
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 13,
+    fontWeight: "800",
   },
   slotList: {
     gap: theme.spacing.sm,
-  },
-  slotPressable: {
-    marginBottom: theme.spacing.xs,
   },
   slotCard: {
     alignItems: "center",
     flexDirection: "row",
     gap: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
-  emptySlotCard: {
-    borderStyle: "dashed",
-  },
-  cookedCard: {
-    opacity: 0.65,
-  },
-  slotBadge: {
+  slotCircle: {
     alignItems: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: 14,
-    height: 28,
+    borderRadius: 15,
+    height: 30,
     justifyContent: "center",
-    width: 28,
+    width: 30,
   },
-  slotBadgeText: {
+  slotCircleText: {
     color: theme.colors.primaryForeground,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: "700",
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 13,
+    fontWeight: "800",
   },
-  slotBadgeMuted: {
+  slotCircleCooked: {
+    alignItems: "center",
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: 15,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  slotCircleMuted: {
     alignItems: "center",
     backgroundColor: theme.colors.muted,
-    borderRadius: 14,
-    height: 28,
+    borderRadius: 15,
+    height: 30,
     justifyContent: "center",
-    width: 28,
+    width: 30,
   },
-  slotBadgeMutedText: {
+  slotCircleMutedText: {
     color: theme.colors.mutedForeground,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: "700",
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 13,
+    fontWeight: "800",
   },
   slotContent: {
     flex: 1,
   },
   recipeTitle: {
     color: theme.colors.text,
+    fontFamily: theme.fontFamily.bold,
     fontSize: theme.typography.subhead.fontSize,
     fontWeight: "700",
   },
   cookedTitle: {
-    textDecorationLine: "line-through",
+    color: theme.colors.textSecondary,
   },
   recipeMeta: {
-    color: theme.colors.textSecondary,
+    color: theme.colors.textDisabled,
+    fontFamily: theme.fontFamily.semibold,
     fontSize: theme.typography.caption.fontSize,
+    fontWeight: "600",
     marginTop: 2,
   },
   cookedButton: {
     borderColor: theme.colors.primary,
     borderRadius: theme.radius.pill,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
   cookedButtonText: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: "700",
+    color: theme.colors.primaryDark,
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  emptySlot: {
+    alignItems: "center",
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
   },
   addDinnerText: {
     color: theme.colors.textSecondary,
     flex: 1,
+    fontFamily: theme.fontFamily.bold,
     fontSize: theme.typography.subhead.fontSize,
+    fontWeight: "700",
+  },
+  nudge: {
+    alignItems: "center",
+    backgroundColor: theme.colors.warningLight,
+    borderRadius: theme.radius.lg,
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  nudgeIcon: {
+    alignItems: "center",
+    backgroundColor: "#f5d9bd",
+    borderRadius: theme.radius.sm,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  nudgeText: {
+    flex: 1,
+    gap: 2,
+  },
+  nudgeTitle: {
+    color: theme.colors.warning,
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  nudgeMessage: {
+    color: theme.colors.warning,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: theme.typography.caption.fontSize,
     fontWeight: "600",
   },
 });

@@ -2,9 +2,12 @@ import {
   buildPlanSlots,
   formatPlanProgress,
   getCurrentWeekRangeLabel,
+  getPlanRingModel,
   getPlanSubtitle,
 } from "@/plan/presentation";
 import type { MealPlanEntry } from "@/types";
+
+const RING_CIRCUMFERENCE = 2 * Math.PI * 24;
 
 const entry: MealPlanEntry = {
   id: 1,
@@ -36,6 +39,26 @@ describe("plan presentation", () => {
   });
 
   it("formats the current week range from a supplied date", () => {
-    expect(getCurrentWeekRangeLabel(new Date("2026-05-12T12:00:00Z"))).toBe("11-17 May");
+    expect(getCurrentWeekRangeLabel(new Date("2026-05-12T12:00:00Z"))).toBe("11–17 May");
+  });
+});
+
+describe("getPlanRingModel", () => {
+  it("fills the ring proportionally for a normal case", () => {
+    const ring = getPlanRingModel(2, 5);
+    expect(ring.dashArray).toBe(`${0.4 * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`);
+    expect(ring.ratioLabel).toBe("2/5");
+  });
+
+  it("leaves the ring empty when the target is zero", () => {
+    const ring = getPlanRingModel(3, 0);
+    expect(ring.dashArray).toBe(`0 ${RING_CIRCUMFERENCE}`);
+    expect(ring.ratioLabel).toBe("3/0");
+  });
+
+  it("clamps to a full ring when planned exceeds target", () => {
+    const ring = getPlanRingModel(7, 5);
+    expect(ring.dashArray).toBe(`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`);
+    expect(ring.ratioLabel).toBe("7/5");
   });
 });
