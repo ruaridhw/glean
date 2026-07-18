@@ -175,7 +175,7 @@ class TestInvokeStructured:
         )
 
         assert response == _StructuredTestResponse(name="Pantry", values=["milk", "eggs"])
-        model.with_structured_output.assert_called_once_with(_StructuredTestResponse)
+        model.with_structured_output.assert_called_once_with(_StructuredTestResponse, method="json_schema")
         model.with_structured_output.return_value.invoke.assert_called_once_with(
             ["message"],
             config={"metadata": {"feature": "shopping-list-description"}},

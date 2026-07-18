@@ -22,7 +22,7 @@ class _FakeModel:
         self.config: dict | None = None
         self.schema: type[object] | None = None
 
-    def with_structured_output(self, schema: type[object]) -> _StructuredInvoker:
+    def with_structured_output(self, schema: type[object], *, method: str | None = None) -> _StructuredInvoker:
         self.schema = schema
         return _StructuredInvoker(self, self.response)
 

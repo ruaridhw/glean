@@ -156,6 +156,7 @@ class TestLlmModelPolicyOverrides:
 class TestConfigureLangSmithEnvironment:
     def test_disables_tracing_when_setting_is_false(self) -> None:
         settings = Settings(
+            _env_file=None,
             openrouter_api_key="test-openrouter_api_key",
             recipe_api_key="test-recipe_api_key",
             cognito_user_pool_id="test-cognito_user_pool_id",
@@ -173,6 +174,7 @@ class TestConfigureLangSmithEnvironment:
 
     def test_enables_tracing_with_project_and_key(self) -> None:
         settings = Settings(
+            _env_file=None,
             openrouter_api_key="test-openrouter_api_key",
             recipe_api_key="test-recipe_api_key",
             cognito_user_pool_id="test-cognito_user_pool_id",

@@ -110,7 +110,16 @@ def invoke_structured[StructuredResponseT: BaseModel](
     config: RunnableConfig | None = None,
 ) -> StructuredResponseT:
     """Invoke an LLM through LangChain structured output and validate the result."""
-    structured_model = model.with_structured_output(schema)
+    # method="json_schema" (OpenRouter response_format), NOT LangChain's default
+    # function-calling path. The default binds the schema as a tool and forces it with
+    # tool_choice=required; reasoning/"thinking" models reject that at the provider —
+    # qwen/qwen3.7-plus returns "<400> InvalidParameter: The tool_choice parameter does
+    # not support being set to required or object in thinking mode". json_schema asks for
+    # the object via response_format instead of a forced tool call, so it sends no
+    # tool_choice and works for every model in DEFAULT_LLM_MODEL_POLICY (verified against
+    # qwen3.7-plus, z-ai/glm-5.2 and the gemini models). Without this, POST /meal-plan and
+    # /recipes/import-url — both routed to qwen3.7-plus — fail in production.
+    structured_model = model.with_structured_output(schema, method="json_schema")
     result = structured_model.invoke(messages, config=config)
     if isinstance(result, schema):
         return result
