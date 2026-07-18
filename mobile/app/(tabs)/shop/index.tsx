@@ -2,11 +2,11 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 import { ShoppingSkeleton } from "@/components/skeletons/ShoppingSkeleton";
-import { AppScreen } from "@/components/ui/AppScreen";
+import { AppScreen, type AppScreenChip } from "@/components/ui/AppScreen";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
 import {
   addManualShoppingItem,
-  completeCheckout,
   deleteShoppingItem,
   getShoppingListItems,
   toggleShoppingItem,
@@ -14,14 +14,9 @@ import {
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { hapticImpact } from "@/platform/haptics";
 import { groupShoppingItems } from "@/shop/presentation";
-import {
-  CheckoutActions,
-  ShoppingAddControls,
-  ShoppingList,
-} from "@/shop/shopping-list-components";
+import { CheckoutBar, ShoppingAddControls, ShoppingList } from "@/shop/shopping-list-components";
 import { theme } from "@/theme";
 import type { ShoppingListItem } from "@/types";
-import { showSuccess } from "@/utils/toast";
 
 export default function ShopScreen() {
   const [items, setItems] = useState<ShoppingListItem[]>([]);
@@ -69,16 +64,15 @@ export default function ShopScreen() {
     [load],
   );
 
-  const handleClearChecked = useCallback(async () => {
-    await completeCheckout();
-    showSuccess("Checkout complete");
-    await load();
-  }, [load]);
-
   const unchecked = items.filter((item) => !item.is_checked);
   const checked = items.filter((item) => item.is_checked);
   const sections = groupShoppingItems(items);
   const canAddItem = Boolean(toRequiredSubmittedText(newItemName));
+
+  const chips: AppScreenChip[] = [
+    { label: `${unchecked.length} to buy`, tone: "primary" },
+    { label: `${checked.length} checked`, tone: "neutral" },
+  ];
 
   const addControls = useMemo(
     () => (
@@ -88,18 +82,9 @@ export default function ShopScreen() {
         newItemName={newItemName}
         onAdd={() => void handleAdd()}
         onChangeNewItemName={setNewItemName}
-        onDescribe={() => router.push("/(tabs)/shop/describe" as never)}
       />
     ),
     [adding, canAddItem, handleAdd, newItemName],
-  );
-
-  const checkoutActions = (
-    <CheckoutActions
-      checkedCount={checked.length}
-      onScanReceipt={() => router.push("/(tabs)/pantry/scan?returnTo=shop")}
-      onClearChecked={() => void handleClearChecked()}
-    />
   );
 
   return (
@@ -109,9 +94,19 @@ export default function ShopScreen() {
     >
       <AppScreen
         title="Shopping"
-        subtitle={`${unchecked.length} remaining · ${checked.length} checked`}
-        contentPaddingBottom={0}
+        chips={chips}
         testID="shop.screen"
+        actions={
+          <IconButton
+            icon="sparkles-outline"
+            accessibilityLabel="Describe list"
+            backgroundColor={theme.colors.surface}
+            color={theme.colors.primaryDark}
+            size={20}
+            style={styles.describeAction}
+            onPress={() => router.push("/(tabs)/shop/describe" as never)}
+          />
+        }
       >
         {loading ? (
           <ShoppingSkeleton />
@@ -137,12 +132,14 @@ export default function ShopScreen() {
               <ShoppingList
                 sections={sections}
                 addControls={addControls}
-                hasCheckoutActions={checked.length > 0}
                 onToggle={(shoppingItem) => void handleToggle(shoppingItem)}
                 onDelete={(shoppingItem) => void handleDelete(shoppingItem)}
               />
             )}
-            {checkoutActions}
+            <CheckoutBar
+              checkedCount={checked.length}
+              onScanReceipt={() => router.push("/(tabs)/pantry/scan?returnTo=shop")}
+            />
           </View>
         )}
       </AppScreen>
@@ -154,5 +151,10 @@ const styles = StyleSheet.create({
   keyboardView: { flex: 1, backgroundColor: theme.colors.background },
   screenContent: {
     flex: 1,
+  },
+  describeAction: {
+    height: 44,
+    width: 44,
+    ...theme.shadow.card,
   },
 });

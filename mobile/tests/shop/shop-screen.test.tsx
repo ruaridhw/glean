@@ -1,9 +1,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import { StyleSheet } from "react-native";
 import {
   addManualShoppingItem,
-  completeCheckout,
   deleteShoppingItem,
   getShoppingListItems,
   toggleShoppingItem,
@@ -33,7 +31,6 @@ jest.mock("expo-router", () => {
 
 jest.mock("@/db/shopping", () => ({
   addManualShoppingItem: jest.fn().mockResolvedValue(undefined),
-  completeCheckout: jest.fn().mockResolvedValue(undefined),
   deleteShoppingItem: jest.fn().mockResolvedValue(undefined),
   getShoppingListItems: jest.fn(),
   toggleShoppingItem: jest.fn().mockResolvedValue(undefined),
@@ -41,15 +38,6 @@ jest.mock("@/db/shopping", () => ({
 
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("@/utils/toast", () => ({ showSuccess: jest.fn() }));
-
-type RenderedTree = string | null | { children?: RenderedTree[] | null } | RenderedTree[];
-
-function collectRenderedText(node: RenderedTree): string[] {
-  if (node === null) return [];
-  if (typeof node === "string") return [node];
-  if (Array.isArray(node)) return node.flatMap(collectRenderedText);
-  return node.children?.flatMap(collectRenderedText) ?? [];
-}
 
 function createTouchHistory({
   currentPageX,
@@ -109,42 +97,27 @@ describe("ShopScreen", () => {
     ]);
   });
 
-  it("renders grouped shopping cards and checkout action", async () => {
+  it("renders grouped shopping sections, counts, source badge and checkout bar", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("tomatoes · 2 kg")).toBeTruthy());
     expect(screen.getByText("Shopping")).toBeTruthy();
-    expect(screen.getByText("1 remaining · 1 checked")).toBeTruthy();
-    expect(screen.getByText("Remaining")).toBeTruthy();
-    expect(screen.getByText("Checked")).toBeTruthy();
-    expect(screen.getByText("2 kg")).toBeTruthy();
-    expect(screen.getByText("From plan")).toBeTruthy();
-    expect(screen.getByText("Completed checkout")).toBeTruthy();
+    expect(screen.getByText("1 to buy")).toBeTruthy();
+    expect(screen.getByText("1 checked")).toBeTruthy();
+    expect(screen.getByText("To buy")).toBeTruthy();
+    expect(screen.getByText("In your cart")).toBeTruthy();
+    expect(screen.getByText("Plan")).toBeTruthy();
+    expect(screen.getByText("milk · 1 L")).toBeTruthy();
+    expect(screen.getByTestId("shop.pinnedCheckoutActions")).toBeTruthy();
+    expect(screen.getByText("1 item in cart")).toBeTruthy();
   }, 15_000);
 
-  it("renders checked rows first, remaining rows second, and checkout pinned below the list", async () => {
+  it("adds a manual item and toggles an item checked", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    const textOrder = collectRenderedText(screen.toJSON());
-
-    expect(textOrder.indexOf("Add")).toBeGreaterThanOrEqual(0);
-    expect(textOrder.indexOf("Checked")).toBeGreaterThan(textOrder.indexOf("Add"));
-    expect(textOrder.indexOf("milk")).toBeGreaterThan(textOrder.indexOf("Checked"));
-    expect(textOrder.indexOf("Remaining")).toBeGreaterThan(textOrder.indexOf("milk"));
-    expect(textOrder.indexOf("tomatoes")).toBeGreaterThan(textOrder.indexOf("Remaining"));
-    expect(StyleSheet.flatten(screen.getByTestId("shop.shoppingList").props.style)).toEqual(
-      expect.objectContaining({ flex: 1 }),
-    );
-    expect(screen.getByTestId("shop.pinnedCheckoutActions")).toBeTruthy();
-  });
-
-  it("adds and toggles shopping items", async () => {
-    const screen = render(<ShopScreen />);
-
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    fireEvent.changeText(screen.getByPlaceholderText("Add item..."), "bread");
-    fireEvent.press(screen.getByText("Add"));
+    await waitFor(() => expect(screen.getByText("tomatoes · 2 kg")).toBeTruthy());
+    fireEvent.changeText(screen.getByPlaceholderText("Add item…"), "bread");
+    fireEvent.press(screen.getByTestId("shop.addButton"));
     await waitFor(() => expect(addManualShoppingItem).toHaveBeenCalledWith({ name: "bread" }));
 
     fireEvent.press(screen.getByLabelText("Check tomatoes"));
@@ -154,25 +127,25 @@ describe("ShopScreen", () => {
   it("toggles a shopping item when tapping the row content", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    fireEvent.press(screen.getByText("tomatoes"));
+    await waitFor(() => expect(screen.getByText("tomatoes · 2 kg")).toBeTruthy());
+    fireEvent.press(screen.getByText("tomatoes · 2 kg"));
 
     await waitFor(() => expect(toggleShoppingItem).toHaveBeenCalledWith(1, true));
   });
 
-  it("deletes a shopping item from the trash action", async () => {
+  it("removes a checked cart item from its remove control", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    fireEvent.press(screen.getByLabelText("Remove tomatoes"));
+    await waitFor(() => expect(screen.getByText("milk · 1 L")).toBeTruthy());
+    fireEvent.press(screen.getByLabelText("Remove milk"));
 
-    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(2));
   });
 
   it("deletes a shopping item from a qualifying left swipe", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("tomatoes · 2 kg")).toBeTruthy());
     const row = screen.getByTestId("shopping-row-1");
 
     await act(async () => {
@@ -208,94 +181,19 @@ describe("ShopScreen", () => {
     await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
   });
 
-  it("highlights the delete affordance while swiping an item left", async () => {
+  it("hands off to the receipt scan flow from the checkout bar", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    const row = screen.getByTestId("shopping-row-1");
-
-    act(() => {
-      row.props.onResponderGrant({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 200,
-          currentTimeStamp: 1,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-      row.props.onResponderMove({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 168,
-          currentTimeStamp: 32,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-    });
-
-    expect(screen.getByTestId("shopping-row-delete-action-1").props.style).toContainEqual(
-      expect.objectContaining({ backgroundColor: "#FEE2E2" }),
-    );
-    expect(screen.getByTestId("shopping-row-delete-icon-1").props.color).toBe("#EF4444");
-  });
-
-  it("deletes a shopping item from a fast left flick", async () => {
-    const screen = render(<ShopScreen />);
-
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    const row = screen.getByTestId("shopping-row-1");
-
-    await act(async () => {
-      row.props.onResponderGrant({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 200,
-          currentTimeStamp: 1,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-      row.props.onResponderMove({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 172,
-          currentTimeStamp: 12,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-      row.props.onResponderRelease({
-        nativeEvent: {},
-        touchHistory: createTouchHistory({
-          currentPageX: 172,
-          currentTimeStamp: 12,
-          previousPageX: 200,
-          previousTimeStamp: 1,
-        }),
-      });
-    });
-
-    await waitFor(() => expect(deleteShoppingItem).toHaveBeenCalledWith(1));
-  });
-
-  it("keeps checkout and receipt-scan handoff available", async () => {
-    const screen = render(<ShopScreen />);
-
-    await waitFor(() => expect(screen.getByText("Completed checkout")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Scan receipt")).toBeTruthy());
     fireEvent.press(screen.getByText("Scan receipt"));
     expect(router.push).toHaveBeenCalledWith("/(tabs)/pantry/scan?returnTo=shop");
-
-    fireEvent.press(screen.getByText("Clear checked"));
-    await waitFor(() => expect(completeCheckout).toHaveBeenCalled());
   });
 
-  it("opens the nested describe screen from the Shop list", async () => {
+  it("opens the nested describe screen from the header action", async () => {
     const screen = render(<ShopScreen />);
 
-    await waitFor(() => expect(screen.getByText("tomatoes")).toBeTruthy());
-    fireEvent.press(screen.getByText("Describe"));
+    await waitFor(() => expect(screen.getByText("tomatoes · 2 kg")).toBeTruthy());
+    fireEvent.press(screen.getByLabelText("Describe list"));
 
     expect(router.push).toHaveBeenCalledWith("/(tabs)/shop/describe");
   });

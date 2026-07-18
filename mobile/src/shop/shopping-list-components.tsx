@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import {
-  formatShoppingQuantity,
+  formatShoppingItemLabel,
   getShoppingSourceLabel,
+  getShoppingSourceTone,
   type ShoppingSection,
 } from "@/shop/presentation";
 import { theme } from "@/theme";
@@ -19,7 +20,6 @@ interface ShoppingAddControlsProps {
   newItemName: string;
   onAdd: () => void;
   onChangeNewItemName: (value: string) => void;
-  onDescribe: () => void;
 }
 
 export function ShoppingAddControls({
@@ -28,83 +28,63 @@ export function ShoppingAddControls({
   newItemName,
   onAdd,
   onChangeNewItemName,
-  onDescribe,
 }: ShoppingAddControlsProps) {
   return (
-    <Card style={styles.addCard}>
+    <View style={styles.addRow}>
       <TextInput
         style={styles.addInput}
         value={newItemName}
         onChangeText={onChangeNewItemName}
-        placeholder="Add item..."
+        placeholder="Add item…"
         placeholderTextColor={theme.colors.textDisabled}
         returnKeyType="done"
         onSubmitEditing={onAdd}
       />
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add item"
+        testID="shop.addButton"
         style={[styles.addButton, (!canAddItem || adding) && styles.addButtonDisabled]}
         onPress={onAdd}
         disabled={adding || !canAddItem}
       >
-        <Text style={styles.addButtonText}>Add</Text>
+        <Ionicons name="add" size={24} color={theme.colors.primaryForeground} />
       </Pressable>
-      <Pressable style={styles.describeButton} onPress={onDescribe}>
-        <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
-        <Text style={styles.describeButtonText}>Describe</Text>
-      </Pressable>
-    </Card>
+    </View>
   );
 }
 
-interface CheckoutActionsProps {
+interface CheckoutBarProps {
   checkedCount: number;
-  onClearChecked: () => void;
   onScanReceipt: () => void;
 }
 
-export function CheckoutActions({
-  checkedCount,
-  onClearChecked,
-  onScanReceipt,
-}: CheckoutActionsProps) {
+export function CheckoutBar({ checkedCount, onScanReceipt }: CheckoutBarProps) {
   if (checkedCount === 0) return null;
 
   return (
-    <Card testID="shop.pinnedCheckoutActions" style={styles.checkoutCard}>
-      <View style={styles.checkoutHeader}>
-        <View style={styles.checkoutTitleRow}>
-          <Ionicons name="checkmark-done-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.checkoutTitle}>Completed checkout</Text>
-        </View>
-        <Badge label={`${checkedCount} checked`} tone="primary" />
+    <View testID="shop.pinnedCheckoutActions" style={styles.checkoutBar}>
+      <View style={styles.checkoutText}>
+        <Text style={styles.checkoutTitle}>
+          {checkedCount} item{checkedCount === 1 ? "" : "s"} in cart
+        </Text>
+        <Text style={styles.checkoutSubtitle}>Scan the receipt to restock your pantry</Text>
       </View>
-      <View style={styles.checkoutActions}>
-        <Pressable style={styles.primaryAction} onPress={onScanReceipt}>
-          <Text style={styles.primaryActionText}>Scan receipt</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryAction} onPress={onClearChecked}>
-          <Text style={styles.secondaryActionText}>Clear checked</Text>
-        </Pressable>
-      </View>
-    </Card>
+      <Pressable accessibilityRole="button" style={styles.scanPill} onPress={onScanReceipt}>
+        <Text style={styles.scanPillText}>Scan receipt</Text>
+      </Pressable>
+    </View>
   );
 }
 
 interface ShoppingListProps {
   addControls: ReactElement;
-  hasCheckoutActions: boolean;
   onDelete: (item: ShoppingListItem) => void;
   onToggle: (item: ShoppingListItem) => void;
   sections: ShoppingSection[];
 }
 
-export function ShoppingList({
-  addControls,
-  hasCheckoutActions,
-  onDelete,
-  onToggle,
-  sections,
-}: ShoppingListProps) {
+export function ShoppingList({ addControls, onDelete, onToggle, sections }: ShoppingListProps) {
   return (
     <SectionList<ShoppingListItem, ShoppingSection>
       testID="shop.shoppingList"
@@ -112,16 +92,9 @@ export function ShoppingList({
       sections={sections}
       keyExtractor={(item) => String(item.id)}
       renderItem={({ item }) => <ShoppingRow item={item} onToggle={onToggle} onDelete={onDelete} />}
-      renderSectionHeader={({ section }) => (
-        <View style={styles.sectionHeader}>
-          <SectionHeader title={section.title} />
-        </View>
-      )}
+      renderSectionHeader={({ section }) => <SectionHeader title={section.title} />}
       ListHeaderComponent={addControls}
-      contentContainerStyle={[
-        styles.listContent,
-        hasCheckoutActions ? styles.listContentWithCheckout : null,
-      ]}
+      contentContainerStyle={styles.listContent}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       stickySectionHeadersEnabled={false}
@@ -145,40 +118,38 @@ function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
       rowTestID={`shopping-row-${item.id}`}
       onDelete={() => onDelete(item)}
     >
-      {(deleteActive) => (
+      {() => (
         <Card style={[styles.itemCard, checked && styles.checkedItemCard]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${checked ? "Uncheck" : "Check"} ${item.name}`}
-            style={styles.itemPressable}
+            style={styles.itemMain}
             onPress={() => onToggle(item)}
           >
-            <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+            <View style={[styles.check, checked && styles.checkChecked]}>
               {checked ? (
                 <Ionicons name="checkmark" size={14} color={theme.colors.primaryForeground} />
               ) : null}
             </View>
-            <View style={styles.itemContent}>
-              <Text style={[styles.itemName, checked && styles.checkedText]}>{item.name}</Text>
-              <View style={styles.itemMetaRow}>
-                <Text style={styles.itemQuantity}>{formatShoppingQuantity(item)}</Text>
-                <Badge label={getShoppingSourceLabel(item.source)} />
-              </View>
-            </View>
+            <Text style={[styles.itemLabel, checked && styles.checkedText]} numberOfLines={2}>
+              {formatShoppingItemLabel(item)}
+            </Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${item.name}`}
-            hitSlop={8}
-            style={[styles.deleteButton, deleteActive && styles.deleteButtonActive]}
-            onPress={() => onDelete(item)}
-          >
-            <Ionicons
-              name="trash-outline"
-              size={18}
-              color={deleteActive ? theme.colors.danger : theme.colors.textSecondary}
+          {checked ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${item.name}`}
+              hitSlop={8}
+              onPress={() => onDelete(item)}
+            >
+              <Ionicons name="close" size={18} color={theme.colors.textDisabled} />
+            </Pressable>
+          ) : (
+            <Badge
+              label={getShoppingSourceLabel(item.source)}
+              tone={getShoppingSourceTone(item.source)}
             />
-          </Pressable>
+          )}
         </Card>
       )}
     </SwipeDeleteRow>
@@ -186,160 +157,106 @@ function ShoppingRow({ item, onToggle, onDelete }: ShoppingRowProps) {
 }
 
 const styles = StyleSheet.create({
-  checkoutCard: {
-    gap: theme.spacing.sm,
-  },
-  checkoutHeader: {
+  addRow: {
     alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  checkoutTitle: {
-    color: theme.colors.text,
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "700",
-  },
-  checkoutTitleRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: theme.spacing.xs,
-  },
-  checkoutActions: {
     flexDirection: "row",
     gap: theme.spacing.sm,
-  },
-  primaryAction: {
-    alignItems: "center",
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    flex: 1,
-    padding: theme.spacing.md,
-  },
-  primaryActionText: {
-    color: theme.colors.primaryForeground,
-    fontWeight: "700",
-  },
-  secondaryAction: {
-    alignItems: "center",
-    backgroundColor: theme.colors.muted,
-    borderRadius: theme.radius.md,
-    flex: 1,
-    padding: theme.spacing.md,
-  },
-  secondaryActionText: {
-    color: theme.colors.text,
-    fontWeight: "700",
-  },
-  addCard: {
-    flexDirection: "row",
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
   },
   addInput: {
-    backgroundColor: theme.colors.muted,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.pill,
     color: theme.colors.text,
     flex: 1,
-    fontSize: theme.typography.subhead.fontSize,
-    padding: theme.spacing.md,
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    ...theme.shadow.card,
   },
   addButton: {
+    alignItems: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
+    height: 46,
     justifyContent: "center",
-    paddingHorizontal: theme.spacing.lg,
+    width: 46,
   },
   addButtonDisabled: { opacity: 0.5 },
-  addButtonText: {
-    color: theme.colors.primaryForeground,
-    fontWeight: "700",
-  },
-  describeButton: {
+  checkoutBar: {
     alignItems: "center",
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
+    backgroundColor: theme.colors.ink,
+    borderRadius: theme.radius.xl,
     flexDirection: "row",
-    gap: theme.spacing.xs,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.md,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 14,
   },
-  describeButtonText: {
-    color: theme.colors.primary,
-    fontWeight: "700",
+  checkoutText: { flex: 1 },
+  checkoutTitle: {
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 14,
   },
-  listContent: {
-    gap: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
+  checkoutSubtitle: {
+    color: "rgba(255,255,255,0.6)",
+    fontFamily: theme.fontFamily.semibold,
+    fontSize: 12,
+    marginTop: 2,
   },
-  listContentWithCheckout: {
-    paddingBottom: theme.spacing.xl,
+  scanPill: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  scanPillText: {
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fontFamily.extrabold,
+    fontSize: 12,
   },
   shoppingList: {
     flex: 1,
   },
-  sectionHeader: {
-    marginTop: theme.spacing.xs,
+  listContent: {
+    gap: 10,
+    paddingBottom: theme.spacing.md,
   },
   itemCard: {
     alignItems: "center",
     flexDirection: "row",
-    gap: theme.spacing.md,
+    gap: 14,
   },
-  itemPressable: {
+  checkedItemCard: {
+    opacity: 0.6,
+  },
+  itemMain: {
     alignItems: "center",
     flex: 1,
     flexDirection: "row",
-    gap: theme.spacing.md,
+    gap: 14,
   },
-  checkedItemCard: {
-    opacity: 0.65,
-  },
-  checkbox: {
+  check: {
     alignItems: "center",
-    borderColor: theme.colors.border,
-    borderRadius: 11,
+    borderColor: theme.colors.borderStrong,
+    borderRadius: 12,
     borderWidth: 2,
-    height: 22,
+    height: 24,
     justifyContent: "center",
-    width: 22,
+    width: 24,
   },
-  checkboxChecked: {
+  checkChecked: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
-  itemContent: {
-    flex: 1,
-    gap: theme.spacing.xs,
-  },
-  itemName: {
+  itemLabel: {
     color: theme.colors.text,
-    fontSize: theme.typography.subhead.fontSize,
-    fontWeight: "600",
+    flex: 1,
+    fontFamily: theme.fontFamily.bold,
+    fontSize: 15,
   },
   checkedText: {
     textDecorationLine: "line-through",
-  },
-  itemMetaRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.sm,
-  },
-  itemQuantity: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.typography.caption.fontSize,
-  },
-  deleteButton: {
-    alignItems: "center",
-    borderRadius: theme.radius.pill,
-    height: 40,
-    justifyContent: "center",
-    width: 40,
-  },
-  deleteButtonActive: {
-    backgroundColor: "#FEE2E2",
   },
 });

@@ -118,6 +118,6 @@ const styles = StyleSheet.create({
     top: 0,
   },
   actionActive: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: theme.colors.dangerLight,
   },
 });
