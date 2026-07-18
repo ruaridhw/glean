@@ -1,22 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { AppScreen } from "@/components/ui/AppScreen";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { IconButton } from "@/components/ui/IconButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatsRow } from "@/components/ui/StatsRow";
 import { getRecipeById, getRecipeIngredients } from "@/db/recipes";
+import { getPantryIngredientIds } from "@/meals/pantry-match";
 import { formatRecipeIngredient, getRecipeTags, parseInstructionSteps } from "@/meals/presentation";
 import { theme } from "@/theme";
 import type { Recipe, RecipeIngredient } from "@/types";
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
+  // null = pantry state unavailable → hide in-pantry/to-buy chips (graceful degrade).
+  const [pantryIds, setPantryIds] = useState<Set<number> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,116 +33,180 @@ export default function RecipeDetailScreen() {
       const fetchedIngredients = await getRecipeIngredients(Number(id));
       setRecipe(fetchedRecipe);
       setIngredients(fetchedIngredients);
+      try {
+        setPantryIds(await getPantryIngredientIds());
+      } catch {
+        setPantryIds(null);
+      }
       setLoading(false);
     }
     void load();
   }, [id]);
 
-  const actions = (
-    <IconButton
-      icon="chevron-back"
-      accessibilityLabel="Back to meals"
-      backgroundColor={theme.colors.muted}
-      onPress={() => router.back()}
-    />
+  const header = (
+    <View style={styles.header}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back to meals"
+        style={styles.headerButton}
+        onPress={() => router.back()}
+      >
+        <Ionicons name="chevron-back" size={20} color={theme.colors.ink} />
+      </Pressable>
+      <Text style={styles.headerTitle}>Recipe</Text>
+      <View style={styles.headerButton}>
+        <Ionicons name="bookmark" size={18} color={theme.colors.ink} />
+      </View>
+    </View>
   );
 
-  if (loading) {
+  if (loading || !recipe) {
     return (
-      <AppScreen title="Recipe" actions={actions} testID="recipe.detail">
+      <SafeAreaView style={styles.container} edges={["top"]} testID="recipe.detail">
+        {header}
         <View style={styles.loading}>
           <ActivityIndicator color={theme.colors.primary} />
         </View>
-      </AppScreen>
+      </SafeAreaView>
     );
   }
-
-  if (!recipe) return null;
 
   const tags = getRecipeTags(recipe);
   const instructions = parseInstructionSteps(recipe.instructions);
 
   return (
-    <AppScreen title="Recipe" actions={actions} scroll testID="recipe.detail">
-      <Card style={styles.heroCard}>
-        <Text style={styles.title}>{recipe.title}</Text>
-        {tags.length > 0 ? (
-          <View style={styles.tagsRow}>
-            {tags.map((tag) => (
-              <Badge key={tag} label={tag} />
-            ))}
-          </View>
-        ) : null}
-      </Card>
-
-      <StatsRow
-        style={styles.stats}
-        stats={[
-          { value: recipe.total_time_mins ? `${recipe.total_time_mins} min` : "-", label: "Total" },
-          {
-            value: recipe.active_time_mins ? `${recipe.active_time_mins} min` : "-",
-            label: "Active",
-          },
-          { value: recipe.yield_count ? `${recipe.yield_count} servings` : "-", label: "Serves" },
-        ]}
-      />
-
-      <SectionHeader title="Ingredients" />
-      <Card style={styles.sectionCard}>
-        {ingredients.map((ingredient, index) => (
-          <View key={ingredient.id} style={[styles.ingredientRow, index > 0 && styles.dividedRow]}>
-            <View style={styles.dot} />
-            <Text style={styles.ingredientText}>{formatRecipeIngredient(ingredient)}</Text>
-          </View>
-        ))}
-      </Card>
-
-      <SectionHeader title="Instructions" />
-      <Card style={styles.sectionCard}>
-        {instructions.map((step, index) => (
-          <View
-            key={`${step.number}-${step.text}`}
-            style={[styles.stepRow, index > 0 && styles.stepGap]}
-          >
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>{step.number}</Text>
-            </View>
-            <Text style={styles.stepText}>{step.text}</Text>
-          </View>
-        ))}
-      </Card>
-
-      <Pressable
-        accessibilityRole="button"
-        style={styles.addButton}
-        onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
+    <SafeAreaView style={styles.container} edges={["top"]} testID="recipe.detail">
+      {header}
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 96 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <Ionicons name="calendar-outline" size={18} color={theme.colors.primaryForeground} />
-        <Text style={styles.addButtonText}>Add to Plan</Text>
-      </Pressable>
-    </AppScreen>
+        <Card style={styles.heroCard}>
+          <Text style={styles.title}>{recipe.title}</Text>
+          {tags.length > 0 ? (
+            <View style={styles.tagsRow}>
+              {tags.map((tag) => (
+                <Badge key={tag} label={tag} tone="primary" />
+              ))}
+            </View>
+          ) : null}
+        </Card>
+
+        <StatsRow
+          style={styles.stats}
+          stats={[
+            {
+              value: recipe.total_time_mins ? `${recipe.total_time_mins} min` : "—",
+              label: "Total",
+            },
+            {
+              value: recipe.active_time_mins ? `${recipe.active_time_mins} min` : "—",
+              label: "Active",
+            },
+            { value: recipe.yield_count ? `${recipe.yield_count}` : "—", label: "Serves" },
+          ]}
+        />
+
+        <SectionHeader title="Ingredients" />
+        <Card style={styles.sectionCard}>
+          {ingredients.map((ingredient, index) => {
+            const inPantry =
+              pantryIds !== null &&
+              ingredient.ingredient_id != null &&
+              pantryIds.has(ingredient.ingredient_id);
+            return (
+              <View
+                key={ingredient.id}
+                style={[styles.ingredientRow, index < ingredients.length - 1 && styles.dividedRow]}
+              >
+                <View style={styles.dot} />
+                <Text style={styles.ingredientText}>{formatRecipeIngredient(ingredient)}</Text>
+                {pantryIds !== null ? (
+                  <Badge
+                    label={inPantry ? "in pantry" : "to buy"}
+                    tone={inPantry ? "primary" : "warning"}
+                  />
+                ) : null}
+              </View>
+            );
+          })}
+        </Card>
+
+        <SectionHeader title="Instructions" />
+        <Card style={styles.sectionCard}>
+          {instructions.map((step, index) => (
+            <View
+              key={`${step.number}-${step.text}`}
+              style={[styles.stepRow, index > 0 && styles.stepGap]}
+            >
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>{step.number}</Text>
+              </View>
+              <Text style={styles.stepText}>{step.text}</Text>
+            </View>
+          ))}
+        </Card>
+
+        <Pressable
+          accessibilityRole="button"
+          style={styles.addButton}
+          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { add_recipe_id: id } })}
+        >
+          <Ionicons name="calendar-outline" size={18} color={theme.colors.primaryForeground} />
+          <Text style={styles.addButtonText}>Add to plan</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+  },
+  headerButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.muted,
+    borderRadius: theme.radius.pill,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  headerTitle: {
+    ...theme.typography.sectionLabel,
+  },
   loading: {
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
+  },
+  scroll: {
+    paddingHorizontal: theme.spacing.lg,
   },
   heroCard: {
     gap: theme.spacing.md,
   },
   title: {
     color: theme.colors.text,
-    fontSize: 26,
+    fontSize: 25,
     fontWeight: "800",
-    lineHeight: 32,
+    fontFamily: theme.fontFamily.extrabold,
+    letterSpacing: -0.5,
+    lineHeight: 31,
   },
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: theme.spacing.xs,
+    gap: 6,
   },
   stats: {
     marginTop: theme.spacing.md,
@@ -150,13 +217,12 @@ const styles = StyleSheet.create({
   ingredientRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
+    gap: 10,
+    paddingVertical: 7,
   },
   dividedRow: {
     borderColor: theme.colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: theme.spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   dot: {
     backgroundColor: theme.colors.primary,
@@ -167,7 +233,9 @@ const styles = StyleSheet.create({
   ingredientText: {
     color: theme.colors.text,
     flex: 1,
-    fontSize: theme.typography.subhead.fontSize,
+    fontSize: 14.5,
+    fontWeight: "600",
+    fontFamily: theme.fontFamily.semibold,
   },
   stepRow: {
     flexDirection: "row",
@@ -186,28 +254,33 @@ const styles = StyleSheet.create({
   },
   stepNumberText: {
     color: theme.colors.primaryForeground,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
   stepText: {
     color: theme.colors.text,
     flex: 1,
-    fontSize: theme.typography.subhead.fontSize,
+    fontSize: 14.5,
+    fontWeight: "500",
+    fontFamily: theme.fontFamily.medium,
     lineHeight: 22,
   },
   addButton: {
     alignItems: "center",
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     flexDirection: "row",
     gap: theme.spacing.sm,
     justifyContent: "center",
     marginTop: theme.spacing.xl,
-    padding: theme.spacing.md,
+    padding: 15,
+    ...theme.shadow.fab,
   },
   addButtonText: {
     color: theme.colors.primaryForeground,
-    fontSize: theme.typography.body.fontSize,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "800",
+    fontFamily: theme.fontFamily.extrabold,
   },
 });
