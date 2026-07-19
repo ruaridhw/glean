@@ -55,3 +55,19 @@ make worktree-list                       # list active worktrees
 make worktree-remove BRANCH=feature/foo # remove worktree + clean node_modules + .venv
 make worktree-prune                      # prune stale git metadata
 ```
+
+## Git branch hygiene
+
+**Deleting a remote branch — order of precedence.** Before deleting a remote
+branch, retarget any open PRs that use it as their **base** onto the new base
+(e.g. `main`) first. Deleting a branch that is the base of open PRs
+**auto-closes** those PRs, and GitHub will not let you reopen or re-base them
+while the base is gone — you'd have to recreate the branch to recover them.
+
+So when winding down an integration branch:
+
+1. Retarget every open PR based on it (`gh pr edit <n> --base main`, or the REST
+   API `PATCH /pulls/<n>` if `gh` errors), and rebase each onto the new base.
+2. **Then** delete the branch.
+
+Never delete first — the auto-close is easy to trigger and awkward to undo.
