@@ -153,7 +153,10 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["external_id"] == "abc-123"
+    # get_recipe is routed through the same recipe-api adapter (stored_from_recipe_api
+    # -> stored_to_recipe_out) as the corpus path, so the live API branch now carries
+    # the "recipeapi:" id convention too — the one id convention for recipe-api ids.
+    assert data["external_id"] == "recipeapi:abc-123"
     assert data["title"] == "Spaghetti Carbonara"
     assert data["cuisine"] == "Italian"
     assert data["dietary_flags"] == ["Gluten-Free"]
@@ -161,8 +164,82 @@ def test_get_recipe_returns_detail(client: TestClient) -> None:
     assert data["nutrition"]["calories"] == pytest.approx(487.22)
     assert data["nutrition"]["protein_g"] == pytest.approx(35.75)
     assert data["ingredients"][0]["canonical_name"] == "spaghetti"
+    assert data["ingredients"][0]["api_ingredient_id"] == "recipeapi:spaghetti"
     assert data["ingredients"][0]["quantity"] == pytest.approx(200)
     assert data["source_url"] == "https://example.com/carbonara"
+
+
+def test_get_recipe_strips_recipe_api_prefix_before_calling_upstream_client(client: TestClient) -> None:
+    """The detail response's external_id carries the "recipeapi:" prefix, so a
+    client re-fetching by that id must still resolve upstream: the prefix is our
+    internal convention, not something recipe-api.com understands.
+    """
+    api_recipe = RecipeApiRecipe(
+        id="abc-123",
+        name="Spaghetti Carbonara",
+        source_url="https://example.com/carbonara",
+    )
+
+    with (
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=_empty_corpus_store()),
+        patch("glean.recipes.service.RecipeApiClient") as MockClient,
+    ):
+        MockClient.return_value.get_recipe.return_value = api_recipe
+        resp = client.get("/recipes/recipeapi:abc-123")
+
+    assert resp.status_code == 200
+    MockClient.return_value.get_recipe.assert_called_once_with("abc-123")
+    assert resp.json()["external_id"] == "recipeapi:abc-123"
+
+
+def test_get_recipe_uses_recipe_api_adapter_for_live_lookups() -> None:
+    """`get_recipe`'s live-API branch is the same recipe-api adapter (and id
+    convention) as the corpus path — there is exactly one conversion from
+    `RecipeApiRecipe`, not a second, divergent one.
+    """
+    api_recipe = RecipeApiRecipe(
+        id="abc-123",
+        name="Spaghetti Carbonara",
+        cuisine="Italian",
+        dietary={"flags": ["Gluten-Free"], "not_suitable_for": ["Vegan diets"]},
+        nutrition={"per_serving": {"calories": 487.22, "protein_g": 35.75}},
+        ingredients=[
+            {
+                "group_name": "Pasta",
+                "items": [
+                    {
+                        "ingredient_id": "spaghetti",
+                        "name": "spaghetti",
+                        "quantity": 200,
+                        "unit": "g",
+                    }
+                ],
+            }
+        ],
+        source_url="https://example.com/carbonara",
+    )
+
+    with (
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=_empty_corpus_store()),
+        patch("glean.recipes.service.RecipeApiClient") as MockClient,
+    ):
+        MockClient.return_value.get_recipe.return_value = api_recipe
+        response = service.get_recipe(
+            "abc-123",
+            recipe_api_base_url="https://recipe-api.example.com",
+            recipe_api_key=SecretStr("test-key"),
+        )
+
+    assert response.external_id == "recipeapi:abc-123"
+    assert response.title == "Spaghetti Carbonara"
+    assert response.cuisine == "Italian"
+    assert response.dietary_flags == ["Gluten-Free"]
+    assert response.not_suitable_for == ["Vegan diets"]
+    assert response.nutrition is not None
+    assert response.nutrition.calories == pytest.approx(487.22)
+    assert response.ingredients[0].api_ingredient_id == "recipeapi:spaghetti"
+    assert response.ingredients[0].canonical_name == "spaghetti"
+    assert response.source_url == "https://example.com/carbonara"
 
 
 def test_get_recipe_returns_corpus_detail_by_stored_id() -> None:
