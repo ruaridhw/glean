@@ -11,10 +11,10 @@ from glean.llm import LLMRouter  # noqa: TC001 - FastAPI resolves this via Annot
 from glean.receipts import service
 from glean.receipts.schemas import DescribeRequest, ScanResponse
 
-router = APIRouter(prefix="/receipts", tags=["receipts"])
+router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(verify_cognito_token)])
 
 
-@router.post("/scan", response_model=ScanResponse, dependencies=[Depends(verify_cognito_token)])
+@router.post("/scan", response_model=ScanResponse)
 async def scan_receipt(
     file: Annotated[UploadFile, File()],
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
@@ -34,7 +34,7 @@ async def scan_receipt(
     )
 
 
-@router.post("/describe", response_model=ScanResponse, dependencies=[Depends(verify_cognito_token)])
+@router.post("/describe", response_model=ScanResponse)
 def describe_purchase(
     request: DescribeRequest,
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
