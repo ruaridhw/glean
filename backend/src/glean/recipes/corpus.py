@@ -1,54 +1,35 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from pydantic import ValidationError
 
-from glean.recipe_api.client import CACHE_DIR
+from glean.recipe_api.blob_store import get_recipe_corpus_store
 from glean.recipes.stored import StoredRecipe
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-CORPUS_DIR = CACHE_DIR / "corpus"
+    from glean.recipe_api.blob_store import BlobStore
 
 
 class RecipeCorpusStore:
-    def __init__(self, root: Path = CORPUS_DIR) -> None:
-        self.root = root
+    def __init__(self, store: BlobStore | None = None) -> None:
+        self.store = store if store is not None else get_recipe_corpus_store()
 
     def save(self, recipe: StoredRecipe) -> StoredRecipe:
-        path = self._path_for(recipe.external_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
         data = recipe.model_dump(mode="json")
         for ingredient in data.get("ingredients", []):
             if isinstance(ingredient, dict) and ingredient.get("api_ingredient_id") is None:
                 ingredient.pop("api_ingredient_id", None)
         content = json.dumps(data, indent=2, sort_keys=True) + "\n"
-        temp_path: Path | None = None
-        try:
-            with NamedTemporaryFile(
-                "w",
-                dir=path.parent,
-                prefix=f".{path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as temp_file:
-                temp_file.write(content)
-                temp_path = Path(temp_file.name)
-            temp_path.replace(path)
-        except OSError:
-            if temp_path is not None:
-                temp_path.unlink(missing_ok=True)
-            raise
+        self.store.write(self._key_for(recipe.external_id), content)
         return recipe
 
     def get(self, recipe_id: str) -> StoredRecipe | None:
-        return self._load_recipe(self._path_for(recipe_id))
+        return self._load(self._key_for(recipe_id))
 
     def get_by_source_url(self, source_url: str) -> StoredRecipe | None:
         for recipe in self._iter_recipes():
@@ -64,7 +45,7 @@ class RecipeCorpusStore:
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[list[StoredRecipe], int]:
-        recipes = list(self._iter_recipes())
+        recipes = self._iter_recipes()
         query = (q or "").strip().casefold()
         cuisine_filter = (cuisine or "").strip().casefold()
         dietary_filters = [flag.strip().casefold() for flag in (dietary or "").split(",") if flag.strip()]
@@ -86,29 +67,24 @@ class RecipeCorpusStore:
         return filtered[start:end], total
 
     def _iter_recipes(self) -> list[StoredRecipe]:
-        if not self.root.exists():
-            return []
-        return [
-            recipe
-            for path in sorted(self.root.rglob("*.json"))
-            if path.is_file() and (recipe := self._load_recipe(path)) is not None
-        ]
+        return [recipe for key in self.store.list_keys() if (recipe := self._load(key)) is not None]
 
-    @staticmethod
-    def _load_recipe(path: Path) -> StoredRecipe | None:
-        if not path.exists() or not path.is_file():
+    def _load(self, key: str) -> StoredRecipe | None:
+        raw = self.store.read(key)
+        if raw is None:
             return None
         try:
-            return StoredRecipe.model_validate(json.loads(path.read_text()))
-        except (OSError, json.JSONDecodeError, ValidationError, TypeError, ValueError):
+            return StoredRecipe.model_validate(json.loads(raw))
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
             return None
 
-    def _path_for(self, recipe_id: str) -> Path:
+    @staticmethod
+    def _key_for(recipe_id: str) -> str:
         namespace, separator, namespaced_recipe_id = recipe_id.partition(":")
         if not separator:
             namespace = "_unknown"
             namespaced_recipe_id = recipe_id
-        return self.root / quote(namespace, safe="") / f"{quote(namespaced_recipe_id, safe='')}.json"
+        return f"{quote(namespace, safe='')}/{quote(namespaced_recipe_id, safe='')}.json"
 
     @staticmethod
     def _matches_query(recipe: StoredRecipe, query: str) -> bool:
