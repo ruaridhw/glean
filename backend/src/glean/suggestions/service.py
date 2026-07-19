@@ -21,19 +21,7 @@ Rules:
 - Respect dietary flags (never suggest recipes incompatible with user's dietary_flags)
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Prefer recipes not cooked recently (further last_cooked_at = higher priority)
-- Return up to meals_per_week suggestions
-
-Respond with structured data containing a suggestions array of objects:
-{
-  "suggestions": [
-    {
-      "recipe_id": <int>,
-      "title": <str>,
-      "reason": <str>,
-      "missing_ingredients": [<ingredient names not in pantry>]
-    }
-  ]
-}"""
+- Return up to meals_per_week suggestions"""
 
 
 @tracer.capture_method

@@ -25,22 +25,9 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 URL_PARSE_SYSTEM_PROMPT = """You are a recipe extraction assistant. Given HTML from a recipe page,
-extract the recipe details and return structured data with this exact shape:
-{
-  "title": "Recipe Name",
-  "source_url": "https://...",
-  "cuisine": null,
-  "difficulty": null,
-  "total_time": "PT30M",
-  "prep_time": "PT10M",
-  "yield": "4 servings",
-  "ingredients": ["200g pasta", "2 eggs"],
-  "instructions": ["Step 1 text", "Step 2 text"],
-  "dietary_flags": [],
-  "not_suitable_for": []
-}
-Use null for optional scalar fields that cannot be determined. Use empty arrays for list fields when none are present.
-Do not include commentary."""
+extract the recipe details into the response schema.
+Use null for optional scalar fields that cannot be determined, and empty arrays for list fields when none are present.
+Express time fields as ISO 8601 durations (e.g. "PT30M")."""
 
 _DEFAULT_MAX_REDIRECTS = 5
 _BROWSER_HEADERS = {
