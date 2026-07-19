@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 from glean.llm import Feature, invoke_structured
-from glean.recipes.service import URL_PARSE_SYSTEM_PROMPT
+from glean.recipes.providers import URL_PARSE_SYSTEM_PROMPT
 from glean.recipes.stored import RecipeLlmResponse
 
 from .judges.rubrics import judge_recipe_import
