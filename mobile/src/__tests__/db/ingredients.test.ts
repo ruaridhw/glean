@@ -33,28 +33,29 @@ function makeSelectChain(result: unknown[]) {
 describe("resolveOrCreateIngredient", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("returns existing id when ingredient found by api_ingredient_id", async () => {
+  it("returns existing row when ingredient found by api_ingredient_id", async () => {
     (drizzleDb.select as jest.Mock).mockReturnValue(
       makeSelectChain([{ id: 5, canonical_name: "chicken breast" }]),
     );
 
-    const id = await resolveOrCreateIngredient({
+    const ingredient = await resolveOrCreateIngredient({
       canonical_name: "Chicken Breast",
       api_ingredient_id: "uuid-123",
     });
 
-    expect(id).toBe(5);
+    expect(ingredient).toEqual({ id: 5, canonical_name: "chicken breast" });
     expect(drizzleDb.insert).not.toHaveBeenCalled();
   });
 
   it("normalises name to lowercase and inserts when not found", async () => {
     (drizzleDb.select as jest.Mock).mockReturnValue(makeSelectChain([]));
-    const mockValues = jest.fn().mockResolvedValue({ lastInsertRowId: 9 });
+    const mockReturning = jest.fn().mockResolvedValue([{ id: 9, canonical_name: "salmon fillet" }]);
+    const mockValues = jest.fn(() => ({ returning: mockReturning }));
     (drizzleDb.insert as jest.Mock).mockReturnValue({ values: mockValues });
 
-    const id = await resolveOrCreateIngredient({ canonical_name: "Salmon Fillet" });
+    const ingredient = await resolveOrCreateIngredient({ canonical_name: "Salmon Fillet" });
 
-    expect(id).toBe(9);
+    expect(ingredient).toEqual({ id: 9, canonical_name: "salmon fillet" });
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({ canonical_name: "salmon fillet" }),
     );

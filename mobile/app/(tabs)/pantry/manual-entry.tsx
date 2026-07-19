@@ -6,8 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/AppText";
 import { AppTextInput } from "@/components/ui/AppTextInput";
-import { resolveOrCreateIngredient } from "@/db/ingredients";
-import { upsertPantryItem } from "@/db/pantry";
+import { addPantryItem } from "@/db/pantry";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
@@ -29,10 +28,7 @@ export default function ManualEntryScreen() {
     }
     setSaving(true);
     try {
-      const ingredientId = await resolveOrCreateIngredient({
-        canonical_name: normalizedName.toLowerCase(),
-      });
-      await upsertPantryItem({ ingredient_id: ingredientId, quantity: qty, unit });
+      await addPantryItem({ name: normalizedName.toLowerCase(), quantity: qty, unit });
       showSuccess("Added to pantry");
       router.replace("/(tabs)/pantry");
     } catch {

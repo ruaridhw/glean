@@ -1,8 +1,10 @@
 // mobile/src/db/pantry.ts
 
 import { eq, sql } from "drizzle-orm";
+import { normalizeUnit } from "@/normalization/units";
 import type { PantryItem } from "@/types";
 import { drizzleDb } from "./client";
+import { resolveOrCreateIngredient } from "./ingredients";
 import { ingredientCategories, ingredients, pantryItems } from "./schema";
 
 export async function getPantryItems(): Promise<PantryItem[]> {
@@ -62,6 +64,34 @@ export async function upsertPantryItem(params: {
       expiry_date: params.expiry_date ?? null,
     });
   }
+}
+
+/**
+ * Resolves (or creates) the ingredient for `name`, normalizes the quantity/unit
+ * against the ingredient's canonical unit, and upserts the pantry row. This is
+ * the single entry point for adding an item to the pantry — callers should not
+ * assemble resolve → normalize → upsert themselves.
+ */
+export async function addPantryItem(params: {
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price?: number | null;
+}): Promise<{ ingredientId: number }> {
+  const ingredient = await resolveOrCreateIngredient({ canonical_name: params.name });
+  const normalized = normalizeUnit({
+    quantity: params.quantity,
+    unit: params.unit,
+    canonicalUnit: ingredient.canonical_unit ?? null,
+    canonicalName: ingredient.canonical_name,
+  });
+  await upsertPantryItem({
+    ingredient_id: ingredient.id,
+    quantity: normalized?.quantity ?? params.quantity,
+    unit: normalized?.unit ?? params.unit,
+    unit_price: params.unit_price ?? null,
+  });
+  return { ingredientId: ingredient.id };
 }
 
 export async function updatePantryQuantity(id: number, quantity: number): Promise<void> {
