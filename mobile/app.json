@@ -3,7 +3,7 @@
     "name": "Glean",
     "slug": "glean",
     "owner": "ruaridhgithub",
-    "version": "0.1.21",
+    "version": "0.1.22",
     "scheme": "glean",
     "platforms": ["ios", "android"],
     "icon": "./assets/icon.png",
