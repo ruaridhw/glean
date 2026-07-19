@@ -574,7 +574,7 @@ dependencies = [
     { name = "slowapi" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
@@ -582,14 +582,6 @@ dev = [
     { name = "ruff" },
     { name = "ty" },
     { name = "typos" },
-    { name = "vulture" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
     { name = "vulture" },
 ]
 
@@ -604,26 +596,21 @@ requires-dist = [
     { name = "langchain-openrouter", specifier = ">=0.2.0,<1" },
     { name = "langsmith", specifier = ">=0.7.0,<1" },
     { name = "mangum", specifier = ">=0.21.0,<1" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.2.0,<5" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0,<8" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0,<4" },
     { name = "python-multipart", specifier = ">=0.0.24,<1" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.9,<1" },
     { name = "slowapi", specifier = ">=0.1.9,<1" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.29,<1" },
-    { name = "typos", marker = "extra == 'dev'", specifier = ">=1.45.0,<2" },
-    { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.16,<3" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pre-commit", specifier = ">=4.2.0,<5" },
     { name = "pytest", specifier = ">=9.0.3,<10" },
     { name = "pytest-cov", specifier = ">=7.1.0,<8" },
     { name = "ruff", specifier = ">=0.15.9,<1" },
+    { name = "ty", specifier = ">=0.0.29,<1" },
+    { name = "typos", specifier = ">=1.45.0,<2" },
     { name = "vulture", specifier = ">=2.16,<3" },
 ]
 

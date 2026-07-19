@@ -19,17 +19,6 @@ dependencies = [
     "pydantic>=2.12.5",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=9.0.3,<10",
-    "pytest-cov>=7.1.0,<8",
-    "pre-commit>=4.2.0,<5",
-    "ruff>=0.15.9,<1",
-    "vulture>=2.16,<3",
-    "typos>=1.45.0,<2",
-    "ty>=0.0.29,<1",
-]
-
 [tool.pytest.ini_options]
 testpaths = ["tests", "scripts/tests"]
 addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80 --ignore=tests/integration"
@@ -46,9 +35,11 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=9.0.3,<10",
     "pytest-cov>=7.1.0,<8",
+    "pre-commit>=4.2.0,<5",
     "ruff>=0.15.9,<1",
     "vulture>=2.16,<3",
-
+    "typos>=1.45.0,<2",
+    "ty>=0.0.29,<1",
 ]
 
 [tool.hatch.build.targets.wheel]
