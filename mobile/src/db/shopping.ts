@@ -130,13 +130,13 @@ export async function addAiShoppingItems(
     if (!name) continue;
 
     const unit = normalizeSubmittedText(item.unit) || "units";
-    const ingredientId = await resolveOrCreateIngredient({
+    const ingredient = await resolveOrCreateIngredient({
       canonical_name: name,
       api_ingredient_id: item.api_ingredient_id ?? null,
       category: normaliseIngredientCategory(item.category),
     });
     rows.push({
-      ingredient_id: ingredientId,
+      ingredient_id: ingredient.id,
       name,
       quantity: item.quantity,
       unit,

@@ -54,7 +54,9 @@ describe("addAiShoppingItems", () => {
     const mockValues = jest.fn().mockResolvedValue({});
     const mockInsert = jest.fn(() => ({ values: mockValues }));
     (drizzleDb as unknown as { insert: jest.Mock }).insert = mockInsert;
-    mockResolveOrCreateIngredient.mockResolvedValueOnce(101).mockResolvedValueOnce(102);
+    mockResolveOrCreateIngredient
+      .mockResolvedValueOnce({ id: 101 })
+      .mockResolvedValueOnce({ id: 102 });
 
     await addAiShoppingItems([
       {

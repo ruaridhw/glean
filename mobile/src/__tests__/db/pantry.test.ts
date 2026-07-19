@@ -22,6 +22,7 @@ jest.mock("@/db/schema", () => ({
   ingredients: {
     id: "id",
     canonical_name: "canonical_name",
+    api_ingredient_id: "api_ingredient_id",
     is_staple: "is_staple",
     category: "category",
   },
@@ -30,7 +31,7 @@ jest.mock("@/db/schema", () => ({
 }));
 
 import { drizzleDb } from "@/db/client";
-import { updatePantryQuantity, upsertPantryItem } from "@/db/pantry";
+import { addPantryItem, updatePantryQuantity, upsertPantryItem } from "@/db/pantry";
 
 function makeSelectChain(result: unknown[]) {
   const limit = jest.fn().mockResolvedValue(result);
@@ -65,6 +66,68 @@ describe("upsertPantryItem", () => {
 
     expect(drizzleDb.update).toHaveBeenCalled();
     expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ quantity: expect.anything() }));
+  });
+});
+
+describe("addPantryItem", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("resolves a new ingredient and inserts a new pantry row", async () => {
+    const ingredientRow = { id: 42, canonical_name: "chicken breast", canonical_unit: null };
+    (drizzleDb.select as jest.Mock)
+      .mockReturnValueOnce(makeSelectChain([])) // findIngredientByName -> not found
+      .mockReturnValueOnce(makeSelectChain([])); // upsertPantryItem existing-row check -> not found
+
+    const mockIngredientReturning = jest.fn().mockResolvedValue([ingredientRow]);
+    const mockIngredientValues = jest.fn(() => ({ returning: mockIngredientReturning }));
+    const mockPantryValues = jest.fn().mockResolvedValue({});
+    (drizzleDb.insert as jest.Mock)
+      .mockReturnValueOnce({ values: mockIngredientValues })
+      .mockReturnValueOnce({ values: mockPantryValues });
+
+    const result = await addPantryItem({ name: "Chicken Breast", quantity: 500, unit: "g" });
+
+    expect(result).toEqual({ ingredientId: 42 });
+    expect(mockIngredientValues).toHaveBeenCalledWith(
+      expect.objectContaining({ canonical_name: "chicken breast" }),
+    );
+    expect(mockPantryValues).toHaveBeenCalledWith(
+      expect.objectContaining({ ingredient_id: 42, quantity: 500, unit: "g" }),
+    );
+  });
+
+  it("reuses an existing ingredient and updates an existing pantry row", async () => {
+    (drizzleDb.select as jest.Mock)
+      .mockReturnValueOnce(
+        makeSelectChain([{ id: 7, canonical_name: "rice", canonical_unit: null }]),
+      )
+      .mockReturnValueOnce(makeSelectChain([{ id: 3 }]));
+    const mockWhere = jest.fn().mockResolvedValue({});
+    const mockSet = jest.fn(() => ({ where: mockWhere }));
+    (drizzleDb.update as jest.Mock).mockReturnValue({ set: mockSet });
+
+    const result = await addPantryItem({ name: "Rice", quantity: 200, unit: "g" });
+
+    expect(result).toEqual({ ingredientId: 7 });
+    expect(drizzleDb.insert).not.toHaveBeenCalled();
+    expect(drizzleDb.update).toHaveBeenCalled();
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ quantity: expect.anything() }));
+  });
+
+  it("normalizes quantity/unit against the ingredient's canonical unit before upserting", async () => {
+    (drizzleDb.select as jest.Mock)
+      .mockReturnValueOnce(
+        makeSelectChain([{ id: 11, canonical_name: "flour", canonical_unit: "g" }]),
+      )
+      .mockReturnValueOnce(makeSelectChain([]));
+    const mockValues = jest.fn().mockResolvedValue({});
+    (drizzleDb.insert as jest.Mock).mockReturnValueOnce({ values: mockValues });
+
+    await addPantryItem({ name: "Flour", quantity: 2, unit: "kg" });
+
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({ ingredient_id: 11, quantity: 2000, unit: "g" }),
+    );
   });
 });
 

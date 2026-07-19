@@ -104,13 +104,13 @@ export async function saveRecipe(params: SaveRecipeParams): Promise<number> {
   }
 
   for (const ing of params.ingredients) {
-    const ingredientId = await resolveOrCreateIngredient({
+    const ingredient = await resolveOrCreateIngredient({
       canonical_name: ing.canonical_name,
       api_ingredient_id: ing.api_ingredient_id ?? null,
     });
     await drizzleDb.insert(recipeIngredients).values({
       recipe_id: recipeId,
-      ingredient_id: ingredientId,
+      ingredient_id: ingredient.id,
       quantity: ing.quantity,
       unit: ing.unit,
       preparation: ing.preparation ?? null,

@@ -23,32 +23,31 @@ async function findIngredientByApiId(apiId: string): Promise<Ingredient | null> 
   return row ?? null;
 }
 
-export async function getIngredientById(id: number): Promise<Ingredient | null> {
-  const [row] = await drizzleDb.select().from(ingredients).where(eq(ingredients.id, id)).limit(1);
-  return row ?? null;
-}
-
 export async function resolveOrCreateIngredient(params: {
   canonical_name: string;
   api_ingredient_id?: string | null;
   api_name?: string | null;
   category?: string | null;
-}): Promise<number> {
+}): Promise<Ingredient> {
   const name = params.canonical_name.toLowerCase().trim();
 
   if (params.api_ingredient_id) {
     const byId = await findIngredientByApiId(params.api_ingredient_id);
-    if (byId) return byId.id;
+    if (byId) return byId;
   }
 
   const byName = await findIngredientByName(name);
-  if (byName) return byName.id;
+  if (byName) return byName;
 
-  const result = await drizzleDb.insert(ingredients).values({
-    canonical_name: name,
-    api_ingredient_id: params.api_ingredient_id ?? null,
-    api_name: params.api_name ?? null,
-    category: params.category ?? null,
-  });
-  return result.lastInsertRowId as number;
+  const [row] = await drizzleDb
+    .insert(ingredients)
+    .values({
+      canonical_name: name,
+      api_ingredient_id: params.api_ingredient_id ?? null,
+      api_name: params.api_name ?? null,
+      category: params.category ?? null,
+    })
+    .returning();
+  if (!row) throw new Error("Insert did not return an ingredient row");
+  return row;
 }

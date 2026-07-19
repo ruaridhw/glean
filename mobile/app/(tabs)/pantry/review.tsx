@@ -8,11 +8,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/AppText";
 import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
-import { getIngredientById, resolveOrCreateIngredient } from "@/db/ingredients";
-import { upsertPantryItem } from "@/db/pantry";
+import { addPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
 import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
-import { normalizeUnit } from "@/normalization/units";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
@@ -45,18 +43,10 @@ export default function ReviewScreen() {
       for (const item of acceptedItems) {
         const name = toRequiredSubmittedText(item.name) as string;
         const unit = normalizeSubmittedText(item.unit) || "units";
-        const ingredientId = await resolveOrCreateIngredient({ canonical_name: name });
-        const ingredient = await getIngredientById(ingredientId);
-        const normalized = normalizeUnit({
+        const { ingredientId } = await addPantryItem({
+          name,
           quantity: item.quantity,
           unit,
-          canonicalUnit: ingredient?.canonical_unit ?? null,
-          canonicalName: name,
-        });
-        await upsertPantryItem({
-          ingredient_id: ingredientId,
-          quantity: normalized?.quantity ?? item.quantity,
-          unit: normalized?.unit ?? unit,
           unit_price: item.unit_price ?? null,
         });
         resolvedIds.push(ingredientId);
