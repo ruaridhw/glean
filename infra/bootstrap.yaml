@@ -39,8 +39,17 @@ Resources:
               - s3:GetBucketLocation
               - s3:CreateBucket
             Resource:
-              - arn:aws:s3:::glean-sam-artefacts-prod
-              - arn:aws:s3:::glean-sam-artefacts-prod/*
+              - !Sub 'arn:aws:s3:::glean-sam-artefacts-prod-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-sam-artefacts-prod-${AWS::AccountId}/*'
+          # CloudFormation manages the app's own buckets (receipts, recipe cache) with
+          # the deploy role's credentials, so it needs full control of those too.
+          - Effect: Allow
+            Action: s3:*
+            Resource:
+              - !Sub 'arn:aws:s3:::glean-receipts-prod-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-receipts-prod-${AWS::AccountId}/*'
+              - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}/*'
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
@@ -116,8 +125,15 @@ Resources:
               - s3:GetBucketLocation
               - s3:CreateBucket
             Resource:
-              - arn:aws:s3:::glean-sam-artefacts-dev
-              - arn:aws:s3:::glean-sam-artefacts-dev/*
+              - !Sub 'arn:aws:s3:::glean-sam-artefacts-dev-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-sam-artefacts-dev-${AWS::AccountId}/*'
+          - Effect: Allow
+            Action: s3:*
+            Resource:
+              - !Sub 'arn:aws:s3:::glean-receipts-dev-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-receipts-dev-${AWS::AccountId}/*'
+              - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}'
+              - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}/*'
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
