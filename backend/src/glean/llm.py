@@ -112,14 +112,26 @@ class LLMRouter:
             return feature_policy.eval_model
         return feature_policy.production_model
 
-    def chat_model(
+    def invoke[StructuredResponseT: BaseModel](
         self,
         feature: Feature,
+        schema: type[StructuredResponseT],
+        messages: LanguageModelInput,
         *,
         purpose: ModelPurpose = ModelPurpose.PRODUCTION,
         **kwargs: Any,
-    ) -> BaseChatModel:
-        return create_chat_model(self.model_id_for(feature, purpose=purpose), api_key=self.api_key, **kwargs)
+    ) -> StructuredResponseT:
+        """Select the model for *feature*, invoke it under the structured-output policy, and
+        validate the result.
+
+        This is the one seam callers need: it replaces the old two-step dance of pulling a raw
+        `BaseChatModel` via `chat_model(feature)` and then separately calling `invoke_structured`
+        with `config={"metadata": {"feature": feature}}` — a pairing that named `feature` twice
+        per call and handed every caller a raw LangChain object (with_structured_output,
+        LangChain message types, RunnableConfig) it had no other reason to know about.
+        """
+        model = create_chat_model(self.model_id_for(feature, purpose=purpose), api_key=self.api_key, **kwargs)
+        return invoke_structured(model, schema, messages, config={"metadata": {"feature": feature}})
 
 
 def validate_model(model_id: str, *, api_key: SecretStr) -> None:

@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from glean.llm import Feature, invoke_structured
+from glean.llm import Feature
 from glean.recipes.stored import (
     RecipeImportError,
     RecipeLlmResponse,
@@ -22,7 +22,7 @@ from glean.recipes.stored import (
 )
 
 if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
+    from glean.llm import LLMRouter
 
 URL_PARSE_SYSTEM_PROMPT = """You are a recipe extraction assistant. Given HTML from a recipe page,
 extract the recipe details into the response schema.
@@ -49,7 +49,7 @@ class FetchedPage:
 class SchemaOrgThenLlmParser:
     """Extract a stored recipe from arbitrary recipe-page HTML."""
 
-    def parse(self, html: str, *, source_url: str, model: BaseChatModel) -> RecipeParseResult:
+    def parse(self, html: str, *, source_url: str, llm_router: LLMRouter) -> RecipeParseResult:
         schema_data = _parse_schema_org_recipe(html)
         if schema_data and schema_data.get("recipeIngredient"):
             recipe = stored_from_schema_org(schema_data, source_url=source_url)
@@ -67,12 +67,7 @@ class SchemaOrgThenLlmParser:
         ]
 
         try:
-            llm_response = invoke_structured(
-                model,
-                RecipeLlmResponse,
-                messages,
-                config={"metadata": {"feature": Feature.RECIPE_IMPORT}},
-            )
+            llm_response = llm_router.invoke(Feature.RECIPE_IMPORT, RecipeLlmResponse, messages)
         except ValidationError as exc:
             raise RecipeImportError("invalid_llm_json", "Recipe extraction model returned malformed fields") from exc
         except Exception as exc:
@@ -95,11 +90,11 @@ class SchemaOrgThenLlmParser:
 def import_url_to_canonical(
     url: str,
     *,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
     parser: SchemaOrgThenLlmParser | None = None,
 ) -> RecipeParseResult:
     fetched = fetch_public_https(url)
-    result = (parser or SchemaOrgThenLlmParser()).parse(fetched.text, source_url=fetched.url, model=model)
+    result = (parser or SchemaOrgThenLlmParser()).parse(fetched.text, source_url=fetched.url, llm_router=llm_router)
     result.source_url = url
     result.fetched_url = fetched.url
     if result.recipe and result.recipe.provenance:
@@ -112,12 +107,12 @@ def import_html_to_canonical(
     url: str,
     html: str,
     *,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
     parser: SchemaOrgThenLlmParser | None = None,
     fetched_url: str | None = None,
 ) -> RecipeParseResult:
     resolved_url = fetched_url or url
-    result = (parser or SchemaOrgThenLlmParser()).parse(html, source_url=resolved_url, model=model)
+    result = (parser or SchemaOrgThenLlmParser()).parse(html, source_url=resolved_url, llm_router=llm_router)
     result.source_url = url
     result.fetched_url = resolved_url
     if result.recipe and result.recipe.provenance:

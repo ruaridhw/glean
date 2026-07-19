@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from glean.config import get_settings
-from glean.llm import create_chat_model
+from glean.llm import LLMRouter
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.offline import OfflineRecipeImportJob, OfflineRecipeImportResult, import_offline_recipes
 
@@ -21,10 +21,10 @@ def main() -> int:
     args = _parse_args()
     jobs = read_jobs_file(args.jobs_file)
 
-    model = _NoLlm() if args.fail_on_llm else _create_configured_model()
+    llm_router = _NoLlmRouter() if args.fail_on_llm else _create_llm_router()
     results = run_jobs(
         jobs,
-        model=model,
+        llm_router=llm_router,
         corpus=RecipeCorpusStore(root=args.cache_dir),
         manifest_path=args.manifest,
         rate_limit_seconds=args.rate_limit_seconds,
@@ -71,26 +71,25 @@ def read_jobs_file(path: Path) -> list[CorpusImportJob]:
 def run_jobs(
     jobs: list[CorpusImportJob],
     *,
-    model: Any,
+    llm_router: Any,
     corpus: RecipeCorpusStore,
     manifest_path: Path,
     rate_limit_seconds: float,
 ) -> list[OfflineRecipeImportResult]:
     return import_offline_recipes(
         jobs=jobs,
-        model=model,
+        llm_router=llm_router,
         corpus=corpus,
         manifest_path=manifest_path,
         rate_limit_seconds=rate_limit_seconds,
     )
 
 
-def _create_configured_model() -> Any:
-    settings = get_settings()
-    return create_chat_model(settings.llm_model, api_key=settings.openrouter_api_key)
+def _create_llm_router() -> LLMRouter:
+    return LLMRouter.from_settings(get_settings())
 
 
-class _NoLlm:
+class _NoLlmRouter:
     def invoke(self, *_: Any, **__: Any) -> None:
         raise RuntimeError("LLM invocation is disabled by --fail-on-llm")
 

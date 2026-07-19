@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from glean.llm import Feature
 from glean.recipes.providers import (
     SchemaOrgThenLlmParser,
     discover_first_recipe_url,
@@ -38,12 +39,12 @@ def test_schema_org_then_llm_parser_returns_stored_recipe_without_calling_llm() 
             ],
         }
     )
-    model = MagicMock()
+    llm_router = MagicMock()
 
     result = SchemaOrgThenLlmParser().parse(
         html,
         source_url="https://recipes.example.test/miso-noodles",
-        model=model,
+        llm_router=llm_router,
     )
 
     assert result.recipe is not None
@@ -58,7 +59,7 @@ def test_schema_org_then_llm_parser_returns_stored_recipe_without_calling_llm() 
         ("Noodles", 150, "g"),
         ("Miso paste", 2, "tbsp"),
     ]
-    model.invoke.assert_not_called()
+    llm_router.invoke.assert_not_called()
 
 
 def test_schema_org_parser_reads_embedded_nutrition_mapping() -> None:
@@ -84,12 +85,12 @@ def test_schema_org_parser_reads_embedded_nutrition_mapping() -> None:
             ],
         }
     )
-    model = MagicMock()
+    llm_router = MagicMock()
 
     result = SchemaOrgThenLlmParser().parse(
         html,
         source_url="https://recipes.example.test/green-lentil-bowl",
-        model=model,
+        llm_router=llm_router,
     )
 
     assert result.recipe is not None
@@ -100,7 +101,7 @@ def test_schema_org_parser_reads_embedded_nutrition_mapping() -> None:
     assert result.recipe.nutrition.fat_g == pytest.approx(10)
     assert result.recipe.nutrition.fibre_g == pytest.approx(2)
     assert result.recipe.nutrition.sodium_mg == pytest.approx(600)
-    model.invoke.assert_not_called()
+    llm_router.invoke.assert_not_called()
 
 
 def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_recipe() -> None:
@@ -115,14 +116,13 @@ def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_re
         dietary_flags=["vegetarian"],
         not_suitable_for=[],
     )
-    model = MagicMock()
-    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    model.with_structured_output.return_value.invoke.return_value = llm_recipe
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = llm_recipe
 
     result = SchemaOrgThenLlmParser().parse(
         "<html><body><h1>Tacos</h1></body></html>",
         source_url="https://recipes.example.test/tacos",
-        model=model,
+        llm_router=llm_router,
     )
 
     assert result.recipe is not None
@@ -133,8 +133,9 @@ def test_schema_org_then_llm_parser_fallback_calls_llm_and_validates_returned_re
         "Warm the tortillas.",
         "Fill with beans and lime.",
     ]
-    model.invoke.assert_not_called()
-    model.with_structured_output.assert_called_once_with(RecipeLlmResponse, method="json_schema")
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.RECIPE_IMPORT
+    assert args[1] is RecipeLlmResponse
 
 
 def test_redirect_target_validation_rejects_private_ip(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -298,7 +299,7 @@ def test_import_url_to_canonical_uses_direct_url_parser(monkeypatch: pytest.Monk
         _fake_getaddrinfo({"recipes.example.test": "93.184.216.34"}),
     )
 
-    result = import_url_to_canonical("https://recipes.example.test/lemon-pasta", model=MagicMock())
+    result = import_url_to_canonical("https://recipes.example.test/lemon-pasta", llm_router=MagicMock())
 
     assert result.recipe is not None
     assert result.parser == "schema.org"

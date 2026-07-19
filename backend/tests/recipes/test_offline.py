@@ -28,7 +28,7 @@ def test_import_offline_recipes_imports_urls_saves_and_records_manifest(
     )
     import_calls: list[str] = []
 
-    def fake_import(url: str, *, model: object) -> RecipeParseResult:
+    def fake_import(url: str, *, llm_router: object) -> RecipeParseResult:
         import_calls.append(url)
         return RecipeParseResult(recipe=recipe, parser="schema.org", source_url=url)
 
@@ -36,7 +36,7 @@ def test_import_offline_recipes_imports_urls_saves_and_records_manifest(
 
     results = import_offline_recipes(
         [OfflineRecipeImportJob(name="Carbonara", url="https://recipes.example.test/pasta-recipes/carbonara")],
-        model=object(),
+        llm_router=object(),
         corpus=corpus,
         manifest_path=tmp_path / "manifest.jsonl",
     )
@@ -89,7 +89,7 @@ def test_import_offline_recipes_skips_urls_already_imported_in_manifest(
 
     results = import_offline_recipes(
         [OfflineRecipeImportJob(name="Carbonara", url="https://recipes.example.test/pasta-recipes/carbonara")],
-        model=object(),
+        llm_router=object(),
         corpus=_Corpus(existing_recipes={"ab559dc41bdddf0d": recipe}),
         manifest_path=manifest_path,
     )
@@ -124,12 +124,12 @@ def test_import_offline_recipes_reimports_manifest_entry_when_corpus_recipe_is_m
 
     monkeypatch.setattr(
         "glean.recipes.offline.import_url_to_canonical",
-        lambda url, *, model: RecipeParseResult(recipe=recipe, parser="schema.org", source_url=url),
+        lambda url, *, llm_router: RecipeParseResult(recipe=recipe, parser="schema.org", source_url=url),
     )
 
     results = import_offline_recipes(
         [OfflineRecipeImportJob(name="Carbonara", url="https://recipes.example.test/pasta-recipes/carbonara")],
-        model=object(),
+        llm_router=object(),
         corpus=_Corpus(),
         manifest_path=manifest_path,
     )
@@ -145,7 +145,7 @@ def test_duplicate_url_in_same_run_skips_after_first_import(tmp_path: Path, monk
         source_url="https://recipes.example.test/pasta-recipes/carbonara",
     )
 
-    def fake_import(url: str, *, model: object) -> RecipeParseResult:
+    def fake_import(url: str, *, llm_router: object) -> RecipeParseResult:
         import_calls.append(url)
         return RecipeParseResult(recipe=recipe, parser="schema.org", source_url=url)
 
@@ -159,7 +159,7 @@ def test_duplicate_url_in_same_run_skips_after_first_import(tmp_path: Path, monk
                 name="Carbonara duplicate", url="https://recipes.example.test/pasta-recipes/carbonara"
             ),
         ],
-        model=object(),
+        llm_router=object(),
         corpus=_Corpus(),
         manifest_path=manifest_path,
     )
@@ -170,14 +170,14 @@ def test_duplicate_url_in_same_run_skips_after_first_import(tmp_path: Path, monk
 
 
 def test_import_error_writes_exact_category_and_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_import(url: str, *, model: object) -> RecipeParseResult:
+    def fake_import(url: str, *, llm_router: object) -> RecipeParseResult:
         raise RecipeImportError("invalid_recipe", "Recipe must include at least two instruction steps")
 
     monkeypatch.setattr("glean.recipes.offline.import_url_to_canonical", fake_import)
 
     results = import_offline_recipes(
         [OfflineRecipeImportJob(name="Carbonara", url="https://recipes.example.test/pasta-recipes/carbonara")],
-        model=object(),
+        llm_router=object(),
         corpus=_Corpus(),
         manifest_path=tmp_path / "manifest.jsonl",
     )
@@ -190,7 +190,7 @@ def test_import_error_writes_exact_category_and_message(tmp_path: Path, monkeypa
 
 
 def test_manifest_append_writes_one_json_object_per_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_import(url: str, *, model: object) -> RecipeParseResult:
+    def fake_import(url: str, *, llm_router: object) -> RecipeParseResult:
         raise RecipeImportError("fetch_failed", f"Failed to fetch recipe URL: {url}")
 
     monkeypatch.setattr("glean.recipes.offline.import_url_to_canonical", fake_import)
@@ -200,7 +200,7 @@ def test_manifest_append_writes_one_json_object_per_result(tmp_path: Path, monke
             OfflineRecipeImportJob(name="Missing one", url="https://recipes.example.test/missing-one"),
             OfflineRecipeImportJob(name="Missing two", url="https://recipes.example.test/missing-two"),
         ],
-        model=object(),
+        llm_router=object(),
         corpus=_Corpus(),
         manifest_path=tmp_path / "manifest.jsonl",
     )

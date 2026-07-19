@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from glean.dependencies import get_llm_router, verify_cognito_token
-from glean.llm import Feature, LLMRouter
+from glean.llm import LLMRouter  # noqa: TC001 - FastAPI resolves this via Annotated/Depends at runtime.
 from glean.shopping import service
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 
@@ -17,5 +17,4 @@ def parse_shopping_description(
     request: ShoppingParseRequest,
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
 ) -> ShoppingParseResponse:
-    model = llm_router.chat_model(Feature.SHOPPING_LIST_DESCRIPTION)
-    return service.parse_shopping_description(request, model=model)
+    return service.parse_shopping_description(request, llm_router=llm_router)

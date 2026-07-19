@@ -34,8 +34,7 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
     )
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = structured_response
+    llm_router.invoke.return_value = structured_response
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/shopping/parse-description",
@@ -57,7 +56,9 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
         }
     ]
     assert body["clarifying_questions"] == ["What kind of salsa do you want?"]
-    llm_router.chat_model.assert_called_once_with(Feature.SHOPPING_LIST_DESCRIPTION)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.SHOPPING_LIST_DESCRIPTION
+    assert args[1] is ShoppingParseResponse
 
 
 def test_parse_shopping_description_requires_auth(test_settings: Settings) -> None:
