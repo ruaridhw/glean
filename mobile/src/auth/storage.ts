@@ -1,6 +1,6 @@
 // mobile/src/auth/storage.ts
 import * as SecureStore from "expo-secure-store";
-import { getAuthBypassUserSub, isAuthBypassEnabled, resolveAuthSession } from "./mode";
+import { isAuthBypassEnabled, resolveAuthSession } from "./mode";
 
 const KEYS = {
   accessToken: "glean_access_token",
@@ -11,6 +11,21 @@ const KEYS = {
   pendingAuthCodeVerifier: "glean_pending_auth_code_verifier",
   pendingAuthState: "glean_pending_auth_state",
 };
+
+// Single entry point for "what is the current auth session?". resolveAuthSession is the
+// authoritative source of the session shape; the bypass short-circuit here just avoids
+// touching SecureStore when it isn't needed.
+async function loadSession() {
+  if (isAuthBypassEnabled()) {
+    return resolveAuthSession({ accessToken: null, refreshToken: null, userSub: null });
+  }
+  const [accessToken, refreshToken, userSub] = await Promise.all([
+    SecureStore.getItemAsync(KEYS.accessToken),
+    SecureStore.getItemAsync(KEYS.refreshToken),
+    SecureStore.getItemAsync(KEYS.userSub),
+  ]);
+  return resolveAuthSession({ accessToken, refreshToken, userSub });
+}
 
 export const authStorage = {
   async getAccessToken(): Promise<string | null> {
@@ -23,8 +38,7 @@ export const authStorage = {
     return SecureStore.getItemAsync(KEYS.email);
   },
   async getUserSub(): Promise<string | null> {
-    if (isAuthBypassEnabled()) return getAuthBypassUserSub();
-    return SecureStore.getItemAsync(KEYS.userSub);
+    return (await loadSession()).userSub;
   },
   async setTokens(params: {
     access: string;
@@ -72,12 +86,6 @@ export const authStorage = {
     );
   },
   async hasTokens(): Promise<boolean> {
-    if (isAuthBypassEnabled()) return true;
-    const [accessToken, refreshToken, userSub] = await Promise.all([
-      SecureStore.getItemAsync(KEYS.accessToken),
-      SecureStore.getItemAsync(KEYS.refreshToken),
-      SecureStore.getItemAsync(KEYS.userSub),
-    ]);
-    return resolveAuthSession({ accessToken, refreshToken, userSub }).authenticated;
+    return (await loadSession()).authenticated;
   },
 };
