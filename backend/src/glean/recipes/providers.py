@@ -5,7 +5,7 @@ import json
 import socket
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -201,19 +201,6 @@ def _looks_like_browser_challenge(body: bytes) -> bool:
     return "Enable JavaScript and cookies to continue" in text or "<title>Simple Page</title>" in text
 
 
-def discover_first_recipe_url(search_html: str, *, base_url: str) -> str | None:
-    soup = BeautifulSoup(search_html, "html.parser")
-    for anchor in soup.find_all("a", href=True):
-        href = str(anchor["href"]).strip()
-        if not href or href.startswith(("#", "mailto:", "javascript:")):
-            continue
-
-        for candidate in _candidate_urls_from_href(href, base_url):
-            if _is_plausible_recipe_link(candidate):
-                return candidate
-    return None
-
-
 def validate_public_https_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme.lower() != "https":
@@ -282,23 +269,3 @@ def _is_recipe_type(raw_type: Any) -> bool:
 
 def _is_redirect(response: httpx.Response) -> bool:
     return 300 <= response.status_code < 400
-
-
-def _is_plausible_recipe_link(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        return False
-    return parsed.path.rstrip("/") not in {"", "/"}
-
-
-def _candidate_urls_from_href(href: str, base_url: str) -> list[str]:
-    direct_candidate = urljoin(base_url, href)
-    parsed = urlparse(direct_candidate)
-    if parsed.path == "/url":
-        extracted = parse_qs(parsed.query).get("q", [])
-        return [*extracted, direct_candidate]
-    return [direct_candidate]
-
-
-if TYPE_CHECKING:
-    _vulture_recipe_link_references = (discover_first_recipe_url,)
