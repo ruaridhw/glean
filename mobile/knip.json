@@ -3,5 +3,5 @@
   "entry": ["babel.config.js", "src/auth/async-storage-shim.ts"],
   "ignore": ["e2e/helpers/*.js", "coverage/**"],
   "ignoreBinaries": ["maestro"],
-  "ignoreDependencies": ["babel-preset-expo", "babel-plugin-inline-import"]
+  "ignoreDependencies": ["babel-preset-expo", "babel-plugin-inline-import", "buffer"]
 }
