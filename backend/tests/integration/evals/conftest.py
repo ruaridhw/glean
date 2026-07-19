@@ -20,22 +20,28 @@ from glean.llm import (
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-_EVAL_FEATURES_BY_MODULE = {
-    "test_purchase_description": Feature.PANTRY_PURCHASE_DESCRIPTION,
-    "test_receipt_scan": Feature.RECEIPT_SCAN,
-    "test_recipe_import": Feature.RECIPE_IMPORT,
-    "test_shopping_list_description": Feature.SHOPPING_LIST_DESCRIPTION,
-    "test_meal_plan_generation": Feature.MEAL_PLAN_GENERATION,
-}
-
 
 def _load_fixture(name: str) -> list[dict[str, Any]]:
     return json.loads((FIXTURES / name).read_text())
 
 
 def _eval_feature_for_request(request: pytest.FixtureRequest) -> Feature:
-    module_name = request.module.__name__.rsplit(".", maxsplit=1)[-1]
-    return _EVAL_FEATURES_BY_MODULE[module_name]
+    """Resolve the Feature under test from the module's own declaration.
+
+    Each eval test module declares a module-level `FEATURE: Feature` constant.
+    Reading that (instead of keying a lookup table on the test file's name)
+    means renaming a test module can never again break model selection —
+    see the two "Fix eval feature lookup for renamed meal-plan module" fixes
+    in git history, both caused by a stale filename key.
+    """
+    module = request.module
+    feature = getattr(module, "FEATURE", None)
+    if not isinstance(feature, Feature):
+        raise RuntimeError(
+            f"{module.__name__} must define a module-level `FEATURE: Feature` constant "
+            "identifying which feature it evaluates."
+        )
+    return feature
 
 
 def _eval_model_id_for(feature: Feature, router: LLMRouter) -> str:

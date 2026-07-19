@@ -45,3 +45,4 @@ settings_customise_sources  # pydantic-settings hook, called by BaseSettings met
 cls  # classmethod first argument (settings_customise_sources)
 ExceptionHandler  # Starlette exception handler type used only for static cast
 clarifying_questions  # ShoppingParseResponse Pydantic field
+_value_  # Enum internal attribute, set explicitly in Feature.__new__ to attach per-member policy

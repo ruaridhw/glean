@@ -16,12 +16,10 @@ if TYPE_CHECKING:
     from pydantic import SecretStr
 
 
-class Feature(StrEnum):
-    RECEIPT_SCAN = "receipt-scan"
-    PANTRY_PURCHASE_DESCRIPTION = "pantry-purchase-description"
-    MEAL_PLAN_GENERATION = "meal-plan-generation"
-    RECIPE_IMPORT = "recipe-import"
-    SHOPPING_LIST_DESCRIPTION = "shopping-list-description"
+@dataclass(frozen=True, slots=True)
+class LLMModelPolicy:
+    production_model: str
+    eval_model: str
 
 
 class ModelPurpose(StrEnum):
@@ -29,34 +27,67 @@ class ModelPurpose(StrEnum):
     EVAL = "eval"
 
 
-@dataclass(frozen=True, slots=True)
-class LLMModelPolicy:
-    production_model: str
-    eval_model: str
+class Feature(StrEnum):
+    """Every LLM-backed feature, with its LLMModelPolicy attached to the member.
+
+    This is the single place to add a feature: one line below with its slug
+    and policy. Python enforces total coverage for free — a member defined
+    without a policy (or with something that isn't an LLMModelPolicy) raises
+    an error while this module is imported, so there is no way to ship a
+    Feature that later raises a latent KeyError in LLMRouter.model_id_for.
+    """
+
+    policy: LLMModelPolicy
+
+    def __new__(cls, value: str, policy: LLMModelPolicy) -> Feature:
+        if not isinstance(policy, LLMModelPolicy):
+            raise TypeError(f"Feature {value!r} must be given an LLMModelPolicy, got {policy!r}")
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.policy = policy
+        return member
+
+    RECEIPT_SCAN = (
+        "receipt-scan",
+        LLMModelPolicy(
+            production_model="google/gemini-3.1-flash-lite",
+            eval_model="google/gemini-3.5-flash",
+        ),
+    )
+    PANTRY_PURCHASE_DESCRIPTION = (
+        "pantry-purchase-description",
+        LLMModelPolicy(
+            production_model="google/gemini-2.5-flash-lite",
+            eval_model="google/gemini-3.1-flash-lite",
+        ),
+    )
+    MEAL_PLAN_GENERATION = (
+        "meal-plan-generation",
+        LLMModelPolicy(
+            production_model="qwen/qwen3.7-plus",
+            eval_model="z-ai/glm-5.2",
+        ),
+    )
+    RECIPE_IMPORT = (
+        "recipe-import",
+        LLMModelPolicy(
+            production_model="qwen/qwen3.7-plus",
+            eval_model="z-ai/glm-5.2",
+        ),
+    )
+    SHOPPING_LIST_DESCRIPTION = (
+        "shopping-list-description",
+        LLMModelPolicy(
+            production_model="google/gemini-2.5-flash-lite",
+            eval_model="google/gemini-3.1-flash-lite",
+        ),
+    )
 
 
-DEFAULT_LLM_MODEL_POLICY: dict[Feature, LLMModelPolicy] = {
-    Feature.SHOPPING_LIST_DESCRIPTION: LLMModelPolicy(
-        production_model="google/gemini-2.5-flash-lite",
-        eval_model="google/gemini-3.1-flash-lite",
-    ),
-    Feature.PANTRY_PURCHASE_DESCRIPTION: LLMModelPolicy(
-        production_model="google/gemini-2.5-flash-lite",
-        eval_model="google/gemini-3.1-flash-lite",
-    ),
-    Feature.RECEIPT_SCAN: LLMModelPolicy(
-        production_model="google/gemini-3.1-flash-lite",
-        eval_model="google/gemini-3.5-flash",
-    ),
-    Feature.RECIPE_IMPORT: LLMModelPolicy(
-        production_model="qwen/qwen3.7-plus",
-        eval_model="z-ai/glm-5.2",
-    ),
-    Feature.MEAL_PLAN_GENERATION: LLMModelPolicy(
-        production_model="qwen/qwen3.7-plus",
-        eval_model="z-ai/glm-5.2",
-    ),
-}
+# Derived, not authored: kept for callers that want a plain mapping (e.g. the
+# LLMRouter default policy below). Building it by iterating Feature means it can
+# never drift from the per-member policies declared above.
+DEFAULT_LLM_MODEL_POLICY: dict[Feature, LLMModelPolicy] = {feature: feature.policy for feature in Feature}
 
 
 class LLMRouter:
