@@ -65,7 +65,7 @@ _COMPACT_PREFIX_UNITS = {
     "thigh",
 }
 _COMPACT_PREFIX_UNIT_PATTERN = "|".join(
-    re.escape(unit) for unit in sorted(_COMPACT_PREFIX_UNITS, key=len, reverse=True)
+    re.escape(unit) for unit in sorted(_COMPACT_PREFIX_UNITS, key=lambda u: len(u), reverse=True)
 )
 
 
