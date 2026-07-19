@@ -6,6 +6,7 @@ import { Animated, StyleSheet, View } from "react-native";
 import { useScanReceipt } from "@/api/hooks";
 import { AppText } from "@/components/ui/AppText";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { serializeReviewItems } from "@/intake/serialization";
 import { theme } from "@/theme";
 
 const STEPS = [
@@ -76,7 +77,7 @@ export default function ScanProgressScreen() {
         router.replace({
           pathname: "/(tabs)/pantry/review",
           params: {
-            items: JSON.stringify(scanMutation.data.items),
+            items: serializeReviewItems(scanMutation.data.items),
             ...(returnTo ? { returnTo } : {}),
           },
         });

@@ -7,6 +7,7 @@ import { AppText } from "@/components/ui/AppText";
 import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { serializeReviewItems } from "@/intake/serialization";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 
@@ -25,7 +26,7 @@ export default function ShoppingDescribeScreen() {
           router.push({
             pathname: "/(tabs)/shop/review",
             params: {
-              items: JSON.stringify(result.items),
+              items: serializeReviewItems(result.items),
               clarifyingQuestions: JSON.stringify(result.clarifying_questions),
             },
           });
