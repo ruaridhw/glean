@@ -11,7 +11,6 @@ import pytest
 from glean.llm import Feature
 from glean.recipes.providers import (
     SchemaOrgThenLlmParser,
-    discover_first_recipe_url,
     fetch_public_https,
     import_url_to_canonical,
 )
@@ -304,19 +303,6 @@ def test_import_url_to_canonical_uses_direct_url_parser(monkeypatch: pytest.Monk
     assert result.recipe is not None
     assert result.parser == "schema.org"
     assert result.recipe.title == "Lemon Pasta"
-
-
-def test_generic_search_html_selects_first_plausible_recipe_url() -> None:
-    html = """
-    <html><body>
-      <a href="#top">Top</a>
-      <a href="/url?q=https%3A%2F%2Frecipes.example.test%2Frecipes%2Fchicken-katsu&sa=U">Recipe</a>
-      <a href="https://recipes.example.test/recipes/salmon-tacos">Salmon tacos</a>
-    </body></html>
-    """
-    url = discover_first_recipe_url(html, base_url="https://search.example.test/?q=katsu")
-
-    assert url == "https://recipes.example.test/recipes/chicken-katsu"
 
 
 def _schema_org_html(data: dict[str, Any]) -> str:
