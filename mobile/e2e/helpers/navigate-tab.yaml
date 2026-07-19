@@ -1,3 +1,5 @@
 appId: ${APP_ID}
 ---
-- tapOn: ${tab}
+- tapOn:
+    text: ${tab}
+    retryTapIfNoChange: true
