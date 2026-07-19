@@ -3,15 +3,9 @@ import { eq } from "drizzle-orm";
 import { authStorage } from "@/auth/storage";
 import type { UserConfig } from "@/types";
 import { drizzleDb } from "./client";
-import { userConfig } from "./schema";
+import { USER_CONFIG_DEFAULTS, userConfig } from "./schema";
 
-const DEFAULT_CONFIG: Omit<UserConfig, "id"> = {
-  purchase_tolerance: 0.5,
-  preferred_servings: 2,
-  meals_per_week: 5,
-  dietary_flags: [],
-  max_active_time_mins: null,
-};
+const DEFAULT_CONFIG: Omit<UserConfig, "id"> = USER_CONFIG_DEFAULTS;
 
 export async function getUserConfig(): Promise<UserConfig> {
   const sub = await authStorage.getUserSub();
@@ -31,25 +25,21 @@ export async function getUserConfig(): Promise<UserConfig> {
   };
 }
 
+function buildConfigRow(config: UserConfig) {
+  return {
+    id: config.id,
+    purchase_tolerance: config.purchase_tolerance,
+    preferred_servings: config.preferred_servings,
+    meals_per_week: config.meals_per_week,
+    dietary_flags: JSON.stringify(config.dietary_flags),
+    max_active_time_mins: config.max_active_time_mins ?? null,
+  };
+}
+
 export async function saveUserConfig(config: UserConfig): Promise<void> {
-  await drizzleDb
-    .insert(userConfig)
-    .values({
-      id: config.id,
-      purchase_tolerance: config.purchase_tolerance,
-      preferred_servings: config.preferred_servings,
-      meals_per_week: config.meals_per_week,
-      dietary_flags: JSON.stringify(config.dietary_flags),
-      max_active_time_mins: config.max_active_time_mins ?? null,
-    })
-    .onConflictDoUpdate({
-      target: userConfig.id,
-      set: {
-        purchase_tolerance: config.purchase_tolerance,
-        preferred_servings: config.preferred_servings,
-        meals_per_week: config.meals_per_week,
-        dietary_flags: JSON.stringify(config.dietary_flags),
-        max_active_time_mins: config.max_active_time_mins ?? null,
-      },
-    });
+  const row = buildConfigRow(config);
+  await drizzleDb.insert(userConfig).values(row).onConflictDoUpdate({
+    target: userConfig.id,
+    set: row,
+  });
 }

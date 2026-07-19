@@ -95,11 +95,27 @@ export const shoppingListItems = sqliteTable("shopping_list_items", {
   is_checked: integer("is_checked", { mode: "boolean" }).notNull().default(false),
 });
 
+// Single source of truth for user-config defaults, shared by the column defaults below and
+// by the "no row yet" fallback in db/config.ts so the two can't drift.
+export const USER_CONFIG_DEFAULTS = {
+  purchase_tolerance: 0.5,
+  preferred_servings: 2,
+  meals_per_week: 5,
+  dietary_flags: [] as string[],
+  max_active_time_mins: null as number | null,
+};
+
 export const userConfig = sqliteTable("user_config", {
   id: text("id").primaryKey(), // Cognito user sub (UUID)
-  purchase_tolerance: real("purchase_tolerance").notNull().default(0.5),
-  preferred_servings: integer("preferred_servings").notNull().default(2),
-  meals_per_week: integer("meals_per_week").notNull().default(5),
-  dietary_flags: text("dietary_flags").notNull().default("[]"),
+  purchase_tolerance: real("purchase_tolerance")
+    .notNull()
+    .default(USER_CONFIG_DEFAULTS.purchase_tolerance),
+  preferred_servings: integer("preferred_servings")
+    .notNull()
+    .default(USER_CONFIG_DEFAULTS.preferred_servings),
+  meals_per_week: integer("meals_per_week").notNull().default(USER_CONFIG_DEFAULTS.meals_per_week),
+  dietary_flags: text("dietary_flags")
+    .notNull()
+    .default(JSON.stringify(USER_CONFIG_DEFAULTS.dietary_flags)),
   max_active_time_mins: integer("max_active_time_mins"),
 });
