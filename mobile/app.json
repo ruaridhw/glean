@@ -2,6 +2,7 @@
   "expo": {
     "name": "Glean",
     "slug": "glean",
+    "owner": "ruaridhgithub",
     "version": "0.1.21",
     "scheme": "glean",
     "platforms": ["ios", "android"],
@@ -37,6 +38,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bd4d9a03-2d5a-4fc6-8e51-bb12f4420be5"
+      }
     }
   }
 }
