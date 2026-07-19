@@ -6,6 +6,8 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from glean.nutrition import NutritionFields
+
 _TITLE_SUFFIX_PATTERNS = (
     re.compile(r"\b\d+\s*(?:min|mins|minute|minutes)\b", re.IGNORECASE),
     re.compile(r"\bprep\b", re.IGNORECASE),
@@ -24,6 +26,11 @@ _NUTRITION_FIELD_KEYS = {
     "sugar_g": ("sugars", "sugarContent", "sugar_g"),
     "sodium_mg": ("sodium", "sodiumContent", "sodium_mg"),
 }
+if set(_NUTRITION_FIELD_KEYS) != set(NutritionFields.model_fields):
+    raise AssertionError(
+        "_NUTRITION_FIELD_KEYS has drifted from glean.nutrition.NutritionFields - "
+        "keep the alias table in sync whenever a nutrition field is added/removed"
+    )
 _PUBLIC_TEXT_MARKS = str.maketrans({"®": "", "™": "", "℠": "", "©": ""})
 
 

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from glean.nutrition import NutritionFields, copy_nutrition
 from glean.recipe_api.client import _iso_to_mins
 from glean.recipes.import_normalization import (
     clean_recipe_title,
@@ -16,7 +17,7 @@ from glean.recipes.import_normalization import (
 from glean.recipes.schemas import InstructionOut, NutritionOut, RecipeIngredientOut, RecipeOut
 
 if TYPE_CHECKING:
-    from glean.recipe_api.schemas import RecipeApiRecipe
+    from glean.recipe_api.schemas import RecipeApiIngredient, RecipeApiRecipe
 
 __all__ = [
     "RecipeImportError",
@@ -27,6 +28,7 @@ __all__ = [
     "StoredInstruction",
     "StoredNutrition",
     "StoredRecipe",
+    "ingredient_fields_from_api",
     "stored_from_llm_json",
     "stored_from_llm_response",
     "stored_from_recipe_api",
@@ -43,28 +45,19 @@ class RecipeImportError(Exception):
         super().__init__(message)
 
 
-class StoredNutrition(BaseModel):
+class StoredNutrition(NutritionFields):
     """Nutrition fields as persisted in the server-side recipe corpus."""
 
-    calories: float = 0
-    protein_g: float = 0
-    carbohydrates_g: float = 0
-    fat_g: float = 0
-    fibre_g: float = 0
-    sugar_g: float = 0
-    sodium_mg: float = 0
 
+class StoredIngredient(RecipeIngredientOut):
+    """Ingredient fields as persisted before adapting to the public recipe response.
 
-class StoredIngredient(BaseModel):
-    """Ingredient fields as persisted before adapting to the public recipe response."""
+    Same shape as `RecipeIngredientOut`, but `quantity`/`unit` default rather
+    than being required: parsers may not always resolve a quantity or unit.
+    """
 
-    api_ingredient_id: str | None = None
-    canonical_name: str
     quantity: float = 0
     unit: str = ""
-    preparation: str | None = None
-    is_optional: bool = False
-    substitutions: list[str] = Field(default_factory=list)
 
 
 class StoredInstruction(BaseModel):
@@ -211,28 +204,14 @@ def stored_from_recipe_api(api_recipe: RecipeApiRecipe) -> StoredRecipe:
         dietary_flags=api_recipe.dietary.flags,
         not_suitable_for=api_recipe.dietary.not_suitable_for,
         yield_count=api_recipe.meta.yield_count,
-        nutrition=StoredNutrition(
-            calories=nutrition_source.calories,
-            protein_g=nutrition_source.protein_g,
-            carbohydrates_g=nutrition_source.carbohydrates_g,
-            fat_g=nutrition_source.fat_g,
-            fibre_g=nutrition_source.fibre_g,
-            sugar_g=nutrition_source.sugar_g,
-            sodium_mg=nutrition_source.sodium_mg,
-        ),
+        nutrition=copy_nutrition(nutrition_source, StoredNutrition),
         instructions=[
             StoredInstruction(step_number=instruction.step_number, phase=instruction.phase, text=instruction.text)
             for instruction in api_recipe.instructions
         ],
         ingredients=[
             StoredIngredient(
-                api_ingredient_id=f"recipeapi:{ingredient.ingredient_id}",
-                canonical_name=ingredient.name,
-                quantity=ingredient.quantity or 0.0,
-                unit=ingredient.unit or "",
-                preparation=ingredient.preparation,
-                is_optional=ingredient.is_optional,
-                substitutions=ingredient.substitutions,
+                **ingredient_fields_from_api(ingredient, api_ingredient_id=f"recipeapi:{ingredient.ingredient_id}")
             )
             for group in api_recipe.ingredients
             for ingredient in group.items
@@ -323,18 +302,7 @@ def stored_to_recipe_out(recipe: StoredRecipe) -> RecipeOut:
             )
             for instruction in recipe.instructions
         ],
-        ingredients=[
-            RecipeIngredientOut(
-                api_ingredient_id=ingredient.api_ingredient_id,
-                canonical_name=ingredient.canonical_name,
-                quantity=ingredient.quantity,
-                unit=ingredient.unit,
-                preparation=ingredient.preparation,
-                is_optional=ingredient.is_optional,
-                substitutions=ingredient.substitutions,
-            )
-            for ingredient in recipe.ingredients
-        ],
+        ingredients=[RecipeIngredientOut(**ingredient.model_dump()) for ingredient in recipe.ingredients],
     )
 
 
@@ -349,15 +317,25 @@ def _stored_nutrition_from_values(values: dict[str, float] | None) -> StoredNutr
 def _nutrition_out(nutrition: StoredNutrition | None) -> NutritionOut | None:
     if nutrition is None:
         return None
-    return NutritionOut(
-        calories=nutrition.calories,
-        protein_g=nutrition.protein_g,
-        carbohydrates_g=nutrition.carbohydrates_g,
-        fat_g=nutrition.fat_g,
-        fibre_g=nutrition.fibre_g,
-        sugar_g=nutrition.sugar_g,
-        sodium_mg=nutrition.sodium_mg,
-    )
+    return copy_nutrition(nutrition, NutritionOut)
+
+
+def ingredient_fields_from_api(ingredient: RecipeApiIngredient, *, api_ingredient_id: str | None) -> dict[str, Any]:
+    """Map a recipe-api.com ingredient onto the shared internal ingredient fields.
+
+    `api_ingredient_id` is passed in rather than derived here because callers
+    disagree on the id convention (namespaced vs raw) depending on whether the
+    recipe is being persisted to the corpus or served straight through.
+    """
+    return {
+        "api_ingredient_id": api_ingredient_id,
+        "canonical_name": ingredient.name,
+        "quantity": ingredient.quantity or 0.0,
+        "unit": ingredient.unit or "",
+        "preparation": ingredient.preparation,
+        "is_optional": ingredient.is_optional,
+        "substitutions": ingredient.substitutions,
+    }
 
 
 def _parse_yield_count(raw_yield: Any) -> int | None:

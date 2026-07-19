@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from glean.nutrition import NutritionFields
+
 
 class RecipeApiIngredient(BaseModel):
     ingredient_id: str
@@ -16,14 +18,8 @@ class RecipeApiIngredientGroup(BaseModel):
     items: list[RecipeApiIngredient] = []
 
 
-class RecipeApiNutrition(BaseModel):
-    calories: float = 0
-    protein_g: float = 0
-    carbohydrates_g: float = 0
-    fat_g: float = 0
-    fibre_g: float = 0
-    sugar_g: float = 0
-    sodium_mg: float = 0
+class RecipeApiNutrition(NutritionFields):
+    """Nutrition fields as returned by recipe-api.com."""
 
 
 class RecipeApiRecipeNutrition(BaseModel):
