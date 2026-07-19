@@ -46,3 +46,11 @@ cls  # classmethod first argument (settings_customise_sources)
 ExceptionHandler  # Starlette exception handler type used only for static cast
 clarifying_questions  # ShoppingParseResponse Pydantic field
 _value_  # Enum internal attribute, set explicitly in Feature.__new__ to attach per-member policy
+# nutrition.py NutritionFields — canonical Pydantic fields, moved between layers via model_dump()
+calories  # NutritionFields
+protein_g  # NutritionFields
+carbohydrates_g  # NutritionFields
+fat_g  # NutritionFields
+fibre_g  # NutritionFields
+sugar_g  # NutritionFields
+sodium_mg  # NutritionFields

@@ -7,6 +7,8 @@ they came from. Provenance/cache metadata belongs in `StoredRecipe`.
 
 from pydantic import BaseModel
 
+from glean.nutrition import NutritionFields
+
 
 class RecipeIngredientOut(BaseModel):
     """Ingredient data returned to mobile clients in recipe responses."""
@@ -20,16 +22,8 @@ class RecipeIngredientOut(BaseModel):
     substitutions: list[str] = []
 
 
-class NutritionOut(BaseModel):
+class NutritionOut(NutritionFields):
     """Nutrition data returned to mobile clients in recipe responses."""
-
-    calories: float = 0
-    protein_g: float = 0
-    carbohydrates_g: float = 0
-    fat_g: float = 0
-    fibre_g: float = 0
-    sugar_g: float = 0
-    sodium_mg: float = 0
 
 
 class InstructionOut(BaseModel):
