@@ -8,68 +8,23 @@ from glean.recipes import providers as recipe_providers
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.schemas import (
     ImportUrlRequest,
-    InstructionOut,
-    NutritionOut,
-    RecipeIngredientOut,
     RecipeOut,
     RecipeSearchResponse,
     RecipeSearchResult,
 )
-from glean.recipes.stored import RecipeImportError, stored_to_recipe_out
+from glean.recipes.stored import RecipeImportError, stored_from_recipe_api, stored_to_recipe_out
 
 URL_PARSE_SYSTEM_PROMPT = recipe_providers.URL_PARSE_SYSTEM_PROMPT
+
+# `stored_from_recipe_api` is the one recipe-api adapter and the one place the
+# "recipeapi:{id}" id convention is defined. Corpus/import ids never carry this
+# prefix, but recipe-api.com itself knows nothing about it, so any id we hand
+# back to the upstream client must have it stripped first.
+_RECIPE_API_ID_PREFIX = "recipeapi:"
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from pydantic import SecretStr
-
-    from glean.recipe_api.schemas import RecipeApiRecipe
-
-
-def _api_recipe_to_out(api_recipe: RecipeApiRecipe) -> RecipeOut:
-    """Convert a recipe-api.com response to our internal RecipeOut shape."""
-    nutrition_source = api_recipe.nutrition.per_serving
-    instructions = [
-        InstructionOut(step_number=instr.step_number, phase=instr.phase, text=instr.text)
-        for instr in api_recipe.instructions
-    ]
-    ingredients = [
-        RecipeIngredientOut(
-            api_ingredient_id=ing.ingredient_id,
-            canonical_name=ing.name,
-            quantity=ing.quantity or 0.0,
-            unit=ing.unit or "",
-            preparation=ing.preparation,
-            is_optional=ing.is_optional,
-            substitutions=ing.substitutions,
-        )
-        for group in api_recipe.ingredients
-        for ing in group.items
-    ]
-    nutrition = NutritionOut(
-        calories=nutrition_source.calories,
-        protein_g=nutrition_source.protein_g,
-        carbohydrates_g=nutrition_source.carbohydrates_g,
-        fat_g=nutrition_source.fat_g,
-        fibre_g=nutrition_source.fibre_g,
-        sugar_g=nutrition_source.sugar_g,
-        sodium_mg=nutrition_source.sodium_mg,
-    )
-    return RecipeOut(
-        external_id=api_recipe.id,
-        title=api_recipe.name,
-        source_url=api_recipe.source_url,
-        cuisine=api_recipe.cuisine,
-        difficulty=api_recipe.difficulty,
-        active_time_mins=_iso_to_mins(api_recipe.meta.active_time),
-        total_time_mins=_iso_to_mins(api_recipe.meta.total_time),
-        dietary_flags=api_recipe.dietary.flags,
-        not_suitable_for=api_recipe.dietary.not_suitable_for,
-        yield_count=api_recipe.meta.yield_count,
-        nutrition=nutrition,
-        instructions=instructions,
-        ingredients=ingredients,
-    )
 
 
 def search_recipes(
@@ -124,14 +79,13 @@ def search_recipes(
 def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: SecretStr) -> RecipeOut:
     corpus_store = RecipeCorpusStore()
     corpus_recipe = corpus_store.get(recipe_id)
-    if corpus_recipe is None and ":" not in recipe_id:
-        corpus_recipe = corpus_store.get(f"recipeapi:{recipe_id}")
     if corpus_recipe is not None:
         return stored_to_recipe_out(corpus_recipe)
 
+    upstream_id = recipe_id.removeprefix(_RECIPE_API_ID_PREFIX)
     client = RecipeApiClient(base_url=recipe_api_base_url, api_key=recipe_api_key.get_secret_value())
-    api_recipe = client.get_recipe(recipe_id)
-    return _api_recipe_to_out(api_recipe)
+    api_recipe = client.get_recipe(upstream_id)
+    return stored_to_recipe_out(stored_from_recipe_api(api_recipe))
 
 
 def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -> RecipeOut:
