@@ -2,10 +2,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
+
+// React Navigation renders tabBarIcon inside a fixed 31x28 wrapper; a pill wider
+// than that gets its glyph culled by Fabric on Android, so the wrapper must be
+// sized to the pill via tabBarIconStyle.
+const PILL_WIDTH = 54;
+const PILL_HEIGHT = 30;
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const iconName = (focused ? name : `${name}-outline`) as IconName;
@@ -32,6 +39,7 @@ function tabOptions(title: string, testID: string, icon: string) {
   return {
     title,
     tabBarButtonTestID: testID,
+    tabBarIconStyle: { width: PILL_WIDTH, height: PILL_HEIGHT },
     tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name={icon} focused={focused} />,
     tabBarLabel: ({ focused }: { focused: boolean }) => (
       <TabLabel label={title} focused={focused} />
@@ -40,6 +48,8 @@ function tabOptions(title: string, testID: string, icon: string) {
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -48,9 +58,11 @@ export default function TabsLayout() {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 64,
+          // A fixed height would discard the bottom safe-area inset and push the
+          // labels under the Android gesture handle, which also swallows taps.
+          height: 64 + insets.bottom,
           paddingTop: 8,
-          paddingBottom: 10,
+          paddingBottom: 10 + insets.bottom,
         },
         tabBarItemStyle: { gap: 2 },
       }}
