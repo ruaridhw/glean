@@ -14,8 +14,6 @@ from glean.recipes.schemas import (
 )
 from glean.recipes.stored import RecipeImportError, stored_from_recipe_api, stored_to_recipe_out
 
-URL_PARSE_SYSTEM_PROMPT = recipe_providers.URL_PARSE_SYSTEM_PROMPT
-
 # `stored_from_recipe_api` is the one recipe-api adapter and the one place the
 # "recipeapi:{id}" id convention is defined. Corpus/import ids never carry this
 # prefix, but recipe-api.com itself knows nothing about it, so any id we hand
