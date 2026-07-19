@@ -21,23 +21,8 @@ Rules:
 - Respect dietary flags (never choose recipes incompatible with user's dietary_flags)
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Prefer recipes not cooked recently (further last_cooked_at = higher priority)
-<<<<<<< HEAD:backend/src/glean/suggestions/service.py
-- Return up to meals_per_week suggestions"""
-=======
-- Return up to meals_per_week planned meals
-
-Respond with structured data containing a suggestions array of objects:
-{
-  "suggestions": [
-    {
-      "recipe_id": <int>,
-      "title": <str>,
-      "reason": <str>,
-      "missing_ingredients": [<ingredient names not in pantry>]
-    }
-  ]
-}"""
->>>>>>> a8591a9 (🏷️ Rename suggestions domain to meal plan on LLM router):backend/src/glean/meal_plan/service.py
+- Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
+  fine; do not pad the list with weaker choices to reach the limit."""
 
 
 @tracer.capture_method
@@ -70,5 +55,16 @@ def generate_meal_plan(request: MealPlanRequest, *, model: BaseChatModel) -> Mea
         ],
         config={"metadata": {"feature": Feature.MEAL_PLAN_GENERATION}},
     )
+
+    # Enforce the count cap server-side: the prompt asks for at most meals_per_week, but
+    # models (especially reasoning models) do not always comply, so guarantee the contract
+    # regardless of model behaviour rather than surfacing an over-long plan to the client.
+    if len(response.suggestions) > request.meals_per_week:
+        logger.error(
+            "meal plan exceeded meals_per_week; truncating",
+            extra={"returned": len(response.suggestions), "limit": request.meals_per_week},
+        )
+        response = response.model_copy(update={"suggestions": response.suggestions[: request.meals_per_week]})
+
     logger.info("meal plan generated", extra={"count": len(response.suggestions)})
     return response

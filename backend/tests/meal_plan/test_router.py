@@ -93,3 +93,24 @@ def test_generate_meal_plan_uses_meal_plan_feature_metadata() -> None:
     model.invoke.assert_not_called()
     _, kwargs = model.with_structured_output.return_value.invoke.call_args
     assert kwargs["config"] == {"metadata": {"feature": "meal-plan-generation"}}
+
+
+def test_generate_meal_plan_truncates_to_meals_per_week() -> None:
+    model = MagicMock()
+    model.with_structured_output.return_value.invoke.return_value = MealPlanResponse(
+        suggestions=[
+            {
+                "recipe_id": i,
+                "title": f"Meal {i}",
+                "reason": "Uses pantry items well.",
+                "missing_ingredients": [],
+            }
+            for i in range(1, 5)  # model returns 4 despite the limit
+        ]
+    )
+
+    request = MealPlanRequest(**{**SAMPLE_REQUEST, "meals_per_week": 2})
+    response = generate_meal_plan(request, model=model)
+
+    assert len(response.suggestions) == 2
+    assert [s.recipe_id for s in response.suggestions] == [1, 2]
