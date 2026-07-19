@@ -9,11 +9,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.llm import invoke_structured
+from glean.llm import Feature, invoke_structured
 from glean.recipes.service import URL_PARSE_SYSTEM_PROMPT
 from glean.recipes.stored import RecipeLlmResponse
 
 from .judges.rubrics import judge_recipe_import
+
+FEATURE = Feature.RECIPE_IMPORT
 
 
 def _invoke_recipe_import(model: BaseChatModel, html: str, *, example_idx: int) -> RecipeLlmResponse:

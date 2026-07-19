@@ -9,11 +9,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.llm import invoke_structured
+from glean.llm import Feature, invoke_structured
 from glean.meal_plan.schemas import MealPlanResponse
 from glean.meal_plan.service import MEAL_PLAN_SYSTEM_PROMPT
 
 from .judges.rubrics import judge_meal_plan_recipe
+
+FEATURE = Feature.MEAL_PLAN_GENERATION
 
 
 def _invoke_meal_plan_generation(

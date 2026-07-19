@@ -8,11 +8,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-from glean.llm import invoke_structured
+from glean.llm import Feature, invoke_structured
 from glean.receipts.schemas import ScanResponse
 from glean.receipts.service import NORMALISE_SYSTEM_PROMPT
 
 from .judges.rubrics import judge_purchase_description
+
+FEATURE = Feature.PANTRY_PURCHASE_DESCRIPTION
 
 ALLOWED_UNITS = {"g", "ml", "units"}
 
