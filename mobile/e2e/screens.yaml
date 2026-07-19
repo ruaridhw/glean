@@ -7,7 +7,7 @@ name: "Screens: all main screens render key elements"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Pantry
+      tab: pantry
 - assertVisible: "Pantry"
 - assertVisible: "Add pantry item"
 
@@ -15,7 +15,7 @@ name: "Screens: all main screens render key elements"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Meals
+      tab: meals
 - assertVisible: "Meals"
 - assertVisible: "Saved (0)"
 - assertVisible: "Search"
@@ -24,7 +24,7 @@ name: "Screens: all main screens render key elements"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Plan
+      tab: plan
 - assertVisible: "This Week"
 - assertVisible: "Generate"
 
@@ -32,12 +32,12 @@ name: "Screens: all main screens render key elements"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Shop
+      tab: shop
 - assertVisible: "Shopping"
 
 # Settings: heading
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Settings
+      tab: settings
 - assertVisible: "Settings"

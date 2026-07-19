@@ -114,7 +114,16 @@ describe("PantryScreen", () => {
     expect(screen.getByText("1 L")).toBeTruthy();
   });
 
-  it("shows empty state actions when there are no items", async () => {
+  it("opens the add pantry flow when the pantry has items", async () => {
+    const screen = render(<PantryScreen />);
+
+    await waitFor(() => expect(screen.getByText("broccoli")).toBeTruthy());
+    fireEvent.press(screen.getByLabelText("Add pantry item"));
+
+    expect(router.push).toHaveBeenCalledWith("/(tabs)/pantry/add");
+  });
+
+  it("opens the add pantry flow from the empty state header", async () => {
     (getPantryItems as jest.Mock).mockResolvedValueOnce([]);
     const screen = render(<PantryScreen />);
 

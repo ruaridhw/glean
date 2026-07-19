@@ -1,5 +1,11 @@
 appId: ${APP_ID}
 ---
-- tapOn:
-    text: ${tab}
-    retryTapIfNoChange: true
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: tabs.${tab}
+          point: 50%,20%
+          retryTapIfNoChange: true
+      - assertVisible:
+          id: ${tab}.screen

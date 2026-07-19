@@ -2,7 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { type ReactElement, useCallback, useState } from "react";
 import { FlatList, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
@@ -64,7 +64,7 @@ function ScanButton() {
   );
 }
 
-function AddPantryButton() {
+function AddPantryButton(): ReactElement {
   return (
     <IconButton
       icon="add"
@@ -73,6 +73,15 @@ function AddPantryButton() {
       backgroundColor={theme.colors.primary}
       onPress={() => router.push("/(tabs)/pantry/add")}
     />
+  );
+}
+
+function PantryHeaderActions(): ReactElement {
+  return (
+    <>
+      <AddPantryButton />
+      <ScanButton />
+    </>
   );
 }
 
@@ -276,12 +285,7 @@ export default function PantryScreen() {
         title="Pantry"
         subtitle="Reduce waste, eat what you have"
         testID="pantry.screen"
-        actions={
-          <>
-            <AddPantryButton />
-            <ScanButton />
-          </>
-        }
+        actions={<PantryHeaderActions />}
       >
         <EmptyState
           testID="pantry.emptyState"
@@ -321,12 +325,7 @@ export default function PantryScreen() {
       title="Pantry"
       chips={chips}
       testID="pantry.screen"
-      actions={
-        <>
-          <AddPantryButton />
-          <ScanButton />
-        </>
-      }
+      actions={<PantryHeaderActions />}
     >
       <FilterChipRow filters={filters} active={filter} onSelect={setFilter} />
       <FlatList

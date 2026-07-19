@@ -8,7 +8,7 @@ name: "Empty States: each tab shows guidance when empty"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Pantry
+      tab: pantry
 - assertVisible:
     id: "pantry.emptyState"
 - assertVisible: "Your pantry is empty"
@@ -19,7 +19,7 @@ name: "Empty States: each tab shows guidance when empty"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Meals
+      tab: meals
 - assertVisible:
     id: "meals.emptyState"
 - assertVisible: "No saved recipes"
@@ -29,7 +29,7 @@ name: "Empty States: each tab shows guidance when empty"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Plan
+      tab: plan
 - assertVisible:
     id: "plan.screen"
 - assertVisible: "Dinner progress"
@@ -41,7 +41,7 @@ name: "Empty States: each tab shows guidance when empty"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Shop
+      tab: shop
 - assertVisible:
     id: "shop.emptyState"
 - assertVisible: "Your shopping list is empty"
@@ -51,6 +51,6 @@ name: "Empty States: each tab shows guidance when empty"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Pantry
+      tab: pantry
 - tapOn: "Describe items"
 - assertVisible: "Describe your shop"
