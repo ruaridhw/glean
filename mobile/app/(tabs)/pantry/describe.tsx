@@ -14,6 +14,7 @@ import { useDescribeReceipt } from "@/api/hooks";
 import { AppText } from "@/components/ui/AppText";
 import { AppTextInput } from "@/components/ui/AppTextInput";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { serializeReviewItems } from "@/intake/serialization";
 import { toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 
@@ -28,7 +29,7 @@ export default function DescribeScreen() {
       onSuccess: (result) => {
         router.push({
           pathname: "/(tabs)/pantry/review",
-          params: { items: JSON.stringify(result.items) },
+          params: { items: serializeReviewItems(result.items) },
         });
       },
     });

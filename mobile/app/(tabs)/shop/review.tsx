@@ -2,35 +2,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
-import type { ShoppingProposalItem } from "@/api/types";
 import { AppScreen } from "@/components/ui/AppScreen";
 import { AppText } from "@/components/ui/AppText";
 import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Card } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
-import { addAiShoppingItems } from "@/db/shopping";
-import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
+import { isLowConfidence } from "@/intake/presentation";
+import { deserializeReviewItems } from "@/intake/serialization";
+import { useReviewList } from "@/intake/useReviewList";
+import { toRequiredSubmittedText } from "@/normalization/text-input";
+import { commitShoppingIntake, type ShopReviewItem } from "@/shop/intake";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
-
-type ReviewItem = Pick<
-  ShoppingProposalItem,
-  "name" | "quantity" | "unit" | "api_ingredient_id" | "category" | "confidence"
-> & { review_id: string };
-
-function parseItems(raw: string | undefined): ReviewItem[] {
-  if (!raw) return [];
-  const seen = new Map<string, number>();
-  return (JSON.parse(raw) as ShoppingProposalItem[]).map((item) => ({
-    ...item,
-    review_id: (() => {
-      const base = `${item.name}:${item.unit}:${item.api_ingredient_id ?? ""}:${item.category ?? ""}`;
-      const occurrence = seen.get(base) ?? 0;
-      seen.set(base, occurrence + 1);
-      return `${base}:${occurrence}`;
-    })(),
-  }));
-}
 
 function parseQuestions(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -39,32 +22,16 @@ function parseQuestions(raw: string | undefined): string[] {
 
 export default function ShoppingReviewScreen() {
   const params = useLocalSearchParams<{ items?: string; clarifyingQuestions?: string }>();
-  const [items, setItems] = useState<ReviewItem[]>(() => parseItems(params.items));
+  const { items, updateItem, removeItem, acceptedItems, acceptedCount } =
+    useReviewList<ShopReviewItem>(() => deserializeReviewItems<ShopReviewItem>(params.items));
   const [saving, setSaving] = useState(false);
   const questions = parseQuestions(params.clarifyingQuestions);
-
-  function updateItem(index: number, patch: Partial<ReviewItem>) {
-    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  }
-
-  function removeItem(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  }
 
   async function confirm() {
     setSaving(true);
     try {
-      const accepted = items
-        .filter((item) => toRequiredSubmittedText(item.name))
-        .map((item) => ({
-          name: toRequiredSubmittedText(item.name) as string,
-          quantity: item.quantity,
-          unit: normalizeSubmittedText(item.unit) || "units",
-          api_ingredient_id: item.api_ingredient_id,
-          category: item.category,
-        }));
-      await addAiShoppingItems(accepted);
-      showSuccess(`Added ${accepted.length} item${accepted.length !== 1 ? "s" : ""}`);
+      const savedCount = await commitShoppingIntake(acceptedItems);
+      showSuccess(`Added ${savedCount} item${savedCount !== 1 ? "s" : ""}`);
       router.replace("/(tabs)/shop");
     } catch {
       Alert.alert("Error", "Failed to save shopping items. Please try again.");
@@ -72,8 +39,6 @@ export default function ShoppingReviewScreen() {
       setSaving(false);
     }
   }
-
-  const acceptedCount = items.filter((item) => toRequiredSubmittedText(item.name)).length;
 
   return (
     <AppScreen
@@ -97,7 +62,7 @@ export default function ShoppingReviewScreen() {
         {items.map((item, index) => (
           <Card key={item.review_id} style={styles.itemCard}>
             <View style={styles.itemHeader}>
-              {item.confidence < 0.7 ? (
+              {isLowConfidence(item) ? (
                 <View style={styles.flag}>
                   <Ionicons name="warning-outline" size={14} color={theme.colors.warning} />
                   <AppText style={styles.flagText}>Check</AppText>

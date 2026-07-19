@@ -10,36 +10,26 @@ import { AppTextInput } from "@/components/ui/AppTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { addPantryItem } from "@/db/pantry";
 import { checkOffByIngredientIds, completeCheckout } from "@/db/shopping";
+import { isLowConfidence } from "@/intake/presentation";
+import { deserializeReviewItems } from "@/intake/serialization";
+import type { ReviewItem } from "@/intake/types";
+import { useReviewList } from "@/intake/useReviewList";
 import { normalizeSubmittedText, toRequiredSubmittedText } from "@/normalization/text-input";
 import { theme } from "@/theme";
 import { showSuccess } from "@/utils/toast";
 
-interface ReviewItem {
-  name: string;
-  quantity: number;
-  unit: string;
-  unit_price: number | null;
-  confidence: number;
-}
+type PantryReviewItem = ReviewItem & { unit_price: number | null };
 
 export default function ReviewScreen() {
   const params = useLocalSearchParams<{ items: string; returnTo?: string }>();
-  const [items, setItems] = useState<ReviewItem[]>(JSON.parse(params.items ?? "[]"));
+  const { items, updateItem, removeItem, acceptedItems, acceptedCount } =
+    useReviewList<PantryReviewItem>(() => deserializeReviewItems<PantryReviewItem>(params.items));
   const [saving, setSaving] = useState(false);
-
-  function updateItem(index: number, patch: Partial<ReviewItem>) {
-    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  }
-
-  function removeItem(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  }
 
   async function confirm() {
     setSaving(true);
     try {
       const resolvedIds: number[] = [];
-      const acceptedItems = items.filter((item) => toRequiredSubmittedText(item.name));
       for (const item of acceptedItems) {
         const name = toRequiredSubmittedText(item.name) as string;
         const unit = normalizeSubmittedText(item.unit) || "units";
@@ -66,8 +56,6 @@ export default function ReviewScreen() {
     }
   }
 
-  const acceptedCount = items.filter((item) => toRequiredSubmittedText(item.name)).length;
-
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
@@ -78,11 +66,11 @@ export default function ReviewScreen() {
       </View>
       <FlatList
         data={items}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item) => item.review_id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
-          const flagged = item.confidence < 0.7;
+          const flagged = isLowConfidence(item);
           return (
             <View style={[styles.row, flagged && styles.rowFlagged]}>
               {flagged ? (
