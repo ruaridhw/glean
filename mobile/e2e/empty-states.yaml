@@ -31,8 +31,11 @@ name: "Empty States: each tab shows guidance when empty"
     env:
       tab: Plan
 - assertVisible:
-    id: "plan.emptyState"
-- assertVisible: "No meals planned this week"
+    id: "plan.screen"
+- assertVisible: "Dinner progress"
+- assertVisible: "0/5"
+- assertVisible: "5 dinners left to plan this week"
+- assertVisible: "Add a dinner"
 
 # Shop empty state
 - runFlow:
