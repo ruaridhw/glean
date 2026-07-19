@@ -64,6 +64,18 @@ function ScanButton() {
   );
 }
 
+function AddPantryButton() {
+  return (
+    <IconButton
+      icon="add"
+      accessibilityLabel="Add pantry item"
+      color={theme.colors.primaryForeground}
+      backgroundColor={theme.colors.primary}
+      onPress={() => router.push("/(tabs)/pantry/add")}
+    />
+  );
+}
+
 interface FilterChipRowProps {
   filters: PantryFilter[];
   active: string;
@@ -264,7 +276,12 @@ export default function PantryScreen() {
         title="Pantry"
         subtitle="Reduce waste, eat what you have"
         testID="pantry.screen"
-        actions={<ScanButton />}
+        actions={
+          <>
+            <AddPantryButton />
+            <ScanButton />
+          </>
+        }
       >
         <EmptyState
           testID="pantry.emptyState"
@@ -300,7 +317,17 @@ export default function PantryScreen() {
     filter === ALL_FILTER ? allSections : allSections.filter((section) => section.key === filter);
 
   return (
-    <AppScreen title="Pantry" chips={chips} testID="pantry.screen" actions={<ScanButton />}>
+    <AppScreen
+      title="Pantry"
+      chips={chips}
+      testID="pantry.screen"
+      actions={
+        <>
+          <AddPantryButton />
+          <ScanButton />
+        </>
+      }
+    >
       <FilterChipRow filters={filters} active={filter} onSelect={setFilter} />
       <FlatList
         testID="pantry.list"

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import PantryScreen from "../../app/(tabs)/pantry";
 
@@ -120,6 +121,10 @@ describe("PantryScreen", () => {
     await waitFor(() => expect(screen.getByText("Your pantry is empty")).toBeTruthy());
     expect(screen.getByText("Scan receipt")).toBeTruthy();
     expect(screen.getByText("Describe items")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText("Add pantry item"));
+
+    expect(router.push).toHaveBeenCalledWith("/(tabs)/pantry/add");
   });
 
   it("commits quantity edits", async () => {
