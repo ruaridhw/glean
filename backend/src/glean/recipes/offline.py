@@ -15,8 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
-    from langchain_core.language_models import BaseChatModel
-
+    from glean.llm import LLMRouter
     from glean.recipes.corpus import RecipeCorpusStore
 
 
@@ -44,7 +43,7 @@ if TYPE_CHECKING:
 def import_offline_recipes(
     jobs: Iterable[OfflineRecipeImportJob],
     *,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
     corpus: RecipeCorpusStore,
     manifest_path: Path,
     rate_limit_seconds: float = 0.0,
@@ -70,7 +69,7 @@ def import_offline_recipes(
         if has_processed_non_skipped_job and rate_limit_seconds > 0:
             time.sleep(rate_limit_seconds)
 
-        result = _import_recipe_url(job, model=model, corpus=corpus)
+        result = _import_recipe_url(job, llm_router=llm_router, corpus=corpus)
         _append_manifest_entry(manifest_path, result)
         results.append(result)
         has_processed_non_skipped_job = True
@@ -109,7 +108,7 @@ def _load_imported_manifest_entries(
 def _import_recipe_url(
     job: OfflineRecipeImportJob,
     *,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
     corpus: RecipeCorpusStore,
 ) -> OfflineRecipeImportResult:
     if existing_recipe := corpus.get_by_source_url(job.url):
@@ -121,7 +120,7 @@ def _import_recipe_url(
         )
 
     try:
-        parse_result = import_url_to_canonical(job.url, model=model)
+        parse_result = import_url_to_canonical(job.url, llm_router=llm_router)
         if parse_result.recipe is None:
             return OfflineRecipeImportResult(
                 name=job.name,

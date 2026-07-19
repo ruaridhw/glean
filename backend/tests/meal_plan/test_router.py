@@ -51,8 +51,7 @@ def test_generate_meal_plan_returns_ranked_list(client: TestClient, auth_headers
     structured_response = MealPlanResponse(suggestions=[MealPlanRecipe(**item) for item in fixture])
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = structured_response
+    llm_router.invoke.return_value = structured_response
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post("/meal-plan", headers=auth_headers, json=SAMPLE_REQUEST)
 
@@ -62,7 +61,9 @@ def test_generate_meal_plan_returns_ranked_list(client: TestClient, auth_headers
     assert planned_recipes[0]["title"] == "Chicken Stir Fry"
     assert "expiring" in planned_recipes[0]["reason"]
     assert planned_recipes[1]["missing_ingredients"] == []
-    llm_router.chat_model.assert_called_once_with(Feature.MEAL_PLAN_GENERATION)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.MEAL_PLAN_GENERATION
+    assert args[1] is MealPlanResponse
 
 
 def test_generate_meal_plan_requires_auth(test_settings: Settings) -> None:
@@ -74,9 +75,8 @@ def test_generate_meal_plan_requires_auth(test_settings: Settings) -> None:
 
 
 def test_generate_meal_plan_uses_meal_plan_feature_metadata() -> None:
-    model = MagicMock()
-    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    model.with_structured_output.return_value.invoke.return_value = MealPlanResponse(
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = MealPlanResponse(
         suggestions=[
             {
                 "recipe_id": 1,
@@ -87,17 +87,17 @@ def test_generate_meal_plan_uses_meal_plan_feature_metadata() -> None:
         ]
     )
 
-    response = generate_meal_plan(MealPlanRequest(**SAMPLE_REQUEST), model=model)
+    response = generate_meal_plan(MealPlanRequest(**SAMPLE_REQUEST), llm_router=llm_router)
 
     assert response.suggestions[0].recipe_id == 1
-    model.invoke.assert_not_called()
-    _, kwargs = model.with_structured_output.return_value.invoke.call_args
-    assert kwargs["config"] == {"metadata": {"feature": "meal-plan-generation"}}
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.MEAL_PLAN_GENERATION
+    assert args[1] is MealPlanResponse
 
 
 def test_generate_meal_plan_truncates_to_meals_per_week() -> None:
-    model = MagicMock()
-    model.with_structured_output.return_value.invoke.return_value = MealPlanResponse(
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = MealPlanResponse(
         suggestions=[
             {
                 "recipe_id": i,
@@ -110,7 +110,7 @@ def test_generate_meal_plan_truncates_to_meals_per_week() -> None:
     )
 
     request = MealPlanRequest(**{**SAMPLE_REQUEST, "meals_per_week": 2})
-    response = generate_meal_plan(request, model=model)
+    response = generate_meal_plan(request, llm_router=llm_router)
 
     assert len(response.suggestions) == 2
     assert [s.recipe_id for s in response.suggestions] == [1, 2]

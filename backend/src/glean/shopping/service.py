@@ -4,12 +4,12 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.llm import Feature, invoke_structured
+from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 
 if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
+    from glean.llm import LLMRouter
 
 
 SHOPPING_PARSE_SYSTEM_PROMPT = """You are a grocery shopping list parser for the Glean app.
@@ -33,17 +33,16 @@ Rules:
 def parse_shopping_description(
     request: ShoppingParseRequest,
     *,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
 ) -> ShoppingParseResponse:
     logger.info("parsing shopping description", extra={"text_length": len(request.text)})
-    response = invoke_structured(
-        model,
+    response = llm_router.invoke(
+        Feature.SHOPPING_LIST_DESCRIPTION,
         ShoppingParseResponse,
         [
             SystemMessage(content=SHOPPING_PARSE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this shopping list description: {request.text}"),
         ],
-        config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
     )
     logger.info("shopping description parsed", extra={"items": len(response.items)})
     return response

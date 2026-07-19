@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
-
-from glean.llm import Feature, invoke_structured
+from glean.llm import Feature
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResponse
 from glean.observability import logger, tracer
+
+if TYPE_CHECKING:
+    from glean.llm import LLMRouter
 
 MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
 Given a user's pantry, recipe history, and preferences, choose meals to cook this week.
@@ -26,7 +26,7 @@ Rules:
 
 
 @tracer.capture_method
-def generate_meal_plan(request: MealPlanRequest, *, model: BaseChatModel) -> MealPlanResponse:
+def generate_meal_plan(request: MealPlanRequest, *, llm_router: LLMRouter) -> MealPlanResponse:
 
     context = {
         "pantry": [item.model_dump() for item in request.pantry],
@@ -46,14 +46,13 @@ def generate_meal_plan(request: MealPlanRequest, *, model: BaseChatModel) -> Mea
         },
     )
 
-    response = invoke_structured(
-        model,
+    response = llm_router.invoke(
+        Feature.MEAL_PLAN_GENERATION,
         MealPlanResponse,
         [
             SystemMessage(content=MEAL_PLAN_SYSTEM_PROMPT),
             HumanMessage(content=json.dumps(context, default=str)),
         ],
-        config={"metadata": {"feature": Feature.MEAL_PLAN_GENERATION}},
     )
 
     # Enforce the count cap server-side: the prompt asks for at most meals_per_week, but

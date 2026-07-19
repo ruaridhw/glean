@@ -61,13 +61,13 @@ def test_run_jobs_delegates_to_offline_url_runner(tmp_path: Path, monkeypatch: p
             url="https://recipes.example.test/recipes/noodle-soup-abc123",
         )
     ]
-    model = object()
+    llm_router = object()
     corpus = MagicMock()
     manifest_path = tmp_path / "manifest.jsonl"
 
     results = import_recipe_corpus.run_jobs(
         jobs,
-        model=model,
+        llm_router=llm_router,
         corpus=corpus,
         manifest_path=manifest_path,
         rate_limit_seconds=0.0,
@@ -77,7 +77,7 @@ def test_run_jobs_delegates_to_offline_url_runner(tmp_path: Path, monkeypatch: p
     assert calls == [
         {
             "jobs": jobs,
-            "model": model,
+            "llm_router": llm_router,
             "corpus": corpus,
             "manifest_path": manifest_path,
             "rate_limit_seconds": 0.0,

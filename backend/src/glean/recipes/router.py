@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router, verify_cognito_token
-from glean.llm import Feature, LLMRouter
+from glean.llm import LLMRouter
 from glean.recipes import service
 from glean.recipes.schemas import ImportUrlRequest, RecipeOut, RecipeSearchResponse
 
@@ -49,7 +49,6 @@ def import_recipe_from_url(
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
 ) -> RecipeOut:
     try:
-        model = llm_router.chat_model(Feature.RECIPE_IMPORT)
-        return service.import_recipe_from_url(request, model=model)
+        return service.import_recipe_from_url(request, llm_router=llm_router)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

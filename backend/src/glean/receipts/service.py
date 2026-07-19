@@ -10,12 +10,12 @@ import boto3
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.content import create_image_block, create_text_block
 
-if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
-
-from glean.llm import Feature, invoke_structured
+from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.receipts.schemas import DescribeRequest, ScanResponse
+
+if TYPE_CHECKING:
+    from glean.llm import LLMRouter
 
 NORMALISE_SYSTEM_PROMPT = """You are a grocery ingredient normaliser.
 Given a list of receipt line items (name, quantity, price), return structured items with:
@@ -57,7 +57,7 @@ def _extract_textract_lines(textract_response: dict) -> list[dict]:
 
 
 @tracer.capture_method
-def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel, aws_region: str, s3_bucket: str) -> ScanResponse:
+def _scan_via_textract(image_bytes: bytes, *, llm_router: LLMRouter, aws_region: str, s3_bucket: str) -> ScanResponse:
     """OCR via AWS Textract, then normalise extracted text with the LLM."""
     s3 = boto3.client("s3", region_name=aws_region)
     s3_key = f"receipts/tmp/{uuid.uuid4()}.jpg"
@@ -72,23 +72,22 @@ def _scan_via_textract(image_bytes: bytes, *, model: BaseChatModel, aws_region: 
     finally:
         s3.delete_object(Bucket=s3_bucket, Key=s3_key)
 
-    response = invoke_structured(
-        model,
+    response = llm_router.invoke(
+        Feature.RECEIPT_SCAN,
         ScanResponse,
         [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
-        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
     logger.info("llm normalised items")
     return response
 
 
 @tracer.capture_method
-def _scan_via_vision(image_bytes: bytes, *, model: BaseChatModel) -> ScanResponse:
+def _scan_via_vision(image_bytes: bytes, *, llm_router: LLMRouter) -> ScanResponse:
     """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
     b64 = base64.b64encode(image_bytes).decode()
     image_block = create_image_block(base64=b64, mime_type="image/jpeg")
-    response = invoke_structured(
-        model,
+    response = llm_router.invoke(
+        Feature.RECEIPT_SCAN,
         ScanResponse,
         [
             SystemMessage(content=VISION_SYSTEM_PROMPT),
@@ -99,7 +98,6 @@ def _scan_via_vision(image_bytes: bytes, *, model: BaseChatModel) -> ScanRespons
                 ]
             ),
         ],
-        config={"metadata": {"feature": Feature.RECEIPT_SCAN}},
     )
     logger.info("vision model scanned receipt")
     return response
@@ -110,24 +108,22 @@ def scan_receipt(
     image_bytes: bytes,
     *,
     ocr_mode: str,
-    model: BaseChatModel,
+    llm_router: LLMRouter,
     aws_region: str,
     s3_bucket: str,
-    vision_model: BaseChatModel,
 ) -> ScanResponse:
     if ocr_mode == "vision":
-        return _scan_via_vision(image_bytes, model=vision_model)
-    return _scan_via_textract(image_bytes, model=model, aws_region=aws_region, s3_bucket=s3_bucket)
+        return _scan_via_vision(image_bytes, llm_router=llm_router)
+    return _scan_via_textract(image_bytes, llm_router=llm_router, aws_region=aws_region, s3_bucket=s3_bucket)
 
 
 @tracer.capture_method
-def describe_purchase(request: DescribeRequest, *, model: BaseChatModel) -> ScanResponse:
-    return invoke_structured(
-        model,
+def describe_purchase(request: DescribeRequest, *, llm_router: LLMRouter) -> ScanResponse:
+    return llm_router.invoke(
+        Feature.PANTRY_PURCHASE_DESCRIPTION,
         ScanResponse,
         [
             SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
             HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
         ],
-        config={"metadata": {"feature": Feature.PANTRY_PURCHASE_DESCRIPTION}},
     )

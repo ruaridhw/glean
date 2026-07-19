@@ -1,34 +1,26 @@
 from __future__ import annotations
 
+from glean.llm import Feature
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 from glean.shopping.service import parse_shopping_description
 
 
-class _StructuredInvoker:
-    def __init__(self, parent: _FakeModel, response: ShoppingParseResponse) -> None:
-        self.parent = parent
+class _FakeLLMRouter:
+    def __init__(self, response: ShoppingParseResponse) -> None:
         self.response = response
+        self.feature: Feature | None = None
+        self.schema: type[object] | None = None
+        self.messages: list[object] = []
 
-    def invoke(self, messages: list[object], config: dict | None = None) -> ShoppingParseResponse:
-        self.parent.messages = messages
-        self.parent.config = config
+    def invoke(self, feature: Feature, schema: type[object], messages: list[object]) -> ShoppingParseResponse:
+        self.feature = feature
+        self.schema = schema
+        self.messages = messages
         return self.response
 
 
-class _FakeModel:
-    def __init__(self, response: ShoppingParseResponse) -> None:
-        self.response = response
-        self.messages: list[object] = []
-        self.config: dict | None = None
-        self.schema: type[object] | None = None
-
-    def with_structured_output(self, schema: type[object], *, method: str | None = None) -> _StructuredInvoker:
-        self.schema = schema
-        return _StructuredInvoker(self, self.response)
-
-
 def test_parse_shopping_description_returns_proposed_items() -> None:
-    model = _FakeModel(
+    llm_router = _FakeLLMRouter(
         ShoppingParseResponse(
             items=[
                 {
@@ -54,7 +46,7 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
 
     response = parse_shopping_description(
         ShoppingParseRequest(text="stuff for tacos, milk, and lunchbox snacks"),
-        model=model,
+        llm_router=llm_router,
     )
 
     assert len(response.items) == 2
@@ -67,12 +59,12 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert response.items[0].confidence == 0.82
     assert response.items[1].name == "whole milk"
     assert response.clarifying_questions == ["What lunchbox snacks do you want?"]
-    assert model.config == {"metadata": {"feature": "shopping-list-description"}}
-    assert model.schema is ShoppingParseResponse
+    assert llm_router.feature == Feature.SHOPPING_LIST_DESCRIPTION
+    assert llm_router.schema is ShoppingParseResponse
 
 
 def test_parse_shopping_description_allows_vague_items() -> None:
-    model = _FakeModel(
+    llm_router = _FakeLLMRouter(
         ShoppingParseResponse(
             items=[
                 {
@@ -90,7 +82,7 @@ def test_parse_shopping_description_allows_vague_items() -> None:
 
     response = parse_shopping_description(
         ShoppingParseRequest(text="some lunchbox snacks"),
-        model=model,
+        llm_router=llm_router,
     )
 
     assert response.items[0].name == "lunchbox snacks"

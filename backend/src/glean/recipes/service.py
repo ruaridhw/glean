@@ -23,8 +23,9 @@ URL_PARSE_SYSTEM_PROMPT = recipe_providers.URL_PARSE_SYSTEM_PROMPT
 _RECIPE_API_ID_PREFIX = "recipeapi:"
 
 if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
     from pydantic import SecretStr
+
+    from glean.llm import LLMRouter
 
 
 def search_recipes(
@@ -88,7 +89,7 @@ def get_recipe(recipe_id: str, *, recipe_api_base_url: str, recipe_api_key: Secr
     return stored_to_recipe_out(stored_from_recipe_api(api_recipe))
 
 
-def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -> RecipeOut:
+def import_recipe_from_url(request: ImportUrlRequest, *, llm_router: LLMRouter) -> RecipeOut:
     try:
         recipe_providers.validate_public_https_url(request.url)
     except RecipeImportError as exc:
@@ -103,11 +104,11 @@ def import_recipe_from_url(request: ImportUrlRequest, *, model: BaseChatModel) -
             result = recipe_providers.import_html_to_canonical(
                 request.url,
                 request.rendered_html,
-                model=model,
+                llm_router=llm_router,
                 fetched_url=request.fetched_url,
             )
         else:
-            result = recipe_providers.import_url_to_canonical(request.url, model=model)
+            result = recipe_providers.import_url_to_canonical(request.url, llm_router=llm_router)
     except RecipeImportError as exc:
         raise ValueError(exc.message) from exc
 

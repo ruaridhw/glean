@@ -48,8 +48,7 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
         return mock_textract
 
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
+    llm_router.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     with patch("boto3.client", side_effect=boto3_client_factory):
         response = client.post(
@@ -67,7 +66,9 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     assert items[0]["unit_price"] == pytest.approx(0.007)
     mock_s3.put_object.assert_called_once()
     mock_s3.delete_object.assert_called_once()
-    llm_router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.RECEIPT_SCAN
+    assert args[1] is ScanResponse
 
 
 def test_scan_receipt_requires_auth(unauth_client: TestClient) -> None:
@@ -107,8 +108,7 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     )
     app.dependency_overrides[get_settings] = lambda: vision_settings
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
+    llm_router.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/receipts/scan",
@@ -120,13 +120,14 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     items = response.json()["items"]
     assert len(items) == 2
     assert items[0]["name"] == "chicken breast"
-    llm_router.chat_model.assert_called_once_with(Feature.RECEIPT_SCAN)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.RECEIPT_SCAN
+    assert args[1] is ScanResponse
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
     llm_router = MagicMock()
-    llm_router.chat_model.return_value.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    llm_router.chat_model.return_value.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
+    llm_router.invoke.return_value = _mock_scan_response()
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/receipts/describe",
@@ -136,19 +137,21 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
 
     assert response.status_code == 200
     assert len(response.json()["items"]) == 2
-    llm_router.chat_model.assert_called_once_with(Feature.PANTRY_PURCHASE_DESCRIPTION)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.PANTRY_PURCHASE_DESCRIPTION
+    assert args[1] is ScanResponse
 
 
 def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
-    model = MagicMock()
-    model.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    model.with_structured_output.return_value.invoke.return_value = _mock_scan_response()
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = _mock_scan_response()
 
-    response = describe_purchase(DescribeRequest(text="I bought chicken and milk"), model=model)
+    response = describe_purchase(DescribeRequest(text="I bought chicken and milk"), llm_router=llm_router)
 
     assert len(response.items) == 2
-    model.invoke.assert_not_called()
-    messages, kwargs = model.with_structured_output.return_value.invoke.call_args
-    assert isinstance(messages[0][0], SystemMessage)
-    assert isinstance(messages[0][1], HumanMessage)
-    assert kwargs["config"] == {"metadata": {"feature": "pantry-purchase-description"}}
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.PANTRY_PURCHASE_DESCRIPTION
+    assert args[1] is ScanResponse
+    messages = args[2]
+    assert isinstance(messages[0], SystemMessage)
+    assert isinstance(messages[1], HumanMessage)

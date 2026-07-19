@@ -330,9 +330,7 @@ def test_import_url_uses_schema_org(client: TestClient) -> None:
             )
         ]
     )
-    mock_llm = MagicMock()
     llm_router = MagicMock()
-    llm_router.chat_model.return_value = mock_llm
     app.dependency_overrides[get_llm_router] = lambda: llm_router
 
     with (
@@ -348,8 +346,7 @@ def test_import_url_uses_schema_org(client: TestClient) -> None:
     assert len(data["ingredients"]) == 2
     assert len(data["instructions"]) == 2
     assert data["total_time_mins"] == 20
-    mock_llm.invoke.assert_not_called()
-    llm_router.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
+    llm_router.invoke.assert_not_called()
 
 
 def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None:
@@ -368,9 +365,7 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     </script>
     </head><body></body></html>
     """
-    mock_llm = MagicMock()
     llm_router = MagicMock()
-    llm_router.chat_model.return_value = mock_llm
     app.dependency_overrides[get_llm_router] = lambda: llm_router
 
     with (
@@ -395,9 +390,8 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     )
     assert len(data["ingredients"]) == 2
     assert len(data["instructions"]) == 2
-    mock_llm.invoke.assert_not_called()
+    llm_router.invoke.assert_not_called()
     import_url_to_canonical.assert_not_called()
-    llm_router.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
 
 
 def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pipeline() -> None:
@@ -416,7 +410,7 @@ def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pip
     ):
         response = service.import_recipe_from_url(
             ImportUrlRequest(url="https://example.com/pasta"),
-            model=MagicMock(),
+            llm_router=MagicMock(),
         )
 
     assert response.external_id == "import:pasta"
@@ -441,7 +435,7 @@ def test_import_url_rejects_http_before_matching_cached_recipe() -> None:
     ):
         service.import_recipe_from_url(
             ImportUrlRequest(url="http://example.com/pasta"),
-            model=MagicMock(),
+            llm_router=MagicMock(),
         )
 
     CorpusStore.assert_not_called()
@@ -465,7 +459,7 @@ def test_import_url_rejects_private_host_before_matching_cached_recipe() -> None
     ):
         service.import_recipe_from_url(
             ImportUrlRequest(url="https://internal.example.com/pasta"),
-            model=MagicMock(),
+            llm_router=MagicMock(),
         )
 
     CorpusStore.assert_not_called()
@@ -504,11 +498,8 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
         not_suitable_for=[],
     )
 
-    mock_llm = MagicMock()
-    mock_llm.invoke.side_effect = AssertionError("raw LLM JSON should not be used")
-    mock_llm.with_structured_output.return_value.invoke.return_value = llm_recipe
     llm_router = MagicMock()
-    llm_router.chat_model.return_value = mock_llm
+    llm_router.invoke.return_value = llm_recipe
     app.dependency_overrides[get_llm_router] = lambda: llm_router
 
     with (
@@ -525,9 +516,9 @@ def test_import_url_falls_back_to_claude(client: TestClient) -> None:
     assert len(data["ingredients"]) == 3
     assert len(data["instructions"]) == 3
     assert data["dietary_flags"] == ["Vegan"]
-    mock_llm.invoke.assert_not_called()
-    mock_llm.with_structured_output.assert_called_once_with(RecipeLlmResponse, method="json_schema")
-    llm_router.chat_model.assert_called_once_with(Feature.RECIPE_IMPORT)
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.RECIPE_IMPORT
+    assert args[1] is RecipeLlmResponse
 
 
 class _FakeClient:

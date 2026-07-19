@@ -19,7 +19,7 @@ WEB_RECIPE_URLS = (
 
 
 def test_direct_url_import_parses_neutral_recipe_fixtures_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    model = _NoLlm()
+    llm_router = _NoLlm()
     pages = {
         WEB_RECIPE_URLS[0]: _schema_org_html(
             name="Coconut Lentil Curry",
@@ -38,7 +38,7 @@ def test_direct_url_import_parses_neutral_recipe_fixtures_without_llm(monkeypatc
 
     monkeypatch.setattr(providers, "fetch_public_https", fetch_fixture)
 
-    results = [import_url_to_canonical(url, model=model) for url in WEB_RECIPE_URLS]
+    results = [import_url_to_canonical(url, llm_router=llm_router) for url in WEB_RECIPE_URLS]
 
     recipes = [
         _assert_imported_recipe(
@@ -50,11 +50,11 @@ def test_direct_url_import_parses_neutral_recipe_fixtures_without_llm(monkeypatc
         for result, title in zip(results, ("Coconut Lentil Curry", "Green Noodle Bowl"), strict=True)
     ]
     assert [recipe.source_url for recipe in recipes] == list(WEB_RECIPE_URLS)
-    assert model.calls == 0
+    assert llm_router.calls == 0
 
 
 def test_direct_url_import_saves_neutral_recipe_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    model = _NoLlm()
+    llm_router = _NoLlm()
     corpus = RecipeCorpusStore(root=tmp_path / "corpus")
     html = _schema_org_html(
         name="Crispy Bean Tacos",
@@ -64,7 +64,7 @@ def test_direct_url_import_saves_neutral_recipe_fixtures(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(providers, "fetch_public_https", lambda url, **_: FetchedPage(url=url, text=html))
 
-    result = import_url_to_canonical(WEB_RECIPE_URLS[0], model=model)
+    result = import_url_to_canonical(WEB_RECIPE_URLS[0], llm_router=llm_router)
     recipe = _assert_imported_recipe(
         result,
         title_contains="Crispy Bean Tacos",
@@ -77,7 +77,7 @@ def test_direct_url_import_saves_neutral_recipe_fixtures(monkeypatch: pytest.Mon
     assert loaded is not None
     assert isinstance(loaded, StoredRecipe)
     assert loaded.title == "Crispy Bean Tacos"
-    assert model.calls == 0
+    assert llm_router.calls == 0
 
 
 class _NoLlm:

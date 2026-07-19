@@ -91,12 +91,20 @@ class TestLLMRouter:
         assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].production_model == "qwen/qwen3.7-plus"
         assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].eval_model == "z-ai/glm-5.2"
 
-    def test_creates_chat_model_for_feature_and_purpose(self) -> None:
+    def test_invoke_creates_chat_model_for_feature_and_purpose(self) -> None:
         api_key = SecretStr("test-key")
         router = LLMRouter(api_key=api_key)
 
         with patch("glean.llm.ChatOpenRouter") as mock_cls:
-            model = router.chat_model(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL)
+            mock_cls.return_value.with_structured_output.return_value.invoke.return_value = _StructuredTestResponse(
+                name="Pantry", values=["milk"]
+            )
+            response = router.invoke(
+                Feature.RECIPE_IMPORT,
+                _StructuredTestResponse,
+                ["message"],
+                purpose=ModelPurpose.EVAL,
+            )
 
         mock_cls.assert_called_once_with(
             model="z-ai/glm-5.2",
@@ -104,7 +112,25 @@ class TestLLMRouter:
             max_retries=0,
             request_timeout=10_000,
         )
-        assert model is mock_cls.return_value
+        assert response == _StructuredTestResponse(name="Pantry", values=["milk"])
+
+    def test_invoke_stamps_feature_as_trace_metadata_once(self) -> None:
+        api_key = SecretStr("test-key")
+        router = LLMRouter(api_key=api_key)
+
+        with patch("glean.llm.ChatOpenRouter") as mock_cls:
+            mock_cls.return_value.with_structured_output.return_value.invoke.return_value = _StructuredTestResponse(
+                name="Pantry", values=["milk"]
+            )
+            router.invoke(Feature.SHOPPING_LIST_DESCRIPTION, _StructuredTestResponse, ["message"])
+
+        mock_cls.return_value.with_structured_output.assert_called_once_with(
+            _StructuredTestResponse, method="json_schema"
+        )
+        mock_cls.return_value.with_structured_output.return_value.invoke.assert_called_once_with(
+            ["message"],
+            config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
+        )
 
     def test_from_settings_applies_feature_policy_overrides(self) -> None:
         settings = Settings(
