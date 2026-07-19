@@ -1,11 +1,6 @@
 appId: ${APP_ID}
 ---
-- retry:
-    maxRetries: 3
-    commands:
-      - tapOn:
-          id: tabs.${tab}
-          point: 50%,20%
-          retryTapIfNoChange: true
-      - assertVisible:
-          id: ${tab}.screen
+- tapOn:
+    id: tabs.${tab}
+- assertVisible:
+    id: ${tab}.screen
