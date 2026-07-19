@@ -29,7 +29,10 @@ Parameters:
 
   LangSmithEndpoint:
     Type: String
-    Default: ""
+    # The Glean LangSmith workspace is EU-hosted; the SDK otherwise defaults to the US
+    # endpoint (https://api.smith.langchain.com) and every trace POST 403s. Override per
+    # deploy only if the workspace region changes.
+    Default: "https://eu.api.smith.langchain.com"
 
   GoogleClientId:
     Type: String
