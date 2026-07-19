@@ -22,7 +22,7 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
 - **Rate limiting:** Per-user token bucket via slowapi (20 AI requests/hour)
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
-- **Recipe data:** External recipe-api.com integration with local `/tmp` caching (24h search TTL, 7d detail TTL)
+- **Recipe data:** External recipe-api.com integration plus a durable recipe corpus. Both the HTTP response cache (24h search TTL; detail cached indefinitely) and the corpus are stored via `recipe_api.blob_store`: an S3 bucket (`s3_recipe_cache_bucket`) in deployed environments, or the `.cache/glean_recipe_cache` filesystem tree locally and in tests.
 
 ### Module layout
 
@@ -37,7 +37,7 @@ src/glean/
 ├── dev/router.py     # POST /dev/export-db → S3
 ├── receipts/         # POST /receipts/scan (image upload → Textract or vision OCR)
 │                     # POST /receipts/describe (text → normalised ingredients)
-├── recipe_api/       # External recipe-api.com HTTP client with /tmp caching
+├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation

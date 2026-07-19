@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 if TYPE_CHECKING:
     from pathlib import Path
 
+from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipe_api.client import (
     DETAIL_TTL_SECS,
     SEARCH_TTL_SECS,
@@ -64,14 +65,14 @@ def test_cache_key_search_differs_for_different_params() -> None:
 
 
 def test_cache_read_returns_none_when_file_missing(tmp_path: Path) -> None:
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         result = _cache_read("nonexistent_key", SEARCH_TTL_SECS)
     assert result is None
 
 
 def test_cache_write_and_read_roundtrip(tmp_path: Path) -> None:
     data = {"data": [], "meta": {"total": 0, "page": 1, "per_page": 20, "total_capped": False}}
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         _cache_write("test_key", data)
         result = _cache_read("test_key", SEARCH_TTL_SECS)
     assert result == data
@@ -79,7 +80,7 @@ def test_cache_write_and_read_roundtrip(tmp_path: Path) -> None:
 
 def test_cache_read_returns_none_when_expired(tmp_path: Path) -> None:
     data = {"data": [], "meta": {"total": 0, "page": 1, "per_page": 20, "total_capped": False}}
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         _cache_write("test_key", data)
         cache_file = tmp_path / "test_key.json"
         raw = json.loads(cache_file.read_text())
@@ -91,7 +92,7 @@ def test_cache_read_returns_none_when_expired(tmp_path: Path) -> None:
 
 def test_cache_read_keeps_detail_cache_indefinitely(tmp_path: Path) -> None:
     data = {"id": "abc-123", "name": "Spaghetti Carbonara"}
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         _cache_write("detail_abc-123", data)
         cache_file = tmp_path / "detail_abc-123.json"
         raw = json.loads(cache_file.read_text())
@@ -103,7 +104,7 @@ def test_cache_read_keeps_detail_cache_indefinitely(tmp_path: Path) -> None:
 
 def test_cache_read_returns_none_on_corrupt_file(tmp_path: Path) -> None:
     (tmp_path / "bad_key.json").write_text("not json at all {{{")
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         result = _cache_read("bad_key", SEARCH_TTL_SECS)
     assert result is None
 
@@ -131,7 +132,7 @@ def test_client_search_uses_cache_on_hit(tmp_path: Path) -> None:
     }
     cache_key = _cache_key_search({"q": "carbonara", "page": 1, "per_page": 20})
     client = RecipeApiClient.__new__(RecipeApiClient)
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         _cache_write(cache_key, search_data)
         response = client.search(q="carbonara")
     assert response.meta.total == 1
@@ -148,7 +149,7 @@ def test_client_search_hits_api_when_cache_miss(tmp_path: Path) -> None:
     client._client = MagicMock()
     client._client.get.return_value = mock_resp
 
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         response = client.search(q="sushi")
 
     assert response.meta.total == 0
@@ -194,7 +195,7 @@ def test_client_search_accepts_recipe_api_data_meta_response(tmp_path: Path) -> 
     client._client = MagicMock()
     client._client.get.return_value = mock_resp
 
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         response = client.search(q="miso")
 
     assert response.meta.total == 15
@@ -221,7 +222,7 @@ def test_client_get_recipe_uses_cache_on_hit(tmp_path: Path) -> None:
         "nutrition": {},
     }
     client = RecipeApiClient.__new__(RecipeApiClient)
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         _cache_write("detail_abc-123", detail_data)
         response = client.get_recipe("abc-123")
     assert response.id == "abc-123"
@@ -291,7 +292,7 @@ def test_client_get_recipe_hits_api_when_cache_miss(tmp_path: Path) -> None:
     client._client = MagicMock()
     client._client.get.return_value = mock_resp
 
-    with patch("glean.recipe_api.client.CACHE_DIR", tmp_path):
+    with patch("glean.recipe_api.blob_store.get_recipe_cache_store", return_value=FilesystemBlobStore(tmp_path)):
         response = client.get_recipe("117e87ca-4825-48c0-8236-e80107e71d3a")
 
     assert response.id == "117e87ca-4825-48c0-8236-e80107e71d3a"

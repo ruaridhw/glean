@@ -8,6 +8,7 @@ from typing import Any
 
 from glean.config import get_settings
 from glean.llm import LLMRouter
+from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.offline import OfflineRecipeImportJob, OfflineRecipeImportResult, import_offline_recipes
 
@@ -25,7 +26,7 @@ def main() -> int:
     results = run_jobs(
         jobs,
         llm_router=llm_router,
-        corpus=RecipeCorpusStore(root=args.cache_dir),
+        corpus=RecipeCorpusStore(FilesystemBlobStore(args.cache_dir)),
         manifest_path=args.manifest,
         rate_limit_seconds=args.rate_limit_seconds,
     )

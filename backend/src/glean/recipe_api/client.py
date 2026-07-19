@@ -4,14 +4,13 @@ import hashlib
 import json
 import re
 import time
-from pathlib import Path
 
 import httpx
 
 from glean.observability import tracer
+from glean.recipe_api import blob_store
 from glean.recipe_api.schemas import RecipeApiDetailResponse, RecipeApiRecipe, RecipeApiSearchResponse
 
-CACHE_DIR = Path(".cache/glean_recipe_cache")
 SEARCH_TTL_SECS = 86_400  # 24h
 DETAIL_TTL_SECS = float("inf")
 
@@ -33,22 +32,21 @@ def _cache_key_search(params: dict) -> str:
 
 
 def _cache_read(key: str, ttl: float) -> dict | None:
-    path = CACHE_DIR / f"{key}.json"
-    if not path.exists():
+    raw = blob_store.get_recipe_cache_store().read(f"{key}.json")
+    if raw is None:
         return None
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(raw)
         if time.time() - data["cached_at"] > ttl:
             return None
         return data["data"]
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError):
         return None
 
 
 def _cache_write(key: str, data: dict) -> None:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = CACHE_DIR / f"{key}.json"
-    path.write_text(json.dumps({"data": data, "cached_at": time.time()}))
+    content = json.dumps({"data": data, "cached_at": time.time()})
+    blob_store.get_recipe_cache_store().write(f"{key}.json", content)
 
 
 class RecipeApiClient:

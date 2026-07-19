@@ -112,6 +112,13 @@ Resources:
           - Status: Enabled
             ExpirationInDays: 1
 
+  # Durable store for the recipe corpus + recipe-api HTTP cache. No expiry — unlike the
+  # receipts buffer, the corpus is durable data the app reads on every search/get.
+  GleanRecipeCacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "glean-recipe-cache-${Environment}-${AWS::AccountId}"
+
   GleanFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -125,6 +132,7 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref GleanUserPool
           COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
           S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
+          S3_RECIPE_CACHE_BUCKET: !Ref GleanRecipeCacheBucket
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -135,6 +143,8 @@ Resources:
         - CloudWatchLogsFullAccess
         - S3CrudPolicy:
             BucketName: !Ref GleanReceiptsBucket
+        - S3CrudPolicy:
+            BucketName: !Ref GleanRecipeCacheBucket
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
         - Statement:
             - Effect: Allow
