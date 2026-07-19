@@ -192,3 +192,74 @@ jobs:
           name: maestro-artifacts
           path: /tmp/maestro-artifacts.zip
           retention-days: 14
+
+  deploy:
+    name: Deploy
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK on EAS
+        id: eas
+        run: |
+          eas build --platform android --profile production --non-interactive --wait --json > build.json
+          URL=$(jq -r '(if type=="array" then .[0] else . end).artifacts.applicationArchiveUrl' build.json)
+          echo "Artifact URL: $URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK from EAS
+        run: |
+          mkdir -p artifacts
+          curl -fL -o artifacts/app-release.apk "${{ steps.eas.outputs.url }}"
+
+      - name: Bump patch version
+        run: |
+          CURRENT=$(node -e "console.log(require('./app.json').expo.version)")
+          NEXT=$(echo "$CURRENT" | awk -F. '{print $1"."$2"."$3+1}')
+          sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEXT\"/" app.json
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app.json
+          git commit -m "🔖 chore: bump patch version [skip ci]"
+          git push
+
+      - name: Get app version
+        id: app-version
+        run: |
+          VERSION=$(node -e "const c = require('./app.json'); console.log(c.expo.version)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.app-version.outputs.version }}" \
+            artifacts/app-release.apk \
+            --title "v${{ steps.app-version.outputs.version }}" \
+            --notes "Android APK built from commit ${{ github.sha }}" \
+            --repo "${{ github.repository }}"

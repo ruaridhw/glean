@@ -1,11 +1,9 @@
 name: EAS Build
 
 on:
+  # Manual, on-demand production builds. Automated builds on pushes to main are
+  # handled by the `deploy` job in mobile-ci.yml (which also cuts the release).
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'mobile/**'
 
 jobs:
   build:
