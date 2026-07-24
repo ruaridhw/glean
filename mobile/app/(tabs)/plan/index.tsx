@@ -206,6 +206,7 @@ export default function PlanScreen() {
     useCallback(() => {
       void load();
       if (addRecipeId) {
+        router.setParams({ add_recipe_id: undefined });
         void handleAddRecipeRef.current(Number(addRecipeId));
       }
     }, [load, addRecipeId]),
@@ -288,8 +289,12 @@ export default function PlanScreen() {
       actions={
         <Pressable
           accessibilityRole="button"
-          style={styles.generateButton}
+          style={[
+            styles.generateButton,
+            mealPlanMutation.isPending && styles.generateButtonDisabled,
+          ]}
           onPress={() => void generateWeek()}
+          disabled={mealPlanMutation.isPending}
         >
           <Ionicons name="sparkles-outline" size={15} color={theme.colors.primaryForeground} />
           <AppText style={styles.generateButtonText}>
@@ -361,6 +366,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     ...theme.shadow.fab,
   },
+  generateButtonDisabled: { opacity: 0.5 },
   generateButtonText: {
     color: theme.colors.primaryForeground,
     fontFamily: theme.fontFamily.extrabold,

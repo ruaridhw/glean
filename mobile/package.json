@@ -5,6 +5,9 @@
   "scripts": {
     "check": "biome check . && npm run typecheck && knip && node scripts/guard-text-imports.mjs",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:bundle": "npm run test:bundle:android && npm run test:bundle:ios",
+    "test:bundle:android": "expo export --platform android --output-dir .cache/native-bundle-smoke/android --clear",
+    "test:bundle:ios": "expo export --platform ios --output-dir .cache/native-bundle-smoke/ios --clear",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "e2e": "for flow in e2e/*.yaml; do maestro test --env APP_ID=${APP_ID:-host.exp.exponent} --env EXPO_URL=${EXPO_URL:-exp://localhost:8081} \"$flow\" || exit 1; done",

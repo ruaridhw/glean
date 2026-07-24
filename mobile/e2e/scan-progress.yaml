@@ -6,7 +6,7 @@ name: "Scan Progress: scan screen loads"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Pantry
+      tab: pantry
 
 # Navigate to scan — try FAB route (works whether pantry is empty or not)
 - tapOn: "Add pantry item"

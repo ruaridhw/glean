@@ -27,7 +27,7 @@ name: "Error States: offline banner and API error handling"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Meals
+      tab: meals
 - tapOn: "Discover"
 - tapOn: "Search recipes →"
 

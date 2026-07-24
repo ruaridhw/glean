@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Glean brand mark">
+  <!-- Same geometry as src/components/GleanMark.tsx (mark 2a-i): two leaves + curved stem.
+       White-on-green variant used for app icons and splash. -->
+  <path d="M30.5 29C30.5 14 43 5 58 5C58 20 45.5 29 30.5 29Z" fill="#d8f2e0"/>
+  <path d="M33.5 36C33.5 20 21 11 6 11C6 27 19 36 33.5 36Z" fill="#ffffff"/>
+  <path d="M32 57C29.5 48 30 39 32.5 30" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+</svg>

@@ -2,7 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { type ReactElement, useCallback, useState } from "react";
 import { FlatList, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { PantrySkeleton } from "@/components/skeletons/PantrySkeleton";
 import { SwipeDeleteRow } from "@/components/swipe-delete-row";
@@ -61,6 +61,27 @@ function ScanButton() {
       <Ionicons name="camera-outline" size={18} color={theme.colors.primaryForeground} />
       <AppText style={styles.scanButtonText}>Scan</AppText>
     </Pressable>
+  );
+}
+
+function AddPantryButton(): ReactElement {
+  return (
+    <IconButton
+      icon="add"
+      accessibilityLabel="Add pantry item"
+      color={theme.colors.primaryForeground}
+      backgroundColor={theme.colors.primary}
+      onPress={() => router.push("/(tabs)/pantry/add")}
+    />
+  );
+}
+
+function PantryHeaderActions(): ReactElement {
+  return (
+    <>
+      <AddPantryButton />
+      <ScanButton />
+    </>
   );
 }
 
@@ -264,7 +285,7 @@ export default function PantryScreen() {
         title="Pantry"
         subtitle="Reduce waste, eat what you have"
         testID="pantry.screen"
-        actions={<ScanButton />}
+        actions={<PantryHeaderActions />}
       >
         <EmptyState
           testID="pantry.emptyState"
@@ -300,7 +321,12 @@ export default function PantryScreen() {
     filter === ALL_FILTER ? allSections : allSections.filter((section) => section.key === filter);
 
   return (
-    <AppScreen title="Pantry" chips={chips} testID="pantry.screen" actions={<ScanButton />}>
+    <AppScreen
+      title="Pantry"
+      chips={chips}
+      testID="pantry.screen"
+      actions={<PantryHeaderActions />}
+    >
       <FilterChipRow filters={filters} active={filter} onSelect={setFilter} />
       <FlatList
         testID="pantry.list"

@@ -1,36 +1,59 @@
 // mobile/app/(tabs)/pantry/add.tsx
 
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppText } from "@/components/ui/AppText";
 import { theme } from "@/theme";
 
+interface AddOption {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  route: Parameters<typeof router.push>[0];
+}
+
+const OPTIONS: AddOption[] = [
+  {
+    icon: "receipt-outline",
+    label: "Scan Receipt",
+    sub: "Take a photo of your receipt",
+    route: "/(tabs)/pantry/scan",
+  },
+  {
+    icon: "chatbubble-outline",
+    label: "Describe Purchase",
+    sub: "Type what you bought",
+    route: "/(tabs)/pantry/describe",
+  },
+  {
+    icon: "create-outline",
+    label: "Manual Entry",
+    sub: "Add a single item",
+    route: "/(tabs)/pantry/manual-entry",
+  },
+];
+
 export default function AddScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <AppText style={styles.heading}>Add to Pantry</AppText>
-      <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/scan")}>
-        <AppText style={styles.icon}>🧾</AppText>
-        <View>
-          <AppText style={styles.label}>Scan Receipt</AppText>
-          <AppText style={styles.sub}>Take a photo of your receipt</AppText>
-        </View>
-      </Pressable>
-      <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/describe")}>
-        <AppText style={styles.icon}>💬</AppText>
-        <View>
-          <AppText style={styles.label}>Describe Purchase</AppText>
-          <AppText style={styles.sub}>Type what you bought</AppText>
-        </View>
-      </Pressable>
-      <Pressable style={styles.option} onPress={() => router.push("/(tabs)/pantry/manual-entry")}>
-        <AppText style={styles.icon}>✏️</AppText>
-        <View>
-          <AppText style={styles.label}>Manual Entry</AppText>
-          <AppText style={styles.sub}>Add a single item</AppText>
-        </View>
-      </Pressable>
+      {OPTIONS.map((option) => (
+        <Pressable
+          key={option.label}
+          style={styles.option}
+          onPress={() => router.push(option.route)}
+        >
+          <View style={styles.iconChip}>
+            <Ionicons name={option.icon} size={22} color={theme.colors.primaryDark} />
+          </View>
+          <View>
+            <AppText style={styles.label}>{option.label}</AppText>
+            <AppText style={styles.sub}>{option.sub}</AppText>
+          </View>
+        </Pressable>
+      ))}
     </SafeAreaView>
   );
 }
@@ -52,7 +75,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
     ...theme.shadow.card,
   },
-  icon: { fontSize: 28 },
+  iconChip: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   label: {
     fontSize: 16,
     fontFamily: theme.fontFamily.bold,

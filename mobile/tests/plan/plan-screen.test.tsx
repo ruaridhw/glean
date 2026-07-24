@@ -1,5 +1,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { router } from "expo-router";
+// @ts-expect-error -- test-only escape hatch, see jest.mock("expo-router") below
+import { __resetRouterMock, __setSearchParams, __triggerRefocus, router } from "expo-router";
+import { useState } from "react";
 import { useGenerateMealPlan } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
@@ -28,10 +30,54 @@ jest.mock("react-native-safe-area-context", () => ({
 
 jest.mock("expo-router", () => {
   const React = require("react");
+  // Real expo-router calls useFocusEffect's callback on every focus event
+  // (mount, and again each time the screen regains focus after navigating
+  // away), and useLocalSearchParams reactively reflects router.setParams.
+  // Mapping useFocusEffect to a plain useEffect and useLocalSearchParams to
+  // a static value can't reproduce the refocus-duplicate bug, nor prove a
+  // fix that clears the param via router.setParams. This fake wires the two
+  // together: setParams updates shared state and notifies subscribers, and
+  // __triggerRefocus imperatively re-fires the latest captured focus
+  // callback to simulate "navigate away, then back" without a real
+  // NavigationContainer.
+  const state: { focusCallback: (() => void) | undefined; params: Record<string, unknown> } = {
+    focusCallback: undefined,
+    params: {},
+  };
+  const listeners = new Set<() => void>();
+  const setParams = (patch: Record<string, unknown>) => {
+    const next = { ...state.params, ...patch };
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined) delete next[key];
+    }
+    state.params = next;
+    listeners.forEach((listener) => {
+      listener();
+    });
+  };
   return {
-    router: { push: jest.fn() },
-    useFocusEffect: (callback: () => void) => React.useEffect(callback, [callback]),
-    useLocalSearchParams: () => ({}),
+    router: { push: jest.fn(), setParams: jest.fn(setParams) },
+    useFocusEffect: (callback: () => void) => {
+      state.focusCallback = callback;
+      React.useEffect(callback, [callback]);
+    },
+    useLocalSearchParams: () => {
+      const [, forceRender] = React.useReducer((c: number) => c + 1, 0);
+      React.useEffect(() => {
+        listeners.add(forceRender);
+        return () => listeners.delete(forceRender);
+      }, [forceRender]);
+      return state.params;
+    },
+    __triggerRefocus: () => state.focusCallback?.(),
+    __setSearchParams: (params: Record<string, unknown>) => {
+      state.params = params;
+    },
+    __resetRouterMock: () => {
+      state.focusCallback = undefined;
+      state.params = {};
+      listeners.clear();
+    },
   };
 });
 
@@ -91,6 +137,7 @@ describe("PlanScreen", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (__resetRouterMock as () => void)();
     mutate.mockImplementation((_payload, callbacks) => {
       callbacks.onSuccess({ suggestions: [{ recipe_id: 10 }] });
     });
@@ -199,11 +246,75 @@ describe("PlanScreen", () => {
     expect(addShoppingGapsForRecipe).toHaveBeenCalledWith(10);
   });
 
+  it("disables Generate while a request is pending, so a double-tap can't fire it twice", async () => {
+    // mutateSpy records every call generateWeek() makes into mutate(),
+    // regardless of whether/when any of them resolve — this isolates the
+    // "does a second tap re-enter generateWeek" question from mutation
+    // resolution timing, which a naive single-shared-callback stub would
+    // silently mask (a second call's callbacks would just replace the
+    // first's, hiding a double-fire instead of surfacing it).
+    const mutateSpy = jest.fn();
+    (useGenerateMealPlan as jest.Mock).mockImplementation(() => {
+      const [isPending, setIsPending] = useState(false);
+      return {
+        isPending,
+        reset: jest.fn(),
+        mutate: (...callArgs: unknown[]) => {
+          mutateSpy(...callArgs);
+          setIsPending(true);
+        },
+      };
+    });
+
+    const screen = render(<PlanScreen />);
+    await waitFor(() => expect(screen.getByText("Generate")).toBeTruthy());
+
+    fireEvent.press(screen.getByText("Generate"));
+    await waitFor(() => expect(screen.getByText("Generating")).toBeTruthy());
+
+    // Generate button is disabled while pending, so this second tap must be
+    // a no-op rather than firing generateWeek again. generateWeek() is
+    // async even when it *does* re-enter (it awaits getPantryItems /
+    // getSavedRecipes / getUserConfig before calling mutate), so a bare
+    // synchronous assertion right after fireEvent.press would pass even
+    // without the guard, simply because the second call hadn't reached
+    // mutate() yet. Flush pending microtasks first to rule that out.
+    fireEvent.press(screen.getByText("Generating"));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mutateSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("navigates empty slots to recipe search", async () => {
     const screen = render(<PlanScreen />);
 
     await waitFor(() => expect(screen.getAllByText("Add a dinner")[0]).toBeTruthy());
     fireEvent.press(screen.getAllByText("Add a dinner")[0]!);
     expect(router.push).toHaveBeenCalledWith("/(tabs)/meals/search");
+  });
+
+  it("does not re-add the same recipe when the plan tab regains focus again", async () => {
+    // Reproduces the reported bug: "Add to plan" hands off via the
+    // add_recipe_id route param (see recipe-detail-screen.test.tsx's
+    // "add-to-plan handoff"). If that param is never cleared, every
+    // subsequent focus of the plan tab re-runs handleAddRecipe for the same
+    // id and inserts another meal_plan_entries row.
+    (__setSearchParams as (params: Record<string, unknown>) => void)({ add_recipe_id: "7" });
+
+    render(<PlanScreen />);
+
+    await waitFor(() => expect(addMealPlanEntry).toHaveBeenCalledTimes(1));
+    expect(addMealPlanEntry).toHaveBeenCalledWith(7);
+
+    // Simulate navigating off the plan tab and back onto it. The
+    // add_recipe_id search param is only gone on refocus if the screen
+    // cleared it (via router.setParams) after consuming it the first time.
+    await act(async () => {
+      (__triggerRefocus as () => void)();
+    });
+
+    expect(addMealPlanEntry).toHaveBeenCalledTimes(1);
   });
 });

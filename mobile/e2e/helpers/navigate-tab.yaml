@@ -1,3 +1,6 @@
 appId: ${APP_ID}
 ---
-- tapOn: ${tab}
+- tapOn:
+    id: tabs.${tab}
+- assertVisible:
+    id: ${tab}.screen
