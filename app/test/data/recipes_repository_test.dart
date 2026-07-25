@@ -113,6 +113,20 @@ void main() {
       expect(saved.map((r) => r.id).toList(), [secondId, firstId]);
     });
 
+    test('getSaved is a one-shot snapshot with the same ordering and dietary '
+        'flags as watchSaved (FINDINGS.md F-14)', () async {
+      final firstId = await saveSampleRecipe(externalId: 'ext-a');
+      final secondId = await saveSampleRecipe(externalId: 'ext-b');
+
+      final saved = await repository.getSaved(userId);
+
+      expect(saved.map((r) => r.id).toList(), [secondId, firstId]);
+      expect(
+        saved.first.dietaryFlags,
+        unorderedEquals(['vegetarian', 'dairy_free']),
+      );
+    });
+
     test(
       'deleteRecipe keeps a referencing plan entry and only clears the link (AC-MEAL-03)',
       () async {

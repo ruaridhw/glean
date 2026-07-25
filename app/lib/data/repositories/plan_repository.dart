@@ -52,6 +52,31 @@ class PlanRepository {
     return query.watch().map((rows) => rows.map(_mapEntry).toList());
   }
 
+  /// One-shot twin of [watchWeek]: same week window and ordering, but a
+  /// plain `.get()`. Command paths (e.g. meal-plan generation) need a
+  /// snapshot of this week's entries, not a subscription opened and
+  /// immediately cancelled (FINDINGS.md F-14).
+  Future<List<MealPlanEntryView>> getWeek({
+    required String userId,
+    required DateTime weekStart,
+  }) async {
+    final start = formatDate(weekStart);
+    final end = formatDate(endOfWeek(weekStart));
+    final query = _db.select(_db.mealPlanEntries)
+      ..where(
+        (t) =>
+            t.userId.equals(userId) &
+            t.plannedDate.isBiggerOrEqualValue(start) &
+            t.plannedDate.isSmallerThanValue(end),
+      )
+      ..orderBy([
+        (t) => OrderingTerm.asc(t.plannedDate),
+        (t) => OrderingTerm.asc(t.id),
+      ]);
+    final rows = await query.get();
+    return rows.map(_mapEntry).toList();
+  }
+
   MealPlanEntryView _mapEntry(MealPlanEntry row) => MealPlanEntryView(
     id: row.id,
     userId: row.userId,

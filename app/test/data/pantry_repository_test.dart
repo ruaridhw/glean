@@ -283,6 +283,81 @@ void main() {
       );
     });
 
+    group('getAll (one-shot snapshot, FINDINGS.md F-14)', () {
+      test('matches watchAll\'s rows for the same user', () async {
+        await repository.addItem(
+          userId: userId,
+          name: 'strawberries',
+          quantity: 1,
+          unit: 'punnet',
+          category: 'berries',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final snapshot = await repository.getAll(userId);
+        expect(snapshot, hasLength(1));
+        expect(snapshot.single.canonicalName, 'strawberries');
+        expect(snapshot.single.foodGroup, 'fruit');
+      });
+
+      test(
+        'a pantry item whose ingredient has no category still appears, '
+        'with foodGroup "other" (regression, same join shape as watchAll)',
+        () async {
+          final ingredients = IngredientsRepository(db);
+          final ingredient = await ingredients.resolveOrCreate(
+            canonicalName: 'mystery meat',
+          );
+          expect(ingredient.category, isNull);
+          await db
+              .into(db.pantryItems)
+              .insert(
+                PantryItemsCompanion.insert(
+                  userId: userId,
+                  ingredientId: ingredient.id,
+                  quantity: 1,
+                  unit: 'unit',
+                  updatedAt: DateTime(2026, 1, 1).toIso8601String(),
+                ),
+              );
+
+          final snapshot = await repository.getAll(userId);
+
+          // Same non-dropping guarantee as watchAll's leftOuterJoin — a
+          // null category must never disappear the row (data-loss bug
+          // already fixed once for the stream version).
+          expect(snapshot, hasLength(1));
+          expect(snapshot.single.canonicalName, 'mystery meat');
+          expect(snapshot.single.category, isNull);
+          expect(snapshot.single.foodGroup, 'other');
+          expect(snapshot.single.shelfLifeDays, isNull);
+        },
+      );
+
+      test('only returns the given user\'s items (AC-DATA-02/03)', () async {
+        await repository.addItem(
+          userId: userId,
+          name: 'garlic',
+          quantity: 1,
+          unit: 'unit',
+          category: 'alliums',
+          now: DateTime(2026, 1, 1),
+        );
+        await repository.addItem(
+          userId: 'user-b',
+          name: 'ginger',
+          quantity: 1,
+          unit: 'unit',
+          category: 'alliums',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final snapshot = await repository.getAll(userId);
+        expect(snapshot, hasLength(1));
+        expect(snapshot.single.canonicalName, 'garlic');
+      });
+    });
+
     group('addItems (review-screen commit, AC-PAN-10)', () {
       test('commits every item in one transaction', () async {
         final ids = await repository.addItems(

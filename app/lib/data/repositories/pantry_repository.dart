@@ -99,6 +99,46 @@ class PantryRepository {
     return query.watch().map((rows) => rows.map(_mapRow).toList());
   }
 
+  /// One-shot twin of [watchAll] — same join, ordering and
+  /// coalesced-to-`"other"` `foodGroup` shape, but a plain `.get()` rather
+  /// than a `.watch()` subscription. Command paths (e.g. meal-plan
+  /// generation) need a snapshot of the pantry, not a live subscription
+  /// they immediately cancel — that pattern opens and tears down a
+  /// `StreamQueryStore` subscription for nothing, which is what made
+  /// FINDINGS.md F-14's callers flaky.
+  Future<List<PantryItemView>> getAll(String userId) async {
+    final query =
+        _db.select(_db.pantryItems).join([
+            innerJoin(
+              _db.ingredients,
+              _db.ingredients.id.equalsExp(_db.pantryItems.ingredientId),
+            ),
+            leftOuterJoin(
+              _db.ingredientCategories,
+              _db.ingredientCategories.category.equalsExp(
+                _db.ingredients.category,
+              ),
+            ),
+          ])
+          ..where(_db.pantryItems.userId.equals(userId))
+          ..orderBy([
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.expiryDate,
+                const Constant('9999-12-31'),
+              ]),
+            ),
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.lastUsedAt,
+                const Constant('0000-01-01'),
+              ]),
+            ),
+          ]);
+    final rows = await query.get();
+    return rows.map(_mapRow).toList();
+  }
+
   // The fallback for a pantry item whose ingredient has no taxonomy
   // category — matches the backend's and the RN UI's "other" bucket
   // (FINDINGS.md F-07/F-08) rather than inventing a new vocabulary.

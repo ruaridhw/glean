@@ -113,6 +113,43 @@ void main() {
       },
     );
 
+    test(
+      'getWeek is a one-shot snapshot scoped like watchWeek (FINDINGS.md F-14)',
+      () async {
+        final week1 = startOfWeek(DateTime(2026, 1, 5));
+        final week2 = startOfWeek(DateTime(2026, 1, 12));
+        final recipe1 = await createRecipe('Week 1 meal');
+        final recipe2 = await createRecipe('Week 2 meal');
+
+        await repository.addEntry(
+          userId: userId,
+          recipeId: recipe1,
+          recipeTitle: 'Week 1 meal',
+          servings: 2,
+          plannedDate: week1,
+        );
+        await repository.addEntry(
+          userId: userId,
+          recipeId: recipe2,
+          recipeTitle: 'Week 2 meal',
+          servings: 2,
+          plannedDate: week2,
+        );
+
+        final week1Snapshot = await repository.getWeek(
+          userId: userId,
+          weekStart: week1,
+        );
+        expect(week1Snapshot.map((e) => e.recipeTitle), ['Week 1 meal']);
+
+        final week2Snapshot = await repository.getWeek(
+          userId: userId,
+          weekStart: week2,
+        );
+        expect(week2Snapshot.map((e) => e.recipeTitle), ['Week 2 meal']);
+      },
+    );
+
     group('capacity', () {
       test('is per-week, not lifetime (AC-PLAN-04)', () async {
         await setMealsPerWeek(2);

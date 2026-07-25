@@ -307,3 +307,41 @@ The repositories already expose one-shot `Future` getters for some of this
 (`uncookedCountForWeek`, `remainingCapacityForWeek`) — the gap is one-shot reads for "all pantry
 items", "saved recipes" and "this week's entries". **Fix: add those getters and have the controller
 use them.** Reserve `.watch()` for what the UI subscribes to.
+
+## F-15 — `autoDispose` command providers can be disposed mid-network-call
+**Status:** OPEN · surfaced independently by: meals agent, then the plan fix agent
+**Affects:** AC-DATA-06, AC-PAN-14, AC-MEAL-10, AC-PLAN-09/10 — and it is a **production** risk
+
+Every remote command provider in `lib/api/providers/` is an `AsyncNotifierProvider.autoDispose`.
+If nothing holds the provider alive across its `await`, Riverpod disposes it mid-flight and the
+notifier throws `Cannot use the Ref ... after it has been disposed` when it next assigns `state`.
+
+**In the UI that presents as the action silently doing nothing** — precisely the dead-end class §11
+catalogues (RN's scan hanging forever on "Almost done…"). It is not a test-only artefact.
+
+Audit at the time of writing — five such providers, three different outcomes:
+
+| Provider | Kept alive? |
+|---|---|
+| `importRecipeControllerProvider` | yes — a `ref.watch` added *after* hitting the crash |
+| `generateMealPlanControllerProvider` | yes — a throwaway `ref.listen` keep-alive in the **caller** |
+| `scanReceiptControllerProvider` | **no** |
+| `describeReceiptControllerProvider` | **no** |
+| `parseShoppingDescriptionControllerProvider` | **no — and referenced nowhere at all** |
+
+Two independent agents hit this and each patched their own call site differently. That is the tell
+that the fix belongs in the **provider**, not in every caller: a caller that forgets gets a silent
+failure, and nothing makes the requirement visible.
+
+The `autoDispose` *intent* is right and documented ("leaving the scan flow drops any in-flight or
+last result") — the defect is that disposal can happen **mid-await**, which is not the same thing as
+disposing when the screen leaves.
+
+**Fix:** inside each notifier's async method, hold `ref.keepAlive()` for the duration of the work and
+release it when done. That keeps the drop-on-leave behaviour while making mid-flight disposal
+impossible, and removes the need for callers to know anything about it. Then unwind the two
+call-site workarounds.
+
+Also resolve `parseShoppingDescriptionControllerProvider`: either wire it to Shop's describe flow or
+delete it. An unreferenced command provider for a live endpoint is either a missing feature or dead
+code, and both want a decision.
