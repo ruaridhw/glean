@@ -75,6 +75,32 @@ void main() {
       expect(find.text('Manual entry'), findsOneWidget);
     });
 
+    testWidgets(
+      'each row settles in via GleanListEntrance rather than popping in '
+      '(R-10, AC-TRN-02)',
+      (WidgetTester tester) async {
+        await pantry.addItem(
+          userId: 'test-user',
+          name: 'butter',
+          quantity: 250,
+          unit: 'g',
+          category: 'dairy',
+          now: DateTime(2026, 1, 1),
+        );
+
+        await harness.pumpAt(tester, AppRoutes.pantry.path);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.ancestor(
+            of: find.text('butter'),
+            matching: find.byType(GleanListEntrance),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
     testWidgets('swipe-to-delete removes the item and shows undo; undo '
         'restores it (AC-UX-01/02)', (WidgetTester tester) async {
       await pantry.addItem(

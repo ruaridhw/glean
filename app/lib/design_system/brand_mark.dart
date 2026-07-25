@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'tokens.dart';
+
 /// Which vendored brand SVG to render.
 ///
 /// FLUTTER_MIGRATION.md §2 calls this asset `assets/source/glean-mark.svg`.
@@ -33,6 +35,17 @@ const Map<GleanMarkAsset, String> _assetPaths = <GleanMarkAsset, String>{
 
 /// Renders the Glean brand mark from a vendored SVG via `flutter_svg`
 /// (AC-DS-07). Defaults to [GleanMarkAsset.icon].
+///
+/// F-01: the vendored SVGs used to bake a drop shadow into an
+/// `feDropShadow` `<filter>`, which `flutter_svg` 2.3.0 cannot render — it
+/// logged `unhandled element <filter/>` and silently dropped the shadow
+/// (a silent visual regression against the RN app, plus console noise on
+/// every test that touched sign-in or onboarding). The `<filter>` is now
+/// stripped from the SVG source, and the same soft elevation shadow is
+/// reapplied here instead, via the design system's own `card` shadow token
+/// rather than a hand-rolled `BoxShadow` (AC-DS-03) — so every rendering of
+/// the mark keeps its shadow, and it stays in sync if that token ever
+/// changes per theme.
 class GleanMark extends StatelessWidget {
   const GleanMark({super.key, this.asset = GleanMarkAsset.icon, this.size});
 
@@ -44,6 +57,11 @@ class GleanMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(_assetPaths[asset]!, width: size, height: size);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        boxShadow: <BoxShadow>[context.tokens.shadow.card],
+      ),
+      child: SvgPicture.asset(_assetPaths[asset]!, width: size, height: size),
+    );
   }
 }

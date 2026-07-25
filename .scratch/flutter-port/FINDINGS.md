@@ -9,11 +9,23 @@ Status: `OPEN` needs action · `RESOLVED` done · `ACCEPTED` deliberate, no acti
 ---
 
 ## F-01 — Brand SVGs contain `<filter>` elements `flutter_svg` cannot render
-**Status:** OPEN (still reproducible — all three SVGs still contain `<filter>` elements as of
-this check) · surfaced by: design-system agent · affects: AC-DS-07 · **being fixed:**
-REMEDIATION.md R-13 assigns this exact fix (strip the filter, reapply the shadow in Flutter) to
-the design-auth-haptics wave; another agent owns it concurrently with this pass, so leave this
-status alone rather than re-diagnosing or re-fixing it here.
+**Status:** RESOLVED · surfaced by: design-system agent · affects: AC-DS-07
+
+**Resolution (polish/verification pass, R-13):** the `<filter>`/`feDropShadow` defs and their
+`filter="url(#...)"` references are stripped from all three vendored SVGs
+(`app/assets/brand/glean-b1-{icon,splash-logo,adaptive-foreground}.svg`) — each edit leaves an
+in-file comment naming this finding. The dropped shadow is reapplied in Flutter instead:
+`GleanMark` (`app/lib/design_system/brand_mark.dart`) now wraps the rendered `SvgPicture` in a
+`DecoratedBox` using the design system's own `AppTokens.shadow.card` `BoxShadow` (tokens, not a
+hand-rolled constant, per AC-DS-03) — so every rendering of the mark keeps a shadow, not just the
+one instance a call site happened to add a container to. `test/design_system/brand_mark_test.dart`
+asserts the shadow is present; a full `flutter test` run has zero `unhandled element <filter/>`
+occurrences (previously one per `GleanMark` render, i.e. every test touching sign-in or
+onboarding). The native splash screen is unaffected — `flutter_native_splash.yaml` points at
+`glean-b1-splash-logo.png`, a pre-rasterised export taken before this edit, not re-derived from
+the SVG at build time.
+
+Original finding below.
 
 All three vendored brand SVGs (`app/assets/brand/glean-b1-{icon,splash-logo,adaptive-foreground}.svg`)
 contain `<filter>` elements that `flutter_svg` 2.3.0 does not support. It logs

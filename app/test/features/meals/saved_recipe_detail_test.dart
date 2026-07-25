@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
 
@@ -110,6 +111,36 @@ void main() {
           ),
           findsNothing,
         );
+      },
+    );
+
+    testWidgets(
+      'the outer loading→content hand-off goes through GleanCrossFade, not '
+      'a hard cut (R-14, AC-TRN-01)',
+      (WidgetTester tester) async {
+        final int id = await recipes.save(
+          userId: 'test-user',
+          externalId: 'ext-4',
+          title: 'Tomato Soup',
+          ingredients: const <SaveRecipeIngredient>[],
+        );
+
+        await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+        // Present in the tree wrapping whichever state is current — this is
+        // the mechanism itself, not a frame-timing assertion (the previous
+        // bare `.when()` had no equivalent widget to find here at all). At
+        // least one: this outer instance, possibly plus
+        // `_SavedRecipeDetailBody`'s own separate one for the ingredients
+        // list, depending on how far the in-memory streams have resolved by
+        // this point.
+        expect(find.byType(GleanCrossFade), findsAtLeastNWidgets(1));
+
+        await tester.pumpAndSettle();
+        expect(find.text('Tomato Soup'), findsOneWidget);
+        // Two now: this outer one plus `_SavedRecipeDetailBody`'s own,
+        // separate cross-fade for the ingredients list — both legitimate,
+        // not a regression of this test's own making.
+        expect(find.byType(GleanCrossFade), findsNWidgets(2));
       },
     );
 

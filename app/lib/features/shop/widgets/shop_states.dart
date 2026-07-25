@@ -19,7 +19,7 @@ class ShopEmptyState extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Icon(
-              Icons.shopping_cart_outlined,
+              Icons.shopping_cart_rounded,
               size: 40,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

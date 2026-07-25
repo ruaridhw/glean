@@ -9,12 +9,18 @@
       <stop offset="0" stop-color="#ffffff"/>
       <stop offset="1" stop-color="#f4fff0"/>
     </linearGradient>
-    <filter id="tileShadow" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="26" stdDeviation="32" flood-color="#2c1a0e" flood-opacity="0.16"/>
-    </filter>
   </defs>
   <rect width="1024" height="1024" fill="none"/>
-  <g filter="url(#tileShadow)">
+  <!--
+    F-01: this group used to carry `filter="url(#tileShadow)"`, an
+    `feDropShadow` `flutter_svg` 2.3.0 cannot render (it logs "unhandled
+    element <filter/>" and silently drops it). Stripped here; see
+    `glean-b1-icon.svg`'s equivalent comment. Unaffected: the native splash
+    screen uses `glean-b1-splash-logo.png`, a pre-rasterised export of this
+    SVG taken before this edit — not re-derived from it at build time — so
+    its baked-in shadow is untouched.
+  -->
+  <g>
     <rect x="112" y="112" width="800" height="800" rx="176" fill="url(#tile)"/>
     <path
       d="M703 332c-77-92-221-112-322-43-105 72-136 210-71 319 35 59 90 99 151 116"

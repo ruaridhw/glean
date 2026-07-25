@@ -6,38 +6,39 @@ import 'package:go_router/go_router.dart';
 /// (and therefore one independent back stack) per tab — the direct analogue
 /// of the RN app's per-tab `Stack` navigators (AC-TEST-14).
 ///
-/// Icons are plain Material `Icons` (`_rounded`/`_outlined` variants) per
-/// AC-DS-01/AC-DS-06 — no Cupertino, no icon package.
+/// Icons are plain Material `Icons` `_rounded` variants per AC-DS-01/AC-DS-06
+/// — no Cupertino, no icon package.
 class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
+  // R-13/AC-DS-06: these previously paired an `_outlined` unselected icon
+  // with a `_rounded` `selectedIcon` — a common Material 3 convention, but
+  // AC-DS-06's sanctioned exception to "`_rounded` throughout" is a
+  // vendored SVG for a glyph with no rounded equivalent, not a different
+  // built-in suffix. A rounded equivalent exists for all five, so there is
+  // nothing to justify here — `selectedIcon` is simply dropped and `icon`
+  // switched to `_rounded`, which `NavigationDestination` then uses for
+  // both states. The selection indicator pill plus the label already
+  // convey which tab is active.
   static const List<NavigationDestination> _destinations =
       <NavigationDestination>[
+        NavigationDestination(icon: Icon(Icons.eco_rounded), label: 'Pantry'),
         NavigationDestination(
-          icon: Icon(Icons.eco_outlined),
-          selectedIcon: Icon(Icons.eco_rounded),
-          label: 'Pantry',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.restaurant_outlined),
-          selectedIcon: Icon(Icons.restaurant_rounded),
+          icon: Icon(Icons.restaurant_rounded),
           label: 'Meals',
         ),
         NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month_rounded),
+          icon: Icon(Icons.calendar_month_rounded),
           label: 'Plan',
         ),
         NavigationDestination(
-          icon: Icon(Icons.shopping_cart_outlined),
-          selectedIcon: Icon(Icons.shopping_cart_rounded),
+          icon: Icon(Icons.shopping_cart_rounded),
           label: 'Shop',
         ),
         NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
+          icon: Icon(Icons.settings_rounded),
           label: 'Settings',
         ),
       ];

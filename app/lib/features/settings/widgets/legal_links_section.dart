@@ -27,14 +27,14 @@ class LegalLinksSection extends ConsumerWidget {
       child: Column(
         children: <Widget>[
           ListTile(
-            leading: const Icon(Icons.description_outlined),
+            leading: const Icon(Icons.description_rounded),
             title: const Text('Terms of Service'),
             trailing: const Icon(Icons.open_in_new_rounded),
             onTap: () => _open(context, ref, termsOfServiceUrl),
           ),
           const Divider(height: 1),
           ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
+            leading: const Icon(Icons.privacy_tip_rounded),
             title: const Text('Privacy Policy'),
             trailing: const Icon(Icons.open_in_new_rounded),
             onTap: () => _open(context, ref, privacyPolicyUrl),

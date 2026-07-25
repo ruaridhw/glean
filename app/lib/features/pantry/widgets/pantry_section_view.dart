@@ -11,6 +11,10 @@ import 'pantry_item_row.dart';
 /// `Dismissible` already animates its own removal gap closed (AC-TRN-02);
 /// adding a second removal animation for the same item would fight it
 /// (matches the same call in `lib/features/meals/meals_screen.dart`).
+/// Insertion is the other half of AC-TRN-02 (R-10) — each row is wrapped in
+/// [GleanListEntrance], keyed by the item's own id so an item that merely
+/// shifted position (e.g. another item was added above it) keeps its
+/// already-settled state instead of replaying the entrance.
 class PantrySectionView extends StatelessWidget {
   const PantrySectionView({
     super.key,
@@ -50,9 +54,15 @@ class PantrySectionView extends StatelessWidget {
           ),
           SizedBox(height: tokens.spacing.sm),
           for (final PantryItemView item in section.items)
-            Padding(
-              padding: EdgeInsets.only(bottom: tokens.spacing.sm),
-              child: PantryItemRow(item: item, onDelete: () => onDelete(item)),
+            GleanListEntrance(
+              key: ValueKey<int>(item.id),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: tokens.spacing.sm),
+                child: PantryItemRow(
+                  item: item,
+                  onDelete: () => onDelete(item),
+                ),
+              ),
             ),
         ],
       ),

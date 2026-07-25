@@ -43,25 +43,36 @@ class SavedRecipeDetail extends ConsumerWidget {
       recipeByIdProvider(recipeId),
     );
 
-    return recipeAsync.when(
-      data: (RecipeView? recipe) {
-        // AC-MEAL-12: a missing recipe (never existed for this user, or was
-        // deleted while this screen was open) is a recoverable error, never
-        // a permanent spinner — reusing `RouteErrorScreen` per its own doc
-        // comment rather than calling `pop()` on a possibly-empty stack.
-        if (recipe == null) {
-          return const RouteErrorScreen(
-            message: 'This recipe could not be found.',
-          );
-        }
-        return _SavedRecipeDetailBody(recipe: recipe);
-      },
-      loading: () => Scaffold(
+    // R-14: this outer loading→content switch used to be a bare `.when()`
+    // hard cut — the one place that pattern survived after every sibling
+    // screen (Pantry/Plan/Meals/`RecipePreviewScreen`) standardised on
+    // `GleanCrossFade`. Wrapped the same way here: `showSkeleton` covers
+    // only the genuine first-load wait, and `content` still resolves
+    // data/error/missing-recipe exactly as before.
+    return GleanCrossFade(
+      showSkeleton: !recipeAsync.hasValue && !recipeAsync.hasError,
+      skeleton: Scaffold(
         appBar: AppBar(title: const Text('Recipe')),
         body: const RecipeDetailSkeleton(),
       ),
-      error: (Object error, StackTrace stackTrace) =>
-          const RouteErrorScreen(message: 'This recipe could not be loaded.'),
+      content: recipeAsync.when(
+        data: (RecipeView? recipe) {
+          // AC-MEAL-12: a missing recipe (never existed for this user, or
+          // was deleted while this screen was open) is a recoverable error,
+          // never a permanent spinner — reusing `RouteErrorScreen` per its
+          // own doc comment rather than calling `pop()` on a possibly-empty
+          // stack.
+          if (recipe == null) {
+            return const RouteErrorScreen(
+              message: 'This recipe could not be found.',
+            );
+          }
+          return _SavedRecipeDetailBody(recipe: recipe);
+        },
+        loading: () => const SizedBox.shrink(),
+        error: (Object error, StackTrace stackTrace) =>
+            const RouteErrorScreen(message: 'This recipe could not be loaded.'),
+      ),
     );
   }
 }

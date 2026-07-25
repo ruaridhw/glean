@@ -4,12 +4,16 @@
       <stop offset="0" stop-color="#ffffff"/>
       <stop offset="1" stop-color="#f4fff0"/>
     </linearGradient>
-    <filter id="shadow" x="-12%" y="-12%" width="124%" height="124%">
-      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#003f25" flood-opacity="0.2"/>
-    </filter>
   </defs>
   <rect width="1024" height="1024" fill="none"/>
-  <g filter="url(#shadow)">
+  <!--
+    F-01: this group used to carry `filter="url(#shadow)"`, an
+    `feDropShadow` `flutter_svg` 2.3.0 cannot render (it logs "unhandled
+    element <filter/>" and silently drops it). Stripped here; see
+    `glean-b1-icon.svg`'s equivalent comment — `GleanMark` reapplies the
+    shadow in Flutter for every asset this enum covers.
+  -->
+  <g>
     <path
       d="M703 332c-77-92-221-112-322-43-105 72-136 210-71 319 35 59 90 99 151 116"
       fill="none"

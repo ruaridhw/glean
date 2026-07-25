@@ -7,8 +7,9 @@
 /// **Short and genuinely skippable**: three steps, a "Skip" escape hatch
 /// visible on every one of them, and reused controls (`IntegerSliderControl`,
 /// `DietaryFlagsControl`) rather than a bespoke duplicate set (§6 — "reuse
-/// the same controls as Settings"). See `onboarding_gate.dart` for why this
-/// screen isn't wired into real navigation yet.
+/// the same controls as Settings"). See `onboarding_gate.dart` for how this
+/// screen is wired into real navigation (`OnboardingGate`, in the router's
+/// tab-shell builder).
 library;
 
 import 'dart:async';
@@ -23,11 +24,9 @@ import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
-import '../settings/settings_presentation.dart';
-import '../settings/widgets/dietary_flags_control.dart';
-import '../settings/widgets/integer_slider_control.dart';
 import 'providers/onboarding_status.dart';
-import 'widgets/onboarding_step_scaffold.dart';
+import 'widgets/onboarding_footer.dart';
+import 'widgets/onboarding_step_body.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -92,89 +91,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
-  Widget _buildStep() {
-    switch (_step) {
-      case 0:
-        return OnboardingStepScaffold(
-          key: const ValueKey<String>('step-dinners'),
-          question: 'How many dinners do you cook at home most weeks?',
-          child: IntegerSliderControl(
-            value: _dinners,
-            min: SettingsOptionRanges.dinnersPerWeek.min,
-            max: SettingsOptionRanges.dinnersPerWeek.max,
-            onChanged: (int v) => setState(() => _dinners = v),
-            onCommitted: (int v) => setState(() => _dinners = v),
-          ),
-        );
-      case 1:
-        return OnboardingStepScaffold(
-          key: const ValueKey<String>('step-servings'),
-          question: 'How many people are you usually cooking for?',
-          child: IntegerSliderControl(
-            value: _servings,
-            min: SettingsOptionRanges.defaultServings.min,
-            max: SettingsOptionRanges.defaultServings.max,
-            onChanged: (int v) => setState(() => _servings = v),
-            onCommitted: (int v) => setState(() => _servings = v),
-          ),
-        );
-      default:
-        return OnboardingStepScaffold(
-          key: const ValueKey<String>('step-dietary'),
-          question: 'Any dietary preferences we should know about?',
-          subtitle: 'Optional — skip this if none apply.',
-          child: DietaryFlagsControl(
-            selected: _dietaryFlags,
-            onToggle: (String flag, bool isSelected) {
-              setState(() {
-                if (isSelected) {
-                  _dietaryFlags.add(flag);
-                } else {
-                  _dietaryFlags.remove(flag);
-                }
-              });
-            },
-          ),
-        );
-    }
-  }
-
-  Widget _buildFooter(AppTokens tokens) {
-    final bool isLastStep = _step == OnboardingScreen.stepCount - 1;
-    if (!isLastStep) {
-      return Row(
-        children: <Widget>[
-          if (_step > 0)
-            OutlinedButton(
-              onPressed: () => _goToStep(_step - 1),
-              child: const Text('Back'),
-            ),
-          const Spacer(),
-          FilledButton(
-            onPressed: () => _goToStep(_step + 1),
-            child: const Text('Next'),
-          ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        FilledButton(
-          onPressed: () =>
-              unawaited(_finish(persistCaptured: true, navigateToScan: true)),
-          child: const Text('Scan a receipt'),
-        ),
-        SizedBox(height: tokens.spacing.sm),
-        TextButton(
-          onPressed: () =>
-              unawaited(_finish(persistCaptured: true, navigateToScan: false)),
-          child: const Text("I'll do this later"),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
@@ -203,10 +119,37 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
-                  child: _buildStep(),
+                  child: OnboardingStepBody(
+                    key: ValueKey<int>(_step),
+                    step: _step,
+                    dinners: _dinners,
+                    servings: _servings,
+                    dietaryFlags: _dietaryFlags,
+                    onDinnersChanged: (int v) => setState(() => _dinners = v),
+                    onServingsChanged: (int v) => setState(() => _servings = v),
+                    onDietaryFlagToggled: (String flag, bool isSelected) {
+                      setState(() {
+                        if (isSelected) {
+                          _dietaryFlags.add(flag);
+                        } else {
+                          _dietaryFlags.remove(flag);
+                        }
+                      });
+                    },
+                  ),
                 ),
               ),
-              _buildFooter(tokens),
+              OnboardingFooter(
+                step: _step,
+                onBack: () => _goToStep(_step - 1),
+                onNext: () => _goToStep(_step + 1),
+                onScanReceipt: () => unawaited(
+                  _finish(persistCaptured: true, navigateToScan: true),
+                ),
+                onFinishLater: () => unawaited(
+                  _finish(persistCaptured: true, navigateToScan: false),
+                ),
+              ),
             ],
           ),
         ),

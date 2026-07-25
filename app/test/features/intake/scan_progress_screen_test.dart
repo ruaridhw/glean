@@ -1,13 +1,15 @@
 // Widget coverage for the "honest progress" screen (AC-PAN-06): a real
 // indeterminate indicator (no fake staged steps), a scan timeout surfaces
 // and is recoverable (AC-PAN-14 — the RN app hung on "Almost done…"
-// forever), and success lands on the shared review screen with the parsed
-// items and their categories carried through (AC-BE-04).
+// forever), success lands on the shared review screen with the parsed items
+// and their categories carried through (AC-BE-04), and both success and
+// failure fire a `mediumImpact` haptic (R-11, AC-HAP-05).
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/intake/review_screen.dart';
 import 'package:glean/features/intake/scan_progress_screen.dart';
 import 'package:glean/router/app_routes.dart';
@@ -106,6 +108,10 @@ void main() {
       );
       expect(find.text('Try again'), findsOneWidget);
       expect(find.text('Back'), findsOneWidget);
+      // R-11: failure fires the ladder's data-commit weight — Flutter has
+      // no notification-style haptic, so this plus the message above stand
+      // in for one (§7).
+      expect(harness.hapticCalls, contains(HapticWeight.medium));
 
       // Recoverable: "Back" pops out of the flow rather than being stuck.
       await tester.tap(find.text('Back'));
@@ -143,6 +149,10 @@ void main() {
       expect(widget.args.destination, ReviewDestination.pantry);
       expect(widget.args.items.single.name, 'Milk');
       expect(widget.args.items.single.category, 'dairy');
+      // R-11: success also fires the ladder's data-commit weight, routed
+      // through `hapticsProvider` (AC-HAP-04) rather than `HapticFeedback`
+      // directly.
+      expect(harness.hapticCalls, contains(HapticWeight.medium));
     });
   });
 }

@@ -93,30 +93,44 @@ class _SavedRecipesList extends ConsumerWidget {
               message: 'Search for recipes or import one from a URL.',
             );
           }
-          // Animated insert/remove (AC-TRN-02): the gap a SwipeToDeleteRow's
+          // Animated remove (AC-TRN-02): the gap a SwipeToDeleteRow's
           // Dismissible leaves animates closed on its own; wrapping this in
           // an AnimatedList would fight that with a second removal
-          // animation for the same item.
-          return ListView.separated(
-            itemCount: recipes.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (BuildContext context, int index) {
-              final RecipeView recipe = recipes[index];
-              return SwipeToDeleteRow(
-                dismissibleKey: ValueKey<int>(recipe.id),
-                onDelete: () => deleteRecipeWithUndo(context, ref, recipe),
-                child: RecipeCard(
-                  recipe: recipe,
-                  onTap: () {
-                    ref.read(hapticsProvider).lightImpact();
-                    context.pushNamed(
-                      AppRoutes.mealsDetail.name,
-                      pathParameters: <String, String>{'id': '${recipe.id}'},
-                    );
-                  },
+          // animation for the same item. Insertion is the other half:
+          // each row is a [GleanListEntrance] keyed by the recipe's own id,
+          // and this is a plain `ListView(children: ...)`
+          // (`SliverChildListDelegate`) rather than `.separated`/`.builder`
+          // (`SliverChildBuilderDelegate`) deliberately — only the former
+          // reorders existing children by key without a
+          // `findChildIndexCallback`, which is what lets a recipe that
+          // merely shifted position keep its already-settled entrance state
+          // instead of replaying it.
+          return ListView(
+            children: <Widget>[
+              for (int i = 0; i < recipes.length; i++) ...<Widget>[
+                if (i > 0) const SizedBox(height: 12),
+                GleanListEntrance(
+                  key: ValueKey<int>(recipes[i].id),
+                  child: SwipeToDeleteRow(
+                    dismissibleKey: ValueKey<int>(recipes[i].id),
+                    onDelete: () =>
+                        deleteRecipeWithUndo(context, ref, recipes[i]),
+                    child: RecipeCard(
+                      recipe: recipes[i],
+                      onTap: () {
+                        ref.read(hapticsProvider).lightImpact();
+                        context.pushNamed(
+                          AppRoutes.mealsDetail.name,
+                          pathParameters: <String, String>{
+                            'id': '${recipes[i].id}',
+                          },
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              );
-            },
+              ],
+            ],
           );
         },
         orElse: () => const MealsMessagePanel(

@@ -10,6 +10,7 @@ import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/data/repositories/plan_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 
 import '../../data/fixture.dart';
@@ -88,6 +89,30 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets(
+      'a saved recipe settles in via GleanListEntrance rather than popping '
+      'in (R-10, AC-TRN-02)',
+      (WidgetTester tester) async {
+        await recipes.save(
+          userId: 'test-user',
+          externalId: 'ext-entrance',
+          title: 'Lentil Soup',
+          ingredients: const <SaveRecipeIngredient>[],
+        );
+
+        await harness.pumpAt(tester, AppRoutes.meals.path);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.ancestor(
+            of: find.text('Lentil Soup'),
+            matching: find.byType(GleanListEntrance),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets(
       'swipe-to-delete removes a recipe with undo, keeping a referencing '

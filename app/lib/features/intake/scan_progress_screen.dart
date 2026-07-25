@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/receipts.dart';
 import 'package:glean/api/providers/receipts_providers.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
@@ -89,8 +90,21 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
       AsyncValue<ScanResponse?>? previous,
       AsyncValue<ScanResponse?> next,
     ) {
+      // R-11 / §7: Flutter has no notification-style haptic, so scan
+      // success/failure is communicated by `mediumImpact()` (the
+      // data-commit weight) plus whatever the body already shows — the
+      // review screen on success, `ScanProgressError`'s message on failure.
+      // Routed through `hapticsProvider`, never `HapticFeedback` directly
+      // (AC-HAP-04).
+      if (next.hasError) {
+        ref.read(hapticsProvider).mediumImpact();
+        return;
+      }
       final ScanResponse? response = next.value;
-      if (response != null) _onSuccess(response);
+      if (response != null) {
+        ref.read(hapticsProvider).mediumImpact();
+        _onSuccess(response);
+      }
     });
 
     final AsyncValue<ScanResponse?> async = ref.watch(

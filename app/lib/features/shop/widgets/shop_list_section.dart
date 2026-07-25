@@ -3,7 +3,8 @@
 /// swipe-to-delete rows with an animated-closed gap on commit (AC-TRN-02 —
 /// inherited free from `Dismissible`, no `AnimatedList` needed; see
 /// `MealsScreen`'s identical choice and its comment on why the two would
-/// fight each other).
+/// fight each other) and a fade/settle on insertion via [GleanListEntrance]
+/// (AC-TRN-02, R-10).
 library;
 
 import 'package:flutter/material.dart';
@@ -58,13 +59,19 @@ class _ShopItemsList extends ConsumerWidget {
       children: <Widget>[
         if (toBuy.isNotEmpty) const _SectionHeader(title: toBuySectionTitle),
         for (final ShoppingListItemView item in toBuy)
-          _Row(item: item, bottomGap: tokens.spacing.sm),
+          GleanListEntrance(
+            key: ValueKey<int>(item.id),
+            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+          ),
         if (inCart.isNotEmpty) ...<Widget>[
           SizedBox(height: tokens.spacing.xs),
           const _SectionHeader(title: inCartSectionTitle),
         ],
         for (final ShoppingListItemView item in inCart)
-          _Row(item: item, bottomGap: tokens.spacing.sm),
+          GleanListEntrance(
+            key: ValueKey<int>(item.id),
+            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+          ),
       ],
     );
   }

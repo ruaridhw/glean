@@ -67,6 +67,22 @@ void main() {
       },
     );
 
+    testWidgets('rows settle in via GleanListEntrance rather than popping in '
+        '(R-10, AC-TRN-02)', (WidgetTester tester) async {
+      await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.ancestor(
+          of: find.text('Bananas'),
+          matching: find.byType(GleanListEntrance),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('tapping a row toggles it checked with a light haptic', (
       WidgetTester tester,
     ) async {

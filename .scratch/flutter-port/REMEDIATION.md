@@ -1,5 +1,19 @@
 # Remediation list
 
+> **Correction (orchestrator).** Commit `e778fe7`'s message claims R-02 and R-08 were fixed. **They
+> were not.** The wiring agent stopped without reporting; I saw an empty task list, assumed it had
+> finished, and wrote the commit message without verifying. The code reviewer caught it on re-read.
+> Verified by grep: `addGapsForRecipe` still has one caller, `SignedOutBanner` is referenced only
+> inside its own file, `checkOffResolvedIngredients` appears only in comments, and Shop's actions
+> have no error handling.
+>
+> R-01, R-04, R-05, R-06, R-12, R-16, R-17, R-19 and the tab-switch half of R-11 **did** land and are
+> independently confirmed. R-18, R-22, R-15 and the Pantry/Meals half of R-07 also landed.
+>
+> This is the same defect I spent the session catching in agents — claiming done without evidence —
+> and the lesson is that an agent's *silence* is not completion. Verify before writing the message.
+
+
 Defects found by the independent verification pass. Each must be fixed and **re-verified by an
 agent that did not fix it** before the port is done.
 
@@ -37,7 +51,7 @@ reproduces the exact gap it set out to close.
 **Fix:** wrap the shell with `OnboardingGate` in the router, and add a test asserting a first-run
 user lands on setup while a returning user goes straight to Pantry.
 
-## R-02 — Manual "Add to plan" never creates shopping rows · PARTIAL AC-SHOP-05
+## R-02 [NOT FIXED — reopened] — Manual "Add to plan" never creates shopping rows · PARTIAL AC-SHOP-05
 **Found by:** shop-plan-settings verifier · **Severity: high** (functional regression)
 
 `ShoppingRepository.addGapsForRecipe` is called **only** from the Generate path
@@ -53,7 +67,7 @@ adding the same meal twice must not double the rows.
 Also add the announcement AC-SHOP-05 asks for: rows appearing on the shopping list must be
 acknowledged, not inserted silently.
 
-## R-03 — `checkOffResolvedIngredients` is dead code · PARTIAL AC-SHOP-04
+## R-03 [NOT FIXED — reopened] — `checkOffResolvedIngredients` is dead code · PARTIAL AC-SHOP-04
 **Found by:** shop-plan-settings verifier · **Severity: medium**
 
 Correctly scoped and unit-tested, zero call sites in `lib/`.
@@ -91,7 +105,7 @@ The app's entire remote layer uses `http`, which §2 never mentions. The spec is
 the implementation. Worth a note in `FLUTTER_MIGRATION.md` so the sanctioned-stack list matches
 reality.
 
-## R-07 [FIXED] — Delete-with-undo swallows database failures silently
+## R-07 [PARTIAL — Pantry/Meals only; Shop and Plan still exposed] — Delete-with-undo swallows database failures silently
 **Found by:** pantry-meals verifier (beyond its criteria) · **Severity: medium**
 
 `deletePantryItemWithUndo` (`lib/features/pantry/actions.dart:36-63`) and `deleteRecipeWithUndo`
@@ -114,7 +128,7 @@ covered.
 **Fix:** catch, surface via `GleanSnackBar`, and leave the row intact. Add a test forcing the failure,
 since nothing currently exercises it.
 
-## R-08 — The "signed out" banner and AI gating are never mounted · PARTIAL AC-AUTH-04
+## R-08 [NOT FIXED — reopened] — The "signed out" banner and AI gating are never mounted · PARTIAL AC-AUTH-04
 **Found by:** design-auth-haptics verifier · **Severity: high** (a decided behaviour is absent)
 
 `SignedOutBanner` and `aiFeaturesAvailableProvider` exist, are tested, and are referenced by
@@ -341,3 +355,27 @@ The same verifier reported `flutter test` exiting 1 with 2 failures on AC-PAN-10
 The cause was mine: I ran five verifiers concurrently in one shared worktree *and* authorised them to
 temporarily break code to prove tests weren't vacuous. They saw each other's probes. Several noticed
 and said so. Next time, adversarial mutation testing needs an isolated worktree per verifier.
+
+
+## R-23 — A fallback unit can become an ingredient's permanent canonical unit
+**Found by:** code reviewer, reviewing the R-18 fix · **Severity: medium**
+
+The reviewer confirmed R-18's corruption fix is correct and that throwing beats silently summing. But
+it found a follow-on: `review_screen.dart`'s blank-unit fallback (`_unitOrDefault` → `'units'`) can
+seed an ingredient's **permanent** canonical unit on first resolution, with no in-app way to correct
+it. The same change extended unit-seeding to `ShoppingRepository`, widening that surface.
+
+Three things compound into a genuine dead end: a defaulted unit becomes permanent truth; the catch
+message says "try again", which is misleading because retrying identical input fails identically; and
+`addItems` commits a whole review batch in one transaction, so one bad row blocks the batch.
+
+**Fix:** don't let a *fallback* unit seed the canonical unit — only an explicitly chosen one should.
+Then give the mismatch exception a targeted message that says what actually went wrong.
+
+## R-24 — Undoing both cooks oldest-first leaves a stale `lastUsedAt`
+**Found by:** code reviewer, reviewing the R-15 fix · **Severity: low**
+
+R-15's primary case is correctly fixed. Residual: undoing both cooks oldest-first leaves the
+intermediate value rather than fully reverting to null. The new test documents this as expected rather
+than catching it. Same low severity as the original — `lastUsedAt` only affects ordering and urgency
+scoring.
