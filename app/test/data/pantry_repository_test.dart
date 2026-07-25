@@ -60,6 +60,46 @@ void main() {
     );
 
     test(
+      'a pantry item whose ingredient has no category still appears, with foodGroup "other" (regression)',
+      () async {
+        // Simulates an ingredient that reached the pantry with no
+        // category at all — e.g. one first created by recipe import
+        // (which has no category source, §9) and never since resolved
+        // through a categorised pantry/shopping intake path. `addItem`
+        // itself always supplies a category, so this bypasses it
+        // deliberately, the same way a future insert path that forgets to
+        // would.
+        final ingredients = IngredientsRepository(db);
+        final ingredient = await ingredients.resolveOrCreate(
+          canonicalName: 'mystery meat',
+        );
+        expect(ingredient.category, isNull);
+        await db
+            .into(db.pantryItems)
+            .insert(
+              PantryItemsCompanion.insert(
+                userId: userId,
+                ingredientId: ingredient.id,
+                quantity: 1,
+                unit: 'unit',
+                updatedAt: DateTime(2026, 1, 1).toIso8601String(),
+              ),
+            );
+
+        final items = await repository.watchAll(userId).first;
+
+        // The item must still be visible — disappearing entirely would be
+        // silent data loss, strictly worse than the RN app's "Other"
+        // bucket (mobile/src/pantry/presentation.ts:47).
+        expect(items, hasLength(1));
+        expect(items.single.canonicalName, 'mystery meat');
+        expect(items.single.category, isNull);
+        expect(items.single.foodGroup, 'other');
+        expect(items.single.shelfLifeDays, isNull);
+      },
+    );
+
+    test(
       'topping up an existing item adds to the quantity and refreshes expiry',
       () async {
         await repository.addItem(

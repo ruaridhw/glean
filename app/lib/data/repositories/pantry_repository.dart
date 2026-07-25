@@ -52,9 +52,21 @@ class PantryRepository {
 
   /// All of [userId]'s pantry items, ordered like the RN app: soonest
   /// expiry first, then longest-unused first within the same expiry bucket.
-  /// Inner-joins through `ingredients.category` to `ingredient_categories`,
-  /// so `foodGroup` on the result is structurally non-null (AC-DATA-11) —
-  /// there is no row to read if that join fails to match.
+  ///
+  /// `ingredients` is joined with `innerJoin` — `pantryItems.ingredientId`
+  /// is a NOT NULL FK, so that join can never fail to match. But
+  /// `ingredients.category` is nullable (the ingredient catalog is shared
+  /// and non-user-scoped, and recipe import creates ingredients with no
+  /// category source at all, §9), so `ingredient_categories` is joined with
+  /// `leftOuterJoin`: a category-less ingredient must still surface its
+  /// pantry row rather than vanish from the list. `_mapRow` coalesces the
+  /// missing food group to `"other"` — the same fallback the backend
+  /// (`backend/src/glean/receipts/schemas.py`) and the RN UI
+  /// (`getPantryCategoryMeta`, `mobile/src/pantry/presentation.ts:47`) both
+  /// already use, so all three layers agree (FINDINGS.md F-07/F-08).
+  /// `foodGroup` stays non-null on this view model either way (AC-DATA-11
+  /// is about non-nullability where the value is consumed, not about
+  /// discarding rows to force it at the join).
   Stream<List<PantryItemView>> watchAll(String userId) {
     final query =
         _db.select(_db.pantryItems).join([
@@ -62,7 +74,7 @@ class PantryRepository {
               _db.ingredients,
               _db.ingredients.id.equalsExp(_db.pantryItems.ingredientId),
             ),
-            innerJoin(
+            leftOuterJoin(
               _db.ingredientCategories,
               _db.ingredientCategories.category.equalsExp(
                 _db.ingredients.category,
@@ -87,10 +99,15 @@ class PantryRepository {
     return query.watch().map((rows) => rows.map(_mapRow).toList());
   }
 
+  // The fallback for a pantry item whose ingredient has no taxonomy
+  // category — matches the backend's and the RN UI's "other" bucket
+  // (FINDINGS.md F-07/F-08) rather than inventing a new vocabulary.
+  static const String _uncategorisedFoodGroup = 'other';
+
   PantryItemView _mapRow(TypedResult row) {
     final item = row.readTable(_db.pantryItems);
     final ingredient = row.readTable(_db.ingredients);
-    final category = row.readTable(_db.ingredientCategories);
+    final category = row.readTableOrNull(_db.ingredientCategories);
     return PantryItemView(
       id: item.id,
       userId: item.userId,
@@ -105,9 +122,9 @@ class PantryRepository {
       updatedAt: DateTime.parse(item.updatedAt),
       canonicalName: ingredient.canonicalName,
       isStaple: ingredient.isStaple,
-      category: category.category,
-      foodGroup: category.foodGroup,
-      shelfLifeDays: category.shelfLifeDays,
+      category: category?.category,
+      foodGroup: category?.foodGroup ?? _uncategorisedFoodGroup,
+      shelfLifeDays: category?.shelfLifeDays,
     );
   }
 
