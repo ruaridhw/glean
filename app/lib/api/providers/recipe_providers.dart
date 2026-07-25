@@ -62,10 +62,20 @@ class ImportRecipeController extends AsyncNotifier<RecipeOut?> {
   @override
   FutureOr<RecipeOut?> build() => null;
 
+  /// See `ScanReceiptController.scan`'s doc comment
+  /// (`lib/api/providers/receipts_providers.dart`) for why the
+  /// [Ref.keepAlive] hold-and-release is here (FINDINGS.md F-15). Callers no
+  /// longer need their own keep-alive workaround for this reason — see
+  /// `lib/features/meals/meals_import_screen.dart`.
   Future<void> importFromUrl(ImportUrlRequest request) async {
     state = const AsyncLoading();
-    final client = ref.read(apiClientProvider);
-    state = await AsyncValue.guard(() => client.importRecipeFromUrl(request));
+    final keepAliveLink = ref.keepAlive();
+    try {
+      final client = ref.read(apiClientProvider);
+      state = await AsyncValue.guard(() => client.importRecipeFromUrl(request));
+    } finally {
+      keepAliveLink.close();
+    }
   }
 }
 

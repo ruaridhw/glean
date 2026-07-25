@@ -345,3 +345,29 @@ call-site workarounds.
 Also resolve `parseShoppingDescriptionControllerProvider`: either wire it to Shop's describe flow or
 delete it. An unreferenced command provider for a live endpoint is either a missing feature or dead
 code, and both want a decision.
+
+## F-16 — the Shop "describe" flow was never built (ownership seam gap)
+**Status:** OPEN · surfaced by: API agent while resolving F-15
+**Affects:** AC-SHOP parity with the RN app, AC-PAN-05
+
+`lib/features/intake/shop_describe_screen.dart` is still the router wave's placeholder. Shop
+routes to it (`AppRoutes.intakeDescribeShop`), so the flow dead-ends on a screen reading
+"Describe list".
+
+The RN app had a real one (`mobile/app/(tabs)/shop/describe.tsx`, 107 lines), so this is a
+**regression against the app being replaced**, not a deferred nicety.
+
+How it slipped: Shop's brief said route into the shared intake screens and don't build a second
+describe/review screen — correct. Pantry+Intake owned `lib/features/intake/**` and built
+`pantry_describe_screen.dart`, but the *shop* variant wasn't named in either brief. Each wave
+reasonably assumed the other had it. A seam nobody owned.
+
+Everything downstream is already built and waiting: `ReviewArgs`/`ReviewDestination.shop` carries a
+`clarifyingQuestions` field, and `review_screen.dart` already renders it through
+`ClarifyingQuestionsCard` — whose doc comment names `ShoppingParseResponse.clarifyingQuestions`
+explicitly. `parseShoppingDescriptionControllerProvider` exists and is now keep-alive-safe. It is
+only the screen that is missing, which is also why nothing failed: no test asserted the flow.
+
+**Lesson for the remaining waves:** a screen owned by one feature but reached only from another is
+exactly where work falls through. When verifying, check every route resolves to a real screen, not
+just that the route table is correct.

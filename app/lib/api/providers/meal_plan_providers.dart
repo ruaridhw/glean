@@ -18,10 +18,20 @@ class GenerateMealPlanController extends AsyncNotifier<MealPlanResponse?> {
   @override
   FutureOr<MealPlanResponse?> build() => null;
 
+  /// See `ScanReceiptController.scan`'s doc comment
+  /// (`lib/api/providers/receipts_providers.dart`) for why the
+  /// [Ref.keepAlive] hold-and-release is here (FINDINGS.md F-15). Callers no
+  /// longer need their own keep-alive workaround for this reason — see
+  /// `lib/features/plan/providers/generate_week_controller.dart`.
   Future<void> generate(MealPlanRequest request) async {
     state = const AsyncLoading();
-    final client = ref.read(apiClientProvider);
-    state = await AsyncValue.guard(() => client.generateMealPlan(request));
+    final keepAliveLink = ref.keepAlive();
+    try {
+      final client = ref.read(apiClientProvider);
+      state = await AsyncValue.guard(() => client.generateMealPlan(request));
+    } finally {
+      keepAliveLink.close();
+    }
   }
 }
 

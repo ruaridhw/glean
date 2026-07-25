@@ -124,30 +124,23 @@ class GenerateWeekController extends AsyncNotifier<void> {
   /// provider) so an `autoDispose` teardown between the two calls can never
   /// read back a freshly-rebuilt, reset state.
   ///
-  /// That provider is `autoDispose` and nothing else ever watches it, so a
-  /// bare `ref.read(...notifier)` doesn't keep it alive: Riverpod disposes
-  /// it as soon as it notices zero listeners, which can land *while
-  /// `generate()`'s own async body is still suspended on the network
-  /// await* — its later `state = ...` then throws using a disposed `ref`.
-  /// A throwaway, non-weak `ref.listen` subscription for the duration of
-  /// this call holds it alive; closed in `finally` so it doesn't outlive
-  /// the call and leak.
+  /// No keep-alive needed here on our side: that provider now holds itself
+  /// alive for the duration of its own network call
+  /// (`lib/api/providers/meal_plan_providers.dart`, FINDINGS.md F-15), so a
+  /// bare `ref.read(...notifier)` is safe even though nothing else watches
+  /// it — an earlier version of this method held a throwaway `ref.listen`
+  /// subscription open for exactly this reason; that workaround is gone now
+  /// that the provider guarantees it for every caller.
   Future<MealPlanResponse?> _fetchSuggestions(MealPlanRequest request) async {
-    final ProviderSubscription<AsyncValue<MealPlanResponse?>> keepAlive = ref
-        .listen(generateMealPlanControllerProvider, (_, _) {});
-    try {
-      final GenerateMealPlanController notifier = ref.read(
-        generateMealPlanControllerProvider.notifier,
-      );
-      await notifier.generate(request);
-      final AsyncValue<MealPlanResponse?> result = notifier.state;
-      if (result.hasError) {
-        Error.throwWithStackTrace(result.error!, result.stackTrace!);
-      }
-      return result.value;
-    } finally {
-      keepAlive.close();
+    final GenerateMealPlanController notifier = ref.read(
+      generateMealPlanControllerProvider.notifier,
+    );
+    await notifier.generate(request);
+    final AsyncValue<MealPlanResponse?> result = notifier.state;
+    if (result.hasError) {
+      Error.throwWithStackTrace(result.error!, result.stackTrace!);
     }
+    return result.value;
   }
 
   /// Guarded and atomic (AC-PLAN-10): every suggestion's `recipe_id` is

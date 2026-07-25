@@ -107,14 +107,12 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // `importRecipeControllerProvider` is `.autoDispose` (it's an ephemeral
-    // command, per FLUTTER_MIGRATION.md §3) — with no active `ref.watch`
-    // anywhere, Riverpod tears it down the instant `ref.read` in `_import`
-    // returns, disposing its `Ref` while `importFromUrl`'s `await` is still
-    // in flight and throwing `UnmountedRefException` on the later
-    // `state = ...` assignment. Watching it here (even unused) keeps it
-    // alive for exactly as long as this screen is mounted.
-    ref.watch(importRecipeControllerProvider);
+    // No `ref.watch(importRecipeControllerProvider)` keep-alive needed here:
+    // the provider now holds itself alive for the duration of its own
+    // network call (`lib/api/providers/recipe_providers.dart`,
+    // FINDINGS.md F-15), and this screen renders pending/error state from
+    // its own local `_importing`/`_error` fields rather than the provider's
+    // `AsyncValue`, so there is nothing left for a watch here to do.
     final AppTokens tokens = context.tokens;
     return Scaffold(
       appBar: AppBar(title: const Text('Import from URL')),
