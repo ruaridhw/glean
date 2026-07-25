@@ -23,6 +23,7 @@ import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:meta/meta.dart';
 // `Override` is only exported from riverpod's `misc.dart` entrypoint, not from
 // the `flutter_riverpod` barrel. `riverpod` is a direct dependency precisely so
 // this import is legitimate — see FINDINGS.md F-03.
@@ -92,4 +93,76 @@ class AppTestHarness {
     container.dispose();
     await db.close();
   }
+}
+
+/// Unmounts the widget tree and drains the timer drift schedules while tearing
+/// down its stream subscriptions.
+///
+/// **Any widget test whose tree holds a drift `.watch()` subscription must end
+/// with this**, or the test wedges the whole isolate — see the wrapper below and
+/// `.scratch/flutter-port/FINDINGS.md` F-12.
+///
+/// Unmounting disposes the `ProviderScope`, which disposes the `StreamProvider`
+/// element, which cancels the drift stream — and `StreamQueryStore.markAsClosed`
+/// schedules a zero-duration timer to finish its bookkeeping. Left pending, that
+/// trips `!timersPending` and then hangs the isolate, so the entire *file* times
+/// out rather than just the offending test.
+///
+/// Both details below are load-bearing and were each got wrong once:
+///  * A **`pump`**, not `runAsync`. The timer is a `FakeTimer`, so `runAsync`
+///    steps outside the very zone that would service it.
+///  * A **non-zero** advance. The timer is scheduled *during* the unmount pump,
+///    so a zero-duration advance does not reach it.
+Future<void> releaseDriftTree(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
+}
+
+/// Pumps in fixed steps until [condition] holds, then returns.
+///
+/// **Use this instead of `pumpAndSettle` anywhere a skeleton or an indeterminate
+/// progress indicator may be on screen.** Both are *required* to animate
+/// perpetually (AC-DS-11 puts `SkeletonBox` on a `TweenAnimationBuilder`, and
+/// AC-PAN-06 requires a genuinely indeterminate scan indicator), so
+/// `pumpAndSettle` has no quiescent frame to settle on and times out — which
+/// reads as a hang, not as a clear failure. A correct implementation is exactly
+/// what makes `pumpAndSettle` unusable here.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxSteps = 40,
+  String description = 'condition',
+}) async {
+  for (int i = 0; i < maxSteps; i++) {
+    await tester.pump(step);
+    if (condition()) return;
+  }
+  fail('pumpUntil: $description never became true within $maxSteps pumps.');
+}
+
+/// Pumps until every [SkeletonBox] has been swapped out for real content.
+Future<void> pumpPastSkeleton(WidgetTester tester) => pumpUntil(
+  tester,
+  () => find.byType(SkeletonBox).evaluate().isEmpty,
+  description: 'content past the loading skeleton',
+);
+
+/// `testWidgets` that always releases the tree, even if the body throws.
+///
+/// The release must happen **inside** the test body: the binding verifies
+/// `!timersPending` *before* any `addTearDown` callback runs, so registering the
+/// cleanup as a teardown is too late — verified, it still trips the assertion.
+@isTest
+void gleanWidgetTest(
+  String description,
+  Future<void> Function(WidgetTester tester) body,
+) {
+  testWidgets(description, (WidgetTester tester) async {
+    try {
+      await body(tester);
+    } finally {
+      await releaseDriftTree(tester);
+    }
+  });
 }

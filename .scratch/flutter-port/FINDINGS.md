@@ -271,3 +271,39 @@ third wave needs it.
 **Misdiagnosis warning:** the obvious suspect is an app-level debounce or auto-save timer in the
 widget under test, and it is the wrong one. Check the pending timer's **duration** first — a real
 debounce reports its configured duration; drift's cleanup reports zero.
+
+## F-13 — `pumpAndSettle` is unusable where a skeleton or indeterminate indicator is on screen
+**Status:** RESOLVED (helpers added) · surfaced by: pantry + plan agents
+
+`SkeletonBox` animates perpetually (AC-DS-11 puts it on a `TweenAnimationBuilder`) and the scan
+progress indicator is *required* to be genuinely indeterminate (AC-PAN-06). Neither ever reaches a
+quiescent frame, so `pumpAndSettle` times out. It surfaces as a **hang**, not a clear failure —
+and because a timed-out test wedges the isolate, the whole file reports as a load error.
+
+A correct implementation is precisely what makes `pumpAndSettle` unusable here. Do not "fix" it by
+making the animation finite.
+
+**Use** `pumpUntil(tester, condition)` or `pumpPastSkeleton(tester)` from
+`test/support/harness.dart` instead.
+
+## F-14 — command providers read snapshots by subscribing to a stream and cancelling it
+**Status:** OPEN · surfaced by: orchestrator while fixing the Plan suite
+**Affects:** AC-DATA-06, AC-PLAN-09/10, test stability generally
+
+`lib/features/plan/providers/generate_week_controller.dart:60-69` reads three snapshots as
+`repository.watchXxx(...).first` — i.e. it opens a live drift query stream, takes one value, and
+cancels it, three times per generation.
+
+Wrong on three counts:
+1. **Semantically.** A command needs a *snapshot*, not a subscription. §3 reserves streams for
+   screen reads; a mutation path has no business subscribing.
+2. **Mechanically.** Every such read creates and tears down a `StreamQueryStore` subscription,
+   which is what schedules the deferred cleanup timers behind F-12. It manufactures the very
+   churn that made three suites flaky.
+3. **Testability.** It cannot complete inside a `FakeAsync` zone without `runAsync` gymnastics,
+   which is why AC-PLAN-09's test could not be made to pass honestly.
+
+The repositories already expose one-shot `Future` getters for some of this
+(`uncookedCountForWeek`, `remainingCapacityForWeek`) — the gap is one-shot reads for "all pantry
+items", "saved recipes" and "this week's entries". **Fix: add those getters and have the controller
+use them.** Reserve `.watch()` for what the UI subscribes to.

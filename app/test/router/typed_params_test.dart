@@ -49,7 +49,16 @@ void main() {
     unawaited(
       harness.router.push(AppRoutes.intakeScanProgress.path, extra: args),
     );
-    await pump(tester);
+    // Not `pump(tester)`/`pumpAndSettle`: AC-PAN-06 requires a real
+    // indeterminate spinner on this screen while its scan request is in
+    // flight, and an indeterminate `CircularProgressIndicator` schedules
+    // frames forever by design — `pumpAndSettle` can never observe the tree
+    // "settling" and always times out against it. A couple of bounded
+    // pumps is enough to resolve the route and mount the screen, which is
+    // all this test needs to assert.
+    await tester.pumpWidget(harness.app());
+    await tester.pump();
+    await tester.pump();
 
     final widget = tester.widget<ScanProgressScreen>(
       find.byType(ScanProgressScreen),

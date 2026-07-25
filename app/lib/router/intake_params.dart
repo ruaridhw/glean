@@ -27,6 +27,7 @@ class ReviewItemDraft {
     required this.unit,
     required this.confidence,
     this.unitPrice,
+    this.category,
   });
 
   /// Stable identity assigned once when the draft list is built. List key
@@ -40,12 +41,25 @@ class ReviewItemDraft {
   /// Pantry-only; always null for shop drafts.
   final double? unitPrice;
 
+  /// The taxonomy category the backend classified this ingredient as
+  /// (`ParsedIngredient.category`, FLUTTER_MIGRATION.md §9). Nullable on
+  /// purpose, mirroring the API contract (FINDINGS.md F-08): the backend
+  /// coerces an unclassifiable item to `null` rather than failing the whole
+  /// parse. Both destinations need this to persist a real category on
+  /// confirm (AC-BE-04) — pantry expiry inference has no basis without one
+  /// (AC-PAN-01), and shop intake resolves an ingredient identity the same
+  /// way. Added post-hoc: the initial `ReviewArgs`/`ReviewItemDraft` seam
+  /// didn't carry it at all, which would have silently dropped every parsed
+  /// category on the way into either review flow.
+  final String? category;
+
   ReviewItemDraft copyWith({
     String? name,
     double? quantity,
     String? unit,
     double? confidence,
     double? unitPrice,
+    String? category,
   }) {
     return ReviewItemDraft(
       reviewId: reviewId,
@@ -54,6 +68,7 @@ class ReviewItemDraft {
       unit: unit ?? this.unit,
       confidence: confidence ?? this.confidence,
       unitPrice: unitPrice ?? this.unitPrice,
+      category: category ?? this.category,
     );
   }
 
@@ -65,11 +80,19 @@ class ReviewItemDraft {
       other.quantity == quantity &&
       other.unit == unit &&
       other.confidence == confidence &&
-      other.unitPrice == unitPrice;
+      other.unitPrice == unitPrice &&
+      other.category == category;
 
   @override
-  int get hashCode =>
-      Object.hash(reviewId, name, quantity, unit, confidence, unitPrice);
+  int get hashCode => Object.hash(
+    reviewId,
+    name,
+    quantity,
+    unit,
+    confidence,
+    unitPrice,
+    category,
+  );
 }
 
 /// Typed `extra` for [AppRoutes.intakeReview].
