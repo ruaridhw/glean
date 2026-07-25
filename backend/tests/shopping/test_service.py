@@ -28,7 +28,7 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
                     "quantity": 1,
                     "unit": "pack",
                     "unit_price": None,
-                    "category": "bakery",
+                    "category": "grains",
                     "confidence": 0.82,
                 },
                 {
@@ -55,9 +55,12 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert response.items[0].unit == "pack"
     assert response.items[0].unit_price is None
     assert response.items[0].api_ingredient_id is None
-    assert response.items[0].category == "bakery"
+    assert response.items[0].category == "grains"
+    assert response.items[0].food_group == "carbohydrates"
     assert response.items[0].confidence == 0.82
     assert response.items[1].name == "whole milk"
+    assert response.items[1].category == "dairy"
+    assert response.items[1].food_group == "dairy"
     assert response.clarifying_questions == ["What lunchbox snacks do you want?"]
     assert llm_router.feature == Feature.SHOPPING_LIST_DESCRIPTION
     assert llm_router.schema is ShoppingParseResponse
@@ -72,7 +75,7 @@ def test_parse_shopping_description_allows_vague_items() -> None:
                     "quantity": 1,
                     "unit": "units",
                     "unit_price": None,
-                    "category": "snacks",
+                    "category": None,
                     "confidence": 0.55,
                 }
             ],
@@ -89,4 +92,33 @@ def test_parse_shopping_description_allows_vague_items() -> None:
     assert response.items[0].quantity == 1
     assert response.items[0].unit == "units"
     assert response.items[0].unit_price is None
+    assert response.items[0].category is None
+    assert response.items[0].food_group == "other"
     assert response.items[0].confidence == 0.55
+
+
+def test_parse_shopping_description_rejects_out_of_taxonomy_category() -> None:
+    """A category the LLM invents outside the fixed taxonomy is coerced to null, not passed
+    through, and food_group still resolves to "other" rather than null."""
+    llm_router = _FakeLLMRouter(
+        ShoppingParseResponse(
+            items=[
+                {
+                    "name": "lunchbox snacks",
+                    "quantity": 1,
+                    "unit": "units",
+                    "unit_price": None,
+                    "category": "snacks",  # not in the taxonomy
+                    "confidence": 0.55,
+                }
+            ],
+        )
+    )
+
+    response = parse_shopping_description(
+        ShoppingParseRequest(text="some lunchbox snacks"),
+        llm_router=llm_router,
+    )
+
+    assert response.items[0].category is None
+    assert response.items[0].food_group == "other"
