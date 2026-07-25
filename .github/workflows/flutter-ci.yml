@@ -1,0 +1,59 @@
+name: Flutter CI
+
+# The only job that runs automatically (AC-CI-01). Lint/format/unit/widget
+# only — no device, no emulator/simulator, so no Android SDK/Java/Xcode is
+# needed here. Real device/emulator/simulator integration tests live in
+# flutter-integration.yml, gated behind workflow_dispatch (AC-CI-02) because
+# neither runs on push.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/flutter-ci.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/flutter-ci.yml'
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+      - name: Analyze (must be zero errors, warnings AND infos)
+        run: flutter analyze
+
+  test:
+    name: Test (unit + widget)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # `flutter test` (no path) only runs `test/` — `integration_test/` is a
+      # separate top-level directory it does not recurse into, so this is
+      # unit + widget only, never the device-bound suite (AC-CI-01).
+      - run: flutter test

@@ -1,0 +1,147 @@
+name: Flutter Integration Tests
+
+# Manual only (AC-CI-02) — neither job below runs on push or pull_request.
+# flutter-ci.yml already covers lint/format/unit/widget on every push.
+#
+# Two separate jobs, not one combined macOS job — do not "simplify" this to
+# a single macos-latest job that runs both. GitHub-hosted macOS runners
+# cannot run the Android emulator with hardware acceleration: nested
+# virtualization is unsupported on the current arm64 macOS runner image
+# ("Nested-virtualization is not supported due to the limitation of Apple's
+# Virtualization Framework" — GitHub's own hosted-runners reference), and a
+# 2026-01-08 feature request to lift this via Apple's newer
+# Hypervisor.framework APIs was closed "not planned"
+# (actions/runner-images#13505). The de facto standard community Action for
+# this (ReactiveCircus/android-emulator-runner) now tells users outright to
+# prefer Ubuntu over macOS for Android emulation — it's faster *and*
+# cheaper. See .scratch/flutter-port/research/build-release-macos-ci.md for
+# the full research trail. So: iOS Simulator on macOS, Android emulator on
+# Linux/KVM, as two independent jobs here.
+#
+# Both are also runnable locally from a single Mac — real Apple Silicon
+# hardware isn't subject to the nested-virtualization limitation above, so
+# one machine can drive both an iOS Simulator and an Android emulator
+# directly (AC-CI-03). See app/README.md for the exact commands.
+#
+# Both jobs run the single integration_test suite
+# (app/integration_test/app_test.dart) against lib/main_e2e.dart — the auth
+# bypass lives only there (FLUTTER_MIGRATION.md §5) — and never build a
+# release artifact; that's the Fastlane lanes' job
+# (app/ios/fastlane/Fastfile, app/android/fastlane/Fastfile), run from the
+# Mac, not from CI.
+on:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+  # Inert placeholders: lib/main_e2e.dart's AuthController is seeded from
+  # `bypassAuthSnapshot()` and never constructs a CognitoAuthClient, so
+  # these values are only read by `GleanConfig.assertComplete()`'s
+  # non-empty check and `assertAuthBypassUnreachable`'s loopback check —
+  # never dialled for real. No secrets needed for either job.
+  API_BASE_URL_IOS: 'http://127.0.0.1:8000'
+  API_BASE_URL_ANDROID: 'http://10.0.2.2:8000'
+  COGNITO_DOMAIN_PLACEHOLDER: 'placeholder.auth.eu-west-2.amazoncognito.com'
+  COGNITO_CLIENT_ID_PLACEHOLDER: 'placeholder-client-id'
+
+jobs:
+  ios-integration:
+    name: iOS Integration (Simulator)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Boot an iOS Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j \
+            | jq -r '.devices | to_entries[] | .value[] | select(.name | test("iPhone")) | .udid' \
+            | head -n1)
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No available iPhone simulator found on this runner image." >&2
+            exit 1
+          fi
+          xcrun simctl boot "$DEVICE_ID"
+          echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+
+      - name: Run integration_test suite against lib/main_e2e.dart
+        run: |
+          flutter test integration_test/app_test.dart \
+            -d "$DEVICE_ID" \
+            --dart-define=API_BASE_URL="$API_BASE_URL_IOS" \
+            --dart-define=COGNITO_DOMAIN="$COGNITO_DOMAIN_PLACEHOLDER" \
+            --dart-define=COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID_PLACEHOLDER"
+
+  android-integration:
+    name: Android Integration (Emulator)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      API_LEVEL: 35
+      ARCH: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          arch: ${{ env.ARCH }}
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: false
+          script: echo 'Generated AVD snapshot for caching.'
+
+      - name: Run integration_test suite against lib/main_e2e.dart
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          arch: ${{ env.ARCH }}
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: false
+          working-directory: app
+          script: |
+            flutter test integration_test/app_test.dart \
+              -d emulator-5554 \
+              --dart-define=API_BASE_URL="$API_BASE_URL_ANDROID" \
+              --dart-define=COGNITO_DOMAIN="$COGNITO_DOMAIN_PLACEHOLDER" \
+              --dart-define=COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID_PLACEHOLDER"

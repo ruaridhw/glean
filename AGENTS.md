@@ -23,9 +23,13 @@ for deeper context. `CLAUDE.md` files are compatibility symlinks to these files.
 
 ```
 backend/   — Python / FastAPI, deployed as AWS Lambda (uv)
-mobile/    — Expo / React Native (npm)
+app/       — Flutter app (iOS + Android)
 Makefile   — unified task runner for both sub-projects
 ```
+
+`mobile/` (the Expo/React Native app `app/` replaces) is retained only until
+the cutover finishes — see `app/AGENTS.md` and the root `FLUTTER_MIGRATION.md`
+if it's still present. Treat it as read-only reference, not a place to add code.
 
 ## Makefile
 
@@ -35,17 +39,23 @@ sub-project commands directly when both are equivalent.
 ### Common targets
 
 ```bash
-make setup            # install all dependencies (backend + mobile)
-make test             # run all tests
+make setup            # install all dependencies (backend + app)
+make test             # run all tests (backend + Flutter unit/widget)
 make lint             # lint + format everything
 make pre-commit       # run all pre-commit hooks
 
 make start-backend    # FastAPI dev server on :8000 (hot reload)
 make start-backend-docker # Dockerized FastAPI dev server on :8000 (hot reload)
-make start-mobile     # Expo dev server; add API_HOST=192.168.1.42 for phone testing
-make start-ios        # Expo on iOS simulator
-make start-android    # Expo on Android emulator (wraps mobile/scripts/emu-start)
+make start-ios        # Flutter on iOS Simulator (macOS only)
+make start-android    # Flutter on a running Android emulator
+make test-e2e         # Flutter integration_test suite (needs a booted simulator/emulator)
 ```
+
+`start-ios`/`start-android`/`test-e2e` need `COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...`
+— see `app/README.md` for where those values come from. None of the three can
+run without an Android SDK/Java/Xcode toolchain (a Mac, for both platforms);
+`setup-app`, `test-app` and `lint-app` need none of that and run anywhere,
+including a plain Linux box.
 
 ### Worktrees
 

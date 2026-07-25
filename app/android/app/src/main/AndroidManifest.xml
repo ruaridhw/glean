@@ -1,4 +1,10 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- AC-BUILD-10: receipt scanning (`camera` package). No RECORD_AUDIO —
+         §2 established it as vestigial in the RN app (the "describe" screens
+         are plain text inputs, not audio capture), so it is not carried over. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
     <application
         android:label="glean"
         android:name="${applicationName}"
@@ -23,6 +29,28 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- The Cognito Hosted UI → Google redirect target (`glean://auth/callback`,
+             matching backend/template.yaml's GleanUserPoolClient CallbackURLs).
+             flutter_appauth's Android side delivers the redirect through
+             AppAuth's own RedirectUriReceiverActivity rather than MainActivity;
+             registering it explicitly here (instead of the alternative
+             `manifestPlaceholders["appAuthRedirectScheme"]` route in
+             build.gradle.kts) keeps the whole contract visible in one file. -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="true"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="glean"
+                    android:host="auth"
+                    android:path="/callback"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

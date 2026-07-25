@@ -1,0 +1,76 @@
+# iOS release lane — TestFlight (FLUTTER_MIGRATION.md §8, AC-CI-04).
+#
+# Driven from the Mac laptop only: `bundle exec fastlane beta` from this
+# directory (`app/ios/fastlane`). **Not wired into CI** — GitHub-hosted
+# macOS runners are reserved for the workflow_dispatch-gated iOS Simulator
+# integration job (../../.github/workflows/flutter-integration.yml); running
+# a real signed release build there would need Apple credentials sitting on
+# a shared CI runner for no benefit over the one Mac that already has them.
+#
+# No `match`: one Mac, one signer — Xcode's own "Automatically manage
+# signing" (already on: see `CODE_SIGN_STYLE = Automatic` in
+# `Runner.xcodeproj/project.pbxproj`) is adequate per §8. Adopt `match` only
+# once a second signer/machine needs the same certificates.
+
+default_platform(:ios)
+
+# `app/pubspec.yaml`'s `version: X.Y.Z+N` is the source of truth for the
+# marketing version; `N` is a local placeholder only — see `build_number`
+# below for what actually ships.
+def pubspec_version_name
+  pubspec = File.read('../../pubspec.yaml')
+  match = pubspec.match(/^version:\s*(\d+\.\d+\.\d+)\+\d+/)
+  UI.user_error!('Could not read version from app/pubspec.yaml') unless match
+  match[1]
+end
+
+platform :ios do
+  desc 'Build and upload a release to TestFlight'
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV['ASC_KEY_ID'],
+      issuer_id: ENV['ASC_ISSUER_ID'],
+      key_content: ENV['ASC_KEY_CONTENT'],
+      is_key_content_base64: true,
+    )
+
+    version_name = pubspec_version_name
+
+    # AC-CI-05 — EAS used to silently provide remote build-number
+    # auto-increment (`appVersionSource: "remote"`, `autoIncrement: true`).
+    # This is the explicit replacement: ask App Store Connect for the
+    # highest build number already uploaded for this version (across
+    # TestFlight, not just the live App Store) and increment it, rather
+    # than trusting whatever `pubspec.yaml`'s local `+N` happens to be —
+    # that number is never bumped by hand and would collide on the second
+    # release of the same marketing version otherwise.
+    previous_build_number = app_store_build_number(
+      api_key: api_key,
+      version: version_name,
+      live: false,
+    )
+    build_number = previous_build_number.to_i + 1
+
+    UI.message("Building #{version_name}+#{build_number} (-t lib/main.dart)")
+
+    # `-t lib/main.dart` is explicit, not incidental: this lane must never
+    # build `lib/main_e2e.dart` (AC-AUTH-07) — `test/build/release_entrypoint_test.dart`
+    # asserts this file's contents never mention `main_e2e`.
+    sh(
+      'cd ../.. && flutter build ipa --release ' \
+      "-t lib/main.dart --build-number=#{build_number}",
+    )
+
+    # `flutter build ipa` names the output after the Xcode archive's product
+    # name, not `pubspec.yaml`'s package name, so this globs for it rather
+    # than assuming a fixed filename.
+    ipa_path = Dir.glob('../build/ios/ipa/*.ipa').first
+    UI.user_error!('No .ipa found under build/ios/ipa/ — did the build step fail?') unless ipa_path
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: ipa_path,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end

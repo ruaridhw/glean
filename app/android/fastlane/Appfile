@@ -1,0 +1,6 @@
+# Matches `app/android/app/build.gradle.kts`'s `applicationId` exactly.
+package_name('com.ruaridhw.glean')
+
+# Play Console service-account JSON, injected as an env var at release time
+# (a Mac laptop) — never a checked-in file (FLUTTER_MIGRATION.md §8).
+json_key_data(ENV['PLAY_STORE_JSON_KEY'])
