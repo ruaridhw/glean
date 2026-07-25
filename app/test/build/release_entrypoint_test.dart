@@ -16,6 +16,32 @@
 /// `auth_bypass_test.dart`'s job), and it does not merely restate CI YAML
 /// like the deleted RN test — a Fastfile/workflow is the actual build
 /// configuration that runs, not a description of one.
+///
+/// ## Why this scans *logical* lines, not raw source lines
+///
+/// A previous version of this test matched `flutter build`/`gradlew
+/// assemble*` and `main_e2e` only when both appeared on the same **raw**
+/// line. Both Fastfiles build via two string literals concatenated across
+/// two physical lines with a trailing `\` continuation:
+///
+/// ```ruby
+/// sh(
+///   'cd ../.. && flutter build ipa --release ' \
+///   "-t lib/main.dart --build-number=#{build_number}",
+/// )
+/// ```
+///
+/// `flutter build` lives on the first line, the `-t` target on the second.
+/// Editing *only* the second line to `-t lib/main_e2e.dart` produced a
+/// shippable release build of the auth-bypass entrypoint while the
+/// raw-line guard kept passing 5/5 — a false negative, since fixed. Line
+/// formatting must not be able to defeat a security guard, so this version
+/// first joins any line ending in a backslash continuation (Ruby's
+/// statement continuation and Bash's line continuation both use the same
+/// character) onto the next line before applying any check, and — stronger
+/// still — extracts the actual resolved `-t`/`--target` value each Fastlane
+/// lane passes and asserts it is exactly `lib/main.dart`, rather than
+/// merely asserting the absence of a substring.
 library;
 
 import 'dart:io';
@@ -35,13 +61,103 @@ final RegExp _releaseBuildInvocation = RegExp(
   r'flutter\s+build|gradlew\s+(assemble|bundle)',
 );
 
+/// Extracts the value passed to a `-t`/`--target` flag, tolerating the
+/// surrounding Ruby/shell quoting this repo's build scripts use
+/// (`-t lib/main.dart`, `--target=lib/main.dart`, `-t "lib/main.dart"`, …).
+final RegExp _targetFlag = RegExp(
+  r'''(?:-t|--target)[= ]+["']?([\w./]+\.dart)["']?''',
+);
+
+/// Joins backslash-continued lines into one logical line so that a build
+/// invocation split across physical lines — Ruby's `sh('a ' \` + `'b')`
+/// pattern used by both Fastfiles, or an equally idiomatic multi-line shell
+/// command in a workflow's `run: |` block — is scanned as the single
+/// statement it actually is, rather than as independent lines a naive
+/// per-line regex can be defeated by.
+///
+/// Full-line comments (Ruby `#`/YAML `#`, once trimmed) are dropped first:
+/// this is prose about builds ("`flutter build ipa` names the output
+/// after…"), not a build invocation, and joining across a comment boundary
+/// would otherwise manufacture a fake "statement" out of unrelated code.
+///
+/// This is a text heuristic, not a Ruby/YAML/Bash parser — it only needs to
+/// hold for the build-configuration files this test reads, not arbitrary
+/// source. A line continues onto the next when, after trimming trailing
+/// whitespace, it ends in exactly one `\`.
+List<String> _logicalLines(String contents) {
+  final List<String> rawLines = contents.split('\n');
+  final List<String> logical = <String>[];
+  final StringBuffer pending = StringBuffer();
+
+  for (final String rawLine in rawLines) {
+    if (rawLine.trim().startsWith('#')) {
+      continue;
+    }
+    final String trimmedEnd = rawLine.replaceFirst(RegExp(r'\s+$'), '');
+    final bool continues =
+        trimmedEnd.endsWith(r'\') && !trimmedEnd.endsWith(r'\\');
+    pending.write(continues ? trimmedEnd.substring(0, trimmedEnd.length - 1) : rawLine);
+    if (continues) {
+      pending.write(' ');
+    } else {
+      logical.add(pending.toString());
+      pending.clear();
+    }
+  }
+  if (pending.isNotEmpty) {
+    logical.add(pending.toString());
+  }
+  return logical;
+}
+
+/// Extracts the argument text passed to the Fastfile's single `sh(...)`
+/// call — the actual shell command Fastlane executes — as opposed to any
+/// other Ruby string in the file (e.g. an error message that happens to
+/// *mention* `flutter build` in prose, as `android/fastlane/Fastfile`'s
+/// `UI.user_error!` does). This is what "resolved target" means in
+/// practice: the one piece of text that is actually handed to a shell,
+/// scoped precisely so prose elsewhere can't be mistaken for it.
+///
+/// Follows this repo's Fastfile convention of `sh(` opening a call whose
+/// closing `)` sits alone on its own line — true of both Fastfiles today.
+String? _shInvocationBody(String contents) {
+  final List<String> rawLines = contents.split('\n');
+  final int start = rawLines.indexWhere(
+    // A comment mentioning the call (e.g. "the `sh(...)` call below") also
+    // contains the substring `sh(` — skip comment lines so that prose
+    // about the invocation can't be mistaken for the invocation itself.
+    (String line) => !line.trim().startsWith('#') && line.contains('sh('),
+  );
+  if (start == -1) {
+    return null;
+  }
+  final int end = rawLines.indexWhere(
+    (String line) => line.trim() == ')',
+    start + 1,
+  );
+  if (end == -1) {
+    return null;
+  }
+  return rawLines.sublist(start + 1, end).join('\n');
+}
+
+/// Finds every logical line that both looks like a release build invocation
+/// and mentions `main_e2e` — the one pattern that must never exist, however
+/// the source happens to be wrapped across physical lines.
+List<String> _sameStatementViolations(String contents) => <String>[
+      for (final String line in _logicalLines(contents))
+        if (_releaseBuildInvocation.hasMatch(line) &&
+            _mainE2eMention.hasMatch(line))
+          line.trim(),
+    ];
+
 void main() {
   group('release lanes never target the e2e entrypoint', () {
     for (final String fastfilePath in <String>[
       'ios/fastlane/Fastfile',
       'android/fastlane/Fastfile',
     ]) {
-      test('$fastfilePath builds lib/main.dart, never main_e2e', () {
+      test('$fastfilePath resolves its build target to lib/main.dart', () {
         final File file = File(fastfilePath);
         expect(
           file.existsSync(),
@@ -52,31 +168,78 @@ void main() {
         );
 
         final String contents = file.readAsStringSync();
+
+        // Scope to the actual `sh(...)` call — the one piece of text
+        // Fastlane hands to a shell — not any other string in the file
+        // (android/fastlane/Fastfile's UI.user_error! message mentions
+        // "flutter build appbundle" in prose; that must not be mistaken
+        // for the invocation itself).
+        final String? shBody = _shInvocationBody(contents);
         expect(
-          contents,
-          contains('lib/main.dart'),
+          shBody,
+          isNotNull,
           reason:
-              '$fastfilePath must explicitly target lib/main.dart so the '
-              'shipped entrypoint is never left to whatever the default '
-              'happens to be',
+              '$fastfilePath has no `sh(...)` call shaped as this repo\'s '
+              'Fastfiles use — expected one opening `sh(` and a `)` alone '
+              'on its own line',
         );
 
-        // Explanatory comments (like this file's own header, and this
-        // test's) are allowed to *say* "main_e2e" — what must never exist
-        // is that name on the same line as the actual build invocation this
-        // lane runs.
-        final List<String> violations = <String>[
-          for (final String line in contents.split('\n'))
-            if (_releaseBuildInvocation.hasMatch(line) &&
-                _mainE2eMention.hasMatch(line))
-              line.trim(),
-        ];
+        // Join continuations *within the sh(...) body only* — after
+        // joining, this is the single logical statement Fastlane executes,
+        // however many physical lines/string literals it was wrapped
+        // across (both Fastfiles concatenate two string literals with a
+        // trailing `\` continuation).
+        final List<String> joined = _logicalLines(shBody!)
+            .where((String line) => line.trim().isNotEmpty)
+            .toList();
         expect(
-          violations,
+          joined,
+          hasLength(1),
+          reason:
+              'expected the sh(...) body in $fastfilePath to join into one '
+              'logical statement, got: $joined',
+        );
+        final String buildStatement = joined.single;
+        expect(
+          _releaseBuildInvocation.hasMatch(buildStatement),
+          isTrue,
+          reason:
+              '$fastfilePath\'s sh(...) call is not a release build '
+              'invocation: $buildStatement',
+        );
+
+        // Assert on the *resolved* target rather than merely on the
+        // absence of a substring — this is what makes the assertion
+        // immune to line formatting: however the statement is wrapped,
+        // once joined there is exactly one target value, and it must be
+        // lib/main.dart.
+        final RegExpMatch? targetMatch = _targetFlag.firstMatch(
+          buildStatement,
+        );
+        expect(
+          targetMatch,
+          isNotNull,
+          reason:
+              '$fastfilePath\'s release build invocation has no '
+              '-t/--target flag at all: $buildStatement',
+        );
+        expect(
+          targetMatch!.group(1),
+          'lib/main.dart',
+          reason:
+              '$fastfilePath\'s release build must target lib/main.dart — '
+              'found target "${targetMatch.group(1)}" in: $buildStatement',
+        );
+
+        // Defence in depth, and a clearer failure message than the target
+        // check alone would give if main_e2e shows up somewhere in the
+        // statement other than the target flag itself.
+        expect(
+          _sameStatementViolations(contents),
           isEmpty,
           reason:
-              '$fastfilePath has a build invocation targeting main_e2e — '
-              'exactly what AC-AUTH-07 forbids: $violations',
+              '$fastfilePath has a build invocation mentioning main_e2e — '
+              'exactly what AC-AUTH-07 forbids',
         );
       });
     }
@@ -102,13 +265,16 @@ void main() {
           // A release-shaped build step (`flutter build`/`gradlew
           // assemble*`) is fine on its own, and `main_e2e` on its own is
           // fine (the integration jobs legitimately run tests against it).
-          // What must never happen is both on the *same line* — a build
-          // step whose target is the bypass entrypoint.
-          for (final String line in contents.split('\n')) {
-            if (_releaseBuildInvocation.hasMatch(line) &&
-                _mainE2eMention.hasMatch(line)) {
-              violations.add('${entity.path}: ${line.trim()}');
-            }
+          // What must never happen is both in the same logical statement —
+          // a build step whose resolved target is the bypass entrypoint.
+          // Logical-line joining (see `_logicalLines`) means wrapping a
+          // shell command across multiple `run: |` lines with a trailing
+          // `\` — completely idiomatic YAML/Bash, and already used by this
+          // very file for its `flutter test` invocations — cannot be used
+          // to split the two matches apart the way the Fastfile split once
+          // did.
+          for (final String violation in _sameStatementViolations(contents)) {
+            violations.add('${entity.path}: $violation');
           }
         }
 
@@ -116,8 +282,8 @@ void main() {
           violations,
           isEmpty,
           reason:
-              'these workflow lines build a release artifact from the e2e '
-              'entrypoint: $violations',
+              'these workflow statements build a release artifact from the '
+              'e2e entrypoint: $violations',
         );
       },
     );
@@ -151,14 +317,13 @@ void main() {
             'suite against main_e2e.dart — if this ever stops being true, '
             'update this test rather than deleting it',
       );
-      for (final String line in contents.split('\n')) {
-        expect(
-          _releaseBuildInvocation.hasMatch(line) &&
-              _mainE2eMention.hasMatch(line),
-          isFalse,
-          reason: 'release-shaped build line targets main_e2e: $line',
-        );
-      }
+      expect(
+        _sameStatementViolations(contents),
+        isEmpty,
+        reason:
+            'a release-shaped build statement in flutter-integration.yml '
+            'targets main_e2e',
+      );
     });
   });
 }

@@ -1,22 +1,20 @@
-/// Settings' seam onto the AUTH module (`lib/auth/**`, not yet built — see
-/// IMPLEMENTATION.md's module contract).
+/// Settings' seam onto the AUTH module (`lib/auth/**`).
 ///
 /// FLUTTER_MIGRATION.md §6 is explicit: "Sign-out lives here [Settings],
 /// fires a haptic, and clears tokens explicitly (that behaviour belongs to
-/// AUTH — call their action, don't reimplement it)." Settings has no way to
-/// clear a Cognito token today because nothing has written that code yet, so
-/// this is the smallest interface Settings needs in the meantime: something
-/// callable that ends the session.
+/// AUTH — call their action, don't reimplement it)." This typedef is the
+/// smallest interface Settings needs to call that behaviour without
+/// importing an AUTH type directly.
 ///
-/// The default implementation only flips `lib/router/auth_state.dart`'s
-/// [authStatusProvider] to [AuthStatus.signedOut] — which is real behaviour
-/// (it already drives the router's redirect-to-sign-in, per that file's own
-/// "AUTH should replace this" doc comment) but is *not* token-clearing.
-/// **Required follow-up for AUTH**: override this provider with the real
+/// The default implementation below only flips `lib/router/auth_state.dart`'s
+/// [authStatusProvider] to [AuthStatus.signedOut] — real behaviour (it
+/// already drives the router's redirect-to-sign-in) but *not*
+/// token-clearing. `lib/main.dart` overrides this provider with the real
 /// action (revoke + delete tokens via `flutter_secure_storage`, then set
-/// [AuthStatus.signedOut]) once `lib/auth/**` lands, so Settings never needs
-/// to change its call site. Deliberately does not touch any drift table —
-/// signing out must not wipe local user data (AC-DATA-09).
+/// [AuthStatus.signedOut]) via [AuthController.signOut] — see that
+/// override's call site for the wiring. Settings never needed to change its
+/// call site. Deliberately does not touch any drift table — signing out
+/// must not wipe local user data (AC-DATA-09).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';

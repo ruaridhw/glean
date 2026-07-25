@@ -16,21 +16,22 @@ final Provider<GleanDatabase> gleanDatabaseProvider = Provider<GleanDatabase>((
   return db;
 });
 
-/// Seam for the AUTH module (not yet built): override this with the
-/// signed-in user's Cognito sub. Every user-scoped read/write in this data
-/// layer takes a user id as a parameter rather than reading this provider
-/// directly — repositories stay auth-agnostic, and `lib/features/**`
-/// providers are the ones expected to `ref.watch` this.
+/// Seam for the AUTH module: overridden with the signed-in user's Cognito
+/// sub in `lib/main.dart` (real session, via [AuthController]) and
+/// `lib/main_e2e.dart` (bypassed session). Every user-scoped read/write in
+/// this data layer takes a user id as a parameter rather than reading this
+/// provider directly — repositories stay auth-agnostic, and
+/// `lib/features/**` providers are the ones expected to `ref.watch` this.
 ///
-/// Deliberately has no fallback default: reading it before AUTH overrides
-/// it (in production) or before a test overrides it (in `ProviderScope`)
-/// is a wiring bug, and should fail loudly rather than silently scope every
-/// query to a placeholder user id.
+/// Deliberately has no fallback default: reading it before AUTH's override
+/// applies (in production/e2e) or before a test overrides it (in
+/// `ProviderScope`) is a wiring bug, and should fail loudly rather than
+/// silently scope every query to a placeholder user id.
 final Provider<String> currentUserIdProvider = Provider<String>((ref) {
   throw UnimplementedError(
     'currentUserIdProvider has no default. Override it with the signed-in '
-    "user id — the AUTH module's job once it lands — or with a fixed value "
-    'in ProviderScope(overrides: ...) for tests/previews.',
+    'user id (lib/main.dart / lib/main_e2e.dart already do) or with a '
+    'fixed value in ProviderScope(overrides: ...) for tests/previews.',
   );
 });
 

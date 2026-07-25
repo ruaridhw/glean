@@ -9,7 +9,11 @@ Status: `OPEN` needs action · `RESOLVED` done · `ACCEPTED` deliberate, no acti
 ---
 
 ## F-01 — Brand SVGs contain `<filter>` elements `flutter_svg` cannot render
-**Status:** OPEN · surfaced by: design-system agent · affects: AC-DS-07
+**Status:** OPEN (still reproducible — all three SVGs still contain `<filter>` elements as of
+this check) · surfaced by: design-system agent · affects: AC-DS-07 · **being fixed:**
+REMEDIATION.md R-13 assigns this exact fix (strip the filter, reapply the shadow in Flutter) to
+the design-auth-haptics wave; another agent owns it concurrently with this pass, so leave this
+status alone rather than re-diagnosing or re-fixing it here.
 
 All three vendored brand SVGs (`app/assets/brand/glean-b1-{icon,splash-logo,adaptive-foreground}.svg`)
 contain `<filter>` elements that `flutter_svg` 2.3.0 does not support. It logs
@@ -287,8 +291,15 @@ making the animation finite.
 `test/support/harness.dart` instead.
 
 ## F-14 — command providers read snapshots by subscribing to a stream and cancelling it
-**Status:** OPEN · surfaced by: orchestrator while fixing the Plan suite
+**Status:** RESOLVED · surfaced by: orchestrator while fixing the Plan suite
 **Affects:** AC-DATA-06, AC-PLAN-09/10, test stability generally
+
+**Resolution:** `lib/features/plan/providers/generate_week_controller.dart`'s `_generate` now
+takes one-shot snapshots via `getAll`/`getSaved`/`getWeek`/`get` Future getters instead of
+`.watch().first`, with a comment at the call site naming this finding directly. Verified in
+the current source (2026-07-25).
+
+Original finding below.
 
 `lib/features/plan/providers/generate_week_controller.dart:60-69` reads three snapshots as
 `repository.watchXxx(...).first` — i.e. it opens a live drift query stream, takes one value, and
@@ -309,8 +320,20 @@ items", "saved recipes" and "this week's entries". **Fix: add those getters and 
 use them.** Reserve `.watch()` for what the UI subscribes to.
 
 ## F-15 — `autoDispose` command providers can be disposed mid-network-call
-**Status:** OPEN · surfaced independently by: meals agent, then the plan fix agent
+**Status:** RESOLVED · surfaced independently by: meals agent, then the plan fix agent
 **Affects:** AC-DATA-06, AC-PAN-14, AC-MEAL-10, AC-PLAN-09/10 — and it is a **production** risk
+
+**Resolution:** every provider in the table below now holds `ref.keepAlive()` for the duration
+of its async work and closes the link when done, each with a comment naming this finding
+directly: `generateMealPlanControllerProvider` (`lib/api/providers/meal_plan_providers.dart`),
+`scanReceiptControllerProvider`/`describeReceiptControllerProvider`
+(`lib/api/providers/receipts_providers.dart`), `importRecipeControllerProvider`
+(`lib/api/providers/recipe_providers.dart`), and
+`parseShoppingDescriptionControllerProvider` (`lib/api/providers/shopping_providers.dart`) — the
+last of these is also no longer dead: F-16 wired it to `ShopDescribeScreen`. Verified in the
+current source (2026-07-25).
+
+Original finding below.
 
 Every remote command provider in `lib/api/providers/` is an `AsyncNotifierProvider.autoDispose`.
 If nothing holds the provider alive across its `await`, Riverpod disposes it mid-flight and the
@@ -379,3 +402,23 @@ only the screen that is missing, which is also why nothing failed: no test asser
 **Lesson for the remaining waves:** a screen owned by one feature but reached only from another is
 exactly where work falls through. When verifying, check every route resolves to a real screen, not
 just that the route table is correct.
+
+## F-17 — Concurrent agents in one worktree silently revert each other's uncommitted work
+**Status:** OPEN (process, not code) · **my orchestration error**
+
+Two separate agents reported their edits vanishing mid-session. The docs/guard agent found most of its
+work reverted on disk and had to redo it; the pubspec cleanup (R-05) has now been reverted **twice**.
+
+Cause: many agents sharing one worktree with a large uncommitted working set, some of them running
+`git checkout -- <path>` to restore their own temporary probes. That restores from HEAD, so it also
+discards *other* agents' uncommitted edits to those paths.
+
+It compounded a second mistake: I authorised verifiers to temporarily break code to prove tests
+weren't vacuous, and ran five of them **concurrently in the same worktree**. They saw each other's
+probes, which is why one reported a red tree that was actually green.
+
+**Mitigations for the rest of this effort:**
+- Commit after every wave, so the uncommitted surface stays small and `git checkout` is harmless.
+- Never run mutation-testing verifiers concurrently in a shared worktree — give each an isolated one
+  (the Agent tool supports `isolation: "worktree"`), or run them one at a time.
+- Re-check any "fixed" item after a later wave; a fix is not durable until committed.

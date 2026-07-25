@@ -13,10 +13,11 @@ import 'text_input.dart';
 
 /// Supplies the current user's bearer token, or `null` if signed out.
 ///
-/// **Seam:** the AUTH module (`lib/auth/**`, a later wave) owns tokens and
-/// does not exist yet. [GleanApiClient] takes this as an injected callback
-/// rather than reading token storage itself, so it stays testable now and
-/// AUTH can be wired in later without this module depending on `lib/auth/`.
+/// **Seam:** the AUTH module (`lib/auth/**`) owns tokens. [GleanApiClient]
+/// takes this as an injected callback rather than reading token storage
+/// itself, so it stays testable and never depends on `lib/auth/` directly —
+/// `lib/main.dart` wires in [AuthController.getValidAccessToken] via
+/// `lib/api/providers/api_providers.dart`'s `apiAccessTokenProvider`.
 typedef AccessTokenProvider = Future<String?> Function();
 
 /// Typed HTTP client for the Glean FastAPI backend.

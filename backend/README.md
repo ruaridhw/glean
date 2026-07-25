@@ -68,54 +68,36 @@ uv run ruff check src/ tests/ --fix
 uv run ruff format src/ tests/
 ```
 
-## Running the Mobile App Locally
+## Running the App Locally
 
-### Prerequisites
-
-- Node.js 18+
-- [Expo CLI](https://docs.expo.dev/get-started/set-up-your-environment/) (`npx expo`)
-- **iOS Simulator:** Xcode (macOS only)
-- **Android Emulator:** Android Studio with an AVD configured
-
-### Setup
+The client is now a native Flutter app at `app/` (the Expo/React Native app
+that used to live at `mobile/` was replaced in a big-bang cutover — see the
+root `FLUTTER_MIGRATION.md`). Full setup and run instructions live in
+`app/README.md` and the root `README.md`; the short version, from the repo
+root, once the backend above is running:
 
 ```bash
-cd mobile
-npm install
+make start-ios     COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...   # macOS only
+make start-android COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...   # needs a running emulator
 ```
 
-### Emulator (iOS Simulator / Android Emulator)
+Both default to pointing at the plain `make start-backend` server above
+(`http://localhost:8000` for iOS Simulator, `http://10.0.2.2:8000` — the
+emulator's alias for the host's localhost — for Android). `COGNITO_DOMAIN`/
+`COGNITO_CLIENT_ID` come from the deployed backend stack's SAM outputs (or
+your own Cognito setup for local dev) — see `app/README.md`.
 
-Start the backend first (see above), then:
+### Physical Device on Local Network
+
+A physical phone can't reach your laptop's `localhost`. Start the
+Dockerized backend, find your laptop's Wi-Fi IP, then pass it through
+`API_HOST`:
 
 ```bash
-npx expo start
+make start-backend-docker
+ipconfig getifaddr en0   # e.g. 192.168.1.42
+make start-android API_HOST=192.168.1.42 COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...
 ```
 
-Press **i** for iOS Simulator or **a** for Android Emulator. Both can reach the backend at `http://localhost:8000` (the default), so no extra config is needed.
-
-### Physical Android Device on Local Network
-
-A physical device can't reach `localhost`, so you need to bind the backend to your Mac's LAN IP and tell the mobile app where to find it.
-
-1. Start the Dockerized backend from the repo root:
-
-   ```bash
-   make start-backend-docker
-   ```
-
-2. Find your Mac's LAN IP:
-
-   ```bash
-   ipconfig getifaddr en0   # e.g. 192.168.1.42
-   ```
-
-3. Start Expo with the API URL override:
-
-   ```bash
-   make start-mobile API_HOST=192.168.1.42
-   ```
-
-4. Scan the QR code with Expo Go, or press **a** if connected via USB/ADB.
-
-Make sure your phone and Mac are on the same Wi-Fi network.
+Your phone and laptop must be on the same Wi-Fi network. If your IP changes,
+rerun `ipconfig getifaddr en0` and restart with the new `API_HOST`.

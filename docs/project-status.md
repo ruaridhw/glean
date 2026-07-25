@@ -68,7 +68,10 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
    - Enable required-reviewer protection
 2. Add repository secrets:
    - `AWS_ROLE_ARN_DEV` (value in `infra/.bootstrap-outputs`)
-   - `EXPO_TOKEN` (from expo.dev/accounts)
+   - ~~`EXPO_TOKEN` (from expo.dev/accounts)~~ — no longer needed: EAS was
+     removed entirely in the Flutter cutover (see the corrected "Tech stack"
+     table above); Fastlane release lanes need no CI secret since they run
+     from a Mac, not from CI (see `app/README.md`).
 3. Merge `feat/plan-06-deploy` → `main`
 
 ---
@@ -96,6 +99,6 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
 | OCR | AWS Textract (or vision model via OpenRouter) |
 | Storage | SQLite (mobile, local-first), S3 (receipt image buffer) |
 | Infra | AWS SAM, CloudFormation, CloudWatch, X-Ray |
-| CI/CD | GitHub Actions, OIDC, EAS |
-| Testing | pytest + coverage (backend), jest-expo + maestro (mobile) |
-| Linting | ruff + black (backend), biome (mobile) |
+| CI/CD | GitHub Actions, OIDC; Fastlane (release lanes, run from a Mac, not CI) — EAS is gone entirely post-cutover |
+| Testing | pytest + coverage (backend); `flutter test` (unit + widget) + one `integration_test` suite (app) — jest-expo + Maestro were the pre-cutover (mobile/) equivalents |
+| Linting | ruff + ty + vulture (backend); `dart format` + `flutter analyze` (app) — biome was the pre-cutover (mobile/) equivalent |

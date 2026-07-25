@@ -1,13 +1,13 @@
 /// The router's auth-state seam.
 ///
-/// **Follow-up required**: the AUTH module (`lib/auth/**`, a later wave)
-/// owns real auth state (Cognito tokens via `flutter_appauth` +
-/// `flutter_secure_storage`). This file is the smallest interface the router
-/// needs in the meantime — a single provider it can watch to decide whether
-/// to redirect to sign-in. AUTH should replace [authStatusProvider]'s
-/// definition (or override it at the `ProviderScope` root) with one backed
-/// by real token state; the router only depends on the provider's type and
-/// name, not on how it's produced.
+/// Deliberately just an interface, not the real state: `lib/auth/**` owns
+/// real auth state (Cognito tokens via `flutter_appauth` +
+/// `flutter_secure_storage`) and overrides [authStatusProvider] at the
+/// `ProviderScope` root (`lib/main.dart`, `lib/main_e2e.dart`) with a
+/// notifier backed by [AuthController] — see `lib/auth/auth_controller.dart`.
+/// The router only depends on this provider's type and name, not on how it's
+/// produced, which is what keeps this file a stable seam rather than a
+/// dependency on `lib/auth/**` itself.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,15 +22,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 enum AuthStatus { signedOut, active, expired }
 
 /// Notifier backing [authStatusProvider]. Defaults to `active` so the app
-/// (and every other module under development in parallel) is navigable
-/// before the AUTH module exists.
+/// stays navigable wherever this provider is used unoverridden (widget
+/// tests/previews); the production and e2e entrypoints both override it
+/// with a notifier seeded from real (or bypassed) session state instead.
 class AuthStatusNotifier extends Notifier<AuthStatus> {
   @override
   AuthStatus build() => AuthStatus.active;
 
-  /// AUTH will call the real equivalent of this after sign-in/out/refresh.
-  /// Exposed as a plain setter (rather than e.g. only via `overrideWith`) so
-  /// tests can flip status on a live provider to exercise the redirect.
+  /// [AuthController] calls the real equivalent of this after
+  /// sign-in/out/refresh. Exposed as a plain setter (rather than e.g. only
+  /// via `overrideWith`) so tests can flip status on a live provider to
+  /// exercise the redirect.
   void setStatus(AuthStatus status) => state = status;
 }
 

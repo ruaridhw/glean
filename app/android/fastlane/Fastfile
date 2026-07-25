@@ -54,8 +54,9 @@ platform :android do
 
     # `-t lib/main.dart` is explicit, not incidental: this lane must never
     # build `lib/main_e2e.dart` (AC-AUTH-07) —
-    # `test/build/release_entrypoint_test.dart` asserts this file's contents
-    # never mention `main_e2e`.
+    # `test/build/release_entrypoint_test.dart` extracts the resolved `-t`
+    # target from the `sh(...)` call below and asserts it is exactly
+    # `lib/main.dart`.
     sh(
       'cd ../.. && flutter build appbundle --release ' \
       "-t lib/main.dart --build-number=#{version_code}",

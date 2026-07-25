@@ -135,6 +135,11 @@ trail). Trigger it from the Actions tab or `gh workflow run flutter-integration.
 
 ## Release (Fastlane)
 
+**Before running either lane, work through
+[`../docs/pre-release-checklist.md`](../docs/pre-release-checklist.md)** — airplane-mode error
+states, both `integration_test` platform runs, and (for a first submission to either store)
+signing/build-number gotchas neither lane nor any automated test catches.
+
 `ios/fastlane/` (TestFlight) and `android/fastlane/` (Play internal track) —
 **run from a Mac, never from CI**. No `match`: one Mac, one signer, so
 Xcode's own "Automatically manage signing" (already on) is adequate; adopt

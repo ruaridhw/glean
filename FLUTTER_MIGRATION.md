@@ -34,6 +34,7 @@ This is a **planning artifact**. No Flutter code exists yet. Every decision here
 | State | **Riverpod** | The only option with cache/invalidate primitives (`family`, `autoDispose`, `ref.invalidate`, `AsyncNotifier`) analogous to TanStack Query. |
 | Persistence | **`drift`** | Best-maintained, SQL-like typed queries closest to the current Drizzle experience. `isar` rejected — maintenance stalled (last stable release ~3 years old). |
 | Auth | **`flutter_appauth`** + **`flutter_secure_storage`** | Unchanged identity provider: AWS Cognito Hosted UI federating to Google, PKCE. |
+| Networking | **`http`** | The entire remote layer (`GleanApiClient` — recipe search/import, meal-plan generation, the three parse endpoints) is built on it. Omitted from this table originally; a documentation gap, not a stack change (FINDINGS.md/REMEDIATION.md R-06) — `http` shipped from the start. |
 | Camera | **`camera`** | Not `image_picker` — receipt scanning needs live preview with a custom framing overlay and programmatic capture. |
 | SVG | **`flutter_svg`** | For `GleanMark` from `assets/source/glean-mark.svg`, and for any individually-vendored icon glyph. |
 | Permissions | **`permission_handler`** | Plus `Info.plist` strings (`NSCameraUsageDescription`). |
@@ -311,7 +312,7 @@ Porting alone would leave every decision above untested. The first two are non-n
 9. **The haptic ladder** applied at design-system level.
 10. **`go_router` route-table structure.**
 
-`manual/error-states.yaml` (airplane-mode toggling) stays a **manual pre-release checklist item** — it is already excluded from CI.
+`manual/error-states.yaml` (airplane-mode toggling) stays a **manual pre-release checklist item** — it is already excluded from CI. The checklist itself lives at `docs/pre-release-checklist.md`, which also covers the two `integration_test` platform runs and first-release signing/build-number steps.
 
 No test debt from deletions: there is no test for `guard-text-imports.mjs` or `AppText`.
 

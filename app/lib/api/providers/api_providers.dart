@@ -24,11 +24,12 @@ final Provider<String> apiBaseUrlProvider = Provider<String>((ref) {
 
 /// Supplies the bearer token for authenticated requests.
 ///
-/// **SEAM:** the AUTH module (`lib/auth/**`, a later wave) owns tokens and
-/// does not exist yet. This default (always signed-out) lets the API
-/// module compile and stay independently testable now; AUTH overrides this
-/// provider once it lands, without the API module ever importing
-/// `lib/auth/`. This is not a placeholder bug — every route already 401s
+/// **SEAM:** the AUTH module (`lib/auth/**`) owns tokens. This default
+/// (always signed-out) keeps the API module independently testable without
+/// importing `lib/auth/` — `lib/main.dart` overrides this provider with
+/// [AuthController.getValidAccessToken] (see its `ProviderScope` overrides),
+/// and `lib/main_e2e.dart` overrides it with the bypassed session's token
+/// instead. This is not a placeholder bug — every route already 401s
 /// cleanly without a token, and [ApiAuthException] carries that to the UI.
 final Provider<AccessTokenProvider> apiAccessTokenProvider =
     Provider<AccessTokenProvider>((ref) {
