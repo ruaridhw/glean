@@ -198,16 +198,37 @@ class _SavedRecipeDetailBody extends ConsumerWidget {
     }
 
     ref.read(hapticsProvider).mediumImpact();
-    await ref
+    final String userId = ref.read(currentUserIdProvider);
+    final int entryId = await ref
         .read(planRepositoryProvider)
         .addEntry(
-          userId: ref.read(currentUserIdProvider),
+          userId: userId,
           recipeId: recipe.id,
           recipeTitle: recipe.title,
           servings: servings,
         );
+    // R-02: the Generate path has always created shopping gaps for a newly
+    // planned recipe (`GenerateWeekController._persist`); this manual path
+    // silently skipped it. `addGapsForRecipe` is idempotent on its own (see
+    // its doc comment), so nothing extra is needed here to avoid doubling
+    // rows on a repeat add.
+    final int gapsAdded = await ref
+        .read(shoppingRepositoryProvider)
+        .addGapsForRecipe(
+          userId: userId,
+          recipeId: recipe.id,
+          servings: servings,
+          sourceMealPlanEntryId: entryId,
+        );
     if (context.mounted) {
-      GleanSnackBar.show(context, 'Added to plan');
+      // AC-SHOP-05: announce plan-derived shopping rows rather than
+      // inserting them silently.
+      GleanSnackBar.show(
+        context,
+        gapsAdded > 0
+            ? 'Added to plan · $gapsAdded ${gapsAdded == 1 ? 'item' : 'items'} added to your shopping list'
+            : 'Added to plan',
+      );
     }
   }
 }

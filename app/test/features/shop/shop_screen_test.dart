@@ -4,12 +4,27 @@
 // with a long list and with the keyboard up (AC-SHOP-08/10).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 
+import '../../data/fixture.dart';
 import '../../support/harness.dart';
+
+/// Forces `ShoppingRepository.deleteItem` to fail, so R-07's guard around
+/// `deleteShoppingItemWithUndo` can be exercised without a real DB failure
+/// mode to hand — mirrors `_ThrowingDeletePantryRepository` in
+/// `test/features/pantry/pantry_screen_test.dart`.
+class _ThrowingDeleteShoppingRepository extends ShoppingRepository {
+  _ThrowingDeleteShoppingRepository(super.db, super.ingredients);
+
+  @override
+  Future<void> deleteItem({required int id, required String userId}) {
+    return Future<void>.error(Exception('simulated DB failure'));
+  }
+}
 
 void main() {
   group('ShopScreen', () {
@@ -134,6 +149,45 @@ void main() {
       );
       expect(find.text('Bananas'), findsOneWidget);
     });
+
+    gleanWidgetTest(
+      'a delete failure is caught and surfaced, leaving the row intact '
+      '(R-07)',
+      (WidgetTester tester) async {
+        final throwingDb = createTestDatabase();
+        addTearDown(() => throwingDb.close());
+        final throwingRepo = _ThrowingDeleteShoppingRepository(
+          throwingDb,
+          IngredientsRepository(throwingDb),
+        );
+        await throwingRepo.addManualItem(userId: 'test-user', name: 'Bananas');
+
+        final localHarness = AppTestHarness(
+          overrides: [
+            shoppingRepositoryProvider.overrideWithValue(throwingRepo),
+          ],
+        );
+        addTearDown(() => localHarness.dispose());
+
+        await localHarness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+        expect(find.text('Bananas'), findsOneWidget);
+
+        await tester.drag(find.text('Bananas'), const Offset(-600, 0));
+        await tester.pumpAndSettle();
+
+        // No undo snackbar — the delete failed and was caught, not
+        // propagated uncaught with zero feedback (the R-07 bug).
+        expect(find.text('Undo'), findsNothing);
+        expect(find.textContaining('Could not remove'), findsOneWidget);
+
+        // The row must survive untouched in the data layer.
+        final survivors = await tester.runAsync(
+          () => throwingRepo.watchAll('test-user').first,
+        );
+        expect(survivors!.single.name, 'Bananas');
+      },
+    );
 
     testWidgets(
       'the pinned add field stays visible with a long list (AC-SHOP-08)',

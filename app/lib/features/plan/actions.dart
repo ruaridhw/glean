@@ -64,6 +64,14 @@ Future<void> markCookedWithUndo(
 /// recipe id left to re-add with — `PlanRepository.addEntry` requires one
 /// — so this shows a plain snackbar with no "Undo" action rather than one
 /// that would silently do nothing.
+///
+/// Both the delete and the undo's re-add are guarded (R-07): neither had a
+/// `try`/`catch` before, so a DB-layer failure propagated as an uncaught
+/// exception with no feedback at all — the same defect class §11 calls
+/// "silent failures", already fixed this way in
+/// `lib/features/pantry/actions.dart` and `lib/features/meals/actions.dart`.
+/// A failed delete leaves the entry exactly as it was; a failed undo leaves
+/// it deleted, but the user is told rather than left to assume undo worked.
 Future<void> deleteEntryWithUndo(
   BuildContext context,
   WidgetRef ref,
@@ -72,7 +80,17 @@ Future<void> deleteEntryWithUndo(
   final planRepository = ref.read(planRepositoryProvider);
   final String userId = ref.read(currentUserIdProvider);
 
-  await planRepository.deleteEntry(id: entry.id, userId: userId);
+  try {
+    await planRepository.deleteEntry(id: entry.id, userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(
+        context,
+        'Could not remove ${entry.recipeTitle}. Try again.',
+      );
+    }
+    return;
+  }
   if (!context.mounted) return;
 
   final int? recipeId = entry.recipeId;
@@ -85,15 +103,24 @@ Future<void> deleteEntryWithUndo(
     context,
     message: '${entry.recipeTitle} removed',
     onUndo: () {
-      unawaited(
-        planRepository.addEntry(
-          userId: userId,
-          recipeId: recipeId,
-          recipeTitle: entry.recipeTitle,
-          servings: entry.servings,
-          plannedDate: entry.plannedDate,
-        ),
-      );
+      unawaited(() async {
+        try {
+          await planRepository.addEntry(
+            userId: userId,
+            recipeId: recipeId,
+            recipeTitle: entry.recipeTitle,
+            servings: entry.servings,
+            plannedDate: entry.plannedDate,
+          );
+        } catch (_) {
+          if (context.mounted) {
+            GleanSnackBar.show(
+              context,
+              'Could not restore ${entry.recipeTitle}.',
+            );
+          }
+        }
+      }());
     },
   );
 }

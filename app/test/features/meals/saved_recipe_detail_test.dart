@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
+import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
@@ -141,6 +142,50 @@ void main() {
         // separate cross-fade for the ingredients list — both legitimate,
         // not a regression of this test's own making.
         expect(find.byType(GleanCrossFade), findsNWidgets(2));
+      },
+    );
+
+    testWidgets(
+      'manually adding to plan also creates shopping gaps and announces '
+      'them (R-02, AC-SHOP-05) — asserted through the real "Add to plan" '
+      'button, not by calling the repository directly',
+      (WidgetTester tester) async {
+        final int id = await recipes.save(
+          userId: 'test-user',
+          externalId: 'ext-6',
+          title: 'Chicken Curry',
+          ingredients: const <SaveRecipeIngredient>[
+            SaveRecipeIngredient(
+              canonicalName: 'chicken breast',
+              quantity: 400,
+              unit: 'g',
+            ),
+          ],
+        );
+
+        await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
+        await tester.pumpAndSettle();
+
+        // Announced, not silently inserted.
+        expect(
+          find.textContaining('added to your shopping list'),
+          findsOneWidget,
+        );
+        expect(find.widgetWithText(FilledButton, 'In plan'), findsOneWidget);
+
+        final shopping = ShoppingRepository(
+          harness.db,
+          IngredientsRepository(harness.db),
+        );
+        final items = await tester.runAsync(
+          () => shopping.watchAll('test-user').first,
+        );
+        expect(items, hasLength(1));
+        expect(items!.single.name, 'chicken breast');
+        expect(items.single.source, 'meal_plan');
       },
     );
 

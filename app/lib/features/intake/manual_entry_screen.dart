@@ -13,6 +13,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
+import 'package:glean/data/repositories/pantry_repository.dart'
+    show PantryUnitMismatchException;
 import 'package:glean/data/seed/taxonomy.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
@@ -66,9 +68,17 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       ref.read(hapticsProvider).mediumImpact();
       GleanSnackBar.show(context, 'Added to pantry');
       context.goNamed(AppRoutes.pantry.name);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      GleanSnackBar.show(context, 'Could not save this item. Try again.');
+      // R-23: a unit mismatch gets its own targeted message — the generic
+      // "try again" below is misleading for it, since retrying the same
+      // chosen unit fails identically every time.
+      GleanSnackBar.show(
+        context,
+        e is PantryUnitMismatchException
+            ? e.userMessage
+            : 'Could not save this item. Try again.',
+      );
     } finally {
       // Always clears — an RN bug left the add button permanently disabled
       // on any DB error because `setAdding(true)` had no `try/finally`.

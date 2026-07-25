@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/auth/auth_controller.dart'
+    show aiFeaturesAvailableProvider;
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
@@ -9,6 +11,10 @@ import 'package:go_router/go_router.dart';
 /// whether the pantry is empty or full, unlike the RN app, where nothing
 /// routed to manual entry at all and "Describe" vanished the moment the
 /// pantry owned one item.
+///
+/// R-08/AC-AUTH-04: "Scan receipt" and "Describe purchase" both call the AI
+/// backend, so both are disabled while `aiFeaturesAvailableProvider` is
+/// false — "Manual entry" is a purely local write and stays available.
 class PantryAddSheet extends ConsumerWidget {
   const PantryAddSheet({super.key});
 
@@ -30,6 +36,7 @@ class PantryAddSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppTokens tokens = context.tokens;
+    final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
     return SafeArea(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
@@ -52,6 +59,7 @@ class PantryAddSheet extends ConsumerWidget {
               ),
             ),
             ListTile(
+              enabled: aiAvailable,
               leading: const Icon(Icons.camera_alt_rounded),
               title: const Text('Scan receipt'),
               subtitle: const Text('Take a photo of your receipt'),
@@ -65,6 +73,7 @@ class PantryAddSheet extends ConsumerWidget {
               ),
             ),
             ListTile(
+              enabled: aiAvailable,
               leading: const Icon(Icons.chat_bubble_outline_rounded),
               title: const Text('Describe purchase'),
               subtitle: const Text('Type what you bought'),

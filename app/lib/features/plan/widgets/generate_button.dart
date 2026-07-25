@@ -7,6 +7,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/auth/auth_controller.dart'
+    show aiFeaturesAvailableProvider;
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/plan_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
@@ -29,9 +31,13 @@ class PlanGenerateButton extends ConsumerWidget {
     );
     final bool pending = ref.watch(generateWeekControllerProvider).isLoading;
     final bool ready = remainingAsync.hasValue && configAsync.hasValue;
+    // R-08/AC-AUTH-04: generation calls the AI backend, so an expired
+    // session disables it — the [SignedOutBanner] mounted above every tab is
+    // what explains why.
+    final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return FilledButton.icon(
-      onPressed: pending || !ready
+      onPressed: pending || !ready || !aiAvailable
           ? null
           : () => _onPressed(
               context,

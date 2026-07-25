@@ -2,18 +2,28 @@
 // fixing the three data-integrity bugs FLUTTER_MIGRATION.md §11/§6 Shop
 // call out:
 //
-//   - `resolveCheckout` (AC-SHOP-01) replaces `completeCheckout`, which
-//     deleted *every* checked row regardless of receipt match — check off
-//     12 items, scan a receipt matching 4, and the other 8 vanished without
-//     ever becoming pantry stock. This version deletes only rows whose
-//     ingredient the receipt actually resolved, in one statement, so there
-//     is no window where an unmatched checked row could be swept up.
-//   - `checkOffResolvedIngredients` (AC-SHOP-04) replaces
-//     `checkOffByIngredientIds`, which had no user scope at all and
-//     unconditionally flipped every row sharing an ingredient id. This
-//     version is scoped to the current user and only ever moves a row from
-//     unchecked -> checked — it can't re-affect an already-checked row or
-//     touch another user's list.
+//   - `resolveCheckout` (AC-SHOP-01/AC-SHOP-04) replaces both `completeCheckout`
+//     *and* `checkOffByIngredientIds`. `completeCheckout` deleted *every*
+//     checked row regardless of receipt match — check off 12 items, scan a
+//     receipt matching 4, and the other 8 vanished without ever becoming
+//     pantry stock. `resolveCheckout` deletes only rows that are both
+//     checked *and* whose ingredient the receipt actually resolved, in one
+//     statement scoped to the current user — so there is no window where an
+//     unmatched checked row, an unchecked row, or another user's row could
+//     be swept up.
+//
+//     RN's flow was two steps for a reason this port's isn't: `checkOffByIngredientIds`
+//     first ticked every row the receipt resolved (whether or not the user
+//     had checked it), then `completeCheckout` deleted every checked row —
+//     so an unscoped/unchecked-row bug in *either* step could corrupt the
+//     list. Collapsing both into `resolveCheckout`'s single atomic,
+//     already-scoped statement made the standalone tick step (`AC-SHOP-04`
+//     required by-ingredient check-off to be scoped) genuinely redundant —
+//     ported once as `checkOffResolvedIngredients`, unit-tested, but never
+//     called from anywhere real — so R-03 deleted it rather than wiring a
+//     second, needless path to the same rows. AC-SHOP-04 is satisfied by
+//     `resolveCheckout`'s own scoping (`userId` + `isChecked` + a matched
+//     `ingredientId`) instead.
 //   - `addManualItem` (AC-SHOP-03) resolves an ingredient identity through
 //     `IngredientsRepository` instead of storing `ingredient_id: null`,
 //     which is why manual items never matched a receipt in RN.
@@ -97,9 +107,14 @@ class ShoppingRepository {
   /// Adds AI-parsed items (receipt describe / shopping description parse),
   /// each resolved to a real ingredient identity with the category the
   /// backend returned (§9), also seeding/upgrading `canonicalUnit` (R-18)
-  /// from its parsed unit for the same reason. Runs as a single transaction
-  /// (AC-PAN-10): a failure partway through the list persists nothing, so
-  /// retrying can't double-insert the rows that already succeeded.
+  /// from its parsed unit for the same reason — but, per R-23, only when
+  /// [AiShoppingItem.unit] is genuinely non-blank. A blank one still
+  /// defaults to `'units'` for the row itself (every row needs some unit
+  /// string), but that fallback must never become the ingredient's
+  /// *permanent* canonical unit — only an explicitly parsed/typed one
+  /// should. Runs as a single transaction (AC-PAN-10): a failure partway
+  /// through the list persists nothing, so retrying can't double-insert the
+  /// rows that already succeeded.
   Future<void> addAiItems({
     required String userId,
     required List<AiShoppingItem> items,
@@ -108,12 +123,13 @@ class ShoppingRepository {
       for (final item in items) {
         final name = item.name.trim();
         if (name.isEmpty) continue;
-        final unit = item.unit.trim().isEmpty ? 'units' : item.unit.trim();
+        final String trimmedUnit = item.unit.trim();
+        final String unit = trimmedUnit.isEmpty ? 'units' : trimmedUnit;
         final ingredient = await _ingredients.resolveOrCreate(
           canonicalName: name,
           apiIngredientId: item.apiIngredientId,
           category: item.category,
-          unit: unit,
+          unit: trimmedUnit.isEmpty ? null : trimmedUnit,
         );
         await _db
             .into(_db.shoppingListItems)
@@ -135,12 +151,24 @@ class ShoppingRepository {
   /// that the pantry can't fully cover for [servings], linked back to
   /// [sourceMealPlanEntryId] so deleting that plan entry removes this row
   /// too (AC-SHOP-06).
-  Future<void> addGapsForRecipe({
+  ///
+  /// Returns the number of rows actually inserted, so a caller can announce
+  /// the outcome (AC-SHOP-05 — plan-derived rows must be announced, not
+  /// inserted silently) rather than assuming something happened.
+  ///
+  /// Idempotent by construction, not by a caller-side guard: the per-row
+  /// `existing` check below skips any ingredient that already has an
+  /// unchecked gap, so calling this twice for the same recipe/servings never
+  /// doubles a row (R-02 — the RN duplicate-add bug produced duplicate
+  /// shopping gaps as well as duplicate plan entries; this must not
+  /// reproduce that even from a repeated manual "Add to plan").
+  Future<int> addGapsForRecipe({
     required String userId,
     required int recipeId,
     required int servings,
     required int sourceMealPlanEntryId,
   }) async {
+    var inserted = 0;
     final rows =
         await (_db.select(_db.recipeIngredients).join([
               innerJoin(
@@ -194,26 +222,9 @@ class ShoppingRepository {
               sourceMealPlanEntryId: Value(sourceMealPlanEntryId),
             ),
           );
+      inserted++;
     }
-  }
-
-  /// Flips unchecked rows matching [ingredientIds] to checked, for
-  /// [userId] only. Never touches an already-checked row (so it can't
-  /// interfere with a checkout in progress) and never touches another
-  /// user's list — the scoping RN's `checkOffByIngredientIds` lacked
-  /// entirely (AC-SHOP-04).
-  Future<void> checkOffResolvedIngredients({
-    required String userId,
-    required List<int> ingredientIds,
-  }) {
-    if (ingredientIds.isEmpty) return Future.value();
-    return (_db.update(_db.shoppingListItems)..where(
-          (t) =>
-              t.userId.equals(userId) &
-              t.ingredientId.isIn(ingredientIds) &
-              t.isChecked.equals(false),
-        ))
-        .write(const ShoppingListItemsCompanion(isChecked: Value(true)));
+    return inserted;
   }
 
   Future<void> toggleItem({
@@ -236,6 +247,12 @@ class ShoppingRepository {
   /// checked rows whose ingredient the receipt actually resolved
   /// (AC-SHOP-01/AC-TEST-06), leaving every other row — checked-but-
   /// unmatched or never-checked — exactly as it was.
+  ///
+  /// Also this file's satisfaction of AC-SHOP-04 (R-03): `userId` +
+  /// `isChecked` + a matched `ingredientId` is the same scoping a standalone
+  /// "check off by ingredient" step would need, and doing it here — in the
+  /// one statement that both matches *and* removes — means there's no
+  /// separate tick step whose own scoping could be gotten wrong or skipped.
   Future<int> resolveCheckout({
     required String userId,
     required List<int> resolvedIngredientIds,

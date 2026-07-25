@@ -349,5 +349,93 @@ void main() {
       );
       expect(shoppingRows, isEmpty);
     });
+
+    testWidgets('clearing the unit field before confirming does not seed the '
+        "ingredient's canonical unit — asserted through the real screen, not "
+        'the repository directly (R-23)', (WidgetTester tester) async {
+      await pumpReview(
+        tester,
+        const ReviewArgs(
+          destination: ReviewDestination.pantry,
+          items: <ReviewItemDraft>[
+            ReviewItemDraft(
+              reviewId: 'a',
+              name: 'chia seeds',
+              quantity: 1,
+              unit: 'g',
+              confidence: 0.9,
+              category: 'grains',
+            ),
+          ],
+        ),
+      );
+
+      // The user clears what was parsed rather than leaving it as typed.
+      await tester.enterText(find.widgetWithText(TextField, 'Unit'), '');
+      await tester.pump();
+
+      await tester.tap(find.text('Add 1 item'));
+      await tester.pumpAndSettle();
+
+      final saved = (await tester.runAsync(
+        () => pantry.watchAll('test-user').first,
+      ))!.single;
+      // The row itself still gets a usable default.
+      expect(saved.unit, 'units');
+
+      // But the shared ingredient catalog was never permanently locked
+      // to that fallback — a later, genuinely explicit unit must still
+      // be free to seed it.
+      final ingredients = IngredientsRepository(harness.db);
+      final ingredient = await tester.runAsync(
+        () => ingredients.resolveOrCreate(canonicalName: 'chia seeds'),
+      );
+      expect(ingredient!.canonicalUnit, isNull);
+    });
+
+    testWidgets(
+      'a unit mismatch shows a targeted message, not the generic "try '
+      'again" (R-23)',
+      (WidgetTester tester) async {
+        // Establishes 'units' as garlic's canonical/row unit — mirrors
+        // `pantry_repository_test.dart`'s equivalent R-18 regression.
+        await pantry.addItem(
+          userId: 'test-user',
+          name: 'garlic',
+          quantity: 3,
+          unit: 'units',
+          category: 'alliums',
+        );
+
+        await pumpReview(
+          tester,
+          const ReviewArgs(
+            destination: ReviewDestination.pantry,
+            items: <ReviewItemDraft>[
+              ReviewItemDraft(
+                reviewId: 'a',
+                name: 'garlic',
+                quantity: 50,
+                unit: 'g',
+                confidence: 0.9,
+                category: 'alliums',
+              ),
+            ],
+          ),
+        );
+
+        await tester.tap(find.text('Add 1 item'));
+        await tester.pumpAndSettle();
+
+        // Names the ingredient, both units, and what actually fixes it —
+        // never the misleading generic message, since retrying identical
+        // input would fail identically every time.
+        expect(
+          find.textContaining('garlic is stocked in units'),
+          findsOneWidget,
+        );
+        expect(find.text('Could not save. Please try again.'), findsNothing);
+      },
+    );
   });
 }

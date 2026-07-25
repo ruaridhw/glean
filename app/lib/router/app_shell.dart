@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/widgets/signed_out_banner.dart';
+
 /// The five-tab shell. Built once by [StatefulShellRoute.indexedStack] and
 /// handed a [StatefulNavigationShell] that keeps one independent `Navigator`
 /// (and therefore one independent back stack) per tab — the direct analogue
@@ -8,6 +10,12 @@ import 'package:go_router/go_router.dart';
 ///
 /// Icons are plain Material `Icons` `_rounded` variants per AC-DS-01/AC-DS-06
 /// — no Cupertino, no icon package.
+///
+/// R-08: mounts [SignedOutBanner] once here, above every tab, rather than
+/// asking each of the five screens to remember it individually — a token
+/// expiry is a cross-cutting concern, not a per-feature one, so this is the
+/// one place a user is guaranteed to see it regardless of which tab they're
+/// on. It renders nothing while AI features are available.
 class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key});
 
@@ -46,7 +54,12 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
+      body: Column(
+        children: <Widget>[
+          const SignedOutBanner(),
+          Expanded(child: navigationShell),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         destinations: _destinations,

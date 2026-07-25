@@ -12,6 +12,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/auth/auth_controller.dart'
+    show aiFeaturesAvailableProvider;
 import 'package:glean/data/models/shopping_list_item_view.dart';
 import 'package:glean/data/providers/shopping_providers.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -74,6 +76,10 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
         if (item.isChecked) item,
     ];
     final int uncheckedCount = items.length - checkedItems.length;
+    // R-08/AC-AUTH-04: both "Describe list" and "Scan receipt" call the AI
+    // backend, so both are disabled while a session is expired — the
+    // [SignedOutBanner] mounted above every tab is what explains why.
+    final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return Scaffold(
       // AC-SHOP-10: so the keyboard never covers the pinned add field.
@@ -84,7 +90,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
           IconButton(
             icon: const Icon(Icons.auto_awesome_rounded),
             tooltip: 'Describe list',
-            onPressed: _describeList,
+            onPressed: aiAvailable ? _describeList : null,
           ),
         ],
       ),
@@ -128,6 +134,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
             ShopCheckoutBar(
               checkedCount: checkedItems.length,
               busy: _completingCheckout,
+              aiFeaturesAvailable: aiAvailable,
               onScanReceipt: _scanReceipt,
               onDoneShopping: () => _doneShopping(checkedItems),
             ),

@@ -20,6 +20,7 @@ class ShopCheckoutBar extends StatelessWidget {
   const ShopCheckoutBar({
     required this.checkedCount,
     required this.busy,
+    required this.aiFeaturesAvailable,
     required this.onScanReceipt,
     required this.onDoneShopping,
     super.key,
@@ -30,6 +31,11 @@ class ShopCheckoutBar extends StatelessWidget {
   /// True while "Done shopping" is committing — disables both actions so a
   /// double-tap can't fire the checkout (or a second scan) twice.
   final bool busy;
+
+  /// R-08/AC-AUTH-04: "Scan receipt" calls the AI backend, so it — but not
+  /// "Done shopping", a purely local write — is disabled while this is
+  /// false.
+  final bool aiFeaturesAvailable;
   final VoidCallback onScanReceipt;
   final VoidCallback onDoneShopping;
 
@@ -87,7 +93,9 @@ class ShopCheckoutBar extends StatelessWidget {
                 SizedBox(width: tokens.spacing.sm),
                 Expanded(
                   child: FilledButton(
-                    onPressed: busy ? null : onScanReceipt,
+                    onPressed: busy || !aiFeaturesAvailable
+                        ? null
+                        : onScanReceipt,
                     child: const Text('Scan receipt'),
                   ),
                 ),

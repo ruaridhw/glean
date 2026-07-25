@@ -49,6 +49,37 @@ void main() {
       },
     );
 
+    test('addAiItems: a blank unit defaults to "units" for the row, but never '
+        "seeds the ingredient's shared canonical unit (R-23)", () async {
+      await repository.addAiItems(
+        userId: userId,
+        items: const <AiShoppingItem>[
+          // The review screen's exact scenario: the unit field was left
+          // blank, not a real chosen/parsed unit.
+          AiShoppingItem(
+            name: 'chia seeds',
+            quantity: 1,
+            unit: '',
+            category: 'grains',
+          ),
+        ],
+      );
+
+      final items = await repository.watchAll(userId).first;
+      // The row itself still needs *some* unit to store and display.
+      expect(items.single.unit, 'units');
+
+      // But the shared ingredient's canonical unit was never seeded from
+      // that fallback — a later, genuinely explicit unit must still be
+      // free to seed it (proven at the Pantry side in
+      // `pantry_repository_test.dart`'s equivalent R-23 test, since
+      // `Ingredients` is one shared, non-user-scoped catalog either way).
+      final ingredient = await ingredients.resolveOrCreate(
+        canonicalName: 'chia seeds',
+      );
+      expect(ingredient.canonicalUnit, isNull);
+    });
+
     test(
       'resolveCheckout removes only the rows the receipt resolved, leaving the rest (AC-SHOP-01, AC-TEST-06)',
       () async {
@@ -87,44 +118,13 @@ void main() {
       },
     );
 
-    test(
-      'checkOffResolvedIngredients is scoped to the current user and to unchecked rows (AC-SHOP-04)',
-      () async {
-        await repository.addManualItem(userId: userId, name: 'eggs');
-        await repository.addManualItem(userId: 'user-b', name: 'eggs');
-        final mine = (await repository.watchAll(userId).first).single;
-        final theirs = (await repository.watchAll('user-b').first).single;
-
-        // A row the user already checked in a different context must not be
-        // affected by a later resolution for an unrelated ingredient.
-        final other = await repository.addManualItem(
-          userId: userId,
-          name: 'milk',
-        );
-        await repository.toggleItem(id: other, userId: userId, checked: true);
-
-        await repository.checkOffResolvedIngredients(
-          userId: userId,
-          ingredientIds: [mine.ingredientId, theirs.ingredientId],
-        );
-
-        final mineAfter = (await repository.watchAll(userId).first).firstWhere(
-          (r) => r.id == mine.id,
-        );
-        expect(mineAfter.isChecked, isTrue);
-
-        // Another user's matching row is never touched.
-        final theirsAfter = (await repository.watchAll('user-b').first)
-            .firstWhere((r) => r.id == theirs.id);
-        expect(theirsAfter.isChecked, isFalse);
-
-        // An unrelated already-checked row for this user is untouched too.
-        final otherAfter = (await repository.watchAll(userId).first).firstWhere(
-          (r) => r.id == other,
-        );
-        expect(otherAfter.isChecked, isTrue);
-      },
-    );
+    // AC-SHOP-04's scoping (never cross a user, never re-affect an
+    // already-checked row) is exercised above, inside `resolveCheckout`'s
+    // own test — R-03 deleted the standalone `checkOffResolvedIngredients`
+    // (and this test's former sibling covering it) as genuinely redundant
+    // once `resolveCheckout` did the matching and removal in one already-
+    // scoped statement. See the doc comments on `resolveCheckout` and at the
+    // top of `lib/data/repositories/shopping_repository.dart` for why.
 
     group('addGapsForRecipe shortfall maths', () {
       late RecipesRepository recipes;

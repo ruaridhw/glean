@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
+import 'package:glean/auth/auth_controller.dart'
+    show aiFeaturesAvailableProvider;
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -52,6 +54,10 @@ class _MealsSearchPanelState extends ConsumerState<MealsSearchPanel> {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final String query = _controller.text.trim();
+    // R-08/AC-AUTH-04: both recipe search and URL import call the AI
+    // backend, so both are disabled while a session is expired — the
+    // [SignedOutBanner] mounted above every tab is what explains why.
+    final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -61,6 +67,7 @@ class _MealsSearchPanelState extends ConsumerState<MealsSearchPanel> {
             Expanded(
               child: TextField(
                 controller: _controller,
+                enabled: aiAvailable,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Search recipes…',
@@ -78,13 +85,23 @@ class _MealsSearchPanelState extends ConsumerState<MealsSearchPanel> {
             IconButton(
               icon: const Icon(Icons.link_rounded),
               tooltip: 'Import recipe from a URL',
-              onPressed: () => context.pushNamed(AppRoutes.mealsImport.name),
+              onPressed: aiAvailable
+                  ? () => context.pushNamed(AppRoutes.mealsImport.name)
+                  : null,
             ),
           ],
         ),
         SizedBox(height: tokens.spacing.lg),
         Expanded(
-          child: query.isEmpty
+          child: !aiAvailable
+              ? const MealsMessagePanel(
+                  icon: Icons.wifi_off_rounded,
+                  title: 'Sign in to search recipes',
+                  message:
+                      'Reconnect to search or import recipes. Your saved '
+                      'recipes are still here.',
+                )
+              : query.isEmpty
               ? const MealsMessagePanel(
                   icon: Icons.search_rounded,
                   title: 'Search recipes',

@@ -17,8 +17,8 @@ import 'package:glean/design_system/design_system.dart';
 /// Toggles [item]'s checked state (AC-SHOP-04's flip side of the ledger — a
 /// user tapping a row is always in-scope for that row, so there's no scoping
 /// concern here, only for the bulk receipt-driven check-off that
-/// `ShoppingRepository.checkOffResolvedIngredients` guards). Fires the same
-/// light acknowledgement RN used for this tap.
+/// `ShoppingRepository.resolveCheckout` guards, per R-03's doc comment on
+/// that method). Fires the same light acknowledgement RN used for this tap.
 Future<void> toggleShoppingItem(WidgetRef ref, ShoppingListItemView item) {
   ref.read(hapticsProvider).lightImpact();
   return ref
@@ -42,6 +42,14 @@ Future<void> toggleShoppingItem(WidgetRef ref, ShoppingListItemView item) {
 /// undone plan-derived or AI-parsed row loses its provenance tag. Checked
 /// state is preserved with a follow-up `toggleItem` call, since that's a
 /// visible behaviour difference an undo really should restore.
+///
+/// Both the delete and the undo's re-add are guarded (R-07): neither had a
+/// `try`/`catch` before, so a DB-layer failure propagated as an uncaught
+/// exception with no feedback at all — the same defect class §11 calls
+/// "silent failures", already fixed this way in
+/// `lib/features/pantry/actions.dart` and `lib/features/meals/actions.dart`.
+/// A failed delete leaves the row exactly as it was; a failed undo leaves it
+/// deleted, but the user is told rather than left to assume undo worked.
 Future<void> deleteShoppingItemWithUndo(
   BuildContext context,
   WidgetRef ref,
@@ -50,13 +58,20 @@ Future<void> deleteShoppingItemWithUndo(
   final ShoppingRepository repository = ref.read(shoppingRepositoryProvider);
   final String userId = ref.read(currentUserIdProvider);
 
-  await repository.deleteItem(id: item.id, userId: userId);
+  try {
+    await repository.deleteItem(id: item.id, userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(context, 'Could not remove ${item.name}. Try again.');
+    }
+    return;
+  }
   if (!context.mounted) return;
 
   GleanSnackBar.showUndo(
     context,
     message: '${item.name} removed',
-    onUndo: () => unawaited(_restore(repository, userId, item)),
+    onUndo: () => unawaited(_restore(context, repository, userId, item)),
   );
 }
 
@@ -64,6 +79,10 @@ Future<void> deleteShoppingItemWithUndo(
 /// via `completeCheckoutWithoutReceipt`, with the same snapshot-and-restore
 /// undo [deleteShoppingItemWithUndo] uses, applied to the whole batch. Fires
 /// the single `mediumImpact()` for this data commit (AC-HAP-05).
+///
+/// Guarded the same way as [deleteShoppingItemWithUndo] (R-07): a DB failure
+/// here surfaces via `GleanSnackBar` and leaves every checked row exactly as
+/// it was, rather than propagating uncaught.
 Future<void> completeCheckoutWithoutReceipt(
   BuildContext context,
   WidgetRef ref,
@@ -75,7 +94,14 @@ Future<void> completeCheckoutWithoutReceipt(
     checkedItems,
   );
 
-  await repository.completeCheckoutWithoutReceipt(userId: userId);
+  try {
+    await repository.completeCheckoutWithoutReceipt(userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(context, 'Could not finish shopping. Try again.');
+    }
+    return;
+  }
   ref.read(hapticsProvider).mediumImpact();
   if (!context.mounted) return;
 
@@ -84,32 +110,40 @@ Future<void> completeCheckoutWithoutReceipt(
     message: snapshot.length == 1
         ? '1 item checked off'
         : '${snapshot.length} items checked off',
-    onUndo: () => unawaited(_restoreAll(repository, userId, snapshot)),
+    onUndo: () => unawaited(_restoreAll(context, repository, userId, snapshot)),
   );
 }
 
 Future<void> _restore(
+  BuildContext context,
   ShoppingRepository repository,
   String userId,
   ShoppingListItemView item,
 ) async {
-  final int newId = await repository.addManualItem(
-    userId: userId,
-    name: item.name,
-    quantity: item.quantity,
-    unit: item.unit,
-  );
-  if (item.isChecked) {
-    await repository.toggleItem(id: newId, userId: userId, checked: true);
+  try {
+    final int newId = await repository.addManualItem(
+      userId: userId,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+    );
+    if (item.isChecked) {
+      await repository.toggleItem(id: newId, userId: userId, checked: true);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(context, 'Could not restore ${item.name}.');
+    }
   }
 }
 
 Future<void> _restoreAll(
+  BuildContext context,
   ShoppingRepository repository,
   String userId,
   List<ShoppingListItemView> items,
 ) async {
   for (final ShoppingListItemView item in items) {
-    await _restore(repository, userId, item);
+    await _restore(context, repository, userId, item);
   }
 }

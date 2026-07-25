@@ -53,22 +53,36 @@ class PantryCookDelta {
 /// the caller's existing catch-and-`GleanSnackBar` path (`ReviewScreen`,
 /// `ManualEntryScreen`) surfaces it rather than the pantry quietly holding a
 /// wrong number.
+///
+/// R-23: callers must show [userMessage], not a generic "try again" —
+/// retrying the *same* incoming unit fails identically every time, so a
+/// message implying a retry might help is actively misleading. The only way
+/// out is entering the quantity in [existingUnit] instead (or editing the
+/// existing row's unit, if that's what's actually wrong).
 class PantryUnitMismatchException implements Exception {
   const PantryUnitMismatchException({
     required this.ingredientId,
+    required this.canonicalName,
     required this.existingUnit,
     required this.incomingUnit,
   });
 
   final int ingredientId;
+  final String canonicalName;
   final String existingUnit;
   final String incomingUnit;
+
+  /// What to show the user: names the ingredient, both units, and the one
+  /// thing that actually fixes it — never "try again".
+  String get userMessage =>
+      '$canonicalName is stocked in $existingUnit — enter this amount in '
+      '$existingUnit instead of $incomingUnit.';
 
   @override
   String toString() =>
       'PantryUnitMismatchException: cannot merge $incomingUnit into the '
-      'existing pantry row for ingredient $ingredientId, stocked in '
-      '$existingUnit — no conversion path exists between them.';
+      'existing pantry row for ingredient $ingredientId ($canonicalName), '
+      'stocked in $existingUnit — no conversion path exists between them.';
 }
 
 class PantryRepository {
@@ -214,18 +228,23 @@ class PantryRepository {
     DateTime? now,
   }) async {
     final effectiveNow = now ?? DateTime.now();
-    // `unit` seeds/upgrades `canonicalUnit` on first resolution (R-18) — see
-    // `IngredientsRepository.resolveOrCreate` for the rule — so the
-    // `normalizeUnit` call immediately below always has a target, including
-    // on this very first add.
+    // R-23: a blank `unit` (e.g. the review screen's unit field left empty)
+    // still needs *some* concrete string for the row itself and for
+    // `normalizeUnit` below, so it defaults to `'units'` here — but that
+    // fallback must never reach `resolveOrCreate`'s seeding parameter. Only
+    // an explicitly non-blank `unit` seeds/upgrades `canonicalUnit` (R-18);
+    // a defaulted one would otherwise become the ingredient's *permanent*
+    // canonical unit on first resolution, with no in-app way to correct it.
+    final String trimmedUnit = unit.trim();
+    final String effectiveUnit = trimmedUnit.isEmpty ? 'units' : trimmedUnit;
     final ingredient = await _ingredients.resolveOrCreate(
       canonicalName: name,
       category: category,
-      unit: unit,
+      unit: trimmedUnit.isEmpty ? null : trimmedUnit,
     );
     final normalized = normalizeUnit(
       quantity: quantity,
-      unit: unit,
+      unit: effectiveUnit,
       canonicalUnit: ingredient.canonicalUnit,
       canonicalName: ingredient.canonicalName,
     );
@@ -237,7 +256,7 @@ class PantryRepository {
       ingredientId: ingredient.id,
       canonicalName: ingredient.canonicalName,
       quantity: normalized?.quantity ?? quantity,
-      unit: normalized?.unit ?? unit,
+      unit: normalized?.unit ?? effectiveUnit,
       unitPrice: unitPrice,
       expiryDate: expiry,
       now: effectiveNow,
@@ -326,6 +345,7 @@ class PantryRepository {
         if (reconciled == null) {
           throw PantryUnitMismatchException(
             ingredientId: ingredientId,
+            canonicalName: canonicalName,
             existingUnit: existing.unit,
             incomingUnit: unit,
           );

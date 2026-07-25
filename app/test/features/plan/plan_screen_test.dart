@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/user_config_view.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/data/repositories/plan_repository.dart';
@@ -23,9 +24,23 @@ import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 
+import '../../data/fixture.dart';
 import '../../support/harness.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
+
+/// Forces `PlanRepository.deleteEntry` to fail, so R-07's guard around
+/// `deleteEntryWithUndo` can be exercised without a real DB failure mode to
+/// hand — mirrors `_ThrowingDeletePantryRepository` in
+/// `test/features/pantry/pantry_screen_test.dart`.
+class _ThrowingDeletePlanRepository extends PlanRepository {
+  _ThrowingDeletePlanRepository(super.db, super.pantry);
+
+  @override
+  Future<void> deleteEntry({required int id, required String userId}) {
+    return Future<void>.error(Exception('simulated DB failure'));
+  }
+}
 
 void main() {
   setUpAll(() {
@@ -359,6 +374,67 @@ void main() {
         );
         expect(restored, hasLength(1));
         expect(restored!.single.servings, 3);
+      },
+    );
+
+    gleanWidgetTest(
+      'a delete failure is caught and surfaced, leaving the entry intact '
+      '(R-07)',
+      (WidgetTester tester) async {
+        final throwingDb = createTestDatabase();
+        addTearDown(() => throwingDb.close());
+        final throwingIngredients = IngredientsRepository(throwingDb);
+        final throwingPantry = PantryRepository(
+          throwingDb,
+          throwingIngredients,
+        );
+        final throwingRepo = _ThrowingDeletePlanRepository(
+          throwingDb,
+          throwingPantry,
+        );
+        final throwingRecipes = RecipesRepository(
+          throwingDb,
+          throwingIngredients,
+        );
+        final id = await throwingRecipes.save(
+          userId: 'test-user',
+          title: 'Weeknight Curry',
+          ingredients: const <SaveRecipeIngredient>[],
+        );
+        await throwingRepo.addEntry(
+          userId: 'test-user',
+          recipeId: id,
+          recipeTitle: 'Weeknight Curry',
+          servings: 2,
+        );
+
+        final localHarness = AppTestHarness(
+          overrides: [planRepositoryProvider.overrideWithValue(throwingRepo)],
+        );
+        addTearDown(() => localHarness.dispose());
+
+        await localHarness.pumpAt(tester, AppRoutes.plan.path);
+        await tester.pumpAndSettle();
+        expect(find.text('Weeknight Curry'), findsOneWidget);
+
+        await tester.drag(find.text('Weeknight Curry'), const Offset(-600, 0));
+        await tester.pumpAndSettle();
+
+        // No undo snackbar — the delete failed and was caught, not
+        // propagated uncaught with zero feedback (the R-07 bug).
+        expect(find.text('Undo'), findsNothing);
+        expect(find.textContaining('Could not remove'), findsOneWidget);
+
+        // The entry must survive untouched in the data layer.
+        final survivors = await tester.runAsync(
+          () => throwingRepo
+              .watchWeek(
+                userId: 'test-user',
+                weekStart: startOfWeek(DateTime.now()),
+              )
+              .first,
+        );
+        expect(survivors!.single.recipeTitle, 'Weeknight Curry');
       },
     );
 

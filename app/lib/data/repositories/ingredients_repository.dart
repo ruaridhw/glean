@@ -53,6 +53,17 @@ class IngredientsRepository {
   /// (`PantryRepository._upsert`) instead of quietly summing under the
   /// wrong unit.
   ///
+  /// **Callers must never pass a fallback/defaulted string** (R-23) — only
+  /// an explicitly chosen or parsed unit should reach this parameter. Since
+  /// the seeded value is permanent (never overwritten once set) and shared
+  /// across every user (`ingredients` is one non-user-scoped catalog), a
+  /// caller that defaults a blank field to e.g. `'units'` before calling
+  /// this would lock that guess in forever, for everyone, with no in-app way
+  /// to correct it. `PantryRepository.addItem` and
+  /// `ShoppingRepository.addAiItems` both apply their own storage-only
+  /// fallback *after* this call decides whether to seed — see either for
+  /// the pattern.
+  ///
   /// Only called with a real, stock-tracking unit from pantry/shopping
   /// intake (mirroring the category asymmetry above) — recipe import never
   /// passes one, since a recipe's unit reflects that recipe's phrasing, not

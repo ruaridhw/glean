@@ -215,6 +215,54 @@ void main() {
       expect(items.single.unit, 'units');
     });
 
+    test('a blank unit defaults to "units" for the row, but never seeds the '
+        "ingredient's shared canonical unit — a later, explicit add (even "
+        'from another user, since the ingredient catalog is shared) still '
+        'can (R-23)', () async {
+      final ingredients = IngredientsRepository(db);
+
+      // The review screen's exact scenario: the unit field was left
+      // blank (e.g. the user cleared it), not a real chosen unit.
+      await repository.addItem(
+        userId: 'user-a',
+        name: 'chia seeds',
+        quantity: 1,
+        unit: '',
+        category: 'grains',
+        now: DateTime(2026, 1, 1),
+      );
+
+      final itemsA = await repository.watchAll('user-a').first;
+      // The row itself still needs *some* unit to store and display.
+      expect(itemsA.single.unit, 'units');
+
+      // But the shared ingredient's canonical unit was never seeded from
+      // that fallback — it must still be null, i.e. unresolved, not
+      // permanently locked to 'units'.
+      var ingredient = await ingredients.resolveOrCreate(
+        canonicalName: 'chia seeds',
+      );
+      expect(ingredient.canonicalUnit, isNull);
+
+      // A later, genuinely explicit unit — even from a different user,
+      // since `ingredients` is a shared, non-user-scoped catalog — is
+      // free to seed it. This would throw a `PantryUnitMismatchException`
+      // instead if the earlier blank had already claimed 'units'.
+      await repository.addItem(
+        userId: 'user-b',
+        name: 'chia seeds',
+        quantity: 200,
+        unit: 'g',
+        category: 'grains',
+        now: DateTime(2026, 1, 2),
+      );
+
+      ingredient = await ingredients.resolveOrCreate(
+        canonicalName: 'chia seeds',
+      );
+      expect(ingredient.canonicalUnit, 'g');
+    });
+
     test('updateItem changes only the fields provided', () async {
       final now = DateTime(2026, 1, 1);
       await repository.addItem(

@@ -10,7 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
-import 'package:glean/data/repositories/pantry_repository.dart';
+import 'package:glean/data/repositories/pantry_repository.dart'
+    show PantryItemInput, PantryUnitMismatchException;
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
@@ -97,9 +98,17 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       } else {
         await _confirmShop(userId, accepted);
       }
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      GleanSnackBar.show(context, 'Could not save. Please try again.');
+      // R-23: a unit mismatch gets its own targeted message — the generic
+      // "try again" below is actively misleading for it, since retrying the
+      // same incoming unit fails identically every time.
+      GleanSnackBar.show(
+        context,
+        e is PantryUnitMismatchException
+            ? e.userMessage
+            : 'Could not save. Please try again.',
+      );
       setState(() => _saving = false);
       return;
     }
@@ -120,13 +129,21 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   /// review was reached via Shop's "scan receipt" (`returnToShop`), and even
   /// then only the ingredients this batch actually resolved are checked off
   /// (AC-SHOP-01) — never an unconditional `completeCheckout`.
+  /// R-23: passes the row's unit text **raw** (trimmed, but not defaulted)
+  /// to the repository, rather than pre-substituting `'units'` for a blank
+  /// field here. `PantryRepository.addItem`/`ShoppingRepository.addAiItems`
+  /// each apply that same `'units'` default for the row itself, but — unlike
+  /// this screen previously did — never let it seed the ingredient's
+  /// canonical unit; only an explicitly typed one does that. Applying the
+  /// fallback here would erase the "was this typed or defaulted" distinction
+  /// before it ever reached the one place that needs it.
   Future<void> _confirmPantry(String userId, List<ReviewRow> accepted) async {
     final List<PantryItemInput> items = <PantryItemInput>[
       for (final ReviewRow row in accepted)
         PantryItemInput(
           name: row.nameController.text.trim(),
           quantity: row.parsedQuantity!,
-          unit: _unitOrDefault(row.unitController.text),
+          unit: row.unitController.text.trim(),
           category: row.category!,
           unitPrice: row.unitPrice,
         ),
@@ -151,7 +168,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         AiShoppingItem(
           name: row.nameController.text.trim(),
           quantity: row.parsedQuantity!,
-          unit: _unitOrDefault(row.unitController.text),
+          unit: row.unitController.text.trim(),
           category: row.category,
         ),
     ];
@@ -159,9 +176,6 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         .read(shoppingRepositoryProvider)
         .addAiItems(userId: userId, items: items);
   }
-
-  String _unitOrDefault(String text) =>
-      text.trim().isEmpty ? 'units' : text.trim();
 
   @override
   Widget build(BuildContext context) {

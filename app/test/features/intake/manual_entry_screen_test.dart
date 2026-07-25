@@ -83,5 +83,48 @@ void main() {
       expect(find.byType(ManualEntryScreen), findsNothing);
       expect(find.text('kale'), findsOneWidget);
     });
+
+    testWidgets(
+      'a unit mismatch shows a targeted message, not the generic "try '
+      'again" (R-23)',
+      (WidgetTester tester) async {
+        // Establishes 'units' as chives' canonical/row unit.
+        await pantry.addItem(
+          userId: 'test-user',
+          name: 'chives',
+          quantity: 3,
+          unit: 'units',
+          category: 'alliums',
+        );
+
+        await pumpManualEntry(tester);
+
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Ingredient name'),
+          'chives',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Quantity'),
+          '10',
+        );
+        // 'g' is the default chip selection — no conversion path to the
+        // existing row's 'units'.
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Alliums').last);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Add to pantry'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('chives is stocked in units'),
+          findsOneWidget,
+        );
+        expect(find.text('Could not save this item. Try again.'), findsNothing);
+        // Still on this screen — the row was not committed.
+        expect(find.byType(ManualEntryScreen), findsOneWidget);
+      },
+    );
   });
 }
