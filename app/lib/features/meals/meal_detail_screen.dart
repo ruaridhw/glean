@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:glean/router/route_error_screen.dart';
 
-/// Placeholder — the Meals feature wave replaces this wholesale.
+import 'saved_recipe_detail.dart';
+
+/// The `go_router` entry point for `/meals/:id` — a saved recipe reached
+/// either from the library list or a cold-start deep link.
 ///
-/// [recipeId] arrives as a path parameter, not typed `extra` — a cold-start
-/// deep link has no in-memory object to hand over, so it must be a plain
-/// path segment the screen (or a provider it reads) resolves against the
-/// database. The router already guards the format (non-numeric ids never
-/// reach here — see `router.dart`'s redirect on this route); "valid id, no
-/// such recipe" is a data lookup the Meals wave still needs to handle with
-/// the same no-dead-end rule (AC-MEAL-12), reusing `RouteErrorScreen` rather
-/// than calling `pop()` on a possibly-empty stack.
+/// [recipeId] arrives as a path parameter, not typed `extra` (see the
+/// router's own doc comment on this route): a cold-start deep link has no
+/// in-memory object to hand over. The router already guards the format (a
+/// non-numeric id never reaches here — see `router.dart`'s redirect on this
+/// route); "valid id, no such recipe" is [SavedRecipeDetail]'s job
+/// (AC-MEAL-12), which reuses [RouteErrorScreen] rather than calling `pop()`
+/// on a possibly-empty stack. The parse guard below is defensive — belt and
+/// braces against the same failure mode the router already blocks.
 class MealDetailScreen extends StatelessWidget {
   const MealDetailScreen({required this.recipeId, super.key});
 
@@ -17,9 +21,10 @@ class MealDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recipe')),
-      body: Center(child: Text('Recipe $recipeId')),
-    );
+    final int? id = int.tryParse(recipeId);
+    if (id == null) {
+      return const RouteErrorScreen(message: 'This recipe could not be found.');
+    }
+    return SavedRecipeDetail(recipeId: id);
   }
 }

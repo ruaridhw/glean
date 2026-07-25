@@ -7,23 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'design_system/design_system.dart';
 import 'router/router.dart';
 
-/// `theme` defaults to a bare Material fallback: `lib/design_system/**`
-/// (a parallel wave) didn't exist yet when this was written. Once it does,
-/// wire `gleanLightTheme` in here — see the Router agent's report for this
-/// follow-up. Accepting it as a parameter (rather than hard-coding a theme
-/// in this file) is the seam: `main.dart` can start passing it the moment
-/// it exists, with no change needed on this side.
+/// `theme` exists only so a test can substitute one. It defaults to
+/// [gleanLightTheme] and there is deliberately **no** bare-Material fallback:
+/// an earlier revision defaulted to `ColorScheme.fromSeed`, which registers no
+/// `AppTokens` extension, so every widget reading `context.tokens` asserted at
+/// build time. A theme without the brand tokens is never a useful degradation
+/// here — it is a crash one frame later — so the only default is the real one.
 class GleanApp extends ConsumerWidget {
   const GleanApp({this.theme, super.key});
 
   final ThemeData? theme;
-
-  static final ThemeData _fallbackTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
-  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,7 +27,7 @@ class GleanApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Glean',
       debugShowCheckedModeBanner: false,
-      theme: theme ?? _fallbackTheme,
+      theme: theme ?? gleanLightTheme,
       routerConfig: router,
     );
   }
