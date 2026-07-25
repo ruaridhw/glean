@@ -290,9 +290,10 @@ class PlanRepository {
   /// ingredient back to its pre-A value, or it discards the fact that B is
   /// still cooked and used it more recently. So `lastUsedAt` is only
   /// restored when this adjustment is the *most recent* still-live one for
-  /// that ingredient (no other `cooked_adjustments` row for the same
-  /// `userId`/`ingredientId` with a later id is still standing) — otherwise
-  /// it's left exactly as the later, still-standing cook set it.
+  /// that ingredient. When a later cook is still standing, this adjustment's
+  /// older snapshot is forwarded to the immediate next adjustment before it
+  /// is deleted. That preserves the undo chain even when cooks are undone
+  /// oldest-first (R-24).
   Future<void> undoCooked({
     required int entryId,
     required String userId,
@@ -320,13 +321,26 @@ class PlanRepository {
         // still standing, uncooked-undone? If so, this adjustment is not
         // the most recent word on `lastUsedAt` and must not overwrite it.
         final laterLiveAdjustment =
-            await (_db.select(_db.cookedAdjustments)..where(
-                  (t) =>
-                      t.userId.equals(userId) &
-                      t.ingredientId.equals(adjustment.ingredientId) &
-                      t.id.isBiggerThanValue(adjustment.id),
-                ))
+            await (_db.select(_db.cookedAdjustments)
+                  ..where(
+                    (t) =>
+                        t.userId.equals(userId) &
+                        t.ingredientId.equals(adjustment.ingredientId) &
+                        t.id.isBiggerThanValue(adjustment.id),
+                  )
+                  ..orderBy([(t) => OrderingTerm.asc(t.id)])
+                  ..limit(1))
                 .getSingleOrNull();
+
+        if (laterLiveAdjustment != null) {
+          await (_db.update(
+            _db.cookedAdjustments,
+          )..where((t) => t.id.equals(laterLiveAdjustment.id))).write(
+            CookedAdjustmentsCompanion(
+              previousLastUsedAt: Value(adjustment.previousLastUsedAt),
+            ),
+          );
+        }
 
         await _pantry.restoreFromCook(
           userId: userId,

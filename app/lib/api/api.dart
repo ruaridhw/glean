@@ -10,7 +10,6 @@ export 'models/receipts.dart';
 export 'models/recipes.dart';
 export 'models/shopping.dart';
 export 'providers/api_providers.dart';
-export 'providers/health_provider.dart';
 export 'providers/meal_plan_providers.dart';
 export 'providers/receipts_providers.dart';
 export 'providers/recipe_providers.dart';

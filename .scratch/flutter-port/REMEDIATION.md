@@ -164,7 +164,7 @@ in Pantry, Shop or Meals. §7 asks for both, noting only Pantry animated at all 
 
 **Fix:** animate insertion — implicit animations or `AnimatedList` — in the three list screens.
 
-## R-11 — Two haptic moments missing, one of them every tab switch · PARTIAL AC-HAP-05
+## R-11 [FIXED in continuation] — Two haptic moments missing, one of them every tab switch · PARTIAL AC-HAP-05
 **Found by:** design-auth-haptics verifier · **Severity: low**
 
 10 of 12 named moments confirmed. Missing: **scan success/failure**, and **every tab switch**
@@ -372,10 +372,15 @@ message says "try again", which is misleading because retrying identical input f
 **Fix:** don't let a *fallback* unit seed the canonical unit — only an explicitly chosen one should.
 Then give the mismatch exception a targeted message that says what actually went wrong.
 
-## R-24 — Undoing both cooks oldest-first leaves a stale `lastUsedAt`
+## R-24 [FIXED in continuation] — Undoing both cooks oldest-first leaves a stale `lastUsedAt`
 **Found by:** code reviewer, reviewing the R-15 fix · **Severity: low**
 
 R-15's primary case is correctly fixed. Residual: undoing both cooks oldest-first leaves the
 intermediate value rather than fully reverting to null. The new test documents this as expected rather
 than catching it. Same low severity as the original — `lastUsedAt` only affects ordering and urgency
 scoring.
+
+**Resolution:** before deleting an older adjustment, `undoCooked` now forwards
+its `previousLastUsedAt` snapshot to the immediate next live adjustment. This
+preserves the snapshot chain for oldest-first and multi-cook undo order. The
+regression test now requires the original `null` timestamp to be restored.

@@ -31,14 +31,35 @@ Future<void> markCookedWithUndo(
   final String userId = ref.read(currentUserIdProvider);
 
   ref.read(hapticsProvider).mediumImpact();
-  await planRepository.markCooked(entryId: entry.id, userId: userId);
+  try {
+    await planRepository.markCooked(entryId: entry.id, userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(
+        context,
+        'Could not mark ${entry.recipeTitle} as cooked. Try again.',
+      );
+    }
+    return;
+  }
   if (!context.mounted) return;
 
   GleanSnackBar.showUndo(
     context,
     message: '${entry.recipeTitle} marked as cooked',
     onUndo: () {
-      unawaited(planRepository.undoCooked(entryId: entry.id, userId: userId));
+      unawaited(() async {
+        try {
+          await planRepository.undoCooked(entryId: entry.id, userId: userId);
+        } catch (_) {
+          if (context.mounted) {
+            GleanSnackBar.show(
+              context,
+              'Could not undo cooking ${entry.recipeTitle}.',
+            );
+          }
+        }
+      }());
     },
   );
 }

@@ -607,10 +607,8 @@ void main() {
             now: DateTime(2026, 1, 8),
           );
 
-          // Now undo B too — its own adjustment is the only (and therefore
-          // most recent) one left for this ingredient, so this time
-          // lastUsedAt *is* restored, to B's own snapshot (taken right
-          // after A's cook).
+          // Now undo B too. Undoing A forwarded its pre-cook snapshot into
+          // B's adjustment, preserving the chain after A's row was deleted.
           await repository.undoCooked(
             entryId: entryB,
             userId: userId,
@@ -619,7 +617,7 @@ void main() {
 
           final pantry = (await pantryRepository.watchAll(userId).first).single;
           expect(pantry.quantity, 1000); // fully restored
-          expect(pantry.lastUsedAt, DateTime(2026, 1, 6));
+          expect(pantry.lastUsedAt, isNull);
         },
       );
     });

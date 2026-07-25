@@ -434,3 +434,14 @@ probes, which is why one reported a red tree that was actually green.
 - Never run mutation-testing verifiers concurrently in a shared worktree — give each an isolated one
   (the Agent tool supports `isolation: "worktree"`), or run them one at a time.
 - Re-check any "fixed" item after a later wave; a fix is not durable until committed.
+
+## F-18 — Isolated worktrees can start at the repository base, not the active branch
+**Status:** OPEN (process, not code)
+
+The final verifier's assigned isolated worktree started at `624c70d`, before
+the Flutter port, and contained `mobile/` but no `app/`. The verifier caught
+the mismatch and created a clean worktree at `bf748cd`.
+
+**Mitigation:** prepare verification worktrees explicitly at a named commit,
+then require the verifier to confirm both the commit and expected project
+layout before running commands.

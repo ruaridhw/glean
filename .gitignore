@@ -40,7 +40,8 @@ infra/.bootstrap-outputs
 .agents/
 .claude/
 skills-lock.json
-docs/
+docs/*
+!docs/pre-release-checklist.md
 plans/
 
 # macOS

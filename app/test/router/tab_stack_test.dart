@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/features/meals/meals_import_screen.dart';
 import 'package:glean/features/meals/meals_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 
 import '../support/harness.dart';
@@ -42,6 +43,22 @@ void main() {
   });
 
   tearDown(() => harness.dispose());
+
+  testWidgets('every tab tap fires the selection haptic (AC-HAP-05)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    harness.hapticCalls.clear();
+
+    await tapTab(tester, 'Meals');
+    await tapTab(tester, 'Meals');
+
+    expect(harness.hapticCalls, <HapticWeight>[
+      HapticWeight.selection,
+      HapticWeight.selection,
+    ]);
+  });
 
   testWidgets('pushing in Meals survives switching tabs and back', (
     tester,

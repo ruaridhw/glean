@@ -42,6 +42,32 @@ class _ThrowingDeletePlanRepository extends PlanRepository {
   }
 }
 
+class _ThrowingMarkCookedPlanRepository extends PlanRepository {
+  _ThrowingMarkCookedPlanRepository(super.db, super.pantry);
+
+  @override
+  Future<void> markCooked({
+    required int entryId,
+    required String userId,
+    DateTime? now,
+  }) {
+    return Future<void>.error(Exception('simulated DB failure'));
+  }
+}
+
+class _ThrowingUndoCookedPlanRepository extends PlanRepository {
+  _ThrowingUndoCookedPlanRepository(super.db, super.pantry);
+
+  @override
+  Future<void> undoCooked({
+    required int entryId,
+    required String userId,
+    DateTime? now,
+  }) {
+    return Future<void>.error(Exception('simulated DB failure'));
+  }
+}
+
 void main() {
   setUpAll(() {
     registerFallbackValue(Uri.parse('http://localhost:9999/'));
@@ -437,6 +463,65 @@ void main() {
         expect(survivors!.single.recipeTitle, 'Weeknight Curry');
       },
     );
+
+    gleanWidgetTest(
+      'a mark-cooked failure is caught and surfaced, leaving the entry '
+      'uncooked',
+      (WidgetTester tester) async {
+        final throwingRepo = _ThrowingMarkCookedPlanRepository(
+          harness.db,
+          pantry,
+        );
+        final recipeId = await saveRecipe('Weeknight Curry');
+        await throwingRepo.addEntry(
+          userId: harness.userId,
+          recipeId: recipeId,
+          recipeTitle: 'Weeknight Curry',
+          servings: 2,
+        );
+        final localHarness = AppTestHarness(
+          overrides: [planRepositoryProvider.overrideWithValue(throwingRepo)],
+        );
+        addTearDown(() => localHarness.dispose());
+
+        await localHarness.pumpAt(tester, AppRoutes.plan.path);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Cooked?'));
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Could not mark'), findsOneWidget);
+        expect(find.widgetWithText(OutlinedButton, 'Cooked?'), findsOneWidget);
+      },
+    );
+
+    gleanWidgetTest('an undo-cooked failure is caught and surfaced', (
+      WidgetTester tester,
+    ) async {
+      final throwingRepo = _ThrowingUndoCookedPlanRepository(
+        harness.db,
+        pantry,
+      );
+      final recipeId = await saveRecipe('Weeknight Curry');
+      await throwingRepo.addEntry(
+        userId: harness.userId,
+        recipeId: recipeId,
+        recipeTitle: 'Weeknight Curry',
+        servings: 2,
+      );
+      final localHarness = AppTestHarness(
+        overrides: [planRepositoryProvider.overrideWithValue(throwingRepo)],
+      );
+      addTearDown(() => localHarness.dispose());
+
+      await localHarness.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cooked?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Could not undo cooking'), findsOneWidget);
+    });
 
     gleanWidgetTest(
       'marking cooked decrements pantry, transitions to a checkmark, and '

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../design_system/haptics.dart';
 import '../features/auth/widgets/signed_out_banner.dart';
 
 /// The five-tab shell. Built once by [StatefulShellRoute.indexedStack] and
@@ -16,7 +18,7 @@ import '../features/auth/widgets/signed_out_banner.dart';
 /// expiry is a cross-cutting concern, not a per-feature one, so this is the
 /// one place a user is guaranteed to see it regardless of which tab they're
 /// on. It renders nothing while AI features are available.
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
@@ -52,7 +54,7 @@ class AppShell extends StatelessWidget {
       ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: Column(
         children: <Widget>[
@@ -63,13 +65,16 @@ class AppShell extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         destinations: _destinations,
-        onDestinationSelected: (int index) => navigationShell.goBranch(
-          index,
-          // Tapping the already-active tab resets it to its initial
-          // location; tapping another tab restores that branch's own stack
-          // exactly where it was left.
-          initialLocation: index == navigationShell.currentIndex,
-        ),
+        onDestinationSelected: (int index) {
+          ref.read(hapticsProvider).selectionClick();
+          navigationShell.goBranch(
+            index,
+            // Tapping the already-active tab resets it to its initial
+            // location; tapping another tab restores that branch's own stack
+            // exactly where it was left.
+            initialLocation: index == navigationShell.currentIndex,
+          );
+        },
       ),
     );
   }
