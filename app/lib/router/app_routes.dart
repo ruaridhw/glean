@@ -26,10 +26,12 @@ abstract final class AppRoutes {
   static const RouteSpec pantry = RouteSpec('/pantry', 'pantry');
 
   static const RouteSpec meals = RouteSpec('/meals', 'meals');
-  static const RouteSpec mealsSearch = RouteSpec(
-    '/meals/search',
-    'meals-search',
-  );
+  // No `mealsSearch` route: search is a single inline `TextField` in the
+  // Search segment of `MealsScreen` itself (AC-MEAL-07 — "one search
+  // affordance", dropping both the fake search pill and the separate
+  // pushed screen). A route that still resolved to a screen would leave
+  // that dropped second affordance reachable by deep link, which is
+  // exactly what the criterion rules out.
   static const RouteSpec mealsImport = RouteSpec(
     '/meals/import',
     'meals-import',
@@ -108,7 +110,6 @@ abstract final class AppRoutes {
   static const List<RouteSpec> all = <RouteSpec>[
     signIn,
     ...tabBranchRoots,
-    mealsSearch,
     mealsImport,
     mealsDetail,
     ...intakeRoutes,

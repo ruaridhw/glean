@@ -15,13 +15,13 @@ import 'package:glean/features/intake/shop_describe_screen.dart';
 import 'package:glean/features/meals/meal_detail_screen.dart';
 import 'package:glean/features/meals/meals_import_screen.dart';
 import 'package:glean/features/meals/meals_screen.dart';
-import 'package:glean/features/meals/meals_search_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/features/plan/plan_screen.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/shop/shop_screen.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/auth_state.dart';
+import 'package:glean/router/route_error_screen.dart';
 
 import '../support/harness.dart';
 
@@ -49,6 +49,21 @@ void main() {
         );
         expect(route.path, startsWith('/intake/'));
       }
+    });
+
+    test('there is no dedicated meals-search route (AC-MEAL-07)', () {
+      // Search is a single inline TextField inside MealsScreen now — a
+      // second, deep-link-reachable search screen is exactly what "one
+      // search affordance" rules out, so there must be nothing in the
+      // table named or pathed for it.
+      expect(
+        AppRoutes.all.map((route) => route.name),
+        isNot(contains('meals-search')),
+      );
+      expect(
+        AppRoutes.all.map((route) => route.path),
+        isNot(contains('/meals/search')),
+      );
     });
   });
 
@@ -86,9 +101,6 @@ void main() {
     });
 
     testWidgets('nested meals routes resolve within the shell', (tester) async {
-      await pumpAt(tester, AppRoutes.mealsSearch.path);
-      expect(find.byType(MealsSearchScreen), findsOneWidget);
-
       await pumpAt(tester, AppRoutes.mealsImport.path);
       expect(find.byType(MealsImportScreen), findsOneWidget);
 
@@ -99,6 +111,19 @@ void main() {
       await pumpAt(tester, AppRoutes.mealsDetailPath('42'));
       expect(find.byType(MealDetailScreen), findsOneWidget);
     });
+
+    testWidgets(
+      'a deep link to the old /meals/search path is not reachable (AC-MEAL-07)',
+      (tester) async {
+        // With the dedicated route gone, 'search' now falls through to the
+        // `:id` catch-all, fails the numeric-id guard, and lands on the
+        // error page — it must not resolve to any meals screen.
+        await pumpAt(tester, '/meals/search');
+        expect(find.byType(MealDetailScreen), findsNothing);
+        expect(find.byType(MealsScreen), findsNothing);
+        expect(find.byType(RouteErrorScreen), findsOneWidget);
+      },
+    );
 
     testWidgets('sign-in resolves outside the shell', (tester) async {
       // Signed-in users get bounced off /sign-in by design (see

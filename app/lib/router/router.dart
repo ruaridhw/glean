@@ -18,7 +18,6 @@ import '../features/intake/shop_describe_screen.dart';
 import '../features/meals/meal_detail_screen.dart';
 import '../features/meals/meals_import_screen.dart';
 import '../features/meals/meals_screen.dart';
-import '../features/meals/meals_search_screen.dart';
 import '../features/pantry/pantry_screen.dart';
 import '../features/plan/plan_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -166,16 +165,10 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                 builder: (BuildContext context, GoRouterState state) =>
                     const MealsScreen(),
                 routes: <RouteBase>[
-                  // Literal segments must be declared before the `:id`
-                  // catch-all below — go_router matches siblings in
-                  // declaration order, and `:id` would otherwise swallow
-                  // `/meals/search` and `/meals/import` as ids.
-                  GoRoute(
-                    path: 'search',
-                    name: AppRoutes.mealsSearch.name,
-                    builder: (BuildContext context, GoRouterState state) =>
-                        const MealsSearchScreen(),
-                  ),
+                  // The literal 'import' segment must be declared before
+                  // the `:id` catch-all below — go_router matches siblings
+                  // in declaration order, and `:id` would otherwise
+                  // swallow `/meals/import` as an id.
                   GoRoute(
                     path: 'import',
                     name: AppRoutes.mealsImport.name,

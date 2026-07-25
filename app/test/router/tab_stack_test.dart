@@ -5,14 +5,16 @@
 //
 // Assertions are on screen *widget type*, not copy — Meals already has a
 // real screen; Pantry doesn't yet, but must not matter to this test either
-// way.
+// way. Uses the `import` nested route as the vehicle for exercising the
+// stack (search was dropped — AC-MEAL-07, there is no dedicated route for
+// it any more).
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/features/meals/meals_import_screen.dart';
 import 'package:glean/features/meals/meals_screen.dart';
-import 'package:glean/features/meals/meals_search_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
 
@@ -51,20 +53,20 @@ void main() {
     await tapTab(tester, 'Meals');
     expect(find.byType(MealsScreen), findsOneWidget);
 
-    // Push directly through the router rather than tapping a real search
-    // affordance — this suite tests routing, not any particular feature's
-    // UI for reaching that route.
-    unawaited(harness.router.push(AppRoutes.mealsSearch.path));
+    // Push directly through the router rather than tapping a real
+    // navigation affordance — this suite tests routing, not any particular
+    // feature's UI for reaching that route.
+    unawaited(harness.router.push(AppRoutes.mealsImport.path));
     await tester.pumpAndSettle();
-    expect(find.byType(MealsSearchScreen), findsOneWidget);
+    expect(find.byType(MealsImportScreen), findsOneWidget);
 
     await tapTab(tester, 'Pantry');
     expect(find.byType(PantryScreen), findsOneWidget);
-    expect(find.byType(MealsSearchScreen), findsNothing);
+    expect(find.byType(MealsImportScreen), findsNothing);
 
     await tapTab(tester, 'Meals');
     expect(
-      find.byType(MealsSearchScreen),
+      find.byType(MealsImportScreen),
       findsOneWidget,
       reason:
           'Meals branch must restore exactly where it was left, not reset to its home route',
@@ -78,15 +80,15 @@ void main() {
     await tester.pumpAndSettle();
 
     await tapTab(tester, 'Meals');
-    unawaited(harness.router.push(AppRoutes.mealsSearch.path));
+    unawaited(harness.router.push(AppRoutes.mealsImport.path));
     await tester.pumpAndSettle();
-    expect(find.byType(MealsSearchScreen), findsOneWidget);
+    expect(find.byType(MealsImportScreen), findsOneWidget);
 
     // Tapping the currently-active tab is the RN app's "tap the tab you're
     // already on" reset gesture — it should collapse back to that branch's
     // home route.
     await tapTab(tester, 'Meals');
     expect(find.byType(MealsScreen), findsOneWidget);
-    expect(find.byType(MealsSearchScreen), findsNothing);
+    expect(find.byType(MealsImportScreen), findsNothing);
   });
 }
