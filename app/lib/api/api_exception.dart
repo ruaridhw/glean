@@ -1,6 +1,7 @@
 /// Typed error hierarchy for [GleanApiClient].
 ///
-/// The RN client (`mobile/src/api/client.ts`) had exactly one error type
+/// The RN client (the Expo app's `src/api/client.ts`, see git history) had
+/// exactly one error type
 /// (`ApiError`, a status code + message) and no client timeout at all, so a
 /// stalled `fetch` in scan-progress just hung on "Almost done..." forever
 /// (FLUTTER_MIGRATION.md §11). The UI needs to tell "you're signed out"

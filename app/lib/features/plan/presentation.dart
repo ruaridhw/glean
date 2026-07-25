@@ -1,5 +1,6 @@
-/// Pure presentation logic for the Plan screen, ported from
-/// `mobile/src/plan/presentation.ts`. No Riverpod/widget dependency here —
+/// Pure presentation logic for the Plan screen, ported from the Expo app's
+/// `src/plan/presentation.ts` (see git history). No Riverpod/widget
+/// dependency here —
 /// everything is a plain function over data the screen already has, so it's
 /// unit-testable without a widget harness.
 library;
@@ -97,8 +98,9 @@ String planHint(int remaining) {
 }
 
 /// A day-boundary check matching the RN "expired or within 2 days" tone
-/// used for both the pantry's expiry badge and this nudge (ported from
-/// `mobile/src/pantry/presentation.ts`'s `getExpiryBadge`/`isExpiringSoon`).
+/// used for both the pantry's expiry badge and this nudge (ported from the
+/// Expo app's `src/pantry/presentation.ts`'s `getExpiryBadge`/
+/// `isExpiringSoon`, see git history).
 ///
 /// Duplicated here rather than imported: the Pantry feature (which would
 /// own the Flutter equivalent) is a parallel, not-yet-landed wave, and this

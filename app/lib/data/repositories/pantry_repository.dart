@@ -1,5 +1,6 @@
-// Ported from `mobile/src/db/pantry.ts`, with the schema changes from
-// FLUTTER_MIGRATION.md §3/§6: every query is scoped by `userId`
+// Ported from the Expo app's `src/db/pantry.ts` (see git history), with
+// the schema changes from FLUTTER_MIGRATION.md §3/§6: every query is
+// scoped by `userId`
 // (AC-DATA-02/03), and `addItem` infers an expiry date from the ingredient's
 // category shelf life (AC-PAN-01) — RN's `addPantryItem` never accepted or
 // wrote one at all.
@@ -62,8 +63,9 @@ class PantryRepository {
   /// pantry row rather than vanish from the list. `_mapRow` coalesces the
   /// missing food group to `"other"` — the same fallback the backend
   /// (`backend/src/glean/receipts/schemas.py`) and the RN UI
-  /// (`getPantryCategoryMeta`, `mobile/src/pantry/presentation.ts:47`) both
-  /// already use, so all three layers agree (FINDINGS.md F-07/F-08).
+  /// (`getPantryCategoryMeta`, the Expo app's `src/pantry/presentation.ts:47`,
+  /// see git history) both already use, so all three layers agree
+  /// (FINDINGS.md F-07/F-08).
   /// `foodGroup` stays non-null on this view model either way (AC-DATA-11
   /// is about non-nullability where the value is consumed, not about
   /// discarding rows to force it at the join).

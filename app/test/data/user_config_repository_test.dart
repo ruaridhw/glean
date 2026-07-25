@@ -1,5 +1,6 @@
 // Real-outcome tests for user config defaults and persistence, ported from
-// the "no row yet" fallback intent of `mobile/src/db/config.ts`.
+// the "no row yet" fallback intent of the Expo app's `src/db/config.ts`
+// (see git history).
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';

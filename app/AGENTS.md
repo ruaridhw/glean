@@ -25,9 +25,9 @@ run`/the `integration_test` suite do need a real toolchain; see
 ## Architecture
 
 Feature-first Flutter app: `go_router` + `flutter_riverpod` + `drift`
-(SQLite), replacing the Expo/React Native app that used to live at
-`../mobile/`. All app state lives on-device; the FastAPI backend
-(`../backend/`) is a stateless AI processing service with no user data of
+(SQLite), replacing the Expo/React Native app that used to live in this
+repository (see git history). All app state lives on-device; the FastAPI
+backend (`../backend/`) is a stateless AI processing service with no user data of
 its own — see the root `FLUTTER_MIGRATION.md` for the full spec this app was
 built against, and `.scratch/flutter-port/ACCEPTANCE.md` for the criteria it
 was verified against.

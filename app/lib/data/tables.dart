@@ -1,7 +1,8 @@
 // Table definitions for the Glean drift database.
 //
-// Ported from `mobile/src/db/schema.ts` (Drizzle over expo-sqlite), with the
-// schema changes required by FLUTTER_MIGRATION.md §3 and §6:
+// Ported from the Expo app's `src/db/schema.ts` (Drizzle over expo-sqlite;
+// see git history), with the schema changes required by
+// FLUTTER_MIGRATION.md §3 and §6:
 //
 //   1. Every user-data table carries a `userId` column (AC-DATA-02). RN only
 //      scoped `user_config`; `pantry_items`, `recipes`, `meal_plan_entries`

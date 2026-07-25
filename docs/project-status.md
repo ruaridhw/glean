@@ -2,6 +2,13 @@
 
 Last updated: 2026-05-21
 
+**Superseded note (2026-07-25):** the Expo/React Native app this document
+describes (`mobile/`) has since been replaced by a native Flutter app
+(`app/`) in a big-bang cutover — see the root `FLUTTER_MIGRATION.md` for the
+spec and `.scratch/flutter-port/` for the migration record. The narrative
+below is kept as a historical log of the pre-cutover RN build and is not
+representative of the current stack (see the corrected "Tech stack" table).
+
 ## What's been built
 
 ### Plan 01 — Foundation (`feat/plan-01-*`)
@@ -43,7 +50,7 @@ End-to-end deployment pipeline. Current branch, not yet merged.
 **GitHub Actions**
 - `backend-ci.yml` — PR: ruff lint + pytest + SAM validate (parallel)
 - `backend-deploy.yml` — Push to `main` → prod (GitHub Environment gate); `workflow_dispatch` → dev
-- `mobile-ci.yml` — PR + push to `main`: biome + jest + Gradle build + Maestro E2E (parallel where possible); on `main` also deploys APK as GitHub Release
+- `mobile-ci.yml` — (historical; removed post-cutover) PR + push to `main`: biome + jest + Gradle build + Maestro E2E (parallel where possible); on `main` also deployed APK as GitHub Release. Replaced by `flutter-ci.yml`/`flutter-integration.yml`.
 
 ---
 
@@ -81,7 +88,8 @@ Bootstrap stack `glean-bootstrap` deployed to `eu-west-2`. Outputs saved locally
 
 | Layer | Technology |
 |---|---|
-| Mobile | React Native (Expo 55), TypeScript, drizzle-orm, SQLite, Zustand, TanStack Query |
+| Mobile (historical, pre-cutover) | React Native (Expo 55), TypeScript, drizzle-orm, SQLite, Zustand, TanStack Query |
+| App (current) | Flutter (Dart), go_router, flutter_riverpod, drift/SQLite — see `app/AGENTS.md` |
 | Backend | Python 3.14, FastAPI, Mangum, AWS Lambda, LangChain + OpenRouter |
 | Auth | AWS Cognito (JWT, RS256) |
 | AI | OpenRouter via LangChain (default model: claude-sonnet-4-6) |

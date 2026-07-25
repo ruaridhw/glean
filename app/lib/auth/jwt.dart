@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 /// Decodes a JWT's payload (the middle, base64url-encoded segment) into a
-/// JSON map — the Flutter port of `mobile/src/auth/google.ts`'s
-/// `decodeIdTokenPayload`. Unlike the RN version, there is no need to
-/// translate the base64url alphabet (`-`/`_`) to standard base64 (`+`/`/`)
-/// first: `dart:convert`'s [base64Url] codec already understands it
-/// natively, and [base64Url.normalize] restores the padding JWTs omit.
+/// JSON map — the Flutter port of the Expo app's `src/auth/google.ts`'s
+/// `decodeIdTokenPayload` (see git history). Unlike the RN version, there is
+/// no need to translate the base64url alphabet (`-`/`_`) to standard base64
+/// (`+`/`/`) first: `dart:convert`'s [base64Url] codec already understands
+/// it natively, and [base64Url.normalize] restores the padding JWTs omit.
 ///
 /// Throws [FormatException] for anything that isn't a well-formed JWT with a
 /// JSON object payload — callers decide how to react (AUTH treats it as an

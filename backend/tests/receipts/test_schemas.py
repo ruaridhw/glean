@@ -10,9 +10,10 @@ from pydantic import ValidationError
 from glean.meal_plan.schemas import CompressedPantryItem
 from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, IngredientCategory, ParsedIngredient
 
-# Mirrors mobile/src/db/ingredient-categories.ts exactly. If this ever needs to change,
+# Mirrors app/lib/data/seed/taxonomy.dart exactly. If this ever needs to change,
 # INGREDIENT_CATEGORY_FOOD_GROUPS must change to match — the two must never drift, since the
-# client can only map categories it already knows about.
+# client can only map categories it already knows about. The Flutter side of this contract is
+# enforced by app/test/data/taxonomy_contract_test.dart, which reads this file as text.
 EXPECTED_CLIENT_TAXONOMY: dict[str, str] = {
     "leafy_greens": "vegetables",
     "brassicas": "vegetables",

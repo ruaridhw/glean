@@ -1,6 +1,7 @@
-/// Pantry compression for `POST /meal-plan` — ported faithfully from
-/// `mobile/src/meal-plan/compress.ts` (FLUTTER_MIGRATION.md's "highest-value
-/// logic to port" table). Scores every non-staple, in-stock pantry item by
+/// Pantry compression for `POST /meal-plan` — ported faithfully from the
+/// Expo app's `src/meal-plan/compress.ts` (see git history;
+/// FLUTTER_MIGRATION.md's "highest-value logic to port" table). Scores
+/// every non-staple, in-stock pantry item by
 /// urgency (expiry proximity, time since last use, low quantity) and keeps
 /// only the top [defaultTopN], so the LLM request payload stays small
 /// regardless of pantry size.

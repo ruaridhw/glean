@@ -69,8 +69,9 @@ class ParsedIngredient {
   final double confidence;
 
   /// One of the 23-category ingredient taxonomy values (see
-  /// `mobile/src/db/ingredient-categories.ts` for the current list, ported
-  /// to the DATA module), or `null` when the backend couldn't classify it.
+  /// `lib/data/seed/taxonomy.dart` for the current list, ported from the
+  /// Expo app's `src/db/ingredient-categories.ts`, see git history), or
+  /// `null` when the backend couldn't classify it.
   /// Nullable — see the class-level note.
   final String? category;
 

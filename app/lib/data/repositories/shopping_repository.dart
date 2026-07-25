@@ -1,5 +1,6 @@
-// Ported from `mobile/src/db/shopping.ts`, fixing the three data-integrity
-// bugs FLUTTER_MIGRATION.md §11/§6 Shop call out:
+// Ported from the Expo app's `src/db/shopping.ts` (see git history),
+// fixing the three data-integrity bugs FLUTTER_MIGRATION.md §11/§6 Shop
+// call out:
 //
 //   - `resolveCheckout` (AC-SHOP-01) replaces `completeCheckout`, which
 //     deleted *every* checked row regardless of receipt match — check off

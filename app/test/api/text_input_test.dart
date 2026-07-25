@@ -1,4 +1,5 @@
-// Port of mobile/src/__tests__/normalization/text-input.test.ts — per the
+// Port of the Expo app's src/__tests__/normalization/text-input.test.ts
+// (see git history) — per the
 // API module brief, this trim/validate wrapper was the only logic in the RN
 // `api/hooks.ts` its own tests actually exercised.
 import 'package:flutter_test/flutter_test.dart';

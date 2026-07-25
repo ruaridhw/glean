@@ -1,5 +1,5 @@
-/// The Shop tab — FLUTTER_MIGRATION.md §6 "Shop". Replaces
-/// `mobile/app/(tabs)/shop/index.tsx`.
+/// The Shop tab — FLUTTER_MIGRATION.md §6 "Shop". Replaces the Expo app's
+/// `app/(tabs)/shop/index.tsx` (see git history).
 ///
 /// The two intake entry points on this screen ("Describe list" and "Scan
 /// receipt") both push into the shared intake flow the router already wires

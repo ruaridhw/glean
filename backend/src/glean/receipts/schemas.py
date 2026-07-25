@@ -5,9 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from glean.observability import logger
 
-# The 23-category taxonomy the mobile client already uses (mobile/src/db/ingredient-categories.ts)
-# and expects `food_group` to be derived from. Keep this mapping in sync with that file — it is the
-# single source `food_group` is derived from, so the client never receives a category it can't map.
+# The 23-category taxonomy the Flutter client already uses
+# (app/lib/data/seed/taxonomy.dart) and expects `food_group` to be derived
+# from. Keep this mapping in sync with that file — it is the single source
+# `food_group` is derived from, so the client never receives a category it
+# can't map.
 INGREDIENT_CATEGORY_FOOD_GROUPS: dict[str, str] = {
     "leafy_greens": "vegetables",
     "brassicas": "vegetables",
@@ -108,7 +110,8 @@ class ParsedIngredient(BaseModel):
     def food_group(self) -> str:
         # Non-nullable by design: meal_plan/schemas.py declares food_group non-nullable, so a
         # null here would 422 generation for exactly the ingredients this change exists to fix.
-        # "other" is an existing client-side food-group bucket (mobile/src/pantry/presentation.ts),
+        # "other" is an existing client-side food-group bucket (the coalesce in
+        # app/lib/data/repositories/pantry_repository.dart's watchAll/getAll),
         # so this needs no new vocabulary and renders correctly with zero client changes.
         if self.category is None:
             return "other"

@@ -1,6 +1,7 @@
-/// Pure, UI-independent settings logic — ported 1:1 from
-/// `mobile/src/settings/presentation.ts` (kept, per IMPLEMENTATION.md, as
-/// "presentation logic that ports as unit-testable functions; it has a real
+/// Pure, UI-independent settings logic — ported 1:1 from the Expo app's
+/// `src/settings/presentation.ts` (see git history; kept, per
+/// IMPLEMENTATION.md, as "presentation logic that ports as unit-testable
+/// functions; it has a real
 /// test worth keeping"). No Flutter/Riverpod import here on purpose: this
 /// file is usable from a plain `dart test` as well as from both the Settings
 /// screen and the first-run onboarding flow, which share these controls

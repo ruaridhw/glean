@@ -16,9 +16,9 @@ class AuthException implements Exception {
   String toString() => 'AuthException: $message';
 }
 
-/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth` — the flow
-/// `mobile/src/auth/google.ts` implements with `expo-auth-session`
-/// (FLUTTER_MIGRATION.md §5).
+/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth` — the flow the
+/// Expo app's `src/auth/google.ts` implemented with `expo-auth-session`
+/// (see git history; FLUTTER_MIGRATION.md §5).
 ///
 /// Deliberately owns no session *state* (that's [AuthController]'s job) —
 /// just the two network operations: exchange an authorization for tokens,
@@ -148,7 +148,8 @@ class CognitoAuthClient {
         accessToken: accessToken,
         idToken: idToken,
         // Cognito's refresh grant does not reissue a refresh token; reuse
-        // the one the caller supplied (mirrors `mobile/src/auth/google.ts`'s
+        // the one the caller supplied (mirrors the Expo app's
+        // `src/auth/google.ts`, see git history:
         // `refreshToken: refreshToken, // Cognito doesn't return a new
         // refresh token`).
         refreshToken: response.refreshToken ?? refreshToken,

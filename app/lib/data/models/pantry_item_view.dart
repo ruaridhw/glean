@@ -1,6 +1,6 @@
 // Read-side shape for a pantry item joined with its ingredient and category
-// (mirrors the `PantryItem` interface in `mobile/src/types/index.ts`, plus
-// `userId`).
+// (mirrors the `PantryItem` interface in the Expo app's `src/types/index.ts`,
+// see git history, plus `userId`).
 //
 // `foodGroup` is non-nullable (AC-DATA-11), but that is enforced by
 // coalescing in `PantryRepository._mapRow`, not by requiring the join to

@@ -1,5 +1,6 @@
 // Read-side shape for a shopping list row — mirrors `ShoppingListItem` in
-// `mobile/src/types/index.ts`, plus `userId`. `ingredientId` is non-nullable
+// the Expo app's `src/types/index.ts` (see git history), plus `userId`.
+// `ingredientId` is non-nullable
 // (AC-SHOP-03): every row, including manual entries, resolves an ingredient
 // identity on the way in via `IngredientsRepository`.
 class ShoppingListItemView {

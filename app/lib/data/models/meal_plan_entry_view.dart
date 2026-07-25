@@ -1,5 +1,6 @@
-// Read-side shape for a planned meal — mirrors `MealPlanEntry` in
-// `mobile/src/types/index.ts`, plus `userId` and `recipeTitle` (the
+// Read-side shape for a planned meal — mirrors `MealPlanEntry` in the Expo
+// app's `src/types/index.ts` (see git history), plus `userId` and
+// `recipeTitle` (the
 // creation-time snapshot that survives the recipe being deleted, AC-MEAL-03)
 // in place of a join to `recipes.title`.
 class MealPlanEntryView {

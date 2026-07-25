@@ -1,6 +1,6 @@
-/// Pure, dependency-free auth-session logic — the Flutter port of
-/// `mobile/src/auth/mode.ts` (FLUTTER_MIGRATION.md §5, §10 "auth-mode
-/// logic").
+/// Pure, dependency-free auth-session logic — the Flutter port of the Expo
+/// app's `src/auth/mode.ts` (see git history; FLUTTER_MIGRATION.md §5, §10
+/// "auth-mode logic").
 ///
 /// **What changed in the port, deliberately (§5 "structure, not a flag")**:
 /// the RN version decided *for itself* whether to bypass real auth by

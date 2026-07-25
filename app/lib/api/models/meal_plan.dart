@@ -1,6 +1,7 @@
 /// Top-N urgency-scored pantry item sent to `POST /meal-plan`. Building the
 /// urgency score and top-N compression is the DATA module's job (ported
-/// from `mobile/src/meal-plan/compress.ts`); this model is just the wire
+/// from the Expo app's `src/meal-plan/compress.ts`, see git history); this
+/// model is just the wire
 /// shape the backend's `CompressedPantryItem` schema expects.
 class CompressedPantryItem {
   const CompressedPantryItem({

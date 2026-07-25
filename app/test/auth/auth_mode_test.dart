@@ -1,4 +1,5 @@
-// Port of mobile/tests/auth/mode.test.ts, adapted for the structural (not
+// Port of the Expo app's tests/auth/mode.test.ts (see git history),
+// adapted for the structural (not
 // flag-based) bypass §5 requires — see lib/auth/auth_mode.dart's top doc
 // comment for exactly what changed and why.
 import 'package:flutter_test/flutter_test.dart';

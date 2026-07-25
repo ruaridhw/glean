@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Radius scale, ported 1:1 from `mobile/src/theme/index.ts` (`theme.radius`).
+/// Radius scale, ported 1:1 from the Expo app's `src/theme/index.ts`
+/// (`theme.radius`; see git history).
 ///
 /// `pill` uses a large-but-finite value (not `double.infinity`) because it
 /// feeds [BorderRadius.circular], which requires a finite radius; any value
@@ -31,7 +32,8 @@ class AppRadius {
   );
 }
 
-/// Spacing scale, ported 1:1 from `mobile/src/theme/index.ts` (`theme.spacing`).
+/// Spacing scale, ported 1:1 from the Expo app's `src/theme/index.ts`
+/// (`theme.spacing`; see git history).
 @immutable
 class AppSpacing {
   const AppSpacing({
@@ -60,7 +62,8 @@ class AppSpacing {
   );
 }
 
-/// Elevation shadow presets, ported from `mobile/src/theme/index.ts` (`theme.shadow`).
+/// Elevation shadow presets, ported from the Expo app's `src/theme/index.ts`
+/// (`theme.shadow`; see git history).
 ///
 /// RN expressed these as `{shadowColor, shadowOffset, shadowOpacity, shadowRadius,
 /// elevation}` for `Platform`-conditional rendering. Flutter has one shadow model

@@ -1,6 +1,7 @@
 // Verifies the seed data by querying a real in-memory database (AC-DATA-10),
-// not by counting SQL calls — see `mobile/src/db/ingredient-categories.ts`
-// and `mobile/src/db/seed.ts` for the ported source of truth.
+// not by counting SQL calls — see the Expo app's
+// `src/db/ingredient-categories.ts` and `src/db/seed.ts` (see git history)
+// for the ported source of truth.
 import 'package:glean/data/seed/taxonomy.dart';
 import 'package:flutter_test/flutter_test.dart';
 

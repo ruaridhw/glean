@@ -1,4 +1,5 @@
-// Ported from `mobile/tests/meal-plan/compress.test.ts` — the pantry
+// Ported from the Expo app's `tests/meal-plan/compress.test.ts` (see git
+// history) — the pantry
 // urgency-scoring/top-N compression that feeds `MealPlanRequest.pantry`
 // (FLUTTER_MIGRATION.md's "highest-value logic to port" table).
 import 'package:flutter_test/flutter_test.dart';

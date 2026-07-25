@@ -1,5 +1,5 @@
-// Ported faithfully from `mobile/src/normalization/units.ts`. Keep aligned
-// with the backend's recipe-import unit parsing
+// Ported faithfully from the Expo app's `src/normalization/units.ts` (see
+// git history). Keep aligned with the backend's recipe-import unit parsing
 // (backend/src/glean/recipes/ingredient_parser.py) — recipe imports and
 // meal-plan pantry math must agree on canonical units.
 //

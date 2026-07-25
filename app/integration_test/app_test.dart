@@ -1,6 +1,7 @@
 /// The single `integration_test` suite (FLUTTER_MIGRATION.md §10, AC-TEST-15).
 ///
-/// Ports `mobile/e2e/smoke.yaml`'s intent onto real widgets driving the real
+/// Ports the Expo app's `e2e/smoke.yaml` (see git history) intent onto
+/// real widgets driving the real
 /// router/database/camera stack — not the 11 Maestro files it replaces, one
 /// of which (`smoke.yaml`) was the only one worth keeping as an automated
 /// suite (the other 10 either fold into widget tests or drop outright, see

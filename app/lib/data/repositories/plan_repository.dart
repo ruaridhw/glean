@@ -1,4 +1,5 @@
-// Ported from `mobile/src/db/plan.ts`, with the schema changes
+// Ported from the Expo app's `src/db/plan.ts` (see git history), with the
+// schema changes
 // FLUTTER_MIGRATION.md §6 Plan requires:
 //
 //   - Week-scoped reads and a per-week capacity (AC-PLAN-01/04) in place of

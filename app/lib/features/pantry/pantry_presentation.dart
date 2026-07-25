@@ -1,5 +1,6 @@
-/// Pure presentation helpers for the Pantry screen, ported from
-/// `mobile/src/pantry/presentation.ts` — grouping, expiry badges and the
+/// Pure presentation helpers for the Pantry screen, ported from the Expo
+/// app's `src/pantry/presentation.ts` (see git history) — grouping, expiry
+/// badges and the
 /// "expiring soon" predicate the header chip and (eventually) the Plan nudge
 /// both rely on. Kept free of Flutter/Riverpod so it stays unit-testable in
 /// isolation from widgets (AC-TEST-05 style: this is the highest-value

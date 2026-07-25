@@ -1,5 +1,5 @@
-/// Pure presentation helpers for the Shop tab, ported from
-/// `mobile/src/shop/presentation.ts`.
+/// Pure presentation helpers for the Shop tab, ported from the Expo app's
+/// `src/shop/presentation.ts` (see git history).
 ///
 /// AC-SHOP-07 folds in here too: RN said "N checked" (a chip), "N items in
 /// cart" (the checkout bar) and "In your cart" (a section header) for the

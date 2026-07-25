@@ -1,7 +1,8 @@
 // AC-TEST-19: the redirect-URI cross-repo contract. `flutter test` always
 // runs with the package root (`app/`) as the working directory, so
 // `../backend/template.yaml` resolves regardless of which test file this is
-// (mirrors mobile/tests/auth/redirect-uri.test.ts's equivalent check).
+// (mirrors the Expo app's tests/auth/redirect-uri.test.ts's equivalent
+// check; see git history).
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

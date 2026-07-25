@@ -6,7 +6,8 @@ import '../providers/link_opener.dart';
 
 /// **Placeholder URLs.** No hosted Terms of Service / Privacy Policy page
 /// exists anywhere for Glean yet — it is pre-launch, and the RN app only
-/// ever showed a single unlinked sentence (`mobile/app/sign-in.tsx:70-72`).
+/// ever showed a single unlinked sentence (the Expo app's
+/// `app/sign-in.tsx:70-72`, see git history).
 /// These two constants are the *only* place that placeholder lives; swap
 /// them for the real hosted URLs once they exist and nothing else in this
 /// file needs to change.

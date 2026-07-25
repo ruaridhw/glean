@@ -1,10 +1,5 @@
 # Mobile
 mobile_replit/
-mobile/node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/.env
-# mobile/drizzle/ — tracked: migrations are required at runtime
 
 # Backend
 backend/.venv/
@@ -51,4 +46,3 @@ plans/
 # macOS
 .DS_Store
 .DS_Store?
-mobile/coverage

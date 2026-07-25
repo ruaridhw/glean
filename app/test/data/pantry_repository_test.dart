@@ -90,7 +90,8 @@ void main() {
 
         // The item must still be visible — disappearing entirely would be
         // silent data loss, strictly worse than the RN app's "Other"
-        // bucket (mobile/src/pantry/presentation.ts:47).
+        // bucket (the Expo app's `src/pantry/presentation.ts:47`, see git
+        // history).
         expect(items, hasLength(1));
         expect(items.single.canonicalName, 'mystery meat');
         expect(items.single.category, isNull);

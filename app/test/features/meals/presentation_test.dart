@@ -1,4 +1,5 @@
-// Ported from `mobile/tests/meals/presentation.test.ts` — real-outcome
+// Ported from the Expo app's `tests/meals/presentation.test.ts` (see git
+// history) — real-outcome
 // assertions for the pure formatting helpers (AC-TEST-05).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

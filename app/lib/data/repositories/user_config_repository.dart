@@ -1,4 +1,5 @@
-// Ported from `mobile/src/db/config.ts`. `id` is the Cognito user sub, so
+// Ported from the Expo app's `src/db/config.ts` (see git history). `id` is
+// the Cognito user sub, so
 // this table was already user-scoped in RN — no schema change needed here,
 // unlike the other four tables (FLUTTER_MIGRATION.md §3).
 import 'dart:convert';

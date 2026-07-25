@@ -1,4 +1,5 @@
-// Ported from `mobile/src/db/recipes.ts`, scoped by `userId` (AC-DATA-02):
+// Ported from the Expo app's `src/db/recipes.ts` (see git history), scoped
+// by `userId` (AC-DATA-02):
 // the local `recipes` table is a user's saved/imported library, not the
 // read-only server-side search corpus.
 //

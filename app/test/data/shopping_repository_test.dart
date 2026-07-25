@@ -3,8 +3,9 @@
 // unmatched items (AC-SHOP-01, AC-TEST-06), manual items never resolving an
 // ingredient identity (AC-SHOP-03), unscoped check-off (AC-SHOP-04), and
 // plan-derived rows outliving their plan entry (AC-SHOP-06). Also ports the
-// shortfall-maths intent of `mobile/tests/db/shopping.test.ts` as outcome
-// assertions rather than query-builder call counts.
+// shortfall-maths intent of the Expo app's `tests/db/shopping.test.ts`
+// (see git history) as outcome assertions rather than query-builder call
+// counts.
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';

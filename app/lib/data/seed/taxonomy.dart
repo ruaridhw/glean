@@ -1,8 +1,8 @@
-// Seed data ported from `mobile/src/db/ingredient-categories.ts` and
-// `mobile/src/db/seed.ts` — the 23-category taxonomy and the 10 staples
-// (AC-DATA-10), plus the per-category shelf life the RN app never had
-// (§6 Pantry: expiry is inferred automatically, so every category needs a
-// default).
+// Seed data ported from the Expo app's `src/db/ingredient-categories.ts`
+// and `src/db/seed.ts` (see git history) — the 23-category taxonomy and the
+// 10 staples (AC-DATA-10), plus the per-category shelf life the RN app
+// never had (§6 Pantry: expiry is inferred automatically, so every
+// category needs a default).
 //
 // Shelf-life values are reasonable defaults for a home fridge/pantry, not a
 // clinically-verified table — inferred expiry is deliberately approximate

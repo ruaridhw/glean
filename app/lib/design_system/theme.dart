@@ -5,8 +5,8 @@ import 'tokens.dart';
 /// Brand hex constants used exactly once, to build [gleanLightTheme]. This is
 /// deliberately the *only* file in the design system that references raw
 /// hex — everywhere else (including feature code) reaches the brand through
-/// `Theme.of(context)` (AC-DS-03). Values are ported 1:1 from
-/// `mobile/src/theme/index.ts`.
+/// `Theme.of(context)` (AC-DS-03). Values are ported 1:1 from the Expo
+/// app's `src/theme/index.ts` (see git history).
 class _Brand {
   const _Brand._();
 

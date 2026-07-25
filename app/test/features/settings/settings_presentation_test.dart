@@ -1,5 +1,6 @@
-// Ported from `mobile/tests/settings/presentation.test.ts` — same cases,
-// same expected outputs, proving the port is behaviour-faithful.
+// Ported from the Expo app's `tests/settings/presentation.test.ts` (see
+// git history) — same cases, same expected outputs, proving the port is
+// behaviour-faithful.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
 

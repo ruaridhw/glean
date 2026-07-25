@@ -27,9 +27,10 @@ app/       — Flutter app (iOS + Android)
 Makefile   — unified task runner for both sub-projects
 ```
 
-`mobile/` (the Expo/React Native app `app/` replaces) is retained only until
-the cutover finishes — see `app/AGENTS.md` and the root `FLUTTER_MIGRATION.md`
-if it's still present. Treat it as read-only reference, not a place to add code.
+`app/` replaced the Expo/React Native app previously in this repository
+(deleted in the cutover) — see `app/AGENTS.md` and the root
+`FLUTTER_MIGRATION.md` for the spec it was ported against, and git history
+for the deleted app's source.
 
 ## Makefile
 

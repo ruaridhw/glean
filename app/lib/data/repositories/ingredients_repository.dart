@@ -1,4 +1,5 @@
-// Ported from `mobile/src/db/ingredients.ts`, with one behaviour change:
+// Ported from the Expo app's `src/db/ingredients.ts` (see git history),
+// with one behaviour change:
 // resolving by an existing name/api-id match now *upgrades* a null category
 // to a newly-supplied one instead of keeping it forever. Without that, an
 // ingredient first created without a category (e.g. via recipe import,

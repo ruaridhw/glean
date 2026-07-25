@@ -1,5 +1,5 @@
-// Mirrors `UserConfig` in `mobile/src/types/index.ts` and the
-// `USER_CONFIG_DEFAULTS` fallback in `mobile/src/db/schema.ts` — the
+// Mirrors `UserConfig` in the Expo app's `src/types/index.ts` and the
+// `USER_CONFIG_DEFAULTS` fallback in `src/db/schema.ts` (see git history) — the
 // settings that steer meal-plan generation (dinners/week, servings,
 // dietary flags, active-time cap) plus the "no row yet" defaults used
 // before a user has ever saved settings.

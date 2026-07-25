@@ -1,7 +1,8 @@
 /// Trim/validate wrapper for free-text API request bodies.
 ///
-/// Ported from `mobile/src/normalization/text-input.ts`, which — per the
-/// API module brief — was the only logic in the RN `api/hooks.ts` its own
+/// Ported from the Expo app's `src/normalization/text-input.ts` (see git
+/// history), which — per the API module brief — was the only logic in the
+/// RN `api/hooks.ts` its own
 /// tests actually exercised. Behaviour, not structure: outer whitespace is
 /// trimmed, intentional internal newlines/spacing (a multi-line shopping
 /// description) are preserved, and text that is empty after trimming is

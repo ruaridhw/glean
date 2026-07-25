@@ -1,5 +1,5 @@
-// Unit coverage for the ported Plan presentation logic
-// (`mobile/src/plan/presentation.ts`), plus the AC-PLAN-03/04 fix to the
+// Unit coverage for the ported Plan presentation logic (the Expo app's
+// `src/plan/presentation.ts`, see git history), plus the AC-PLAN-03/04 fix to the
 // "left to plan" hint: it must be driven by remaining *capacity*
 // (cooked-excluded, per-week), not `target - totalEntries`.
 import 'package:flutter_test/flutter_test.dart';

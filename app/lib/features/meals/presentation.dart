@@ -1,6 +1,6 @@
-/// Ported from `mobile/src/meals/presentation.ts` — pure, unit-testable
-/// formatting helpers (FLUTTER_MIGRATION.md's "Highest-value logic to port
-/// faithfully" table).
+/// Ported from the Expo app's `src/meals/presentation.ts` (see git history)
+/// — pure, unit-testable formatting helpers (FLUTTER_MIGRATION.md's
+/// "Highest-value logic to port faithfully" table).
 ///
 /// `parseInstructionSteps` has no Dart equivalent to port: it existed in RN
 /// only to decode a JSON-text `instructions` column into typed steps at the

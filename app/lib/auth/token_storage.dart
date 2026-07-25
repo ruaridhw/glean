@@ -24,8 +24,8 @@ class StoredTokenValues {
   final DateTime? expiresAt;
 }
 
-/// Token persistence — the Flutter analogue of `mobile/src/auth/storage.ts`'s
-/// `SecureStore` wrapper.
+/// Token persistence — the Flutter analogue of the Expo app's
+/// `src/auth/storage.ts`'s `SecureStore` wrapper (see git history).
 ///
 /// An interface (not a set of static functions) so tests substitute
 /// `InMemoryTokenStorage` (`test/auth/support/fakes.dart`) instead of

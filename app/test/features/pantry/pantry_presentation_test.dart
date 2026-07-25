@@ -1,5 +1,6 @@
 // Unit coverage for the pure Pantry presentation helpers (AC-TEST-05 style
-// port), ported from `mobile/src/pantry/presentation.ts`.
+// port), ported from the Expo app's `src/pantry/presentation.ts` (see git
+// history).
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/features/pantry/pantry_presentation.dart';

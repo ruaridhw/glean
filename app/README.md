@@ -2,8 +2,8 @@
 
 The Glean mobile app: Flutter, targeting iOS and Android only (no web/desktop
 scaffolding is committed — see [Web target](#web-target-deferred) below).
-Replaces the Expo/React Native app that used to live at `../mobile/`. Full
-spec: the root `../FLUTTER_MIGRATION.md`.
+Replaces the Expo/React Native app that used to live in this repository
+(see git history). Full spec: the root `../FLUTTER_MIGRATION.md`.
 
 ## Setup
 
@@ -66,9 +66,10 @@ exception and were verified on exactly such a box.
 ## Integration tests
 
 The one `integration_test` suite (`integration_test/app_test.dart`) ports
-`../mobile/e2e/smoke.yaml`'s intent: launch, all five tabs visible, navigate
-each, camera-permission handling on the Scan screen, and add an item via
-manual entry (dead code in the RN app — reachable here from the `+` sheet).
+the Expo app's `e2e/smoke.yaml` (see git history) intent: launch, all five
+tabs visible, navigate each, camera-permission handling on the Scan screen,
+and add an item via manual entry (dead code in the RN app — reachable here
+from the `+` sheet).
 It runs against `lib/main_e2e.dart`, never `lib/main.dart` — that's where the
 e2e auth bypass lives, and it cannot compile into `lib/main.dart`'s import
 graph at all (`test/auth/auth_bypass_test.dart` enforces this; see
