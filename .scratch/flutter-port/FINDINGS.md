@@ -347,7 +347,15 @@ delete it. An unreferenced command provider for a live endpoint is either a miss
 code, and both want a decision.
 
 ## F-16 — the Shop "describe" flow was never built (ownership seam gap)
-**Status:** OPEN · surfaced by: API agent while resolving F-15
+**Status:** RESOLVED · surfaced by: API agent while resolving F-15
+
+**Resolution:** `ShopDescribeScreen` built, and the shared presentational parts extracted into
+`lib/features/intake/widgets/describe_form.dart` so the two describe screens don't repeat the
+RN app's twin-review-screen mistake. The split is presentation vs orchestration: the form is
+destination-agnostic UI, while each screen keeps its own provider and its own response→`ReviewArgs`
+mapping (different response types, and shop carries `clarifyingQuestions` where pantry carries
+`unitPrice`). Forcing those into one generic widget would have needed a type parameter and a
+mapping callback for ~15 lines of real difference.
 **Affects:** AC-SHOP parity with the RN app, AC-PAN-05
 
 `lib/features/intake/shop_describe_screen.dart` is still the router wave's placeholder. Shop

@@ -9,8 +9,9 @@ import 'api_providers.dart';
 /// ephemeral list of shopping-item proposals (AC-DATA-06) for the shop
 /// review screen; nothing is written to drift until the user confirms.
 ///
-/// **Not currently wired to any screen** — see the module report for why
-/// this is a missing feature, not dead code, and who needs to wire it.
+/// Wired from `lib/features/intake/shop_describe_screen.dart`, which maps the
+/// response into `ReviewArgs` with `ReviewDestination.shop` and passes
+/// `clarifyingQuestions` through to the shared review screen.
 class ParseShoppingDescriptionController
     extends AsyncNotifier<ShoppingParseResponse?> {
   @override
