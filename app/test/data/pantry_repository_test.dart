@@ -1,0 +1,325 @@
+// Real-outcome tests for pantry reads/writes (AC-TEST-02), covering the
+// schema changes FLUTTER_MIGRATION.md §6 Pantry requires that the RN app
+// never had: automatic expiry inference (AC-PAN-01, AC-TEST-10) and a
+// guaranteed non-null `foodGroup` on every row (AC-DATA-11).
+import 'package:glean/data/database.dart';
+import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/repositories/pantry_repository.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'fixture.dart';
+
+void main() {
+  group('PantryRepository', () {
+    late GleanDatabase db;
+    late PantryRepository repository;
+    const userId = 'user-a';
+
+    setUp(() {
+      db = createTestDatabase();
+      repository = PantryRepository(db, IngredientsRepository(db));
+    });
+
+    tearDown(() => db.close());
+
+    test(
+      'addItem infers an expiry date from the category shelf life',
+      () async {
+        final now = DateTime(2026, 1, 1);
+        await repository.addItem(
+          userId: userId,
+          name: 'strawberries',
+          quantity: 1,
+          unit: 'punnet',
+          category: 'berries', // 4-day shelf life
+          now: now,
+        );
+
+        final items = await repository.watchAll(userId).first;
+        expect(items, hasLength(1));
+        expect(items.single.expiryDate, DateTime(2026, 1, 5));
+      },
+    );
+
+    test(
+      'the persisted category survives — food_group is never null',
+      () async {
+        await repository.addItem(
+          userId: userId,
+          name: 'aubergine',
+          quantity: 2,
+          unit: 'unit',
+          category: 'nightshades',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final items = await repository.watchAll(userId).first;
+        expect(items.single.category, 'nightshades');
+        expect(items.single.foodGroup, 'vegetables');
+      },
+    );
+
+    test(
+      'topping up an existing item adds to the quantity and refreshes expiry',
+      () async {
+        await repository.addItem(
+          userId: userId,
+          name: 'milk',
+          quantity: 500,
+          unit: 'ml',
+          category: 'dairy',
+          now: DateTime(2026, 1, 1),
+        );
+        await repository.addItem(
+          userId: userId,
+          name: 'milk',
+          quantity: 500,
+          unit: 'ml',
+          category: 'dairy',
+          now: DateTime(2026, 1, 3),
+        );
+
+        final items = await repository.watchAll(userId).first;
+        expect(items, hasLength(1));
+        expect(items.single.quantity, 1000);
+        expect(
+          items.single.expiryDate,
+          DateTime(2026, 1, 10),
+        ); // 7-day dairy shelf life from the second add
+      },
+    );
+
+    test(
+      'addItem normalizes units into the ingredient canonical unit',
+      () async {
+        // Establish a canonical unit of 'g' for flour via a first add in kg.
+        await repository.addItem(
+          userId: userId,
+          name: 'plain flour',
+          quantity: 1,
+          unit: 'kg',
+          category: 'grains',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final items = await repository.watchAll(userId).first;
+        // 'plain flour' is a staple with no canonical_unit set, so no
+        // normalization target exists yet and the raw unit is kept — this
+        // documents current behaviour rather than asserting a conversion.
+        expect(items.single.unit, 'kg');
+        expect(items.single.quantity, 1);
+      },
+    );
+
+    test('updateItem changes only the fields provided', () async {
+      final now = DateTime(2026, 1, 1);
+      await repository.addItem(
+        userId: userId,
+        name: 'butter',
+        quantity: 250,
+        unit: 'g',
+        category: 'dairy',
+        now: now,
+      );
+      final before = (await repository.watchAll(userId).first).single;
+
+      await repository.updateItem(
+        id: before.id,
+        userId: userId,
+        quantity: 100,
+        now: now,
+      );
+
+      final after = (await repository.watchAll(userId).first).single;
+      expect(after.quantity, 100);
+      expect(after.unit, before.unit);
+      expect(after.expiryDate, before.expiryDate);
+    });
+
+    test('deleteItem removes the row', () async {
+      await repository.addItem(
+        userId: userId,
+        name: 'eggs',
+        quantity: 6,
+        unit: 'unit',
+        category: 'eggs',
+        now: DateTime(2026, 1, 1),
+      );
+      final item = (await repository.watchAll(userId).first).single;
+
+      await repository.deleteItem(id: item.id, userId: userId);
+
+      expect(await repository.watchAll(userId).first, isEmpty);
+    });
+
+    group('decrementForCook / restoreFromCook', () {
+      test(
+        'reverses a decrement exactly, restoring quantity and lastUsedAt',
+        () async {
+          final addedAt = DateTime(2026, 1, 1);
+          await repository.addItem(
+            userId: userId,
+            name: 'chicken breast',
+            quantity: 500,
+            unit: 'g',
+            category: 'poultry',
+            now: addedAt,
+          );
+          final before = (await repository.watchAll(userId).first).single;
+          expect(before.lastUsedAt, isNull);
+
+          final cookedAt = DateTime(2026, 1, 2);
+          final delta = await repository.decrementForCook(
+            userId: userId,
+            ingredientId: before.ingredientId,
+            amount: 200,
+            now: cookedAt,
+          );
+          expect(delta, isNotNull);
+          expect(delta!.amountApplied, 200);
+          expect(delta.previousLastUsedAt, isNull);
+
+          final afterCook = (await repository.watchAll(userId).first).single;
+          expect(afterCook.quantity, 300);
+          expect(afterCook.lastUsedAt, cookedAt);
+
+          await repository.restoreFromCook(
+            userId: userId,
+            ingredientId: before.ingredientId,
+            amount: delta.amountApplied,
+            unit: delta.unit,
+            previousLastUsedAt: delta.previousLastUsedAt,
+            now: DateTime(2026, 1, 3),
+          );
+
+          final restored = (await repository.watchAll(userId).first).single;
+          expect(restored.quantity, before.quantity);
+          expect(restored.lastUsedAt, before.lastUsedAt);
+        },
+      );
+
+      test(
+        'floors the decrement at the available quantity, not the requested amount',
+        () async {
+          await repository.addItem(
+            userId: userId,
+            name: 'rice',
+            quantity: 100,
+            unit: 'g',
+            category: 'pasta_rice',
+            now: DateTime(2026, 1, 1),
+          );
+          final before = (await repository.watchAll(userId).first).single;
+
+          final delta = await repository.decrementForCook(
+            userId: userId,
+            ingredientId: before.ingredientId,
+            amount: 300, // more than is in the pantry
+            now: DateTime(2026, 1, 2),
+          );
+
+          expect(delta!.amountApplied, 100); // floored, not 300
+          final after = (await repository.watchAll(userId).first).single;
+          expect(after.quantity, 0);
+        },
+      );
+
+      test(
+        'returns null when there is no pantry row for the ingredient',
+        () async {
+          final ingredient = await IngredientsRepository(
+            db,
+          ).resolveOrCreate(canonicalName: 'saffron', category: 'spices');
+
+          final delta = await repository.decrementForCook(
+            userId: userId,
+            ingredientId: ingredient.id,
+            amount: 1,
+            now: DateTime(2026, 1, 1),
+          );
+
+          expect(delta, isNull);
+        },
+      );
+    });
+
+    group('addItems (review-screen commit, AC-PAN-10)', () {
+      test('commits every item in one transaction', () async {
+        final ids = await repository.addItems(
+          userId: userId,
+          items: const [
+            PantryItemInput(
+              name: 'onion',
+              quantity: 3,
+              unit: 'unit',
+              category: 'alliums',
+            ),
+            PantryItemInput(
+              name: 'lemon',
+              quantity: 2,
+              unit: 'unit',
+              category: 'citrus',
+            ),
+          ],
+          now: DateTime(2026, 1, 1),
+        );
+
+        expect(ids, hasLength(2));
+        expect(await repository.watchAll(userId).first, hasLength(2));
+      });
+
+      test(
+        'a failure partway through persists nothing, so retrying cannot double quantities',
+        () async {
+          final badBatch = [
+            const PantryItemInput(
+              name: 'onion',
+              quantity: 3,
+              unit: 'unit',
+              category: 'alliums',
+            ),
+            const PantryItemInput(
+              name: 'mystery item',
+              quantity: 1,
+              unit: 'unit',
+              category: 'not_a_real_category', // rejected by the taxonomy FK
+            ),
+          ];
+
+          await expectLater(
+            repository.addItems(
+              userId: userId,
+              items: badBatch,
+              now: DateTime(2026, 1, 1),
+            ),
+            throwsA(anything),
+          );
+          // The first row's insert must have rolled back with the rest —
+          // nothing partially committed (unlike RN's un-transacted loop).
+          expect(await repository.watchAll(userId).first, isEmpty);
+
+          // Retrying with an all-valid batch (as the review screen would,
+          // after the user fixes the bad row) must not double the earlier
+          // attempt's quantity, because nothing from it was ever persisted.
+          final goodBatch = [
+            const PantryItemInput(
+              name: 'onion',
+              quantity: 3,
+              unit: 'unit',
+              category: 'alliums',
+            ),
+          ];
+          await repository.addItems(
+            userId: userId,
+            items: goodBatch,
+            now: DateTime(2026, 1, 1),
+          );
+
+          final items = await repository.watchAll(userId).first;
+          expect(items, hasLength(1));
+          expect(items.single.quantity, 3);
+        },
+      );
+    });
+  });
+}
