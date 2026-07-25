@@ -226,26 +226,48 @@ Until this lands, **any** feature screen using `context.tokens` will fail when e
 the router's own test harnesses — this is not specific to AUTH's `SignInScreen`, and will resurface
 for Meals/Plan/Pantry/Shop the moment their real screens replace today's plain-text placeholders.
 
-## F-12 — drift stream cleanup hangs widget tests under FakeAsync
-**Status:** OPEN (needs the harness note applied per-wave) · surfaced by: meals agent
+## F-12 — drift stream teardown vs. widget-test FakeAsync
+**Status:** RESOLVED (pattern established) · surfaced by: meals + settings agents
 **Affects:** every feature widget test that touches a drift stream
 
-`testWidgets` runs inside a FakeAsync zone. drift's `StreamQueryStore` defers stream-cancellation
-cleanup through a **real** `Timer.run()`, which FakeAsync never services. The symptom is either a
-hang or:
+`testWidgets` runs inside a `FakeAsync` zone. drift interacts badly with it in **two distinct
+ways**, with **two different fixes**. They are easy to conflate — the first note in this file
+prescribed the wrong one for the second case.
 
+### Symptom A — a direct stream/query read in the test body hangs
+A bare `await repository.watchXxx(...).first` (or any direct query) never completes while a widget
+in the tree holds a live `.watch()` subscription: the manual query queues behind that stream's
+bookkeeping on the same connection and nothing drives it.
+
+**Fix:** wrap it in `tester.runAsync(...)`, which steps **outside** the fake zone so real async can
+progress.
+
+### Symptom B — a zero-duration timer is still pending at test end
 ```
 A Timer is still pending even after the widget tree was disposed.
 Pending timers: Timer (duration: 0:00:00.000000, periodic: false)
 ```
+Unmounting disposes the `ProviderScope` → disposes the `StreamProvider` element → cancels the drift
+stream → `StreamQueryStore.markAsClosed` schedules a zero-duration timer to finish its bookkeeping.
+Confirmed from the pending timer's own creation stack.
 
-The zero duration is the tell — it is `Timer.run()`, **not** an app-level debounce. Two waves hit
-this independently and one initially mistook it for a leaked auto-save timer.
+Consequence is worse than one red test: it **wedges the isolate**, so the whole *file* times out
+(~4 min) and every other test in it is reported as a load failure.
 
-**Fix:** wrap any direct `repository.watchXxx(...).first` (or similar stream read) in a widget test
-with `tester.runAsync(...)`, which escapes the FakeAsync zone so the cleanup timer can fire. This
-is a **test-harness** issue, not a production defect — no fix belongs in `lib/`.
+**Fix — three things, all necessary:**
+1. Unmount first: `await tester.pumpWidget(const SizedBox.shrink());`
+2. Then **`await tester.pump(const Duration(milliseconds: 1))`** — a *pump*, not `runAsync`, and a
+   **non-zero** advance. The timer is a `FakeTimer`, so `runAsync` steps outside the very zone that
+   would service it; and because it is scheduled *during* the unmount pump, a zero-duration advance
+   does not reach it.
+3. Do it **inside the test body** (wrap the body in `try/finally`). The binding verifies
+   `!timersPending` *before* `addTearDown` callbacks run, so registering it as a teardown is too
+   late — verified, it still trips.
 
-Watch for the misdiagnosis: an auto-save or debounce timer in the widget under test is the obvious
-suspect and the wrong one. Check the pending timer's *duration* first — a real debounce shows its
-configured duration, this shows zero.
+`test/features/settings/settings_screen_test.dart` has the worked example: `_releaseTree` plus a
+`_settingsWidgetTest` wrapper. Prefer lifting that wrapper into `test/support/harness.dart` if a
+third wave needs it.
+
+**Misdiagnosis warning:** the obvious suspect is an app-level debounce or auto-save timer in the
+widget under test, and it is the wrong one. Check the pending timer's **duration** first — a real
+debounce reports its configured duration; drift's cleanup reports zero.
