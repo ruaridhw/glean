@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:glean/design_system/design_system.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../presentation.dart';
 import 'recipe_detail_sections.dart';
@@ -141,12 +141,8 @@ class _StatCell extends StatelessWidget {
   }
 }
 
-/// AC-MEAL-05: tappable attribution for imported recipes. There is no
-/// `url_launcher` in this project's dependency set (pubspec.yaml is
-/// orchestrator-owned — see the final report's flagged follow-up), so
-/// "tappable" copies the link to the clipboard rather than opening a
-/// browser; the orchestrator should wire a real "open in browser" once that
-/// dependency lands.
+/// AC-MEAL-05: tappable attribution for imported recipes — opens the
+/// original source in an external browser.
 class _SourceAttribution extends StatelessWidget {
   const _SourceAttribution({required this.sourceUrl});
 
@@ -167,9 +163,12 @@ class _SourceAttribution extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(tokens.radius.md),
       onTap: () async {
-        await Clipboard.setData(ClipboardData(text: sourceUrl));
-        if (context.mounted) {
-          GleanSnackBar.show(context, 'Recipe link copied');
+        final Uri? uri = Uri.tryParse(sourceUrl);
+        final bool launched =
+            uri != null &&
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched && context.mounted) {
+          GleanSnackBar.show(context, 'Could not open this link.');
         }
       },
       child: Padding(
@@ -190,7 +189,7 @@ class _SourceAttribution extends StatelessWidget {
               ),
             ),
             Icon(
-              Icons.copy_rounded,
+              Icons.open_in_new_rounded,
               size: 16,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

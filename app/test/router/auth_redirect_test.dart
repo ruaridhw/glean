@@ -2,97 +2,94 @@
 // token expiry must not evict the user from their (local) data — the
 // screen they're on stays exactly as it is.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/features/auth/sign_in_screen.dart';
+import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/auth_state.dart';
-import 'package:glean/router/router.dart';
 
-Future<ProviderContainer> pumpApp(WidgetTester tester) async {
-  final container = ProviderContainer();
-  final router = container.read(goRouterProvider);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp.router(routerConfig: router),
-    ),
-  );
-  await tester.pumpAndSettle();
-  return container;
+import '../support/harness.dart';
+
+/// Seeds [authStatusProvider] as `signedOut` from its very first `build()`,
+/// so the redirect can be exercised before the router (and therefore
+/// anything else) has ever resolved a location — mirrors the real
+/// `SeededAuthStatusNotifier` AUTH now uses to seed real cold-start state
+/// (`lib/auth/auth_controller.dart`).
+class _SignedOutFromStart extends AuthStatusNotifier {
+  @override
+  AuthStatus build() => AuthStatus.signedOut;
 }
 
 void main() {
   testWidgets('signed out is gated to sign-in from the very first frame', (
     tester,
   ) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    // Flip status before the router is even built, proving the gate applies
-    // on entry, not just on a later transition.
-    container.read(authStatusProvider.notifier).setStatus(AuthStatus.signedOut);
-    final router = container.read(goRouterProvider);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ),
+    final harness = AppTestHarness(
+      overrides: [authStatusProvider.overrideWith(_SignedOutFromStart.new)],
     );
+    addTearDown(harness.dispose);
+
+    await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('Pantry screen'), findsNothing);
+    expect(find.byType(SignInScreen), findsOneWidget);
+    expect(find.byType(PantryScreen), findsNothing);
   });
 
   testWidgets('expiry keeps the user on their current screen, no redirect', (
     tester,
   ) async {
-    final container = await pumpApp(tester);
-    expect(find.text('Pantry screen'), findsWidgets);
+    final harness = AppTestHarness();
+    addTearDown(harness.dispose);
 
-    container.read(authStatusProvider.notifier).setStatus(AuthStatus.expired);
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    expect(find.byType(PantryScreen), findsOneWidget);
+
+    harness.container
+        .read(authStatusProvider.notifier)
+        .setStatus(AuthStatus.expired);
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Pantry screen'),
-      findsWidgets,
+      find.byType(PantryScreen),
+      findsOneWidget,
       reason: 'AC-AUTH-04: expiry must not route the user away from local data',
     );
-    expect(find.text('Sign in'), findsNothing);
+    expect(find.byType(SignInScreen), findsNothing);
   });
 
   testWidgets('signing out while in the app redirects reactively', (
     tester,
   ) async {
-    final container = await pumpApp(tester);
-    expect(find.text('Pantry screen'), findsWidgets);
+    final harness = AppTestHarness();
+    addTearDown(harness.dispose);
 
-    container.read(authStatusProvider.notifier).setStatus(AuthStatus.signedOut);
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    expect(find.byType(PantryScreen), findsOneWidget);
+
+    harness.container
+        .read(authStatusProvider.notifier)
+        .setStatus(AuthStatus.signedOut);
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in'), findsWidgets);
+    expect(find.byType(SignInScreen), findsOneWidget);
   });
 
   testWidgets('landing on sign-in while already active sends you to Pantry', (
     tester,
   ) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final router = container.read(goRouterProvider);
+    final harness = AppTestHarness();
+    addTearDown(harness.dispose);
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
+    await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
 
-    router.go(AppRoutes.signIn.path);
+    harness.router.go(AppRoutes.signIn.path);
     await tester.pumpAndSettle();
 
-    expect(find.text('Pantry screen'), findsWidgets);
-    expect(find.text('Sign in'), findsNothing);
+    expect(find.byType(PantryScreen), findsOneWidget);
+    expect(find.byType(SignInScreen), findsNothing);
   });
 }

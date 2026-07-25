@@ -110,33 +110,39 @@ class _SearchResults extends ConsumerWidget {
       recipeSearchProvider(query),
     );
 
-    return resultsAsync.when(
-      loading: () => const RecipeListSkeleton(),
-      error: (Object error, StackTrace stackTrace) => MealsMessagePanel(
-        icon: Icons.error_outline_rounded,
-        title: 'Search failed',
-        message: describeRecipeSearchError(error),
-      ),
-      data: (RecipeSearchResponse response) {
-        if (response.results.isEmpty) {
-          return MealsMessagePanel(
-            icon: Icons.search_off_rounded,
-            title: 'No recipes found',
-            message: 'No results for "$query". Try a different search.',
-          );
-        }
-        return ListView.separated(
-          itemCount: response.results.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (BuildContext context, int index) {
-            final RecipeSearchResult result = response.results[index];
-            return SearchResultCard(
-              result: result,
-              onTap: () => _onResultTap(context, ref, result),
+    // AC-TRN-01: skeleton → content cross-fades everywhere, including a
+    // live search re-querying as the user keeps typing — never a hard cut.
+    return GleanCrossFade(
+      showSkeleton: resultsAsync.isLoading,
+      skeleton: const RecipeListSkeleton(),
+      content: resultsAsync.when(
+        loading: () => const SizedBox.shrink(),
+        error: (Object error, StackTrace stackTrace) => MealsMessagePanel(
+          icon: Icons.error_outline_rounded,
+          title: 'Search failed',
+          message: describeRecipeSearchError(error),
+        ),
+        data: (RecipeSearchResponse response) {
+          if (response.results.isEmpty) {
+            return MealsMessagePanel(
+              icon: Icons.search_off_rounded,
+              title: 'No recipes found',
+              message: 'No results for "$query". Try a different search.',
             );
-          },
-        );
-      },
+          }
+          return ListView.separated(
+            itemCount: response.results.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (BuildContext context, int index) {
+              final RecipeSearchResult result = response.results[index];
+              return SearchResultCard(
+                result: result,
+                onTap: () => _onResultTap(context, ref, result),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

@@ -13,17 +13,17 @@ import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/router/app_routes.dart';
 
-import 'test_harness.dart';
+import '../../support/harness.dart';
 
 void main() {
   group('SavedRecipeDetail — Add to plan', () {
-    late MealsTestHarness harness;
+    late AppTestHarness harness;
     late RecipesRepository recipes;
     late PlanRepository plan;
     late UserConfigRepository userConfig;
 
     setUp(() {
-      harness = MealsTestHarness();
+      harness = AppTestHarness();
       final ingredients = IngredientsRepository(harness.db);
       recipes = RecipesRepository(harness.db, ingredients);
       plan = PlanRepository(
@@ -38,13 +38,14 @@ void main() {
     testWidgets('stays on the recipe, shows a snackbar and flips the button to '
         '"In plan"', (WidgetTester tester) async {
       final int id = await recipes.save(
-        userId: 'user-a',
+        userId: 'test-user',
         externalId: 'ext-1',
         title: 'Veggie Chilli',
         ingredients: const <SaveRecipeIngredient>[],
       );
 
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'Add to plan'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
@@ -65,7 +66,10 @@ void main() {
       // `tester.runAsync` — see `meals_screen_test.dart`'s comment.
       final entries = await tester.runAsync(
         () => plan
-            .watchWeek(userId: 'user-a', weekStart: startOfWeek(DateTime.now()))
+            .watchWeek(
+              userId: 'test-user',
+              weekStart: startOfWeek(DateTime.now()),
+            )
             .first,
       );
       expect(entries, hasLength(1));
@@ -75,13 +79,14 @@ void main() {
     testWidgets('tapping "In plan" again reports it without adding a duplicate '
         '(AC-PLAN-11 Meals half)', (WidgetTester tester) async {
       final int id = await recipes.save(
-        userId: 'user-a',
+        userId: 'test-user',
         externalId: 'ext-2',
         title: 'Baked Salmon',
         ingredients: const <SaveRecipeIngredient>[],
       );
 
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(FilledButton, 'In plan'), findsOneWidget);
@@ -90,7 +95,9 @@ void main() {
       // this replaces (F-05) re-added on every focus; here there is no
       // focus effect to re-trigger at all, but assert the outcome anyway.
       await harness.pumpAt(tester, AppRoutes.meals.path);
+      await tester.pumpAndSettle();
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(FilledButton, 'In plan'));
       await tester.pumpAndSettle();
@@ -98,7 +105,10 @@ void main() {
       expect(find.text('Already in your plan for this week.'), findsOneWidget);
       final entries = await tester.runAsync(
         () => plan
-            .watchWeek(userId: 'user-a', weekStart: startOfWeek(DateTime.now()))
+            .watchWeek(
+              userId: 'test-user',
+              weekStart: startOfWeek(DateTime.now()),
+            )
             .first,
       );
       expect(entries, hasLength(1));
@@ -109,7 +119,7 @@ void main() {
       (WidgetTester tester) async {
         await userConfig.save(
           const UserConfigView(
-            id: 'user-a',
+            id: 'test-user',
             purchaseTolerance: 0.5,
             preferredServings: 2,
             mealsPerWeek: 0,
@@ -118,13 +128,14 @@ void main() {
           ),
         );
         final int id = await recipes.save(
-          userId: 'user-a',
+          userId: 'test-user',
           externalId: 'ext-3',
           title: 'Full Week Meal',
           ingredients: const <SaveRecipeIngredient>[],
         );
 
         await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+        await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
         await tester.pumpAndSettle();
 
@@ -133,7 +144,7 @@ void main() {
           await tester.runAsync(
             () => plan
                 .watchWeek(
-                  userId: 'user-a',
+                  userId: 'test-user',
                   weekStart: startOfWeek(DateTime.now()),
                 )
                 .first,

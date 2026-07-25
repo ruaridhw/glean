@@ -9,15 +9,15 @@ import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
 
-import 'test_harness.dart';
+import '../../support/harness.dart';
 
 void main() {
   group('SavedRecipeDetail', () {
-    late MealsTestHarness harness;
+    late AppTestHarness harness;
     late RecipesRepository recipes;
 
     setUp(() {
-      harness = MealsTestHarness();
+      harness = AppTestHarness();
       recipes = RecipesRepository(
         harness.db,
         IngredientsRepository(harness.db),
@@ -30,7 +30,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final int id = await recipes.save(
-        userId: 'user-a',
+        userId: 'test-user',
         externalId: 'ext-1',
         title: 'Peanut Noodles',
         sourceUrl: 'https://cooking.example.com/peanut-noodles',
@@ -39,6 +39,7 @@ void main() {
       );
 
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
 
       expect(
         find.textContaining('Not suitable for: nuts, soy'),
@@ -54,13 +55,14 @@ void main() {
       WidgetTester tester,
     ) async {
       final int id = await recipes.save(
-        userId: 'user-a',
+        userId: 'test-user',
         externalId: 'ext-2',
         title: 'Plain Rice',
         ingredients: const <SaveRecipeIngredient>[],
       );
 
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
       await tester.pump();
 
       expect(find.textContaining('Not suitable for'), findsNothing);
@@ -72,13 +74,14 @@ void main() {
       'screen (AC-MEAL-02/12 — never left stranded on a deleted recipe)',
       (WidgetTester tester) async {
         final int id = await recipes.save(
-          userId: 'user-a',
+          userId: 'test-user',
           externalId: 'ext-3',
           title: 'Lentil Soup',
           ingredients: const <SaveRecipeIngredient>[],
         );
 
         await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+        await tester.pumpAndSettle();
         expect(
           find.descendant(
             of: find.byType(AppBar),
@@ -94,7 +97,7 @@ void main() {
         // A raw repository stream query in a widget test must go through
         // `tester.runAsync` — see `meals_screen_test.dart`'s comment.
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           isEmpty,
         );
         // Whether this pops (a prior page beneath it) or falls back to
@@ -114,6 +117,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await harness.pumpAt(tester, AppRoutes.mealsDetailPath('999'));
+      await tester.pumpAndSettle();
 
       expect(find.byType(RouteErrorScreen), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);

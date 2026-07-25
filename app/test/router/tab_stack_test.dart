@@ -2,18 +2,27 @@
 // of the RN app's per-tab `Stack` navigators): a push in one tab survives
 // switching to another tab and back — StatefulShellRoute.indexedStack's
 // whole reason for existing.
+//
+// Assertions are on screen *widget type*, not copy — Meals already has a
+// real screen; Pantry doesn't yet, but must not matter to this test either
+// way.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/features/meals/meals_screen.dart';
+import 'package:glean/features/meals/meals_search_screen.dart';
+import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:glean/router/router.dart';
+
+import '../support/harness.dart';
 
 /// Taps a `NavigationBar` destination by its label, not by coordinates —
 /// resilient to layout and avoids matching a same-named `Text` elsewhere on
-/// screen (e.g. an `AppBar` title).
+/// screen (e.g. an `AppBar` title). The label itself is `AppShell`'s own
+/// copy (router-owned), not a feature placeholder, so it's stable to assert
+/// against.
 Future<void> tapTab(WidgetTester tester, String label) async {
   final finder = find.descendant(
     of: find.byType(NavigationBar),
@@ -24,39 +33,39 @@ Future<void> tapTab(WidgetTester tester, String label) async {
 }
 
 void main() {
+  late AppTestHarness harness;
+
+  setUp(() {
+    harness = AppTestHarness();
+  });
+
+  tearDown(() => harness.dispose());
+
   testWidgets('pushing in Meals survives switching tabs and back', (
     tester,
   ) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final router = container.read(goRouterProvider);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
+    await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
-    expect(find.text('Pantry screen'), findsWidgets);
+    expect(find.byType(PantryScreen), findsOneWidget);
 
     await tapTab(tester, 'Meals');
-    expect(find.text('Meals screen'), findsWidgets);
+    expect(find.byType(MealsScreen), findsOneWidget);
 
-    // Placeholders have no real navigation actions yet (Wave 3's job) —
-    // push directly through the router, same as a feature screen would.
-    unawaited(router.push(AppRoutes.mealsSearch.path));
+    // Push directly through the router rather than tapping a real search
+    // affordance — this suite tests routing, not any particular feature's
+    // UI for reaching that route.
+    unawaited(harness.router.push(AppRoutes.mealsSearch.path));
     await tester.pumpAndSettle();
-    expect(find.text('Search recipes'), findsWidgets);
+    expect(find.byType(MealsSearchScreen), findsOneWidget);
 
     await tapTab(tester, 'Pantry');
-    expect(find.text('Pantry screen'), findsWidgets);
-    expect(find.text('Search recipes'), findsNothing);
+    expect(find.byType(PantryScreen), findsOneWidget);
+    expect(find.byType(MealsSearchScreen), findsNothing);
 
     await tapTab(tester, 'Meals');
     expect(
-      find.text('Search recipes'),
-      findsWidgets,
+      find.byType(MealsSearchScreen),
+      findsOneWidget,
       reason:
           'Meals branch must restore exactly where it was left, not reset to its home route',
     );
@@ -65,28 +74,19 @@ void main() {
   testWidgets('tapping the active tab again resets its own stack', (
     tester,
   ) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final router = container.read(goRouterProvider);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
+    await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
 
     await tapTab(tester, 'Meals');
-    unawaited(router.push(AppRoutes.mealsSearch.path));
+    unawaited(harness.router.push(AppRoutes.mealsSearch.path));
     await tester.pumpAndSettle();
-    expect(find.text('Search recipes'), findsWidgets);
+    expect(find.byType(MealsSearchScreen), findsOneWidget);
 
     // Tapping the currently-active tab is the RN app's "tap the tab you're
     // already on" reset gesture — it should collapse back to that branch's
     // home route.
     await tapTab(tester, 'Meals');
-    expect(find.text('Meals screen'), findsWidgets);
-    expect(find.text('Search recipes'), findsNothing);
+    expect(find.byType(MealsScreen), findsOneWidget);
+    expect(find.byType(MealsSearchScreen), findsNothing);
   });
 }

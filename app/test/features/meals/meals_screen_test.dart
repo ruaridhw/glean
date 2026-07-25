@@ -11,16 +11,16 @@ import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/router/app_routes.dart';
 
-import 'test_harness.dart';
+import '../../support/harness.dart';
 
 void main() {
   group('MealsScreen — Saved segment', () {
-    late MealsTestHarness harness;
+    late AppTestHarness harness;
     late RecipesRepository recipes;
     late PlanRepository plan;
 
     setUp(() {
-      harness = MealsTestHarness();
+      harness = AppTestHarness();
       final ingredients = IngredientsRepository(harness.db);
       recipes = RecipesRepository(harness.db, ingredients);
       plan = PlanRepository(
@@ -35,6 +35,9 @@ void main() {
       WidgetTester tester,
     ) async {
       await harness.pumpAt(tester, AppRoutes.meals.path);
+      // `pumpAt` deliberately does a single `pump()` — settle the
+      // skeleton→content crossfade and the provider chain resolving.
+      await tester.pumpAndSettle();
 
       expect(find.text('No saved recipes'), findsOneWidget);
     });
@@ -43,13 +46,16 @@ void main() {
       WidgetTester tester,
     ) async {
       await recipes.save(
-        userId: 'user-a',
+        userId: 'test-user',
         externalId: 'ext-1',
         title: 'Tomato Pasta',
         ingredients: const <SaveRecipeIngredient>[],
       );
 
       await harness.pumpAt(tester, AppRoutes.meals.path);
+      // `pumpAt` deliberately does a single `pump()` — settle the
+      // skeleton→content crossfade and the provider chain resolving.
+      await tester.pumpAndSettle();
       expect(find.text('Tomato Pasta'), findsOneWidget);
 
       await tester.tap(find.text('Tomato Pasta'));
@@ -73,19 +79,22 @@ void main() {
       'plan entry with its title snapshot intact (AC-MEAL-03)',
       (WidgetTester tester) async {
         final int recipeId = await recipes.save(
-          userId: 'user-a',
+          userId: 'test-user',
           externalId: 'ext-2',
           title: 'Chicken Curry',
           ingredients: const <SaveRecipeIngredient>[],
         );
         final int entryId = await plan.addEntry(
-          userId: 'user-a',
+          userId: 'test-user',
           recipeId: recipeId,
           recipeTitle: 'Chicken Curry',
           servings: 2,
         );
 
         await harness.pumpAt(tester, AppRoutes.meals.path);
+        // `pumpAt` deliberately does a single `pump()` — settle the
+        // skeleton→content crossfade and the provider chain resolving.
+        await tester.pumpAndSettle();
         expect(find.text('Chicken Curry'), findsOneWidget);
 
         await tester.drag(find.text('Chicken Curry'), const Offset(-600, 0));
@@ -100,7 +109,7 @@ void main() {
         // `Timer.run()`, which the fake-clock zone `testWidgets` normally
         // runs in cannot service, hanging the test.
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           isEmpty,
         );
 
@@ -109,7 +118,7 @@ void main() {
         final entryAfterDelete = (await tester.runAsync(
           () => plan
               .watchWeek(
-                userId: 'user-a',
+                userId: 'test-user',
                 weekStart: startOfWeek(DateTime.now()),
               )
               .first,
@@ -123,7 +132,7 @@ void main() {
         // Undo re-saves it (a new row — SQLite has no "undelete at the same
         // id"), so the library shows it again.
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           hasLength(1),
         );
         expect(find.text('Chicken Curry'), findsOneWidget);

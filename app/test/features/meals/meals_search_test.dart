@@ -12,7 +12,7 @@ import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 
-import 'test_harness.dart';
+import '../../support/harness.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
 
@@ -29,12 +29,12 @@ void main() {
 
   group('MealsScreen — Search segment', () {
     late MockHttpClient httpClient;
-    late MealsTestHarness harness;
+    late AppTestHarness harness;
     late RecipesRepository recipes;
 
     setUp(() {
       httpClient = MockHttpClient();
-      harness = MealsTestHarness(httpClient: httpClient);
+      harness = AppTestHarness(httpClient: httpClient);
       recipes = RecipesRepository(
         harness.db,
         IngredientsRepository(harness.db),
@@ -94,6 +94,7 @@ void main() {
       );
 
       await harness.pumpAt(tester, AppRoutes.meals.path);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Search'));
       await tester.pumpAndSettle();
 
@@ -112,6 +113,7 @@ void main() {
       'tapping a search result previews it without saving (AC-TEST-11)',
       (WidgetTester tester) async {
         await harness.pumpAt(tester, AppRoutes.meals.path);
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Search'));
         await tester.pumpAndSettle();
 
@@ -132,7 +134,7 @@ void main() {
         // repository stream query in a widget test must go through
         // `tester.runAsync` — see `meals_screen_test.dart`'s comment.)
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           isEmpty,
         );
         expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
@@ -142,7 +144,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           hasLength(1),
         );
         expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);

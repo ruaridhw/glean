@@ -116,41 +116,22 @@ unclassifiable item, i.e. worse than the bug §9 set out to fix. Corrected. Watc
 inversion recurring in the data layer and the Pantry/Shop review flows.
 
 ## F-09 — Landing a real Meals screen breaks pre-existing router-owned tests that hard-code its placeholder
-**Status:** OPEN · surfaced by: meals agent · affects: AC-TEST-14, AC-MEAL-07/12
+**Status:** RESOLVED (superseded by F-11) · surfaced by: meals agent · affects: AC-TEST-14, AC-MEAL-07/12
 
-Three router-owned test files assert on the literal placeholder text/behaviour the Meals wave was
-explicitly asked to replace ("replace the router agent's placeholder screens"). They are outside
-this wave's remit (`lib/router/**`, `test/router/**`), so they were not edited, and each will now
-fail against a green Meals implementation:
+Landing the real `MealsScreen`/`SavedRecipeDetail` initially broke several `test/router/*.dart`
+tests two ways: (1) a missing `theme:` in those tests' bare `MaterialApp.router(...)` — see F-11,
+which covers this precisely (`StatefulShellRoute.indexedStack` builds every tab branch eagerly, so
+this hits router tests that look unrelated to Meals too, e.g. `auth_redirect_test.dart`); and
+(2) several assertions hard-coded the placeholder copy ("Meals screen", "Search recipes", "Recipe
+42") this wave was explicitly asked to replace.
 
-- `test/router/route_table_test.dart:66-67` — `AppRoutes.meals.path` expects `find.text('Meals
-  screen')`; the real `MealsScreen` renders a segmented Saved/Search UI instead.
-- `test/router/route_table_test.dart:79-88` — `AppRoutes.mealsSearch.path` expects `'Search
-  recipes'` as the *only* thing on screen and `AppRoutes.mealsImport.path` expects `'Import
-  recipe'`; `mealsSearch` is now an intentionally-dead stub (see below) and `mealsImport` is a
-  real form. `AppRoutes.mealsDetailPath('42')` expects `find.text('Recipe 42')` with
-  `findsOneWidget` for a **non-existent** recipe id 42 against a database with **no
-  `currentUserIdProvider` override at all** — the real `SavedRecipeDetail` will throw
-  `UnimplementedError` reading that provider (it has no default by design) before it ever gets to
-  "recipe not found".
-- `test/router/tab_stack_test.dart:44,50,54,58,83,89,90` — same `'Meals screen'`/`'Search
-  recipes'` placeholder assertions, used here to test tab-stack persistence rather than Meals
-  behaviour itself. The *mechanism* being tested (per-tab `Navigator` state survives a tab
-  switch) is unaffected by this wave; only the literal strings it greps for are stale.
-- `test/router/error_handling_test.dart:68-87` — `'a valid recipe id resolves normally'` calls
-  `container.read(goRouterProvider)` with **no provider overrides**, then asserts `find.text('Recipe
-  7')`. Any real screen reading `currentUserIdProvider`/`gleanDatabaseProvider` (Meals is just the
-  first wave to land one) throws or errors here.
-
-None of these are Meals bugs — they're fixtures written against a placeholder, by design, before
-any wave landed real content, and this wave's own task brief predicts exactly this ("replace the
-router agent's placeholder screens"). Recommended fix, for whichever agent owns `test/router/**`
-next: add `currentUserIdProvider`/`gleanDatabaseProvider` overrides (an in-memory fixture, e.g.
-`test/data/fixture.dart`) to the affected `pumpAt`/`container` setups, and swap the placeholder-text
-assertions for either a structural check (e.g. `find.byType(MealsScreen)`) or a seeded-recipe
-assertion. This same collision will recur for every other tab as its own wave replaces its
-placeholder (Pantry/Plan/Shop/Settings all currently share the same `'<Tab> screen'` pattern) —
-worth fixing once for the pattern rather than once per wave.
+**Re-verified after F-11's fix landed: `flutter test test/router` now passes 21/21.** Both the
+theme wiring (via `test/support/harness.dart`'s `AppTestHarness`) and the placeholder-text
+assertions have already been updated by other agents — no action remains here. Left as a record of
+what broke and why, since the same two-part collision (missing theme + stale placeholder-text
+assertions) will recur for Pantry/Plan/Shop/Settings as their own waves land real screens; F-11's
+`AppTestHarness` prevents the theme half project-wide, and the placeholder-text half needs the same
+per-tab swap `test/router/*.dart` already did for Meals.
 
 Additionally, `AppRoutes.mealsSearch` (`/meals/search`) is now **intentionally dead**: AC-MEAL-07
 requires one inline search affordance inside the Meals tab's Search segment, not a separate pushed
@@ -170,6 +151,12 @@ genuinely require opening an external URL. Both waves have been asked to swap to
 
 Original finding below.
 
+**Meals side done:** `_SourceAttribution` in
+`lib/features/meals/widgets/recipe_detail_view.dart` now calls
+`launchUrl(uri, mode: LaunchMode.externalApplication)` instead of copying to the clipboard, with a
+snackbar only on failure (bad URL or nothing installed to handle it). `flutter analyze`/`flutter
+test` for `lib/features/meals` and `test/features/meals` stay clean — no test taps this row, so no
+platform-channel mock was needed for `url_launcher` itself.
 
 `pubspec.yaml` is orchestrator-owned (module contract), and §2 of the spec doesn't list
 `url_launcher` among the sanctioned packages. AC-MEAL-05 asks for `source_url` to be "tappable
@@ -238,3 +225,27 @@ throwaway test.
 Until this lands, **any** feature screen using `context.tokens` will fail when exercised through
 the router's own test harnesses — this is not specific to AUTH's `SignInScreen`, and will resurface
 for Meals/Plan/Pantry/Shop the moment their real screens replace today's plain-text placeholders.
+
+## F-12 — drift stream cleanup hangs widget tests under FakeAsync
+**Status:** OPEN (needs the harness note applied per-wave) · surfaced by: meals agent
+**Affects:** every feature widget test that touches a drift stream
+
+`testWidgets` runs inside a FakeAsync zone. drift's `StreamQueryStore` defers stream-cancellation
+cleanup through a **real** `Timer.run()`, which FakeAsync never services. The symptom is either a
+hang or:
+
+```
+A Timer is still pending even after the widget tree was disposed.
+Pending timers: Timer (duration: 0:00:00.000000, periodic: false)
+```
+
+The zero duration is the tell — it is `Timer.run()`, **not** an app-level debounce. Two waves hit
+this independently and one initially mistook it for a leaked auto-save timer.
+
+**Fix:** wrap any direct `repository.watchXxx(...).first` (or similar stream read) in a widget test
+with `tester.runAsync(...)`, which escapes the FakeAsync zone so the cleanup timer can fire. This
+is a **test-harness** issue, not a production defect — no fix belongs in `lib/`.
+
+Watch for the misdiagnosis: an auto-save or debounce timer in the widget under test is the obvious
+suspect and the wrong one. Check the pending timer's *duration* first — a real debounce shows its
+configured duration, this shows zero.

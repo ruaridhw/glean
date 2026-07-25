@@ -11,7 +11,7 @@ import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 
-import 'test_harness.dart';
+import '../../support/harness.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
 
@@ -44,12 +44,12 @@ void main() {
 
   group('MealsImportScreen', () {
     late MockHttpClient httpClient;
-    late MealsTestHarness harness;
+    late AppTestHarness harness;
     late RecipesRepository recipes;
 
     setUp(() {
       httpClient = MockHttpClient();
-      harness = MealsTestHarness(httpClient: httpClient);
+      harness = AppTestHarness(httpClient: httpClient);
       recipes = RecipesRepository(
         harness.db,
         IngredientsRepository(harness.db),
@@ -77,12 +77,13 @@ void main() {
       ).thenAnswer((_) async => _importResponse('ext-new', 'Miso Soup'));
 
       await harness.pumpAt(tester, AppRoutes.mealsImport.path);
+      await tester.pumpAndSettle();
       await enterAndImport(tester, 'https://example.com/miso');
 
       // A raw repository stream query in a widget test must go through
       // `tester.runAsync` — see `meals_screen_test.dart`'s comment.
       expect(
-        await tester.runAsync(() => recipes.watchSaved('user-a').first),
+        await tester.runAsync(() => recipes.watchSaved('test-user').first),
         hasLength(1),
       );
       expect(
@@ -98,7 +99,7 @@ void main() {
       'dedupes an already-saved external id and says "already saved"',
       (WidgetTester tester) async {
         await recipes.save(
-          userId: 'user-a',
+          userId: 'test-user',
           externalId: 'ext-dupe',
           title: 'Already Here',
           ingredients: const <SaveRecipeIngredient>[],
@@ -113,12 +114,13 @@ void main() {
         ).thenAnswer((_) async => _importResponse('ext-dupe', 'Already Here'));
 
         await harness.pumpAt(tester, AppRoutes.mealsImport.path);
+        await tester.pumpAndSettle();
         await enterAndImport(tester, 'https://example.com/dupe');
 
         expect(find.text('Already saved'), findsOneWidget);
         // No duplicate row was inserted for the same external id.
         expect(
-          await tester.runAsync(() => recipes.watchSaved('user-a').first),
+          await tester.runAsync(() => recipes.watchSaved('test-user').first),
           hasLength(1),
         );
       },

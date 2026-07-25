@@ -1,14 +1,29 @@
 // Route-table structure (AC-TEST-14): the five tab branches exist, every
 // route resolves to real content, names are unique, and the intake flow
 // resolves outside the tab shell (no `NavigationBar` while it's active).
+//
+// Assertions here are structural (which screen *class* is mounted, whether
+// a `NavigationBar` is present) rather than textual — feature waves replace
+// placeholder copy wholesale, and routing correctness must not depend on it.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/features/auth/sign_in_screen.dart';
+import 'package:glean/features/intake/manual_entry_screen.dart';
+import 'package:glean/features/intake/pantry_describe_screen.dart';
+import 'package:glean/features/intake/shop_describe_screen.dart';
+import 'package:glean/features/meals/meal_detail_screen.dart';
+import 'package:glean/features/meals/meals_import_screen.dart';
+import 'package:glean/features/meals/meals_screen.dart';
+import 'package:glean/features/meals/meals_search_screen.dart';
+import 'package:glean/features/pantry/pantry_screen.dart';
+import 'package:glean/features/plan/plan_screen.dart';
+import 'package:glean/features/settings/settings_screen.dart';
+import 'package:glean/features/shop/shop_screen.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/auth_state.dart';
-import 'package:glean/router/router.dart';
-import 'package:go_router/go_router.dart';
+
+import '../support/harness.dart';
 
 void main() {
   group('AppRoutes structure', () {
@@ -38,64 +53,62 @@ void main() {
   });
 
   group('goRouterProvider resolves every route', () {
-    late ProviderContainer container;
-    late GoRouter router;
+    late AppTestHarness harness;
 
     setUp(() {
-      container = ProviderContainer();
-      router = container.read(goRouterProvider);
+      harness = AppTestHarness();
     });
 
-    tearDown(() => container.dispose());
+    tearDown(() => harness.dispose());
 
     Future<void> pumpAt(WidgetTester tester, String location) async {
-      router.go(location);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
+      await harness.pumpAt(tester, location);
       await tester.pumpAndSettle();
     }
 
-    testWidgets('each tab branch root renders its placeholder', (tester) async {
+    testWidgets('each tab branch root resolves to its own screen widget', (
+      tester,
+    ) async {
       await pumpAt(tester, AppRoutes.pantry.path);
-      expect(find.text('Pantry screen'), findsWidgets);
+      expect(find.byType(PantryScreen), findsOneWidget);
 
       await pumpAt(tester, AppRoutes.meals.path);
-      expect(find.text('Meals screen'), findsWidgets);
+      expect(find.byType(MealsScreen), findsOneWidget);
 
       await pumpAt(tester, AppRoutes.plan.path);
-      expect(find.text('Plan screen'), findsWidgets);
+      expect(find.byType(PlanScreen), findsOneWidget);
 
       await pumpAt(tester, AppRoutes.shop.path);
-      expect(find.text('Shop screen'), findsWidgets);
+      expect(find.byType(ShopScreen), findsOneWidget);
 
       await pumpAt(tester, AppRoutes.settings.path);
-      expect(find.text('Settings screen'), findsWidgets);
+      expect(find.byType(SettingsScreen), findsOneWidget);
     });
 
     testWidgets('nested meals routes resolve within the shell', (tester) async {
       await pumpAt(tester, AppRoutes.mealsSearch.path);
-      expect(find.text('Search recipes'), findsWidgets);
+      expect(find.byType(MealsSearchScreen), findsOneWidget);
 
       await pumpAt(tester, AppRoutes.mealsImport.path);
-      expect(find.text('Import recipe'), findsWidgets);
+      expect(find.byType(MealsImportScreen), findsOneWidget);
 
+      // A syntactically-valid id must reach the screen — whether that
+      // specific recipe exists in the database is a data/feature concern,
+      // not routing's. See error_handling_test.dart for the format guard
+      // that *does* belong to routing (a non-numeric id never gets here).
       await pumpAt(tester, AppRoutes.mealsDetailPath('42'));
-      expect(find.text('Recipe 42'), findsOneWidget);
+      expect(find.byType(MealDetailScreen), findsOneWidget);
     });
 
     testWidgets('sign-in resolves outside the shell', (tester) async {
       // Signed-in users get bounced off /sign-in by design (see
       // auth_redirect_test.dart) — go signedOut here to test that the route
       // itself resolves, independent of that redirect policy.
-      container
+      harness.container
           .read(authStatusProvider.notifier)
           .setStatus(AuthStatus.signedOut);
       await pumpAt(tester, AppRoutes.signIn.path);
-      expect(find.text('Sign in'), findsWidgets);
+      expect(find.byType(SignInScreen), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
     });
 
@@ -103,7 +116,7 @@ void main() {
       tester,
     ) async {
       await pumpAt(tester, AppRoutes.intakeManualEntry.path);
-      expect(find.text('Add item'), findsWidgets);
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
       expect(
         find.byType(NavigationBar),
         findsNothing,
@@ -112,11 +125,11 @@ void main() {
       );
 
       await pumpAt(tester, AppRoutes.intakeDescribePantry.path);
-      expect(find.text('Describe your shop'), findsWidgets);
+      expect(find.byType(PantryDescribeScreen), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
 
       await pumpAt(tester, AppRoutes.intakeDescribeShop.path);
-      expect(find.text('Describe list'), findsWidgets);
+      expect(find.byType(ShopDescribeScreen), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
     });
   });
