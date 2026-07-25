@@ -96,7 +96,9 @@ List<String> _logicalLines(String contents) {
     final String trimmedEnd = rawLine.replaceFirst(RegExp(r'\s+$'), '');
     final bool continues =
         trimmedEnd.endsWith(r'\') && !trimmedEnd.endsWith(r'\\');
-    pending.write(continues ? trimmedEnd.substring(0, trimmedEnd.length - 1) : rawLine);
+    pending.write(
+      continues ? trimmedEnd.substring(0, trimmedEnd.length - 1) : rawLine,
+    );
     if (continues) {
       pending.write(' ');
     } else {
@@ -145,11 +147,11 @@ String? _shInvocationBody(String contents) {
 /// and mentions `main_e2e` — the one pattern that must never exist, however
 /// the source happens to be wrapped across physical lines.
 List<String> _sameStatementViolations(String contents) => <String>[
-      for (final String line in _logicalLines(contents))
-        if (_releaseBuildInvocation.hasMatch(line) &&
-            _mainE2eMention.hasMatch(line))
-          line.trim(),
-    ];
+  for (final String line in _logicalLines(contents))
+    if (_releaseBuildInvocation.hasMatch(line) &&
+        _mainE2eMention.hasMatch(line))
+      line.trim(),
+];
 
 void main() {
   group('release lanes never target the e2e entrypoint', () {
@@ -189,9 +191,9 @@ void main() {
         // however many physical lines/string literals it was wrapped
         // across (both Fastfiles concatenate two string literals with a
         // trailing `\` continuation).
-        final List<String> joined = _logicalLines(shBody!)
-            .where((String line) => line.trim().isNotEmpty)
-            .toList();
+        final List<String> joined = _logicalLines(
+          shBody!,
+        ).where((String line) => line.trim().isNotEmpty).toList();
         expect(
           joined,
           hasLength(1),
@@ -213,9 +215,7 @@ void main() {
         // immune to line formatting: however the statement is wrapped,
         // once joined there is exactly one target value, and it must be
         // lib/main.dart.
-        final RegExpMatch? targetMatch = _targetFlag.firstMatch(
-          buildStatement,
-        );
+        final RegExpMatch? targetMatch = _targetFlag.firstMatch(buildStatement);
         expect(
           targetMatch,
           isNotNull,

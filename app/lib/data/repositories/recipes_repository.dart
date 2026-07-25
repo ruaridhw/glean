@@ -145,7 +145,11 @@ class RecipesRepository {
       for (final ing in ingredients) {
         // Recipe endpoints don't return a category (§9 scope is the parse
         // endpoints only), so this ingredient may stay null-categoried
-        // until a pantry/shopping resolution upgrades it.
+        // until a pantry/shopping resolution upgrades it. Deliberately no
+        // `unit:` either (R-18): a recipe's unit reflects that recipe's
+        // phrasing ("2 cloves"), not how the ingredient is actually
+        // stocked, and would be the wrong thing to lock in as the pantry
+        // normalization target.
         final ingredient = await _ingredients.resolveOrCreate(
           canonicalName: ing.canonicalName,
           apiIngredientId: ing.apiIngredientId,

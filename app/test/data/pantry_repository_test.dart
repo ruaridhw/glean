@@ -131,9 +131,13 @@ void main() {
     );
 
     test(
-      'addItem normalizes units into the ingredient canonical unit',
+      'addItem normalizes units into the ingredient canonical unit '
+      '(R-18 — even the very first add, which is also what sets the target)',
       () async {
-        // Establish a canonical unit of 'g' for flour via a first add in kg.
+        // 'plain flour' is a seeded staple with no canonicalUnit yet. This
+        // first add both establishes it (as 'g', derived from 'kg' — see
+        // `IngredientsRepository.resolveOrCreate`) and is itself normalized
+        // into it in the same call, rather than being stored as raw kg.
         await repository.addItem(
           userId: userId,
           name: 'plain flour',
@@ -144,13 +148,72 @@ void main() {
         );
 
         final items = await repository.watchAll(userId).first;
-        // 'plain flour' is a staple with no canonical_unit set, so no
-        // normalization target exists yet and the raw unit is kept — this
-        // documents current behaviour rather than asserting a conversion.
-        expect(items.single.unit, 'kg');
-        expect(items.single.quantity, 1);
+        expect(items.single.unit, 'g');
+        expect(items.single.quantity, 1000);
       },
     );
+
+    test('a mixed-unit top-up converts and sums correctly instead of '
+        'corrupting the quantity (R-18 regression)', () async {
+      // The exact scenario R-18 describes: "2 kg flour" then "500 g
+      // flour" must total 2500g, never the RN/pre-fix bug's "502 kg".
+      await repository.addItem(
+        userId: userId,
+        name: 'plain flour',
+        quantity: 2,
+        unit: 'kg',
+        category: 'grains',
+        now: DateTime(2026, 1, 1),
+      );
+      await repository.addItem(
+        userId: userId,
+        name: 'plain flour',
+        quantity: 500,
+        unit: 'g',
+        category: 'grains',
+        now: DateTime(2026, 1, 3),
+      );
+
+      final items = await repository.watchAll(userId).first;
+      expect(items, hasLength(1));
+      expect(items.single.unit, 'g');
+      expect(items.single.quantity, 2500);
+    });
+
+    test('a genuinely incompatible unit merge throws rather than silently '
+        'summing under the wrong unit (R-18)', () async {
+      // First add establishes 'units' as garlic's canonical unit (not a
+      // recognised mass/volume unit, so it becomes the literal unit).
+      await repository.addItem(
+        userId: userId,
+        name: 'garlic',
+        quantity: 3,
+        unit: 'units',
+        category: 'alliums',
+        now: DateTime(2026, 1, 1),
+      );
+
+      // A later add in a mass unit has no conversion path to 'units' and
+      // no density entry either — must fail loudly, not sum 3 + 50 under
+      // 'units'.
+      await expectLater(
+        repository.addItem(
+          userId: userId,
+          name: 'garlic',
+          quantity: 50,
+          unit: 'g',
+          category: 'alliums',
+          now: DateTime(2026, 1, 2),
+        ),
+        throwsA(isA<PantryUnitMismatchException>()),
+      );
+
+      // The original row must survive untouched — the whole point of
+      // failing loudly instead of merging.
+      final items = await repository.watchAll(userId).first;
+      expect(items.single.quantity, 3);
+      expect(items.single.unit, 'units');
+    });
 
     test('updateItem changes only the fields provided', () async {
       final now = DateTime(2026, 1, 1);

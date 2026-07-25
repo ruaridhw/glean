@@ -45,6 +45,32 @@ class PantryCookDelta {
   final String? previousLastUsedAt;
 }
 
+/// Thrown by [PantryRepository.addItem] (via `_upsert`) when an add would
+/// merge into an existing pantry row under a unit no conversion path
+/// connects to that row's actual unit — e.g. an ingredient already stocked
+/// in `'g'` being added to in `'units'`. Summing across incompatible units
+/// would silently corrupt the quantity (R-18); this fails loudly instead, so
+/// the caller's existing catch-and-`GleanSnackBar` path (`ReviewScreen`,
+/// `ManualEntryScreen`) surfaces it rather than the pantry quietly holding a
+/// wrong number.
+class PantryUnitMismatchException implements Exception {
+  const PantryUnitMismatchException({
+    required this.ingredientId,
+    required this.existingUnit,
+    required this.incomingUnit,
+  });
+
+  final int ingredientId;
+  final String existingUnit;
+  final String incomingUnit;
+
+  @override
+  String toString() =>
+      'PantryUnitMismatchException: cannot merge $incomingUnit into the '
+      'existing pantry row for ingredient $ingredientId, stocked in '
+      '$existingUnit — no conversion path exists between them.';
+}
+
 class PantryRepository {
   PantryRepository(this._db, this._ingredients);
 
@@ -188,9 +214,14 @@ class PantryRepository {
     DateTime? now,
   }) async {
     final effectiveNow = now ?? DateTime.now();
+    // `unit` seeds/upgrades `canonicalUnit` on first resolution (R-18) — see
+    // `IngredientsRepository.resolveOrCreate` for the rule — so the
+    // `normalizeUnit` call immediately below always has a target, including
+    // on this very first add.
     final ingredient = await _ingredients.resolveOrCreate(
       canonicalName: name,
       category: category,
+      unit: unit,
     );
     final normalized = normalizeUnit(
       quantity: quantity,
@@ -204,6 +235,7 @@ class PantryRepository {
     await _upsert(
       userId: userId,
       ingredientId: ingredient.id,
+      canonicalName: ingredient.canonicalName,
       quantity: normalized?.quantity ?? quantity,
       unit: normalized?.unit ?? unit,
       unitPrice: unitPrice,
@@ -251,9 +283,13 @@ class PantryRepository {
     return row.shelfLifeDays;
   }
 
+  /// [canonicalName] is only needed for the density fallback in the
+  /// mismatch-reconciliation path below — it plays no part when [unit]
+  /// already matches the existing row.
   Future<void> _upsert({
     required String userId,
     required int ingredientId,
+    required String canonicalName,
     required double quantity,
     required String unit,
     double? unitPrice,
@@ -268,11 +304,40 @@ class PantryRepository {
             .getSingleOrNull();
 
     if (existing != null) {
+      // `unit` reaching here should already have been normalized into the
+      // ingredient's `canonicalUnit` by `addItem`, so this ordinarily
+      // matches `existing.unit` already. This is still the last line of
+      // defence against R-18 (mixed-unit pantry adds silently summing under
+      // the wrong unit) rather than trusting that upstream normalization
+      // always ran cleanly — e.g. a row that predates `canonicalUnit` being
+      // set at all, or an ingredient whose canonical unit has no
+      // conversion path from the incoming one. Re-normalize straight
+      // against *this row's own* unit — the ground truth of what's actually
+      // on the shelf — before deciding whether to merge.
+      final normalizedUnit = unit.toLowerCase().trim();
+      double mergeQuantity = quantity;
+      if (normalizedUnit != existing.unit) {
+        final reconciled = normalizeUnit(
+          quantity: quantity,
+          unit: unit,
+          canonicalUnit: existing.unit,
+          canonicalName: canonicalName,
+        );
+        if (reconciled == null) {
+          throw PantryUnitMismatchException(
+            ingredientId: ingredientId,
+            existingUnit: existing.unit,
+            incomingUnit: unit,
+          );
+        }
+        mergeQuantity = reconciled.quantity;
+      }
+
       await (_db.update(
         _db.pantryItems,
       )..where((t) => t.id.equals(existing.id))).write(
         PantryItemsCompanion(
-          quantity: Value(existing.quantity + quantity),
+          quantity: Value(existing.quantity + mergeQuantity),
           unitPrice: unitPrice != null
               ? Value(unitPrice)
               : const Value.absent(),
@@ -364,10 +429,19 @@ class PantryRepository {
     );
   }
 
-  /// Reverses [decrementForCook] exactly: restores the applied quantity and
-  /// the prior `lastUsedAt`. If the user deleted the pantry row after
-  /// cooking, recreates it best-effort (there is no prior expiry to
-  /// restore in that case).
+  /// Reverses [decrementForCook] exactly: restores the applied quantity
+  /// always, and the prior `lastUsedAt` only when [restoreLastUsedAt] is
+  /// true. If the user deleted the pantry row after cooking, recreates it
+  /// best-effort (there is no prior expiry to restore in that case).
+  ///
+  /// [restoreLastUsedAt] defaults to `true` for direct callers (e.g.
+  /// `test/data/pantry_repository_test.dart`'s single-cook case, where
+  /// there is nothing else to clobber). `PlanRepository.undoCooked` passes
+  /// it explicitly (R-15): quantity is additive and safe to always restore,
+  /// but `lastUsedAt` is last-writer-wins, so undoing an *earlier* cook
+  /// while a *later* one on the same ingredient is still standing must
+  /// leave the later cook's timestamp alone rather than overwrite it with
+  /// the earlier cook's stale snapshot.
   Future<void> restoreFromCook({
     required String userId,
     required int ingredientId,
@@ -375,6 +449,7 @@ class PantryRepository {
     required String unit,
     required String? previousLastUsedAt,
     required DateTime now,
+    bool restoreLastUsedAt = true,
   }) async {
     final row =
         await (_db.select(_db.pantryItems)..where(
@@ -384,6 +459,9 @@ class PantryRepository {
             .getSingleOrNull();
 
     if (row == null) {
+      // Nothing exists to "leave alone" — there is no current value, only
+      // the snapshot this adjustment carries — so restore it regardless of
+      // [restoreLastUsedAt].
       await _db
           .into(_db.pantryItems)
           .insert(
@@ -404,7 +482,9 @@ class PantryRepository {
     )..where((t) => t.id.equals(row.id))).write(
       PantryItemsCompanion(
         quantity: Value(row.quantity + amount),
-        lastUsedAt: Value(previousLastUsedAt),
+        lastUsedAt: restoreLastUsedAt
+            ? Value(previousLastUsedAt)
+            : const Value.absent(),
         updatedAt: Value(now.toIso8601String()),
       ),
     );

@@ -3,32 +3,28 @@
 /// app restarts**, per this wave's brief, which explicitly directs deciding
 /// persistence via `user_config`.
 ///
-/// **Required follow-up for the Data module**: `user_config`
-/// (`lib/data/tables.dart`) has no "has completed onboarding" column today,
-/// and `lib/data/**` is outside this wave's ownership (IMPLEMENTATION.md's
-/// module contract; that module is being actively edited in parallel).
-/// [FileOnboardingStatusStore] below is a deliberately small, fully
-/// self-contained substitute using `path_provider` (already a declared
-/// dependency — no `pubspec.yaml` change needed): a plain text file of user
-/// ids who have finished or skipped setup, one per line. It is designed to
-/// be swapped for a `UserConfigRepository`-backed implementation later
-/// without any call site changing — only [OnboardingStatusStore]'s
-/// production instance in [onboardingStatusStoreProvider] would need to
-/// change.
+/// R-04 (.scratch/flutter-port/REMEDIATION.md): the original version of this
+/// file wrote completed user ids to a standalone `onboarding_completed.txt`
+/// via `path_provider`, because `user_config` (`lib/data/tables.dart`) had no
+/// "has completed onboarding" column yet and that table was outside this
+/// wave's ownership. That column now exists (`UserConfig.onboardingCompleted`)
+/// and [UserConfigOnboardingStatusStore] backs this interface with it, so
+/// SQLite is once again the sole source of truth for user data (§3) — no
+/// text file, no `path_provider` read here. Only [OnboardingStatusStore]'s
+/// production instance in [onboardingStatusStoreProvider] changed; every
+/// call site ([OnboardingGate], `onboarding_screen.dart`) is untouched.
 ///
 /// Modelled the same way as every drift-backed read in this app: a mutation
 /// ([markCompleted]) just writes, and [watch] is a stream that re-emits on
-/// its own — no `ref.invalidate` anywhere (mirrors AC-DATA-04/05's rule for
-/// `lib/data/**`, applied here on principle even though this file sits
-/// outside that module).
+/// its own — no `ref.invalidate` anywhere (AC-DATA-04/05).
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/providers/database_providers.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:glean/data/providers/repository_providers.dart';
+import 'package:glean/data/repositories/user_config_repository.dart';
 
 abstract class OnboardingStatusStore {
   /// Emits the current "has completed" value for [userId] immediately, then
@@ -38,40 +34,20 @@ abstract class OnboardingStatusStore {
   Future<void> markCompleted(String userId);
 }
 
-class FileOnboardingStatusStore implements OnboardingStatusStore {
-  final Map<String, StreamController<bool>> _controllers =
-      <String, StreamController<bool>>{};
+/// Production [OnboardingStatusStore]: a thin adapter over
+/// [UserConfigRepository]'s `onboardingCompleted` column (R-04).
+class UserConfigOnboardingStatusStore implements OnboardingStatusStore {
+  UserConfigOnboardingStatusStore(this._repository);
 
-  Future<File> _file() async {
-    final Directory dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/onboarding_completed.txt');
-  }
-
-  Future<Set<String>> _readCompletedIds() async {
-    final File file = await _file();
-    if (!await file.exists()) return <String>{};
-    final List<String> lines = await file.readAsLines();
-    return lines.where((String line) => line.trim().isNotEmpty).toSet();
-  }
-
-  StreamController<bool> _controllerFor(String userId) => _controllers
-      .putIfAbsent(userId, () => StreamController<bool>.broadcast());
+  final UserConfigRepository _repository;
 
   @override
-  Stream<bool> watch(String userId) async* {
-    yield (await _readCompletedIds()).contains(userId);
-    yield* _controllerFor(userId).stream;
-  }
+  Stream<bool> watch(String userId) =>
+      _repository.watchOnboardingCompleted(userId);
 
   @override
-  Future<void> markCompleted(String userId) async {
-    final Set<String> completed = await _readCompletedIds();
-    if (!completed.contains(userId)) {
-      final File file = await _file();
-      await file.writeAsString('$userId\n', mode: FileMode.append);
-    }
-    _controllerFor(userId).add(true);
-  }
+  Future<void> markCompleted(String userId) =>
+      _repository.markOnboardingCompleted(userId);
 }
 
 /// A fake [OnboardingStatusStore] for widget/unit tests — avoids exercising
@@ -103,7 +79,11 @@ class InMemoryOnboardingStatusStore implements OnboardingStatusStore {
 }
 
 final Provider<OnboardingStatusStore> onboardingStatusStoreProvider =
-    Provider<OnboardingStatusStore>((Ref ref) => FileOnboardingStatusStore());
+    Provider<OnboardingStatusStore>(
+      (Ref ref) => UserConfigOnboardingStatusStore(
+        ref.watch(userConfigRepositoryProvider),
+      ),
+    );
 
 final StreamProvider<bool> hasCompletedOnboardingProvider =
     StreamProvider<bool>((Ref ref) {

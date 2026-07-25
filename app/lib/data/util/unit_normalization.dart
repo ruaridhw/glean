@@ -62,6 +62,22 @@ const Map<String, double> _ingredientDensity = {
   'water': 1.0,
 };
 
+/// The canonical unit a *newly-resolved* ingredient should normalise into,
+/// derived from the first unit it was ever added under (see
+/// `IngredientsRepository.resolveOrCreate`, R-18). A recognised mass/volume
+/// unit resolves to its common base (`'g'` for mass, `'ml'` for volume) —
+/// e.g. a first add in `'kg'` yields `'g'`, so a later add in plain `'g'`
+/// still merges correctly, and the first add itself gets normalised too. An
+/// unrecognised, typically count-based unit (`'unit'`, `'clove'`, `'punnet'`,
+/// ...) has no conversion target, so it becomes the canonical unit verbatim
+/// — a later add in a genuinely different, unconvertible unit then has
+/// something concrete to fail loudly against, instead of silently summing
+/// (see `PantryRepository._upsert`).
+String canonicalUnitFor(String unit) {
+  final normalized = unit.toLowerCase().trim();
+  return _unitConversions[normalized]?.to ?? normalized;
+}
+
 enum NormalizeSource { identity, lookup, density }
 
 class NormalizeResult {

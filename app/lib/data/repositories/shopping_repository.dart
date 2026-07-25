@@ -61,6 +61,10 @@ class ShoppingRepository {
   /// unlike pantry intake this does not require one; if the ingredient
   /// already exists with a category, that is left untouched, and if not, it
   /// simply stays uncategorised until something else resolves it.
+  ///
+  /// [unit], when given, also seeds/upgrades `canonicalUnit` (R-18) via
+  /// `IngredientsRepository.resolveOrCreate` — a manual shopping entry is a
+  /// real stock-tracking unit like a pantry add, unlike a recipe's.
   Future<int> addManualItem({
     required String userId,
     required String name,
@@ -75,6 +79,7 @@ class ShoppingRepository {
     final ingredient = await _ingredients.resolveOrCreate(
       canonicalName: trimmed,
       category: category,
+      unit: unit,
     );
     return _db
         .into(_db.shoppingListItems)
@@ -91,9 +96,10 @@ class ShoppingRepository {
 
   /// Adds AI-parsed items (receipt describe / shopping description parse),
   /// each resolved to a real ingredient identity with the category the
-  /// backend returned (§9). Runs as a single transaction (AC-PAN-10): a
-  /// failure partway through the list persists nothing, so retrying can't
-  /// double-insert the rows that already succeeded.
+  /// backend returned (§9), also seeding/upgrading `canonicalUnit` (R-18)
+  /// from its parsed unit for the same reason. Runs as a single transaction
+  /// (AC-PAN-10): a failure partway through the list persists nothing, so
+  /// retrying can't double-insert the rows that already succeeded.
   Future<void> addAiItems({
     required String userId,
     required List<AiShoppingItem> items,
@@ -107,6 +113,7 @@ class ShoppingRepository {
           canonicalName: name,
           apiIngredientId: item.apiIngredientId,
           category: item.category,
+          unit: unit,
         );
         await _db
             .into(_db.shoppingListItems)

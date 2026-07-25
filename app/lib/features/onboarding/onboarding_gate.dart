@@ -1,15 +1,12 @@
 /// The integration seam for showing [OnboardingScreen] at all.
 ///
-/// **Required follow-up for the Router module**: nothing in `lib/router/**`
-/// currently mounts this. Wrap the shell it builds — in
-/// `lib/router/router.dart`'s `StatefulShellRoute.indexedStack`, that's
-/// `AppShell(navigationShell: navigationShell)` — as
-/// `OnboardingGate(child: AppShell(navigationShell: navigationShell))`. That
-/// is the entire integration: this widget already does the rest (checking
-/// first-run status, showing/hiding itself, and — once finished — getting
-/// out of the way so `child` renders). Until that one-line change lands,
-/// [OnboardingScreen] is fully built and tested in isolation
-/// (`test/features/onboarding/`) but unreachable through real navigation.
+/// Wired into `lib/router/router.dart`'s `StatefulShellRoute.indexedStack`
+/// (R-04/R-01, .scratch/flutter-port/REMEDIATION.md): the builder there wraps
+/// `AppShell(navigationShell: navigationShell)` in
+/// `OnboardingGate(child: ...)`, so a first-run user lands on
+/// [OnboardingScreen] instead of any tab, and a returning user passes
+/// straight through. See `test/router/onboarding_gate_wiring_test.dart` for
+/// the proof through the real route table.
 ///
 /// Deliberately placed *inside* the router's widget tree (rather than
 /// wrapping `MaterialApp.router` in `lib/app.dart`, which is

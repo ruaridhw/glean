@@ -42,11 +42,7 @@ void main() {
   ) async {
     final harness = AppTestHarness(
       userId: _userId,
-      overrides: [
-        onboardingStatusStoreProvider.overrideWithValue(
-          InMemoryOnboardingStatusStore(),
-        ),
-      ],
+      onboardingStatusStore: InMemoryOnboardingStatusStore(),
     );
     addTearDown(harness.dispose);
 
@@ -63,11 +59,9 @@ void main() {
   ) async {
     final harness = AppTestHarness(
       userId: _userId,
-      overrides: [
-        onboardingStatusStoreProvider.overrideWithValue(
-          InMemoryOnboardingStatusStore(initiallyCompleted: <String>{_userId}),
-        ),
-      ],
+      onboardingStatusStore: InMemoryOnboardingStatusStore(
+        initiallyCompleted: <String>{_userId},
+      ),
     );
     addTearDown(harness.dispose);
 
@@ -85,7 +79,7 @@ void main() {
       final store = InMemoryOnboardingStatusStore();
       final harness = AppTestHarness(
         userId: _userId,
-        overrides: [onboardingStatusStoreProvider.overrideWithValue(store)],
+        onboardingStatusStore: store,
       );
       addTearDown(harness.dispose);
 

@@ -20,6 +20,7 @@ import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/design_system/design_system.dart';
+import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -36,6 +37,18 @@ class AppTestHarness {
     this.userId = 'test-user',
     http.Client? httpClient,
     Haptics? haptics,
+    // R-01: `OnboardingGate` now wraps the real tab shell, so every widget
+    // test that pumps straight to a tab needs a resolved "already
+    // onboarded" status by default — otherwise the hundreds of existing
+    // screen tests across every feature would suddenly land on
+    // `OnboardingScreen` instead. A test that wants to exercise the gate
+    // itself (see `test/router/onboarding_gate_wiring_test.dart`) passes
+    // its own store here, e.g. `InMemoryOnboardingStatusStore()`. A named
+    // parameter rather than a generic `overrides` entry, like [haptics] and
+    // [httpClient] above — Riverpod asserts if the same provider is
+    // overridden twice in one `ProviderContainer`, so this and a
+    // caller-supplied `overrides` entry for the same provider can't coexist.
+    OnboardingStatusStore? onboardingStatusStore,
     List<Override> overrides = const <Override>[],
   }) : haptics = haptics ?? RecordingHaptics(),
        db = createTestDatabase() {
@@ -47,6 +60,12 @@ class AppTestHarness {
         // request should fail fast rather than reach the network.
         apiBaseUrlProvider.overrideWithValue('http://localhost:9999'),
         hapticsProvider.overrideWithValue(this.haptics),
+        onboardingStatusStoreProvider.overrideWithValue(
+          onboardingStatusStore ??
+              InMemoryOnboardingStatusStore(
+                initiallyCompleted: <String>{userId},
+              ),
+        ),
         if (httpClient != null)
           httpClientProvider.overrideWithValue(httpClient),
         ...overrides,

@@ -119,5 +119,92 @@ void main() {
         );
       },
     );
+
+    group('canonicalUnit (R-18)', () {
+      test(
+        'a recognised mass unit sets canonicalUnit to its base (g)',
+        () async {
+          final ingredient = await repository.resolveOrCreate(
+            canonicalName: 'beef mince',
+            category: 'red_meat',
+            unit: 'kg',
+          );
+
+          expect(ingredient.canonicalUnit, 'g');
+        },
+      );
+
+      test(
+        'a recognised volume unit sets canonicalUnit to its base (ml)',
+        () async {
+          final ingredient = await repository.resolveOrCreate(
+            canonicalName: 'whole milk',
+            category: 'dairy',
+            unit: 'l',
+          );
+
+          expect(ingredient.canonicalUnit, 'ml');
+        },
+      );
+
+      test('an unrecognised, count-based unit becomes the canonical unit '
+          'verbatim', () async {
+        final ingredient = await repository.resolveOrCreate(
+          canonicalName: 'lemon',
+          category: 'citrus',
+          unit: 'unit',
+        );
+
+        expect(ingredient.canonicalUnit, 'unit');
+      });
+
+      test('no unit given leaves canonicalUnit null', () async {
+        final ingredient = await repository.resolveOrCreate(
+          canonicalName: 'harissa paste',
+          category: 'condiments',
+        );
+
+        expect(ingredient.canonicalUnit, isNull);
+      });
+
+      test('upgrades a null canonicalUnit on an existing ingredient instead '
+          'of keeping it null forever', () async {
+        // Simulates an ingredient first resolved with no unit at all
+        // (recipe import never passes one — see recipes_repository.dart).
+        final fromRecipeImport = await repository.resolveOrCreate(
+          canonicalName: 'harissa paste',
+        );
+        expect(fromRecipeImport.canonicalUnit, isNull);
+
+        final fromPantryIntake = await repository.resolveOrCreate(
+          canonicalName: 'harissa paste',
+          unit: 'g',
+        );
+
+        expect(fromPantryIntake.id, fromRecipeImport.id);
+        expect(fromPantryIntake.canonicalUnit, 'g');
+
+        final persisted = await (db.select(
+          db.ingredients,
+        )..where((t) => t.id.equals(fromRecipeImport.id))).getSingle();
+        expect(persisted.canonicalUnit, 'g');
+      });
+
+      test('never changes an already-set canonicalUnit', () async {
+        final first = await repository.resolveOrCreate(
+          canonicalName: 'beef mince',
+          unit: 'kg', // -> 'g'
+        );
+        expect(first.canonicalUnit, 'g');
+
+        final second = await repository.resolveOrCreate(
+          canonicalName: 'beef mince',
+          unit: 'l', // would be 'ml' if this were allowed to overwrite
+        );
+
+        expect(second.id, first.id);
+        expect(second.canonicalUnit, 'g');
+      });
+    });
   });
 }

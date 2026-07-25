@@ -496,6 +496,132 @@ void main() {
           );
         },
       );
+
+      test('undoing an earlier cook does not clobber a later cook\'s '
+          'lastUsedAt while the later cook is still standing (R-15)', () async {
+        await pantryRepository.addItem(
+          userId: userId,
+          name: 'chicken breast',
+          quantity: 1000,
+          unit: 'g',
+          category: 'poultry',
+          now: DateTime(2026, 1, 1),
+        );
+        final recipeId = await saveChickenRecipe();
+        final week = startOfWeek(DateTime(2026, 1, 5));
+        // Two separate plan entries for the same recipe/ingredient — e.g.
+        // chicken dinner planned twice in the same week.
+        final entryA = await repository.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: 'Chicken dinner',
+          servings: 1, // 200g
+          plannedDate: week,
+        );
+        final entryB = await repository.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: 'Chicken dinner',
+          servings: 1, // 200g
+          plannedDate: week,
+        );
+
+        await repository.markCooked(
+          entryId: entryA,
+          userId: userId,
+          now: DateTime(2026, 1, 6),
+        );
+        await repository.markCooked(
+          entryId: entryB,
+          userId: userId,
+          now: DateTime(2026, 1, 7),
+        );
+        var pantry = (await pantryRepository.watchAll(userId).first).single;
+        expect(pantry.quantity, 600); // 1000 - 200 - 200
+        expect(pantry.lastUsedAt, DateTime(2026, 1, 7)); // B's cook
+
+        // Undo the earlier cook (A) while B is still cooked.
+        await repository.undoCooked(
+          entryId: entryA,
+          userId: userId,
+          now: DateTime(2026, 1, 8),
+        );
+
+        pantry = (await pantryRepository.watchAll(userId).first).single;
+        expect(pantry.quantity, 800); // A's 200g restored: 600 + 200
+        // Must remain B's timestamp — B is still cooked and is the most
+        // recent real use of this ingredient. The pre-fix bug restored
+        // A's `previousLastUsedAt` snapshot (null) here, discarding B's
+        // still-standing cook.
+        expect(pantry.lastUsedAt, DateTime(2026, 1, 7));
+
+        final entries = await repository
+            .watchWeek(userId: userId, weekStart: week)
+            .first;
+        expect(entries.firstWhere((e) => e.id == entryA).isCooked, isFalse);
+        expect(entries.firstWhere((e) => e.id == entryB).isCooked, isTrue);
+      });
+
+      test(
+        'undoing the later cook after the earlier one is already undone '
+        'still restores lastUsedAt, since no live adjustment remains (R-15)',
+        () async {
+          await pantryRepository.addItem(
+            userId: userId,
+            name: 'chicken breast',
+            quantity: 1000,
+            unit: 'g',
+            category: 'poultry',
+            now: DateTime(2026, 1, 1),
+          );
+          final recipeId = await saveChickenRecipe();
+          final week = startOfWeek(DateTime(2026, 1, 5));
+          final entryA = await repository.addEntry(
+            userId: userId,
+            recipeId: recipeId,
+            recipeTitle: 'Chicken dinner',
+            servings: 1,
+            plannedDate: week,
+          );
+          final entryB = await repository.addEntry(
+            userId: userId,
+            recipeId: recipeId,
+            recipeTitle: 'Chicken dinner',
+            servings: 1,
+            plannedDate: week,
+          );
+
+          await repository.markCooked(
+            entryId: entryA,
+            userId: userId,
+            now: DateTime(2026, 1, 6),
+          );
+          await repository.markCooked(
+            entryId: entryB,
+            userId: userId,
+            now: DateTime(2026, 1, 7),
+          );
+          await repository.undoCooked(
+            entryId: entryA,
+            userId: userId,
+            now: DateTime(2026, 1, 8),
+          );
+
+          // Now undo B too — its own adjustment is the only (and therefore
+          // most recent) one left for this ingredient, so this time
+          // lastUsedAt *is* restored, to B's own snapshot (taken right
+          // after A's cook).
+          await repository.undoCooked(
+            entryId: entryB,
+            userId: userId,
+            now: DateTime(2026, 1, 9),
+          );
+
+          final pantry = (await pantryRepository.watchAll(userId).first).single;
+          expect(pantry.quantity, 1000); // fully restored
+          expect(pantry.lastUsedAt, DateTime(2026, 1, 6));
+        },
+      );
     });
   });
 }

@@ -278,9 +278,21 @@ class PlanRepository {
     });
   }
 
-  /// Reverses [markCooked] exactly: restores every pantry quantity (and
-  /// `lastUsedAt`) [markCooked] changed, from the recorded
-  /// `cooked_adjustments` rows, then clears them and un-stamps the entry.
+  /// Reverses [markCooked] exactly: restores every pantry quantity
+  /// [markCooked] changed, from the recorded `cooked_adjustments` rows, then
+  /// clears them and un-stamps the entry.
+  ///
+  /// `lastUsedAt` is restored more carefully than quantity (R-15). Quantity
+  /// is additive, so reversing it out of order is always safe. `lastUsedAt`
+  /// is last-writer-wins: with two plan entries sharing an ingredient (cook
+  /// A, then cook B — B's adjustment snapshots the timestamp A's cook just
+  /// set), undoing A while B is still standing must *not* stamp the
+  /// ingredient back to its pre-A value, or it discards the fact that B is
+  /// still cooked and used it more recently. So `lastUsedAt` is only
+  /// restored when this adjustment is the *most recent* still-live one for
+  /// that ingredient (no other `cooked_adjustments` row for the same
+  /// `userId`/`ingredientId` with a later id is still standing) — otherwise
+  /// it's left exactly as the later, still-standing cook set it.
   Future<void> undoCooked({
     required int entryId,
     required String userId,
@@ -304,6 +316,18 @@ class PlanRepository {
       )..where((t) => t.mealPlanEntryId.equals(entryId))).get();
 
       for (final adjustment in adjustments) {
+        // Is a *later* cook of this same ingredient (from any plan entry)
+        // still standing, uncooked-undone? If so, this adjustment is not
+        // the most recent word on `lastUsedAt` and must not overwrite it.
+        final laterLiveAdjustment =
+            await (_db.select(_db.cookedAdjustments)..where(
+                  (t) =>
+                      t.userId.equals(userId) &
+                      t.ingredientId.equals(adjustment.ingredientId) &
+                      t.id.isBiggerThanValue(adjustment.id),
+                ))
+                .getSingleOrNull();
+
         await _pantry.restoreFromCook(
           userId: userId,
           ingredientId: adjustment.ingredientId,
@@ -311,6 +335,7 @@ class PlanRepository {
           unit: adjustment.unit,
           previousLastUsedAt: adjustment.previousLastUsedAt,
           now: effectiveNow,
+          restoreLastUsedAt: laterLiveAdjustment == null,
         );
       }
 

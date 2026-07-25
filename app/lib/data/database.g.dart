@@ -4541,6 +4541,20 @@ class $UserConfigTable extends UserConfig
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _onboardingCompletedMeta =
+      const VerificationMeta('onboardingCompleted');
+  @override
+  late final GeneratedColumn<bool> onboardingCompleted = GeneratedColumn<bool>(
+    'onboarding_completed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("onboarding_completed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4549,6 +4563,7 @@ class $UserConfigTable extends UserConfig
     mealsPerWeek,
     dietaryFlags,
     maxActiveTimeMins,
+    onboardingCompleted,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4612,6 +4627,15 @@ class $UserConfigTable extends UserConfig
         ),
       );
     }
+    if (data.containsKey('onboarding_completed')) {
+      context.handle(
+        _onboardingCompletedMeta,
+        onboardingCompleted.isAcceptableOrUnknown(
+          data['onboarding_completed']!,
+          _onboardingCompletedMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4645,6 +4669,10 @@ class $UserConfigTable extends UserConfig
         DriftSqlType.int,
         data['${effectivePrefix}max_active_time_mins'],
       ),
+      onboardingCompleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}onboarding_completed'],
+      )!,
     );
   }
 
@@ -4661,6 +4689,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
   final int mealsPerWeek;
   final String dietaryFlags;
   final int? maxActiveTimeMins;
+  final bool onboardingCompleted;
   const UserConfigData({
     required this.id,
     required this.purchaseTolerance,
@@ -4668,6 +4697,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     required this.mealsPerWeek,
     required this.dietaryFlags,
     this.maxActiveTimeMins,
+    required this.onboardingCompleted,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4680,6 +4710,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     if (!nullToAbsent || maxActiveTimeMins != null) {
       map['max_active_time_mins'] = Variable<int>(maxActiveTimeMins);
     }
+    map['onboarding_completed'] = Variable<bool>(onboardingCompleted);
     return map;
   }
 
@@ -4693,6 +4724,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       maxActiveTimeMins: maxActiveTimeMins == null && nullToAbsent
           ? const Value.absent()
           : Value(maxActiveTimeMins),
+      onboardingCompleted: Value(onboardingCompleted),
     );
   }
 
@@ -4708,6 +4740,9 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       mealsPerWeek: serializer.fromJson<int>(json['mealsPerWeek']),
       dietaryFlags: serializer.fromJson<String>(json['dietaryFlags']),
       maxActiveTimeMins: serializer.fromJson<int?>(json['maxActiveTimeMins']),
+      onboardingCompleted: serializer.fromJson<bool>(
+        json['onboardingCompleted'],
+      ),
     );
   }
   @override
@@ -4720,6 +4755,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       'mealsPerWeek': serializer.toJson<int>(mealsPerWeek),
       'dietaryFlags': serializer.toJson<String>(dietaryFlags),
       'maxActiveTimeMins': serializer.toJson<int?>(maxActiveTimeMins),
+      'onboardingCompleted': serializer.toJson<bool>(onboardingCompleted),
     };
   }
 
@@ -4730,6 +4766,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     int? mealsPerWeek,
     String? dietaryFlags,
     Value<int?> maxActiveTimeMins = const Value.absent(),
+    bool? onboardingCompleted,
   }) => UserConfigData(
     id: id ?? this.id,
     purchaseTolerance: purchaseTolerance ?? this.purchaseTolerance,
@@ -4739,6 +4776,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     maxActiveTimeMins: maxActiveTimeMins.present
         ? maxActiveTimeMins.value
         : this.maxActiveTimeMins,
+    onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
   );
   UserConfigData copyWithCompanion(UserConfigCompanion data) {
     return UserConfigData(
@@ -4758,6 +4796,9 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       maxActiveTimeMins: data.maxActiveTimeMins.present
           ? data.maxActiveTimeMins.value
           : this.maxActiveTimeMins,
+      onboardingCompleted: data.onboardingCompleted.present
+          ? data.onboardingCompleted.value
+          : this.onboardingCompleted,
     );
   }
 
@@ -4769,7 +4810,8 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
           ..write('preferredServings: $preferredServings, ')
           ..write('mealsPerWeek: $mealsPerWeek, ')
           ..write('dietaryFlags: $dietaryFlags, ')
-          ..write('maxActiveTimeMins: $maxActiveTimeMins')
+          ..write('maxActiveTimeMins: $maxActiveTimeMins, ')
+          ..write('onboardingCompleted: $onboardingCompleted')
           ..write(')'))
         .toString();
   }
@@ -4782,6 +4824,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     mealsPerWeek,
     dietaryFlags,
     maxActiveTimeMins,
+    onboardingCompleted,
   );
   @override
   bool operator ==(Object other) =>
@@ -4792,7 +4835,8 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
           other.preferredServings == this.preferredServings &&
           other.mealsPerWeek == this.mealsPerWeek &&
           other.dietaryFlags == this.dietaryFlags &&
-          other.maxActiveTimeMins == this.maxActiveTimeMins);
+          other.maxActiveTimeMins == this.maxActiveTimeMins &&
+          other.onboardingCompleted == this.onboardingCompleted);
 }
 
 class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
@@ -4802,6 +4846,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
   final Value<int> mealsPerWeek;
   final Value<String> dietaryFlags;
   final Value<int?> maxActiveTimeMins;
+  final Value<bool> onboardingCompleted;
   final Value<int> rowid;
   const UserConfigCompanion({
     this.id = const Value.absent(),
@@ -4810,6 +4855,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     this.mealsPerWeek = const Value.absent(),
     this.dietaryFlags = const Value.absent(),
     this.maxActiveTimeMins = const Value.absent(),
+    this.onboardingCompleted = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   UserConfigCompanion.insert({
@@ -4819,6 +4865,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     this.mealsPerWeek = const Value.absent(),
     this.dietaryFlags = const Value.absent(),
     this.maxActiveTimeMins = const Value.absent(),
+    this.onboardingCompleted = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
   static Insertable<UserConfigData> custom({
@@ -4828,6 +4875,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     Expression<int>? mealsPerWeek,
     Expression<String>? dietaryFlags,
     Expression<int>? maxActiveTimeMins,
+    Expression<bool>? onboardingCompleted,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4837,6 +4885,8 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
       if (mealsPerWeek != null) 'meals_per_week': mealsPerWeek,
       if (dietaryFlags != null) 'dietary_flags': dietaryFlags,
       if (maxActiveTimeMins != null) 'max_active_time_mins': maxActiveTimeMins,
+      if (onboardingCompleted != null)
+        'onboarding_completed': onboardingCompleted,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4848,6 +4898,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     Value<int>? mealsPerWeek,
     Value<String>? dietaryFlags,
     Value<int?>? maxActiveTimeMins,
+    Value<bool>? onboardingCompleted,
     Value<int>? rowid,
   }) {
     return UserConfigCompanion(
@@ -4857,6 +4908,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
       mealsPerWeek: mealsPerWeek ?? this.mealsPerWeek,
       dietaryFlags: dietaryFlags ?? this.dietaryFlags,
       maxActiveTimeMins: maxActiveTimeMins ?? this.maxActiveTimeMins,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4882,6 +4934,9 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     if (maxActiveTimeMins.present) {
       map['max_active_time_mins'] = Variable<int>(maxActiveTimeMins.value);
     }
+    if (onboardingCompleted.present) {
+      map['onboarding_completed'] = Variable<bool>(onboardingCompleted.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4897,6 +4952,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
           ..write('mealsPerWeek: $mealsPerWeek, ')
           ..write('dietaryFlags: $dietaryFlags, ')
           ..write('maxActiveTimeMins: $maxActiveTimeMins, ')
+          ..write('onboardingCompleted: $onboardingCompleted, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9414,6 +9470,7 @@ typedef $$UserConfigTableCreateCompanionBuilder =
       Value<int> mealsPerWeek,
       Value<String> dietaryFlags,
       Value<int?> maxActiveTimeMins,
+      Value<bool> onboardingCompleted,
       Value<int> rowid,
     });
 typedef $$UserConfigTableUpdateCompanionBuilder =
@@ -9424,6 +9481,7 @@ typedef $$UserConfigTableUpdateCompanionBuilder =
       Value<int> mealsPerWeek,
       Value<String> dietaryFlags,
       Value<int?> maxActiveTimeMins,
+      Value<bool> onboardingCompleted,
       Value<int> rowid,
     });
 
@@ -9463,6 +9521,11 @@ class $$UserConfigTableFilterComposer
 
   ColumnFilters<int> get maxActiveTimeMins => $composableBuilder(
     column: $table.maxActiveTimeMins,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get onboardingCompleted => $composableBuilder(
+    column: $table.onboardingCompleted,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -9505,6 +9568,11 @@ class $$UserConfigTableOrderingComposer
     column: $table.maxActiveTimeMins,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get onboardingCompleted => $composableBuilder(
+    column: $table.onboardingCompleted,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UserConfigTableAnnotationComposer
@@ -9541,6 +9609,11 @@ class $$UserConfigTableAnnotationComposer
 
   GeneratedColumn<int> get maxActiveTimeMins => $composableBuilder(
     column: $table.maxActiveTimeMins,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get onboardingCompleted => $composableBuilder(
+    column: $table.onboardingCompleted,
     builder: (column) => column,
   );
 }
@@ -9582,6 +9655,7 @@ class $$UserConfigTableTableManager
                 Value<int> mealsPerWeek = const Value.absent(),
                 Value<String> dietaryFlags = const Value.absent(),
                 Value<int?> maxActiveTimeMins = const Value.absent(),
+                Value<bool> onboardingCompleted = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UserConfigCompanion(
                 id: id,
@@ -9590,6 +9664,7 @@ class $$UserConfigTableTableManager
                 mealsPerWeek: mealsPerWeek,
                 dietaryFlags: dietaryFlags,
                 maxActiveTimeMins: maxActiveTimeMins,
+                onboardingCompleted: onboardingCompleted,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9600,6 +9675,7 @@ class $$UserConfigTableTableManager
                 Value<int> mealsPerWeek = const Value.absent(),
                 Value<String> dietaryFlags = const Value.absent(),
                 Value<int?> maxActiveTimeMins = const Value.absent(),
+                Value<bool> onboardingCompleted = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UserConfigCompanion.insert(
                 id: id,
@@ -9608,6 +9684,7 @@ class $$UserConfigTableTableManager
                 mealsPerWeek: mealsPerWeek,
                 dietaryFlags: dietaryFlags,
                 maxActiveTimeMins: maxActiveTimeMins,
+                onboardingCompleted: onboardingCompleted,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -51,7 +51,12 @@ void main() {
               reviewId: 'a',
               name: 'olive oil',
               quantity: 1,
-              unit: 'l',
+              // Deliberately not a recognised volume/mass unit ('l', 'kg',
+              // ...): this test is about decimal-typing round-trip
+              // (AC-PAN-08), not unit normalization (R-18) — a recognised
+              // unit would legitimately convert (e.g. 1.5 l -> 1500 ml),
+              // which would conflate the two concerns here.
+              unit: 'bottle',
               confidence: 0.9,
               category: 'oils_fats',
             ),

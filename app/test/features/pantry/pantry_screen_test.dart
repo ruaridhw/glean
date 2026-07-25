@@ -1,15 +1,30 @@
 // Widget coverage for the Pantry screen: the `+` sheet's three modes from
 // both empty and populated pantry (AC-PAN-03), swipe delete + undo
-// (AC-UX-01/02), the AC-PAN-12 stranded-filter fix, and the AC-HAP-05
-// filter-chip haptic.
+// (AC-UX-01/02), the AC-PAN-12 stranded-filter fix, the AC-HAP-05
+// filter-chip haptic, and R-07's delete-failure guard.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 
+import '../../data/fixture.dart';
 import '../../support/harness.dart';
+
+/// Forces `PantryRepository.deleteItem` to fail, so R-07's guard around
+/// `deletePantryItemWithUndo` can be exercised without a real DB failure
+/// mode to hand — stays trivial (override the one method under test) since
+/// its only job is injecting that one specific failure.
+class _ThrowingDeletePantryRepository extends PantryRepository {
+  _ThrowingDeletePantryRepository(super.db, super.ingredients);
+
+  @override
+  Future<void> deleteItem({required int id, required String userId}) {
+    return Future<void>.error(Exception('simulated DB failure'));
+  }
+}
 
 void main() {
   group('PantryScreen', () {
@@ -182,5 +197,49 @@ void main() {
       ))!.single;
       expect(saved.quantity, 1.5);
     });
+
+    gleanWidgetTest(
+      'a delete failure is caught and surfaced, leaving the row intact '
+      '(R-07)',
+      (WidgetTester tester) async {
+        final throwingDb = createTestDatabase();
+        addTearDown(() => throwingDb.close());
+        final throwingRepo = _ThrowingDeletePantryRepository(
+          throwingDb,
+          IngredientsRepository(throwingDb),
+        );
+        await throwingRepo.addItem(
+          userId: 'test-user',
+          name: 'butter',
+          quantity: 250,
+          unit: 'g',
+          category: 'dairy',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final localHarness = AppTestHarness(
+          overrides: [pantryRepositoryProvider.overrideWithValue(throwingRepo)],
+        );
+        addTearDown(() => localHarness.dispose());
+
+        await localHarness.pumpAt(tester, AppRoutes.pantry.path);
+        await tester.pumpAndSettle();
+        expect(find.text('butter'), findsOneWidget);
+
+        await tester.drag(find.text('butter'), const Offset(-600, 0));
+        await tester.pumpAndSettle();
+
+        // No undo snackbar — the delete failed and was caught, not
+        // propagated uncaught with zero feedback (the R-07 bug).
+        expect(find.text('Undo'), findsNothing);
+        expect(find.textContaining('Could not remove'), findsOneWidget);
+
+        // The row must survive untouched in the data layer.
+        final survivors = await tester.runAsync(
+          () => throwingRepo.watchAll('test-user').first,
+        );
+        expect(survivors!.single.canonicalName, 'butter');
+      },
+    );
   });
 }

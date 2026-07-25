@@ -33,6 +33,15 @@ import 'package:glean/design_system/design_system.dart';
 /// nullable at the type level only to stay honest about rows inserted
 /// outside this repository (FINDINGS.md F-07/F-08), which don't occur via
 /// any path this feature exposes.
+///
+/// Both the delete and the undo's re-add are guarded (R-07): neither had a
+/// `try`/`catch` before, so a DB-layer failure propagated as an uncaught
+/// exception with no feedback at all — the same defect class §11 calls
+/// "silent failures" and every other mutation in this feature already
+/// guards against (`QuantityEditSheet`, `ManualEntryScreen`, `ReviewScreen`).
+/// A failed delete leaves the row exactly as it was; a failed undo leaves
+/// the item deleted, but the user is told rather than left to assume undo
+/// worked.
 Future<void> deletePantryItemWithUndo(
   BuildContext context,
   WidgetRef ref,
@@ -41,23 +50,42 @@ Future<void> deletePantryItemWithUndo(
   final repository = ref.read(pantryRepositoryProvider);
   final String userId = ref.read(currentUserIdProvider);
 
-  await repository.deleteItem(id: item.id, userId: userId);
+  try {
+    await repository.deleteItem(id: item.id, userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(
+        context,
+        'Could not remove ${item.canonicalName}. Try again.',
+      );
+    }
+    return;
+  }
   if (!context.mounted) return;
 
   GleanSnackBar.showUndo(
     context,
     message: '${item.canonicalName} removed',
     onUndo: () {
-      unawaited(
-        repository.addItem(
-          userId: userId,
-          name: item.canonicalName,
-          quantity: item.quantity,
-          unit: item.unit,
-          category: item.category!,
-          unitPrice: item.unitPrice,
-        ),
-      );
+      unawaited(() async {
+        try {
+          await repository.addItem(
+            userId: userId,
+            name: item.canonicalName,
+            quantity: item.quantity,
+            unit: item.unit,
+            category: item.category!,
+            unitPrice: item.unitPrice,
+          );
+        } catch (_) {
+          if (context.mounted) {
+            GleanSnackBar.show(
+              context,
+              'Could not restore ${item.canonicalName}.',
+            );
+          }
+        }
+      }());
     },
   );
 }

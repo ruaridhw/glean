@@ -208,6 +208,14 @@ class UserConfig extends Table {
   IntColumn get mealsPerWeek => integer().withDefault(const Constant(5))();
   TextColumn get dietaryFlags => text().withDefault(const Constant('[]'))();
   IntColumn get maxActiveTimeMins => integer().nullable()();
+  // R-04 (.scratch/flutter-port/REMEDIATION.md): backs first-run onboarding
+  // completion so it lives in SQLite, the sole source of truth for user
+  // data (§3), instead of the standalone `onboarding_completed.txt` this
+  // replaces. Defaults false so a user with no row yet — the common case,
+  // since a row is only ever created by an explicit settings save or by
+  // finishing/skipping onboarding — reads as "not yet onboarded".
+  BoolColumn get onboardingCompleted =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};

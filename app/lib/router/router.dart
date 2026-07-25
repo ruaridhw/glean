@@ -18,6 +18,7 @@ import '../features/intake/shop_describe_screen.dart';
 import '../features/meals/meal_detail_screen.dart';
 import '../features/meals/meals_import_screen.dart';
 import '../features/meals/meals_screen.dart';
+import '../features/onboarding/onboarding_gate.dart';
 import '../features/pantry/pantry_screen.dart';
 import '../features/plan/plan_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -140,12 +141,21 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
       // --- The five-tab shell. Each branch is its own Navigator, so a push
       // in one tab survives switching away and back (AC-TEST-14). ---
       StatefulShellRoute.indexedStack(
+        // R-01: gates the whole tab shell behind first-run setup
+        // (AC-UX-04) — a first-run user sees `OnboardingScreen` instead of
+        // any tab; a returning user passes straight through. Wrapped here,
+        // not at `MaterialApp.router` in `lib/app.dart`, so
+        // `OnboardingScreen` still has a `GoRouter` in its `BuildContext`
+        // to navigate to receipt-scan with once setup finishes — see
+        // `OnboardingGate`'s own doc comment.
         builder:
             (
               BuildContext context,
               GoRouterState state,
               StatefulNavigationShell navigationShell,
-            ) => AppShell(navigationShell: navigationShell),
+            ) => OnboardingGate(
+              child: AppShell(navigationShell: navigationShell),
+            ),
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
             routes: <RouteBase>[

@@ -87,6 +87,14 @@ String? _encodeNutrition(NutritionOut? nutrition) {
 /// first deleted stays unlinked after an undo; only its `recipeTitle`
 /// snapshot matters there, and that was never touched by the delete
 /// (AC-MEAL-03).
+///
+/// Both the delete and the undo's re-save are guarded (R-07): neither had a
+/// `try`/`catch` before, so a DB-layer failure propagated as an uncaught
+/// exception with no feedback at all — the same defect class §11 calls
+/// "silent failures" and every other mutation in this feature already
+/// guards against. A failed delete leaves the recipe exactly as it was; a
+/// failed undo leaves it deleted, but the user is told rather than left to
+/// assume undo worked.
 Future<void> deleteRecipeWithUndo(
   BuildContext context,
   WidgetRef ref,
@@ -99,42 +107,58 @@ Future<void> deleteRecipeWithUndo(
   // there is nothing left to read them from.
   final ingredients = await repository.getIngredients(recipe.id);
 
-  await repository.deleteRecipe(id: recipe.id, userId: userId);
+  try {
+    await repository.deleteRecipe(id: recipe.id, userId: userId);
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(
+        context,
+        'Could not remove ${recipe.title}. Try again.',
+      );
+    }
+    return;
+  }
   if (!context.mounted) return;
 
   GleanSnackBar.showUndo(
     context,
     message: '${recipe.title} removed',
     onUndo: () {
-      unawaited(
-        repository.save(
-          userId: userId,
-          externalId: recipe.externalId,
-          title: recipe.title,
-          sourceUrl: recipe.sourceUrl,
-          cuisine: recipe.cuisine,
-          difficulty: recipe.difficulty,
-          activeTimeMins: recipe.activeTimeMins,
-          totalTimeMins: recipe.totalTimeMins,
-          dietaryFlags: recipe.dietaryFlags,
-          notSuitableFor: recipe.notSuitableFor,
-          yieldCount: recipe.yieldCount,
-          nutrition: recipe.nutrition,
-          instructions: recipe.instructions,
-          ingredients: <SaveRecipeIngredient>[
-            for (final ingredient in ingredients)
-              SaveRecipeIngredient(
-                canonicalName: ingredient.ingredient.canonicalName,
-                apiIngredientId: ingredient.ingredient.apiIngredientId,
-                quantity: ingredient.quantity,
-                unit: ingredient.unit,
-                preparation: ingredient.preparation,
-                isOptional: ingredient.isOptional,
-                substitutions: ingredient.substitutions,
-              ),
-          ],
-        ),
-      );
+      unawaited(() async {
+        try {
+          await repository.save(
+            userId: userId,
+            externalId: recipe.externalId,
+            title: recipe.title,
+            sourceUrl: recipe.sourceUrl,
+            cuisine: recipe.cuisine,
+            difficulty: recipe.difficulty,
+            activeTimeMins: recipe.activeTimeMins,
+            totalTimeMins: recipe.totalTimeMins,
+            dietaryFlags: recipe.dietaryFlags,
+            notSuitableFor: recipe.notSuitableFor,
+            yieldCount: recipe.yieldCount,
+            nutrition: recipe.nutrition,
+            instructions: recipe.instructions,
+            ingredients: <SaveRecipeIngredient>[
+              for (final ingredient in ingredients)
+                SaveRecipeIngredient(
+                  canonicalName: ingredient.ingredient.canonicalName,
+                  apiIngredientId: ingredient.ingredient.apiIngredientId,
+                  quantity: ingredient.quantity,
+                  unit: ingredient.unit,
+                  preparation: ingredient.preparation,
+                  isOptional: ingredient.isOptional,
+                  substitutions: ingredient.substitutions,
+                ),
+            ],
+          );
+        } catch (_) {
+          if (context.mounted) {
+            GleanSnackBar.show(context, 'Could not restore ${recipe.title}.');
+          }
+        }
+      }());
     },
   );
 }

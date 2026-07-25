@@ -84,14 +84,14 @@ the production instance in `onboardingStatusStoreProvider` needs to change — v
 `path`, `intl` and `collection` were declared with zero import sites. Removed; `flutter analyze`
 stays clean, confirming they were genuinely unused.
 
-## R-06 — §2's stack table lists no networking package
+## R-06 [FIXED] — §2's stack table lists no networking package
 **Found by:** build-and-data verifier · **Severity: low** (spec documentation gap)
 
 The app's entire remote layer uses `http`, which §2 never mentions. The spec is incomplete here, not
 the implementation. Worth a note in `FLUTTER_MIGRATION.md` so the sanctioned-stack list matches
 reality.
 
-## R-07 — Delete-with-undo swallows database failures silently
+## R-07 [FIXED] — Delete-with-undo swallows database failures silently
 **Found by:** pantry-meals verifier (beyond its criteria) · **Severity: medium**
 
 `deletePantryItemWithUndo` (`lib/features/pantry/actions.dart:36-63`) and `deleteRecipeWithUndo`
@@ -191,7 +191,7 @@ correctly everywhere else.
 
 **Fix:** wrap it in `GleanCrossFade` like its siblings.
 
-## R-15 — Undoing an earlier "Cooked" clobbers a later one's `lastUsedAt`
+## R-15 [FIXED] — Undoing an earlier "Cooked" clobbers a later one's `lastUsedAt`
 **Found by:** code reviewer · **Severity: medium** (correctness, not data loss)
 
 `decrementForCook` snapshots `previousLastUsedAt` and `restoreFromCook` writes it back verbatim. With
@@ -234,7 +234,7 @@ idiomatic and correct. This is only about the `push`.
 
 **Fix:** add a route for the preview, or record a justification strong enough to stand in review.
 
-## R-17 — Stale comments left across the tree
+## R-17 [FIXED] — Stale comments left across the tree
 **Found by:** code reviewer · **Severity: low**
 
 Three comments still say AUTH is "not yet built" or similar, now false. `FINDINGS.md`'s own status
@@ -244,6 +244,20 @@ Comments that lie are worse than no comments: the next reader trusts them. Sweep
 
 ## R-18 — Unit normalisation never fires, so mixed-unit additions corrupt quantities
 **Found by:** tests-backend-ci verifier · **Severity: HIGH — silent user-visible data corruption**
+**Status: FIXED**
+
+**The defect predates the port.** The remediation agent checked the original:
+`git show 906c9bb^:mobile/src/db/ingredients.ts` never wrote `canonical_unit` either. So the RN app
+shipped this same corruption and nobody noticed — it belongs on §11's known-bugs list and was simply
+never discovered during the UX review, because reading the code makes normalisation *look* wired.
+Only tracing whether the field is ever **written** exposes it.
+
+Fix as landed: a canonical unit is set on first resolution (recognised mass/volume collapses to its
+base — `kg`→`g`, `l`→`ml`; count-based units are kept verbatim), and `_upsert` re-normalises an
+incoming unit against the existing row's own unit, throwing `PantryUnitMismatchException` rather than
+summing when no conversion exists. "2 kg then 500 g" now totals 2500 g instead of 502 kg. Recipe
+import deliberately does not set it — a recipe's phrasing is not a stock-tracking unit.
+
 
 `ingredients.canonicalUnit` is **only ever read, never written**. `IngredientsRepository.resolveOrCreate`
 does not set it, and nothing else does, so `ingredient.canonicalUnit` is always null. `normalizeUnit`
@@ -270,7 +284,7 @@ names as a **highest-value unit port** — it is simply never given a target to 
 rows whose units are incompatible rather than adding across them — an unconvertible pair should fail
 loudly, not silently sum. Add tests for the mixed-unit merge and for `normalizeUnit` directly.
 
-## R-19 — The release-build auth-bypass guard has a false negative · FAILED AC-AUTH-07
+## R-19 [FIXED] — The release-build auth-bypass guard has a false negative · FAILED AC-AUTH-07
 **Found by:** tests-backend-ci verifier · **Severity: HIGH — the guard does not guard**
 
 `test/build/release_entrypoint_test.dart` is the only build-level barrier stopping a release build
@@ -287,7 +301,7 @@ misconfiguration, is decorative.
 resolved target the lane actually passes, so line formatting cannot defeat it. Then prove it by making
 the two-line edit and confirming it now fails.
 
-## R-20 — Live docs still describe the deleted Expo app · FAILED AC-CUT-01/02, PARTIAL AC-CI-06
+## R-20 [FIXED] — Live docs still describe the deleted Expo app · FAILED AC-CUT-01/02, PARTIAL AC-CI-06
 **Found by:** tests-backend-ci verifier · **Severity: medium**
 
 `backend/README.md` still documents running the Expo app in detail, including `make start-mobile`,
@@ -302,7 +316,7 @@ presented as current state, not history.
 **Fix:** update both. For the genuinely historical files, add a dated "superseded" header so a reader
 knows before following their instructions.
 
-## R-21 — No manual pre-release checklist exists · FAILED AC-TEST-18
+## R-21 [FIXED] — No manual pre-release checklist exists · FAILED AC-TEST-18
 **Found by:** tests-backend-ci verifier · **Severity: low**
 
 The decision to keep airplane-mode/offline testing manual is recorded in the planning docs, but no
@@ -312,7 +326,7 @@ anybody will run before a release.
 **Fix:** create the checklist as a real file in the repo, covering at minimum the airplane-mode error
 states the RN Maestro flow used to cover.
 
-## R-22 — `normalizeUnit` has no test · PARTIAL AC-TEST-05
+## R-22 [FIXED] — `normalizeUnit` has no test · PARTIAL AC-TEST-05
 **Found by:** tests-backend-ci verifier · **Severity: medium**
 
 §10 names unit normalisation (kg→g, L→ml, cup-of-flour→g by density) as a **highest-value unit port**.
