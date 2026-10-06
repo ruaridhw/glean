@@ -102,6 +102,7 @@ class ReviewArgs {
     required this.destination,
     required this.items,
     this.clarifyingQuestions = const <String>[],
+    this.originalDescription,
     this.returnToShop = false,
   });
 
@@ -110,6 +111,7 @@ class ReviewArgs {
 
   /// Shop-describe only; empty for every other entry point.
   final List<String> clarifyingQuestions;
+  final String? originalDescription;
 
   /// True when this pantry review was reached via "scan receipt" from the
   /// Shop tab's checkout bar, so confirming should also complete the
@@ -123,6 +125,7 @@ class ReviewArgs {
       other.destination == destination &&
       listEquals(other.items, items) &&
       listEquals(other.clarifyingQuestions, clarifyingQuestions) &&
+      other.originalDescription == originalDescription &&
       other.returnToShop == returnToShop;
 
   @override
@@ -130,6 +133,7 @@ class ReviewArgs {
     destination,
     Object.hashAll(items),
     Object.hashAll(clarifyingQuestions),
+    originalDescription,
     returnToShop,
   );
 }

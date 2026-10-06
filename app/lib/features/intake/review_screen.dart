@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/providers/shopping_providers.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/pantry_repository.dart'
@@ -19,8 +20,7 @@ import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
 import 'review_row.dart';
-import 'widgets/clarifying_questions_card.dart';
-import 'widgets/review_item_row.dart';
+import 'widgets/review_items_list.dart';
 
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({required this.args, super.key});
@@ -34,10 +34,15 @@ class ReviewScreen extends ConsumerStatefulWidget {
 class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   late List<ReviewRow> _rows;
   bool _saving = false;
+  bool _reparsing = false;
+  late List<String> _questions;
+  final Map<String, String> _answers = {};
+  final Set<String> _removedNames = {};
 
   @override
   void initState() {
     super.initState();
+    _questions = widget.args.clarifyingQuestions;
     _rows = <ReviewRow>[
       for (final ReviewItemDraft item in widget.args.items) ReviewRow(item),
     ];
@@ -62,6 +67,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   void _removeRow(int index) {
     setState(() {
       final ReviewRow row = _rows.removeAt(index);
+      _removedNames.add(row.originalName);
       row.nameController.removeListener(_onRowChanged);
       row.quantityController.removeListener(_onRowChanged);
       row.dispose();
@@ -83,7 +89,63 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       _rows.where((ReviewRow r) => r.isActive).toList();
 
   bool get _canConfirm =>
-      !_saving && _activeRows.isNotEmpty && _activeRows.every(_rowIsValid);
+      !_saving &&
+      !_reparsing &&
+      _activeRows.isNotEmpty &&
+      _activeRows.every(_rowIsValid);
+
+  Future<void> _answerQuestions(Map<String, String> answers) async {
+    if (_reparsing || _saving) return;
+    _answers.addAll(answers.map((key, value) => MapEntry(key, value.trim())));
+    final text =
+        '${widget.args.originalDescription}\n\nAnswers: ${_answers.entries.where((e) => e.value.isNotEmpty).map((e) => '${e.key}: ${e.value}').join('; ')}';
+    setState(() => _reparsing = true);
+    final command = ref.read(
+      parseShoppingDescriptionControllerProvider.notifier,
+    );
+    await command.parse(text);
+    if (!mounted) return;
+    final result = ref.read(parseShoppingDescriptionControllerProvider);
+    if (result.hasError || result.value == null) {
+      setState(() => _reparsing = false);
+      GleanSnackBar.show(context, 'Could not update suggestions. Try again.');
+      return;
+    }
+    final previous = {for (final row in _rows) row.originalName: row};
+    final next = <ReviewRow>[];
+    for (final item in result.value!.items) {
+      final key = item.name.trim().toLowerCase();
+      if (_removedNames.contains(key)) continue;
+      final existing = previous.remove(key);
+      final proposal = ReviewItemDraft(
+        reviewId: existing?.reviewId ?? 'refined-$key',
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        confidence: item.confidence,
+        category: item.category,
+      );
+      if (existing != null) {
+        existing.refine(proposal);
+        next.add(existing);
+      } else {
+        final row = ReviewRow(proposal);
+        row.nameController.addListener(_onRowChanged);
+        row.quantityController.addListener(_onRowChanged);
+        next.add(row);
+      }
+    }
+    for (final row in previous.values) {
+      row.nameController.removeListener(_onRowChanged);
+      row.quantityController.removeListener(_onRowChanged);
+      row.dispose();
+    }
+    setState(() {
+      _rows = next;
+      _questions = result.value!.clarifyingQuestions;
+      _reparsing = false;
+    });
+  }
 
   Future<void> _confirm() async {
     if (!_canConfirm) return;
@@ -129,14 +191,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   /// review was reached via Shop's "scan receipt" (`returnToShop`), and even
   /// then only the ingredients this batch actually resolved are checked off
   /// (AC-SHOP-01) — never an unconditional `completeCheckout`.
-  /// R-23: passes the row's unit text **raw** (trimmed, but not defaulted)
-  /// to the repository, rather than pre-substituting `'units'` for a blank
-  /// field here. `PantryRepository.addItem`/`ShoppingRepository.addAiItems`
-  /// each apply that same `'units'` default for the row itself, but — unlike
-  /// this screen previously did — never let it seed the ingredient's
-  /// canonical unit; only an explicitly typed one does that. Applying the
-  /// fallback here would erase the "was this typed or defaulted" distinction
-  /// before it ever reached the one place that needs it.
+  /// Pass raw units: repositories default blanks without seeding the
+  /// ingredient's canonical unit from an implicit value (R-23).
   Future<void> _confirmPantry(String userId, List<ReviewRow> accepted) async {
     final List<PantryItemInput> items = <PantryItemInput>[
       for (final ReviewRow row in accepted)
@@ -179,6 +235,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(parseShoppingDescriptionControllerProvider);
     final AppTokens tokens = context.tokens;
     final int acceptedCount = _activeRows.length;
 
@@ -187,38 +244,18 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       body: SafeArea(
         child: Column(
           children: <Widget>[
-            if (widget.args.clarifyingQuestions.isNotEmpty)
-              ClarifyingQuestionsCard(
-                questions: widget.args.clarifyingQuestions,
-              ),
             Expanded(
-              child: _rows.isEmpty
-                  ? const Center(child: Text('Nothing left to review.'))
-                  : ListView.separated(
-                      padding: EdgeInsets.all(tokens.spacing.lg),
-                      itemCount: _rows.length,
-                      separatorBuilder: (BuildContext context, int index) =>
-                          SizedBox(height: tokens.spacing.sm),
-                      itemBuilder: (BuildContext context, int index) {
-                        final ReviewRow row = _rows[index];
-                        return ReviewItemRow(
-                          key: ValueKey<String>(row.reviewId),
-                          nameController: row.nameController,
-                          quantityController: row.quantityController,
-                          unitController: row.unitController,
-                          confidence: row.confidence,
-                          quantityErrorText:
-                              row.isActive && row.parsedQuantity == null
-                              ? 'Enter a quantity greater than 0'
-                              : null,
-                          requiresCategory: _isPantry && row.category == null,
-                          selectedCategory: row.category,
-                          onCategoryChanged: (String? value) =>
-                              setState(() => row.category = value),
-                          onRemove: () => _removeRow(index),
-                        );
-                      },
-                    ),
+              child: ReviewItemsList(
+                rows: _rows,
+                questions: _questions,
+                isPantry: _isPantry,
+                pending: _reparsing || _saving,
+                onChanged: _onRowChanged,
+                onRemove: _removeRow,
+                onAnswer: !_isPantry && widget.args.originalDescription != null
+                    ? _answerQuestions
+                    : null,
+              ),
             ),
             Padding(
               padding: EdgeInsets.all(tokens.spacing.lg),

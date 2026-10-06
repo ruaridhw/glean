@@ -26,8 +26,15 @@ import 'package:go_router/go_router.dart';
 
 import 'widgets/describe_form.dart';
 
-class ShopDescribeScreen extends ConsumerWidget {
+class ShopDescribeScreen extends ConsumerStatefulWidget {
   const ShopDescribeScreen({super.key});
+
+  @override
+  ConsumerState<ShopDescribeScreen> createState() => _ShopDescribeScreenState();
+}
+
+class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
+  String _originalDescription = '';
 
   void _onSuccess(BuildContext context, ShoppingParseResponse response) {
     final List<ReviewItemDraft> items = <ReviewItemDraft>[
@@ -51,12 +58,13 @@ class ShopDescribeScreen extends ConsumerWidget {
         destination: ReviewDestination.shop,
         items: items,
         clarifyingQuestions: response.clarifyingQuestions,
+        originalDescription: _originalDescription,
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     ref.listen<AsyncValue<ShoppingParseResponse?>>(
       parseShoppingDescriptionControllerProvider,
       (
@@ -87,9 +95,12 @@ class ShopDescribeScreen extends ConsumerWidget {
                 ? 'Could not turn that into a list. Try being more specific, '
                       'e.g. "milk, bananas, taco shells".'
                 : null,
-            onSubmit: (String text) => ref
-                .read(parseShoppingDescriptionControllerProvider.notifier)
-                .parse(text),
+            onSubmit: (String text) {
+              _originalDescription = text;
+              ref
+                  .read(parseShoppingDescriptionControllerProvider.notifier)
+                  .parse(text);
+            },
           ),
         ),
       ),

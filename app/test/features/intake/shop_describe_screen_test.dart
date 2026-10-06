@@ -106,6 +106,7 @@ void main() {
       expect(widget.args.items.single.category, 'dairy');
       // Pantry-only field never carried for a shop draft.
       expect(widget.args.items.single.unitPrice, isNull);
+      expect(widget.args.originalDescription, 'milk');
       expect(widget.args.clarifyingQuestions, <String>[
         'Semi-skimmed or whole?',
       ]);
