@@ -18,7 +18,7 @@ class TestEvalModelPolicy:
 
         model_id = _eval_model_id_for(Feature.RECIPE_IMPORT, router)
 
-        assert model_id == "qwen/qwen3.7-plus"
+        assert model_id == "google/gemini-3.1-flash-lite"
 
     def test_judge_model_defaults_to_feature_eval_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("GLEAN_JUDGE_MODEL", raising=False)

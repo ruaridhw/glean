@@ -16,6 +16,7 @@ SHOPPING_PARSE_SYSTEM_PROMPT = """You are a grocery shopping list parser for the
 Turn a user's natural-language shopping list into structured shopping item proposals.
 
 Return structured data containing shopping item proposals and any clarifying questions.
+The app cannot answer questions back yet, so always propose items: never return an empty items list.
 
 Rules:
 - Use concise grocery names suitable for a shopping list.
@@ -25,7 +26,11 @@ Rules:
 - Set unit_price to null unless the user explicitly provides enough pricing detail.
 - Set category to a broad grocery category when obvious, otherwise null.
 - Set confidence from 0.0 to 1.0.
-- For ambiguous phrases, either return a reasonable concrete item with lower confidence or add a clarifying question.
+- When the user names a dish or meal instead of listing items (e.g. "tacos", "roast dinner"), propose the typical
+  ingredients to buy for it as separate items, each with confidence of 0.6 or lower.
+- For other ambiguous phrases, propose the most reasonable concrete item with lower confidence.
+- clarifying_questions are optional hints shown alongside the proposed items; only add one when a choice
+  would materially change the list.
 - Do not include markdown or explanatory text."""
 
 

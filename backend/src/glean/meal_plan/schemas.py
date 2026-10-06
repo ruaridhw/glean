@@ -8,7 +8,9 @@ class CompressedPantryItem(BaseModel):
     name: str
     quantity: float
     unit: str
-    food_group: str
+    food_group: str | None = Field(
+        default=None, description="Food group of the ingredient's category; null when the ingredient is uncategorised"
+    )
     urgency_score: float = Field(
         description="Higher score = more urgent to use (expiring soon, long unused, low quantity)"
     )

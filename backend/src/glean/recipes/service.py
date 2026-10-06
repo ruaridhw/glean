@@ -47,14 +47,14 @@ def search_recipes(
         return RecipeSearchResponse(
             results=[
                 RecipeSearchResult(
-                    external_id=stored_to_recipe_out(recipe).external_id,
-                    title=recipe.title,
-                    cuisine=recipe.cuisine,
-                    difficulty=recipe.difficulty,
-                    total_time_mins=recipe.total_time_mins,
-                    dietary_flags=recipe.dietary_flags,
+                    external_id=summary.external_id,
+                    title=summary.title,
+                    cuisine=summary.cuisine,
+                    difficulty=summary.difficulty,
+                    total_time_mins=summary.total_time_mins,
+                    dietary_flags=summary.dietary_flags,
                 )
-                for recipe in corpus_results
+                for summary in corpus_results
             ],
             total=corpus_total,
         )

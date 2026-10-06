@@ -66,7 +66,7 @@ def test_get_returns_none_for_corrupt_json(tmp_path) -> None:
     assert store.get("import:broken") is None
 
 
-def test_get_ignores_legacy_flat_recipe_files(tmp_path) -> None:
+def test_get_without_index_does_not_guess_legacy_flat_paths(tmp_path) -> None:
     store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
     recipe = _recipe("import:legacy", title="Legacy Recipe")
     (tmp_path / "import%3Alegacy.json").write_text(recipe.model_dump_json())
@@ -74,13 +74,83 @@ def test_get_ignores_legacy_flat_recipe_files(tmp_path) -> None:
     assert store.get("import:legacy") is None
 
 
-def test_search_returns_title_matches_in_title_order_with_total(tmp_path) -> None:
+def test_get_resolves_flat_layout_recipe_through_rebuilt_index(tmp_path) -> None:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    recipe = _recipe("rec_007572af2fb61ccb", title="Mexican Style Beef Pasta Bake")
+    (tmp_path / "rec_007572af2fb61ccb.json").write_text(recipe.model_dump_json())
+
+    assert store.rebuild_index() == 1
+
+    assert store.get("rec_007572af2fb61ccb") == recipe
+    results, total = store.search(q="pasta")
+    assert [result.external_id for result in results] == ["rec_007572af2fb61ccb"]
+    assert total == 1
+
+
+def test_index_written_by_save_is_visible_to_a_fresh_store(tmp_path) -> None:
+    RecipeCorpusStore(FilesystemBlobStore(tmp_path)).save(_recipe("import:stew", title="Irish Stew"))
+
+    results, total = RecipeCorpusStore(FilesystemBlobStore(tmp_path)).search(q="stew")
+
+    assert [result.title for result in results] == ["Irish Stew"]
+    assert total == 1
+
+
+def test_save_replaces_existing_summary_for_same_recipe(tmp_path) -> None:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    store.save(_recipe("import:stew", title="Irish Stew"))
+    store.save(_recipe("import:stew", title="Lamb Stew"))
+
+    results, total = store.search(q="stew")
+
+    assert [result.title for result in results] == ["Lamb Stew"]
+    assert total == 1
+
+
+def test_save_without_index_rebuilds_it_from_existing_corpus(tmp_path) -> None:
+    existing = _recipe("rec_1", title="Beef Chilli")
+    (tmp_path / "rec_1.json").write_text(existing.model_dump_json())
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+
+    store.save(_recipe("import:stew", title="Irish Stew"))
+
+    results, total = store.search()
+    assert [result.title for result in results] == ["Beef Chilli", "Irish Stew"]
+    assert total == 2
+
+
+def test_search_without_index_returns_empty_and_logs_error(tmp_path, caplog) -> None:
+    recipe = _recipe("rec_1", title="Beef Chilli")
+    (tmp_path / "rec_1.json").write_text(recipe.model_dump_json())
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+
+    assert store.search(q="chilli") == ([], 0)
+    assert "recipe search index missing" in caplog.text
+
+
+def test_search_reads_index_once_within_ttl(tmp_path) -> None:
+    blob_store = _CountingBlobStore(FilesystemBlobStore(tmp_path))
+    RecipeCorpusStore(blob_store).save(_recipe("import:stew", title="Irish Stew"))
+    blob_store.reads.clear()
+
+    for _ in range(3):
+        RecipeCorpusStore(blob_store).search(q="stew")
+
+    assert blob_store.reads == []
+
+
+def test_search_matches_word_prefixes_and_lists_all_in_title_order(tmp_path) -> None:
     store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
     store.save(_recipe("import:ziti", title="Baked Ziti", cuisine="Italian"))
     store.save(_recipe("import:carbonara", title="Spaghetti Carbonara", cuisine="Italian"))
     store.save(_recipe("import:tacos", title="Tofu Tacos", cuisine="Mexican"))
 
-    results, total = store.search(q="A", cuisine="italian")
+    results, total = store.search(q="ba", cuisine="italian")
+
+    assert [recipe.title for recipe in results] == ["Baked Ziti"]
+    assert total == 1
+
+    results, total = store.search(cuisine="italian")
 
     assert [recipe.title for recipe in results] == ["Baked Ziti", "Spaghetti Carbonara"]
     assert total == 2
@@ -144,3 +214,19 @@ def _recipe(
             parser="test",
         ),
     )
+
+
+class _CountingBlobStore:
+    def __init__(self, inner: FilesystemBlobStore) -> None:
+        self.inner = inner
+        self.reads: list[str] = []
+
+    def read(self, key: str) -> str | None:
+        self.reads.append(key)
+        return self.inner.read(key)
+
+    def write(self, key: str, content: str) -> None:
+        self.inner.write(key, content)
+
+    def list_keys(self, prefix: str = "") -> list[str]:
+        return self.inner.list_keys(prefix)
