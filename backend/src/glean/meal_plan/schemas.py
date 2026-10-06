@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,14 +27,22 @@ class RecipeHistoryItem(BaseModel):
 
 
 class MealPlanRequest(BaseModel):
+    source: Literal["saved", "corpus"] = Field(
+        default="saved",
+        description="Choose from the user's saved recipes (recipe_history) or from the server's recipe corpus",
+    )
     pantry: list[CompressedPantryItem] = Field(
         description="Top-N urgency-scored pantry items (staples and zero-quantity items excluded)"
     )
     recipe_history: list[RecipeHistoryItem] = Field(
-        description="All saved recipes with their last_cooked_at timestamps"
+        default_factory=list, description="All saved recipes with their last_cooked_at timestamps"
+    )
+    exclude_external_ids: list[str] = Field(
+        default_factory=list, description="Corpus recipe IDs already in the plan, never offered again"
     )
     food_group_coverage: dict[str, int] = Field(
-        description="Number of meals cooked this week per food group (e.g. {'protein': 2, 'veg': 1})"
+        default_factory=dict,
+        description="Number of meals cooked this week per food group (e.g. {'protein': 2, 'veg': 1})",
     )
     purchase_tolerance: float = Field(
         ge=0.0,
@@ -72,3 +81,40 @@ class MealPlanResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     suggestions: list[MealPlanRecipe] = Field(description="Ranked recipes that satisfy the request constraints.")
+
+
+class CorpusMealPlanRecipe(BaseModel):
+    """A corpus recipe the model selected from the candidates it was offered."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str = Field(description="external_id of the chosen candidate, copied exactly.")
+    title: str = Field(description="Title of the chosen candidate, copied exactly.")
+    reason: str = Field(description="Human-readable explanation of why this recipe belongs in the meal plan")
+    missing_ingredients: list[str] = Field(
+        description="Candidate ingredient names not currently in the pantry that would need purchasing"
+    )
+
+
+class CorpusMealPlanResponse(BaseModel):
+    """Corpus meal-planning recipes returned by the LLM."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    suggestions: list[CorpusMealPlanRecipe] = Field(description="Ranked candidates that satisfy the constraints.")
+
+
+class MealPlanSuggestion(BaseModel):
+    """One planned meal: a saved recipe (recipe_id) or a corpus recipe (external_id)."""
+
+    recipe_id: int | None = None
+    external_id: str | None = None
+    title: str
+    reason: str
+    missing_ingredients: list[str]
+
+
+class MealPlanResult(BaseModel):
+    """The POST /meal-plan response."""
+
+    suggestions: list[MealPlanSuggestion]
