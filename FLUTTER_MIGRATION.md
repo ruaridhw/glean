@@ -2,7 +2,18 @@
 
 A locked architecture and migration spec for replacing Glean's Expo/React Native app (`mobile/`) with a native Flutter app targeting iOS and Android.
 
-This is a **planning artifact**. No Flutter code exists yet. Every decision here was reached and recorded ticket-by-ticket; the full reasoning, file-level evidence, and rejected alternatives live in `.scratch/flutter-port/` (see [Provenance](#provenance)).
+The Flutter implementation exists at `app/` but has not cut over to production. The original decisions and rejected alternatives live in `.scratch/flutter-port/` (see [Provenance](#provenance)).
+
+## Current contract update — 2026-10-06
+
+The merged #95/#98 backend contract and decisions in #97/#96 supersede the saved-recipe generation assumptions below:
+
+- Generate sends `source: "corpus"`, pantry, dietary flags, purchase tolerance, empty-slot count, cooking-time limit and `exclude_external_ids` for already-planned corpus recipes. Saved recipes remain available for manual planning; `recipe_history` and `food_group_coverage` are optional in corpus mode (AC-PLAN-08 is no longer required there).
+- Suggestions carry nullable `recipe_id` and `external_id`; corpus mode does not return `missing_ingredients`. Fetch corpus details, reuse/save the local recipe, then write plan entries and shopping gaps in one guarded transaction. Failed detail fetches are skipped. Generate stays disabled throughout fetching and persistence, tops up only, and reports `No recipes fit right now. Try again.` if no entries were added.
+- Shopping parse always proposes items; clarifying questions are optional hints. Each question on Shop review has an answer field. Submit appends answers to the original description and re-parses, preserving edited values and selections for case-insensitive matching original item names. This is review reconciliation, not ingredient-identity matching (#100 remains out of scope).
+- Nullable pantry `food_group` no longer causes a server-side 422 (#95). The taxonomy change below is still needed for grouping and expiry, but not for avoiding that old meal-plan bug.
+
+Native builds, iOS/Android visual verification and store cutover remain separate gates; passing headless tests is not device evidence.
 
 ---
 
@@ -258,7 +269,7 @@ Nothing in the app currently assigns an ingredient category: `resolveOrCreateIng
 That single gap breaks **three** features at once:
 
 1. **Pantry grouping and filter chips** collapse to one "Other" bucket.
-2. **Meal-plan generation 422s** — the backend declares `food_group` non-nullable, so any uncategorised ingredient reaching the compressed top-15 fails Pydantic validation and surfaces as a generic "Could not generate meal plan". A type cast in the client is what hides this.
+2. **Historical meal-plan generation 422s** — fixed by #95: the backend accepts nullable `food_group`. This is no longer a reason to require classification before generation.
 3. **Expiry inference has no basis** — per-category shelf life needs a category.
 
 Scope: `POST /receipts/scan`, `POST /receipts/describe`, and `POST /shopping/parse-description` return a category drawn from the **existing** 23-category taxonomy — not a new vocabulary. The LLM already identifies each ingredient while parsing, so classifying it is nearly free. Once categories are reliable, `food_group` stops being nullable client-side and the 422 failure mode disappears.
