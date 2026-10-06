@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import threading
+import weakref
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, ValidationError
@@ -82,6 +83,8 @@ class RecipeSearchIndex:
         self._lock = threading.Lock()
         # FastAPI runs sync endpoints on a worker thread pool; the lock serialises access.
         self._db = sqlite3.connect(":memory:", check_same_thread=False)
+        # Indexes are replaced on every reload; close each connection when its index is collected.
+        weakref.finalize(self, self._db.close)
         self._db.execute(
             "CREATE VIRTUAL TABLE recipe_fts USING fts5("
             "external_id UNINDEXED, title, ingredients, cuisine, tokenize='unicode61 remove_diacritics 2')"
