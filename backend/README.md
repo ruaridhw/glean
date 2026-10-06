@@ -70,9 +70,9 @@ uv run ruff format src/ tests/
 
 ## Running the App Locally
 
-The client is now a native Flutter app at `app/` (the Expo/React Native app
-that used to live at `mobile/` was replaced in a big-bang cutover — see the
-root `FLUTTER_MIGRATION.md`). Full setup and run instructions live in
+This branch's proposed replacement client is the Flutter app at `app/`.
+Production remains Expo; no Flutter cutover has happened. The planned
+big-bang replacement is described in the root `FLUTTER_MIGRATION.md`. Full setup and run instructions live in
 `app/README.md` and the root `README.md`; the short version, from the repo
 root, once the backend above is running:
 

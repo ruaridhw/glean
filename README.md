@@ -1,6 +1,8 @@
 # Glean
 
-Glean is a local-first Flutter app with a stateless FastAPI backend. The app
+This branch contains Glean's proposed local-first Flutter replacement with a
+stateless FastAPI backend. **Production is still the Expo app**; the Flutter
+port has not landed or passed native/visual cutover verification. The app
 stores user state on device with SQLite (`drift`), while the backend handles
 AI-assisted receipt parsing, recipe import, meal-plan generation, auth
 validation, and rate limiting.
