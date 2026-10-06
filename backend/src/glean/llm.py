@@ -73,7 +73,9 @@ class Feature(StrEnum):
     RECIPE_IMPORT = (
         "recipe-import",
         LLMModelPolicy(
-            production_model="qwen/qwen3.7-plus",
+            # qwen/qwen3.7-plus took 19-61s per page (past the 30s Lambda cap); this model
+            # extracted the same recipes in 1.4-2.3s.
+            production_model="google/gemini-3.1-flash-lite",
             eval_model="z-ai/glm-5.2",
         ),
     )
@@ -162,8 +164,8 @@ def invoke_structured[StructuredResponseT: BaseModel](
     # not support being set to required or object in thinking mode". json_schema asks for
     # the object via response_format instead of a forced tool call, so it sends no
     # tool_choice and works for every model in DEFAULT_LLM_MODEL_POLICY (verified against
-    # qwen3.7-plus, z-ai/glm-5.2 and the gemini models). Without this, POST /meal-plan and
-    # /recipes/import-url — both routed to qwen3.7-plus — fail in production.
+    # qwen3.7-plus, z-ai/glm-5.2 and the gemini models). Without this, reasoning models such
+    # as z-ai/glm-5.2 (the eval judge) fail outright.
     structured_model = model.with_structured_output(schema, method="json_schema")
     result = structured_model.invoke(messages, config=config)
     if isinstance(result, schema):
