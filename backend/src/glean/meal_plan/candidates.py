@@ -31,6 +31,7 @@ PANTRY_POOL_SIZE = 60
 _EVERYTHING = 1_000_000
 _TOKEN_RE = re.compile(r"\w+")
 _MIN_TOKEN_LENGTH = 3
+_NEAR_DUPLICATE_OVERLAP = 0.7
 
 
 def _words(*words: str) -> re.Pattern[str]:
@@ -248,12 +249,37 @@ def sample_corpus_candidates(
     tie_breaks = {external_id: rng.random() for external_id in sorted(pantry_matches)}
     ranked = sorted(pantry_matches, key=lambda external_id: (-pantry_matches[external_id], tie_breaks[external_id]))
     pool = ranked[:pool_size]
-    picked = rng.sample(pool, min(sample_size, len(pool)))
+    picked: list[RecipeSummary] = []
+    _take_distinct(picked, [eligible[external_id] for external_id in rng.sample(pool, len(pool))], sample_size)
 
     if len(picked) < sample_size:
-        remaining = sorted(eligible.keys() - set(picked))
-        picked += rng.sample(remaining, min(sample_size - len(picked), len(remaining)))
-    return [eligible[external_id] for external_id in picked]
+        remaining = sorted(eligible.keys() - {summary.external_id for summary in picked})
+        _take_distinct(
+            picked, [eligible[external_id] for external_id in rng.sample(remaining, len(remaining))], sample_size
+        )
+    return picked
+
+
+def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:
+    """Append recipes in order until `limit`, skipping near-duplicates of ones already picked."""
+    for summary in shuffled:
+        if len(picked) >= limit:
+            return
+        if not any(_near_duplicate(summary, existing) for existing in picked):
+            picked.append(summary)
+
+
+def _near_duplicate(a: RecipeSummary, b: RecipeSummary) -> bool:
+    # The corpus holds variants of one dish (chicken breast / thigh / meat-free); offering several
+    # wastes candidate slots and the model tends to pick them together.
+    ingredients_a, ingredients_b = _ingredient_set(a), _ingredient_set(b)
+    if not ingredients_a or not ingredients_b:
+        return False
+    return len(ingredients_a & ingredients_b) / len(ingredients_a | ingredients_b) >= _NEAR_DUPLICATE_OVERLAP
+
+
+def _ingredient_set(summary: RecipeSummary) -> set[str]:
+    return {" ".join(_TOKEN_RE.findall(name.casefold())) for name in summary.ingredient_names}
 
 
 def _recipes_using(corpus: RecipeCorpusStore, pantry_name: str) -> set[str]:

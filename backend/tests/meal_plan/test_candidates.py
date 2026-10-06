@@ -83,9 +83,9 @@ def test_excludes_planned_recipes_and_recipes_over_the_time_limit(tmp_path) -> N
         tmp_path,
         [
             ("rec_planned", "Beef Bolognese", ["beef mince"], 30),
-            ("rec_slow", "Slow Beef Stew", ["beef mince"], 180),
-            ("rec_untimed", "Beef Tacos", ["beef mince"], None),
-            ("rec_quick", "Beef Stir Fry", ["beef mince"], 20),
+            ("rec_slow", "Slow Beef Stew", ["beef mince", "carrot"], 180),
+            ("rec_untimed", "Beef Tacos", ["beef mince", "tortilla"], None),
+            ("rec_quick", "Beef Stir Fry", ["beef mince", "noodles"], 20),
         ],
     )
 
@@ -103,7 +103,7 @@ def test_excludes_planned_recipes_and_recipes_over_the_time_limit(tmp_path) -> N
 
 
 def test_sampling_varies_with_the_random_source(tmp_path) -> None:
-    corpus = _corpus(tmp_path, [(f"rec_{i}", f"Beef Dish {i}", ["beef mince"], 30) for i in range(40)])
+    corpus = _corpus(tmp_path, [(f"rec_{i}", f"Beef Dish {i}", ["beef mince", f"spice {i}"], 30) for i in range(40)])
 
     def sample(seed: int) -> list[str]:
         candidates = sample_corpus_candidates(
@@ -119,6 +119,25 @@ def test_sampling_varies_with_the_random_source(tmp_path) -> None:
 
     assert sample(1) == sample(1)
     assert sample(1) != sample(2)
+
+
+def test_near_duplicate_recipes_are_offered_at_most_once(tmp_path) -> None:
+    bake = ["penne", "cheddar cheese", "courgette", "tomato paste", "garlic"]
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_bake", "Cheese Veg-Packed Pasta Bake", bake, 30),
+            ("rec_bake_3", "3 Cheese Veg-Packed Pasta Bake", [*bake, "mozzarella"], 30),
+            ("rec_bake_ww", "3 Cheese Veg-Packed Wholewheat Pasta Bake", [*bake, "wholewheat penne"], 30),
+            ("rec_curry", "Tomato Curry", ["tomato paste", "cumin", "rice"], 30),
+        ],
+    )
+
+    candidates = _sample(corpus, pantry=["tomato paste"], dietary_flags=[])
+
+    ids = {candidate.external_id for candidate in candidates}
+    assert len(ids & {"rec_bake", "rec_bake_3", "rec_bake_ww"}) == 1
+    assert "rec_curry" in ids
 
 
 def test_vegetarian_excludes_meat_and_fish_but_keeps_vegan_alternatives(tmp_path) -> None:
