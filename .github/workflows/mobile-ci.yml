@@ -61,6 +61,26 @@ jobs:
       - name: Run jest
         run: NODE_OPTIONS=--experimental-vm-modules npx jest --coverage
 
+  bundle-smoke:
+    name: Native bundle smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Export Android and iOS bundles
+        run: npm run test:bundle
+
   build-ci:
     name: Build CI APK (E2E)
     if: github.event_name == 'workflow_dispatch' && (inputs.build_ci_apk || inputs.run_e2e)

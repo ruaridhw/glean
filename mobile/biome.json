@@ -8,7 +8,7 @@
     }
   },
   "files": {
-    "includes": ["**", "!coverage"]
+    "includes": ["**", "!coverage", "!.cache"]
   },
   "linter": {
     "enabled": true,

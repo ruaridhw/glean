@@ -6,7 +6,7 @@ name: "Toast: success message after pantry item added"
 - runFlow:
     file: helpers/navigate-tab.yaml
     env:
-      tab: Pantry
+      tab: pantry
 - tapOn: "Add pantry item"
 - assertVisible: "Manual Entry"
 - tapOn: "Manual Entry"

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { deletePantryItem, getPantryItems, updatePantryQuantity } from "@/db/pantry";
 import PantryScreen from "../../app/(tabs)/pantry";
 
@@ -113,13 +114,26 @@ describe("PantryScreen", () => {
     expect(screen.getByText("1 L")).toBeTruthy();
   });
 
-  it("shows empty state actions when there are no items", async () => {
+  it("opens the add pantry flow when the pantry has items", async () => {
+    const screen = render(<PantryScreen />);
+
+    await waitFor(() => expect(screen.getByText("broccoli")).toBeTruthy());
+    fireEvent.press(screen.getByLabelText("Add pantry item"));
+
+    expect(router.push).toHaveBeenCalledWith("/(tabs)/pantry/add");
+  });
+
+  it("opens the add pantry flow from the empty state header", async () => {
     (getPantryItems as jest.Mock).mockResolvedValueOnce([]);
     const screen = render(<PantryScreen />);
 
     await waitFor(() => expect(screen.getByText("Your pantry is empty")).toBeTruthy());
     expect(screen.getByText("Scan receipt")).toBeTruthy();
     expect(screen.getByText("Describe items")).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText("Add pantry item"));
+
+    expect(router.push).toHaveBeenCalledWith("/(tabs)/pantry/add");
   });
 
   it("commits quantity edits", async () => {
