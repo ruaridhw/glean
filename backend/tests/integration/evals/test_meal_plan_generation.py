@@ -56,9 +56,10 @@ class TestMealPlanGenerationStructural:
 
     @pytest.mark.xfail(
         reason=(
-            "qwen/qwen3.7-plus (the meal-plan-generation production model) does not respect "
-            "meals_per_week in-prompt: it returns more than the limit (observed 6 for a limit "
-            "of 2) even with an explicit 'Return AT MOST meals_per_week ... never exceed' rule. "
+            "The meal-plan-generation production model has not reliably respected "
+            "meals_per_week in-prompt: qwen/qwen3.7-plus, its previous model, returned more than the "
+            "limit (observed 6 for a limit of 2) even with an explicit 'Return AT MOST meals_per_week "
+            "... never exceed' rule. "
             "The /meal-plan service therefore enforces the cap by truncating to "
             "request.meals_per_week (see meal_plan.service.generate_meal_plan and "
             "tests/meal_plan/test_router.py::test_generate_meal_plan_truncates_to_meals_per_week), "

@@ -60,6 +60,17 @@ class TestShoppingListDescriptionStructural:
             assert all(isinstance(q, str) for q in response.clarifying_questions), f"Example {i}: invalid questions"
 
 
+DISH_ONLY_INPUTS = ["tacos", "stuff for a roast dinner"]
+
+
+class TestShoppingListDescriptionDishNames:
+    def test_dish_names_expand_to_low_confidence_items(self, eval_model: BaseChatModel) -> None:
+        for i, text in enumerate(DISH_ONLY_INPUTS):
+            response = _invoke_shopping_list_description(eval_model, text, example_idx=100 + i)
+            assert len(response.items) >= 2, f"{text!r}: expected ingredient proposals, got {response.items}"
+            assert all(item.confidence <= 0.6 for item in response.items), f"{text!r}: confidence too high"
+
+
 @pytest.mark.soft_gate
 class TestShoppingListDescriptionHeuristic:
     def test_expected_names_are_present(

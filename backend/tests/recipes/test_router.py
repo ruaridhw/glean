@@ -15,8 +15,10 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.llm import Feature
 from glean.main import app
+from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 from glean.recipes import service
+from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.schemas import ImportUrlRequest
 from glean.recipes.stored import RecipeLlmResponse, RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
 
@@ -84,6 +86,33 @@ def test_search_recipes_uses_corpus_as_first_port_of_call_before_recipe_api_reso
     assert response.total == 1
     assert [result.title for result in response.results] == ["Spaghetti Carbonara"]
     assert response.results[0].external_id == "import:carbonara"
+    MockClient.assert_not_called()
+
+
+def test_search_recipes_builds_results_from_real_corpus_index(tmp_path: Path) -> None:
+    corpus_store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    corpus_store.save(
+        _stored_recipe("rec_1", title="Chicken Tikka Masala", cuisine="Indian", dietary_flags=["High-Protein"])
+    )
+
+    with (
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=corpus_store),
+        patch("glean.recipes.service.RecipeApiClient") as MockClient,
+    ):
+        response = service.search_recipes(
+            recipe_api_base_url="https://recipe-api.example.com",
+            recipe_api_key=SecretStr("test-key"),
+            q="tikka",
+        )
+
+    assert response.total == 1
+    result = response.results[0]
+    assert (result.external_id, result.title, result.cuisine, result.dietary_flags) == (
+        "rec_1",
+        "Chicken Tikka Masala",
+        "Indian",
+        ["High-Protein"],
+    )
     MockClient.assert_not_called()
 
 
