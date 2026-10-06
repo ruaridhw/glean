@@ -76,6 +76,8 @@ class MealPlanRequest {
     required this.mealsPerWeek,
     required this.dietaryFlags,
     this.maxActiveTimeMins,
+    this.source = 'saved',
+    this.excludeExternalIds = const [],
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -102,7 +104,12 @@ class MealPlanRequest {
   /// Null means no limit.
   final int? maxActiveTimeMins;
 
+  final String source;
+  final List<String> excludeExternalIds;
+
   Map<String, dynamic> toJson() => {
+    'source': source,
+    'exclude_external_ids': excludeExternalIds,
     'pantry': pantry.map((item) => item.toJson()).toList(),
     'recipe_history': recipeHistory.map((item) => item.toJson()).toList(),
     'food_group_coverage': foodGroupCoverage,
@@ -118,7 +125,8 @@ class MealPlanRequest {
 /// reviews and commits it via a DATA mutation.
 class MealPlanRecipe {
   const MealPlanRecipe({
-    required this.recipeId,
+    this.recipeId,
+    this.externalId,
     required this.title,
     required this.reason,
     this.missingIngredients = const [],
@@ -127,7 +135,8 @@ class MealPlanRecipe {
   factory MealPlanRecipe.fromJson(Map<String, dynamic> json) {
     final rawMissing = json['missing_ingredients'] as List<dynamic>?;
     return MealPlanRecipe(
-      recipeId: json['recipe_id'] as int,
+      recipeId: json['recipe_id'] as int?,
+      externalId: json['external_id'] as String?,
       title: json['title'] as String,
       reason: json['reason'] as String,
       missingIngredients:
@@ -135,7 +144,8 @@ class MealPlanRecipe {
     );
   }
 
-  final int recipeId;
+  final int? recipeId;
+  final String? externalId;
   final String title;
   final String reason;
   final List<String> missingIngredients;

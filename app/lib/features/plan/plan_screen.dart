@@ -101,16 +101,21 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     // highest-value haptic moment in the app (§7); a failure (a guarded,
     // aborted half-write per AC-PLAN-10) always surfaces here too, never
     // silently.
-    ref.listen<AsyncValue<void>>(generateWeekControllerProvider, (
-      AsyncValue<void>? previous,
-      AsyncValue<void> next,
+    ref.listen<AsyncValue<int>>(generateWeekControllerProvider, (
+      AsyncValue<int>? previous,
+      AsyncValue<int> next,
     ) {
       final bool wasPending = previous?.isLoading ?? false;
       if (!wasPending) return;
       next.when(
-        data: (_) {
+        data: (count) {
           ref.read(hapticsProvider).mediumImpact();
-          GleanSnackBar.show(context, 'Week generated');
+          GleanSnackBar.show(
+            context,
+            count == 0
+                ? 'No recipes fit right now. Try again.'
+                : 'Week generated',
+          );
         },
         error: (Object error, StackTrace stackTrace) {
           GleanSnackBar.show(context, 'Could not generate meal plan.');

@@ -4,7 +4,7 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
+import 'package:glean/data/providers/recipe_proposal.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,57 +23,12 @@ import 'package:glean/design_system/design_system.dart';
 /// mapping — including reassembling [NutritionOut] into the JSON shape
 /// `RecipeView.nutrition` expects, since that model has no `toJson` of its
 /// own — lives in exactly one place.
-Future<int> saveApiRecipe(WidgetRef ref, RecipeOut detail) {
-  return ref
-      .read(recipesRepositoryProvider)
-      .save(
-        userId: ref.read(currentUserIdProvider),
-        externalId: detail.externalId,
-        title: detail.title,
-        sourceUrl: detail.sourceUrl,
-        cuisine: detail.cuisine,
-        difficulty: detail.difficulty,
-        activeTimeMins: detail.activeTimeMins,
-        totalTimeMins: detail.totalTimeMins,
-        dietaryFlags: detail.dietaryFlags,
-        notSuitableFor: detail.notSuitableFor,
-        yieldCount: detail.yieldCount,
-        nutrition: _encodeNutrition(detail.nutrition),
-        instructions: <RecipeInstructionStep>[
-          for (final InstructionOut step in detail.instructions)
-            RecipeInstructionStep(
-              stepNumber: step.stepNumber,
-              phase: step.phase,
-              text: step.text,
-            ),
-        ],
-        ingredients: <SaveRecipeIngredient>[
-          for (final RecipeIngredientOut ing in detail.ingredients)
-            SaveRecipeIngredient(
-              canonicalName: ing.canonicalName,
-              apiIngredientId: ing.apiIngredientId,
-              quantity: ing.quantity,
-              unit: ing.unit,
-              preparation: ing.preparation,
-              isOptional: ing.isOptional,
-              substitutions: ing.substitutions,
-            ),
-        ],
-      );
-}
-
-String? _encodeNutrition(NutritionOut? nutrition) {
-  if (nutrition == null) return null;
-  return jsonEncode(<String, double>{
-    'calories': nutrition.calories,
-    'protein_g': nutrition.proteinG,
-    'carbohydrates_g': nutrition.carbohydratesG,
-    'fat_g': nutrition.fatG,
-    'fibre_g': nutrition.fibreG,
-    'sugar_g': nutrition.sugarG,
-    'sodium_mg': nutrition.sodiumMg,
-  });
-}
+Future<int> saveApiRecipe(WidgetRef ref, RecipeOut detail) =>
+    saveRecipeProposal(
+      ref.read(recipesRepositoryProvider),
+      ref.read(currentUserIdProvider),
+      detail,
+    );
 
 /// Deletes [recipe] and shows the undo snackbar (AC-UX-02). Does **not**
 /// fire a haptic itself — callers differ on whether one already fired
