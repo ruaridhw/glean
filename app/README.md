@@ -186,6 +186,20 @@ This works headless (verified on this box) and writes native assets under
 `ios/Runner/Assets.xcassets/LaunchImage.imageset/**` /
 `ios/Runner/Base.lproj/LaunchScreen.storyboard` — commit whatever it changes.
 
+## Launcher icons
+
+Both native launcher asset sets are generated from the existing Glean SVG,
+not Flutter's stock logo. The renderer preserves the leaf's stroked stem
+(the regression tracked in PR #90). Regenerate from `app/`:
+
+```bash
+uv run --with cairosvg --with pillow python scripts/generate_launcher_icons.py
+flutter test test/build/launcher_brand_test.dart
+```
+
+The largest iOS/Android PNGs are pixel-tested for green branding and the
+stem. This does not replace visual inspection on a simulator/device.
+
 ## Web target: deferred
 
 No Flutter web harness is committed (confirm with `flutter create --list-samples`
