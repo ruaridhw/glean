@@ -4,6 +4,12 @@ The model never sees the whole corpus. Recipes are ranked by how many pantry
 items they use (via the corpus search index), a random sample of the best
 matches becomes the candidate list, and random other recipes top it up when the
 pantry matches too few. Randomness keeps repeated Generate taps varied.
+
+Dietary flags are applied here, before sampling, because the corpus carries no
+dietary metadata of its own: each rule excludes recipes with an ingredient
+naming a forbidden food, unless that ingredient also carries a qualifier
+that makes it safe ("vegan mince", "coconut milk", "rice noodles"). Flags without
+an ingredient-level rule (Keto, Paleo) are left to the model.
 """
 
 from __future__ import annotations
@@ -27,10 +33,196 @@ _TOKEN_RE = re.compile(r"\w+")
 _MIN_TOKEN_LENGTH = 3
 
 
+def _words(*words: str) -> re.Pattern[str]:
+    # Whole words, optionally plural: "egg" matches "eggs" but not "eggplant".
+    return re.compile(r"\b(?:" + "|".join(re.escape(word) for word in words) + r")(?:s|es)?\b")
+
+
+_PLANT_BASED = _words("vegan", "vegetarian", "veggie", "plant", "meat free", "meat-free", "meatless")
+_MEAT_AND_FISH = (
+    _words(
+        "chicken",
+        "beef",
+        "pork",
+        "lamb",
+        "mince",
+        "meat",
+        "meatball",
+        "steak",
+        "bacon",
+        "lardon",
+        "chorizo",
+        "nduja",
+        "ham",
+        "salami",
+        "pancetta",
+        "prosciutto",
+        "sausage",
+        "turkey",
+        "duck",
+        "venison",
+        "gelatine",
+        "lard",
+        "suet",
+        "fish",
+        "salmon",
+        "cod",
+        "haddock",
+        "basa",
+        "tuna",
+        "mackerel",
+        "anchovy",
+        "anchovies",
+        "prawn",
+        "shrimp",
+        "crab",
+        "mussel",
+        "squid",
+        "pollock",
+        "hake",
+        "sea bass",
+        "seabass",
+        "bream",
+        "trout",
+        "sardine",
+        "plaice",
+        "monkfish",
+        "tilapia",
+        "kipper",
+        "lobster",
+        "scallop",
+        "clam",
+        "calamari",
+        "oyster",
+        "worcestershire",
+    ),
+    _PLANT_BASED,
+)
+_DAIRY = (
+    _words(
+        "cheese",
+        "cheddar",
+        "mozzarella",
+        "parmesan",
+        "feta",
+        "halloumi",
+        "paneer",
+        "ricotta",
+        "mascarpone",
+        "butter",
+        "ghee",
+        "milk",
+        "cream",
+        "creme fraiche",
+        "crème fraîche",
+        "yoghurt",
+        "yogurt",
+    ),
+    _words(
+        "vegan",
+        "plant",
+        "dairy free",
+        "dairy-free",
+        "coconut",
+        "oat",
+        "almond",
+        "soy",
+        "soya",
+        "peanut",
+        "cashew",
+        "nut",
+        "cocoa",
+    ),
+)
+_EGGS_AND_HONEY = (_words("egg", "honey", "mayonnaise", "mayo"), _PLANT_BASED)
+_GLUTEN = (
+    _words(
+        "wheat",
+        "flour",
+        "bread",
+        "breadcrumb",
+        "panko",
+        "pasta",
+        "spaghetti",
+        "linguine",
+        "tagliatelle",
+        "penne",
+        "rigatoni",
+        "tortiglioni",
+        "ditali",
+        "orzo",
+        "gnocchi",
+        "couscous",
+        "bulgur",
+        "noodle",
+        "naan",
+        "ciabatta",
+        "brioche",
+        "sourdough",
+        "flatbread",
+        "pitta",
+        "pita",
+        "tortilla",
+        "wrap",
+        "bun",
+        "pastry",
+        "crouton",
+        "barley",
+        "rye",
+        "beer",
+        "soy sauce",
+        "teriyaki",
+        "hoisin",
+        "seitan",
+        "kecap manis",
+        "ketjap manis",
+    ),
+    _words(
+        "gluten free",
+        "gluten-free",
+        "rice",
+        "corn",
+        "cornflour",
+        "gram",
+        "buckwheat",
+        "tapioca",
+        "potato",
+        "chickpea",
+        "coconut",
+        "almond",
+    ),
+)
+_NUTS = (
+    _words(
+        "peanut",
+        "almond",
+        "cashew",
+        "walnut",
+        "hazelnut",
+        "pecan",
+        "pistachio",
+        "macadamia",
+        "pine nut",
+        "satay",
+        "praline",
+        "nut",
+    ),
+    _words("nut free", "nut-free", "coconut", "nutmeg"),
+)
+_DIETARY_RULES: dict[str, tuple[tuple[re.Pattern[str], re.Pattern[str]], ...]] = {
+    "vegetarian": (_MEAT_AND_FISH,),
+    "vegan": (_MEAT_AND_FISH, _DAIRY, _EGGS_AND_HONEY),
+    "dairy-free": (_DAIRY,),
+    "gluten-free": (_GLUTEN,),
+    "nut-free": (_NUTS,),
+}
+
+
 def sample_corpus_candidates(
     corpus: RecipeCorpusStore,
     *,
     pantry_names: Sequence[str],
+    dietary_flags: Sequence[str],
     max_total_time_mins: int | None,
     exclude_external_ids: Collection[str],
     rng: random.Random,
@@ -39,10 +231,13 @@ def sample_corpus_candidates(
 ) -> list[RecipeSummary]:
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
+    rules = [rule for flag in dietary_flags for rule in _DIETARY_RULES.get(flag.strip().casefold(), ())]
     eligible = {
         summary.external_id: summary
         for summary in all_recipes
-        if summary.external_id not in excluded and _fits_time(summary, max_total_time_mins)
+        if summary.external_id not in excluded
+        and _fits_time(summary, max_total_time_mins)
+        and _fits_diet(summary, rules)
     }
 
     pantry_matches: Counter[str] = Counter()
@@ -85,3 +280,9 @@ def _fits_time(summary: RecipeSummary, max_total_time_mins: int | None) -> bool:
     return (
         max_total_time_mins is None or summary.total_time_mins is None or summary.total_time_mins <= max_total_time_mins
     )
+
+
+def _fits_diet(summary: RecipeSummary, rules: Sequence[tuple[re.Pattern[str], re.Pattern[str]]]) -> bool:
+    # Ingredients, not titles: a title like "Noodle Bowl" says nothing about rice vs wheat noodles.
+    names = [name.casefold() for name in summary.ingredient_names]
+    return not any(forbidden.search(name) and not safe.search(name) for forbidden, safe in rules for name in names)

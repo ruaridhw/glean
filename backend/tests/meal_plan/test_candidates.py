@@ -22,6 +22,7 @@ def test_pantry_matches_fill_the_sample_before_unrelated_recipes(tmp_path) -> No
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=["mince", "tinned tomatoes"],
+        dietary_flags=[],
         max_total_time_mins=None,
         exclude_external_ids=[],
         rng=random.Random(0),
@@ -43,6 +44,7 @@ def test_plural_pantry_names_match_singular_ingredients(tmp_path) -> None:
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=["potatoes"],
+        dietary_flags=[],
         max_total_time_mins=None,
         exclude_external_ids=[],
         rng=random.Random(0),
@@ -65,6 +67,7 @@ def test_tops_up_with_random_recipes_when_pantry_matches_run_out(tmp_path) -> No
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=["mince"],
+        dietary_flags=[],
         max_total_time_mins=None,
         exclude_external_ids=[],
         rng=random.Random(0),
@@ -89,6 +92,7 @@ def test_excludes_planned_recipes_and_recipes_over_the_time_limit(tmp_path) -> N
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=["mince"],
+        dietary_flags=[],
         max_total_time_mins=45,
         exclude_external_ids=["rec_planned"],
         rng=random.Random(0),
@@ -105,6 +109,7 @@ def test_sampling_varies_with_the_random_source(tmp_path) -> None:
         candidates = sample_corpus_candidates(
             corpus,
             pantry_names=["mince"],
+            dietary_flags=[],
             max_total_time_mins=None,
             exclude_external_ids=[],
             rng=random.Random(seed),
@@ -114,6 +119,85 @@ def test_sampling_varies_with_the_random_source(tmp_path) -> None:
 
     assert sample(1) == sample(1)
     assert sample(1) != sample(2)
+
+
+def test_vegetarian_excludes_meat_and_fish_but_keeps_vegan_alternatives(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_chicken", "Chicken Curry", ["chicken thigh", "tomato"], 30),
+            ("rec_fish_sauce", "Pad Thai", ["rice noodles", "fish sauce", "tomato"], 30),
+            ("rec_vegan_mince", "Veggie Chilli", ["vegan mince", "tomato"], 30),
+            ("rec_dal", "Tomato Dal", ["red lentils", "tomato"], 30),
+        ],
+    )
+
+    candidates = _sample(corpus, pantry=["tomatoes"], dietary_flags=["Vegetarian"])
+
+    assert {candidate.external_id for candidate in candidates} == {"rec_vegan_mince", "rec_dal"}
+
+
+def test_vegan_also_excludes_dairy_eggs_and_honey_but_keeps_plant_milks(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_halloumi", "Halloumi Bake", ["halloumi", "tomato"], 30),
+            ("rec_egg", "Shakshuka", ["eggs", "tomato"], 30),
+            ("rec_honey", "Honey Roast Veg", ["honey", "carrot"], 30),
+            ("rec_coconut", "Coconut Curry", ["coconut milk", "tomato"], 30),
+        ],
+    )
+
+    candidates = _sample(corpus, pantry=["tomatoes"], dietary_flags=["vegan"])
+
+    assert [candidate.external_id for candidate in candidates] == ["rec_coconut"]
+
+
+def test_gluten_free_excludes_wheat_but_keeps_rice_noodles_and_cornflour(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_spaghetti", "Spaghetti Pomodoro", ["spaghetti", "tomato"], 30),
+            ("rec_soy", "Stir Fry", ["soy sauce", "pepper"], 30),
+            ("rec_rice_noodles", "Noodle Bowl", ["rice noodles", "cornflour", "pepper"], 30),
+        ],
+    )
+
+    candidates = _sample(corpus, pantry=["pepper"], dietary_flags=["Gluten-Free"])
+
+    assert [candidate.external_id for candidate in candidates] == ["rec_rice_noodles"]
+
+
+def test_dairy_free_and_nut_free_exclusions(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_cheese", "Cheese Toastie", ["cheddar cheese", "bread"], 10),
+            ("rec_satay", "Satay Skewers", ["peanut butter", "tofu"], 20),
+            ("rec_oat", "Overnight Oats", ["oat milk", "banana"], 5),
+        ],
+    )
+
+    assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free", "Nut-Free"])] == ["rec_oat"]
+    assert {c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free"])} == {"rec_satay", "rec_oat"}
+
+
+def test_flags_without_ingredient_rules_leave_candidates_to_the_model(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_pasta", "Pasta Bake", ["penne", "cheese"], 30)])
+
+    assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Keto", "Paleo"])] == ["rec_pasta"]
+
+
+def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list[str]) -> list:
+    return sample_corpus_candidates(
+        corpus,
+        pantry_names=pantry,
+        dietary_flags=dietary_flags,
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=10,
+    )
 
 
 def _corpus(tmp_path, recipes: list[tuple[str, str, list[str], int | None]]) -> RecipeCorpusStore:

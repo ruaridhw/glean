@@ -128,6 +128,7 @@ def _generate_from_corpus(
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=[item.name for item in request.pantry],
+        dietary_flags=request.dietary_flags,
         max_total_time_mins=request.max_active_time_mins,
         exclude_external_ids=request.exclude_external_ids,
         rng=rng,
