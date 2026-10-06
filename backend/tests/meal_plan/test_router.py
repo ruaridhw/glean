@@ -66,6 +66,20 @@ def test_generate_meal_plan_returns_ranked_list(client: TestClient, auth_headers
     assert args[1] is MealPlanResponse
 
 
+def test_generate_meal_plan_accepts_uncategorised_pantry_items(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    # Pantry items added in the app get no ingredient category, so the app sends food_group: null.
+    request = {**SAMPLE_REQUEST, "pantry": [{**SAMPLE_REQUEST["pantry"][0], "food_group": None}]}
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = MealPlanResponse(suggestions=[])
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+
+    response = client.post("/meal-plan", headers=auth_headers, json=request)
+
+    assert response.status_code == 200
+
+
 def test_generate_meal_plan_requires_auth(test_settings: Settings) -> None:
     app.dependency_overrides[get_settings] = lambda: test_settings
     unauthenticated = TestClient(app)
