@@ -101,7 +101,6 @@ export interface MealPlanSuggestion {
   external_id: string | null;
   title: string;
   reason: string;
-  missing_ingredients: string[];
 }
 
 export interface MealPlanResponse {

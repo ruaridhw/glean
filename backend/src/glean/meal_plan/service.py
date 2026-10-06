@@ -45,7 +45,6 @@ Rules:
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
-- missing_ingredients lists the candidate's ingredients that the pantry does not cover
 - Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
   fine; do not pad the list with weaker choices to reach the limit."""
 

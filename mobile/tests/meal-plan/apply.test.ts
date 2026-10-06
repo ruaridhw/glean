@@ -16,7 +16,6 @@ const suggestion = (fields: { recipe_id?: number | null; external_id?: string | 
   external_id: null,
   title: "Recipe",
   reason: "Uses the pantry.",
-  missing_ingredients: [],
   ...fields,
 });
 

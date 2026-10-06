@@ -91,9 +91,6 @@ class CorpusMealPlanRecipe(BaseModel):
     external_id: str = Field(description="external_id of the chosen candidate, copied exactly.")
     title: str = Field(description="Title of the chosen candidate, copied exactly.")
     reason: str = Field(description="Human-readable explanation of why this recipe belongs in the meal plan")
-    missing_ingredients: list[str] = Field(
-        description="Candidate ingredient names not currently in the pantry that would need purchasing"
-    )
 
 
 class CorpusMealPlanResponse(BaseModel):
@@ -111,7 +108,8 @@ class MealPlanSuggestion(BaseModel):
     external_id: str | None = None
     title: str
     reason: str
-    missing_ingredients: list[str]
+    # Filled only by saved-mode plans; the app derives shopping gaps from the recipe itself.
+    missing_ingredients: list[str] = Field(default_factory=list)
 
 
 class MealPlanResult(BaseModel):

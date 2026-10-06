@@ -164,7 +164,6 @@ def test_corpus_mode_offers_sampled_candidates_and_returns_external_ids(tmp_path
                 external_id="rec_bolognese",
                 title="Beef Bolognese",
                 reason="Uses the mince.",
-                missing_ingredients=["spaghetti"],
             )
         ]
     )
@@ -185,8 +184,8 @@ def test_corpus_mode_drops_recipes_that_were_not_offered(tmp_path) -> None:
     llm_router = MagicMock()
     llm_router.invoke.return_value = CorpusMealPlanResponse(
         suggestions=[
-            CorpusMealPlanRecipe(external_id="rec_invented", title="X", reason="Invented.", missing_ingredients=[]),
-            CorpusMealPlanRecipe(external_id="rec_salmon", title="Y", reason="Offered.", missing_ingredients=[]),
+            CorpusMealPlanRecipe(external_id="rec_invented", title="X", reason="Invented."),
+            CorpusMealPlanRecipe(external_id="rec_salmon", title="Y", reason="Offered."),
         ]
     )
 
