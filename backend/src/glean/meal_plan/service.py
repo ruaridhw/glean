@@ -16,6 +16,8 @@ MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app
 Given a user's pantry, recipe history, and preferences, choose meals to cook this week.
 
 Rules:
+- Only choose recipes from recipe_history, and copy each chosen recipe's recipe_id and title exactly.
+  Never invent recipes or IDs; if no saved recipe fits, return fewer meals (or none).
 - Prioritise recipes that use pantry items with high urgency scores (expiring soon, unused long)
 - Balance food group coverage across the week
 - Respect dietary flags (never choose recipes incompatible with user's dietary_flags)
@@ -54,6 +56,15 @@ def generate_meal_plan(request: MealPlanRequest, *, llm_router: LLMRouter) -> Me
             HumanMessage(content=json.dumps(context, default=str)),
         ],
     )
+
+    # The app can only plan recipes the user has saved, so drop anything the model invented.
+    known_ids = {recipe.recipe_id for recipe in request.recipe_history}
+    unknown = [s.recipe_id for s in response.suggestions if s.recipe_id not in known_ids]
+    if unknown:
+        logger.error("meal plan suggested recipes outside recipe_history; dropping", extra={"recipe_ids": unknown})
+        response = response.model_copy(
+            update={"suggestions": [s for s in response.suggestions if s.recipe_id in known_ids]}
+        )
 
     # Enforce the count cap server-side: the prompt asks for at most meals_per_week, but
     # models (especially reasoning models) do not always comply, so guarantee the contract

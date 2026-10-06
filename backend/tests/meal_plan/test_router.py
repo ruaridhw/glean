@@ -123,8 +123,23 @@ def test_generate_meal_plan_truncates_to_meals_per_week() -> None:
         ]
     )
 
-    request = MealPlanRequest(**{**SAMPLE_REQUEST, "meals_per_week": 2})
+    history = [{"recipe_id": i, "title": f"Meal {i}", "last_cooked_at": None, "food_groups": []} for i in range(1, 5)]
+    request = MealPlanRequest(**{**SAMPLE_REQUEST, "recipe_history": history, "meals_per_week": 2})
     response = generate_meal_plan(request, llm_router=llm_router)
 
     assert len(response.suggestions) == 2
     assert [s.recipe_id for s in response.suggestions] == [1, 2]
+
+
+def test_generate_meal_plan_drops_recipes_not_in_history() -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = MealPlanResponse(
+        suggestions=[
+            {"recipe_id": 101, "title": "Classic Beef Bolognese", "reason": "Invented.", "missing_ingredients": []},
+            {"recipe_id": 3, "title": "Lentil Soup", "reason": "Saved recipe.", "missing_ingredients": []},
+        ]
+    )
+
+    response = generate_meal_plan(MealPlanRequest(**SAMPLE_REQUEST), llm_router=llm_router)
+
+    assert [s.recipe_id for s in response.suggestions] == [3]
