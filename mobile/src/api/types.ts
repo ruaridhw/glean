@@ -95,13 +95,14 @@ export interface RecipeSearchResponse {
 
 // --- Meal plan generation ---
 
-export interface MealPlanRecipe {
-  recipe_id: number;
+// A planned meal: a saved recipe (recipe_id) or a corpus recipe (external_id).
+export interface MealPlanSuggestion {
+  recipe_id: number | null;
+  external_id: string | null;
   title: string;
   reason: string;
-  missing_ingredients: string[];
 }
 
 export interface MealPlanResponse {
-  suggestions: MealPlanRecipe[];
+  suggestions: MealPlanSuggestion[];
 }

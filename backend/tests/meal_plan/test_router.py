@@ -1,6 +1,7 @@
 import json
+import random
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -8,8 +9,17 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
-from glean.meal_plan.schemas import MealPlanRecipe, MealPlanRequest, MealPlanResponse
+from glean.meal_plan.schemas import (
+    CorpusMealPlanRecipe,
+    CorpusMealPlanResponse,
+    MealPlanRecipe,
+    MealPlanRequest,
+    MealPlanResponse,
+)
 from glean.meal_plan.service import generate_meal_plan
+from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -143,3 +153,98 @@ def test_generate_meal_plan_drops_recipes_not_in_history() -> None:
     response = generate_meal_plan(MealPlanRequest(**SAMPLE_REQUEST), llm_router=llm_router)
 
     assert [s.recipe_id for s in response.suggestions] == [3]
+
+
+def test_corpus_mode_offers_sampled_candidates_and_returns_external_ids(tmp_path) -> None:
+    corpus = _corpus(tmp_path)
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_bolognese",
+                title="Beef Bolognese",
+                reason="Uses the mince.",
+            )
+        ]
+    )
+
+    result = generate_meal_plan(_corpus_request(), llm_router=llm_router, corpus=corpus, rng=random.Random(0))
+
+    assert [(s.external_id, s.recipe_id, s.title) for s in result.suggestions] == [
+        ("rec_bolognese", None, "Beef Bolognese")
+    ]
+    args, _ = llm_router.invoke.call_args
+    assert args[0] == Feature.MEAL_PLAN_GENERATION
+    assert args[1] is CorpusMealPlanResponse
+    offered = json.loads(args[2][-1].content)["candidates"]
+    assert {candidate["external_id"] for candidate in offered} == {"rec_bolognese", "rec_salmon"}
+
+
+def test_corpus_mode_drops_recipes_that_were_not_offered(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(external_id="rec_invented", title="X", reason="Invented."),
+            CorpusMealPlanRecipe(external_id="rec_salmon", title="Y", reason="Offered."),
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(), llm_router=llm_router, corpus=_corpus(tmp_path), rng=random.Random(0)
+    )
+
+    assert [s.external_id for s in result.suggestions] == ["rec_salmon"]
+
+
+def test_corpus_mode_skips_the_model_when_nothing_is_eligible(tmp_path) -> None:
+    llm_router = MagicMock()
+    request = _corpus_request(exclude_external_ids=["rec_bolognese", "rec_salmon"])
+
+    result = generate_meal_plan(request, llm_router=llm_router, corpus=_corpus(tmp_path), rng=random.Random(0))
+
+    assert result.suggestions == []
+    llm_router.invoke.assert_not_called()
+
+
+def test_meal_plan_endpoint_accepts_corpus_requests_without_recipe_history(
+    client: TestClient, auth_headers: dict[str, str], tmp_path
+) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(suggestions=[])
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    body = _corpus_request().model_dump(mode="json")
+    del body["recipe_history"]
+
+    with patch("glean.meal_plan.service.RecipeCorpusStore", return_value=_corpus(tmp_path)):
+        response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    assert response.json() == {"suggestions": []}
+
+
+def _corpus_request(**overrides: object) -> MealPlanRequest:
+    return MealPlanRequest(
+        **{
+            **SAMPLE_REQUEST,
+            "source": "corpus",
+            "recipe_history": [],
+            "pantry": [{**SAMPLE_REQUEST["pantry"][0], "name": "mince", "food_group": None}],
+            **overrides,
+        }
+    )
+
+
+def _corpus(tmp_path) -> RecipeCorpusStore:
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for external_id, title, ingredient in [
+        ("rec_bolognese", "Beef Bolognese", "beef mince"),
+        ("rec_salmon", "Salmon Teriyaki", "salmon fillet"),
+    ]:
+        corpus.save(
+            StoredRecipe(
+                external_id=external_id,
+                title=title,
+                ingredients=[StoredIngredient(canonical_name=ingredient, quantity=1, unit="each")],
+            )
+        )
+    return corpus
