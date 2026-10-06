@@ -64,7 +64,9 @@ class Feature(StrEnum):
     MEAL_PLAN_GENERATION = (
         "meal-plan-generation",
         LLMModelPolicy(
-            production_model="qwen/qwen3.7-plus",
+            # qwen/qwen3.7-plus took 27-33s per plan, past the 30s Lambda/API Gateway cap;
+            # this model returned the same plan in ~1.5s.
+            production_model="google/gemini-3.1-flash-lite",
             eval_model="z-ai/glm-5.2",
         ),
     )

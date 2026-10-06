@@ -88,7 +88,7 @@ class TestLLMRouter:
         assert DEFAULT_LLM_MODEL_POLICY[Feature.RECEIPT_SCAN].eval_model == "google/gemini-3.5-flash"
         assert DEFAULT_LLM_MODEL_POLICY[Feature.RECIPE_IMPORT].production_model == "qwen/qwen3.7-plus"
         assert DEFAULT_LLM_MODEL_POLICY[Feature.RECIPE_IMPORT].eval_model == "z-ai/glm-5.2"
-        assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].production_model == "qwen/qwen3.7-plus"
+        assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].production_model == "google/gemini-3.1-flash-lite"
         assert DEFAULT_LLM_MODEL_POLICY[Feature.MEAL_PLAN_GENERATION].eval_model == "z-ai/glm-5.2"
 
     def test_invoke_creates_chat_model_for_feature_and_purpose(self) -> None:
@@ -152,7 +152,7 @@ class TestLLMRouter:
 
         assert router.model_id_for(Feature.RECIPE_IMPORT) == "custom/recipe-prod"
         assert router.model_id_for(Feature.RECIPE_IMPORT, purpose=ModelPurpose.EVAL) == "custom/recipe-eval"
-        assert router.model_id_for(Feature.MEAL_PLAN_GENERATION) == "qwen/qwen3.7-plus"
+        assert router.model_id_for(Feature.MEAL_PLAN_GENERATION) == "google/gemini-3.1-flash-lite"
 
     def test_constructor_applies_partial_policy_overrides(self) -> None:
         router = LLMRouter(
