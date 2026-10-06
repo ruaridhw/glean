@@ -3,14 +3,10 @@ import { router } from "expo-router";
 import { useGenerateMealPlan } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
-import {
-  addMealPlanEntry,
-  deleteMealPlanEntry,
-  getMealPlanEntries,
-  markMealAsCooked,
-} from "@/db/plan";
+import { deleteMealPlanEntry, getMealPlanEntries, markMealAsCooked } from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
-import { addShoppingGapsForRecipe } from "@/db/shopping";
+import { planSuggestions } from "@/meal-plan/apply";
+import { showError, showSuccess } from "@/utils/toast";
 import PlanScreen from "../../app/(tabs)/plan";
 
 jest.mock("@expo/vector-icons", () => {
@@ -50,6 +46,7 @@ jest.mock("@/db/shopping", () => ({
   addShoppingGapsForRecipe: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("@/meal-plan/compress", () => ({ compressPantry: jest.fn().mockReturnValue([]) }));
+jest.mock("@/meal-plan/apply", () => ({ planSuggestions: jest.fn() }));
 jest.mock("@/utils/toast", () => ({ showError: jest.fn(), showSuccess: jest.fn() }));
 jest.mock("@/platform/haptics", () => ({ hapticImpact: jest.fn().mockResolvedValue(undefined) }));
 
@@ -92,7 +89,7 @@ describe("PlanScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mutate.mockImplementation((_payload, callbacks) => {
-      callbacks.onSuccess({ suggestions: [{ recipe_id: 10 }] });
+      callbacks.onSuccess({ suggestions: [{ recipe_id: null, external_id: "rec_10" }] });
     });
     (useGenerateMealPlan as jest.Mock).mockReturnValue({
       mutate,
@@ -120,12 +117,21 @@ describe("PlanScreen", () => {
     (getPantryItems as jest.Mock).mockResolvedValue([]);
     (getSavedRecipes as jest.Mock).mockResolvedValue([
       {
+        id: 7,
+        external_id: "rec_7",
+        title: "Tomato Pasta",
+        not_suitable_for: [],
+        instructions: [],
+      },
+      {
         id: 10,
+        external_id: null,
         title: "Miso Soup",
         not_suitable_for: [],
         instructions: [],
       },
     ]);
+    (planSuggestions as jest.Mock).mockResolvedValue(1);
   });
 
   it("renders progress and dinner slots", async () => {
@@ -188,15 +194,32 @@ describe("PlanScreen", () => {
     await waitFor(() => expect(deleteMealPlanEntry).toHaveBeenCalledWith(1));
   });
 
-  it("generates a week using existing suggestion and shopping gap flow", async () => {
+  it("generates the empty slots from the recipe corpus, skipping recipes already planned", async () => {
     const screen = render(<PlanScreen />);
 
-    await waitFor(() => expect(screen.getByText("Generate")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Tomato Pasta")).toBeTruthy());
     fireEvent.press(screen.getByText("Generate"));
 
-    await waitFor(() => expect(mutate).toHaveBeenCalled());
-    expect(addMealPlanEntry).toHaveBeenCalledWith(10);
-    expect(addShoppingGapsForRecipe).toHaveBeenCalledWith(10);
+    await waitFor(() => expect(showSuccess).toHaveBeenCalledWith("Week generated"));
+    expect(mutate.mock.calls[0][0]).toMatchObject({
+      source: "corpus",
+      exclude_external_ids: ["rec_7"],
+      meals_per_week: 2,
+    });
+    expect(planSuggestions).toHaveBeenCalledWith([{ recipe_id: null, external_id: "rec_10" }]);
+  });
+
+  it("says so when no recipes could be planned", async () => {
+    (planSuggestions as jest.Mock).mockResolvedValue(0);
+    const screen = render(<PlanScreen />);
+
+    await waitFor(() => expect(screen.getByText("Tomato Pasta")).toBeTruthy());
+    fireEvent.press(screen.getByText("Generate"));
+
+    await waitFor(() =>
+      expect(showError).toHaveBeenCalledWith("No recipes fit right now. Try again."),
+    );
+    expect(showSuccess).not.toHaveBeenCalled();
   });
 
   it("navigates empty slots to recipe search", async () => {

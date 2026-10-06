@@ -24,6 +24,7 @@ import {
 } from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
 import { addShoppingGapsForRecipe } from "@/db/shopping";
+import { planSuggestions } from "@/meal-plan/apply";
 import { compressPantry } from "@/meal-plan/compress";
 import {
   buildPlanSlots,
@@ -236,18 +237,17 @@ export default function PlanScreen() {
     ]);
 
     const compressed = compressPantry(pantry as Parameters<typeof compressPantry>[0]);
-    const recipeHistory = recipes.map((recipe) => ({
-      recipe_id: recipe.id,
-      title: recipe.title,
-      last_cooked_at: recipe.last_cooked_at ?? null,
-      food_groups: [] as string[],
-    }));
+    // Generate draws from the server's recipe corpus; never re-offer a recipe already planned.
+    const plannedRecipeIds = new Set(entries.map((entry) => entry.recipe_id));
+    const plannedExternalIds = recipes
+      .filter((recipe) => plannedRecipeIds.has(recipe.id) && recipe.external_id)
+      .map((recipe) => recipe.external_id as string);
 
     mealPlanMutation.mutate(
       {
+        source: "corpus",
         pantry: compressed,
-        recipe_history: recipeHistory,
-        food_group_coverage: {},
+        exclude_external_ids: plannedExternalIds,
         purchase_tolerance: config.purchase_tolerance,
         meals_per_week: emptySlots,
         dietary_flags: config.dietary_flags,
@@ -255,11 +255,12 @@ export default function PlanScreen() {
       },
       {
         onSuccess: async (result) => {
-          for (const suggestion of result.suggestions.slice(0, emptySlots)) {
-            await addMealPlanEntry(suggestion.recipe_id);
-            await addShoppingGapsForRecipe(suggestion.recipe_id);
+          const planned = await planSuggestions(result.suggestions.slice(0, emptySlots));
+          if (planned > 0) {
+            showSuccess("Week generated");
+          } else {
+            showError("No recipes fit right now. Try again.");
           }
-          showSuccess("Week generated");
           await load();
         },
         onError: () => {

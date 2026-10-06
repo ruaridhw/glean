@@ -52,9 +52,11 @@ export function useParseShoppingDescription() {
 export function useGenerateMealPlan() {
   return useMutation({
     mutationFn: (body: {
+      source?: "saved" | "corpus";
       pantry: unknown;
-      recipe_history: unknown;
-      food_group_coverage: Record<string, never>;
+      recipe_history?: unknown;
+      exclude_external_ids?: string[];
+      food_group_coverage?: Record<string, never>;
       purchase_tolerance: number;
       meals_per_week: number;
       dietary_flags: string[];
