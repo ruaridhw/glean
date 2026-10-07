@@ -145,28 +145,59 @@ signing/build-number gotchas neither lane nor any automated test catches.
 Xcode's own "Automatically manage signing" (already on) is adequate; adopt
 `match` only once a second signer/machine needs the same certificates.
 
+Both lanes require non-secret production configuration and validate it before
+querying a store or building. Supply your deployed public values; localhost,
+HTTP and missing configuration are rejected:
+
 ```bash
+export API_BASE_URL=https://<production-api-host>
+export COGNITO_DOMAIN=https://<production-cognito-host>
+export COGNITO_CLIENT_ID=<public-app-client-id>
+
 # iOS — needs an App Store Connect API key (see ios/fastlane/Fastfile's header)
-cd ios && bundle exec fastlane beta \
-  ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_CONTENT=...
+cd ios && ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_CONTENT=... \
+  bundle exec fastlane beta
 
 # Android — needs android/key.properties (one-time keystore setup — see
 # android/fastlane/Fastfile's header) and a Play service-account JSON
 cd android && PLAY_STORE_JSON_KEY="$(cat service-account.json)" bundle exec fastlane internal
 ```
 
-Neither lane can run on this box (no Ruby/Bundler/fastlane, no Xcode, no
-Android SDK) — they're authored and reviewed for correctness, not executed
-here.
+`ruby scripts/test_release_lanes.rb` executes both actual lane definitions
+with fake shell/store boundaries: configuration propagation, early rejection,
+production entrypoints, artifact paths and all-track numbering. CI runs this
+without signing or uploading. It is not a signed build or release smoke;
+those remain Mac-only cutover gates.
 
 **Build-number auto-increment** replaces what EAS used to provide silently
 (`appVersionSource: "remote"`, `autoIncrement: true`): both lanes ask the
 respective store for the highest build number/version code already uploaded
-and increment it (`app_store_build_number` for iOS,
-`google_play_track_version_codes` for Android) rather than trusting
+and increment it (`app_store_build_number` for iOS; every Android Play track,
+including custom tracks, discovered through Supply and queried with
+`google_play_track_version_codes`) rather than trusting
 `pubspec.yaml`'s local `+N`, which is never bumped by hand. Both lanes pass
 `-t lib/main.dart` explicitly — never `lib/main_e2e.dart`
 (`test/build/release_entrypoint_test.dart` enforces this).
+
+## Local persistence and regression coverage
+
+Drift schema v2 preserves corpus identity after recipe deletion, reversible
+cook-history links, and meal-owned shopping requirements. Existing v1 gaps
+retain their old shortfall meaning; new requirements are aggregated for display
+and allocate pantry stock only once. `test/data/fixtures/schema_v1.sql` is a
+frozen **Flutter v1** database fixture, not Expo data migration.
+
+Planning uses the viewed week, rechecks current capacity transactionally, and
+retains excess rollover meals in their original week. Warm Monday/resume
+rollover is clock-driven. Destructive Undo restores full row identity and linked
+gaps/cooking state. The shell's connectivity banner mirrors Expo's network
+presence message; it does not claim Internet reachability.
+
+Design-system goldens under `test/design_system/goldens/` exercise rendered
+output, actions and accessibility. Review intentional golden changes visually;
+do not regenerate them merely to silence failures. Goldens and mocked plugin
+boundaries do not substitute native camera, secure-storage, Cognito or haptics
+verification.
 
 ## Splash screen
 

@@ -13,7 +13,16 @@ The merged #95/#98 backend contract and decisions in #97/#96 supersede the saved
 - Shopping parse always proposes items; clarifying questions are optional hints. Each question on Shop review has an answer field. Submit appends answers to the original description and re-parses, preserving edited values and selections for case-insensitive matching original item names. This is review reconciliation, not ingredient-identity matching (#100 remains out of scope).
 - Nullable pantry `food_group` no longer causes a server-side 422 (#95). The taxonomy change below is still needed for grouping and expiry, but not for avoiding that old meal-plan bug.
 
-Native builds, iOS/Android visual verification and store cutover remain separate gates; passing headless tests is not device evidence.
+## Review decisions — 2026-10-07
+
+- Manual Add targets the Plan week the user viewed, with a pending guard and fresh transactional capacity/deduplication checks. Generate also rechecks the current dinners/week limit at persistence time.
+- Rollover fills only current remaining capacity, oldest first; excess stays in its original week. Monday/resume rollover must work without remounting Plan.
+- Shopping stores each meal's full requirements and aggregates compatible deficits in its reactive display, allocating pantry stock once. Delete/cook/Undo must preserve surviving meals' ownership. Unit mismatches are normalized or rejected, never treated as raw comparable numbers.
+- Drift v2 preserves corpus exclusion identity and reversible cook history. Frozen Flutter-v1 reopen/migration tests preserve old shortfalls, data, seeds and foreign keys; this is not Expo data migration.
+- Receipt checkout and manual planning are atomic; destructive Undo restores complete identity, linked shopping rows and cooked state. Logout wins against late refresh/storage completions; identity-only restart remains expired with local data available.
+- Restore Expo's offline network-presence banner. Release remains Mac-only Fastlane, with required public production defines and Android numbering above every Play track, including custom tracks. No automated APK release job is added.
+
+Native builds, iOS/Android visual verification and store cutover remain separate gates; passing headless tests, fake-boundary lane execution or goldens is not device/release evidence.
 
 ---
 
