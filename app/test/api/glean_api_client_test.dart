@@ -490,7 +490,7 @@ void main() {
     );
 
     test('a parsed ingredient missing food_group throws ApiParseException — '
-        'food_group is the field POST /meal-plan validates non-nullably '
+        'receipt proposals always emit this computed field, unlike nullable meal-plan inputs '
         '(AC-DATA-11)', () async {
       when(
         () => httpClient.post(

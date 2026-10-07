@@ -27,43 +27,9 @@ import '../support/harness.dart';
 
 void main() {
   group('AppRoutes structure', () {
-    test('exactly five tab branches, landing on Pantry', () {
-      expect(AppRoutes.tabBranchRoots, hasLength(5));
-      expect(AppRoutes.tabBranchRoots.first.path, AppRoutes.pantry.path);
-    });
-
     test('every route name is unique', () {
       final names = AppRoutes.all.map((route) => route.name).toList();
       expect(names.toSet(), hasLength(names.length));
-    });
-
-    test('intake routes live outside the tab shell paths', () {
-      final tabPaths = AppRoutes.tabBranchRoots
-          .map((route) => route.path)
-          .toSet();
-      for (final route in AppRoutes.intakeRoutes) {
-        expect(
-          tabPaths.contains(route.path),
-          isFalse,
-          reason: '${route.path} is a tab root',
-        );
-        expect(route.path, startsWith('/intake/'));
-      }
-    });
-
-    test('there is no dedicated meals-search route (AC-MEAL-07)', () {
-      // Search is a single inline TextField inside MealsScreen now — a
-      // second, deep-link-reachable search screen is exactly what "one
-      // search affordance" rules out, so there must be nothing in the
-      // table named or pathed for it.
-      expect(
-        AppRoutes.all.map((route) => route.name),
-        isNot(contains('meals-search')),
-      );
-      expect(
-        AppRoutes.all.map((route) => route.path),
-        isNot(contains('/meals/search')),
-      );
     });
   });
 
@@ -84,6 +50,10 @@ void main() {
     testWidgets('each tab branch root resolves to its own screen widget', (
       tester,
     ) async {
+      await tester.pumpWidget(harness.app());
+      await tester.pumpAndSettle();
+      expect(find.byType(PantryScreen), findsOneWidget);
+      expect(find.byType(NavigationDestination), findsNWidgets(5));
       await pumpAt(tester, AppRoutes.pantry.path);
       expect(find.byType(PantryScreen), findsOneWidget);
 

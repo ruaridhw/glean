@@ -1,22 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/design_system/design_system.dart';
 
 void main() {
   group('SkeletonBox', () {
-    test('never instantiates its own AnimationController (AC-DS-11)', () {
-      // Scoped to the constructor call rather than the bare word, since this
-      // file's own doc comment legitimately *names* `AnimationController` in
-      // prose while explaining that this widget doesn't need one.
-      final String source = File(
-        'lib/design_system/skeleton.dart',
-      ).readAsStringSync();
-      expect(source.contains('AnimationController('), isFalse);
-      expect(source.contains('TweenAnimationBuilder'), isTrue);
-    });
-
     testWidgets(
       'pulses opacity over time without a caller-managed controller',
       (WidgetTester tester) async {

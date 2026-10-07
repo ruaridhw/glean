@@ -1,110 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/design_system/design_system.dart';
+import '../support/visual.dart';
 
-/// Renders the built-in button widgets with *no* local style overrides —
-/// every visual comes from `gleanLightTheme`'s `*ButtonTheme`s (AC-DS-04,
-/// AC-DS-05). If a screen ever needed to pass its own `style:`/radius to get
-/// the brand look, that would be exactly the "hand-rolled pill button"
-/// AC-DS-05 rules out.
 void main() {
-  group('Themed buttons', () {
-    testWidgets('FilledButton is pill-shaped and brand-coloured from the theme', (
-      WidgetTester tester,
-    ) async {
+  setUpAll(loadBrandFonts);
+  testWidgets(
+    'filled confirmation has branded output and becomes inert when disabled',
+    (tester) async {
+      var taps = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          theme: gleanLightTheme,
-          home: Scaffold(
-            body: FilledButton(onPressed: () {}, child: const Text('Confirm')),
-          ),
-        ),
-      );
-
-      final ThemeData theme = Theme.of(tester.element(find.text('Confirm')));
-      final ButtonStyle themed = theme.filledButtonTheme.style!;
-
-      expect(
-        themed.shape?.resolve(<WidgetState>{}),
-        isA<StadiumBorder>(),
-        reason:
-            'pill shape must come from FilledButtonThemeData, not a local BorderRadius',
-      );
-      expect(
-        themed.backgroundColor?.resolve(<WidgetState>{}),
-        theme.colorScheme.primary,
-      );
-      expect(themed.foregroundColor?.resolve(<WidgetState>{}), Colors.white);
-    });
-
-    testWidgets('OutlinedButton is pill-shaped with the brand primary border', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: gleanLightTheme,
-          home: Scaffold(
-            body: OutlinedButton(
-              onPressed: () {},
-              child: const Text('Cooked?'),
+        visual(
+          Center(
+            child: FilledButton(
+              onPressed: () {
+                taps++;
+              },
+              child: const Text('Confirm'),
             ),
           ),
         ),
       );
-
-      final ThemeData theme = Theme.of(tester.element(find.text('Cooked?')));
-      final ButtonStyle themed = theme.outlinedButtonTheme.style!;
-
-      expect(themed.shape?.resolve(<WidgetState>{}), isA<StadiumBorder>());
-      expect(
-        themed.side?.resolve(<WidgetState>{})?.color,
-        theme.colorScheme.primary,
-      );
-    });
-
-    testWidgets(
-      'the pill-chip variant (FilterChip) is stadium-shaped from ChipThemeData',
-      (WidgetTester tester) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: gleanLightTheme,
-            home: Scaffold(
-              body: FilterChip(
-                label: const Text('Vegetarian'),
-                selected: false,
-                onSelected: (_) {},
-              ),
-            ),
+      await golden(tester, 'button-filled');
+      await tester.tap(find.text('Confirm'));
+      expect(taps, 1);
+      await tester.pumpWidget(
+        visual(
+          const Center(
+            child: FilledButton(onPressed: null, child: Text('Confirm')),
           ),
-        );
-
-        final ThemeData theme = Theme.of(
-          tester.element(find.text('Vegetarian')),
-        );
-        expect(theme.chipTheme.shape, isA<StadiumBorder>());
-      },
+        ),
+      );
+      await tester.tap(find.text('Confirm'));
+      expect(taps, 1);
+    },
+  );
+  testWidgets('outlined cooking action renders and dispatches one activation', (
+    tester,
+  ) async {
+    var taps = 0;
+    await tester.pumpWidget(
+      visual(
+        Center(
+          child: OutlinedButton(
+            onPressed: () {
+              taps++;
+            },
+            child: const Text('Cooked?'),
+          ),
+        ),
+      ),
     );
-
-    testWidgets('IconButton is a 40x40 pill from IconButtonThemeData', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: gleanLightTheme,
-          home: Scaffold(
-            body: IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.close_rounded),
+    await golden(tester, 'button-outlined');
+    await tester.tap(find.text('Cooked?'));
+    expect(taps, 1);
+  });
+  testWidgets('dietary chip toggles its visible selection and announces it', (
+    tester,
+  ) async {
+    var selected = false;
+    await tester.pumpWidget(
+      visual(
+        StatefulBuilder(
+          builder: (context, setState) => Center(
+            child: FilterChip(
+              label: const Text('Vegetarian'),
+              selected: selected,
+              onSelected: (value) => setState(() => selected = value),
             ),
           ),
         ),
-      );
-
-      final ThemeData theme = Theme.of(
-        tester.element(find.byIcon(Icons.close_rounded)),
-      );
-      final ButtonStyle themed = theme.iconButtonTheme.style!;
-      expect(themed.fixedSize?.resolve(<WidgetState>{}), const Size.square(40));
-    });
+      ),
+    );
+    await tester.tap(find.text('Vegetarian'));
+    await tester.pumpAndSettle();
+    expect(selected, isTrue);
+    expect(
+      tester.getSemantics(find.byType(FilterChip)).label,
+      contains('Vegetarian'),
+    );
+    await golden(tester, 'chip-selected');
+  });
+  testWidgets('remove icon has a discoverable action and one activation', (
+    tester,
+  ) async {
+    var taps = 0;
+    await tester.pumpWidget(
+      visual(
+        Center(
+          child: IconButton(
+            tooltip: 'Remove recipe',
+            onPressed: () {
+              taps++;
+            },
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ),
+    );
+    await golden(tester, 'button-icon');
+    await tester.tap(find.byTooltip('Remove recipe'));
+    expect(taps, 1);
   });
 }

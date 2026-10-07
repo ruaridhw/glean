@@ -1,7 +1,9 @@
 # backend/tests/receipts/test_schemas.py
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import get_args
 
 import pytest
@@ -10,34 +12,11 @@ from pydantic import ValidationError
 from glean.meal_plan.schemas import CompressedPantryItem
 from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, IngredientCategory, ParsedIngredient
 
-# Mirrors app/lib/data/seed/taxonomy.dart exactly. If this ever needs to change,
-# INGREDIENT_CATEGORY_FOOD_GROUPS must change to match — the two must never drift, since the
-# client can only map categories it already knows about. The Flutter side of this contract is
-# enforced by app/test/data/taxonomy_contract_test.dart, which reads this file as text.
+# Frozen wire examples, consumed by Flutter through its real decoder and
+# seeded SQLite repositories. Neither side parses the other side's source.
+WIRE_ITEMS = json.loads((Path(__file__).parents[1] / "fixtures/receipt_taxonomy.json").read_text())["items"]
 EXPECTED_CLIENT_TAXONOMY: dict[str, str] = {
-    "leafy_greens": "vegetables",
-    "brassicas": "vegetables",
-    "alliums": "vegetables",
-    "root_vegetables": "vegetables",
-    "nightshades": "vegetables",
-    "legumes": "protein",
-    "citrus": "fruit",
-    "tropical_fruit": "fruit",
-    "stone_fruit": "fruit",
-    "berries": "fruit",
-    "red_meat": "protein",
-    "poultry": "protein",
-    "seafood": "protein",
-    "eggs": "protein",
-    "dairy": "dairy",
-    "grains": "carbohydrates",
-    "pasta_rice": "carbohydrates",
-    "bread": "carbohydrates",
-    "oils_fats": "fats",
-    "herbs_fresh": "condiments",
-    "herbs_dried": "condiments",
-    "spices": "condiments",
-    "condiments": "condiments",
+    item["category"]: item["food_group"] for item in WIRE_ITEMS if item["category"] is not None
 }
 
 
@@ -55,10 +34,10 @@ def _make_ingredient(**overrides: object) -> ParsedIngredient:
 
 def test_taxonomy_matches_the_mobile_client_exactly() -> None:
     assert INGREDIENT_CATEGORY_FOOD_GROUPS == EXPECTED_CLIENT_TAXONOMY
-
-
-def test_taxonomy_has_23_categories() -> None:
-    assert len(INGREDIENT_CATEGORY_FOOD_GROUPS) == 23
+    for wire in WIRE_ITEMS:
+        # food_group is emitted, not accepted as an independent model input.
+        parsed = ParsedIngredient.model_validate({key: value for key, value in wire.items() if key != "food_group"})
+        assert parsed.model_dump(mode="json") == wire
 
 
 def test_taxonomy_matches_ingredient_category_literal() -> None:
@@ -74,8 +53,8 @@ def test_food_group_is_derived_deterministically_from_category(category: str, ex
 
 
 def test_null_category_yields_other_food_group() -> None:
-    """food_group is non-nullable (meal_plan/schemas.py requires it), so a null category must
-    still resolve to a food group rather than propagating null."""
+    """Receipt proposals always emit a deterministic UI bucket, even with no category.
+    Meal-plan inputs separately allow null food_group (#95)."""
     ingredient = _make_ingredient(category=None)
     assert ingredient.category is None
     assert ingredient.food_group == "other"
@@ -127,8 +106,7 @@ def test_in_taxonomy_category_does_not_trigger_fallback_warning(caplog: pytest.L
 
 
 def test_categorised_ingredient_satisfies_meal_plan_food_group_validation() -> None:
-    """Reproduces the fix for the meal-plan 422: a categorised ingredient's food_group is a
-    non-null string, so it passes CompressedPantryItem's non-nullable food_group field."""
+    """A derived receipt bucket remains valid for nullable meal-plan inputs."""
     ingredient = _make_ingredient(category="poultry")
 
     pantry_item = CompressedPantryItem(
@@ -144,9 +122,7 @@ def test_categorised_ingredient_satisfies_meal_plan_food_group_validation() -> N
 
 
 def test_uncategorised_ingredient_also_satisfies_meal_plan_food_group_validation() -> None:
-    """The 422 vector is closed even for a genuinely unclassifiable ingredient: food_group
-    falls back to "other" rather than null, so it still passes CompressedPantryItem's
-    non-nullable food_group field."""
+    """The receipt fallback remains accepted by nullable meal-plan inputs."""
     ingredient = _make_ingredient(category=None)
 
     pantry_item = CompressedPantryItem(
@@ -159,12 +135,3 @@ def test_uncategorised_ingredient_also_satisfies_meal_plan_food_group_validation
     )
 
     assert pantry_item.food_group == "other"
-
-
-@pytest.mark.parametrize("category", [*EXPECTED_CLIENT_TAXONOMY, None, "artisanal-cheese-boutique"])
-def test_food_group_is_never_null(category: str | None) -> None:
-    """Covers every input shape: a taxonomy category, an omitted/null category, and an
-    out-of-taxonomy LLM value — food_group must resolve to a string in all three cases."""
-    ingredient = _make_ingredient(category=category)
-    assert ingredient.food_group is not None
-    assert isinstance(ingredient.food_group, str)

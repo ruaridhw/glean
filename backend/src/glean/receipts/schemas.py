@@ -108,11 +108,10 @@ class ParsedIngredient(BaseModel):
     )
     @property
     def food_group(self) -> str:
-        # Non-nullable by design: meal_plan/schemas.py declares food_group non-nullable, so a
-        # null here would 422 generation for exactly the ingredients this change exists to fix.
-        # "other" is an existing client-side food-group bucket (the coalesce in
-        # app/lib/data/repositories/pantry_repository.dart's watchAll/getAll),
-        # so this needs no new vocabulary and renders correctly with zero client changes.
+        # Receipt proposals always emit a stable UI bucket; the LLM cannot
+        # choose it independently of category. Meal-plan input food_group is
+        # separately nullable (#95), so this fallback is not a validation rule.
+        # "other" matches the clients' uncategorised pantry fallback.
         if self.category is None:
             return "other"
         return INGREDIENT_CATEGORY_FOOD_GROUPS.get(self.category, "other")
