@@ -56,4 +56,7 @@ jobs:
       # `flutter test` (no path) only runs `test/` — `integration_test/` is a
       # separate top-level directory it does not recurse into, so this is
       # unit + widget only, never the device-bound suite (AC-CI-01).
+      # Executes both release lanes with fake shell/store boundaries only.
+      # This validates production defines/version codes, not an APK CI build.
+      - run: ruby scripts/test_release_lanes.rb
       - run: flutter test

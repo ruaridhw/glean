@@ -21,11 +21,14 @@
 # signing (so CI and any machine without the keystore keep working — they
 # just can't produce anything this lane would actually upload).
 
+require_relative '../../fastlane/release_config'
+
 default_platform(:android)
 
 platform :android do
   desc 'Build and upload a release to the Play internal track'
   lane :internal do
+    defines = release_defines
     keystore_properties = File.join(Dir.pwd, '..', 'key.properties')
     unless File.exist?(keystore_properties)
       UI.user_error!(
@@ -44,11 +47,7 @@ platform :android do
     # `autoIncrement: true`): ask the Play Console for the highest version
     # code already uploaded to *any* track (a version code must be strictly
     # increasing across the whole app, not just one track) and increment it.
-    existing_codes = google_play_track_version_codes(
-      package_name: package_name,
-      track: track,
-    )
-    version_code = (existing_codes.max || 0) + 1
+    version_code = next_play_version_code(package_name)
 
     UI.message("Building versionCode #{version_code} (-t lib/main.dart)")
 
@@ -59,13 +58,13 @@ platform :android do
     # `lib/main.dart`.
     sh(
       'cd ../.. && flutter build appbundle --release ' \
-      "-t lib/main.dart --build-number=#{version_code}",
+      "-t lib/main.dart --build-number=#{version_code} #{defines}",
     )
 
     upload_to_play_store(
       package_name: package_name,
       track: track,
-      aab: '../build/app/outputs/bundle/release/app-release.aab',
+      aab: '../../build/app/outputs/bundle/release/app-release.aab',
     )
   end
 end
