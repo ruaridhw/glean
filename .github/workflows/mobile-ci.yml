@@ -246,6 +246,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add app.json
           git commit -m "🔖 chore: bump patch version [skip ci]"
+          # main often moves during the long EAS build; replay the bump on top instead of failing.
+          git pull --rebase origin main
           git push
 
       - name: Get app version
