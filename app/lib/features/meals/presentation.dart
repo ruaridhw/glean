@@ -237,6 +237,9 @@ class RecipeDetailData {
 /// server at all" — [GleanApiClient] already gives us that distinction as a
 /// typed exception, where RN had to sniff a plain `status` field.
 String describeRecipeSearchError(Object error) {
+  if (error is ApiAuthException) {
+    return 'Your session has expired. Sign in again to search recipes.';
+  }
   if (error is ApiServerException) {
     return 'Search failed because the server returned an error.';
   }

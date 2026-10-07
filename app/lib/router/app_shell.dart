@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../design_system/haptics.dart';
 import '../features/auth/widgets/signed_out_banner.dart';
+import '../features/auth/widgets/offline_banner.dart';
 
 /// The five-tab shell. Built once by [StatefulShellRoute.indexedStack] and
 /// handed a [StatefulNavigationShell] that keeps one independent `Navigator`
@@ -58,6 +59,7 @@ class AppShell extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: <Widget>[
+          const OfflineBanner(),
           const SignedOutBanner(),
           Expanded(child: navigationShell),
         ],

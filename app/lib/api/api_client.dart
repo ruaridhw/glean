@@ -123,21 +123,20 @@ class GleanApiClient {
     final uri = _uri('/receipts/scan');
     final boundary =
         'glean-boundary-${identityHashCode(imageBytes)}-${imageBytes.length}';
-    final request = http.Request('POST', uri);
-    request.headers.addAll(await _authHeaders());
-    request.headers['Content-Type'] = 'multipart/form-data; boundary=$boundary';
-    request.bodyBytes = _multipartBody(
-      boundary: boundary,
-      fieldName: 'file',
-      filename: filename,
-      contentType: contentType,
-      bytes: imageBytes,
-    );
-    return _send(
-      uri,
-      () async => http.Response.fromStream(await httpClient.send(request)),
-      (dynamic json) => ScanResponse.fromJson(json as Map<String, dynamic>),
-    );
+    return _send(uri, () async {
+      final request = http.Request('POST', uri);
+      request.headers.addAll(await _authHeaders());
+      request.headers['Content-Type'] =
+          'multipart/form-data; boundary=$boundary';
+      request.bodyBytes = _multipartBody(
+        boundary: boundary,
+        fieldName: 'file',
+        filename: filename,
+        contentType: contentType,
+        bytes: imageBytes,
+      );
+      return http.Response.fromStream(await httpClient.send(request));
+    }, (dynamic json) => ScanResponse.fromJson(json as Map<String, dynamic>));
   }
 
   Future<ScanResponse> describeReceipt(String text) {
@@ -191,7 +190,10 @@ class GleanApiClient {
   }
 
   Future<Map<String, String>> _authHeaders() async {
-    final token = await _accessTokenProvider();
+    final token = await _accessTokenProvider().timeout(
+      timeout,
+      onTimeout: () => throw const ApiTimeoutException('authentication'),
+    );
     return {
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };

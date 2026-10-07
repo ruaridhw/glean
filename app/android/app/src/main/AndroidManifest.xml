@@ -4,6 +4,8 @@
          §2 established it as vestigial in the RN app (the "describe" screens
          are plain text inputs, not audio capture), so it is not carried over. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <application
         android:label="glean"

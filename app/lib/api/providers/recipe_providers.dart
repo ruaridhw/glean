@@ -28,6 +28,8 @@ const Duration recipeSearchDebounce = Duration(milliseconds: 350);
 // otherwise relies on, and pubspec.yaml (orchestrator-owned) declares only
 // `flutter_riverpod`. Letting Dart infer the type avoids an
 // `depend_on_referenced_packages` lint on a package we don't declare.
+// Surface remote failures promptly. Riverpod's automatic retries otherwise
+// keep auth rejections behind a loading skeleton instead of showing recovery.
 final recipeSearchProvider = FutureProvider.autoDispose
     .family<RecipeSearchResponse, String>((ref, rawQuery) async {
       final query = toRequiredSubmittedText(rawQuery);
@@ -42,7 +44,7 @@ final recipeSearchProvider = FutureProvider.autoDispose
 
       final client = ref.watch(apiClientProvider);
       return client.searchRecipes(q: query);
-    });
+    }, retry: (retryCount, error) => null);
 
 /// Recipe detail lookup by external id (`GET /recipes/{id}`). `family` +
 /// `autoDispose` so a screen that navigates away drops the fetch rather
@@ -52,7 +54,7 @@ final recipeDetailProvider = FutureProvider.autoDispose
     .family<RecipeOut, String>((ref, recipeId) async {
       final client = ref.watch(apiClientProvider);
       return client.getRecipe(recipeId);
-    });
+    }, retry: (retryCount, error) => null);
 
 /// Command controller for `POST /recipes/import-url`. The imported recipe
 /// is an ephemeral proposal (AC-DATA-06): the caller still has to run it
