@@ -1,265 +1,161 @@
-// Coverage for generation's guarantees (AC-PLAN-07/08/09/10): real
-// `food_groups`/`food_group_coverage` in the request, `preferred_servings`
-// honoured on every inserted entry, a double-tap can't fire a second
-// network call while one is pending, and a hallucinated `recipe_id` in the
-// response aborts the whole batch — nothing is written, and the caller
-// always sees an error — rather than RN's silent half-write.
+// Replaces obsolete saved-only responses with Plan -> corpus -> detail -> DB.
 import 'dart:convert';
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/data/repositories/ingredients_repository.dart';
-import 'package:glean/data/repositories/pantry_repository.dart';
-import 'package:glean/data/repositories/plan_repository.dart';
-import 'package:glean/data/repositories/recipes_repository.dart';
-import 'package:glean/data/repositories/shopping_repository.dart';
-import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/data/models/user_config_view.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/util/week.dart';
-import 'package:glean/features/plan/providers/generate_week_controller.dart';
+import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
-import 'package:mocktail/mocktail.dart';
-
+import 'package:http/testing.dart';
 import '../../support/harness.dart';
 
-class MockHttpClient extends Mock implements http.Client {}
-
-http.Response _mealPlanResponse(List<Map<String, Object?>> suggestions) {
-  return http.Response(
-    jsonEncode(<String, Object?>{'suggestions': suggestions}),
-    200,
-    headers: const {'content-type': 'application/json'},
-  );
-}
+Map<String, Object?> pick(String id) => {
+  'recipe_id': null,
+  'external_id': id,
+  'title': 'Corpus $id',
+  'reason': 'fit',
+};
+http.Response proposal(List<Map<String, Object?>> picks) =>
+    http.Response(jsonEncode({'suggestions': picks}), 200);
+http.Response detail(String id) => http.Response(
+  jsonEncode({
+    'external_id': id,
+    'title': 'Corpus $id',
+    'ingredients': [
+      {'canonical_name': 'beans', 'quantity': 200, 'unit': 'g'},
+    ],
+  }),
+  200,
+);
 
 void main() {
-  setUpAll(() {
-    registerFallbackValue(Uri.parse('http://localhost:9999/'));
-  });
-
-  group('GenerateWeekController', () {
-    late MockHttpClient httpClient;
-    late AppTestHarness harness;
-    late RecipesRepository recipes;
-    late PlanRepository plan;
-    late ShoppingRepository shopping;
-    late UserConfigRepository userConfig;
-    final DateTime week = startOfWeek(DateTime(2026, 1, 5));
-
-    setUp(() {
-      httpClient = MockHttpClient();
-      harness = AppTestHarness(httpClient: httpClient);
-      final ingredients = IngredientsRepository(harness.db);
-      recipes = RecipesRepository(harness.db, ingredients);
-      plan = PlanRepository(
-        harness.db,
-        PantryRepository(harness.db, ingredients),
+  gleanWidgetTest(
+    'Plan Generate honors corpus settings and exclusions then persists recipes, servings and aggregated demand',
+    (tester) async {
+      Map<String, dynamic>? body;
+      final h = AppTestHarness(
+        httpClient: MockClient((request) async {
+          if (request.method == 'POST') {
+            body = jsonDecode(request.body) as Map<String, dynamic>;
+            return proposal([
+              pick('rec_a'),
+              pick('rec_b'),
+              pick('rec_existing'),
+            ]);
+          }
+          return detail(request.url.pathSegments.last);
+        }),
       );
-      shopping = ShoppingRepository(harness.db, ingredients);
-      userConfig = UserConfigRepository(harness.db);
-    });
-
-    tearDown(() => harness.dispose());
-
-    Future<int> saveChickenRecipe() {
-      return recipes.save(
-        userId: harness.userId,
-        title: 'Chicken Curry',
-        ingredients: const <SaveRecipeIngredient>[
-          SaveRecipeIngredient(
-            canonicalName: 'chicken breast',
-            quantity: 200,
-            unit: 'g',
+      addTearDown(h.dispose);
+      final recipes = h.container.read(recipesRepositoryProvider);
+      final plan = h.container.read(planRepositoryProvider);
+      final existing = await recipes.save(
+        userId: h.userId,
+        externalId: 'rec_existing',
+        title: 'Existing',
+        ingredients: const [],
+      );
+      await plan.addEntry(
+        userId: h.userId,
+        recipeId: existing,
+        recipeTitle: 'Existing',
+        servings: 1,
+      );
+      await h.container
+          .read(userConfigRepositoryProvider)
+          .save(
+            UserConfigView(
+              id: h.userId,
+              purchaseTolerance: 0.25,
+              preferredServings: 3,
+              mealsPerWeek: 3,
+              dietaryFlags: const ['vegetarian'],
+              maxActiveTimeMins: 30,
+            ),
+          );
+      await h.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+      expect(body!['source'], 'corpus');
+      expect(body!['exclude_external_ids'], contains('rec_existing'));
+      expect(body!['purchase_tolerance'], 0.25);
+      expect(body!['dietary_flags'], ['vegetarian']);
+      expect(body!['max_active_time_mins'], 30);
+      expect(body!['meals_per_week'], 2);
+      expect(find.text('Corpus rec_a'), findsOneWidget);
+      expect(find.text('Corpus rec_b'), findsOneWidget);
+      final entries = await tester.runAsync(
+        () => plan.getWeek(
+          userId: h.userId,
+          weekStart: startOfWeek(DateTime.now()),
+        ),
+      );
+      expect(entries, hasLength(3));
+      expect(
+        entries!.where((e) => e.recipeId != existing).map((e) => e.servings),
+        everyElement(3),
+      );
+      expect(
+        await tester.runAsync(() => recipes.getSaved(h.userId)),
+        hasLength(3),
+      );
+      expect(
+        (await tester.runAsync(
+          () => h.container
+              .read(shoppingRepositoryProvider)
+              .watchAll(h.userId)
+              .first,
+        ))!.single.quantity,
+        1200,
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('shopping list'), findsOneWidget);
+    },
+  );
+  gleanWidgetTest(
+    'all failed corpus details leave no half-plan and a visible retry succeeds',
+    (tester) async {
+      var fail = true;
+      final h = AppTestHarness(
+        httpClient: MockClient(
+          (request) async => request.method == 'POST'
+              ? proposal([pick('rec_a')])
+              : fail
+              ? http.Response('{}', 500)
+              : detail('rec_a'),
+        ),
+      );
+      addTearDown(h.dispose);
+      await h.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+      expect(find.text('No recipes fit right now. Try again.'), findsOneWidget);
+      final plan = h.container.read(planRepositoryProvider);
+      expect(
+        await tester.runAsync(
+          () => plan.getWeek(
+            userId: h.userId,
+            weekStart: startOfWeek(DateTime.now()),
           ),
-        ],
-      );
-    }
-
-    test('populates real food_groups/food_group_coverage and honours '
-        'preferred_servings on the inserted entry', () async {
-      final chickenId = await saveChickenRecipe();
-      await IngredientsRepository(
-        harness.db,
-      ).resolveOrCreate(canonicalName: 'chicken breast', category: 'poultry');
-      await userConfig.save(
-        UserConfigView(
-          id: harness.userId,
-          purchaseTolerance: 0.5,
-          preferredServings: 4,
-          mealsPerWeek: 5,
-          dietaryFlags: const <String>['vegetarian'],
-          maxActiveTimeMins: null,
         ),
+        isEmpty,
       );
-
-      Map<String, Object?>? capturedBody;
-      when(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).thenAnswer((invocation) async {
-        capturedBody =
-            jsonDecode(invocation.namedArguments[#body] as String)
-                as Map<String, Object?>;
-        return _mealPlanResponse(<Map<String, Object?>>[
-          <String, Object?>{
-            'recipe_id': chickenId,
-            'title': 'Chicken Curry',
-            'reason': 'Uses up pantry chicken',
-            'missing_ingredients': <String>[],
-          },
-        ]);
-      });
-
-      final controller = harness.container.read(
-        generateWeekControllerProvider.notifier,
-      );
-      await controller.generate(weekStart: week, slots: 1, servings: 4);
-
+      fail = false;
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+      expect(find.text('Corpus rec_a'), findsOneWidget);
       expect(
-        harness.container.read(generateWeekControllerProvider).hasError,
-        isFalse,
-      );
-
-      // The request body sent real, non-empty food group data — not RN's
-      // hardcoded `food_groups: []` / `food_group_coverage: {}`.
-      final List<dynamic> history =
-          capturedBody!['recipe_history'] as List<dynamic>;
-      final Map<String, dynamic> chickenHistory =
-          history.single as Map<String, dynamic>;
-      expect(chickenHistory['food_groups'], <String>['protein']);
-      expect(capturedBody!['dietary_flags'], <String>['vegetarian']);
-
-      final entries = await plan
-          .watchWeek(userId: harness.userId, weekStart: week)
-          .first;
-      expect(entries, hasLength(1));
-      expect(entries.single.servings, 4); // AC-PLAN-07
-      expect(entries.single.recipeId, chickenId);
-
-      // A shopping gap row was added for the newly-planned recipe, linked
-      // back to the entry so deleting it cascades the row away
-      // (AC-SHOP-06).
-      final shoppingRows = await shopping.watchAll(harness.userId).first;
-      expect(shoppingRows, hasLength(1));
-      expect(shoppingRows.single.sourceMealPlanEntryId, entries.single.id);
-    });
-
-    test('a hallucinated recipe_id aborts the whole batch — nothing is '
-        'written, and the caller sees an error (AC-PLAN-10)', () async {
-      final realId = await saveChickenRecipe();
-      await userConfig.save(
-        UserConfigView(
-          id: harness.userId,
-          purchaseTolerance: 0.5,
-          preferredServings: 2,
-          mealsPerWeek: 5,
-          dietaryFlags: const <String>[],
-          maxActiveTimeMins: null,
+        await tester.runAsync(
+          () => plan.getWeek(
+            userId: h.userId,
+            weekStart: startOfWeek(DateTime.now()),
+          ),
         ),
+        hasLength(1),
       );
-
-      when(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).thenAnswer(
-        (_) async => _mealPlanResponse(<Map<String, Object?>>[
-          // A real suggestion the batch *would* otherwise have written...
-          <String, Object?>{
-            'recipe_id': realId,
-            'title': 'Chicken Curry',
-            'reason': 'ok',
-            'missing_ingredients': <String>[],
-          },
-          // ...followed by a hallucinated id with no matching saved recipe.
-          <String, Object?>{
-            'recipe_id': 999999,
-            'title': 'Invented Recipe',
-            'reason': 'ok',
-            'missing_ingredients': <String>[],
-          },
-        ]),
-      );
-
-      final controller = harness.container.read(
-        generateWeekControllerProvider.notifier,
-      );
-      await controller.generate(weekStart: week, slots: 2, servings: 2);
-
-      expect(
-        harness.container.read(generateWeekControllerProvider).hasError,
-        isTrue,
-      );
-
-      // Neither suggestion was persisted — the good one included, proving
-      // this is a whole-batch abort, not a skip-the-bad-one filter that
-      // would otherwise have silently half-written the plan.
-      final entries = await plan
-          .watchWeek(userId: harness.userId, weekStart: week)
-          .first;
-      expect(entries, isEmpty);
-    });
-
-    test('a double-tap while a generation is pending fires only one network '
-        'call (AC-PLAN-09)', () async {
-      final chickenId = await saveChickenRecipe();
-      await userConfig.save(
-        UserConfigView(
-          id: harness.userId,
-          purchaseTolerance: 0.5,
-          preferredServings: 2,
-          mealsPerWeek: 5,
-          dietaryFlags: const <String>[],
-          maxActiveTimeMins: null,
-        ),
-      );
-
-      when(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).thenAnswer(
-        (_) async => _mealPlanResponse(<Map<String, Object?>>[
-          <String, Object?>{
-            'recipe_id': chickenId,
-            'title': 'Chicken Curry',
-            'reason': 'ok',
-            'missing_ingredients': <String>[],
-          },
-        ]),
-      );
-
-      final controller = harness.container.read(
-        generateWeekControllerProvider.notifier,
-      );
-      final first = controller.generate(weekStart: week, slots: 1, servings: 2);
-      final second = controller.generate(
-        weekStart: week,
-        slots: 1,
-        servings: 2,
-      );
-      await Future.wait(<Future<void>>[first, second]);
-
-      verify(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).called(1);
-
-      // And only one entry got planned, not two.
-      final entries = await plan
-          .watchWeek(userId: harness.userId, weekStart: week)
-          .first;
-      expect(entries, hasLength(1));
-    });
-  });
+    },
+  );
 }

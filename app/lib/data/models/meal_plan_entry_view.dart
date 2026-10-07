@@ -12,6 +12,7 @@ class MealPlanEntryView {
     required this.plannedDate,
     required this.cookedAt,
     required this.servings,
+    this.externalIdSnapshot,
   });
 
   final int id;
@@ -24,6 +25,7 @@ class MealPlanEntryView {
   final DateTime plannedDate;
   final DateTime? cookedAt;
   final int servings;
+  final String? externalIdSnapshot;
 
   bool get isCooked => cookedAt != null;
 }

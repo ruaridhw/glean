@@ -9,7 +9,8 @@
 
 /// Deterministic lookup: source unit -> conversion factor and target unit.
 const Map<String, ({double factor, String to})> _unitConversions = {
-  // Volume -> ml
+  // Volume -> ml (base units also participate in density conversion).
+  'ml': (factor: 1, to: 'ml'),
   'l': (factor: 1000, to: 'ml'),
   'litre': (factor: 1000, to: 'ml'),
   'litres': (factor: 1000, to: 'ml'),
@@ -27,6 +28,7 @@ const Map<String, ({double factor, String to})> _unitConversions = {
   'pint': (factor: 473.176, to: 'ml'),
   'pints': (factor: 473.176, to: 'ml'),
   // Mass -> g
+  'g': (factor: 1, to: 'g'),
   'kg': (factor: 1000, to: 'g'),
   'kilogram': (factor: 1000, to: 'g'),
   'kilograms': (factor: 1000, to: 'g'),

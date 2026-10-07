@@ -156,7 +156,9 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final List<ReviewRow> accepted = _activeRows;
     try {
       if (_isPantry) {
-        await _confirmPantry(userId, accepted);
+        await ref
+            .read(gleanDatabaseProvider)
+            .transaction(() => _confirmPantry(userId, accepted));
       } else {
         await _confirmShop(userId, accepted);
       }

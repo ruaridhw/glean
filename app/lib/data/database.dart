@@ -34,7 +34,7 @@ class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
@@ -42,6 +42,22 @@ class GleanDatabase extends _$GleanDatabase {
       onCreate: (m) async {
         await m.createAll();
         await _seed();
+      },
+      onUpgrade: (m, from, to) async {
+        if (from < 2) {
+          await m.addColumn(
+            mealPlanEntries,
+            mealPlanEntries.externalIdSnapshot,
+          );
+          await m.addColumn(
+            mealPlanEntries,
+            mealPlanEntries.previousRecipeCookedAt,
+          );
+          await m.addColumn(shoppingListItems, shoppingListItems.isRequirement);
+          await customStatement(
+            'UPDATE meal_plan_entries SET external_id_snapshot = (SELECT external_id FROM recipes WHERE recipes.id = meal_plan_entries.recipe_id)',
+          );
+        }
       },
       beforeOpen: (details) async {
         // SQLite disables foreign-key enforcement by default; the schema

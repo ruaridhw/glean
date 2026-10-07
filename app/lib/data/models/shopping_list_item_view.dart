@@ -14,9 +14,12 @@ class ShoppingListItemView {
     required this.source,
     required this.isChecked,
     required this.sourceMealPlanEntryId,
+    this.memberIds = const [],
   });
 
   final int id;
+  final List<int> memberIds;
+  List<int> get ids => memberIds.isEmpty ? [id] : memberIds;
   final String userId;
   final int ingredientId;
   final String name;

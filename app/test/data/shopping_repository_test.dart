@@ -219,7 +219,7 @@ void main() {
       });
 
       test(
-        'adds nothing when an unchecked gap for the ingredient is already listed',
+        'aggregates different meals while repeated requirements remain idempotent',
         () async {
           final firstLink = await saveRecipeAndPlanEntry(
             ingredient: 'pasta',
@@ -235,8 +235,7 @@ void main() {
           );
           expect(await repository.watchAll(userId).first, hasLength(1));
 
-          // A second plan entry for the same recipe/ingredient shouldn't add
-          // a duplicate gap row while the first is still unchecked.
+          // A second meal owns separate demand, aggregated only for display.
           final secondEntryId = await plan.addEntry(
             userId: userId,
             recipeId: firstLink.recipeId,
@@ -249,8 +248,179 @@ void main() {
             servings: 1,
             sourceMealPlanEntryId: secondEntryId,
           );
+          final both = (await repository.watchAll(userId).first).single;
+          expect(both.quantity, 400);
+          expect(both.ids, hasLength(2));
+          await plan.deleteEntry(id: firstLink.entryId, userId: userId);
+          expect(
+            (await repository.watchAll(userId).first).single.quantity,
+            200,
+          );
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: firstLink.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: secondEntryId,
+          );
+          expect(
+            (await repository.watchAll(userId).first).single.quantity,
+            200,
+          );
+        },
+      );
 
-          expect(await repository.watchAll(userId).first, hasLength(1));
+      test(
+        'compatible requirements aggregate even before any stock exists',
+        () async {
+          final first = await saveRecipeAndPlanEntry(
+            ingredient: 'chicken breast',
+            quantityPerServing: 200,
+            unit: 'g',
+          );
+          final second = await saveRecipeAndPlanEntry(
+            ingredient: 'chicken breast',
+            quantityPerServing: 0.3,
+            unit: 'kg',
+          );
+          for (final linked in [first, second]) {
+            await repository.addGapsForRecipe(
+              userId: userId,
+              recipeId: linked.recipeId,
+              servings: 1,
+              sourceMealPlanEntryId: linked.entryId,
+            );
+          }
+          final visible = await repository.watchAll(userId).first;
+          expect(visible, hasLength(1));
+          expect(visible.single.quantity, 500);
+          expect(visible.single.unit, 'g');
+          expect(visible.single.ids, hasLength(2));
+        },
+      );
+
+      test(
+        'editing stock units cannot allocate the same stock twice across old and new requirements',
+        () async {
+          await pantry.addItem(
+            userId: userId,
+            name: 'chicken breast',
+            quantity: 3000,
+            unit: 'g',
+            category: 'poultry',
+          );
+          final stockId = (await pantry.getAll(userId)).single.id;
+          final first = await saveRecipeAndPlanEntry(
+            ingredient: 'chicken breast',
+            quantityPerServing: 3000,
+            unit: 'g',
+          );
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: first.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: first.entryId,
+          );
+          expect(await repository.watchAll(userId).first, isEmpty);
+          await pantry.updateItem(
+            id: stockId,
+            userId: userId,
+            quantity: 3,
+            unit: 'kg',
+          );
+          final second = await saveRecipeAndPlanEntry(
+            ingredient: 'chicken breast',
+            quantityPerServing: 1,
+            unit: 'kg',
+          );
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: second.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: second.entryId,
+          );
+          final visible = await repository.watchAll(userId).first;
+          expect(visible, hasLength(1));
+          expect(
+            visible.single.quantity,
+            1000,
+          ); // 4kg total demand - 3kg owned.
+          expect(visible.single.unit, 'g');
+        },
+      );
+
+      test(
+        'density-compatible requirements aggregate without pantry stock',
+        () async {
+          final first = await saveRecipeAndPlanEntry(
+            ingredient: 'milk',
+            quantityPerServing: 515,
+            unit: 'g',
+          );
+          final second = await saveRecipeAndPlanEntry(
+            ingredient: 'milk',
+            quantityPerServing: 500,
+            unit: 'ml',
+          );
+          for (final linked in [first, second]) {
+            await repository.addGapsForRecipe(
+              userId: userId,
+              recipeId: linked.recipeId,
+              servings: 1,
+              sourceMealPlanEntryId: linked.entryId,
+            );
+          }
+          final visible = await repository.watchAll(userId).first;
+          expect(visible, hasLength(1));
+          expect(visible.single.quantity, 1030); // Milk density: 1.03g/ml.
+          expect(visible.single.unit, 'g');
+          expect(visible.single.ids, hasLength(2));
+        },
+      );
+
+      test(
+        'density-compatible unit edits cannot spend the same pantry stock twice',
+        () async {
+          await pantry.addItem(
+            userId: userId,
+            name: 'milk',
+            quantity: 515,
+            unit: 'g',
+            category: 'dairy',
+          );
+          final stockId = (await pantry.getAll(userId)).single.id;
+          final first = await saveRecipeAndPlanEntry(
+            ingredient: 'milk',
+            quantityPerServing: 515,
+            unit: 'g',
+          );
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: first.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: first.entryId,
+          );
+          expect(await repository.watchAll(userId).first, isEmpty);
+          await pantry.updateItem(
+            id: stockId,
+            userId: userId,
+            quantity: 500,
+            unit: 'ml',
+          );
+          final second = await saveRecipeAndPlanEntry(
+            ingredient: 'milk',
+            quantityPerServing: 250,
+            unit: 'ml',
+          );
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: second.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: second.entryId,
+          );
+          final visible = await repository.watchAll(userId).first;
+          expect(visible, hasLength(1));
+          expect(visible.single.quantity, 257.5); // 750ml demand - 500ml owned.
+          expect(visible.single.unit, 'g');
         },
       );
 

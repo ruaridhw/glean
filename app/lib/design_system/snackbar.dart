@@ -39,7 +39,12 @@ class GleanSnackBar {
   /// (e.g. a config-save failure surfacing per AC-SET-03). Still routes
   /// through the same themed `SnackBar`, never a bespoke toast.
   static void show(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
+    showOn(ScaffoldMessenger.of(context), message);
+  }
+
+  /// A captured messenger survives route disposal during a pending Undo.
+  static void showOn(ScaffoldMessengerState messenger, String message) {
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
   }

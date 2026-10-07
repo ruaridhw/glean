@@ -52,6 +52,8 @@ class GenerateWeekController extends AsyncNotifier<int> {
     }
     final plannedIds = entries.map((entry) => entry.recipeId).toSet();
     final excluded = <String>{
+      for (final entry in entries)
+        if (entry.externalIdSnapshot != null) entry.externalIdSnapshot!,
       for (final recipe in saved)
         if (plannedIds.contains(recipe.id) && recipe.externalId != null)
           recipe.externalId!,
@@ -122,9 +124,10 @@ class GenerateWeekController extends AsyncNotifier<int> {
       // must not overfill the week or duplicate a now-planned recipe.
       final current = await plan.getWeek(userId: userId, weekStart: weekStart);
       final currentIds = current.map((entry) => entry.recipeId).toSet();
-      final remaining =
-          config.mealsPerWeek -
-          current.where((entry) => !entry.isCooked).length;
+      final remaining = await plan.remainingCapacityForWeek(
+        userId: userId,
+        weekStart: weekStart,
+      );
       var inserted = 0;
       for (final recipe in resolved) {
         if (inserted >= remaining) break;

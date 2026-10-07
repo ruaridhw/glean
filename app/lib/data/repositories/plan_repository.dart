@@ -17,6 +17,7 @@
 import 'package:drift/drift.dart';
 
 import '../database.dart';
+import '../deletion_snapshots.dart';
 import '../models/meal_plan_entry_view.dart';
 import '../util/unit_normalization.dart';
 import '../util/week.dart';
@@ -86,6 +87,7 @@ class PlanRepository {
     plannedDate: parseDate(row.plannedDate),
     cookedAt: row.cookedAt == null ? null : DateTime.parse(row.cookedAt!),
     servings: row.servings,
+    externalIdSnapshot: row.externalIdSnapshot,
   );
 
   /// Uncooked entries in the week starting [weekStart] — the figure "left
@@ -137,7 +139,11 @@ class PlanRepository {
     required String recipeTitle,
     required int servings,
     DateTime? plannedDate,
-  }) {
+  }) async {
+    final recipe =
+        await (_db.select(_db.recipes)
+              ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
+            .getSingle();
     return _db
         .into(_db.mealPlanEntries)
         .insert(
@@ -147,6 +153,7 @@ class PlanRepository {
             recipeTitle: recipeTitle,
             plannedDate: formatDate(plannedDate ?? DateTime.now()),
             servings: servings,
+            externalIdSnapshot: Value(recipe.externalId),
           ),
         );
   }
@@ -154,6 +161,62 @@ class PlanRepository {
   /// Deletes the entry. Its plan-derived shopping rows cascade away with it
   /// (AC-SHOP-06) via `shopping_list_items.sourceMealPlanEntryId`'s
   /// `onDelete: cascade` — no manual sweep needed here.
+  Future<DeletedPlanEntry> deleteWithSnapshot({
+    required int id,
+    required String userId,
+  }) => _db.transaction(() async {
+    final entry = await (_db.select(
+      _db.mealPlanEntries,
+    )..where((t) => t.id.equals(id) & t.userId.equals(userId))).getSingle();
+    final shopping =
+        await (_db.select(_db.shoppingListItems)..where(
+              (t) =>
+                  t.sourceMealPlanEntryId.equals(id) & t.userId.equals(userId),
+            ))
+            .get();
+    final adjustments =
+        await (_db.select(_db.cookedAdjustments)..where(
+              (t) => t.mealPlanEntryId.equals(id) & t.userId.equals(userId),
+            ))
+            .get();
+    await deleteEntry(id: id, userId: userId);
+    return DeletedPlanEntry(entry, shopping, adjustments);
+  });
+
+  Future<void> restoreDeleted({
+    required DeletedPlanEntry snapshot,
+    required String userId,
+  }) => _db.transaction(() async {
+    if (snapshot.entry.userId != userId) {
+      throw ArgumentError('Undo belongs to another user');
+    }
+    final entry = snapshot.entry;
+    if (entry.cookedAt == null &&
+        await remainingCapacityForWeek(
+              userId: userId,
+              weekStart: startOfWeek(DateTime.parse(entry.plannedDate)),
+            ) <=
+            0) {
+      throw StateError('Plan is full');
+    }
+    var companion = entry.toCompanion(false);
+    if (entry.recipeId != null &&
+        await (_db.select(_db.recipes)..where(
+                  (t) => t.id.equals(entry.recipeId!) & t.userId.equals(userId),
+                ))
+                .getSingleOrNull() ==
+            null) {
+      companion = companion.copyWith(recipeId: const Value(null));
+    }
+    await _db.into(_db.mealPlanEntries).insert(companion);
+    for (final row in snapshot.shopping) {
+      await _db.into(_db.shoppingListItems).insert(row.toCompanion(false));
+    }
+    for (final row in snapshot.adjustments) {
+      await _db.into(_db.cookedAdjustments).insert(row.toCompanion(false));
+    }
+  });
+
   Future<void> deleteEntry({required int id, required String userId}) {
     return (_db.delete(
       _db.mealPlanEntries,
@@ -172,13 +235,32 @@ class PlanRepository {
   }) {
     final weekStart = startOfWeek(referenceDate ?? DateTime.now());
     final start = formatDate(weekStart);
-    return (_db.update(_db.mealPlanEntries)..where(
-          (t) =>
-              t.userId.equals(userId) &
-              t.cookedAt.isNull() &
-              t.plannedDate.isSmallerThanValue(start),
-        ))
-        .write(MealPlanEntriesCompanion(plannedDate: Value(start)));
+    return _db.transaction(() async {
+      final capacity = await remainingCapacityForWeek(
+        userId: userId,
+        weekStart: weekStart,
+      );
+      if (capacity <= 0) return;
+      final oldest =
+          await (_db.select(_db.mealPlanEntries)
+                ..where(
+                  (t) =>
+                      t.userId.equals(userId) &
+                      t.cookedAt.isNull() &
+                      t.plannedDate.isSmallerThanValue(start),
+                )
+                ..orderBy([
+                  (t) => OrderingTerm.asc(t.plannedDate),
+                  (t) => OrderingTerm.asc(t.id),
+                ])
+                ..limit(capacity))
+              .get();
+      for (final entry in oldest) {
+        await (_db.update(_db.mealPlanEntries)
+              ..where((t) => t.id.equals(entry.id) & t.userId.equals(userId)))
+            .write(MealPlanEntriesCompanion(plannedDate: Value(start)));
+      }
+    });
   }
 
   /// Marks [entryId] cooked: decrements pantry quantities for every
@@ -207,7 +289,14 @@ class PlanRepository {
       }
 
       final recipeId = entry.recipeId;
+      String? previousRecipeCookedAt;
       if (recipeId != null) {
+        final recipe =
+            await (_db.select(_db.recipes)..where(
+                  (t) => t.id.equals(recipeId) & t.userId.equals(userId),
+                ))
+                .getSingle();
+        previousRecipeCookedAt = recipe.lastCookedAt;
         final ingredientRows = await (_db.select(_db.recipeIngredients).join([
           innerJoin(
             _db.ingredients,
@@ -235,7 +324,15 @@ class PlanRepository {
               canonicalUnit: pantryRow.unit,
               canonicalName: ingredient.canonicalName,
             );
-            if (normalized != null) decrementQuantity = normalized.quantity;
+            if (normalized == null) {
+              throw PantryUnitMismatchException(
+                ingredientId: ingredient.id,
+                canonicalName: ingredient.canonicalName,
+                existingUnit: pantryRow.unit,
+                incomingUnit: recipeIngredient.unit,
+              );
+            }
+            decrementQuantity = normalized.quantity;
           }
 
           final delta = await _pantry.decrementForCook(
@@ -273,6 +370,7 @@ class PlanRepository {
       )..where((t) => t.id.equals(entryId))).write(
         MealPlanEntriesCompanion(
           cookedAt: Value(effectiveNow.toIso8601String()),
+          previousRecipeCookedAt: Value(previousRecipeCookedAt),
         ),
       );
     });
@@ -357,9 +455,50 @@ class PlanRepository {
         _db.cookedAdjustments,
       )..where((t) => t.mealPlanEntryId.equals(entryId))).go();
 
-      await (_db.update(_db.mealPlanEntries)
-            ..where((t) => t.id.equals(entryId)))
-          .write(const MealPlanEntriesCompanion(cookedAt: Value(null)));
+      if (entry.recipeId != null) {
+        final later =
+            await (_db.select(_db.mealPlanEntries)
+                  ..where(
+                    (t) =>
+                        t.userId.equals(userId) &
+                        t.recipeId.equals(entry.recipeId!) &
+                        (t.cookedAt.isBiggerThanValue(entry.cookedAt!) |
+                            (t.cookedAt.equals(entry.cookedAt!) &
+                                t.id.isBiggerThanValue(entry.id))),
+                  )
+                  ..orderBy([
+                    (t) => OrderingTerm.asc(t.cookedAt),
+                    (t) => OrderingTerm.asc(t.id),
+                  ])
+                  ..limit(1))
+                .getSingleOrNull();
+        if (later != null) {
+          await (_db.update(
+            _db.mealPlanEntries,
+          )..where((t) => t.id.equals(later.id))).write(
+            MealPlanEntriesCompanion(
+              previousRecipeCookedAt: Value(entry.previousRecipeCookedAt),
+            ),
+          );
+        } else {
+          await (_db.update(_db.recipes)..where(
+                (t) => t.id.equals(entry.recipeId!) & t.userId.equals(userId),
+              ))
+              .write(
+                RecipesCompanion(
+                  lastCookedAt: Value(entry.previousRecipeCookedAt),
+                ),
+              );
+        }
+      }
+      await (_db.update(
+        _db.mealPlanEntries,
+      )..where((t) => t.id.equals(entryId))).write(
+        const MealPlanEntriesCompanion(
+          cookedAt: Value(null),
+          previousRecipeCookedAt: Value(null),
+        ),
+      );
     });
   }
 }

@@ -36,6 +36,8 @@ import 'package:drift/drift.dart';
 import '../database.dart';
 import '../models/shopping_list_item_view.dart';
 import 'ingredients_repository.dart';
+import 'pantry_repository.dart' show PantryUnitMismatchException;
+import '../util/unit_normalization.dart';
 
 class ShoppingRepository {
   ShoppingRepository(this._db, this._ingredients);
@@ -43,26 +45,111 @@ class ShoppingRepository {
   final GleanDatabase _db;
   final IngredientsRepository _ingredients;
 
-  Stream<List<ShoppingListItemView>> watchAll(String userId) {
-    final query = _db.select(_db.shoppingListItems)
-      ..where((t) => t.userId.equals(userId))
-      ..orderBy([
-        (t) => OrderingTerm.asc(t.isChecked),
-        (t) => OrderingTerm.desc(t.id),
-      ]);
-    return query.watch().map((rows) => rows.map(_mapRow).toList());
+  // Joining stock and cooking state makes demand react to either table, not
+  // only to cart mutations. Physical rows retain per-meal cascade ownership.
+  JoinedSelectStatement<HasResultSet, dynamic> _query(String userId) =>
+      _db.select(_db.shoppingListItems).join([
+          leftOuterJoin(
+            _db.pantryItems,
+            _db.pantryItems.userId.equalsExp(_db.shoppingListItems.userId) &
+                _db.pantryItems.ingredientId.equalsExp(
+                  _db.shoppingListItems.ingredientId,
+                ),
+          ),
+          leftOuterJoin(
+            _db.mealPlanEntries,
+            _db.mealPlanEntries.id.equalsExp(
+              _db.shoppingListItems.sourceMealPlanEntryId,
+            ),
+          ),
+        ])
+        ..where(_db.shoppingListItems.userId.equals(userId))
+        ..orderBy([OrderingTerm.asc(_db.shoppingListItems.id)]);
+
+  Stream<List<ShoppingListItemView>> watchAll(String userId) =>
+      _query(userId).watch().map(_visible);
+
+  List<ShoppingListItemView> _visible(List<TypedResult> rows) {
+    final canonicalUnits = <int, String?>{};
+    final remainingStock = <(int, String?), double>{};
+    final grouped = <(int, String?, bool), ShoppingListItemView>{};
+    final result = <ShoppingListItemView>[];
+    for (final joined in rows) {
+      final row = joined.readTable(_db.shoppingListItems);
+      if (!row.isRequirement) {
+        result.add(_mapRow(row));
+        continue;
+      }
+      final meal = joined.readTableOrNull(_db.mealPlanEntries);
+      if (meal == null || meal.cookedAt != null) continue;
+      final stock = joined.readTableOrNull(_db.pantryItems);
+      // Compatible demands share a single stock budget, even when a unit edit
+      // leaves older rows in mass and newer rows in convertible volume units.
+      final canonical = canonicalUnits.putIfAbsent(
+        row.ingredientId,
+        () => row.unit,
+      );
+      final requirement = normalizeUnit(
+        quantity: row.quantity ?? 0,
+        unit: row.unit ?? 'units',
+        canonicalUnit: canonical,
+        canonicalName: row.name,
+      );
+      final unit = requirement?.unit ?? row.unit;
+      final stockKey = (row.ingredientId, unit);
+      final available = remainingStock.putIfAbsent(
+        stockKey,
+        () => stock == null
+            ? 0
+            : normalizeUnit(
+                    quantity: stock.quantity,
+                    unit: stock.unit,
+                    canonicalUnit: unit,
+                    canonicalName: row.name,
+                  )?.quantity ??
+                  0,
+      );
+      final needed = requirement?.quantity ?? row.quantity ?? 0;
+      final used = available.clamp(0.0, needed);
+      remainingStock[stockKey] = available - used;
+      final missing = needed - used;
+      if (missing <= 0) continue;
+      final key = (row.ingredientId, unit, row.isChecked);
+      final prior = grouped[key];
+      grouped[key] = _mapRow(
+        row,
+        quantity: missing + (prior?.quantity ?? 0),
+        unit: unit,
+        memberIds: [...?prior?.ids, row.id],
+      );
+    }
+    result.addAll(grouped.values);
+    result.sort(
+      (a, b) => a.isChecked != b.isChecked
+          ? (a.isChecked ? 1 : -1)
+          : b.id.compareTo(a.id),
+    );
+    return result;
   }
 
-  ShoppingListItemView _mapRow(ShoppingListItem row) => ShoppingListItemView(
+  ShoppingListItemView _mapRow(
+    ShoppingListItem row, {
+    double? quantity,
+    String? unit,
+    List<int> memberIds = const [],
+  }) => ShoppingListItemView(
     id: row.id,
     userId: row.userId,
     ingredientId: row.ingredientId,
     name: row.name,
-    quantity: row.quantity,
-    unit: row.unit,
+    quantity: quantity ?? row.quantity,
+    unit: unit ?? row.unit,
     source: row.source,
     isChecked: row.isChecked,
-    sourceMealPlanEntryId: row.sourceMealPlanEntryId,
+    sourceMealPlanEntryId: memberIds.length > 1
+        ? null
+        : row.sourceMealPlanEntryId,
+    memberIds: memberIds,
   );
 
   /// Adds a manual entry, resolving [name] to a real ingredient identity
@@ -147,28 +234,27 @@ class ShoppingRepository {
     });
   }
 
-  /// Adds a shopping row for each non-optional ingredient of [recipeId]
-  /// that the pantry can't fully cover for [servings], linked back to
-  /// [sourceMealPlanEntryId] so deleting that plan entry removes this row
-  /// too (AC-SHOP-06).
+  /// Stores each meal's full non-optional requirement. The read model allocates
+  /// pantry stock once and aggregates the visible deficits; stock-satisfied
+  /// requirements are retained invisibly so another meal cannot reuse them.
   ///
-  /// Returns the number of rows actually inserted, so a caller can announce
+  /// Returns the number of newly visible requirement rows, so a caller can announce
   /// the outcome (AC-SHOP-05 — plan-derived rows must be announced, not
   /// inserted silently) rather than assuming something happened.
   ///
-  /// Idempotent by construction, not by a caller-side guard: the per-row
-  /// `existing` check below skips any ingredient that already has an
-  /// unchecked gap, so calling this twice for the same recipe/servings never
-  /// doubles a row (R-02 — the RN duplicate-add bug produced duplicate
-  /// shopping gaps as well as duplicate plan entries; this must not
-  /// reproduce that even from a repeated manual "Add to plan").
+  /// Idempotency is scoped to the same meal's requirement. A different meal
+  /// must retain its own row so deleting one cannot erase another's demand.
   Future<int> addGapsForRecipe({
     required String userId,
     required int recipeId,
     required int servings,
     required int sourceMealPlanEntryId,
-  }) async {
-    var inserted = 0;
+  }) => _db.transaction(() async {
+    final before = _visible(
+      await _query(userId).get(),
+    ).expand((item) => item.ids).toSet();
+    final requirements =
+        <int, ({Ingredient ingredient, double quantity, String unit})>{};
     final rows =
         await (_db.select(_db.recipeIngredients).join([
               innerJoin(
@@ -186,8 +272,6 @@ class ShoppingRepository {
     for (final row in rows) {
       final recipeIngredient = row.readTable(_db.recipeIngredients);
       final ingredient = row.readTable(_db.ingredients);
-      final needed = recipeIngredient.quantity * servings;
-
       final pantryRow =
           await (_db.select(_db.pantryItems)..where(
                 (t) =>
@@ -195,16 +279,36 @@ class ShoppingRepository {
                     t.ingredientId.equals(recipeIngredient.ingredientId),
               ))
               .getSingleOrNull();
-      final available = pantryRow?.quantity ?? 0;
-      if (available >= needed) continue;
-      final shortfall = needed - available;
-
+      final unit = canonicalUnitFor(pantryRow?.unit ?? recipeIngredient.unit);
+      final normalized = normalizeUnit(
+        quantity: recipeIngredient.quantity * servings,
+        unit: recipeIngredient.unit,
+        canonicalUnit: unit,
+        canonicalName: ingredient.canonicalName,
+      );
+      if (normalized == null) {
+        throw PantryUnitMismatchException(
+          ingredientId: ingredient.id,
+          canonicalName: ingredient.canonicalName,
+          existingUnit: unit,
+          incomingUnit: recipeIngredient.unit,
+        );
+      }
+      final prior = requirements[ingredient.id];
+      requirements[ingredient.id] = (
+        ingredient: ingredient,
+        quantity: normalized.quantity + (prior?.quantity ?? 0),
+        unit: unit,
+      );
+    }
+    for (final requirement in requirements.values) {
+      final ingredient = requirement.ingredient;
       final existing =
           await (_db.select(_db.shoppingListItems)..where(
                 (t) =>
                     t.userId.equals(userId) &
-                    t.ingredientId.equals(recipeIngredient.ingredientId) &
-                    t.isChecked.equals(false),
+                    t.ingredientId.equals(ingredient.id) &
+                    t.sourceMealPlanEntryId.equals(sourceMealPlanEntryId),
               ))
               .getSingleOrNull();
       if (existing != null) continue;
@@ -214,18 +318,74 @@ class ShoppingRepository {
           .insert(
             ShoppingListItemsCompanion.insert(
               userId: userId,
-              ingredientId: recipeIngredient.ingredientId,
+              ingredientId: ingredient.id,
               name: ingredient.canonicalName,
-              quantity: Value(shortfall),
-              unit: Value(recipeIngredient.unit),
+              quantity: Value(requirement.quantity),
+              unit: Value(requirement.unit),
               source: const Value('meal_plan'),
+              isRequirement: const Value(true),
               sourceMealPlanEntryId: Value(sourceMealPlanEntryId),
             ),
           );
-      inserted++;
     }
-    return inserted;
-  }
+    return _visible(
+      await _query(userId).get(),
+    ).expand((item) => item.ids).where((id) => !before.contains(id)).length;
+  });
+
+  Future<List<ShoppingListItem>> deleteRowsWithSnapshot({
+    required List<int> ids,
+    required String userId,
+  }) => _db.transaction(() async {
+    final rows = await (_db.select(
+      _db.shoppingListItems,
+    )..where((t) => t.id.isIn(ids) & t.userId.equals(userId))).get();
+    await (_db.delete(
+      _db.shoppingListItems,
+    )..where((t) => t.id.isIn(ids) & t.userId.equals(userId))).go();
+    return rows;
+  });
+
+  Future<List<ShoppingListItem>> deleteCheckedWithSnapshot({
+    required String userId,
+  }) => _db.transaction(() async {
+    final rows = await (_db.select(
+      _db.shoppingListItems,
+    )..where((t) => t.isChecked.equals(true) & t.userId.equals(userId))).get();
+    await completeCheckoutWithoutReceipt(userId: userId);
+    return rows;
+  });
+
+  Future<void> restoreRows({
+    required List<ShoppingListItem> rows,
+    required String userId,
+  }) => _db.transaction(() async {
+    for (final row in rows) {
+      if (row.userId != userId) {
+        throw ArgumentError('Undo belongs to another user');
+      }
+      if (row.sourceMealPlanEntryId != null &&
+          await (_db.select(_db.mealPlanEntries)..where(
+                    (t) =>
+                        t.id.equals(row.sourceMealPlanEntryId!) &
+                        t.userId.equals(userId),
+                  ))
+                  .getSingleOrNull() ==
+              null) {
+        continue;
+      }
+      await _db.into(_db.shoppingListItems).insert(row.toCompanion(false));
+    }
+  });
+
+  Future<void> toggleRows({
+    required List<int> ids,
+    required String userId,
+    required bool checked,
+  }) =>
+      (_db.update(_db.shoppingListItems)
+            ..where((t) => t.id.isIn(ids) & t.userId.equals(userId)))
+          .write(ShoppingListItemsCompanion(isChecked: Value(checked)));
 
   Future<void> toggleItem({
     required int id,

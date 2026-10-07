@@ -36,7 +36,8 @@ List<PlanSlot> buildPlanSlots(List<MealPlanEntryView> entries, int target) {
     for (final MealPlanEntryView entry in entries)
       PlanSlot(key: 'entry-${entry.id}', entry: entry),
   ];
-  final int emptyCount = target > entries.length ? target - entries.length : 0;
+  final uncooked = entries.where((entry) => !entry.isCooked).length;
+  final int emptyCount = target > uncooked ? target - uncooked : 0;
   for (int i = 0; i < emptyCount; i++) {
     slots.add(PlanSlot(key: 'empty-$i', entry: null));
   }

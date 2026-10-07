@@ -2977,6 +2977,28 @@ class $MealPlanEntriesTable extends MealPlanEntries
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _externalIdSnapshotMeta =
+      const VerificationMeta('externalIdSnapshot');
+  @override
+  late final GeneratedColumn<String> externalIdSnapshot =
+      GeneratedColumn<String>(
+        'external_id_snapshot',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _previousRecipeCookedAtMeta =
+      const VerificationMeta('previousRecipeCookedAt');
+  @override
+  late final GeneratedColumn<String> previousRecipeCookedAt =
+      GeneratedColumn<String>(
+        'previous_recipe_cooked_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _servingsMeta = const VerificationMeta(
     'servings',
   );
@@ -2996,6 +3018,8 @@ class $MealPlanEntriesTable extends MealPlanEntries
     recipeTitle,
     plannedDate,
     cookedAt,
+    externalIdSnapshot,
+    previousRecipeCookedAt,
     servings,
   ];
   @override
@@ -3055,6 +3079,24 @@ class $MealPlanEntriesTable extends MealPlanEntries
         cookedAt.isAcceptableOrUnknown(data['cooked_at']!, _cookedAtMeta),
       );
     }
+    if (data.containsKey('external_id_snapshot')) {
+      context.handle(
+        _externalIdSnapshotMeta,
+        externalIdSnapshot.isAcceptableOrUnknown(
+          data['external_id_snapshot']!,
+          _externalIdSnapshotMeta,
+        ),
+      );
+    }
+    if (data.containsKey('previous_recipe_cooked_at')) {
+      context.handle(
+        _previousRecipeCookedAtMeta,
+        previousRecipeCookedAt.isAcceptableOrUnknown(
+          data['previous_recipe_cooked_at']!,
+          _previousRecipeCookedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('servings')) {
       context.handle(
         _servingsMeta,
@@ -3096,6 +3138,14 @@ class $MealPlanEntriesTable extends MealPlanEntries
         DriftSqlType.string,
         data['${effectivePrefix}cooked_at'],
       ),
+      externalIdSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id_snapshot'],
+      ),
+      previousRecipeCookedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}previous_recipe_cooked_at'],
+      ),
       servings: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}servings'],
@@ -3116,6 +3166,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
   final String recipeTitle;
   final String plannedDate;
   final String? cookedAt;
+  final String? externalIdSnapshot;
+  final String? previousRecipeCookedAt;
   final int servings;
   const MealPlanEntry({
     required this.id,
@@ -3124,6 +3176,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
     required this.recipeTitle,
     required this.plannedDate,
     this.cookedAt,
+    this.externalIdSnapshot,
+    this.previousRecipeCookedAt,
     required this.servings,
   });
   @override
@@ -3138,6 +3192,14 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
     map['planned_date'] = Variable<String>(plannedDate);
     if (!nullToAbsent || cookedAt != null) {
       map['cooked_at'] = Variable<String>(cookedAt);
+    }
+    if (!nullToAbsent || externalIdSnapshot != null) {
+      map['external_id_snapshot'] = Variable<String>(externalIdSnapshot);
+    }
+    if (!nullToAbsent || previousRecipeCookedAt != null) {
+      map['previous_recipe_cooked_at'] = Variable<String>(
+        previousRecipeCookedAt,
+      );
     }
     map['servings'] = Variable<int>(servings);
     return map;
@@ -3155,6 +3217,12 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
       cookedAt: cookedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(cookedAt),
+      externalIdSnapshot: externalIdSnapshot == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalIdSnapshot),
+      previousRecipeCookedAt: previousRecipeCookedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(previousRecipeCookedAt),
       servings: Value(servings),
     );
   }
@@ -3171,6 +3239,12 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
       recipeTitle: serializer.fromJson<String>(json['recipeTitle']),
       plannedDate: serializer.fromJson<String>(json['plannedDate']),
       cookedAt: serializer.fromJson<String?>(json['cookedAt']),
+      externalIdSnapshot: serializer.fromJson<String?>(
+        json['externalIdSnapshot'],
+      ),
+      previousRecipeCookedAt: serializer.fromJson<String?>(
+        json['previousRecipeCookedAt'],
+      ),
       servings: serializer.fromJson<int>(json['servings']),
     );
   }
@@ -3184,6 +3258,10 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
       'recipeTitle': serializer.toJson<String>(recipeTitle),
       'plannedDate': serializer.toJson<String>(plannedDate),
       'cookedAt': serializer.toJson<String?>(cookedAt),
+      'externalIdSnapshot': serializer.toJson<String?>(externalIdSnapshot),
+      'previousRecipeCookedAt': serializer.toJson<String?>(
+        previousRecipeCookedAt,
+      ),
       'servings': serializer.toJson<int>(servings),
     };
   }
@@ -3195,6 +3273,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
     String? recipeTitle,
     String? plannedDate,
     Value<String?> cookedAt = const Value.absent(),
+    Value<String?> externalIdSnapshot = const Value.absent(),
+    Value<String?> previousRecipeCookedAt = const Value.absent(),
     int? servings,
   }) => MealPlanEntry(
     id: id ?? this.id,
@@ -3203,6 +3283,12 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
     recipeTitle: recipeTitle ?? this.recipeTitle,
     plannedDate: plannedDate ?? this.plannedDate,
     cookedAt: cookedAt.present ? cookedAt.value : this.cookedAt,
+    externalIdSnapshot: externalIdSnapshot.present
+        ? externalIdSnapshot.value
+        : this.externalIdSnapshot,
+    previousRecipeCookedAt: previousRecipeCookedAt.present
+        ? previousRecipeCookedAt.value
+        : this.previousRecipeCookedAt,
     servings: servings ?? this.servings,
   );
   MealPlanEntry copyWithCompanion(MealPlanEntriesCompanion data) {
@@ -3217,6 +3303,12 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
           ? data.plannedDate.value
           : this.plannedDate,
       cookedAt: data.cookedAt.present ? data.cookedAt.value : this.cookedAt,
+      externalIdSnapshot: data.externalIdSnapshot.present
+          ? data.externalIdSnapshot.value
+          : this.externalIdSnapshot,
+      previousRecipeCookedAt: data.previousRecipeCookedAt.present
+          ? data.previousRecipeCookedAt.value
+          : this.previousRecipeCookedAt,
       servings: data.servings.present ? data.servings.value : this.servings,
     );
   }
@@ -3230,6 +3322,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
           ..write('recipeTitle: $recipeTitle, ')
           ..write('plannedDate: $plannedDate, ')
           ..write('cookedAt: $cookedAt, ')
+          ..write('externalIdSnapshot: $externalIdSnapshot, ')
+          ..write('previousRecipeCookedAt: $previousRecipeCookedAt, ')
           ..write('servings: $servings')
           ..write(')'))
         .toString();
@@ -3243,6 +3337,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
     recipeTitle,
     plannedDate,
     cookedAt,
+    externalIdSnapshot,
+    previousRecipeCookedAt,
     servings,
   );
   @override
@@ -3255,6 +3351,8 @@ class MealPlanEntry extends DataClass implements Insertable<MealPlanEntry> {
           other.recipeTitle == this.recipeTitle &&
           other.plannedDate == this.plannedDate &&
           other.cookedAt == this.cookedAt &&
+          other.externalIdSnapshot == this.externalIdSnapshot &&
+          other.previousRecipeCookedAt == this.previousRecipeCookedAt &&
           other.servings == this.servings);
 }
 
@@ -3265,6 +3363,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
   final Value<String> recipeTitle;
   final Value<String> plannedDate;
   final Value<String?> cookedAt;
+  final Value<String?> externalIdSnapshot;
+  final Value<String?> previousRecipeCookedAt;
   final Value<int> servings;
   const MealPlanEntriesCompanion({
     this.id = const Value.absent(),
@@ -3273,6 +3373,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
     this.recipeTitle = const Value.absent(),
     this.plannedDate = const Value.absent(),
     this.cookedAt = const Value.absent(),
+    this.externalIdSnapshot = const Value.absent(),
+    this.previousRecipeCookedAt = const Value.absent(),
     this.servings = const Value.absent(),
   });
   MealPlanEntriesCompanion.insert({
@@ -3282,6 +3384,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
     required String recipeTitle,
     required String plannedDate,
     this.cookedAt = const Value.absent(),
+    this.externalIdSnapshot = const Value.absent(),
+    this.previousRecipeCookedAt = const Value.absent(),
     required int servings,
   }) : userId = Value(userId),
        recipeTitle = Value(recipeTitle),
@@ -3294,6 +3398,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
     Expression<String>? recipeTitle,
     Expression<String>? plannedDate,
     Expression<String>? cookedAt,
+    Expression<String>? externalIdSnapshot,
+    Expression<String>? previousRecipeCookedAt,
     Expression<int>? servings,
   }) {
     return RawValuesInsertable({
@@ -3303,6 +3409,10 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
       if (recipeTitle != null) 'recipe_title': recipeTitle,
       if (plannedDate != null) 'planned_date': plannedDate,
       if (cookedAt != null) 'cooked_at': cookedAt,
+      if (externalIdSnapshot != null)
+        'external_id_snapshot': externalIdSnapshot,
+      if (previousRecipeCookedAt != null)
+        'previous_recipe_cooked_at': previousRecipeCookedAt,
       if (servings != null) 'servings': servings,
     });
   }
@@ -3314,6 +3424,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
     Value<String>? recipeTitle,
     Value<String>? plannedDate,
     Value<String?>? cookedAt,
+    Value<String?>? externalIdSnapshot,
+    Value<String?>? previousRecipeCookedAt,
     Value<int>? servings,
   }) {
     return MealPlanEntriesCompanion(
@@ -3323,6 +3435,9 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
       recipeTitle: recipeTitle ?? this.recipeTitle,
       plannedDate: plannedDate ?? this.plannedDate,
       cookedAt: cookedAt ?? this.cookedAt,
+      externalIdSnapshot: externalIdSnapshot ?? this.externalIdSnapshot,
+      previousRecipeCookedAt:
+          previousRecipeCookedAt ?? this.previousRecipeCookedAt,
       servings: servings ?? this.servings,
     );
   }
@@ -3348,6 +3463,14 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
     if (cookedAt.present) {
       map['cooked_at'] = Variable<String>(cookedAt.value);
     }
+    if (externalIdSnapshot.present) {
+      map['external_id_snapshot'] = Variable<String>(externalIdSnapshot.value);
+    }
+    if (previousRecipeCookedAt.present) {
+      map['previous_recipe_cooked_at'] = Variable<String>(
+        previousRecipeCookedAt.value,
+      );
+    }
     if (servings.present) {
       map['servings'] = Variable<int>(servings.value);
     }
@@ -3363,6 +3486,8 @@ class MealPlanEntriesCompanion extends UpdateCompanion<MealPlanEntry> {
           ..write('recipeTitle: $recipeTitle, ')
           ..write('plannedDate: $plannedDate, ')
           ..write('cookedAt: $cookedAt, ')
+          ..write('externalIdSnapshot: $externalIdSnapshot, ')
+          ..write('previousRecipeCookedAt: $previousRecipeCookedAt, ')
           ..write('servings: $servings')
           ..write(')'))
         .toString();
@@ -3981,6 +4106,21 @@ class $ShoppingListItemsTable extends ShoppingListItems
     requiredDuringInsert: false,
     defaultValue: const Constant('manual'),
   );
+  static const VerificationMeta _isRequirementMeta = const VerificationMeta(
+    'isRequirement',
+  );
+  @override
+  late final GeneratedColumn<bool> isRequirement = GeneratedColumn<bool>(
+    'is_requirement',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_requirement" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _isCheckedMeta = const VerificationMeta(
     'isChecked',
   );
@@ -4018,6 +4158,7 @@ class $ShoppingListItemsTable extends ShoppingListItems
     quantity,
     unit,
     source,
+    isRequirement,
     isChecked,
     sourceMealPlanEntryId,
   ];
@@ -4081,6 +4222,15 @@ class $ShoppingListItemsTable extends ShoppingListItems
         source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
       );
     }
+    if (data.containsKey('is_requirement')) {
+      context.handle(
+        _isRequirementMeta,
+        isRequirement.isAcceptableOrUnknown(
+          data['is_requirement']!,
+          _isRequirementMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_checked')) {
       context.handle(
         _isCheckedMeta,
@@ -4133,6 +4283,10 @@ class $ShoppingListItemsTable extends ShoppingListItems
         DriftSqlType.string,
         data['${effectivePrefix}source'],
       )!,
+      isRequirement: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_requirement'],
+      )!,
       isChecked: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_checked'],
@@ -4159,6 +4313,7 @@ class ShoppingListItem extends DataClass
   final double? quantity;
   final String? unit;
   final String source;
+  final bool isRequirement;
   final bool isChecked;
   final int? sourceMealPlanEntryId;
   const ShoppingListItem({
@@ -4169,6 +4324,7 @@ class ShoppingListItem extends DataClass
     this.quantity,
     this.unit,
     required this.source,
+    required this.isRequirement,
     required this.isChecked,
     this.sourceMealPlanEntryId,
   });
@@ -4186,6 +4342,7 @@ class ShoppingListItem extends DataClass
       map['unit'] = Variable<String>(unit);
     }
     map['source'] = Variable<String>(source);
+    map['is_requirement'] = Variable<bool>(isRequirement);
     map['is_checked'] = Variable<bool>(isChecked);
     if (!nullToAbsent || sourceMealPlanEntryId != null) {
       map['source_meal_plan_entry_id'] = Variable<int>(sourceMealPlanEntryId);
@@ -4204,6 +4361,7 @@ class ShoppingListItem extends DataClass
           : Value(quantity),
       unit: unit == null && nullToAbsent ? const Value.absent() : Value(unit),
       source: Value(source),
+      isRequirement: Value(isRequirement),
       isChecked: Value(isChecked),
       sourceMealPlanEntryId: sourceMealPlanEntryId == null && nullToAbsent
           ? const Value.absent()
@@ -4224,6 +4382,7 @@ class ShoppingListItem extends DataClass
       quantity: serializer.fromJson<double?>(json['quantity']),
       unit: serializer.fromJson<String?>(json['unit']),
       source: serializer.fromJson<String>(json['source']),
+      isRequirement: serializer.fromJson<bool>(json['isRequirement']),
       isChecked: serializer.fromJson<bool>(json['isChecked']),
       sourceMealPlanEntryId: serializer.fromJson<int?>(
         json['sourceMealPlanEntryId'],
@@ -4241,6 +4400,7 @@ class ShoppingListItem extends DataClass
       'quantity': serializer.toJson<double?>(quantity),
       'unit': serializer.toJson<String?>(unit),
       'source': serializer.toJson<String>(source),
+      'isRequirement': serializer.toJson<bool>(isRequirement),
       'isChecked': serializer.toJson<bool>(isChecked),
       'sourceMealPlanEntryId': serializer.toJson<int?>(sourceMealPlanEntryId),
     };
@@ -4254,6 +4414,7 @@ class ShoppingListItem extends DataClass
     Value<double?> quantity = const Value.absent(),
     Value<String?> unit = const Value.absent(),
     String? source,
+    bool? isRequirement,
     bool? isChecked,
     Value<int?> sourceMealPlanEntryId = const Value.absent(),
   }) => ShoppingListItem(
@@ -4264,6 +4425,7 @@ class ShoppingListItem extends DataClass
     quantity: quantity.present ? quantity.value : this.quantity,
     unit: unit.present ? unit.value : this.unit,
     source: source ?? this.source,
+    isRequirement: isRequirement ?? this.isRequirement,
     isChecked: isChecked ?? this.isChecked,
     sourceMealPlanEntryId: sourceMealPlanEntryId.present
         ? sourceMealPlanEntryId.value
@@ -4280,6 +4442,9 @@ class ShoppingListItem extends DataClass
       quantity: data.quantity.present ? data.quantity.value : this.quantity,
       unit: data.unit.present ? data.unit.value : this.unit,
       source: data.source.present ? data.source.value : this.source,
+      isRequirement: data.isRequirement.present
+          ? data.isRequirement.value
+          : this.isRequirement,
       isChecked: data.isChecked.present ? data.isChecked.value : this.isChecked,
       sourceMealPlanEntryId: data.sourceMealPlanEntryId.present
           ? data.sourceMealPlanEntryId.value
@@ -4297,6 +4462,7 @@ class ShoppingListItem extends DataClass
           ..write('quantity: $quantity, ')
           ..write('unit: $unit, ')
           ..write('source: $source, ')
+          ..write('isRequirement: $isRequirement, ')
           ..write('isChecked: $isChecked, ')
           ..write('sourceMealPlanEntryId: $sourceMealPlanEntryId')
           ..write(')'))
@@ -4312,6 +4478,7 @@ class ShoppingListItem extends DataClass
     quantity,
     unit,
     source,
+    isRequirement,
     isChecked,
     sourceMealPlanEntryId,
   );
@@ -4326,6 +4493,7 @@ class ShoppingListItem extends DataClass
           other.quantity == this.quantity &&
           other.unit == this.unit &&
           other.source == this.source &&
+          other.isRequirement == this.isRequirement &&
           other.isChecked == this.isChecked &&
           other.sourceMealPlanEntryId == this.sourceMealPlanEntryId);
 }
@@ -4338,6 +4506,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
   final Value<double?> quantity;
   final Value<String?> unit;
   final Value<String> source;
+  final Value<bool> isRequirement;
   final Value<bool> isChecked;
   final Value<int?> sourceMealPlanEntryId;
   const ShoppingListItemsCompanion({
@@ -4348,6 +4517,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
     this.quantity = const Value.absent(),
     this.unit = const Value.absent(),
     this.source = const Value.absent(),
+    this.isRequirement = const Value.absent(),
     this.isChecked = const Value.absent(),
     this.sourceMealPlanEntryId = const Value.absent(),
   });
@@ -4359,6 +4529,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
     this.quantity = const Value.absent(),
     this.unit = const Value.absent(),
     this.source = const Value.absent(),
+    this.isRequirement = const Value.absent(),
     this.isChecked = const Value.absent(),
     this.sourceMealPlanEntryId = const Value.absent(),
   }) : userId = Value(userId),
@@ -4372,6 +4543,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
     Expression<double>? quantity,
     Expression<String>? unit,
     Expression<String>? source,
+    Expression<bool>? isRequirement,
     Expression<bool>? isChecked,
     Expression<int>? sourceMealPlanEntryId,
   }) {
@@ -4383,6 +4555,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
       if (quantity != null) 'quantity': quantity,
       if (unit != null) 'unit': unit,
       if (source != null) 'source': source,
+      if (isRequirement != null) 'is_requirement': isRequirement,
       if (isChecked != null) 'is_checked': isChecked,
       if (sourceMealPlanEntryId != null)
         'source_meal_plan_entry_id': sourceMealPlanEntryId,
@@ -4397,6 +4570,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
     Value<double?>? quantity,
     Value<String?>? unit,
     Value<String>? source,
+    Value<bool>? isRequirement,
     Value<bool>? isChecked,
     Value<int?>? sourceMealPlanEntryId,
   }) {
@@ -4408,6 +4582,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
       source: source ?? this.source,
+      isRequirement: isRequirement ?? this.isRequirement,
       isChecked: isChecked ?? this.isChecked,
       sourceMealPlanEntryId:
           sourceMealPlanEntryId ?? this.sourceMealPlanEntryId,
@@ -4438,6 +4613,9 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
+    if (isRequirement.present) {
+      map['is_requirement'] = Variable<bool>(isRequirement.value);
+    }
     if (isChecked.present) {
       map['is_checked'] = Variable<bool>(isChecked.value);
     }
@@ -4459,6 +4637,7 @@ class ShoppingListItemsCompanion extends UpdateCompanion<ShoppingListItem> {
           ..write('quantity: $quantity, ')
           ..write('unit: $unit, ')
           ..write('source: $source, ')
+          ..write('isRequirement: $isRequirement, ')
           ..write('isChecked: $isChecked, ')
           ..write('sourceMealPlanEntryId: $sourceMealPlanEntryId')
           ..write(')'))
@@ -7918,6 +8097,8 @@ typedef $$MealPlanEntriesTableCreateCompanionBuilder =
       required String recipeTitle,
       required String plannedDate,
       Value<String?> cookedAt,
+      Value<String?> externalIdSnapshot,
+      Value<String?> previousRecipeCookedAt,
       required int servings,
     });
 typedef $$MealPlanEntriesTableUpdateCompanionBuilder =
@@ -7928,6 +8109,8 @@ typedef $$MealPlanEntriesTableUpdateCompanionBuilder =
       Value<String> recipeTitle,
       Value<String> plannedDate,
       Value<String?> cookedAt,
+      Value<String?> externalIdSnapshot,
+      Value<String?> previousRecipeCookedAt,
       Value<int> servings,
     });
 
@@ -8037,6 +8220,16 @@ class $$MealPlanEntriesTableFilterComposer
 
   ColumnFilters<String> get cookedAt => $composableBuilder(
     column: $table.cookedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalIdSnapshot => $composableBuilder(
+    column: $table.externalIdSnapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get previousRecipeCookedAt => $composableBuilder(
+    column: $table.previousRecipeCookedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8153,6 +8346,16 @@ class $$MealPlanEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get externalIdSnapshot => $composableBuilder(
+    column: $table.externalIdSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get previousRecipeCookedAt => $composableBuilder(
+    column: $table.previousRecipeCookedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get servings => $composableBuilder(
     column: $table.servings,
     builder: (column) => ColumnOrderings(column),
@@ -8209,6 +8412,16 @@ class $$MealPlanEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get cookedAt =>
       $composableBuilder(column: $table.cookedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get externalIdSnapshot => $composableBuilder(
+    column: $table.externalIdSnapshot,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get previousRecipeCookedAt => $composableBuilder(
+    column: $table.previousRecipeCookedAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get servings =>
       $composableBuilder(column: $table.servings, builder: (column) => column);
@@ -8329,6 +8542,8 @@ class $$MealPlanEntriesTableTableManager
                 Value<String> recipeTitle = const Value.absent(),
                 Value<String> plannedDate = const Value.absent(),
                 Value<String?> cookedAt = const Value.absent(),
+                Value<String?> externalIdSnapshot = const Value.absent(),
+                Value<String?> previousRecipeCookedAt = const Value.absent(),
                 Value<int> servings = const Value.absent(),
               }) => MealPlanEntriesCompanion(
                 id: id,
@@ -8337,6 +8552,8 @@ class $$MealPlanEntriesTableTableManager
                 recipeTitle: recipeTitle,
                 plannedDate: plannedDate,
                 cookedAt: cookedAt,
+                externalIdSnapshot: externalIdSnapshot,
+                previousRecipeCookedAt: previousRecipeCookedAt,
                 servings: servings,
               ),
           createCompanionCallback:
@@ -8347,6 +8564,8 @@ class $$MealPlanEntriesTableTableManager
                 required String recipeTitle,
                 required String plannedDate,
                 Value<String?> cookedAt = const Value.absent(),
+                Value<String?> externalIdSnapshot = const Value.absent(),
+                Value<String?> previousRecipeCookedAt = const Value.absent(),
                 required int servings,
               }) => MealPlanEntriesCompanion.insert(
                 id: id,
@@ -8355,6 +8574,8 @@ class $$MealPlanEntriesTableTableManager
                 recipeTitle: recipeTitle,
                 plannedDate: plannedDate,
                 cookedAt: cookedAt,
+                externalIdSnapshot: externalIdSnapshot,
+                previousRecipeCookedAt: previousRecipeCookedAt,
                 servings: servings,
               ),
           withReferenceMapper: (p0) => p0
@@ -8970,6 +9191,7 @@ typedef $$ShoppingListItemsTableCreateCompanionBuilder =
       Value<double?> quantity,
       Value<String?> unit,
       Value<String> source,
+      Value<bool> isRequirement,
       Value<bool> isChecked,
       Value<int?> sourceMealPlanEntryId,
     });
@@ -8982,6 +9204,7 @@ typedef $$ShoppingListItemsTableUpdateCompanionBuilder =
       Value<double?> quantity,
       Value<String?> unit,
       Value<String> source,
+      Value<bool> isRequirement,
       Value<bool> isChecked,
       Value<int?> sourceMealPlanEntryId,
     });
@@ -9079,6 +9302,11 @@ class $$ShoppingListItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get isRequirement => $composableBuilder(
+    column: $table.isRequirement,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get isChecked => $composableBuilder(
     column: $table.isChecked,
     builder: (column) => ColumnFilters(column),
@@ -9170,6 +9398,11 @@ class $$ShoppingListItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isRequirement => $composableBuilder(
+    column: $table.isRequirement,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isChecked => $composableBuilder(
     column: $table.isChecked,
     builder: (column) => ColumnOrderings(column),
@@ -9248,6 +9481,11 @@ class $$ShoppingListItemsTableAnnotationComposer
 
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<bool> get isRequirement => $composableBuilder(
+    column: $table.isRequirement,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<bool> get isChecked =>
       $composableBuilder(column: $table.isChecked, builder: (column) => column);
@@ -9342,6 +9580,7 @@ class $$ShoppingListItemsTableTableManager
                 Value<double?> quantity = const Value.absent(),
                 Value<String?> unit = const Value.absent(),
                 Value<String> source = const Value.absent(),
+                Value<bool> isRequirement = const Value.absent(),
                 Value<bool> isChecked = const Value.absent(),
                 Value<int?> sourceMealPlanEntryId = const Value.absent(),
               }) => ShoppingListItemsCompanion(
@@ -9352,6 +9591,7 @@ class $$ShoppingListItemsTableTableManager
                 quantity: quantity,
                 unit: unit,
                 source: source,
+                isRequirement: isRequirement,
                 isChecked: isChecked,
                 sourceMealPlanEntryId: sourceMealPlanEntryId,
               ),
@@ -9364,6 +9604,7 @@ class $$ShoppingListItemsTableTableManager
                 Value<double?> quantity = const Value.absent(),
                 Value<String?> unit = const Value.absent(),
                 Value<String> source = const Value.absent(),
+                Value<bool> isRequirement = const Value.absent(),
                 Value<bool> isChecked = const Value.absent(),
                 Value<int?> sourceMealPlanEntryId = const Value.absent(),
               }) => ShoppingListItemsCompanion.insert(
@@ -9374,6 +9615,7 @@ class $$ShoppingListItemsTableTableManager
                 quantity: quantity,
                 unit: unit,
                 source: source,
+                isRequirement: isRequirement,
                 isChecked: isChecked,
                 sourceMealPlanEntryId: sourceMealPlanEntryId,
               ),

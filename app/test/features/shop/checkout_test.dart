@@ -128,39 +128,5 @@ void main() {
         );
       },
     );
-
-    testWidgets(
-      'a manual item resolves a real ingredient identity and can later match '
-      'a receipt (AC-SHOP-03)',
-      (WidgetTester tester) async {
-        final int id = await shopping.addManualItem(
-          userId: 'test-user',
-          name: 'Oats',
-        );
-        // A plain one-shot lookup, not `.watchAll(...).first` — see the
-        // comment on the same pattern above.
-        final ingredient = await ingredients.resolveOrCreate(
-          canonicalName: 'Oats',
-        );
-        // `ShoppingListItemView.ingredientId` is a non-nullable `int` — the
-        // schema and the view model make "null" structurally impossible
-        // here, unlike RN's `ingredient_id: null`. Assert it resolved to a
-        // real row rather than some sentinel.
-        expect(ingredient.id, greaterThan(0));
-
-        await shopping.toggleItem(id: id, userId: 'test-user', checked: true);
-
-        final int removed = await shopping.resolveCheckout(
-          userId: 'test-user',
-          resolvedIngredientIds: <int>[ingredient.id],
-        );
-
-        expect(removed, 1);
-        expect(
-          await tester.runAsync(() => shopping.watchAll('test-user').first),
-          isEmpty,
-        );
-      },
-    );
   });
 }

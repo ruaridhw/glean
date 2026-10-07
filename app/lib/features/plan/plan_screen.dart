@@ -22,6 +22,8 @@ import 'package:glean/data/providers/pantry_providers.dart';
 import 'package:glean/data/providers/plan_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
+import 'package:glean/data/providers/viewed_plan_week.dart';
+import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/design_system/design_system.dart';
 
@@ -42,44 +44,93 @@ class PlanScreen extends ConsumerStatefulWidget {
   ConsumerState<PlanScreen> createState() => _PlanScreenState();
 }
 
-class _PlanScreenState extends ConsumerState<PlanScreen> {
-  late DateTime _weekStart;
+class _PlanScreenState extends ConsumerState<PlanScreen>
+    with WidgetsBindingObserver {
+  Timer? _weekTimer;
+  DateTime? _lastRolloverWeek;
+  bool _rolling = false;
+  DateTime get _weekStart => ref.read(viewedPlanWeekProvider);
 
   @override
   void initState() {
     super.initState();
-    _weekStart = startOfWeek(DateTime.now());
-    // Uncooked meals roll forward into the current week on every visit
-    // (AC-PLAN-05). Safe to fire unconditionally here — unlike a manual
-    // reload (which AC-DATA-04 rules out), this is a genuine one-time
-    // mutation, and `rolloverUncookedMeals` *updates* rather than inserts,
-    // so a repeat run (e.g. this widget remounting) is a no-op rather than
-    // a duplicate (verified in `plan_screen_test.dart`, mirroring the
-    // DATA-layer proof in `test/data/plan_repository_test.dart`).
-    unawaited(
-      ref
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_rollToCurrentWeek());
+    _scheduleWeekBoundary();
+  }
+
+  @override
+  void dispose() {
+    _weekTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_rollToCurrentWeek());
+      _scheduleWeekBoundary();
+    }
+  }
+
+  void _scheduleWeekBoundary() {
+    _weekTimer?.cancel();
+    final now = ref.read(clockProvider)();
+    final week = startOfWeek(now);
+    final next = DateTime(week.year, week.month, week.day + 7);
+    _weekTimer = Timer(next.difference(now), () {
+      unawaited(_rollToCurrentWeek());
+      _scheduleWeekBoundary();
+    });
+  }
+
+  Future<void> _rollToCurrentWeek() async {
+    final now = ref.read(clockProvider)();
+    final week = startOfWeek(now);
+    if (_rolling || _lastRolloverWeek == week) return;
+    _rolling = true;
+    try {
+      await ref
           .read(planRepositoryProvider)
           .rolloverUncookedMeals(
             userId: ref.read(currentUserIdProvider),
-            referenceDate: DateTime.now(),
-          ),
-    );
+            referenceDate: now,
+          );
+      if (!mounted) return;
+      if (_lastRolloverWeek != null && _weekStart == _lastRolloverWeek) {
+        ref.read(viewedPlanWeekProvider.notifier).select(week);
+      }
+      _lastRolloverWeek = week;
+    } catch (_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          GleanSnackBar.show(
+            context,
+            'Could not roll over your meals. Try again.',
+          );
+        }
+      });
+    } finally {
+      _rolling = false;
+    }
   }
 
   void _goToPreviousWeek() {
-    setState(() {
-      _weekStart = _weekStart.subtract(const Duration(days: 7));
-    });
+    ref
+        .read(viewedPlanWeekProvider.notifier)
+        .select(_weekStart.subtract(const Duration(days: 7)));
   }
 
   void _goToNextWeek() {
-    setState(() {
-      _weekStart = _weekStart.add(const Duration(days: 7));
-    });
+    ref
+        .read(viewedPlanWeekProvider.notifier)
+        .select(_weekStart.add(const Duration(days: 7)));
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(viewedPlanWeekProvider);
     final AppTokens tokens = context.tokens;
 
     final AsyncValue<List<MealPlanEntryView>> entriesAsync = ref.watch(
@@ -114,7 +165,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             context,
             count == 0
                 ? 'No recipes fit right now. Try again.'
-                : 'Week generated',
+                : 'Week generated · any missing ingredients were added to your shopping list',
           );
         },
         error: (Object error, StackTrace stackTrace) {
@@ -159,7 +210,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
               ),
               SizedBox(height: tokens.spacing.md),
               PlanProgressCard(
-                planned: entries.length,
+                planned: entries.where((entry) => !entry.isCooked).length,
                 target: target,
                 remaining: remaining,
               ),

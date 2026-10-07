@@ -148,6 +148,10 @@ class MealPlanEntries extends Table {
   // (AC-PLAN-01).
   TextColumn get plannedDate => text()();
   TextColumn get cookedAt => text().nullable()();
+  // Survives library deletion so corpus exclusion keeps its identity.
+  TextColumn get externalIdSnapshot => text().nullable()();
+  // Undo restores/forwards this history snapshot, just like pantry deltas.
+  TextColumn get previousRecipeCookedAt => text().nullable()();
   // No default: every call site must state servings explicitly so
   // `preferred_servings` can never be silently re-hardcoded to 1
   // (AC-PLAN-07) the way RN's `addMealPlanEntry` did.
@@ -191,6 +195,10 @@ class ShoppingListItems extends Table {
   RealColumn get quantity => real().nullable()();
   TextColumn get unit => text().nullable()();
   TextColumn get source => text().withDefault(const Constant('manual'))();
+  // New plan rows store full demand. Display allocates stock once across
+  // them; legacy v1 gaps retain their already-computed shortfall semantics.
+  BoolColumn get isRequirement =>
+      boolean().withDefault(const Constant(false))();
   BoolColumn get isChecked => boolean().withDefault(const Constant(false))();
   IntColumn get sourceMealPlanEntryId => integer().nullable().references(
     MealPlanEntries,

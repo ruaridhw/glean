@@ -89,6 +89,28 @@ void main() {
       expect(result?.source, NormalizeSource.density);
     });
 
+    test('base ml converts to g using a known density', () {
+      final result = normalizeUnit(
+        quantity: 500,
+        unit: 'ml',
+        canonicalUnit: 'g',
+        canonicalName: 'milk',
+      );
+      expect(result?.quantity, 515);
+      expect(result?.unit, 'g');
+    });
+
+    test('base g converts to ml using a known density', () {
+      final result = normalizeUnit(
+        quantity: 515,
+        unit: 'g',
+        canonicalUnit: 'ml',
+        canonicalName: 'milk',
+      );
+      expect(result?.quantity, closeTo(500, 1e-9));
+      expect(result?.unit, 'ml');
+    });
+
     test('returns null for unknown ambiguous conversion', () {
       final result = normalizeUnit(
         quantity: 1,

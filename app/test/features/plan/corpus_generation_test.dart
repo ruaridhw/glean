@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/features/plan/providers/generate_week_controller.dart';
 import 'package:http/http.dart' as http;
@@ -78,23 +77,6 @@ void main() {
       ),
     );
   }
-
-  test(
-    'corpus wire response accepts null recipe id without missing ingredients',
-    () {
-      final response = MealPlanResponse.fromJson({
-        'suggestions': [
-          {
-            'recipe_id': null,
-            'external_id': 'rec_1',
-            'title': 'Beans',
-            'reason': 'Fit',
-          },
-        ],
-      });
-      expect(response.suggestions.single.recipeId, isNull);
-    },
-  );
 
   test(
     'fetches corpus picks, skips failed detail, reuses saved recipes and excludes planned external ids',
@@ -208,7 +190,7 @@ void main() {
           .isNotEmpty,
       description: 'empty-generation feedback',
     );
-    expect(find.text('Week generated'), findsNothing);
+    expect(find.textContaining('Week generated'), findsNothing);
   });
 
   test('a gap insertion failure rolls back all plan entries', () async {

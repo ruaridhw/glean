@@ -18,6 +18,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../database.dart';
+import '../deletion_snapshots.dart';
 import '../models/recipe_view.dart';
 import 'ingredients_repository.dart';
 
@@ -205,6 +206,56 @@ class RecipesRepository {
       );
     }).toList();
   }
+
+  Future<DeletedRecipe> deleteWithSnapshot({
+    required int id,
+    required String userId,
+  }) => _db.transaction(() async {
+    final recipe = await (_db.select(
+      _db.recipes,
+    )..where((t) => t.id.equals(id) & t.userId.equals(userId))).getSingle();
+    final ingredients = await (_db.select(
+      _db.recipeIngredients,
+    )..where((t) => t.recipeId.equals(id))).get();
+    final flags = await (_db.select(
+      _db.recipeDietaryFlags,
+    )..where((t) => t.recipeId.equals(id))).get();
+    final entries = await (_db.select(
+      _db.mealPlanEntries,
+    )..where((t) => t.recipeId.equals(id) & t.userId.equals(userId))).get();
+    await deleteRecipe(id: id, userId: userId);
+    return DeletedRecipe(
+      recipe,
+      ingredients,
+      flags,
+      entries.map((e) => e.id).toList(),
+    );
+  });
+
+  Future<void> restoreDeleted({
+    required DeletedRecipe snapshot,
+    required String userId,
+  }) => _db.transaction(() async {
+    if (snapshot.recipe.userId != userId) {
+      throw ArgumentError('Undo belongs to another user');
+    }
+    await _db.into(_db.recipes).insert(snapshot.recipe.toCompanion(false));
+    for (final ingredient in snapshot.ingredients) {
+      await _db
+          .into(_db.recipeIngredients)
+          .insert(ingredient.toCompanion(false));
+    }
+    for (final flag in snapshot.flags) {
+      await _db.into(_db.recipeDietaryFlags).insert(flag.toCompanion(false));
+    }
+    for (final id in snapshot.linkedEntries) {
+      await (_db.update(_db.mealPlanEntries)..where(
+            (t) =>
+                t.id.equals(id) & t.userId.equals(userId) & t.recipeId.isNull(),
+          ))
+          .write(MealPlanEntriesCompanion(recipeId: Value(snapshot.recipe.id)));
+    }
+  });
 
   Future<void> deleteRecipe({required int id, required String userId}) {
     return (_db.delete(

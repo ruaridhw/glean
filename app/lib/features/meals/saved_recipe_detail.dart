@@ -20,7 +20,7 @@ import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/plan_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
-import 'package:glean/data/util/week.dart';
+import 'package:glean/data/providers/viewed_plan_week.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
@@ -77,20 +77,28 @@ class SavedRecipeDetail extends ConsumerWidget {
   }
 }
 
-class _SavedRecipeDetailBody extends ConsumerWidget {
+class _SavedRecipeDetailBody extends ConsumerStatefulWidget {
   const _SavedRecipeDetailBody({required this.recipe});
-
   final RecipeView recipe;
+  @override
+  ConsumerState<_SavedRecipeDetailBody> createState() =>
+      _SavedRecipeDetailBodyState();
+}
+
+class _SavedRecipeDetailBodyState
+    extends ConsumerState<_SavedRecipeDetailBody> {
+  RecipeView get recipe => widget.recipe;
+  bool _adding = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final AsyncValue<List<RecipeIngredientView>> ingredientsAsync = ref.watch(
       recipeIngredientsProvider(recipe.id),
     );
     final AsyncValue<Set<int>> pantryIdsAsync = ref.watch(
       pantryIngredientIdsProvider,
     );
-    final DateTime weekStart = startOfWeek(DateTime.now());
+    final DateTime weekStart = ref.watch(viewedPlanWeekProvider);
     final AsyncValue<List<MealPlanEntryView>> entriesAsync = ref.watch(
       planWeekProvider(weekStart),
     );
@@ -143,15 +151,17 @@ class _SavedRecipeDetailBody extends ConsumerWidget {
                     const SizedBox(height: 24),
                     _AddToPlanButton(
                       isInPlan: isInPlan,
-                      onPressed: () => _onAddToPlan(
-                        context,
-                        ref,
-                        isInPlan: isInPlan,
-                        remaining: remainingAsync,
-                        servings:
-                            configAsync.value?.preferredServings ??
-                            UserConfigView.defaultPreferredServings,
-                      ),
+                      onPressed: _adding
+                          ? null
+                          : () => _onAddToPlan(
+                              context,
+                              ref,
+                              isInPlan: isInPlan,
+                              remaining: remainingAsync,
+                              servings:
+                                  configAsync.value?.preferredServings ??
+                                  UserConfigView.defaultPreferredServings,
+                            ),
                     ),
                   ],
                 ),
@@ -162,8 +172,8 @@ class _SavedRecipeDetailBody extends ConsumerWidget {
 
   Future<void> _onUnsave(BuildContext context, WidgetRef ref) async {
     ref.read(hapticsProvider).mediumImpact();
-    await deleteRecipeWithUndo(context, ref, recipe);
-    if (!context.mounted) return;
+    final deleted = await deleteRecipeWithUndo(context, ref, recipe);
+    if (!deleted || !context.mounted) return;
     // Leaving a now-deleted recipe's own detail screen is the same "recover
     // safely, never pop an empty stack" rule `RouteErrorScreen` follows —
     // this route may have been reached via a deep link with nothing to pop.
@@ -184,6 +194,7 @@ class _SavedRecipeDetailBody extends ConsumerWidget {
     required AsyncValue<int> remaining,
     required int servings,
   }) async {
+    if (_adding) return;
     if (isInPlan) {
       GleanSnackBar.show(context, 'Already in your plan for this week.');
       return;
@@ -197,38 +208,60 @@ class _SavedRecipeDetailBody extends ConsumerWidget {
       return;
     }
 
-    ref.read(hapticsProvider).mediumImpact();
+    setState(() => _adding = true);
     final String userId = ref.read(currentUserIdProvider);
-    final int entryId = await ref
-        .read(planRepositoryProvider)
-        .addEntry(
+    final weekStart = ref.read(viewedPlanWeekProvider);
+    try {
+      final message = await ref.read(gleanDatabaseProvider).transaction(() async {
+        final plan = ref.read(planRepositoryProvider);
+        final entries = await plan.getWeek(
+          userId: userId,
+          weekStart: weekStart,
+        );
+        if (entries.any(
+          (entry) => entry.recipeId == recipe.id && !entry.isCooked,
+        )) {
+          return 'Already in your plan for this week.';
+        }
+        if (await plan.remainingCapacityForWeek(
+              userId: userId,
+              weekStart: weekStart,
+            ) <=
+            0) {
+          return "This week's plan is full.";
+        }
+        final entryId = await plan.addEntry(
           userId: userId,
           recipeId: recipe.id,
           recipeTitle: recipe.title,
           servings: servings,
+          plannedDate: weekStart,
         );
-    // R-02: the Generate path has always created shopping gaps for a newly
-    // planned recipe (`GenerateWeekController._persist`); this manual path
-    // silently skipped it. `addGapsForRecipe` is idempotent on its own (see
-    // its doc comment), so nothing extra is needed here to avoid doubling
-    // rows on a repeat add.
-    final int gapsAdded = await ref
-        .read(shoppingRepositoryProvider)
-        .addGapsForRecipe(
-          userId: userId,
-          recipeId: recipe.id,
-          servings: servings,
-          sourceMealPlanEntryId: entryId,
-        );
-    if (context.mounted) {
-      // AC-SHOP-05: announce plan-derived shopping rows rather than
-      // inserting them silently.
-      GleanSnackBar.show(
-        context,
-        gapsAdded > 0
+        final gapsAdded = await ref
+            .read(shoppingRepositoryProvider)
+            .addGapsForRecipe(
+              userId: userId,
+              recipeId: recipe.id,
+              servings: servings,
+              sourceMealPlanEntryId: entryId,
+            );
+        return gapsAdded > 0
             ? 'Added to plan · $gapsAdded ${gapsAdded == 1 ? 'item' : 'items'} added to your shopping list'
-            : 'Added to plan',
-      );
+            : 'Added to plan';
+      });
+      if (message.startsWith('Added to plan')) {
+        ref.read(hapticsProvider).mediumImpact();
+      }
+      if (context.mounted) GleanSnackBar.show(context, message);
+    } catch (_) {
+      if (context.mounted) {
+        GleanSnackBar.show(
+          context,
+          'Could not add ${recipe.title} to plan. Try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
     }
   }
 }
@@ -237,7 +270,7 @@ class _AddToPlanButton extends StatelessWidget {
   const _AddToPlanButton({required this.isInPlan, required this.onPressed});
 
   final bool isInPlan;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
