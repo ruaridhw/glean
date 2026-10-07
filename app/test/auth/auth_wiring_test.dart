@@ -1,14 +1,11 @@
-// Exercises the exact `ProviderScope(overrides: [...])` literal documented
-// on `AuthController`'s doc comment — the wiring `main.dart` must use, since
-// no test can execute `main.dart` itself (it's orchestrator-owned and still
-// the `flutter create` placeholder). If any of these four seam identities
-// ever change, this test's imports/usages break loudly rather than the
-// mismatch only surfacing once `main.dart` is finally written.
+// Exercises the actual override factory used by the production entrypoint.
+// Tests do not re-create the user/token/sign-out wiring inside their fixtures.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/auth/tokens.dart';
+import 'package:glean/auth/session_overrides.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/features/settings/providers/sign_out_action.dart';
 import 'package:glean/router/auth_state.dart';
@@ -31,29 +28,7 @@ void main() {
 
   ProviderContainer buildContainer(AuthSessionSnapshot snapshot) {
     final ProviderContainer container = ProviderContainer(
-      overrides: [
-        authControllerProvider.overrideWith(
-          () =>
-              AuthController.seeded(snapshot, storage: storage, client: client),
-        ),
-        authStatusProvider.overrideWith(
-          () => SeededAuthStatusNotifier(snapshot.status),
-        ),
-        currentUserIdProvider.overrideWith((Ref ref) {
-          final String? userId = ref.watch(authControllerProvider).userId;
-          if (userId == null) {
-            throw StateError('currentUserIdProvider read while signed out.');
-          }
-          return userId;
-        }),
-        apiAccessTokenProvider.overrideWith(
-          (Ref ref) =>
-              ref.watch(authControllerProvider.notifier).getValidAccessToken,
-        ),
-        signOutActionProvider.overrideWith(
-          (Ref ref) => ref.watch(authControllerProvider.notifier).signOut,
-        ),
-      ],
+      overrides: sessionOverrides(snapshot, storage: storage, client: client),
     );
     addTearDown(container.dispose);
     return container;

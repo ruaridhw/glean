@@ -1,11 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_bypass.dart';
 import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/auth/auth_mode.dart';
-import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/router/auth_state.dart';
 
 void main() {
@@ -53,31 +51,6 @@ void main() {
       );
     });
   });
-
-  test(
-    'the bypass snapshot resolves through currentUserIdProvider exactly like '
-    'the production wiring would',
-    () {
-      final AuthSessionSnapshot snapshot = bypassAuthSnapshot();
-      final ProviderContainer container = ProviderContainer(
-        overrides: [
-          authControllerProvider.overrideWith(
-            () => AuthController.seeded(snapshot),
-          ),
-          authStatusProvider.overrideWith(
-            () => SeededAuthStatusNotifier(snapshot.status),
-          ),
-          currentUserIdProvider.overrideWith(
-            (Ref ref) => ref.watch(authControllerProvider).userId!,
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      expect(container.read(currentUserIdProvider), kAuthBypassUserSub);
-      expect(container.read(authStatusProvider), AuthStatus.active);
-    },
-  );
 
   test('AC-AUTH-06: no file under lib/ other than auth_bypass.dart itself and '
       'the (orchestrator-owned) main_e2e.dart entrypoint imports/exports it — '

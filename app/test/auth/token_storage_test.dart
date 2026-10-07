@@ -2,15 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
 
-import 'support/fakes.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
-  group('InMemoryTokenStorage (TokenStorage contract)', () {
-    late InMemoryTokenStorage storage;
+  TestWidgetsFlutterBinding.ensureInitialized();
+  group('SecureTokenStorage through the secure-storage plugin boundary', () {
+    late SecureTokenStorage storage;
     late CognitoTokens tokens;
 
     setUp(() {
-      storage = InMemoryTokenStorage();
+      FlutterSecureStorage.setMockInitialValues({'unrelated_key': 'keep'});
+      storage = SecureTokenStorage();
       tokens = CognitoTokens(
         accessToken: 'access-123',
         refreshToken: 'refresh-123',
@@ -48,6 +50,10 @@ void main() {
       );
       expect(stored.email, isNull);
       expect(stored.expiresAt, isNull);
+      expect(
+        await const FlutterSecureStorage().read(key: 'unrelated_key'),
+        'keep',
+      );
     });
 
     test('clearTokensKeepIdentity clears tokens but keeps userSub/email '

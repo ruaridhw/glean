@@ -9,14 +9,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod/misc.dart';
 
 import 'api/providers/api_providers.dart';
 import 'auth/auth.dart';
 import 'bootstrap.dart';
-import 'data/providers/database_providers.dart';
-import 'features/settings/providers/sign_out_action.dart';
-import 'router/auth_state.dart';
+import 'auth/session_overrides.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,29 +33,9 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
-      overrides: <Override>[
+      overrides: [
         apiBaseUrlProvider.overrideWithValue(GleanConfig.apiBaseUrl),
-        authControllerProvider.overrideWith(
-          () =>
-              AuthController.seeded(snapshot, storage: storage, client: client),
-        ),
-        authStatusProvider.overrideWith(
-          () => SeededAuthStatusNotifier(snapshot.status),
-        ),
-        currentUserIdProvider.overrideWith((Ref ref) {
-          final String? userId = ref.watch(authControllerProvider).userId;
-          if (userId == null) {
-            throw StateError('currentUserIdProvider read while signed out');
-          }
-          return userId;
-        }),
-        apiAccessTokenProvider.overrideWith(
-          (Ref ref) =>
-              ref.watch(authControllerProvider.notifier).getValidAccessToken,
-        ),
-        signOutActionProvider.overrideWith(
-          (Ref ref) => ref.watch(authControllerProvider.notifier).signOut,
-        ),
+        ...sessionOverrides(snapshot, storage: storage, client: client),
       ],
       child: const GleanRoot(),
     ),
