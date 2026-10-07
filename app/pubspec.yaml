@@ -46,6 +46,7 @@ dependencies:
   drift_flutter: ^0.3.1
   riverpod: ^3.3.2
   url_launcher: ^6.3.2
+  connectivity_plus: ^7.3.2
 
 dev_dependencies:
   flutter_test:
@@ -64,12 +65,13 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   meta: ^1.18.0
+  sqlite3: ^3.5.0
+  xml: ^7.0.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
-
 flutter:
   uses-material-design: true
 
