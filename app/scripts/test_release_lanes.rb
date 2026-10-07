@@ -7,6 +7,8 @@ require 'ostruct'
 
 ROOT = File.expand_path('..', __dir__)
 CONFIG = {'API_BASE_URL'=>'https://api.example.test', 'COGNITO_DOMAIN'=>'glean.auth.eu-west-2.amazoncognito.com', 'COGNITO_CLIENT_ID'=>'abc123'}
+# Never let the lane DSL read operator credential environment in this probe.
+%w[ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_CONTENT PLAY_STORE_JSON_KEY].each { |key| ENV[key] = 'fixture-only' }
 module UI
   def self.user_error!(message); raise message; end
   def self.message(_); end
