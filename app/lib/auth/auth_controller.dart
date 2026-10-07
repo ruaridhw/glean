@@ -143,6 +143,17 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   }
 
   final AuthSessionSnapshot _seed;
+  int _sessionEpoch = 0;
+  Future<String?>? _refreshing;
+  Future<void> _storageWrites = Future.value();
+
+  Future<void> _write(int? epoch, Future<void> Function() operation) {
+    return _storageWrites = _storageWrites.catchError((Object _) {}).then((
+      _,
+    ) async {
+      if (epoch == null || epoch == _sessionEpoch) await operation();
+    });
+  }
 
   /// `late final` rather than initializer-list-assigned: assigning these in
   /// [AuthController.seeded]'s constructor *body* (not its initializer
@@ -193,8 +204,11 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   /// `signOutActionProvider()` rather than the action itself firing one
   /// (avoids the double-buzz bug, AC-HAP-03).
   Future<void> signIn() async {
+    final epoch = ++_sessionEpoch;
+    _refreshing = null;
     final CognitoTokens tokens = await _requireClient.signIn();
-    await _requireStorage.saveTokens(tokens);
+    await _write(epoch, () => _requireStorage.saveTokens(tokens));
+    if (epoch != _sessionEpoch) return;
     _publish(
       AuthSessionSnapshot(
         status: AuthStatus.active,
@@ -214,8 +228,12 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   /// `signOutActionProvider` must be overridden with — see this class's top
   /// doc comment for the exact override.
   Future<void> signOut() async {
-    await _requireStorage.clearAll();
+    ++_sessionEpoch;
+    _refreshing = null;
     _publish(AuthSessionSnapshot.signedOut);
+    // The destructive clear stays ahead of any later session write, even
+    // if a later sign-in fails before it can persist a replacement.
+    await _write(null, _requireStorage.clearAll);
   }
 
   /// The `apiAccessTokenProvider` seam's implementation: returns a
@@ -228,14 +246,27 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
     if (tokens == null) return null;
     if (!tokens.isExpired) return tokens.accessToken;
 
+    if (_refreshing != null) return _refreshing;
+    final operation = _refresh(snapshot, _sessionEpoch);
+    _refreshing = operation;
+    try {
+      return await operation;
+    } finally {
+      if (identical(_refreshing, operation)) _refreshing = null;
+    }
+  }
+
+  Future<String?> _refresh(AuthSessionSnapshot snapshot, int epoch) async {
     final CognitoTokens? refreshed = await _requireClient.refresh(
-      tokens.refreshToken,
+      snapshot.tokens!.refreshToken,
     );
+    if (epoch != _sessionEpoch) return null;
     if (refreshed == null) {
       // AC-AUTH-05: never write a partial/empty token, and never leave
       // storage disagreeing with "no longer authenticated". AC-AUTH-04:
       // keep the user id — local reads must keep working.
-      await _requireStorage.clearTokensKeepIdentity();
+      await _write(epoch, _requireStorage.clearTokensKeepIdentity);
+      if (epoch != _sessionEpoch) return null;
       _publish(
         AuthSessionSnapshot(
           status: AuthStatus.expired,
@@ -245,7 +276,8 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
       return null;
     }
 
-    await _requireStorage.saveTokens(refreshed);
+    await _write(epoch, () => _requireStorage.saveTokens(refreshed));
+    if (epoch != _sessionEpoch) return null;
     _publish(
       AuthSessionSnapshot(
         status: AuthStatus.active,
@@ -282,7 +314,14 @@ Future<AuthSessionSnapshot> loadInitialAuthSnapshot(
     ),
   );
 
-  if (!resolved.authenticated) return AuthSessionSnapshot.signedOut;
+  if (!resolved.authenticated) {
+    return stored.userSub == null || stored.userSub!.isEmpty
+        ? AuthSessionSnapshot.signedOut
+        : AuthSessionSnapshot(
+            status: AuthStatus.expired,
+            userId: stored.userSub,
+          );
+  }
 
   // A record with *some* access token but a missing id token, refresh
   // token, expiry, or user sub is corrupt/partial (should not happen via
