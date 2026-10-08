@@ -20,7 +20,7 @@ repository never start a build, so they cost no Codemagic minutes.
 | Needs a Play Console app | Yes (internal track, service-account key) | No |
 | Build machine | The Mac's local toolchain, Android SDK included | Codemagic's clean builder, Flutter version pinned |
 | Getting the APK onto phones | Play internal-testing opt-in | Firebase invite, then update notifications |
-| Version codes | Read from every Play track | Codemagic `BUILD_NUMBER` plus a fixed base |
+| Version codes | Read from every Play track | Codemagic `BUILD_NUMBER` |
 | Cost | Free | Free tier (500 Linux minutes a month) |
 
 Today the Expo app ships an APK as a GitHub Release on every merge to main.
@@ -40,7 +40,7 @@ update without anyone forwarding a download link.
    ```bash
    flutter build apk --release -t lib/main.dart \
      --build-name="$APP_VERSION" \
-     --build-number="$((ANDROID_VERSION_CODE_BASE + BUILD_NUMBER))" \
+     --build-number="$BUILD_NUMBER" \
      --dart-define="API_BASE_URL=$API_BASE_URL" \
      --dart-define="COGNITO_DOMAIN=$COGNITO_DOMAIN" \
      --dart-define="COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
@@ -64,11 +64,12 @@ uses (`3.44.8` at the time of writing).
   `COGNITO_DOMAIN`, `COGNITO_CLIENT_ID`) are public deployment identifiers.
   Users authenticate through Cognito at run time. None of them are Codemagic
   secrets, which also keeps them readable in build logs for debugging.
-- **The signing key has history.** The live Expo app (`com.ruaridhw.glean`) is
-  signed by an EAS-managed key. See [Decision 1](#decision-1-which-signing-key).
-- **Version codes must start above Expo's.** EAS increments the Expo app's
-  version code remotely. For the Flutter APK to install as an update, its code
-  must be higher, hence `ANDROID_VERSION_CODE_BASE`.
+- **A new signing key, with no Expo compatibility.** Glean is still in
+  testing, so the Flutter app gets its own key rather than reusing the
+  EAS-managed one. Its signature won't match the Expo app's, so each tester
+  uninstalls the Expo app once before the first Flutter install. That loses
+  on-device data, which `FLUTTER_MIGRATION.md` §1 already accepts. Version codes
+  restart from Codemagic's `BUILD_NUMBER`.
 - **Cognito redirect is already registered.** `glean://auth/callback` and
   `glean://auth/logout` are in the user-pool client's callback lists
   (`backend/template.yaml`), and the Flutter app uses the same scheme. No
@@ -85,7 +86,7 @@ Codemagic's first step and can be run locally. It replaces the checks in
 - `COGNITO_DOMAIN` is not a bare hostname;
 - `COGNITO_CLIENT_ID` is not alphanumeric;
 - any variable in the groups below is missing;
-- `ANDROID_VERSION_CODE_BASE` or `BUILD_NUMBER` is not a positive integer;
+- `BUILD_NUMBER` is not a positive integer;
 - `CM_KEYSTORE_PATH` is not `/tmp/glean-release.jks`.
 
 It never prints secret values. Its tests feed it environments and check which
@@ -106,7 +107,14 @@ reason it fails with.
 
 ### Signing
 
-Keep the release JKS and its passwords in 1Password at
+Generate a dedicated release key once:
+
+```bash
+keytool -genkeypair -v -keystore glean-release.jks -alias glean \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Keep the JKS and its passwords in 1Password at
 `op://Homelab/Glean Android Release Signing`. **Never replace it**: Android
 accepts an update only if it is signed by the same key. Codemagic rebuilds the
 JKS on each builder from the `keystore_credentials` group, so nothing goes
@@ -126,7 +134,6 @@ groups:
 | `API_BASE_URL` | `https://txao8jq3c6.execute-api.eu-west-2.amazonaws.com` |
 | `COGNITO_DOMAIN` | the prod Cognito hosted-UI domain |
 | `COGNITO_CLIENT_ID` | the prod user-pool app-client ID |
-| `ANDROID_VERSION_CODE_BASE` | above the last Expo version code (see Decision 1) |
 | `EXPECTED_SIGNING_CERT_SHA256` | the release certificate's SHA-256 |
 | `FIREBASE_ANDROID_APP_ID` | from the Firebase project settings |
 | `FIREBASE_TESTER_GROUP` | `glean-testers` |
@@ -135,26 +142,10 @@ groups:
 **`firebase_credentials`**: `FIREBASE_SERVICE_ACCOUNT` (the full JSON, secret).
 
 **`keystore_credentials`**: `CM_KEYSTORE` (the JKS in base64, secret),
-`CM_KEYSTORE_PASSWORD` (secret), `CM_KEY_PASSWORD` (secret), `CM_KEY_ALIAS`, and
+`CM_KEYSTORE_PASSWORD` (secret), `CM_KEY_PASSWORD` (secret), `CM_KEY_ALIAS=glean`, and
 `CM_KEYSTORE_PATH=/tmp/glean-release.jks`.
 
-## Decisions
-
-### Decision 1: which signing key
-
-- **A. Reuse the EAS key (recommended).** Download it once with
-  `eas credentials --platform android` and store it in 1Password.
-  - Phones running Expo v0.1.x then take the first Flutter APK as an ordinary
-    update, with no uninstall and no "incompatible signature" error.
-  - Set `ANDROID_VERSION_CODE_BASE` above the current EAS version code
-    (`eas build:version:get --platform android`).
-  - Local data doesn't carry over either way. Flutter's drift database is a new
-    file, and §1 already accepts data loss at cutover.
-- **B. Generate a new key.** Simpler on paper, but every tester has to
-  uninstall the Expo app once before the first Flutter install.
-  `ANDROID_VERSION_CODE_BASE` can then be `0`.
-
-### Decision 2: what retires, and when
+### What retires, and when
 
 When `codemagic.yaml` lands:
 
@@ -183,7 +174,7 @@ shopping list.
 - [ ] Validation, analysis and tests passed in Codemagic.
 - [ ] Signature verification passed.
 - [ ] Firebase lists the expected version and build number.
-- [ ] With Decision 1A: the APK installs over Expo v0.1.x as an update.
+- [ ] After uninstalling the Expo app, the APK installs on a phone.
 - [ ] Sign in with Google, then run one AI flow (shop describe) and one corpus
       flow (Generate) against prod.
 - [ ] Start a second build from a harmless change and confirm it updates in
