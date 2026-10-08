@@ -6,19 +6,25 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing (FLUTTER_MIGRATION.md §8, AC-CI-04/05). `key.properties` is
-// generated once on the release Mac (`keytool` + this file, per Flutter's own
-// Android deployment docs) and deliberately gitignored — see `app/.gitignore`
-// and `app/android/fastlane/Fastfile`. Its absence (every CI job, and any
-// local checkout without it) falls back to debug signing so `flutter build`/
-// `flutter run --release` and the workflow_dispatch integration jobs keep
-// working without it; only the actual Play-upload lane needs it configured.
+// Release signing (docs/ANDROID_TEST_DISTRIBUTION.md). Codemagic's
+// `android-test-distribution` workflow writes the release JKS to
+// CM_KEYSTORE_PATH and supplies its passwords and alias as CM_* variables.
+// Locally, a gitignored `key.properties` works too. With neither (GitHub CI,
+// the integration jobs, most checkouts) release builds fall back to debug
+// signing so they still produce something installable; Codemagic's signature
+// check refuses to distribute such a build.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-val hasReleaseKeystore = keystorePropertiesFile.exists()
-if (hasReleaseKeystore) {
+if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
+
+fun requiredEnv(name: String): String =
+    System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: error("$name must be set when CM_KEYSTORE_PATH is")
+
+val ciKeystorePath: String? = System.getenv("CM_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+val hasReleaseKeystore = ciKeystorePath != null || keystorePropertiesFile.exists()
 
 android {
     namespace = "com.ruaridhw.glean"
@@ -44,10 +50,17 @@ android {
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
+                if (ciKeystorePath != null) {
+                    storeFile = file(requiredEnv("CM_KEYSTORE_PATH"))
+                    storePassword = requiredEnv("CM_KEYSTORE_PASSWORD")
+                    keyAlias = requiredEnv("CM_KEY_ALIAS")
+                    keyPassword = requiredEnv("CM_KEY_PASSWORD")
+                } else {
+                    storeFile = file(keystoreProperties.getProperty("storeFile"))
+                    storePassword = keystoreProperties.getProperty("storePassword")
+                    keyAlias = keystoreProperties.getProperty("keyAlias")
+                    keyPassword = keystoreProperties.getProperty("keyPassword")
+                }
             }
         }
     }
@@ -57,11 +70,7 @@ android {
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
-                // No real upload keystore on this machine — debug-signed so
-                // `flutter build`/`flutter run --release` and the CI
-                // integration jobs still produce something installable.
-                // Never uploaded anywhere real like this: `fastlane`'s
-                // Android lane only runs on the Mac that has `key.properties`.
+                // No release keystore here: debug-signed (see the comment above).
                 signingConfigs.getByName("debug")
             }
         }
