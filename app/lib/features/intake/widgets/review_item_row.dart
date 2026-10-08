@@ -95,7 +95,11 @@ class ReviewItemRow extends StatelessWidget {
                     decoration: InputDecoration(
                       isDense: true,
                       labelText: 'Qty',
-                      errorText: quantityErrorText,
+                      // The default errorText renderer ellipsizes inside this
+                      // 90px field, hiding the validation rule on a phone.
+                      error: quantityErrorText == null
+                          ? null
+                          : Text(quantityErrorText!),
                     ),
                   ),
                 ),
