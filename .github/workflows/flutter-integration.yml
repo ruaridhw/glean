@@ -26,9 +26,9 @@ name: Flutter Integration Tests
 # Both jobs run the single integration_test suite
 # (app/integration_test/app_test.dart) against lib/main_e2e.dart — the auth
 # bypass lives only there (FLUTTER_MIGRATION.md §5) — and never build a
-# release artifact; that's the Fastlane lanes' job
-# (app/ios/fastlane/Fastfile, app/android/fastlane/Fastfile), run from the
-# Mac, not from CI.
+# release artifact; that's the job of the iOS Fastlane lane
+# (app/ios/fastlane/Fastfile, run from the Mac) and the Codemagic Android
+# workflow (codemagic.yaml, docs/ANDROID_TEST_DISTRIBUTION.md).
 on:
   workflow_dispatch:
 

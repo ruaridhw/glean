@@ -1,7 +1,8 @@
 # Android test distribution
 
-**Status: proposed, not yet built.** This replaces the Android half of
-`FLUTTER_MIGRATION.md` §8 (the Fastlane lane run from the Mac). It copies the
+**Status: implemented in `codemagic.yaml`; the [one-time setup](#one-time-setup)
+is still to do.** This replaced the Android half of `FLUTTER_MIGRATION.md` §8
+(a Fastlane lane run from the Mac). It copies the
 model in [`ruaridhw/routingapp`'s `docs/ANDROID_TEST_DISTRIBUTION.md`](https://github.com/ruaridhw/routingapp/blob/main/docs/ANDROID_TEST_DISTRIBUTION.md).
 iOS is out of scope for now.
 
@@ -14,7 +15,7 @@ repository never start a build, so they cost no Codemagic minutes.
 
 ## Why not the Fastlane lane
 
-| | Fastlane from the Mac (current §8) | Codemagic → Firebase (this doc) |
+| | Fastlane from the Mac (previous §8) | Codemagic → Firebase (this doc) |
 |---|---|---|
 | Who can release | Only someone at the Mac holding the keystore | Anyone with Codemagic access, from a browser |
 | Needs a Play Console app | Yes (internal track, service-account key) | No |
@@ -77,9 +78,10 @@ uses (`3.44.8` at the time of writing).
 
 ## Validation
 
-One script, `app/tool/validate_release_config.py` (stdlib only), runs as
-Codemagic's first step and can be run locally. It replaces the checks in
-`app/fastlane/release_config.rb` and fails with a named reason when:
+One script, `app/scripts/validate_release_config.py` (stdlib only), runs as
+Codemagic's first step and can be run locally. It mirrors the define checks
+the iOS lane makes in `app/fastlane/release_config.rb` and fails with a named
+reason when:
 
 - `API_BASE_URL` is not a public `https` URL, or has credentials, a query or a
   fragment, or points at localhost or a non-global IP;
@@ -87,7 +89,8 @@ Codemagic's first step and can be run locally. It replaces the checks in
 - `COGNITO_CLIENT_ID` is not alphanumeric;
 - any variable in the groups below is missing;
 - `BUILD_NUMBER` is not a positive integer;
-- `CM_KEYSTORE_PATH` is not `/tmp/glean-release.jks`.
+- `CM_KEY_ALIAS` is not `glean`, or `CM_KEYSTORE_PATH` is not
+  `/tmp/glean-release.jks`.
 
 It never prints secret values. Its tests feed it environments and check which
 reason it fails with.
@@ -145,15 +148,14 @@ groups:
 `CM_KEYSTORE_PASSWORD` (secret), `CM_KEY_PASSWORD` (secret), `CM_KEY_ALIAS=glean`, and
 `CM_KEYSTORE_PATH=/tmp/glean-release.jks`.
 
-### What retires, and when
+### What changed, and what retires later
 
-When `codemagic.yaml` lands:
-
-- delete the Android Fastlane lane, `app/android/fastlane/`, and the Play
-  service-account requirement;
-- move the define checks from `app/fastlane/release_config.rb` into the
-  validator, keeping the Ruby file only if the iOS lane still needs it;
-- update `FLUTTER_MIGRATION.md` §8 to point here.
+- The Android Fastlane lane (`app/android/fastlane/`) and its Play
+  service-account requirement are gone. `app/fastlane/release_config.rb`
+  stays for the iOS lane.
+- `app/android/app/build.gradle.kts` signs with the `CM_*` keystore when
+  `CM_KEYSTORE_PATH` is set, else with a local `key.properties`, else with the
+  debug key (which the signature check refuses to distribute).
 
 At cutover (merging the Flutter port), the Expo `deploy` job and its GitHub
 Release APKs go away with `mobile/`.

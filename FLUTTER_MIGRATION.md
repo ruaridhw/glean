@@ -235,9 +235,9 @@ Gaps this closes, all silent today: **"Sign in with Google"** — the most impor
 
 ### Signing and release
 
-> **Android: proposed replacement.** `docs/ANDROID_TEST_DISTRIBUTION.md` proposes manual Codemagic builds distributed through Firebase App Distribution in place of the Android Fastlane lane below. Until it is accepted, this section stands.
+> **Android: superseded.** Android test builds are started by hand in Codemagic and distributed through Firebase App Distribution: see `docs/ANDROID_TEST_DISTRIBUTION.md`. There is no Android Fastlane lane, and the Codemagic notes below apply to iOS only.
 
-**Fastlane release lanes, driven from the Mac laptop** — build plus upload to TestFlight / Play internal track. Not wired into CI initially. Free, portable, no vendor lock-in, and makes releases a reproducible script rather than a remembered sequence of Xcode clicks.
+**Fastlane release lane, driven from the Mac laptop** — build plus upload to TestFlight. Not wired into CI initially. Free, portable, no vendor lock-in, and makes releases a reproducible script rather than a remembered sequence of Xcode clicks.
 
 **Skip `match` initially** — its purpose is syncing certificates across machines/signers; with one Mac and one signer, Xcode-managed signing is adequate. Adopt it when a second signer exists. Codemagic was passed over: its UI-managed signing mainly pays off for teams.
 

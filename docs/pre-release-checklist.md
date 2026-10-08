@@ -57,19 +57,16 @@ If either platform fails, stop before signing or uploading.
 - [ ] For the first pipeline upload, compare the next build number against
       every existing TestFlight build, including builds uploaded manually.
 
-### Android (`app/android/fastlane/Fastfile`, lane `internal`)
+### Android (`codemagic.yaml`, workflow `android-test-distribution`)
 
-- [ ] `app/android/key.properties` points to the real upload keystore, not a
-      debug keystore.
-- [ ] `PLAY_STORE_JSON_KEY` names a service-account key authorized for this
-      app.
-- [ ] For the first pipeline upload, compare the next version code against
-      every existing Play Console upload.
+- [ ] The one-time Firebase, signing and Codemagic setup in
+      `docs/ANDROID_TEST_DISTRIBUTION.md` is done.
+- [ ] Work through that doc's first-build acceptance check.
 
 ### Both platforms
 
 - [ ] `app/pubspec.yaml`’s marketing version is the version intended for
-      release; the lanes increment build numbers, not the marketing version.
+      release; builds set build numbers, not the marketing version.
 - [ ] The Terms of Service and Privacy Policy URLs configured in
       `lib/features/settings/widgets/legal_links_section.dart` are hosted and
       reachable.

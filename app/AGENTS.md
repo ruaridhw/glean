@@ -60,8 +60,9 @@ integration_test/              # The one integration_test suite (app_test.dart),
 `lib/main_e2e.dart` is the only file (besides `lib/auth/auth_bypass.dart`
 itself) allowed to import it — `test/auth/auth_bypass_test.dart` scans
 `lib/` to enforce this, and `test/build/release_entrypoint_test.dart`
-complements it at the build-configuration level (Fastlane lanes and CI
-workflows can never target `main_e2e.dart` for a release build). Never loosen
+complements it at the build-configuration level (the iOS Fastlane lane,
+`codemagic.yaml` and CI workflows can never target `main_e2e.dart` for a
+release build). Never loosen
 either check to get a change to pass.
 
 ### Testing

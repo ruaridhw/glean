@@ -135,39 +135,42 @@ trail). Trigger it from the Actions tab or `gh workflow run flutter-integration.
 
 ## Release (Fastlane)
 
-**Before running either lane, work through
+**Before a release build, work through
 [`../docs/pre-release-checklist.md`](../docs/pre-release-checklist.md)** — airplane-mode error
 states, both `integration_test` platform runs, and (for a first submission to either store)
-signing/build-number gotchas neither lane nor any automated test catches.
+signing/build-number gotchas no automated test catches.
 
-`ios/fastlane/` (TestFlight) and `android/fastlane/` (Play internal track) —
-**run from a Mac, never from CI**. No `match`: one Mac, one signer, so
-Xcode's own "Automatically manage signing" (already on) is adequate; adopt
-`match` only once a second signer/machine needs the same certificates.
+**Android** test builds come from Codemagic's `android-test-distribution`
+workflow (`../codemagic.yaml`), started by hand and distributed through
+Firebase App Distribution. See
+[`../docs/ANDROID_TEST_DISTRIBUTION.md`](../docs/ANDROID_TEST_DISTRIBUTION.md).
+Its first step, `scripts/validate_release_config.py`, rejects missing or
+malformed configuration before any build work.
 
-Both lanes require non-secret production configuration and validate it before
-querying a store or building. Supply your deployed public values; localhost,
+**iOS** uses `ios/fastlane/` (TestFlight), **run from a Mac, never from CI**.
+No `match`: one Mac, one signer, so Xcode's own "Automatically manage
+signing" (already on) is adequate; adopt `match` only once a second
+signer/machine needs the same certificates.
+
+The lane requires non-secret production configuration and validates it before
+querying the store or building. Supply your deployed public values; localhost,
 HTTP and missing configuration are rejected:
 
 ```bash
 export API_BASE_URL=https://<production-api-host>
-export COGNITO_DOMAIN=https://<production-cognito-host>
+export COGNITO_DOMAIN=<production-cognito-host>   # bare hostname, no https://
 export COGNITO_CLIENT_ID=<public-app-client-id>
 
 # iOS — needs an App Store Connect API key (see ios/fastlane/Fastfile's header)
 cd ios && ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_CONTENT=... \
   bundle exec fastlane beta
-
-# Android — needs android/key.properties (one-time keystore setup — see
-# android/fastlane/Fastfile's header) and a Play service-account JSON
-cd android && PLAY_STORE_JSON_KEY="$(cat service-account.json)" bundle exec fastlane internal
 ```
 
-`ruby scripts/test_release_lanes.rb` executes both actual lane definitions
+`ruby scripts/test_release_lanes.rb` executes the actual iOS lane definition
 with fake shell/store boundaries: configuration propagation, early rejection,
-production entrypoints, artifact paths and all-track numbering. CI runs this
-without signing or uploading. It is not a signed build or release smoke;
-those remain Mac-only cutover gates.
+the production entrypoint and the artifact path. CI runs it, and the
+validator's tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`),
+without signing or uploading. Neither is a signed build or release smoke.
 
 **Build-number auto-increment** replaces what EAS used to provide silently
 (`appVersionSource: "remote"`, `autoIncrement: true`): both lanes ask the
