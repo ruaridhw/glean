@@ -43,6 +43,7 @@ skills-lock.json
 docs/*
 !docs/pre-release-checklist.md
 !docs/flutter-test-audit.md
+!docs/ANDROID_TEST_DISTRIBUTION.md
 plans/
 
 # macOS
