@@ -242,7 +242,23 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final int acceptedCount = _activeRows.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Review items')),
+      appBar: AppBar(
+        title: const Text('Review items'),
+        leading: IconButton(
+          tooltip: 'Cancel',
+          icon: const Icon(Icons.close_rounded),
+          onPressed: _saving
+              ? null
+              : () {
+                  ref.read(hapticsProvider).lightImpact();
+                  context.goNamed(
+                    !_isPantry || widget.args.returnToShop
+                        ? AppRoutes.shop.name
+                        : AppRoutes.pantry.name,
+                  );
+                },
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: <Widget>[

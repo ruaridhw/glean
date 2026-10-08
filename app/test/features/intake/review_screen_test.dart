@@ -39,6 +39,46 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    for (final destination in ReviewDestination.values) {
+      testWidgets('cancel a replacement-route ${destination.name} review '
+          'without writing any stock or shopping rows', (tester) async {
+        harness.router.goNamed(
+          AppRoutes.intakeReview.name,
+          extra: ReviewArgs(
+            destination: destination,
+            items: const [
+              ReviewItemDraft(
+                reviewId: 'cancelled',
+                name: 'onion',
+                quantity: 2,
+                unit: 'units',
+                confidence: 0.9,
+                category: 'alliums',
+              ),
+            ],
+          ),
+        );
+        await tester.pumpWidget(harness.app());
+        await tester.pumpAndSettle();
+        expect(find.byType(NavigationBar), findsNothing);
+        await tester.tap(find.byTooltip('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.byType(NavigationBar), findsOneWidget);
+        expect(
+          harness.router.routeInformationProvider.value.uri.path,
+          destination == ReviewDestination.pantry ? '/pantry' : '/shop',
+        );
+        expect(
+          await tester.runAsync(() => pantry.watchAll('test-user').first),
+          isEmpty,
+        );
+        expect(
+          await tester.runAsync(() => shopping.watchAll('test-user').first),
+          isEmpty,
+        );
+      });
+    }
+
     testWidgets('decimal quantities are typeable and round-trip (AC-PAN-08)', (
       WidgetTester tester,
     ) async {
@@ -173,7 +213,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Fix the bad row by removing it, then retry.
-      await tester.tap(find.byIcon(Icons.close_rounded).last);
+      await tester.tap(find.byTooltip('Remove').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add 1 item'));
       await tester.pumpAndSettle();
