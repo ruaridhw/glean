@@ -81,7 +81,14 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
   }
 
   void _back() {
-    if (context.canPop()) context.pop();
+    _navigated = true;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.goNamed(
+        widget.args.returnToShop ? AppRoutes.shop.name : AppRoutes.pantry.name,
+      );
+    }
   }
 
   @override
@@ -90,6 +97,7 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
       AsyncValue<ScanResponse?>? previous,
       AsyncValue<ScanResponse?> next,
     ) {
+      if (_navigated) return;
       // R-11 / §7: Flutter has no notification-style haptic, so scan
       // success/failure is communicated by `mediumImpact()` (the
       // data-commit weight) plus whatever the body already shows — the

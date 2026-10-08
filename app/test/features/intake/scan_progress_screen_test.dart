@@ -44,8 +44,8 @@ void main() {
       bool returnToShop = false,
     }) async {
       // Renders `/pantry` first (a real prior frame, establishing it in
-      // history) before pushing on top — so a subsequent pop has somewhere
-      // real to land, matching how this screen is actually reached.
+      // history) before pushing on top. This checks stacked navigation;
+      // replacement navigation is covered separately below.
       await harness.pumpAt(tester, AppRoutes.pantry.path);
       unawaited(
         harness.router.pushNamed(
@@ -58,6 +58,56 @@ void main() {
       );
       await tester.pump();
       await tester.pump();
+    }
+
+    for (final returnToShop in [false, true]) {
+      for (final failed in [false, true]) {
+        testWidgets(
+          'replacement-route ${failed ? 'error Back' : 'pending Cancel'} '
+          'returns to ${returnToShop ? 'Shop' : 'Pantry'}',
+          (tester) async {
+            final response = Completer<http.StreamedResponse>();
+            when(
+              () => httpClient.send(any()),
+            ).thenAnswer((_) => response.future);
+            if (failed) {
+              response.complete(
+                http.StreamedResponse(const Stream<List<int>>.empty(), 500),
+              );
+            }
+            await harness.pumpAt(tester, AppRoutes.pantry.path);
+            harness.router.goNamed(
+              AppRoutes.intakeScanProgress.name,
+              extra: ScanProgressArgs(
+                photoBytes: Uint8List.fromList([1, 2, 3]),
+                returnToShop: returnToShop,
+              ),
+            );
+            await tester.pump();
+            await tester.pump();
+            // Let the outgoing shell transition finish before re-entering it.
+            await tester.pump(const Duration(milliseconds: 400));
+            expect(harness.router.canPop(), isFalse);
+            await tester.tap(find.text(failed ? 'Back' : 'Cancel'));
+            await tester.pumpAndSettle();
+            expect(
+              harness.router.routeInformationProvider.value.uri.path,
+              returnToShop ? AppRoutes.shop.path : AppRoutes.pantry.path,
+            );
+            if (!failed) {
+              response.complete(
+                http.StreamedResponse(
+                  Stream.value(utf8.encode(jsonEncode({'items': []}))),
+                  200,
+                  headers: {'content-type': 'application/json'},
+                ),
+              );
+              await tester.pumpAndSettle();
+              expect(find.byType(ReviewScreen), findsNothing);
+            }
+          },
+        );
+      }
     }
 
     testWidgets('shows a real indeterminate spinner, not fake staged steps '
