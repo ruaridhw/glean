@@ -19,6 +19,7 @@ import 'package:drift/drift.dart';
 import '../database.dart';
 import '../deletion_snapshots.dart';
 import '../models/meal_plan_entry_view.dart';
+import '../util/recipe_servings.dart';
 import '../util/unit_normalization.dart';
 import '../util/week.dart';
 import 'pantry_repository.dart';
@@ -316,7 +317,11 @@ class PlanRepository {
                   ))
                   .getSingleOrNull();
 
-          var decrementQuantity = recipeIngredient.quantity * entry.servings;
+          var decrementQuantity = recipeQuantityForServings(
+            quantity: recipeIngredient.quantity,
+            servings: entry.servings,
+            yieldCount: recipe.yieldCount,
+          );
           if (pantryRow != null) {
             final normalized = normalizeUnit(
               quantity: decrementQuantity,

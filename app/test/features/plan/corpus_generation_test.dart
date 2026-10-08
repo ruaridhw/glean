@@ -134,7 +134,9 @@ void main() {
           .watchAll(harness.userId)
           .first;
       expect(gaps.single.name, 'beans');
-      expect(gaps.single.quantity, 800); // Existing per-serving gap semantics.
+      // The API supplies 200g for a two-serving recipe; requesting four
+      // servings needs 400g, not the old per-serving assumption of 800g.
+      expect(gaps.single.quantity, 400);
     },
   );
 

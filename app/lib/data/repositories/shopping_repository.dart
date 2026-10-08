@@ -37,6 +37,7 @@ import '../database.dart';
 import '../models/shopping_list_item_view.dart';
 import 'ingredients_repository.dart';
 import 'pantry_repository.dart' show PantryUnitMismatchException;
+import '../util/recipe_servings.dart';
 import '../util/unit_normalization.dart';
 
 class ShoppingRepository {
@@ -250,6 +251,10 @@ class ShoppingRepository {
     required int servings,
     required int sourceMealPlanEntryId,
   }) => _db.transaction(() async {
+    final recipe =
+        await (_db.select(_db.recipes)
+              ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
+            .getSingle();
     final before = _visible(
       await _query(userId).get(),
     ).expand((item) => item.ids).toSet();
@@ -281,7 +286,11 @@ class ShoppingRepository {
               .getSingleOrNull();
       final unit = canonicalUnitFor(pantryRow?.unit ?? recipeIngredient.unit);
       final normalized = normalizeUnit(
-        quantity: recipeIngredient.quantity * servings,
+        quantity: recipeQuantityForServings(
+          quantity: recipeIngredient.quantity,
+          servings: servings,
+          yieldCount: recipe.yieldCount,
+        ),
         unit: recipeIngredient.unit,
         canonicalUnit: unit,
         canonicalName: ingredient.canonicalName,
