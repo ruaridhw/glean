@@ -21,18 +21,3 @@ def release_defines
   end
   values.map { |name,value| Shellwords.escape("--dart-define=#{name}=#{value}") }.join(' ')
 end
-
-# The existing action configures Supply with the operator's Play credential.
-# Discover ALL tracks, including custom closed-testing tracks, rather than
-# guessing that internal has the highest code. Never commit this read edit.
-def next_play_version_code(package_name)
-  codes = google_play_track_version_codes(package_name: package_name, track: 'internal')
-  client = Supply::Client.make_from_config
-  begin
-    client.begin_edit(package_name: package_name)
-    codes += client.tracks.flat_map { |track| (track.releases || []).flat_map { |release| release.version_codes || [] } }
-    (codes.map(&:to_i).max || 0) + 1
-  ensure
-    client.abort_current_edit
-  end
-end
