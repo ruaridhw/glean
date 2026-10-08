@@ -207,6 +207,8 @@ export default function PlanScreen() {
     useCallback(() => {
       void load();
       if (addRecipeId) {
+        // Consume the param: it outlives this visit, so every later focus would re-add the recipe.
+        router.setParams({ add_recipe_id: undefined });
         void handleAddRecipeRef.current(Number(addRecipeId));
       }
     }, [load, addRecipeId]),

@@ -3,8 +3,14 @@ import { router } from "expo-router";
 import { useGenerateMealPlan } from "@/api/hooks";
 import { getUserConfig } from "@/db/config";
 import { getPantryItems } from "@/db/pantry";
-import { deleteMealPlanEntry, getMealPlanEntries, markMealAsCooked } from "@/db/plan";
+import {
+  addMealPlanEntry,
+  deleteMealPlanEntry,
+  getMealPlanEntries,
+  markMealAsCooked,
+} from "@/db/plan";
 import { getSavedRecipes } from "@/db/recipes";
+import { addShoppingGapsForRecipe } from "@/db/shopping";
 import { planSuggestions } from "@/meal-plan/apply";
 import { showError, showSuccess } from "@/utils/toast";
 import PlanScreen from "../../app/(tabs)/plan";
@@ -22,12 +28,30 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+// Route params live outside the component, as in expo-router: they persist while
+// the tab stays mounted, and only router.setParams changes them. focusPlanTab()
+// replays the latest focus callback, as returning to the Plan tab does.
+const mockRoute: { params: Record<string, string | undefined>; onFocus?: () => void } = {
+  params: {},
+};
+function focusPlanTab() {
+  act(() => mockRoute.onFocus?.());
+}
+
 jest.mock("expo-router", () => {
   const React = require("react");
   return {
-    router: { push: jest.fn() },
-    useFocusEffect: (callback: () => void) => React.useEffect(callback, [callback]),
-    useLocalSearchParams: () => ({}),
+    router: {
+      push: jest.fn(),
+      setParams: jest.fn((params: Record<string, string | undefined>) => {
+        mockRoute.params = { ...mockRoute.params, ...params };
+      }),
+    },
+    useFocusEffect: (callback: () => void) => {
+      mockRoute.onFocus = callback;
+      React.useEffect(callback, [callback]);
+    },
+    useLocalSearchParams: () => mockRoute.params,
   };
 });
 
@@ -88,6 +112,7 @@ describe("PlanScreen", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRoute.params = {};
     mutate.mockImplementation((_payload, callbacks) => {
       callbacks.onSuccess({ suggestions: [{ recipe_id: null, external_id: "rec_10" }] });
     });
@@ -220,6 +245,20 @@ describe("PlanScreen", () => {
       expect(showError).toHaveBeenCalledWith("No recipes fit right now. Try again."),
     );
     expect(showSuccess).not.toHaveBeenCalled();
+  });
+
+  it("adds a recipe from its detail page once, however often the tab is revisited", async () => {
+    mockRoute.params = { add_recipe_id: "10" };
+    const screen = render(<PlanScreen />);
+
+    await waitFor(() => expect(showSuccess).toHaveBeenCalledWith("Meal planned"));
+    focusPlanTab();
+    focusPlanTab();
+    await waitFor(() => expect(screen.getByText("Tomato Pasta")).toBeTruthy());
+
+    expect(addMealPlanEntry).toHaveBeenCalledTimes(1);
+    expect(addMealPlanEntry).toHaveBeenCalledWith(10);
+    expect(addShoppingGapsForRecipe).toHaveBeenCalledTimes(1);
   });
 
   it("navigates empty slots to recipe search", async () => {
