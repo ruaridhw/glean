@@ -28,6 +28,10 @@ library;
 import 'package:camera/camera.dart' show CameraPreview;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/bootstrap.dart';
+import 'package:glean/data/providers/database_providers.dart';
+import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 import 'package:glean/main_e2e.dart' as app;
 import 'package:integration_test/integration_test.dart';
 
@@ -38,6 +42,27 @@ void main() {
     'launch, five tabs, camera-permission handling, and manual pantry add',
     (WidgetTester tester) async {
       await app.main();
+      await _pumpUntilFound(tester, find.byType(GleanRoot));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(GleanRoot)),
+      );
+      // The gate briefly fails open while SQLite resolves onboarding status.
+      // A tab label alone can therefore identify a transient shell, not a
+      // ready returning-user UI. Wait for the real status before tapping.
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      while (!container.read(databaseReadyProvider).hasValue ||
+          !container.read(hasCompletedOnboardingProvider).hasValue) {
+        if (DateTime.now().isAfter(deadline)) {
+          fail('Database/onboarding did not resolve within 20 seconds');
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pump();
+      if (!container.read(hasCompletedOnboardingProvider).requireValue) {
+        await _pumpUntilFound(tester, find.text('Skip'));
+        await tester.tap(find.text('Skip'));
+        await _pumpUntilFound(tester, find.byType(NavigationBar));
+      }
 
       // --- Fresh launch: the native splash hands over to `bootstrap.dart`'s
       // `_SplashHolding` (same brand green, no text) while the database
@@ -58,21 +83,21 @@ void main() {
       // on first visit, so each label below is still unambiguous the first
       // time it's tapped; `.first` guards the one case that isn't (Pantry,
       // whose own AppBar title duplicates its tab label from frame one). ---
-      await tester.tap(find.text('Meals').first);
+      await _tapTab(tester, 'Meals');
       await _pumpUntilFound(tester, find.text('Meals'));
 
-      await tester.tap(find.text('Plan').first);
+      await _tapTab(tester, 'Plan');
       await _pumpUntilFound(tester, find.text('Plan'));
 
-      await tester.tap(find.text('Shop').first);
+      await _tapTab(tester, 'Shop');
       // The Shop tab's own heading is "Shopping", not "Shop" (AC-SHOP-07
       // unifies in-screen cart wording; the tab label itself stays short).
       await _pumpUntilFound(tester, find.text('Shopping'));
 
-      await tester.tap(find.text('Settings').first);
+      await _tapTab(tester, 'Settings');
       await _pumpUntilFound(tester, find.text('Settings'));
 
-      await tester.tap(find.text('Pantry').first);
+      await _tapTab(tester, 'Pantry');
       await _pumpUntilFound(tester, find.byTooltip('Add to pantry'));
 
       // --- Camera-permission handling (AC-TEST-16, AC-PAN-13) ---
@@ -160,5 +185,18 @@ Future<void> _pumpUntilFound(
       fail('Timed out after $timeout waiting for $finder');
     }
     await tester.pump(step);
+  }
+  // Advance multiple frames: one long pump can merely start a route animation.
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(step);
+  }
+}
+
+Future<void> _tapTab(WidgetTester tester, String label) async {
+  await tester.tap(
+    find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+  );
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
   }
 }
