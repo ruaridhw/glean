@@ -9,8 +9,8 @@
 /// YAML whose env vars have since disappeared entirely.
 ///
 /// This test complements the source-graph proof by scanning the actual
-/// build/release *configuration* — the Fastlane lanes that produce what
-/// ships to TestFlight/Play, and every GitHub Actions workflow — for the one
+/// build/release *configuration* — the iOS Fastlane lane, the Codemagic
+/// Android workflow, and every GitHub Actions workflow — for the one
 /// dangerous pattern: a release-shaped build command naming
 /// `main_e2e.dart`. It does not re-check the source graph (that stays
 /// `auth_bypass_test.dart`'s job), and it does not merely restate CI YAML
@@ -21,7 +21,7 @@
 ///
 /// A previous version of this test matched `flutter build`/`gradlew
 /// assemble*` and `main_e2e` only when both appeared on the same **raw**
-/// line. Both Fastfiles build via two string literals concatenated across
+/// line. The Fastfiles built via two string literals concatenated across
 /// two physical lines with a trailing `\` continuation:
 ///
 /// ```ruby
@@ -70,7 +70,7 @@ final RegExp _targetFlag = RegExp(
 
 /// Joins backslash-continued lines into one logical line so that a build
 /// invocation split across physical lines — Ruby's `sh('a ' \` + `'b')`
-/// pattern used by both Fastfiles, or an equally idiomatic multi-line shell
+/// pattern used by the iOS Fastfile, or an equally idiomatic multi-line shell
 /// command in a workflow's `run: |` block — is scanned as the single
 /// statement it actually is, rather than as independent lines a naive
 /// per-line regex can be defeated by.
@@ -115,13 +115,12 @@ List<String> _logicalLines(String contents) {
 /// Extracts the argument text passed to the Fastfile's single `sh(...)`
 /// call — the actual shell command Fastlane executes — as opposed to any
 /// other Ruby string in the file (e.g. an error message that happens to
-/// *mention* `flutter build` in prose, as `android/fastlane/Fastfile`'s
-/// `UI.user_error!` does). This is what "resolved target" means in
+/// *mention* `flutter build` in prose). This is what "resolved target" means in
 /// practice: the one piece of text that is actually handed to a shell,
 /// scoped precisely so prose elsewhere can't be mistaken for it.
 ///
 /// Follows this repo's Fastfile convention of `sh(` opening a call whose
-/// closing `)` sits alone on its own line — true of both Fastfiles today.
+/// closing `)` sits alone on its own line.
 String? _shInvocationBody(String contents) {
   final List<String> rawLines = contents.split('\n');
   final int start = rawLines.indexWhere(
@@ -155,27 +154,19 @@ List<String> _sameStatementViolations(String contents) => <String>[
 
 void main() {
   group('release lanes never target the e2e entrypoint', () {
-    for (final String fastfilePath in <String>[
-      'ios/fastlane/Fastfile',
-      'android/fastlane/Fastfile',
-    ]) {
+    for (final String fastfilePath in <String>['ios/fastlane/Fastfile']) {
       test('$fastfilePath resolves its build target to lib/main.dart', () {
         final File file = File(fastfilePath);
         expect(
           file.existsSync(),
           isTrue,
-          reason:
-              '$fastfilePath is missing — AC-CI-04 requires a release lane '
-              'for both platforms',
+          reason: '$fastfilePath is missing — iOS releases need it',
         );
 
         final String contents = file.readAsStringSync();
 
         // Scope to the actual `sh(...)` call — the one piece of text
-        // Fastlane hands to a shell — not any other string in the file
-        // (android/fastlane/Fastfile's UI.user_error! message mentions
-        // "flutter build appbundle" in prose; that must not be mistaken
-        // for the invocation itself).
+        // Fastlane hands to a shell — not any other string in the file.
         final String? shBody = _shInvocationBody(contents);
         expect(
           shBody,
@@ -189,7 +180,7 @@ void main() {
         // Join continuations *within the sh(...) body only* — after
         // joining, this is the single logical statement Fastlane executes,
         // however many physical lines/string literals it was wrapped
-        // across (both Fastfiles concatenate two string literals with a
+        // across (the Fastfile concatenates two string literals with a
         // trailing `\` continuation).
         final List<String> joined = _logicalLines(
           shBody!,
@@ -243,6 +234,35 @@ void main() {
         );
       });
     }
+
+    test('codemagic.yaml builds its distributed APK from lib/main.dart', () {
+      final File file = File('../codemagic.yaml');
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason:
+            'codemagic.yaml is missing — Android test builds come from it '
+            '(docs/ANDROID_TEST_DISTRIBUTION.md)',
+      );
+
+      final List<String> builds = _logicalLines(
+        file.readAsStringSync(),
+      ).where((String line) => _releaseBuildInvocation.hasMatch(line)).toList();
+      expect(
+        builds,
+        isNotEmpty,
+        reason: 'codemagic.yaml has no flutter build step',
+      );
+      for (final String build in builds) {
+        expect(
+          _targetFlag.firstMatch(build)?.group(1),
+          'lib/main.dart',
+          reason:
+              'every Codemagic build must target lib/main.dart, '
+              'found: ${build.trim()}',
+        );
+      }
+    });
 
     test(
       'no GitHub Actions workflow runs a release build against main_e2e',
@@ -302,7 +322,7 @@ void main() {
     });
 
     test('the workflow_dispatch integration workflow only *tests* main_e2e, '
-        "never builds a release from it (that's the release lanes' job)", () {
+        "never builds a release from it (that's the release builds' job)", () {
       final File integrationWorkflow = File(
         '../.github/workflows/flutter-integration.yml',
       );

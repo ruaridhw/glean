@@ -1,0 +1,99 @@
+# Android test distribution: docs/ANDROID_TEST_DISTRIBUTION.md.
+# Started by hand only (no `triggering`), so pushes never spend build minutes.
+workflows:
+  android-test-distribution:
+    name: Android test distribution
+    instance_type: linux_x2
+    max_build_duration: 60
+    working_directory: app
+    environment:
+      groups:
+        - glean_config
+        - firebase_credentials
+        - keystore_credentials
+      # Keep in step with FLUTTER_VERSION in .github/workflows/flutter-ci.yml.
+      flutter: 3.44.8
+      java: 17
+    scripts:
+      - name: Validate release configuration
+        script: python3 scripts/validate_release_config.py
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze
+      - name: Test
+        script: flutter test
+      - name: Materialize Android release keystore
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          umask 077
+          printf '%s' "$CM_KEYSTORE" | base64 --decode > "$CM_KEYSTORE_PATH"
+          test -s "$CM_KEYSTORE_PATH"
+          keytool -list \
+            -keystore "$CM_KEYSTORE_PATH" \
+            -storepass "$CM_KEYSTORE_PASSWORD" \
+            -alias "$CM_KEY_ALIAS" >/dev/null
+      - name: Export app version
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          APP_VERSION="$(awk '/^version:/ {print $2}' pubspec.yaml | cut -d+ -f1)"
+          test -n "$APP_VERSION"
+          printf 'APP_VERSION=%s\n' "$APP_VERSION" >> "$CM_ENV"
+      # -t lib/main.dart is explicit so the auth-bypass entrypoint can never
+      # ship (test/build/release_entrypoint_test.dart checks this file).
+      - name: Build signed universal APK
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          flutter build apk --release -t lib/main.dart \
+            --build-name="$APP_VERSION" \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define="API_BASE_URL=$API_BASE_URL" \
+            --dart-define="COGNITO_DOMAIN=$COGNITO_DOMAIN" \
+            --dart-define="COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
+      - name: Verify release signature
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          APKSIGNER="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
+          normalise() { tr '[:lower:]' '[:upper:]' | tr -d ':[:space:]'; }
+          ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/apksigner.txt | head -1 | normalise)"
+          EXPECTED="$(printf '%s' "$EXPECTED_SIGNING_CERT_SHA256" | normalise)"
+          test -n "$ACTUAL"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "Release certificate fingerprint mismatch: built with the wrong key" >&2
+            exit 1
+          fi
+      - name: Write Firebase release notes
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          API_HOST="$(python3 -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ["API_BASE_URL"]).hostname)')"
+          {
+            echo "Glean ${APP_VERSION} (${BUILD_NUMBER})"
+            printf 'Commit: %.12s\n' "$CM_COMMIT"
+            echo "API: ${API_HOST}"
+            git log -1 --pretty='format:Change: %s'
+          } > release_notes.txt
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      - release_notes.txt
+    publishing:
+      firebase:
+        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
+        android:
+          app_id: $FIREBASE_ANDROID_APP_ID
+          groups:
+            - $FIREBASE_TESTER_GROUP
+          artifact_type: apk
+      email:
+        recipients:
+          - $BUILD_NOTIFICATION_EMAIL
+        notify:
+          success: false
+          failure: true
