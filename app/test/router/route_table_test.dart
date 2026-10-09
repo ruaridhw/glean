@@ -28,7 +28,23 @@ import '../support/harness.dart';
 void main() {
   group('AppRoutes structure', () {
     test('every route name is unique', () {
-      final names = AppRoutes.all.map((route) => route.name).toList();
+      final names = <RouteSpec>[
+        AppRoutes.signIn,
+        AppRoutes.pantry,
+        AppRoutes.meals,
+        AppRoutes.plan,
+        AppRoutes.shop,
+        AppRoutes.settings,
+        AppRoutes.mealsImport,
+        AppRoutes.mealsDetail,
+        AppRoutes.intakeScan,
+        AppRoutes.intakeScanProgress,
+        AppRoutes.intakeDescribePantry,
+        AppRoutes.intakeDescribeShop,
+        AppRoutes.intakeManualEntry,
+        AppRoutes.intakeReview,
+        AppRoutes.error,
+      ].map((route) => route.name).toList();
       expect(names.toSet(), hasLength(names.length));
     });
   });

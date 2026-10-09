@@ -115,10 +115,8 @@ const Set<String> _citationAllowlist = <String>{
   'lib/features/shop/widgets/shopping_row.dart',
   'lib/main.dart',
   'lib/main_e2e.dart',
-  'lib/router/app_routes.dart',
   'lib/router/app_shell.dart',
   'lib/router/auth_state.dart',
-  'lib/router/intake_params.dart',
   'lib/router/route_error_screen.dart',
   'lib/router/router.dart',
 };

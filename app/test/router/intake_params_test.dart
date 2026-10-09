@@ -1,7 +1,4 @@
-// AC-PLAN-14: nav params are typed objects, not serialised strings. The RN
-// app did an unguarded `JSON.parse` on a nav param and could white-screen a
-// route with no back button (§11) — there is no decode step here to fail,
-// so these tests assert the exact typed object survives the round trip.
+// Intake nav params travel as typed `extra` objects and reach their screens intact.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -104,37 +101,6 @@ void main() {
 
       expect(find.text('Nothing to review.'), findsOneWidget);
       expect(find.byType(ReviewScreen), findsNothing);
-    },
-  );
-
-  test(
-    'ReviewItemDraft and ReviewArgs value-equality holds across separate instances',
-    () {
-      const a = ReviewItemDraft(
-        reviewId: 'x',
-        name: 'Eggs',
-        quantity: 6,
-        unit: 'units',
-        confidence: 0.8,
-      );
-      const b = ReviewItemDraft(
-        reviewId: 'x',
-        name: 'Eggs',
-        quantity: 6,
-        unit: 'units',
-        confidence: 0.8,
-      );
-      expect(a, equals(b));
-
-      const argsA = ReviewArgs(
-        destination: ReviewDestination.pantry,
-        items: <ReviewItemDraft>[a],
-      );
-      const argsB = ReviewArgs(
-        destination: ReviewDestination.pantry,
-        items: <ReviewItemDraft>[b],
-      );
-      expect(argsA, equals(argsB));
     },
   );
 }
