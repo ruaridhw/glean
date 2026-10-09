@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:glean/design_system/design_system.dart';
 
 import '../../settings/settings_presentation.dart';
 import '../../settings/widgets/dietary_flags_control.dart';
@@ -37,26 +38,34 @@ class OnboardingStepBody extends StatelessWidget {
       case 0:
         return OnboardingStepScaffold(
           question: 'How many dinners do you cook at home most weeks?',
-          child: IntegerSliderControl(
+          child: _NumberAnswer(
             value: dinners,
-            min: SettingsOptionRanges.dinnersPerWeek.min,
-            max: SettingsOptionRanges.dinnersPerWeek.max,
-            onChanged: onDinnersChanged,
-            onCommitted: onDinnersChanged,
+            unit: dinners == 1 ? 'dinner a week' : 'dinners a week',
+            slider: IntegerSliderControl(
+              value: dinners,
+              min: SettingsOptionRanges.dinnersPerWeek.min,
+              max: SettingsOptionRanges.dinnersPerWeek.max,
+              onChanged: onDinnersChanged,
+              onCommitted: onDinnersChanged,
+            ),
           ),
         );
       case 1:
         return OnboardingStepScaffold(
           question: 'How many people are you usually cooking for?',
-          child: IntegerSliderControl(
+          child: _NumberAnswer(
             value: servings,
-            min: SettingsOptionRanges.defaultServings.min,
-            max: SettingsOptionRanges.defaultServings.max,
-            onChanged: onServingsChanged,
-            onCommitted: onServingsChanged,
+            unit: servings == 1 ? 'person' : 'people',
+            slider: IntegerSliderControl(
+              value: servings,
+              min: SettingsOptionRanges.defaultServings.min,
+              max: SettingsOptionRanges.defaultServings.max,
+              onChanged: onServingsChanged,
+              onCommitted: onServingsChanged,
+            ),
           ),
         );
-      default:
+      case 2:
         return OnboardingStepScaffold(
           question: 'Any dietary preferences we should know about?',
           subtitle: 'Optional — skip this if none apply.',
@@ -65,6 +74,54 @@ class OnboardingStepBody extends StatelessWidget {
             onToggle: onDietaryFlagToggled,
           ),
         );
+      default:
+        return const OnboardingStepScaffold(
+          question: 'Stock your pantry',
+          subtitle:
+              'Scan a shop receipt and Glean adds what you bought, so meal '
+              'plans start from what you already have.',
+          child: Center(child: Icon(Icons.receipt_long_rounded, size: 72)),
+        );
     }
+  }
+}
+
+/// A slider step's current answer, large enough to read at a glance while
+/// dragging (Settings shows the same value in its card's badge).
+class _NumberAnswer extends StatelessWidget {
+  const _NumberAnswer({
+    required this.value,
+    required this.unit,
+    required this.slider,
+  });
+
+  final int value;
+  final String unit;
+  final Widget slider;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppTokens tokens = context.tokens;
+    final ThemeData theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          '$value',
+          key: const ValueKey<String>('onboarding.selectedValue'),
+          textAlign: TextAlign.center,
+          style: theme.textTheme.displayMedium?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        Text(
+          unit,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium,
+        ),
+        SizedBox(height: tokens.spacing.lg),
+        slider,
+      ],
+    );
   }
 }

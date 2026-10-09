@@ -1,11 +1,12 @@
 // Widget tests for the first-run setup flow itself: stepping through
 // dinners/servings/dietary flags, persisting what was captured, being
-// skippable at any point, and ending by pointing at receipt-scan
+// skippable at any point, and ending on its own receipt-scan step
 // (AC-UX-04).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
+import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -17,6 +18,8 @@ import 'package:go_router/go_router.dart';
 import '../../data/fixture.dart';
 
 const String _userId = 'user-1';
+const String _scanStepQuestion = 'Stock your pantry';
+const Key _selectedValue = ValueKey<String>('onboarding.selectedValue');
 
 Widget _buildApp({
   required GleanDatabase db,
@@ -91,6 +94,10 @@ void main() {
       await tester.tap(find.text('Vegan'));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(find.text(_scanStepQuestion), findsOneWidget);
+
       await tester.tap(find.text('Scan a receipt'));
       await tester.pumpAndSettle();
 
@@ -142,6 +149,8 @@ void main() {
 
       await tester.tap(find.text('Vegetarian'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text("I'll do this later"));
       await tester.pumpAndSettle();
 
@@ -151,4 +160,61 @@ void main() {
       expect(await store.watch(_userId).first, isTrue);
     },
   );
+
+  testWidgets(
+    'the dietary step asks only about diet; the scan offer has its own step',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(420, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final store = InMemoryOnboardingStatusStore();
+      await tester.pumpWidget(_buildApp(db: db, store: store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Any dietary preferences we should know about?'),
+        findsOneWidget,
+      );
+      expect(find.text('Scan a receipt'), findsNothing);
+      expect(find.text('Back'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_scanStepQuestion), findsOneWidget);
+      expect(find.text('Scan a receipt'), findsOneWidget);
+      expect(find.text("I'll do this later"), findsOneWidget);
+    },
+  );
+
+  testWidgets('each slider step shows the number currently chosen', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(420, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final store = InMemoryOnboardingStatusStore();
+    await tester.pumpWidget(_buildApp(db: db, store: store));
+    await tester.pumpAndSettle();
+
+    String shown() => tester.widget<Text>(find.byKey(_selectedValue)).data!;
+
+    expect(shown(), '${UserConfigView.defaultMealsPerWeek}');
+    await tester.drag(find.byType(Slider), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(shown(), '7');
+
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(shown(), '${UserConfigView.defaultPreferredServings}');
+    await tester.drag(find.byType(Slider), const Offset(-400, 0));
+    await tester.pumpAndSettle();
+    expect(shown(), '1');
+  });
 }

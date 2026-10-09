@@ -1,10 +1,10 @@
 /// First-run setup (FLUTTER_MIGRATION.md §6, AC-UX-04) — new; there is no
 /// onboarding today. Captures dinners/week, servings and dietary flags —
 /// the values that steer meal-plan generation and, absent this screen, sit
-/// at their compile-time defaults forever — then points the user at
-/// receipt-scan.
+/// at their compile-time defaults forever — then offers receipt-scan on a
+/// final step of its own.
 ///
-/// **Short and genuinely skippable**: three steps, a "Skip" escape hatch
+/// **Short and genuinely skippable**: four steps, a "Skip" escape hatch
 /// visible on every one of them, and reused controls (`IntegerSliderControl`,
 /// `DietaryFlagsControl`) rather than a bespoke duplicate set (§6 — "reuse
 /// the same controls as Settings"). See `onboarding_gate.dart` for how this
@@ -31,7 +31,7 @@ import 'widgets/onboarding_step_body.dart';
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
-  static const int stepCount = 3;
+  static const int stepCount = 4;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
