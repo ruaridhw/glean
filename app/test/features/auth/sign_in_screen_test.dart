@@ -31,7 +31,7 @@ void main() {
       ProviderScope(
         overrides: [
           authControllerProvider.overrideWith(
-            () => AuthController.seeded(
+            () => AuthController(
               AuthSessionSnapshot.signedOut,
               storage: storage,
               client: client,

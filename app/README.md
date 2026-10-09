@@ -102,9 +102,9 @@ flutter test integration_test/app_test.dart \
 ```
 
 `COGNITO_DOMAIN`/`COGNITO_CLIENT_ID` can be any non-empty placeholder here:
-`lib/main_e2e.dart` seeds auth from `bypassAuthSnapshot()` and never
-constructs a `CognitoAuthClient`, so these values are only read by the
-startup non-empty/loopback assertions, never dialled for real. Repo-root
+`lib/main_e2e.dart` seeds auth from `bypassAuthSnapshot()` and never calls
+its `CognitoAuthClient`, so these values are only read by the startup
+non-empty/loopback assertions, never dialled for real. Repo-root
 equivalent: `make test-e2e COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...`.
 
 ### Running it in CI

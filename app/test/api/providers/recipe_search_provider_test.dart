@@ -46,6 +46,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         apiBaseUrlProvider.overrideWithValue('http://localhost:8000'),
+        apiAccessTokenProvider.overrideWithValue(() async => null),
         httpClientProvider.overrideWithValue(httpClient),
       ],
     );
@@ -86,6 +87,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         apiBaseUrlProvider.overrideWithValue('http://localhost:8000'),
+        apiAccessTokenProvider.overrideWithValue(() async => null),
         httpClientProvider.overrideWithValue(httpClient),
       ],
     );

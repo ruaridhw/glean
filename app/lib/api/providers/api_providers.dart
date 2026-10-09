@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../auth/auth_controller.dart';
 import '../api_client.dart';
 
 /// Every request through [apiClientProvider] is bounded by this (AC-PAN-14).
@@ -22,19 +23,15 @@ final Provider<String> apiBaseUrlProvider = Provider<String>((ref) {
   );
 });
 
-/// Supplies the bearer token for authenticated requests.
-///
-/// **SEAM:** the AUTH module (`lib/auth/**`) owns tokens. This default
-/// (always signed-out) keeps the API module independently testable without
-/// importing `lib/auth/` — `lib/main.dart` overrides this provider with
-/// [AuthController.getValidAccessToken] (see its `ProviderScope` overrides),
-/// and `lib/main_e2e.dart` overrides it with the bypassed session's token
-/// instead. This is not a placeholder bug — every route already 401s
-/// cleanly without a token, and [ApiAuthException] carries that to the UI.
+/// Supplies the bearer token for authenticated requests: the session's
+/// [AuthController.getValidAccessToken], which refreshes an expired token
+/// first. It resolves `null` with no usable session (signed out, expired,
+/// or the e2e bypass); the request then goes out unauthenticated, the
+/// backend rejects it, and [ApiAuthException] carries that to the UI.
 final Provider<AccessTokenProvider> apiAccessTokenProvider =
-    Provider<AccessTokenProvider>((ref) {
-      return () async => null;
-    });
+    Provider<AccessTokenProvider>(
+      (ref) => ref.watch(authControllerProvider.notifier).getValidAccessToken,
+    );
 
 /// The `http.Client` every request goes through. Production gets a real
 /// client, closed when the provider is disposed; tests override this with a

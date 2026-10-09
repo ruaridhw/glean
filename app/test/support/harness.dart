@@ -17,12 +17,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
+import 'package:glean/router/auth_state.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -32,6 +35,7 @@ import 'package:meta/meta.dart';
 // this import is legitimate — see FINDINGS.md F-03.
 import 'package:riverpod/misc.dart';
 
+import '../auth/support/fakes.dart';
 import '../data/fixture.dart';
 
 class AppTestHarness {
@@ -43,13 +47,32 @@ class AppTestHarness {
     // seeded as already onboarded (through the real repository). Pass
     // `onboarded: false` to exercise the first-run flow.
     bool onboarded = true,
+    // The session the app starts in. `expired` keeps [userId] (local data
+    // stays readable); `signedOut` has none. To flip it on a live app, use
+    // the controller's synchronous `debugSetSnapshot`. Only `await signOut()`
+    // on a harness built inside the test body: one built in `setUp` creates
+    // the controller outside the fake-async zone, and awaiting its storage
+    // write then never completes.
+    AuthStatus authStatus = AuthStatus.active,
     List<Override> overrides = const <Override>[],
   }) : haptics = haptics ?? RecordingHaptics(),
        db = createTestDatabase() {
+    // A real TokenStorage over the plugin's in-memory test platform, so
+    // signing out clears it for real.
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
     _container = ProviderContainer(
       overrides: <Override>[
         gleanDatabaseProvider.overrideWithValue(db),
-        currentUserIdProvider.overrideWithValue(userId),
+        authControllerProvider.overrideWith(
+          () => AuthController(
+            AuthSessionSnapshot(
+              status: authStatus,
+              userId: authStatus == AuthStatus.signedOut ? null : userId,
+            ),
+            storage: TokenStorage(),
+            client: inertCognitoClient(),
+          ),
+        ),
         // Deliberately unroutable: a test that accidentally performs a real
         // request should fail fast rather than reach the network.
         apiBaseUrlProvider.overrideWithValue('http://localhost:9999'),

@@ -35,7 +35,7 @@ on:
 env:
   FLUTTER_VERSION: '3.44.8'
   # Inert placeholders: lib/main_e2e.dart's AuthController is seeded from
-  # `bypassAuthSnapshot()` and never constructs a CognitoAuthClient, so
+  # `bypassAuthSnapshot()` and never calls its CognitoAuthClient, so
   # these values are only read by `GleanConfig.assertComplete()`'s
   # non-empty check and `assertAuthBypassUnreachable`'s loopback check —
   # never dialled for real. No secrets needed for either job.

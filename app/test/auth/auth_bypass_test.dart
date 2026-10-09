@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_bypass.dart';
 import 'package:glean/auth/auth_controller.dart';
-import 'package:glean/auth/auth_mode.dart';
 import 'package:glean/router/auth_state.dart';
 
 void main() {

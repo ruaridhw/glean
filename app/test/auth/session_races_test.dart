@@ -57,7 +57,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authControllerProvider.overrideWith(
-            () => AuthController.seeded(
+            () => AuthController(
               AuthSessionSnapshot(
                 status: AuthStatus.active,
                 userId: 'a',
@@ -97,7 +97,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authControllerProvider.overrideWith(
-            () => AuthController.seeded(
+            () => AuthController(
               AuthSessionSnapshot(
                 status: AuthStatus.active,
                 userId: 'a',
@@ -144,7 +144,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           authControllerProvider.overrideWith(
-            () => AuthController.seeded(
+            () => AuthController(
               AuthSessionSnapshot(
                 status: AuthStatus.active,
                 userId: 'a',

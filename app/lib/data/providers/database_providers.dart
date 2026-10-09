@@ -3,6 +3,7 @@
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/auth_controller.dart';
 import '../database.dart';
 
 /// The single `GleanDatabase` instance for the app's lifetime. Local SQLite
@@ -16,23 +17,24 @@ final Provider<GleanDatabase> gleanDatabaseProvider = Provider<GleanDatabase>((
   return db;
 });
 
-/// Seam for the AUTH module: overridden with the signed-in user's Cognito
-/// sub in `lib/main.dart` (real session, via [AuthController]) and
-/// `lib/main_e2e.dart` (bypassed session). Every user-scoped read/write in
-/// this data layer takes a user id as a parameter rather than reading this
-/// provider directly — repositories stay auth-agnostic, and
-/// `lib/features/**` providers are the ones expected to `ref.watch` this.
+/// The signed-in user's stable Cognito sub, from [authControllerProvider].
+/// Every user-scoped read/write in this data layer takes a user id as a
+/// parameter rather than reading this provider directly — repositories stay
+/// auth-agnostic, and `lib/features/**` providers are the ones expected to
+/// `ref.watch` this.
 ///
-/// Deliberately has no fallback default: reading it before AUTH's override
-/// applies (in production/e2e) or before a test overrides it (in
-/// `ProviderScope`) is a wiring bug, and should fail loudly rather than
-/// silently scope every query to a placeholder user id.
+/// An expired session still resolves its id, so local reads keep working.
+/// Signed out, it throws rather than silently scoping every query to a
+/// placeholder id — the router keeps a signed-out user on the sign-in
+/// screen, which reads no user data.
 final Provider<String> currentUserIdProvider = Provider<String>((ref) {
-  throw UnimplementedError(
-    'currentUserIdProvider has no default. Override it with the signed-in '
-    'user id (lib/main.dart / lib/main_e2e.dart already do) or with a '
-    'fixed value in ProviderScope(overrides: ...) for tests/previews.',
+  final String? id = ref.watch(
+    authControllerProvider.select((AuthSessionSnapshot s) => s.userId),
   );
+  if (id == null) {
+    throw StateError('currentUserIdProvider read while signed out');
+  }
+  return id;
 });
 
 /// Resolves once the database has successfully opened, or surfaces the

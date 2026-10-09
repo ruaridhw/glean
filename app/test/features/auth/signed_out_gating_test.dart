@@ -1,11 +1,10 @@
-// R-08: `SignedOutBanner` and `aiFeaturesAvailableProvider` used to be
-// referenced only by their own test — nothing in the assembled app mounted
-// the banner or gated an AI-backed action on the provider. This suite pumps
-// the *real* app (`AppShell` + the real feature screens, via
-// `AppTestHarness`) rather than injecting either directly, so it fails if
-// the wiring is ever removed again.
+// Pumps the *real* app (`AppShell` + the real feature screens, via
+// `AppTestHarness`) rather than injecting `SignedOutBanner` or
+// `aiFeaturesAvailableProvider` directly, so it fails if the assembled app
+// stops mounting the banner or gating an AI-backed action on the provider.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/router/app_routes.dart';
@@ -14,61 +13,62 @@ import 'package:glean/router/auth_state.dart';
 import '../../support/harness.dart';
 
 void main() {
-  group('R-08: expired session shows the banner and gates AI features', () {
-    late AppTestHarness harness;
-    late PantryRepository pantry;
+  testWidgets(
+    'when the session expires the banner appears in the assembled shell, and '
+    'local reads keep working underneath it',
+    (WidgetTester tester) async {
+      final AppTestHarness harness = AppTestHarness();
+      addTearDown(harness.dispose);
+      await PantryRepository(
+        harness.db,
+        IngredientsRepository(harness.db),
+      ).addItem(
+        userId: harness.userId,
+        name: 'Milk',
+        quantity: 1,
+        unit: 'l',
+        category: 'dairy',
+      );
 
-    setUp(() {
-      harness = AppTestHarness();
-      pantry = PantryRepository(harness.db, IngredientsRepository(harness.db));
-    });
+      await harness.pumpAt(tester, AppRoutes.pantry.path);
+      await tester.pumpAndSettle();
+
+      // Nothing shown while the session is active (the harness default).
+      expect(find.textContaining('Signed out'), findsNothing);
+      // `IngredientsRepository.resolveOrCreate` lower-cases the resolved
+      // canonical name (see `plan_rows_test.dart`'s equivalent note).
+      expect(find.textContaining('milk'), findsOneWidget);
+
+      harness.container
+          .read(authControllerProvider.notifier)
+          .debugSetSnapshot(
+            AuthSessionSnapshot(
+              status: AuthStatus.expired,
+              userId: harness.userId,
+            ),
+          );
+      await tester.pumpAndSettle();
+
+      // The banner is now visible from the shell, not from Pantry itself...
+      expect(find.textContaining('Signed out'), findsOneWidget);
+      // ...and the local read underneath it is completely unaffected: expiry
+      // must never gate a local read, only an AI-backed action.
+      expect(find.textContaining('milk'), findsOneWidget);
+    },
+  );
+
+  group('an expired session gates AI features', () {
+    late AppTestHarness harness;
+
+    setUp(() => harness = AppTestHarness(authStatus: AuthStatus.expired));
 
     tearDown(() => harness.dispose());
-
-    testWidgets(
-      'the banner is mounted in the assembled shell, and local reads keep '
-      'working underneath it',
-      (WidgetTester tester) async {
-        await pantry.addItem(
-          userId: harness.userId,
-          name: 'Milk',
-          quantity: 1,
-          unit: 'l',
-          category: 'dairy',
-        );
-
-        await harness.pumpAt(tester, AppRoutes.pantry.path);
-        await tester.pumpAndSettle();
-
-        // Nothing shown while the session is active (the harness default).
-        expect(find.textContaining('Signed out'), findsNothing);
-        // `IngredientsRepository.resolveOrCreate` lower-cases the resolved
-        // canonical name (see `plan_rows_test.dart`'s equivalent note).
-        expect(find.textContaining('milk'), findsOneWidget);
-
-        harness.container
-            .read(authStatusProvider.notifier)
-            .setStatus(AuthStatus.expired);
-        await tester.pumpAndSettle();
-
-        // The banner is now visible from the shell, not from Pantry itself...
-        expect(find.textContaining('Signed out'), findsOneWidget);
-        // ...and the local read underneath it is completely unaffected —
-        // this is the entire point of AC-AUTH-04's decision (§5): expiry
-        // must never gate a local read, only an AI-backed action.
-        expect(find.textContaining('milk'), findsOneWidget);
-      },
-    );
 
     testWidgets(
       'Pantry: Scan receipt and Describe purchase are disabled, Manual '
       'entry stays usable',
       (WidgetTester tester) async {
         await harness.pumpAt(tester, AppRoutes.pantry.path);
-        await tester.pumpAndSettle();
-        harness.container
-            .read(authStatusProvider.notifier)
-            .setStatus(AuthStatus.expired);
         await tester.pumpAndSettle();
 
         await tester.tap(find.byIcon(Icons.add_rounded));
@@ -99,10 +99,6 @@ void main() {
     ) async {
       await harness.pumpAt(tester, AppRoutes.plan.path);
       await tester.pumpAndSettle();
-      harness.container
-          .read(authStatusProvider.notifier)
-          .setStatus(AuthStatus.expired);
-      await tester.pumpAndSettle();
 
       final FilledButton generate = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Generate'),
@@ -112,10 +108,6 @@ void main() {
 
     testWidgets('Shop: Describe list is disabled', (WidgetTester tester) async {
       await harness.pumpAt(tester, AppRoutes.shop.path);
-      await tester.pumpAndSettle();
-      harness.container
-          .read(authStatusProvider.notifier)
-          .setStatus(AuthStatus.expired);
       await tester.pumpAndSettle();
 
       final IconButton describeButton = tester.widget<IconButton>(
@@ -128,10 +120,6 @@ void main() {
       'Meals: search is disabled and explains why, import is disabled',
       (WidgetTester tester) async {
         await harness.pumpAt(tester, AppRoutes.meals.path);
-        await tester.pumpAndSettle();
-        harness.container
-            .read(authStatusProvider.notifier)
-            .setStatus(AuthStatus.expired);
         await tester.pumpAndSettle();
 
         await tester.tap(find.text('Search'));

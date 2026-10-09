@@ -113,12 +113,14 @@ void main() {
 
     testWidgets('sign-in resolves outside the shell', (tester) async {
       // Signed-in users get bounced off /sign-in by design (see
-      // auth_redirect_test.dart) — go signedOut here to test that the route
-      // itself resolves, independent of that redirect policy.
-      harness.container
-          .read(authStatusProvider.notifier)
-          .setStatus(AuthStatus.signedOut);
-      await pumpAt(tester, AppRoutes.signIn.path);
+      // auth_redirect_test.dart) — start signedOut here to test that the
+      // route itself resolves, independent of that redirect policy.
+      final AppTestHarness signedOut = AppTestHarness(
+        authStatus: AuthStatus.signedOut,
+      );
+      addTearDown(signedOut.dispose);
+      await signedOut.pumpAt(tester, AppRoutes.signIn.path);
+      await tester.pumpAndSettle();
       expect(find.byType(SignInScreen), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
     });

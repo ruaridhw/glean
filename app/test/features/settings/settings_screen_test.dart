@@ -17,18 +17,21 @@
 // timer (verified: `_maxTimeDebounce` is cancelled in `dispose()`).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/features/settings/providers/sign_out_action.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/settings/widgets/max_time_field.dart';
+import 'package:glean/router/auth_state.dart';
 
+import '../../auth/support/fakes.dart';
 import '../../data/fixture.dart';
 
 const String _userId = 'user-1';
@@ -48,7 +51,7 @@ class _ThrowingUserConfigRepository extends UserConfigRepository {
 Widget _buildApp({
   required GleanDatabase db,
   Haptics? haptics,
-  SignOutAction? signOut,
+  AuthController Function()? authController,
   bool throwOnSave = false,
 }) {
   return ProviderScope(
@@ -56,7 +59,8 @@ Widget _buildApp({
       gleanDatabaseProvider.overrideWithValue(db),
       currentUserIdProvider.overrideWithValue(_userId),
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
-      if (signOut != null) signOutActionProvider.overrideWithValue(signOut),
+      if (authController != null)
+        authControllerProvider.overrideWith(authController),
       if (throwOnSave)
         userConfigRepositoryProvider.overrideWithValue(
           _ThrowingUserConfigRepository(db),
@@ -355,10 +359,10 @@ void main() {
     expect(find.text('Privacy Policy'), findsNothing);
   });
 
-  group('Sign out (AC-DATA-09, AC-HAP-05)', () {
+  group('Sign out', () {
     _settingsWidgetTest(
-      'calls the AUTH seam, fires a haptic, and touches no local '
-      'user data',
+      'signs the session out and clears secure storage, fires a haptic, and '
+      'touches no local user data',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -376,15 +380,32 @@ void main() {
           ),
         );
 
-        var signedOutCalled = false;
+        FlutterSecureStorage.setMockInitialValues(<String, String>{});
+        final TokenStorage storage = TokenStorage();
+        final CognitoTokens tokens = CognitoTokens(
+          accessToken: 'access-1',
+          refreshToken: 'refresh-1',
+          idToken: 'id-1',
+          userSub: _userId,
+          email: 'test@gmail.com',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
+        await storage.saveTokens(tokens);
+
         final haptics = RecordingHaptics();
         await tester.pumpWidget(
           _buildApp(
             db: db,
             haptics: haptics,
-            signOut: () async {
-              signedOutCalled = true;
-            },
+            authController: () => AuthController(
+              AuthSessionSnapshot(
+                status: AuthStatus.active,
+                userId: _userId,
+                tokens: tokens,
+              ),
+              storage: storage,
+              client: MockCognitoAuthClient(),
+            ),
           ),
         );
         await _waitForContent(tester);
@@ -393,7 +414,16 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(signedOutCalled, isTrue);
+        final ProviderContainer container = ProviderScope.containerOf(
+          tester.element(find.byType(SettingsScreen)),
+        );
+        expect(
+          container.read(authControllerProvider).status,
+          AuthStatus.signedOut,
+        );
+        final StoredTokenValues stored = await storage.readTokens();
+        expect(stored.accessToken, isNull);
+        expect(stored.userSub, isNull);
         expect(haptics.calls, contains(HapticWeight.medium));
 
         // Sign-out must not wipe local data — the row saved above survives.

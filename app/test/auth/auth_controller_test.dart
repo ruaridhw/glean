@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
+import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/router/auth_state.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -30,7 +32,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         authControllerProvider.overrideWith(
-          () => AuthController.seeded(seed, storage: storage, client: client),
+          () => AuthController(seed, storage: storage, client: client),
         ),
       ],
     );
@@ -217,14 +219,71 @@ void main() {
     });
   });
 
-  group('the bare default constructor', () {
-    test('fails loudly rather than silently no-op-ing when mutated', () async {
+  group('providers derived from the controller', () {
+    test('an active session resolves the user id, a valid token, and active '
+        'status', () async {
+      container = buildContainer(
+        AuthSessionSnapshot(
+          status: AuthStatus.active,
+          userId: 'user-sub-123',
+          tokens: tokensExpiringIn(const Duration(hours: 1)),
+        ),
+      );
+
+      expect(container.read(currentUserIdProvider), 'user-sub-123');
+      expect(container.read(authStatusProvider), AuthStatus.active);
+      expect(container.read(aiFeaturesAvailableProvider), isTrue);
+      expect(await container.read(apiAccessTokenProvider)(), 'access-1');
+    });
+
+    test('currentUserIdProvider throws while genuinely signed out', () {
+      container = buildContainer(AuthSessionSnapshot.signedOut);
+
+      // Riverpod wraps a build-time throw in its own exception type, so
+      // assert on the propagated message.
+      expect(
+        () => container.read(currentUserIdProvider),
+        throwsA(
+          predicate<Object>(
+            (Object e) => e.toString().contains('read while signed out'),
+          ),
+        ),
+      );
+    });
+
+    test('a failed refresh reached through apiAccessTokenProvider still leaves '
+        'currentUserIdProvider resolving, with status expired', () async {
+      when(() => client.refresh(any())).thenAnswer((_) async => null);
+      container = buildContainer(
+        AuthSessionSnapshot(
+          status: AuthStatus.active,
+          userId: 'user-sub-123',
+          tokens: tokensExpiringIn(const Duration(seconds: -5)),
+        ),
+      );
+
+      expect(await container.read(apiAccessTokenProvider)(), isNull);
+      expect(container.read(authStatusProvider), AuthStatus.expired);
+      expect(container.read(aiFeaturesAvailableProvider), isFalse);
+      expect(
+        container.read(currentUserIdProvider),
+        'user-sub-123',
+        reason: 'local reads must keep working through an expired session',
+      );
+    });
+
+    test('an unoverridden authControllerProvider fails loudly, naming where '
+        'to override it', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
 
-      await expectLater(
-        c.read(authControllerProvider.notifier).signIn(),
-        throwsA(isA<UnimplementedError>()),
+      expect(
+        () => c.read(authControllerProvider),
+        throwsA(
+          predicate<Object>(
+            (Object e) => e.toString().contains('main.dart / main_e2e.dart'),
+          ),
+        ),
       );
     });
   });

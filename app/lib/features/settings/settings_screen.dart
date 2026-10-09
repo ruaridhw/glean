@@ -15,12 +15,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 
-import 'providers/sign_out_action.dart';
 import 'settings_presentation.dart';
 import 'widgets/account_section.dart';
 import 'widgets/dietary_preferences_card.dart';
@@ -167,7 +167,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
 
   Future<void> _handleSignOut() async {
     try {
-      await ref.read(signOutActionProvider)();
+      await ref.read(authControllerProvider.notifier).signOut();
       if (!mounted) return;
       ref.read(hapticsProvider).mediumImpact();
     } catch (_) {

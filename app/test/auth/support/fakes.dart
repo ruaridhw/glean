@@ -8,6 +8,15 @@ import 'package:mocktail/mocktail.dart';
 /// [CognitoAuthClient] takes as a constructor argument.
 class MockFlutterAppAuth extends Mock implements FlutterAppAuth {}
 
+/// A real [CognitoAuthClient] over an unstubbed [MockFlutterAppAuth], for a
+/// session that never signs in or refreshes (the widget harness, banner
+/// tests) — no platform channel is ever reached.
+CognitoAuthClient inertCognitoClient() => CognitoAuthClient(
+  cognitoDomain: 'auth.example.test',
+  clientId: 'test-client',
+  appAuth: MockFlutterAppAuth(),
+);
+
 /// Mocks the network seam `AuthController` talks to
 /// (`test/auth/auth_controller_test.dart`). `CognitoAuthClient` is a
 /// concrete class, but mocktail's `Mock` intercepts every call via
