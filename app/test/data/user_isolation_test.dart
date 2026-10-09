@@ -126,5 +126,18 @@ void main() {
       final stillA = (await shopping.watchAll(userA).first).single;
       expect(stillA.isChecked, isFalse);
     });
+
+    test("another user cannot delete user A's shopping row", () async {
+      await shopping.addManualItem(userId: userA, name: 'flour');
+      final item = (await shopping.watchAll(userA).first).single;
+
+      final deleted = await shopping.deleteRowsWithSnapshot(
+        ids: [item.id],
+        userId: userB,
+      );
+
+      expect(deleted, isEmpty);
+      expect(await shopping.watchAll(userA).first, hasLength(1));
+    });
   });
 }

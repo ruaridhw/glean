@@ -2,11 +2,10 @@
 // user from their (local) data — the screen they're on stays exactly as it is.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/auth/auth_controller.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/features/auth/sign_in_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:glean/router/auth_state.dart';
 
 import '../support/harness.dart';
 

@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Repo standards from `app/AGENTS.md` §Standards. Every rule is enforced with
-/// no exceptions.
+// Repo standards from `app/AGENTS.md` §Standards. Every rule is enforced with
+// no exceptions.
 
 final RegExp _forbiddenFeatureImport = RegExp(
   r'''^\s*import\s+['"](package:drift/|package:glean/data/(database|tables|deletion_snapshots)\.dart|\.\./.*data/(database|tables|deletion_snapshots)\.dart)''',

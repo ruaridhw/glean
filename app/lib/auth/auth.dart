@@ -4,6 +4,7 @@ library;
 
 export 'auth_controller.dart';
 export 'auth_mode.dart';
+export 'auth_status.dart';
 export 'cognito_auth_client.dart';
 export 'token_storage.dart';
 export 'tokens.dart';

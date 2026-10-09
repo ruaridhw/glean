@@ -4,11 +4,10 @@
 // stops mounting the banner or gating an AI-backed action on the provider.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/auth/auth_controller.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:glean/router/auth_state.dart';
 
 import '../../support/harness.dart';
 

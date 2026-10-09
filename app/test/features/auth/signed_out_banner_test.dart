@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/auth/widgets/signed_out_banner.dart';
-import 'package:glean/router/auth_state.dart';
 
 import '../../auth/support/fakes.dart';
 

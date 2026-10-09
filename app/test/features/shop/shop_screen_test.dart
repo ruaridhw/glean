@@ -4,7 +4,7 @@
 // with a long list and with the keyboard up (AC-SHOP-08/10).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
@@ -14,15 +14,13 @@ import '../../support/harness.dart';
 void main() {
   group('ShopScreen', () {
     late AppTestHarness harness;
-    late ShoppingRepository shopping;
 
-    setUp(() {
-      harness = AppTestHarness();
-      shopping = ShoppingRepository(
-        harness.db,
-        IngredientsRepository(harness.db),
-      );
-    });
+    // Read lazily: touching `harness.container` in `setUp` would start drift
+    // work outside the test's fake-async zone.
+    ShoppingRepository shopping() =>
+        harness.container.read(shoppingRepositoryProvider);
+
+    setUp(() => harness = AppTestHarness());
 
     tearDown(() => harness.dispose());
 
@@ -39,12 +37,12 @@ void main() {
       'lists items into "To buy"/"In cart" with one wording for the count '
       '(AC-SHOP-07)',
       (WidgetTester tester) async {
-        await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
-        final int milkId = await shopping.addManualItem(
+        await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
+        final int milkId = await shopping().addManualItem(
           userId: 'test-user',
           name: 'Milk',
         );
-        await shopping.toggleRows(
+        await shopping().toggleRows(
           ids: [milkId],
           userId: 'test-user',
           checked: true,
@@ -70,7 +68,7 @@ void main() {
     testWidgets('tapping a row toggles it checked with a light haptic', (
       WidgetTester tester,
     ) async {
-      await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
+      await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
 
       await harness.pumpAt(tester, AppRoutes.shop.path);
       await tester.pumpAndSettle();
@@ -80,7 +78,7 @@ void main() {
 
       expect(harness.hapticCalls, contains(HapticWeight.light));
       final items = await tester.runAsync(
-        () => shopping.watchAll('test-user').first,
+        () => shopping().watchAll('test-user').first,
       );
       expect(items!.single.isChecked, isTrue);
     });
@@ -88,7 +86,7 @@ void main() {
     testWidgets('swipe-to-delete removes a row with undo (AC-UX-01/02)', (
       WidgetTester tester,
     ) async {
-      await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
+      await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
 
       await harness.pumpAt(tester, AppRoutes.shop.path);
       await tester.pumpAndSettle();
@@ -99,7 +97,7 @@ void main() {
       expect(find.text('Bananas removed'), findsOneWidget);
       expect(find.text('Undo'), findsOneWidget);
       expect(
-        await tester.runAsync(() => shopping.watchAll('test-user').first),
+        await tester.runAsync(() => shopping().watchAll('test-user').first),
         isEmpty,
       );
       // SwipeToDeleteRow fires exactly one haptic for the commit — the
@@ -113,7 +111,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        await tester.runAsync(() => shopping.watchAll('test-user').first),
+        await tester.runAsync(() => shopping().watchAll('test-user').first),
         hasLength(1),
       );
       expect(find.text('Bananas'), findsOneWidget);
@@ -123,7 +121,7 @@ void main() {
       'a delete failure is caught and surfaced, leaving the row intact '
       '(R-07)',
       (WidgetTester tester) async {
-        await shopping.addManualItem(userId: harness.userId, name: 'Bananas');
+        await shopping().addManualItem(userId: harness.userId, name: 'Bananas');
         await harness.db.customStatement(
           "CREATE TRIGGER fail_delete BEFORE DELETE ON shopping_list_items BEGIN SELECT RAISE(ABORT, 'test failure'); END",
         );
@@ -141,7 +139,7 @@ void main() {
 
         // The row must survive untouched in the data layer.
         final survivors = await tester.runAsync(
-          () => shopping.watchAll(harness.userId).first,
+          () => shopping().watchAll(harness.userId).first,
         );
         expect(survivors!.single.name, 'Bananas');
       },
@@ -151,7 +149,7 @@ void main() {
       'the pinned add field stays visible with a long list (AC-SHOP-08)',
       (WidgetTester tester) async {
         for (int i = 0; i < 30; i++) {
-          await shopping.addManualItem(userId: 'test-user', name: 'Item $i');
+          await shopping().addManualItem(userId: 'test-user', name: 'Item $i');
         }
 
         await harness.pumpAt(tester, AppRoutes.shop.path);
@@ -170,7 +168,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          await tester.runAsync(() => shopping.watchAll('test-user').first),
+          await tester.runAsync(() => shopping().watchAll('test-user').first),
           hasLength(31),
         );
       },

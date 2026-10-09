@@ -29,7 +29,6 @@ import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/settings/widgets/max_time_field.dart';
-import 'package:glean/router/auth_state.dart';
 
 import '../../auth/support/fakes.dart';
 import '../../data/fixture.dart';

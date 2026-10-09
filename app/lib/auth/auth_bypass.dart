@@ -5,7 +5,7 @@
 /// `test/standards/house_rules_test.dart` fails if anything besides `lib/main_e2e.dart` imports it.
 library;
 
-import '../router/auth_state.dart';
+import 'auth_status.dart';
 import 'auth_controller.dart';
 import 'auth_mode.dart';
 

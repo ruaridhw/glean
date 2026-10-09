@@ -2,11 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
-import 'package:glean/auth/auth_controller.dart';
-import 'package:glean/auth/token_storage.dart';
-import 'package:glean/auth/tokens.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/providers/database_providers.dart';
-import 'package:glean/router/auth_state.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'support/fakes.dart';

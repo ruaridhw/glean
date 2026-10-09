@@ -20,7 +20,7 @@ import 'package:glean/features/plan/plan_screen.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/shop/shop_screen.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:glean/router/auth_state.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/router/route_error_screen.dart';
 
 import '../support/harness.dart';

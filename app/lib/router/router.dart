@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/intake/manual_entry_screen.dart';
 import '../features/intake/pantry_describe_screen.dart';
@@ -23,7 +24,6 @@ import '../features/settings/settings_screen.dart';
 import '../features/shop/shop_screen.dart';
 import 'app_routes.dart';
 import 'app_shell.dart';
-import 'auth_state.dart';
 import 'intake_params.dart';
 import 'route_error_screen.dart';
 

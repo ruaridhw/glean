@@ -25,7 +25,6 @@ import 'package:glean/data/database.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/router/auth_state.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -137,6 +136,14 @@ class AppTestHarness {
     await tester.pumpWidget(app());
     await tester.pump();
   }
+
+  /// Makes every INSERT into [table] abort, via a SQLite trigger — the way to
+  /// exercise a repository failure without hand-rolling a fake repository.
+  Future<void> failInsertsOn(String table, {String message = 'test failure'}) =>
+      db.customStatement(
+        'CREATE TRIGGER fail_insert_$table BEFORE INSERT ON $table '
+        "BEGIN SELECT RAISE(ABORT, '$message'); END",
+      );
 
   /// Call from `addTearDown` so the in-memory database and provider graph are
   /// released between tests — a leaked drift connection surfaces later as an

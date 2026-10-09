@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../router/auth_state.dart';
+import 'auth_status.dart';
 import 'cognito_auth_client.dart';
 import 'token_storage.dart';
 import 'tokens.dart';
@@ -69,9 +69,13 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   @override
   AuthSessionSnapshot build() => _seed;
 
-  /// Replaces the session outright, for tests.
+  /// Replaces the session outright, for tests. Like sign-in/out, the latest write wins: in-flight work is dropped.
   @visibleForTesting
-  void debugSetSnapshot(AuthSessionSnapshot snapshot) => state = snapshot;
+  void debugSetSnapshot(AuthSessionSnapshot snapshot) {
+    ++_sessionEpoch;
+    _refreshing = null;
+    state = snapshot;
+  }
 
   /// Fires no haptic itself: `SignInScreen` fires them, so a sign-in never buzzes twice.
   Future<void> signIn() async {
@@ -203,6 +207,15 @@ Future<AuthSessionSnapshot> loadInitialAuthSnapshot(
     ),
   );
 }
+
+/// Coarse session state the router gates navigation on, derived from [authControllerProvider] (the only place
+/// session state is held). To change it, drive the controller (`signIn`/`signOut`, or `debugSetSnapshot` in a
+/// test).
+final Provider<AuthStatus> authStatusProvider = Provider<AuthStatus>(
+  (Ref ref) => ref.watch(
+    authControllerProvider.select((AuthSessionSnapshot s) => s.status),
+  ),
+);
 
 /// Are AI-backed features usable right now? False for `expired` and `signedOut`.
 final Provider<bool> aiFeaturesAvailableProvider = Provider<bool>((Ref ref) {

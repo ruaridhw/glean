@@ -11,8 +11,12 @@ enum ShoppingSource {
 
   final String dbValue;
 
-  static ShoppingSource fromDb(String value) =>
-      values.firstWhere((s) => s.dbValue == value);
+  /// Deliberately fail-fast: an unknown stored value means corrupt or newer-schema data, which must surface
+  /// rather than be coerced to a default source.
+  static ShoppingSource fromDb(String value) => values.firstWhere(
+    (s) => s.dbValue == value,
+    orElse: () => throw StateError('Unknown shopping source "$value"'),
+  );
 }
 
 class ShoppingListItemView {
