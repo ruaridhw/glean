@@ -16,4 +16,20 @@ void main() {
     expect(CognitoAuthClient.redirectUri, 'glean://auth/callback');
     expect(template, contains('- ${CognitoAuthClient.redirectUri}'));
   });
+
+  // An empty taskAffinity puts MainActivity in a different task from the one
+  // Chrome opens RedirectUriReceiverActivity in, so AppAuth never hands the
+  // code back and sign-in silently stalls after Google (flutter_appauth README,
+  // "No Redirect to app after login"; seen on the first Codemagic build).
+  test('MainActivity keeps the default task affinity so the Cognito redirect '
+      'returns to the waiting sign-in', () {
+    final String manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final String mainActivity = RegExp(
+      r'<activity\s[^>]*android:name="\.MainActivity"[^>]*>',
+    ).firstMatch(manifest)![0]!;
+
+    expect(mainActivity, isNot(contains('android:taskAffinity')));
+  });
 }
