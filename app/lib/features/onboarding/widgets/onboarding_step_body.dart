@@ -119,7 +119,9 @@ class _NumberAnswer extends StatelessWidget {
           textAlign: TextAlign.center,
           style: theme.textTheme.titleMedium,
         ),
-        SizedBox(height: tokens.spacing.lg),
+        // Room for the slider's value bubble, which rises above the thumb
+        // while dragging.
+        SizedBox(height: tokens.spacing.xxl),
         slider,
       ],
     );
