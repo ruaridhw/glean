@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/providers/recipes_providers.dart';
@@ -95,29 +96,36 @@ class _SavedRecipesList extends ConsumerWidget {
                     );
                   }
                   // No AnimatedList: a SwipeToDeleteRow's Dismissible already
-                  // animates its own removal gap closed.
+                  // animates its own removal gap closed. The entrance
+                  // [Animate] is the keyed list child, so only a recipe id
+                  // the list has not shown before fades in.
                   return ListView(
                     children: <Widget>[
                       for (int i = 0; i < recipes.length; i++) ...<Widget>[
                         if (i > 0) const SizedBox(height: 12),
                         SwipeToDeleteRow(
-                          key: ValueKey<int>(recipes[i].id),
-                          dismissibleKey: ValueKey<int>(recipes[i].id),
-                          onDelete: () =>
-                              deleteRecipeWithUndo(context, ref, recipes[i]),
-                          child: RecipeCard(
-                            recipe: recipes[i],
-                            onTap: () {
-                              ref.read(hapticsProvider).lightImpact();
-                              context.pushNamed(
-                                AppRoutes.mealsDetail.name,
-                                pathParameters: <String, String>{
-                                  'id': '${recipes[i].id}',
+                              dismissibleKey: ValueKey<int>(recipes[i].id),
+                              onDelete: () => deleteRecipeWithUndo(
+                                context,
+                                ref,
+                                recipes[i],
+                              ),
+                              child: RecipeCard(
+                                recipe: recipes[i],
+                                onTap: () {
+                                  ref.read(hapticsProvider).lightImpact();
+                                  context.pushNamed(
+                                    AppRoutes.mealsDetail.name,
+                                    pathParameters: <String, String>{
+                                      'id': '${recipes[i].id}',
+                                    },
+                                  );
                                 },
-                              );
-                            },
-                          ),
-                        ),
+                              ),
+                            )
+                            .animate(key: ValueKey<int>(recipes[i].id))
+                            .fadeIn(duration: 220.ms, curve: Curves.easeOut)
+                            .slideY(begin: 0.08, end: 0),
                       ],
                     ],
                   );

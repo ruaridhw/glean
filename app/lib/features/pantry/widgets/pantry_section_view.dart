@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/design_system/design_system.dart';
 
@@ -8,9 +9,9 @@ import 'pantry_item_row.dart';
 /// One category section: a header (icon, label, count) plus its rows.
 ///
 /// Deliberately not wrapped in an `AnimatedList` — a [SwipeToDeleteRow]'s
-/// `Dismissible` already animates its own removal gap closed. Each row is
-/// keyed by the item's own id so a row that merely shifted position keeps its
-/// state.
+/// `Dismissible` already animates its own removal gap closed. Each row's
+/// outermost widget is its entrance [Animate], keyed by the item's id: a row
+/// that merely shifted position keeps its state, so only new ids fade in.
 class PantrySectionView extends StatelessWidget {
   const PantrySectionView({
     super.key,
@@ -51,10 +52,15 @@ class PantrySectionView extends StatelessWidget {
           SizedBox(height: tokens.spacing.sm),
           for (final PantryItemView item in section.items)
             Padding(
-              key: ValueKey<int>(item.id),
-              padding: EdgeInsets.only(bottom: tokens.spacing.sm),
-              child: PantryItemRow(item: item, onDelete: () => onDelete(item)),
-            ),
+                  padding: EdgeInsets.only(bottom: tokens.spacing.sm),
+                  child: PantryItemRow(
+                    item: item,
+                    onDelete: () => onDelete(item),
+                  ),
+                )
+                .animate(key: ValueKey<int>(item.id))
+                .fadeIn(duration: 220.ms, curve: Curves.easeOut)
+                .slideY(begin: 0.08, end: 0),
         ],
       ),
     );

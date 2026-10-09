@@ -1,9 +1,9 @@
-/// The shopping list's body: skeleton/error/empty states, then the "to buy" and "in cart" sections, each rendered
-/// as swipe-to-delete rows. `Dismissible` animates the removal gap closed, so there is no `AnimatedList` (see
-/// `MealsScreen`), and rows fade/settle in via [GleanListEntrance].
+/// The shopping list's body: skeleton/error/empty states, then the "to buy" and "in cart" sections of swipe-to-delete
+/// rows. Each row fades and slides in once, keyed by item id, so only newly inserted rows animate.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/shopping_list_item_view.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -87,16 +87,19 @@ class _Row extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: EdgeInsets.only(bottom: bottomGap),
-      child: SwipeToDeleteRow(
-        dismissibleKey: ValueKey<int>(item.id),
-        onDelete: () => deleteShoppingItemWithUndo(context, ref, item),
-        child: ShoppingRow(
-          item: item,
-          onToggle: () => toggleShoppingItem(ref, item),
-        ),
-      ),
-    );
+          padding: EdgeInsets.only(bottom: bottomGap),
+          child: SwipeToDeleteRow(
+            dismissibleKey: ValueKey<int>(item.id),
+            onDelete: () => deleteShoppingItemWithUndo(context, ref, item),
+            child: ShoppingRow(
+              item: item,
+              onToggle: () => toggleShoppingItem(ref, item),
+            ),
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 220.ms, curve: Curves.easeOut)
+        .slideY(begin: 0.08, end: 0);
   }
 }
 
