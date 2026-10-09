@@ -312,7 +312,7 @@ class PantryRepository {
     required double quantity,
     required String unit,
     double? unitPrice,
-    required DateTime expiryDate,
+    required DateTime? expiryDate,
     required DateTime now,
   }) async {
     final existing =
@@ -361,7 +361,7 @@ class PantryRepository {
           unitPrice: unitPrice != null
               ? Value(unitPrice)
               : const Value.absent(),
-          expiryDate: Value(formatDate(expiryDate)),
+          expiryDate: Value(expiryDate == null ? null : formatDate(expiryDate)),
           updatedAt: Value(now.toIso8601String()),
         ),
       );
@@ -375,7 +375,9 @@ class PantryRepository {
               quantity: quantity,
               unit: unit,
               unitPrice: Value(unitPrice),
-              expiryDate: Value(formatDate(expiryDate)),
+              expiryDate: Value(
+                expiryDate == null ? null : formatDate(expiryDate),
+              ),
               updatedAt: now.toIso8601String(),
             ),
           );
@@ -410,6 +412,59 @@ class PantryRepository {
     return (_db.delete(
       _db.pantryItems,
     )..where((t) => t.id.equals(id) & t.userId.equals(userId))).go();
+  }
+
+  /// Restores deleted stock without treating it as a fresh purchase. If new
+  /// stock was added meanwhile, merge quantity but retain that row's metadata.
+  Future<void> restoreDeletedItem({
+    required String userId,
+    required PantryItemView item,
+  }) {
+    if (item.userId != userId) {
+      throw StateError('Cannot restore another user\'s stock');
+    }
+    return _db.transaction(() async {
+      final existing =
+          await (_db.select(_db.pantryItems)..where(
+                (t) =>
+                    t.userId.equals(userId) &
+                    t.ingredientId.equals(item.ingredientId),
+              ))
+              .getSingleOrNull();
+      final now = DateTime.now();
+      if (existing != null) {
+        await _upsert(
+          userId: userId,
+          ingredientId: item.ingredientId,
+          canonicalName: item.canonicalName,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: existing.unitPrice,
+          expiryDate: existing.expiryDate == null
+              ? null
+              : DateTime.parse(existing.expiryDate!),
+          now: now,
+        );
+        return;
+      }
+      await _db
+          .into(_db.pantryItems)
+          .insert(
+            PantryItemsCompanion.insert(
+              id: Value(item.id),
+              userId: userId,
+              ingredientId: item.ingredientId,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: Value(item.unitPrice),
+              expiryDate: Value(
+                item.expiryDate == null ? null : formatDate(item.expiryDate!),
+              ),
+              lastUsedAt: Value(item.lastUsedAt?.toIso8601String()),
+              updatedAt: now.toIso8601String(),
+            ),
+          );
+    });
   }
 
   /// Decrements the pantry row for [ingredientId], floored at zero, as part

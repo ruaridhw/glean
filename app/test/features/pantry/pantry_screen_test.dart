@@ -115,6 +115,9 @@ void main() {
       await harness.pumpAt(tester, AppRoutes.pantry.path);
       await tester.pumpAndSettle();
       expect(find.text('butter'), findsOneWidget);
+      final before = (await tester.runAsync(
+        () => pantry.getAll('test-user'),
+      ))!.single;
 
       // Exactly one delete affordance: no separate trash icon anywhere.
       expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
@@ -141,6 +144,14 @@ void main() {
         await tester.runAsync(() => pantry.watchAll('test-user').first),
         hasLength(1),
       );
+      final restored = (await tester.runAsync(
+        () => pantry.getAll('test-user'),
+      ))!.single;
+      expect(restored.expiryDate, before.expiryDate);
+      expect(restored.lastUsedAt, before.lastUsedAt);
+      expect(restored.id, before.id);
+      expect(restored.quantity, before.quantity);
+      expect(restored.unit, before.unit);
     });
 
     testWidgets('deleting the last item of a filtered category does not '

@@ -69,14 +69,7 @@ Future<void> deletePantryItemWithUndo(
     onUndo: () {
       unawaited(() async {
         try {
-          await repository.addItem(
-            userId: userId,
-            name: item.canonicalName,
-            quantity: item.quantity,
-            unit: item.unit,
-            category: item.category!,
-            unitPrice: item.unitPrice,
-          );
+          await repository.restoreDeletedItem(userId: userId, item: item);
         } catch (_) {
           if (context.mounted) {
             GleanSnackBar.show(
