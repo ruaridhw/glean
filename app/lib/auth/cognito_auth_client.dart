@@ -1,6 +1,5 @@
 import 'package:flutter_appauth/flutter_appauth.dart';
 
-import 'app_auth_gateway.dart';
 import 'tokens.dart';
 
 /// A sign-in failure with a message safe to show a user. [cancelled]
@@ -16,25 +15,22 @@ class AuthException implements Exception {
   String toString() => 'AuthException: $message';
 }
 
-/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth` — the flow the
-/// Expo app's `src/auth/google.ts` implemented with `expo-auth-session`
-/// (see git history; FLUTTER_MIGRATION.md §5).
+/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth`.
 ///
-/// Deliberately owns no session *state* (that's [AuthController]'s job) —
-/// just the two network operations: exchange an authorization for tokens,
-/// and exchange a refresh token for new ones. Never touches
-/// [TokenStorage] itself either; it hands back [CognitoTokens] or `null`/an
-/// exception and lets the caller decide what to persist.
+/// Owns no session *state* (that's [AuthController]'s job) — just the two
+/// network operations: exchange an authorization for tokens, and exchange a
+/// refresh token for new ones. Never touches [TokenStorage] either; it hands
+/// back [CognitoTokens] or `null`/an exception and lets the caller decide
+/// what to persist.
 class CognitoAuthClient {
   CognitoAuthClient({
     required String cognitoDomain,
     required this.clientId,
-    AppAuthGateway? gateway,
+    this._appAuth = const FlutterAppAuth(),
   }) : _config = AuthorizationServiceConfiguration(
          authorizationEndpoint: 'https://$cognitoDomain/oauth2/authorize',
          tokenEndpoint: 'https://$cognitoDomain/oauth2/token',
-       ),
-       _gateway = gateway ?? const SystemAppAuthGateway();
+       );
 
   /// Must equal what `backend/template.yaml`'s Cognito app client declares
   /// as a `CallbackURL`, and what the native custom-scheme intent filter on
@@ -43,31 +39,27 @@ class CognitoAuthClient {
 
   final String clientId;
   final AuthorizationServiceConfiguration _config;
-  final AppAuthGateway _gateway;
+  final FlutterAppAuth _appAuth;
 
   /// Opens Cognito Hosted UI -> Google and exchanges the returned
   /// authorization code for tokens in one native round trip.
   ///
-  /// **AC-AUTH-08**: awaits and consumes [AppAuthGateway.authorizeAndExchangeCode]'s
-  /// **return value** directly. This is the fix for the RN bug (§11): RN's
-  /// `promptAsync()` returned before the redirect arrived, so the exchange
-  /// depended on a deep link showing up separately and could dead-end
-  /// silently if it didn't. `flutter_appauth`'s combined call instead blocks
-  /// until the native `ASWebAuthenticationSession`/Custom Tab round trip
-  /// (including the code exchange) is complete and resolves this `Future`
-  /// with the result — there is no deep-link listener anywhere in this file.
+  /// Consumes [FlutterAppAuth.authorizeAndExchangeCode]'s **return value**
+  /// directly: that call blocks until the native
+  /// `ASWebAuthenticationSession`/Custom Tab round trip (including the code
+  /// exchange) is complete, so there is no separate deep-link listener that
+  /// could miss the redirect and dead-end silently.
   Future<CognitoTokens> signIn() async {
     AuthorizationTokenResponse response;
     try {
-      response = await _gateway.authorizeAndExchangeCode(
+      response = await _appAuth.authorizeAndExchangeCode(
         AuthorizationTokenRequest(
           clientId,
           redirectUri,
           serviceConfiguration: _config,
           scopes: const <String>['openid', 'email', 'profile'],
-          // Google-only sign-in (§6, unchanged): forces the Hosted UI
-          // straight to the Google federation rather than showing Cognito's
-          // provider picker.
+          // Google-only sign-in: sends the Hosted UI straight to the Google
+          // federation rather than showing Cognito's provider picker.
           additionalParameters: const <String, String>{
             'identity_provider': 'Google',
           },
@@ -109,17 +101,13 @@ class CognitoAuthClient {
   /// Returns `null` on **any** failure — a thrown platform/network error, or
   /// a 200 response missing a usable access or id token — rather than
   /// throwing, so [AuthController] has one uniform "treat this refresh as
-  /// failed" signal. This is the direct fix for §11's bug: RN's
-  /// `refreshTokens` wrote whatever `data.access_token` was (including
-  /// `undefined`) once the HTTP call itself succeeded, without checking the
-  /// *content* was usable, so `hasTokens()` kept reporting a valid session
-  /// (AC-AUTH-05). Here, a structurally-successful response with an empty
-  /// access token is treated exactly like a network failure — never
-  /// returned, never given to a caller to persist.
+  /// failed" signal. A structurally successful response with an empty access
+  /// token is treated exactly like a network failure: never returned, so a
+  /// caller can never persist it and keep reporting a valid session.
   Future<CognitoTokens?> refresh(String refreshToken) async {
     TokenResponse response;
     try {
-      response = await _gateway.token(
+      response = await _appAuth.token(
         TokenRequest(
           clientId,
           redirectUri,
@@ -145,11 +133,8 @@ class CognitoAuthClient {
       return CognitoTokens.fromIdToken(
         accessToken: accessToken,
         idToken: idToken,
-        // Cognito's refresh grant does not reissue a refresh token; reuse
-        // the one the caller supplied (mirrors the Expo app's
-        // `src/auth/google.ts`, see git history:
-        // `refreshToken: refreshToken, // Cognito doesn't return a new
-        // refresh token`).
+        // Cognito's refresh grant does not reissue a refresh token; keep
+        // using the one the caller supplied.
         refreshToken: response.refreshToken ?? refreshToken,
         expiresAt: response.accessTokenExpirationDateTime ?? DateTime.now(),
       );

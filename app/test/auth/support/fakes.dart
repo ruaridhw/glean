@@ -1,13 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_appauth/flutter_appauth.dart';
-import 'package:glean/auth/app_auth_gateway.dart';
 import 'package:glean/auth/cognito_auth_client.dart';
 import 'package:mocktail/mocktail.dart';
 
-/// Mocks the platform-channel seam `CognitoAuthClient` talks to
-/// (`test/auth/cognito_auth_client_test.dart`).
-class MockAppAuthGateway extends Mock implements AppAuthGateway {}
+/// Mocks `flutter_appauth`'s platform-channel client, which
+/// [CognitoAuthClient] takes as a constructor argument.
+class MockFlutterAppAuth extends Mock implements FlutterAppAuth {}
 
 /// Mocks the network seam `AuthController` talks to
 /// (`test/auth/auth_controller_test.dart`). `CognitoAuthClient` is a
@@ -18,7 +17,7 @@ class MockCognitoAuthClient extends Mock implements CognitoAuthClient {}
 
 /// Registers the fallback values mocktail needs for `any()`/`captureAny()`
 /// matchers against methods whose parameters aren't primitive types. Call
-/// once from a `setUpAll` in any test file that mocks [AppAuthGateway].
+/// once from a `setUpAll` in any test file that mocks [FlutterAppAuth].
 void registerAuthFallbackValues() {
   registerFallbackValue(
     AuthorizationTokenRequest(

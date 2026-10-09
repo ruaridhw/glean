@@ -21,7 +21,6 @@ const Set<String> _citationAllowlist = <String>{
   'lib/auth/auth_controller.dart',
   'lib/auth/auth.dart',
   'lib/auth/auth_mode.dart',
-  'lib/auth/cognito_auth_client.dart',
   'lib/bootstrap.dart',
   'lib/data/database.dart',
   'lib/data/models/meal_plan_entry_view.dart',
