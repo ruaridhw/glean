@@ -99,7 +99,9 @@ void main() {
       final saved = await UserConfigRepository(db).get(_userId);
       expect(saved.dietaryFlags, <String>['Vegan']);
       expect(
-        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        (await (db.select(
+          db.userConfig,
+        )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
     },
@@ -120,7 +122,9 @@ void main() {
 
       expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
       expect(
-        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        (await (db.select(
+          db.userConfig,
+        )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
 
@@ -155,7 +159,9 @@ void main() {
       final saved = await UserConfigRepository(db).get(_userId);
       expect(saved.dietaryFlags, <String>['Vegetarian']);
       expect(
-        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        (await (db.select(
+          db.userConfig,
+        )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
     },
