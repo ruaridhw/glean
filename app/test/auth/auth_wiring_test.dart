@@ -1,9 +1,11 @@
 // Exercises the actual override factory used by the production entrypoint.
 // Tests do not re-create the user/token/sign-out wiring inside their fixtures.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/auth/auth_controller.dart';
+import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
 import 'package:glean/auth/session_overrides.dart';
 import 'package:glean/data/providers/database_providers.dart';
@@ -14,7 +16,7 @@ import 'package:mocktail/mocktail.dart';
 import 'support/fakes.dart';
 
 void main() {
-  late InMemoryTokenStorage storage;
+  late TokenStorage storage;
   late MockCognitoAuthClient client;
 
   CognitoTokens tokensExpiringIn(Duration delta) => CognitoTokens(
@@ -35,7 +37,8 @@ void main() {
   }
 
   setUp(() {
-    storage = InMemoryTokenStorage();
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    storage = TokenStorage();
     client = MockCognitoAuthClient();
   });
 
@@ -83,9 +86,8 @@ void main() {
     'signOutActionProvider (Settings\' seam) clears tokens and flips '
     'authStatusProvider — AC-AUTH-03 through the real integration point',
     () async {
-      storage.accessToken = 'access-1';
-      storage.userSub = 'user-sub-123';
       final CognitoTokens tokens = tokensExpiringIn(const Duration(hours: 1));
+      await storage.saveTokens(tokens);
       final ProviderContainer container = buildContainer(
         AuthSessionSnapshot(
           status: AuthStatus.active,
@@ -96,7 +98,7 @@ void main() {
 
       await container.read(signOutActionProvider)();
 
-      expect(storage.clearAllCalls, 1);
+      expect((await storage.readTokens()).userSub, isNull);
       expect(container.read(authStatusProvider), AuthStatus.signedOut);
     },
   );

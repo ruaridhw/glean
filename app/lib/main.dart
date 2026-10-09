@@ -20,7 +20,7 @@ Future<void> main() async {
   await showStatusBarAfterSplash();
   GleanConfig.assertComplete();
 
-  final SecureTokenStorage storage = SecureTokenStorage();
+  final TokenStorage storage = TokenStorage();
   final CognitoAuthClient client = CognitoAuthClient(
     cognitoDomain: GleanConfig.cognitoDomain,
     clientId: GleanConfig.cognitoClientId,

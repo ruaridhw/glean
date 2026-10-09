@@ -24,37 +24,11 @@ class StoredTokenValues {
   final DateTime? expiresAt;
 }
 
-/// Token persistence — the Flutter analogue of the Expo app's
-/// `src/auth/storage.ts`'s `SecureStore` wrapper (see git history).
-///
-/// An interface (not a set of static functions) so tests substitute
-/// `InMemoryTokenStorage` (`test/auth/support/fakes.dart`) instead of
-/// touching a real platform channel — `flutter_secure_storage` has no
-/// in-memory test mode, the same reason `Haptics` is an interface rather
-/// than a direct `HapticFeedback` call.
-abstract class TokenStorage {
-  Future<StoredTokenValues> readTokens();
-
-  Future<void> saveTokens(CognitoTokens tokens);
-
-  /// Clears **every** stored value, including identity (`userSub`/`email`).
-  /// The only sign-out path (AC-AUTH-03): iOS Keychain items survive an
-  /// uninstall/reinstall, so "reinstall == signed out" is never a valid
-  /// assumption — this explicit clear is the sole mechanism.
-  Future<void> clearAll();
-
-  /// Clears the access/refresh/id tokens and their expiry, but **keeps**
-  /// `userSub`/`email`. Used when a refresh fails: the session can no longer
-  /// call AI-backed endpoints, but `currentUserIdProvider` must keep
-  /// resolving so local reads stay unaffected (AC-AUTH-04) — this is what
-  /// makes that possible at the storage layer.
-  Future<void> clearTokensKeepIdentity();
-}
-
-/// Production [TokenStorage]: five ordinary key/value pairs in
-/// `flutter_secure_storage` (iOS Keychain / Android Keystore-backed).
-class SecureTokenStorage implements TokenStorage {
-  SecureTokenStorage({FlutterSecureStorage? secureStorage})
+/// Token persistence: six key/value pairs in `flutter_secure_storage`
+/// (iOS Keychain / Android Keystore). Tests run it for real over
+/// `FlutterSecureStorage.setMockInitialValues`.
+class TokenStorage {
+  TokenStorage({FlutterSecureStorage? secureStorage})
     : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _secureStorage;
@@ -74,7 +48,6 @@ class SecureTokenStorage implements TokenStorage {
   ];
   static const List<String> _identityKeys = <String>[_keyUserSub, _keyEmail];
 
-  @override
   Future<StoredTokenValues> readTokens() async {
     final List<String?> values = await Future.wait<String?>(<Future<String?>>[
       _secureStorage.read(key: _keyAccess),
@@ -95,7 +68,6 @@ class SecureTokenStorage implements TokenStorage {
     );
   }
 
-  @override
   Future<void> saveTokens(CognitoTokens tokens) async {
     await Future.wait<void>(<Future<void>>[
       _secureStorage.write(key: _keyAccess, value: tokens.accessToken),
@@ -110,11 +82,17 @@ class SecureTokenStorage implements TokenStorage {
     ]);
   }
 
-  @override
+  /// Clears **every** stored value, including identity (`userSub`/`email`).
+  /// The only sign-out path: iOS Keychain items survive an
+  /// uninstall/reinstall, so "reinstall == signed out" is never a valid
+  /// assumption — this explicit clear is the sole mechanism.
   Future<void> clearAll() =>
       _deleteKeys(<String>[..._tokenKeys, ..._identityKeys]);
 
-  @override
+  /// Clears the access/refresh/id tokens and their expiry, but **keeps**
+  /// `userSub`/`email`. Used when a refresh fails: the session can no longer
+  /// call AI-backed endpoints, but `currentUserIdProvider` must keep
+  /// resolving so local reads stay unaffected.
   Future<void> clearTokensKeepIdentity() => _deleteKeys(_tokenKeys);
 
   Future<void> _deleteKeys(List<String> keys) async {

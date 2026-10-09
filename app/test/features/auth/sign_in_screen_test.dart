@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/auth/cognito_auth_client.dart';
+import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/auth/sign_in_screen.dart';
@@ -13,12 +15,13 @@ import 'package:mocktail/mocktail.dart';
 import '../../auth/support/fakes.dart';
 
 void main() {
-  late InMemoryTokenStorage storage;
+  late TokenStorage storage;
   late MockCognitoAuthClient client;
   late RecordingHaptics haptics;
 
   setUp(() {
-    storage = InMemoryTokenStorage();
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    storage = TokenStorage();
     client = MockCognitoAuthClient();
     haptics = RecordingHaptics();
   });

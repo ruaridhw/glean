@@ -86,7 +86,7 @@ class SeededAuthStatusNotifier extends AuthStatusNotifier {
 /// parameter type instead of it being spelled out. `main.dart` should read:
 ///
 /// ```dart
-/// final storage = SecureTokenStorage();
+/// final storage = TokenStorage();
 /// final client = CognitoAuthClient(cognitoDomain: ..., clientId: ...);
 /// final snapshot = await loadInitialAuthSnapshot(storage);
 ///

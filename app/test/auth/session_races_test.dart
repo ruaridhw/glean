@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_controller.dart';
+import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
 import 'package:glean/router/auth_state.dart';
 import 'package:mocktail/mocktail.dart';
 import 'support/fakes.dart';
 
-class HoldingStorage extends InMemoryTokenStorage {
+class HoldingStorage extends TokenStorage {
   final started = Completer<void>();
   final release = Completer<void>();
   @override
@@ -18,7 +20,17 @@ class HoldingStorage extends InMemoryTokenStorage {
   }
 }
 
+class CountingStorage extends TokenStorage {
+  int saveTokensCalls = 0;
+  @override
+  Future<void> saveTokens(CognitoTokens tokens) {
+    saveTokensCalls += 1;
+    return super.saveTokens(tokens);
+  }
+}
+
 void main() {
+  setUp(() => FlutterSecureStorage.setMockInitialValues(<String, String>{}));
   final expired = CognitoTokens(
     accessToken: 'old',
     refreshToken: 'refresh',
@@ -78,7 +90,7 @@ void main() {
   test(
     'concurrent API callers share one refresh and persist one rotated token',
     () async {
-      final storage = InMemoryTokenStorage();
+      final storage = CountingStorage();
       final client = MockCognitoAuthClient();
       final response = Completer<CognitoTokens?>();
       when(() => client.refresh('refresh')).thenAnswer((_) => response.future);
@@ -111,7 +123,9 @@ void main() {
   test(
     'identity-only storage after expiry reopens local data as expired, not signed out',
     () async {
-      final storage = InMemoryTokenStorage()..userSub = 'a';
+      final storage = TokenStorage();
+      await storage.saveTokens(expired);
+      await storage.clearTokensKeepIdentity();
       final snapshot = await loadInitialAuthSnapshot(storage);
       expect(snapshot.status, AuthStatus.expired);
       expect(snapshot.userId, 'a');
@@ -122,7 +136,7 @@ void main() {
   test(
     'logout invalidates a pending refresh before it can restore identity or tokens',
     () async {
-      final storage = InMemoryTokenStorage();
+      final storage = TokenStorage();
       await storage.saveTokens(expired);
       final client = MockCognitoAuthClient();
       final response = Completer<CognitoTokens?>();

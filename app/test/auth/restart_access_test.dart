@@ -24,7 +24,7 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({
         'glean_user_sub': 'reopen-user',
       });
-      final storage = SecureTokenStorage();
+      final storage = TokenStorage();
       final snapshot = await loadInitialAuthSnapshot(storage);
       final db = createTestDatabase();
       addTearDown(db.close);

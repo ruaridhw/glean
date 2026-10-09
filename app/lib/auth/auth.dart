@@ -6,7 +6,7 @@
 /// file directly, by its own explicit path.
 ///
 /// Exports: [AuthController]/`authControllerProvider`, [CognitoAuthClient],
-/// [SecureTokenStorage], the [AuthSession]/[resolveAuthSession] pure logic,
+/// [TokenStorage], the [AuthSession]/[resolveAuthSession] pure logic,
 /// and `aiFeaturesAvailableProvider`.
 library;
 

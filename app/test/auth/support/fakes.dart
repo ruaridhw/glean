@@ -3,73 +3,7 @@ import 'dart:convert';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:glean/auth/app_auth_gateway.dart';
 import 'package:glean/auth/cognito_auth_client.dart';
-import 'package:glean/auth/token_storage.dart';
-import 'package:glean/auth/tokens.dart';
 import 'package:mocktail/mocktail.dart';
-
-/// An in-memory [TokenStorage] fake — the direct analogue of
-/// `test/data/fixture.dart`'s real in-memory database, but for secure
-/// storage, which has no equivalent "real, but in-memory" test mode.
-///
-/// Exposes its state directly (rather than only via [readTokens]) so tests
-/// can assert storage's *own* view of the world after a controller method
-/// runs, proving `hasTokens`-style agreement (AC-AUTH-05) without going
-/// through the controller a second time.
-class InMemoryTokenStorage implements TokenStorage {
-  String? accessToken;
-  String? refreshToken;
-  String? idToken;
-  String? userSub;
-  String? email;
-  DateTime? expiresAt;
-
-  int clearAllCalls = 0;
-  int clearTokensKeepIdentityCalls = 0;
-  int saveTokensCalls = 0;
-
-  @override
-  Future<StoredTokenValues> readTokens() async {
-    return StoredTokenValues(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      idToken: idToken,
-      userSub: userSub,
-      email: email,
-      expiresAt: expiresAt,
-    );
-  }
-
-  @override
-  Future<void> saveTokens(CognitoTokens tokens) async {
-    saveTokensCalls += 1;
-    accessToken = tokens.accessToken;
-    refreshToken = tokens.refreshToken;
-    idToken = tokens.idToken;
-    userSub = tokens.userSub;
-    email = tokens.email;
-    expiresAt = tokens.expiresAt;
-  }
-
-  @override
-  Future<void> clearAll() async {
-    clearAllCalls += 1;
-    accessToken = null;
-    refreshToken = null;
-    idToken = null;
-    userSub = null;
-    email = null;
-    expiresAt = null;
-  }
-
-  @override
-  Future<void> clearTokensKeepIdentity() async {
-    clearTokensKeepIdentityCalls += 1;
-    accessToken = null;
-    refreshToken = null;
-    idToken = null;
-    expiresAt = null;
-  }
-}
 
 /// Mocks the platform-channel seam `CognitoAuthClient` talks to
 /// (`test/auth/cognito_auth_client_test.dart`).
