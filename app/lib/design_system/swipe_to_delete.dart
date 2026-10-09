@@ -38,7 +38,7 @@ class SwipeToDeleteRow extends ConsumerWidget {
   final Key dismissibleKey;
 
   /// Called once the swipe commits. Callers do the actual delete (and should
-  /// show an undo snackbar via `GleanSnackBar.showUndo` — AC-UX-02); this
+  /// show an undo snackbar via `GleanSnackBar.runUndoable` — AC-UX-02); this
   /// widget's only added responsibility is the single haptic.
   final VoidCallback onDelete;
 

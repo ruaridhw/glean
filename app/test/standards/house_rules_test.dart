@@ -5,12 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Repo standards from `app/AGENTS.md` §Standards, enforced as a ratchet:
 /// each allowlist names files that violated the rule when the rule was
 /// introduced. Entries may only ever be removed.
-const Set<String> _featureDataImportAllowlist = <String>{
-  'lib/features/shop/actions.dart',
-  'lib/features/plan/actions.dart',
-  'lib/features/meals/actions.dart',
-};
-
+const Set<String> _featureDataImportAllowlist = <String>{};
 const Set<String> _rawColourAllowlist = <String>{
   'lib/bootstrap.dart',
   'lib/features/shop/widgets/shop_add_field.dart',
@@ -100,7 +95,6 @@ const Set<String> _citationAllowlist = <String>{
   'lib/features/onboarding/providers/onboarding_status.dart',
   'lib/features/onboarding/widgets/onboarding_footer.dart',
   'lib/features/onboarding/widgets/onboarding_step_body.dart',
-  'lib/features/pantry/actions.dart',
   'lib/features/pantry/pantry_presentation.dart',
   'lib/features/pantry/pantry_screen.dart',
   'lib/features/pantry/widgets/pantry_add_sheet.dart',

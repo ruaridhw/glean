@@ -211,7 +211,7 @@ ThemeData get gleanLightTheme {
     ),
 
     // Undo snackbar (AC-UX-02, AC-DS-10) — see `snackbar.dart` for the
-    // `GleanSnackBar.showUndo` helper that rides on top of this theme.
+    // `GleanSnackBar.runUndoable` helper that rides on top of this theme.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: _Brand.ink,
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
