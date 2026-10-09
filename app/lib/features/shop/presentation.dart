@@ -35,7 +35,8 @@ String _formatQuantity(double quantity) {
 /// belongs. What this module owns is making sure the row's origin is never a
 /// mystery *after* that moment: every render of a plan-derived row carries a
 /// visible tag, not just its first appearance.
-bool isPlanDerived(ShoppingListItemView item) => item.source == 'meal_plan';
+bool isPlanDerived(ShoppingListItemView item) =>
+    item.source == ShoppingSource.mealPlan;
 
 /// The one phrase for "N items are checked off, ready to buy" — used by both
 /// the count chip and the checkout bar.

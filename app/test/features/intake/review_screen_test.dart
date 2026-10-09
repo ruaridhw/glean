@@ -357,8 +357,8 @@ void main() {
         quantity: 1,
         unit: 'l',
       );
-      await shopping.toggleItem(
-        id: ingredientId,
+      await shopping.toggleRows(
+        ids: [ingredientId],
         userId: 'test-user',
         checked: true,
       );

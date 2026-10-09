@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
+import 'package:glean/data/models/shopping_list_item_view.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
@@ -184,7 +185,7 @@ void main() {
         );
         expect(items, hasLength(1));
         expect(items!.single.name, 'chicken breast');
-        expect(items.single.source, 'meal_plan');
+        expect(items.single.source, ShoppingSource.mealPlan);
       },
     );
 

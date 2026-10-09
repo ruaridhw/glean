@@ -44,8 +44,8 @@ void main() {
           userId: 'test-user',
           name: 'Milk',
         );
-        await shopping.toggleItem(
-          id: milkId,
+        await shopping.toggleRows(
+          ids: [milkId],
           userId: 'test-user',
           checked: true,
         );

@@ -117,17 +117,14 @@ void main() {
       },
     );
 
-    test('writes scoped by id and userId cannot cross users', () async {
+    test('writes scoped by userId cannot cross users', () async {
       await shopping.addManualItem(userId: userA, name: 'flour');
       final item = (await shopping.watchAll(userA).first).single;
 
-      // user B attempting to toggle/delete user A's row by id has no effect.
-      await shopping.toggleItem(id: item.id, userId: userB, checked: true);
+      // user B attempting to toggle user A's row by id has no effect.
+      await shopping.toggleRows(ids: [item.id], userId: userB, checked: true);
       final stillA = (await shopping.watchAll(userA).first).single;
       expect(stillA.isChecked, isFalse);
-
-      await shopping.deleteItem(id: item.id, userId: userB);
-      expect(await shopping.watchAll(userA).first, hasLength(1));
     });
   });
 }

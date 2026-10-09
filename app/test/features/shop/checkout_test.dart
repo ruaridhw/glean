@@ -51,7 +51,11 @@ void main() {
             canonicalName: 'Item $i',
           );
           ingredientIds.add(ingredient.id);
-          await shopping.toggleItem(id: id, userId: 'test-user', checked: true);
+          await shopping.toggleRows(
+            ids: [id],
+            userId: 'test-user',
+            checked: true,
+          );
         }
         final List<int> resolved = ingredientIds.sublist(0, 4);
 
@@ -98,8 +102,8 @@ void main() {
           userId: 'test-user',
           name: 'Milk',
         );
-        await shopping.toggleItem(
-          id: milkId,
+        await shopping.toggleRows(
+          ids: [milkId],
           userId: 'test-user',
           checked: true,
         );

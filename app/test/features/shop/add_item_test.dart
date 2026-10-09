@@ -29,7 +29,6 @@ class _ThrowingShoppingRepository extends ShoppingRepository {
     required String name,
     double? quantity,
     String? unit,
-    String? category,
   }) {
     throw Exception('simulated DB failure');
   }

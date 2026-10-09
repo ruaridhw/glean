@@ -19,6 +19,7 @@ import 'package:drift/drift.dart';
 import '../database.dart';
 import '../deletion_snapshots.dart';
 import '../models/meal_plan_entry_view.dart';
+import '../models/user_config_view.dart';
 import '../util/recipe_servings.dart';
 import '../util/unit_normalization.dart';
 import '../util/week.dart';
@@ -38,34 +39,22 @@ class PlanRepository {
   Stream<List<MealPlanEntryView>> watchWeek({
     required String userId,
     required DateTime weekStart,
-  }) {
-    final start = formatDate(weekStart);
-    final end = formatDate(endOfWeek(weekStart));
-    final query = _db.select(_db.mealPlanEntries)
-      ..where(
-        (t) =>
-            t.userId.equals(userId) &
-            t.plannedDate.isBiggerOrEqualValue(start) &
-            t.plannedDate.isSmallerThanValue(end),
-      )
-      ..orderBy([
-        (t) => OrderingTerm.asc(t.plannedDate),
-        (t) => OrderingTerm.asc(t.id),
-      ]);
-    return query.watch().map((rows) => rows.map(_mapEntry).toList());
-  }
+  }) => _weekQuery(userId, weekStart).watch().map(_mapEntries);
 
-  /// One-shot twin of [watchWeek]: same week window and ordering, but a
-  /// plain `.get()`. Command paths (e.g. meal-plan generation) need a
-  /// snapshot of this week's entries, not a subscription opened and
-  /// immediately cancelled (FINDINGS.md F-14).
+  /// One-shot twin of [watchWeek]: same query, a plain `.get()` rather than
+  /// a subscription opened and immediately cancelled.
   Future<List<MealPlanEntryView>> getWeek({
     required String userId,
     required DateTime weekStart,
-  }) async {
+  }) async => _mapEntries(await _weekQuery(userId, weekStart).get());
+
+  SimpleSelectStatement<$MealPlanEntriesTable, MealPlanEntry> _weekQuery(
+    String userId,
+    DateTime weekStart,
+  ) {
     final start = formatDate(weekStart);
     final end = formatDate(endOfWeek(weekStart));
-    final query = _db.select(_db.mealPlanEntries)
+    return _db.select(_db.mealPlanEntries)
       ..where(
         (t) =>
             t.userId.equals(userId) &
@@ -76,9 +65,10 @@ class PlanRepository {
         (t) => OrderingTerm.asc(t.plannedDate),
         (t) => OrderingTerm.asc(t.id),
       ]);
-    final rows = await query.get();
-    return rows.map(_mapEntry).toList();
   }
+
+  List<MealPlanEntryView> _mapEntries(List<MealPlanEntry> rows) =>
+      rows.map(_mapEntry).toList();
 
   MealPlanEntryView _mapEntry(MealPlanEntry row) => MealPlanEntryView(
     id: row.id,
@@ -125,7 +115,8 @@ class PlanRepository {
     final config = await (_db.select(
       _db.userConfig,
     )..where((t) => t.id.equals(userId))).getSingleOrNull();
-    final mealsPerWeek = config?.mealsPerWeek ?? 5;
+    final mealsPerWeek =
+        config?.mealsPerWeek ?? UserConfigView.defaultMealsPerWeek;
     final uncooked = await uncookedCountForWeek(
       userId: userId,
       weekStart: weekStart,

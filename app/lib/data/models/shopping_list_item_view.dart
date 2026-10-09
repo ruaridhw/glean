@@ -3,6 +3,21 @@
 // `ingredientId` is non-nullable
 // (AC-SHOP-03): every row, including manual entries, resolves an ingredient
 // identity on the way in via `IngredientsRepository`.
+/// Where a shopping row came from. Stored as TEXT in
+/// `shopping_list_items.source` using [dbValue].
+enum ShoppingSource {
+  manual('manual'),
+  ai('ai'),
+  mealPlan('meal_plan');
+
+  const ShoppingSource(this.dbValue);
+
+  final String dbValue;
+
+  static ShoppingSource fromDb(String value) =>
+      values.firstWhere((s) => s.dbValue == value);
+}
+
 class ShoppingListItemView {
   const ShoppingListItemView({
     required this.id,
@@ -25,7 +40,7 @@ class ShoppingListItemView {
   final String name;
   final double? quantity;
   final String? unit;
-  final String source;
+  final ShoppingSource source;
   final bool isChecked;
 
   /// Non-null when this row was inserted as a meal-plan shopping gap;

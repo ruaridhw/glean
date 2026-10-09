@@ -89,8 +89,8 @@ void main() {
         }
         final items = await repository.watchAll(userId).first;
         for (final item in items) {
-          await repository.toggleItem(
-            id: item.id,
+          await repository.toggleRows(
+            ids: [item.id],
             userId: userId,
             checked: true,
           );
@@ -500,7 +500,11 @@ void main() {
           userId: userId,
           name: 'remove me',
         );
-        await repository.toggleItem(id: remove, userId: userId, checked: true);
+        await repository.toggleRows(
+          ids: [remove],
+          userId: userId,
+          checked: true,
+        );
 
         final removedCount = await repository.completeCheckoutWithoutReceipt(
           userId: userId,

@@ -48,26 +48,20 @@ class RecipesRepository {
   final GleanDatabase _db;
   final IngredientsRepository _ingredients;
 
-  Stream<List<RecipeView>> watchSaved(String userId) {
-    final query = _db.select(_db.recipes)
-      ..where((t) => t.userId.equals(userId))
-      ..orderBy([(t) => OrderingTerm.desc(t.id)]);
-    return query.watch().asyncMap(
-      (rows) => _attachDietaryFlags(rows.map(_mapRecipe).toList()),
-    );
-  }
+  Stream<List<RecipeView>> watchSaved(String userId) => _savedQuery(userId)
+      .watch()
+      .asyncMap((rows) => _attachDietaryFlags(rows.map(_mapRecipe).toList()));
 
-  /// One-shot twin of [watchSaved]: same ordering and dietary-flag
-  /// attachment, but a plain `.get()`. Command paths (e.g. meal-plan
-  /// generation) need a snapshot of the saved-recipe library, not a
-  /// subscription opened and immediately cancelled (FINDINGS.md F-14).
-  Future<List<RecipeView>> getSaved(String userId) async {
-    final query = _db.select(_db.recipes)
-      ..where((t) => t.userId.equals(userId))
-      ..orderBy([(t) => OrderingTerm.desc(t.id)]);
-    final rows = await query.get();
-    return _attachDietaryFlags(rows.map(_mapRecipe).toList());
-  }
+  /// One-shot twin of [watchSaved]: same query, a plain `.get()` rather than
+  /// a subscription opened and immediately cancelled.
+  Future<List<RecipeView>> getSaved(String userId) async => _attachDietaryFlags(
+    (await _savedQuery(userId).get()).map(_mapRecipe).toList(),
+  );
+
+  SimpleSelectStatement<$RecipesTable, Recipe> _savedQuery(String userId) =>
+      _db.select(_db.recipes)
+        ..where((t) => t.userId.equals(userId))
+        ..orderBy([(t) => OrderingTerm.desc(t.id)]);
 
   Future<RecipeView?> getById({required int id, required String userId}) async {
     final row =

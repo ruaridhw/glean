@@ -145,7 +145,7 @@ class ShoppingRepository {
     name: row.name,
     quantity: quantity ?? row.quantity,
     unit: unit ?? row.unit,
-    source: row.source,
+    source: ShoppingSource.fromDb(row.source),
     isChecked: row.isChecked,
     sourceMealPlanEntryId: memberIds.length > 1
         ? null
@@ -154,11 +154,9 @@ class ShoppingRepository {
   );
 
   /// Adds a manual entry, resolving [name] to a real ingredient identity
-  /// (AC-SHOP-03) so it can later match a receipt at checkout. [category]
-  /// is optional — a manual entry has no LLM classification behind it, so
-  /// unlike pantry intake this does not require one; if the ingredient
-  /// already exists with a category, that is left untouched, and if not, it
-  /// simply stays uncategorised until something else resolves it.
+  /// (AC-SHOP-03) so it can later match a receipt at checkout. A manual
+  /// entry has no LLM classification, so the ingredient's category is left
+  /// untouched (or uncategorised if new).
   ///
   /// [unit], when given, also seeds/upgrades `canonicalUnit` (R-18) via
   /// `IngredientsRepository.resolveOrCreate` — a manual shopping entry is a
@@ -168,7 +166,6 @@ class ShoppingRepository {
     required String name,
     double? quantity,
     String? unit,
-    String? category,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
@@ -176,7 +173,6 @@ class ShoppingRepository {
     }
     final ingredient = await _ingredients.resolveOrCreate(
       canonicalName: trimmed,
-      category: category,
       unit: unit,
     );
     return _db
@@ -228,7 +224,7 @@ class ShoppingRepository {
                 name: name,
                 quantity: Value(item.quantity),
                 unit: Value(unit),
-                source: const Value('ai'),
+                source: Value(ShoppingSource.ai.dbValue),
               ),
             );
       }
@@ -331,7 +327,7 @@ class ShoppingRepository {
               name: ingredient.canonicalName,
               quantity: Value(requirement.quantity),
               unit: Value(requirement.unit),
-              source: const Value('meal_plan'),
+              source: Value(ShoppingSource.mealPlan.dbValue),
               isRequirement: const Value(true),
               sourceMealPlanEntryId: Value(sourceMealPlanEntryId),
             ),
@@ -395,22 +391,6 @@ class ShoppingRepository {
       (_db.update(_db.shoppingListItems)
             ..where((t) => t.id.isIn(ids) & t.userId.equals(userId)))
           .write(ShoppingListItemsCompanion(isChecked: Value(checked)));
-
-  Future<void> toggleItem({
-    required int id,
-    required String userId,
-    required bool checked,
-  }) {
-    return (_db.update(_db.shoppingListItems)
-          ..where((t) => t.id.equals(id) & t.userId.equals(userId)))
-        .write(ShoppingListItemsCompanion(isChecked: Value(checked)));
-  }
-
-  Future<void> deleteItem({required int id, required String userId}) {
-    return (_db.delete(
-      _db.shoppingListItems,
-    )..where((t) => t.id.equals(id) & t.userId.equals(userId))).go();
-  }
 
   /// Completes a checkout backed by a scanned receipt: removes only the
   /// checked rows whose ingredient the receipt actually resolved

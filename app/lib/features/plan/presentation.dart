@@ -8,6 +8,8 @@ library;
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/data/util/week.dart';
+import 'package:glean/features/pantry/pantry_presentation.dart'
+    show isExpiringSoon;
 
 /// One row in the Dinners list: either a real entry, or an empty slot the
 /// user can tap to add a dinner.
@@ -98,23 +100,6 @@ String planHint(int remaining) {
   return '$remaining dinner${remaining == 1 ? '' : 's'} left to plan this week';
 }
 
-/// A day-boundary check matching the RN "expired or within 2 days" tone
-/// used for both the pantry's expiry badge and this nudge (ported from the
-/// Expo app's `src/pantry/presentation.ts`'s `getExpiryBadge`/
-/// `isExpiringSoon`, see git history).
-///
-/// Duplicated here rather than imported: the Pantry feature (which would
-/// own the Flutter equivalent) is a parallel, not-yet-landed wave, and this
-/// is a small enough pure check that porting it twice is cheaper than a
-/// cross-feature import — see the final report for this as a flagged seam.
-bool _isExpiringSoon(PantryItemView item, DateTime now) {
-  final DateTime? expiry = item.expiryDate;
-  if (expiry == null) return false;
-  final DateTime today = DateTime(now.year, now.month, now.day);
-  final int days = expiry.difference(today).inDays;
-  return days <= 2;
-}
-
 /// Nudge shown on the Plan screen about pantry items expiring soon, so a
 /// user plans a dinner that uses them up before they're wasted. Returns
 /// null when nothing is urgent, so the caller can hide the banner entirely.
@@ -133,7 +118,7 @@ class PlanExpiryNudge {
 PlanExpiryNudge? planExpiryNudge(List<PantryItemView> items, {DateTime? now}) {
   final DateTime effectiveNow = now ?? DateTime.now();
   final List<PantryItemView> urgent = items
-      .where((PantryItemView item) => _isExpiringSoon(item, effectiveNow))
+      .where((PantryItemView item) => isExpiringSoon(item, now: effectiveNow))
       .toList();
   if (urgent.isEmpty) return null;
 
