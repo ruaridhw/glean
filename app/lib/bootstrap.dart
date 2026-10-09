@@ -6,7 +6,9 @@
 /// `main.dart`'s import graph stay free of it (AC-AUTH-06).
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
@@ -44,6 +46,21 @@ abstract final class GleanConfig {
       );
     }
   }
+}
+
+/// Shows the iOS status bar again once Flutter starts.
+///
+/// `flutter_native_splash.yaml`'s `fullscreen: true` hides the Android status
+/// bar only on the launch theme, but on iOS it writes `UIStatusBarHidden` into
+/// `Info.plist`, which keeps the bar hidden for the whole app. This is the fix
+/// that package's README gives. Android is left alone so it keeps its default
+/// system UI.
+Future<void> showStatusBarAfterSplash() async {
+  if (defaultTargetPlatform != TargetPlatform.iOS) return;
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: SystemUiOverlay.values,
+  );
 }
 
 /// Wraps [GleanApp] in the database gate.

@@ -17,6 +17,7 @@ import 'auth/session_overrides.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await showStatusBarAfterSplash();
   GleanConfig.assertComplete();
 
   final SecureTokenStorage storage = SecureTokenStorage();

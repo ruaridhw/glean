@@ -28,6 +28,7 @@ import 'router/auth_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await showStatusBarAfterSplash();
   GleanConfig.assertComplete();
 
   // Before installing any bypass override.
