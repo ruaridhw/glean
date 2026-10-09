@@ -1,6 +1,4 @@
-/// Derived reads for the Meals feature, composed entirely from providers the
-/// DATA module already exports (AC-DATA-07: no drift import here, only
-/// providers).
+/// Derived reads for the Meals feature, composed from the data layer's providers (no drift import).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,13 +8,9 @@ import 'package:glean/data/providers/pantry_providers.dart';
 import 'package:glean/data/providers/recipes_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 
-/// The saved recipe with the family argument (a local recipe id) for the
-/// current user, derived from the same [savedRecipesProvider] stream the
-/// library list watches. Keeping this a `.watch()`-backed stream all the way
-/// down (rather than a one-shot `getById` future) is what makes the detail
-/// screen's "to buy"/"in pantry" state — and the recipe disappearing if
-/// deleted elsewhere — update live instead of going stale like RN's
-/// `useEffect([id])` did (§11, AC-MEAL-11).
+/// The saved recipe for a local recipe id, derived from the same [savedRecipesProvider] stream the library list
+/// watches. Staying stream-based means the detail screen's "to buy"/"in pantry" state, and the recipe
+/// disappearing if deleted elsewhere, update live.
 final recipeByIdProvider = Provider.family<AsyncValue<RecipeView?>, int>((
   Ref ref,
   int id,
@@ -30,11 +24,8 @@ final recipeByIdProvider = Provider.family<AsyncValue<RecipeView?>, int>((
   });
 });
 
-/// Ingredient rows for the family argument (a local recipe id). A one-shot
-/// fetch, not a stream — a saved recipe's own ingredient composition never
-/// changes after import (there is no recipe-editing feature). Only *pantry
-/// membership* per ingredient can go stale, which [pantryIngredientIdsProvider]
-/// tracks separately.
+/// Ingredient rows for a local recipe id. A one-shot fetch: a saved recipe's ingredients never change after
+/// import. Only pantry membership can go stale, which [pantryIngredientIdsProvider] tracks.
 final recipeIngredientsProvider =
     FutureProvider.family<List<RecipeIngredientView>, int>((
       Ref ref,

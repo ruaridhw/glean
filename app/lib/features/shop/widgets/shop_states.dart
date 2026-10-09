@@ -4,8 +4,7 @@ import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:go_router/go_router.dart';
 
-/// Empty list state — the whole list is a to-do, and the natural next step
-/// is the tab that actually generates shopping needs.
+/// Empty list state: the natural next step is the tab that generates shopping needs.
 class ShopEmptyState extends ConsumerWidget {
   const ShopEmptyState({super.key});
 
@@ -50,9 +49,8 @@ class ShopEmptyState extends ConsumerWidget {
   }
 }
 
-/// Shown when `shoppingListProvider` itself errors — a drift stream failing
-/// is not expected in practice, but it must never render as a silently empty
-/// list.
+/// Shown when `shoppingListProvider` itself errors: a failing drift stream is unexpected, but must never render
+/// as a silently empty list.
 class ShopErrorState extends StatelessWidget {
   const ShopErrorState({super.key});
 

@@ -1,5 +1,4 @@
-/// Pure presentation helpers shared by the intake screens, ported from
-/// the Expo app's `src/intake/presentation.ts` (see git history).
+/// Pure presentation helpers shared by the intake screens.
 library;
 
 const double _lowConfidenceThreshold = 0.7;

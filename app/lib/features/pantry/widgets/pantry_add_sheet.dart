@@ -7,14 +7,9 @@ import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
-/// The single entry point for all three intake modes (AC-PAN-03) — reachable
-/// whether the pantry is empty or full, unlike the RN app, where nothing
-/// routed to manual entry at all and "Describe" vanished the moment the
-/// pantry owned one item.
-///
-/// R-08/AC-AUTH-04: "Scan receipt" and "Describe purchase" both call the AI
-/// backend, so both are disabled while `aiFeaturesAvailableProvider` is
-/// false — "Manual entry" is a purely local write and stays available.
+/// The single entry point for all three intake modes, reachable whether the pantry is empty or full. "Scan
+/// receipt" and "Describe purchase" call the AI backend, so both are disabled while
+/// `aiFeaturesAvailableProvider` is false; "Manual entry" is a local write and stays available.
 class PantryAddSheet extends ConsumerWidget {
   const PantryAddSheet({super.key});
 

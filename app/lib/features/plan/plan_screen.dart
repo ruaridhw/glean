@@ -1,13 +1,6 @@
-/// The Plan tab: a week-scoped dinner plan (AC-PLAN-01/02) replacing RN's
-/// dateless "This Week", which never filtered on `planned_date`, let cooked
-/// meals occupy slots forever, and gated capacity on a *lifetime* entry
-/// count that eventually blocked every add, permanently
-/// (FLUTTER_MIGRATION.md §6 Plan).
-///
-/// See `providers/generate_week_controller.dart` for generation,
-/// `actions.dart` for the cooked/delete mutations, and
-/// `presentation.dart`/`compression.dart`/`food_groups.dart` for the ported
-/// pure logic this screen renders.
+/// The Plan tab: a week-scoped dinner plan. See `providers/generate_week_controller.dart` for generation,
+/// `actions.dart` for the cooked/delete mutations, and `presentation.dart`/`compression.dart`/`food_groups.dart`
+/// for the pure logic this screen renders.
 library;
 
 import 'dart:async';
@@ -145,12 +138,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
       pantryItemsProvider,
     );
 
-    // Surfaces generation's outcome exactly once per attempt — guarded by
-    // `wasPending` so this doesn't fire on the controller's own initial,
-    // never-pending `build()` state. Generation completion is the
-    // highest-value haptic moment in the app (§7); a failure (a guarded,
-    // aborted half-write per AC-PLAN-10) always surfaces here too, never
-    // silently.
+    // Surfaces generation's outcome exactly once per attempt, guarded by `wasPending` so it doesn't fire on the
+    // controller's initial, never-pending `build()` state. A failure (a guarded, aborted half-write) always
+    // surfaces here too.
     ref.listen<AsyncValue<int>>(generateWeekControllerProvider, (
       AsyncValue<int>? previous,
       AsyncValue<int> next,

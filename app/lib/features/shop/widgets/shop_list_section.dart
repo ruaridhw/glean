@@ -1,10 +1,6 @@
-/// The shopping list's body: skeleton/error/empty states, then the "to buy"
-/// and "in cart" sections (AC-SHOP-07's unified naming) each rendered as
-/// swipe-to-delete rows with an animated-closed gap on commit (AC-TRN-02 —
-/// inherited free from `Dismissible`, no `AnimatedList` needed; see
-/// `MealsScreen`'s identical choice and its comment on why the two would
-/// fight each other) and a fade/settle on insertion via [GleanListEntrance]
-/// (AC-TRN-02, R-10).
+/// The shopping list's body: skeleton/error/empty states, then the "to buy" and "in cart" sections, each rendered
+/// as swipe-to-delete rows. `Dismissible` animates the removal gap closed, so there is no `AnimatedList` (see
+/// `MealsScreen`), and rows fade/settle in via [GleanListEntrance].
 library;
 
 import 'package:flutter/material.dart';
@@ -113,8 +109,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: context.tokens.spacing.sm),
-      // Flutter's TextStyle has no text-transform (FINDINGS.md F-04) — the
-      // uppercase look RN got from CSS is applied explicitly here instead.
+      // Flutter's TextStyle has no text-transform, so the uppercase look is applied explicitly here.
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall,

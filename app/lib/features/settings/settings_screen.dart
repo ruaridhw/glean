@@ -1,14 +1,7 @@
-/// The Settings screen (FLUTTER_MIGRATION.md §6 "Settings & auth").
-///
-/// **Auto-save, no Save button (AC-SET-01).** Every control persists on its
-/// own commit point — a slider's release, a chip's tap, the max-time field's
-/// debounce — through [UserConfigRepository.save]. There is no separate
-/// "unsaved" copy of the form for switching tabs to silently discard (the RN
-/// dirty-state trap): [_SettingsContentState] seeds its local fields once
-/// from the `config` its parent already resolved, and from then on the only
-/// writer of that row is this screen itself, so the stream re-emitting after
-/// a save never fights with an in-progress edit (AC-DATA-04/05 — no
-/// `ref.invalidate` anywhere below; the stream already re-emits on its own).
+/// The Settings screen. Auto-save, no Save button: every control persists on its own commit point (a slider's
+/// release, a chip's tap, the max-time field's debounce) through [UserConfigRepository.save].
+/// [_SettingsContentState] seeds its local fields once from the resolved `config`, and thereafter this screen is
+/// the only writer of that row, so the stream re-emitting after a save never fights an in-progress edit.
 library;
 
 import 'dart:async';
@@ -127,10 +120,8 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
     return text.isEmpty ? null : int.tryParse(text);
   }
 
-  /// The single write path for every control (AC-SET-01/AC-SET-03).
-  /// [fireCommitHaptic] is false for dietary chips, which are on the
-  /// `selectionClick` rung, not `mediumImpact` (AC-HAP-05) — see
-  /// `DietaryFlagsControl`'s doc comment.
+  /// The single write path for every control. [fireCommitHaptic] is false for dietary chips, which are on the
+  /// `selectionClick` rung, not `mediumImpact`.
   Future<void> _persist({required bool fireCommitHaptic}) async {
     try {
       await ref.read(userConfigRepositoryProvider).save(_snapshot());
@@ -138,8 +129,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
       if (fireCommitHaptic) ref.read(hapticsProvider).mediumImpact();
     } catch (_) {
       if (!mounted) return;
-      // AC-SET-03: a config-save failure must surface. RN's `saveUserConfig`
-      // failing showed the user nothing at all.
+      // A config-save failure must surface to the user.
       GleanSnackBar.show(context, 'Could not save your settings. Try again.');
     }
   }
@@ -189,7 +179,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           tolerancePercent: (_tolerance * 100).round(),
         ),
         SizedBox(height: tokens.spacing.md),
-        // AC-UX-05: settings copy must state these values steer generation.
+        // Settings copy must state these values steer generation.
         Text(
           'These preferences steer how Glean plans your meals each week.',
           style: Theme.of(context).textTheme.bodyMedium,

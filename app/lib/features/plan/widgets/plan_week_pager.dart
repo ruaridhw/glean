@@ -1,6 +1,4 @@
-/// Week pagination (AC-PLAN-02): forward and backward arrows around the
-/// current week's label — RN had no equivalent at all, since "This Week"
-/// was the only week it could ever show.
+/// Week pagination: forward and backward arrows around the current week's label.
 library;
 
 import 'package:flutter/material.dart';

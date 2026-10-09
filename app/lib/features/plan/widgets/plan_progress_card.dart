@@ -1,7 +1,4 @@
-/// The "Dinner progress" card: an animated ring plus the "N left to plan"
-/// hint (FLUTTER_MIGRATION.md §7 — RN's SVG ring was fully static, so it
-/// teleported from 0/5 to 5/5 the instant a generation completed,
-/// AC-PLAN-12).
+/// The "Dinner progress" card: an animated ring plus the "N left to plan" hint.
 library;
 
 import 'dart:math' as math;
@@ -19,16 +16,13 @@ class PlanProgressCard extends StatelessWidget {
     required this.remaining,
   });
 
-  /// Total entries this week, cooked or not — a cooked meal still counts
-  /// towards this figure (it keeps the "you did it" satisfaction loop
-  /// alive, AC-PLAN-03's other half) even though it no longer counts
-  /// towards [remaining].
+  /// Total entries this week, cooked or not: a cooked meal still counts here though it no longer counts towards
+  /// [remaining].
   final int planned;
   final int target;
 
-  /// Per-week remaining capacity (already excludes cooked entries,
-  /// AC-PLAN-03/04) — see `planHint`'s doc comment for why this must be
-  /// passed in rather than re-derived from [planned]/[target] here.
+  /// Per-week remaining capacity (already excludes cooked entries); see `planHint` for why it is passed in rather
+  /// than re-derived.
   final int remaining;
 
   @override
@@ -81,12 +75,9 @@ class _PlanProgressRing extends StatelessWidget {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
 
     return TweenAnimationBuilder<double>(
-      // `begin: 0` only matters for the very first frame — see
-      // `skeleton.dart`'s identical note. On a later rebuild where
-      // `fraction` has changed, TweenAnimationBuilder animates from
-      // whichever value it last rendered towards the new `end`, which is
-      // exactly what turns a 0/5 -> 5/5 jump after generation into a
-      // smooth sweep instead of a teleport (AC-PLAN-12).
+      // `begin: 0` only matters for the first frame (see `skeleton.dart`). On a later rebuild where `fraction`
+      // changed, TweenAnimationBuilder animates from the last rendered value, so a 0/5 -> 5/5 jump after generation
+      // is a smooth sweep.
       tween: Tween<double>(begin: 0, end: fraction),
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeOutCubic,

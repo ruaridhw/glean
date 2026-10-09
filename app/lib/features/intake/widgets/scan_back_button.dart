@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The always-present back affordance on every Scan screen phase (AC-PAN-13):
-/// permission-denied and permission-pending previously had no way out at all
-/// — a hard dead end after a permanent deny. This renders identically across
-/// every phase so there is exactly one place a user learns to look for it.
+/// The always-present back affordance on every Scan screen phase, so permission-denied and
+/// permission-pending are never a dead end. Rendered identically across phases.
 class ScanBackButton extends StatelessWidget {
   const ScanBackButton({super.key, required this.onPressed});
 

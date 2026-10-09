@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The "honest progress" body (AC-PAN-06): one real indeterminate indicator,
-/// no fake staged steps and no artificial delay after the API returns — the
-/// RN app's three time-driven steps desynced from the real request and added
-/// ~2.3s of guaranteed latency on top of it. A cancel is always reachable, so
-/// a slow request never becomes a dead end.
+/// The "honest progress" body: one real indeterminate indicator, no fake staged steps and no artificial delay
+/// after the API returns. A cancel is always reachable, so a slow request is never a dead end.
 class ScanProgressBody extends StatelessWidget {
   const ScanProgressBody({super.key, required this.onCancel});
 
@@ -40,10 +37,7 @@ class ScanProgressBody extends StatelessWidget {
   }
 }
 
-/// The error body once the API call fails or times out (AC-PAN-14): a scan
-/// failure must never hang forever and must never be silent — the RN
-/// `scan-progress` screen had no try/catch and no timeout at all, hanging on
-/// "Almost done…" with no way back.
+/// The error body once the API call fails or times out: a scan failure must never hang or be silent.
 class ScanProgressError extends StatelessWidget {
   const ScanProgressError({
     super.key,

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The denied/permanently-denied camera-permission states (AC-PAN-13). Both
-/// render the same shape — an explanation plus one recovery action — since
-/// the only difference is *which* action can recover them: a plain re-prompt
-/// while the OS will still ask, or a trip to Settings once it won't.
+/// The denied/permanently-denied camera-permission states. Both render an explanation plus one recovery action;
+/// they differ only in which action can recover: a re-prompt while the OS will still ask, or a trip to Settings
+/// once it won't.
 class CameraPermissionPrompt extends StatelessWidget {
   const CameraPermissionPrompt({
     super.key,

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// One row in the live search results list. Tapping it previews the recipe
-/// (AC-MEAL-01) — it never persists anything by itself; that is entirely the
-/// caller's (`MealsScreen`) job.
+/// One row in the live search results list. Tapping previews the recipe; persisting is the caller's
+/// (`MealsScreen`) job.
 class SearchResultCard extends StatelessWidget {
   const SearchResultCard({
     required this.result,

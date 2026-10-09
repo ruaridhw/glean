@@ -1,13 +1,5 @@
-/// Ported from the Expo app's `src/meals/presentation.ts` (see git history)
-/// — pure, unit-testable formatting helpers (FLUTTER_MIGRATION.md's
-/// "Highest-value logic to port faithfully" table).
-///
-/// `parseInstructionSteps` has no Dart equivalent to port: it existed in RN
-/// only to decode a JSON-text `instructions` column into typed steps at the
-/// UI layer. Here that decode already happened once, at the data/API
-/// boundary — `RecipeView.instructions` (drift) and `RecipeOut.instructions`
-/// (the API model) both arrive as typed `List<...Step>` already, so there is
-/// no JSON left for a screen to parse.
+/// Pure, unit-testable formatting helpers for recipes. `RecipeView.instructions` and `RecipeOut.instructions`
+/// arrive as typed step lists, so no screen parses instruction JSON.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,9 +7,7 @@ import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/data/models/recipe_view.dart';
 
-/// One icon+label pair for a recipe's meta row (time / servings /
-/// difficulty) — ported 1:1 from RN's `getRecipeMeta`. Icons are built-in
-/// Material `_rounded` glyphs (AC-DS-06), not the RN app's Ionicons names.
+/// One icon+label pair for a recipe's meta row (time / servings / difficulty), using Material `_rounded` icons.
 class RecipeMetaItem {
   const RecipeMetaItem({required this.icon, required this.label});
 
@@ -46,8 +36,7 @@ List<RecipeMetaItem> getRecipeMeta({
   ];
 }
 
-/// Cuisine + dietary flags as a flat tag list — ported 1:1 from RN's
-/// `getRecipeTags`.
+/// Cuisine + dietary flags as a flat tag list.
 List<String> getRecipeTags({
   required String? cuisine,
   required List<String> dietaryFlags,
@@ -78,10 +67,8 @@ class IngredientLine {
   final String? preparation;
   final bool isOptional;
 
-  /// null = pantry state unknown — an unsaved preview has no resolved
-  /// ingredient identity to match against the pantry yet, so the badge is
-  /// hidden rather than guessed (mirrors RN's graceful degrade for a failed
-  /// pantry lookup, `[id].tsx`'s `pantryIds: Set<number> | null`).
+  /// null = pantry state unknown: an unsaved preview has no resolved ingredient identity to match, so the badge
+  /// is hidden rather than guessed.
   final bool? inPantry;
 }
 
@@ -95,7 +82,7 @@ const Set<String> _compactUnits = <String>{
   'cm',
 };
 
-/// Ported 1:1 from RN's `formatRecipeIngredient`.
+/// Formats a recipe ingredient line.
 String formatIngredientLine(IngredientLine ingredient) {
   final String preparation = ingredient.preparation != null
       ? ', ${ingredient.preparation}'
@@ -150,11 +137,10 @@ class RecipeDetailData {
   final String title;
   final List<String> tags;
 
-  /// AC-MEAL-04: surfaced prominently — stored and shown nowhere in the RN
-  /// app.
+  /// Surfaced prominently on the detail screen.
   final List<String> notSuitableFor;
 
-  /// AC-MEAL-05: surfaced as tappable attribution for imported recipes.
+  /// Shown as tappable attribution for imported recipes.
   final String? sourceUrl;
   final int? totalTimeMins;
   final int? activeTimeMins;
@@ -162,10 +148,8 @@ class RecipeDetailData {
   final List<IngredientLine> ingredients;
   final List<InstructionLine> instructions;
 
-  /// Built from a saved-library recipe. [pantryIngredientIds] is `null`
-  /// while the pantry lookup hasn't resolved (or failed) — every ingredient
-  /// line's `inPantry` degrades to `null` in that case, matching RN's
-  /// graceful degrade rather than guessing "to buy".
+  /// Built from a saved-library recipe. [pantryIngredientIds] is `null` while the pantry lookup hasn't resolved
+  /// (or failed); every line's `inPantry` is then `null` rather than guessing "to buy".
   factory RecipeDetailData.fromSaved({
     required RecipeView recipe,
     required List<RecipeIngredientView> ingredients,
@@ -232,10 +216,8 @@ class RecipeDetailData {
   }
 }
 
-/// Ported from RN's `getRecipeSearchErrorMessage` (`search.tsx`): a 5xx (or
-/// other server-side rejection) reads differently from "can't reach the
-/// server at all" — [GleanApiClient] already gives us that distinction as a
-/// typed exception, where RN had to sniff a plain `status` field.
+/// A 5xx (or other server-side rejection) reads differently from "can't reach the server at all"; [GleanApiClient]
+/// already draws that distinction as a typed exception.
 String describeRecipeSearchError(Object error) {
   if (error is ApiAuthException) {
     return 'Your session has expired. Sign in again to search recipes.';

@@ -1,5 +1,5 @@
-/// Corpus generation is one pending operation: fetch/save first, then persist
-/// entries and shopping gaps in one transaction (AC-PLAN-06/09/10).
+/// Corpus generation is one pending operation: fetch/save first, then persist entries and shopping gaps in one
+/// transaction.
 library;
 
 import 'dart:async';

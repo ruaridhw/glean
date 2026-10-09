@@ -1,14 +1,6 @@
-/// The saved-recipe detail screen: shows the dish name in the header
-/// (AC-MEAL-06), a real save/unsave bookmark toggle (AC-MEAL-02), and a
-/// same-screen "Add to plan" mutation with no navigation and no nav param
-/// (AC-MEAL-08/09, FINDINGS.md F-05 — the RN `add_recipe_id` re-add-on-focus
-/// bug has no equivalent here to reintroduce).
-///
-/// Reused by both [MealDetailScreen] (reached via `go_router`, keyed by the
-/// saved recipe's local id) and `RecipePreviewScreen` once a previewed
-/// recipe has been saved — at that point a preview simply *becomes* this
-/// screen, so there is only one implementation of "what a saved recipe looks
-/// like".
+/// The saved-recipe detail screen: dish name in the header, a save/unsave bookmark toggle, and a same-screen
+/// "Add to plan" mutation with no navigation and no nav param. Reused by [MealDetailScreen] (via `go_router`)
+/// and by `RecipePreviewScreen` once a previewed recipe is saved.
 library;
 
 import 'package:flutter/material.dart';
@@ -58,11 +50,8 @@ class SavedRecipeDetail extends ConsumerWidget {
               )
             : recipeAsync.when(
                 data: (RecipeView? recipe) {
-                  // AC-MEAL-12: a missing recipe (never existed for this user, or
-                  // was deleted while this screen was open) is a recoverable error,
-                  // never a permanent spinner — reusing `RouteErrorScreen` per its
-                  // own doc comment rather than calling `pop()` on a possibly-empty
-                  // stack.
+                  // A missing recipe (never existed for this user, or deleted while open) is a recoverable error, never a
+                  // permanent spinner: reuse `RouteErrorScreen` rather than `pop()` on a possibly-empty stack.
                   if (recipe == null) {
                     return const RouteErrorScreen(
                       message: 'This recipe could not be found.',
@@ -131,7 +120,7 @@ class _SavedRecipeDetailBodyState
 
     return Scaffold(
       appBar: AppBar(
-        // AC-MEAL-06: the dish name, not a static "Recipe".
+        // The dish name, not a static "Recipe".
         title: Text(recipe.title, overflow: TextOverflow.ellipsis),
         actions: <Widget>[
           IconButton(
@@ -180,9 +169,8 @@ class _SavedRecipeDetailBodyState
     ref.read(hapticsProvider).mediumImpact();
     final deleted = await deleteRecipeWithUndo(context, ref, recipe);
     if (!deleted || !context.mounted) return;
-    // Leaving a now-deleted recipe's own detail screen is the same "recover
-    // safely, never pop an empty stack" rule `RouteErrorScreen` follows —
-    // this route may have been reached via a deep link with nothing to pop.
+    // Leaving a now-deleted recipe's detail screen follows `RouteErrorScreen`'s rule: this route may have been
+    // reached via a deep link with nothing to pop.
     if (context.canPop()) {
       context.pop();
     } else {
@@ -190,9 +178,8 @@ class _SavedRecipeDetailBodyState
     }
   }
 
-  /// AC-MEAL-08/09: plan-full and already-planned are both checked — and, if
-  /// triggered, reported via snackbar — *before* any mutation is attempted,
-  /// and the user never leaves this screen either way.
+  /// Plan-full and already-planned are both checked, and reported via snackbar, before any mutation is
+  /// attempted; the user never leaves this screen either way.
   Future<void> _onAddToPlan(
     BuildContext context,
     WidgetRef ref, {

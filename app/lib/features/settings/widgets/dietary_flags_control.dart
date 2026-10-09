@@ -4,15 +4,9 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../settings_presentation.dart';
 
-/// Toggleable dietary-flag chips shared by Settings and the first-run
-/// onboarding flow (FLUTTER_MIGRATION.md §6). Built on the themed
-/// `FilterChip` (`chipTheme` in `theme.dart`) rather than a hand-rolled pill
-/// `Pressable` — AC-DS-05.
-///
-/// Each tap fires exactly one `selectionClick` (AC-HAP-05 — "dietary chips
-/// ... → selectionClick"), never `mediumImpact`: a chip toggle is a
-/// selection change, not the separate "committed save" rung, even though the
-/// caller does persist it immediately (see `SettingsScreen`'s doc comment).
+/// Toggleable dietary-flag chips shared by Settings and onboarding, on the themed `FilterChip`. Each tap fires
+/// exactly one `selectionClick`, never `mediumImpact`: a chip toggle is a selection change, not a committed
+/// save, even though the caller persists it immediately.
 class DietaryFlagsControl extends ConsumerWidget {
   const DietaryFlagsControl({
     super.key,

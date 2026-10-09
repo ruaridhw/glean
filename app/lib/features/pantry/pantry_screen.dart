@@ -1,11 +1,5 @@
-/// The Pantry tab (FLUTTER_MIGRATION.md §6 Pantry) — the landing tab
-/// (AC-SET-05).
-///
-/// Reads are a `StreamProvider` over drift `.watch()` (AC-DATA-04): there is
-/// no on-focus reload and no manual `loading` flag, so — unlike the RN
-/// screen, which set `loading = true` unconditionally on every focus — the
-/// skeleton is structurally impossible to re-flash on a tab switch; it can
-/// only ever show before the very first stream event.
+/// The Pantry tab, the landing tab. Reads are a `StreamProvider` over drift `.watch()`, so there is no on-focus
+/// reload and no manual `loading` flag: the skeleton can only show before the very first stream event.
 library;
 
 import 'dart:async' show unawaited;

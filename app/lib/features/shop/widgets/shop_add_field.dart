@@ -1,7 +1,5 @@
-/// The pinned manual-add field (AC-SHOP-08): RN's `ShoppingAddControls` was
-/// the `SectionList`'s `ListHeaderComponent`, so it scrolled out of view
-/// along with the rows. This widget is placed by `ShopScreen` above the
-/// scrollable list, never inside it, so it can't scroll away.
+/// The pinned manual-add field. `ShopScreen` places it above the scrollable list, never inside it, so it can't
+/// scroll away.
 library;
 
 import 'package:flutter/material.dart';
@@ -41,10 +39,8 @@ class _ShopAddFieldState extends ConsumerState<ShopAddField> {
 
   bool get _canAdd => toRequiredSubmittedText(_controller.text) != null;
 
-  /// AC-SHOP-09: RN's `setAdding(true)` had no `try`/`finally`, so any DB
-  /// failure left the add button permanently disabled with no error shown.
-  /// Every exit path here — success, thrown error, or an early return —
-  /// resets `_adding`, and a failure surfaces inline instead of vanishing.
+  /// Every exit path here (success, thrown error, early return) resets `_adding`, and a failure surfaces inline
+  /// instead of vanishing, so a DB error can't leave the add button permanently disabled.
   Future<void> _submit() async {
     final String? name = toRequiredSubmittedText(_controller.text);
     if (name == null || _adding) return;
@@ -58,7 +54,7 @@ class _ShopAddFieldState extends ConsumerState<ShopAddField> {
           .read(shoppingRepositoryProvider)
           .addManualItem(userId: ref.read(currentUserIdProvider), name: name);
       if (!mounted) return;
-      ref.read(hapticsProvider).mediumImpact(); // data commit (AC-HAP-05).
+      ref.read(hapticsProvider).mediumImpact(); // data commit.
       _controller.clear();
     } catch (_) {
       if (!mounted) return;

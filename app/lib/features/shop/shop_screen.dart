@@ -1,13 +1,7 @@
-/// The Shop tab — FLUTTER_MIGRATION.md §6 "Shop". Replaces the Expo app's
-/// `app/(tabs)/shop/index.tsx` (see git history).
-///
-/// The two intake entry points on this screen ("Describe list" and "Scan
-/// receipt") both push into the shared intake flow the router already wires
-/// (`lib/features/intake/**`, owned by the Pantry+Intake wave) rather than
-/// building a second describe/review screen here (§6 — "one review screen,
-/// not two"). `ScanArgs.returnToShop`/`ReviewArgs.returnToShop` is how that
-/// flow knows to call `ShoppingRepository.resolveCheckout` on confirm
-/// instead of a plain pantry commit — see `intake_params.dart`.
+/// The Shop tab. Its two intake entry points ("Describe list" and "Scan receipt") push into the shared intake
+/// flow rather than building a second describe/review screen. `ScanArgs.returnToShop`/`ReviewArgs.returnToShop`
+/// tells that flow to call `ShoppingRepository.resolveCheckout` on confirm instead of a plain pantry commit; see
+/// `intake_params.dart`.
 library;
 
 import 'package:flutter/material.dart';
@@ -35,9 +29,7 @@ class ShopScreen extends ConsumerStatefulWidget {
 }
 
 class _ShopScreenState extends ConsumerState<ShopScreen> {
-  // Guards "Done shopping" against a double-tap firing the checkout twice —
-  // there's no network call to time out, but the same discipline the
-  // add-item flow needs (AC-SHOP-09) applies to any button that commits data.
+  // Guards "Done shopping" against a double-tap firing the checkout twice.
   bool _completingCheckout = false;
 
   Future<void> _doneShopping(List<ShoppingListItemView> checkedItems) async {
@@ -76,13 +68,12 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
         if (item.isChecked) item,
     ];
     final int uncheckedCount = items.length - checkedItems.length;
-    // R-08/AC-AUTH-04: both "Describe list" and "Scan receipt" call the AI
-    // backend, so both are disabled while a session is expired — the
-    // [SignedOutBanner] mounted above every tab is what explains why.
+    // Both "Describe list" and "Scan receipt" call the AI backend, so both are disabled while a session is
+    // expired; the [SignedOutBanner] above every tab explains why.
     final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return Scaffold(
-      // AC-SHOP-10: so the keyboard never covers the pinned add field.
+      // So the keyboard never covers the pinned add field.
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Shopping'),

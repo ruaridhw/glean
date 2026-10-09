@@ -3,9 +3,8 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../presentation.dart';
 
-/// The ingredients card — each row a formatted [IngredientLine] plus its
-/// "in pantry"/"to buy" badge (AC-MEAL-11), hidden when pantry state is
-/// unresolved (`line.inPantry == null`).
+/// The ingredients card: each row a formatted [IngredientLine] plus its "in pantry"/"to buy" badge, hidden when
+/// pantry state is unresolved (`line.inPantry == null`).
 class IngredientsSection extends StatelessWidget {
   const IngredientsSection({required this.ingredients, super.key});
 

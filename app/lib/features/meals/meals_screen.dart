@@ -1,5 +1,4 @@
-/// The Meals tab: a deliberately curated recipe library (Saved) plus one
-/// real inline search affordance (Search) — FLUTTER_MIGRATION.md §6 "Meals".
+/// The Meals tab: a curated recipe library (Saved) plus one inline search affordance (Search).
 library;
 
 import 'package:flutter/material.dart';

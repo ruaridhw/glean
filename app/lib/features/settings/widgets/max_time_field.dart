@@ -4,18 +4,9 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../settings_presentation.dart';
 
-/// The "max active cooking time" field.
-///
-/// Two RN gaps this closes (AC-UX-05):
-/// - a **"minutes" unit** is always visible (`suffixText`), not implied;
-/// - the **1–480 bound is shown before it's violated** — [helperText] states
-///   it unconditionally, replaced by [errorText] only once the current input
-///   is actually out of range, rather than the bound appearing for the first
-///   time as an error message.
-///
-/// [FilteringTextInputFormatter.digitsOnly] rules out the RN bug where
-/// non-numeric input could round-trip into a persisted `NaN` (§11) — there
-/// is no non-digit character this field can ever contain.
+/// The "max active cooking time" field. A "minutes" unit is always visible (`suffixText`), and the 1–480 bound
+/// is shown before it's violated: [helperText] states it unconditionally, replaced by [errorText] once the
+/// input is out of range. [FilteringTextInputFormatter.digitsOnly] means the field can never hold a non-digit.
 class MaxTimeField extends StatelessWidget {
   const MaxTimeField({
     super.key,

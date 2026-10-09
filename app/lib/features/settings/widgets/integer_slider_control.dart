@@ -2,23 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// A controlled, whole-number stepping slider shared by Settings and the
-/// first-run onboarding flow (FLUTTER_MIGRATION.md §6 — "reuse the same
-/// controls as Settings rather than duplicating them").
+/// A controlled, whole-number stepping slider shared by Settings and onboarding. Two load-bearing behaviours:
 ///
-/// Two behaviours are load-bearing here, both from AC-SET-02/AC-HAP-05:
-/// - Every step the thumb passes through while dragging fires exactly one
-///   `selectionClick` (compared against the *previous* value, so holding
-///   still mid-drag never re-fires).
-/// - [onCommitted] — the only place a caller should persist anything — is
-///   called once, on release ([Slider.onChangeEnd]), never per drag frame.
-///   This is the direct fix for the RN sliders' `onValueChange` writing
-///   state (and re-rendering) on every drag frame with no
-///   `onSlidingComplete`.
+/// - Every step the thumb passes through while dragging fires exactly one `selectionClick` (compared against the
+///   previous value, so holding still never re-fires).
+/// - [onCommitted], the only place a caller should persist, is called once on release ([Slider.onChangeEnd]),
+///   never per drag frame.
 ///
-/// Deliberately stateless about the *committed* value — the caller
-/// (Settings/onboarding) owns that, so switching away and back always shows
-/// exactly what was last persisted, never a separate in-flight copy.
+/// Stateless about the committed value: the caller owns it, so switching away and back shows what was last
+/// persisted.
 class IntegerSliderControl extends ConsumerWidget {
   const IntegerSliderControl({
     super.key,

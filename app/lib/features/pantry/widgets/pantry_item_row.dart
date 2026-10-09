@@ -11,9 +11,7 @@ GleanBadgeTone _toneFor(ExpiryTone tone) => switch (tone) {
   ExpiryTone.later => GleanBadgeTone.neutral,
 };
 
-/// One pantry row: swipe-to-delete (AC-UX-01 — exactly one delete
-/// affordance, replacing RN's row-swipe **and** trash `IconButton` on the
-/// same row) and a tap opens the quantity/unit/expiry sheet (AC-PAN-07).
+/// One pantry row: swipe-to-delete (the only delete affordance) and a tap opens the quantity/unit/expiry sheet.
 class PantryItemRow extends StatelessWidget {
   const PantryItemRow({super.key, required this.item, required this.onDelete});
 

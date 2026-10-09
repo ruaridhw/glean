@@ -1,9 +1,6 @@
-/// The shared intake review screen (AC-PAN-05) — one screen, one look, one
-/// set of verbs and one numeric fallback rule for both pantry and shop
-/// intake, parameterised by [ReviewArgs.destination]. Fixes three RN defects
-/// at once (§11): decimal quantities are freely typeable (AC-PAN-08), an
-/// invalid quantity blocks Confirm rather than silently falling back to `1`
-/// or `0` (AC-PAN-09), and the commit is atomic (AC-PAN-10).
+/// The shared intake review screen: one screen and one numeric fallback rule for both pantry and shop intake,
+/// parameterised by [ReviewArgs.destination]. Decimal quantities are freely typeable, an invalid quantity
+/// blocks Confirm rather than falling back to `1` or `0`, and the commit is atomic.
 library;
 
 import 'package:flutter/material.dart';
@@ -77,8 +74,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   bool get _isPantry => widget.args.destination == ReviewDestination.pantry;
 
-  /// A pantry row additionally needs a category — expiry inference has no
-  /// basis without one (FINDINGS.md F-07/F-08) and
+  /// A pantry row additionally needs a category: expiry inference has no basis without one, and
   /// `PantryRepository.addItem` requires it. Shop rows never need this.
   bool _rowIsValid(ReviewRow row) {
     if (row.parsedQuantity == null) return false;
@@ -164,9 +160,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      // R-23: a unit mismatch gets its own targeted message — the generic
-      // "try again" below is actively misleading for it, since retrying the
-      // same incoming unit fails identically every time.
+      // A unit mismatch gets its own targeted message: the generic "try again" below is misleading, since retrying
+      // the same unit fails identically.
       GleanSnackBar.show(
         context,
         e is PantryUnitMismatchException
@@ -187,14 +182,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     );
   }
 
-  /// AC-PAN-10: one transaction via `PantryRepository.addItems` — a failure
-  /// partway through persists nothing, so a retry can't double quantities.
-  /// AC-PAN-11: the shopping list is only ever touched when this pantry
-  /// review was reached via Shop's "scan receipt" (`returnToShop`), and even
-  /// then only the ingredients this batch actually resolved are checked off
-  /// (AC-SHOP-01) — never an unconditional `completeCheckout`.
-  /// Pass raw units: repositories default blanks without seeding the
-  /// ingredient's canonical unit from an implicit value (R-23).
+  /// One transaction via `PantryRepository.addItems`: a failure partway persists nothing, so a retry can't double
+  /// quantities. The shopping list is only touched when this pantry review was reached via Shop's "scan receipt"
+  /// (`returnToShop`), and then only the ingredients this batch resolved are checked off. Pass raw units:
+  /// repositories default blanks without seeding the ingredient's canonical unit from an implicit value.
   Future<void> _confirmPantry(String userId, List<ReviewRow> accepted) async {
     final List<PantryItemInput> items = <PantryItemInput>[
       for (final ReviewRow row in accepted)

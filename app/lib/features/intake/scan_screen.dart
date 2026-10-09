@@ -1,7 +1,5 @@
-/// The receipt camera (FLUTTER_MIGRATION.md §6 Pantry). Reached from the
-/// pantry `+` sheet or Shop's checkout bar (`args.returnToShop`); presented
-/// outside the tab shell (`router.dart`) so a mid-scan tab tap can no longer
-/// silently lose the capture (AC-PAN-04).
+/// The receipt camera. Reached from the pantry `+` sheet or Shop's checkout bar (`args.returnToShop`); presented
+/// outside the tab shell (`router.dart`) so a mid-scan tab tap can't lose the capture.
 library;
 
 import 'dart:async' show unawaited;

@@ -1,15 +1,7 @@
-/// The camera seam for the Scan screen.
-///
-/// `flutter test` runs headless with no camera hardware and no platform
-/// channels registered for `package:camera`/`permission_handler`, so
-/// `ScanScreen` never talks to those packages directly — it goes through
-/// this interface, exactly the pattern `Haptics`/`hapticsProvider` already
-/// establishes for the same reason. Production gets [SystemReceiptCamera];
-/// widget tests substitute a fake that can simulate every permission state
-/// and a capture failure without touching a real device (AC-TEST-16 notes
-/// the *live* preview itself is integration-suite territory — this seam is
-/// what makes the permission-state and capture-failure branches testable
-/// here instead).
+/// The camera seam for the Scan screen. `flutter test` has no camera hardware or registered platform channels
+/// for `package:camera`/`permission_handler`, so `ScanScreen` goes through this interface, as `Haptics` does.
+/// Production gets [SystemReceiptCamera]; widget tests substitute a fake that can simulate every permission
+/// state and a capture failure.
 library;
 
 import 'dart:typed_data';
@@ -18,15 +10,12 @@ import 'package:camera/camera.dart' as camera_pkg;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 
-/// Camera permission state, collapsed from `permission_handler`'s richer
-/// [ph.PermissionStatus] to the three branches the Scan screen actually
-/// renders differently (AC-PAN-13): usable, recoverably denied (can
-/// re-prompt), and permanently denied (must fall through to OS settings).
+/// Camera permission state, collapsed to the three branches the Scan screen renders differently: usable,
+/// recoverably denied (can re-prompt), and permanently denied (must fall through to OS settings).
 enum CameraPermissionState { granted, denied, permanentlyDenied }
 
-/// Thrown by [ReceiptCameraController.capture] on any failure — a missing
-/// controller, a platform exception, an empty frame. Never left uncaught
-/// (AC-PAN-14: the RN app's `takePictureAsync` throwing was silent).
+/// Thrown by [ReceiptCameraController.capture] on any failure: a missing controller, a platform exception,
+/// an empty frame.
 class ReceiptCaptureException implements Exception {
   const ReceiptCaptureException(this.message);
 
@@ -36,9 +25,8 @@ class ReceiptCaptureException implements Exception {
   String toString() => 'ReceiptCaptureException: $message';
 }
 
-/// Drives the Scan screen's camera permission and capture lifecycle. One
-/// instance per screen visit — callers create it in `initState` and
-/// [dispose] it in `dispose`.
+/// Drives the Scan screen's camera permission and capture lifecycle; one instance per screen visit (create in
+/// `initState`, [dispose] in `dispose`).
 abstract class ReceiptCameraController {
   /// Checks the current permission without prompting the user.
   Future<CameraPermissionState> checkPermission();
@@ -54,11 +42,8 @@ abstract class ReceiptCameraController {
   /// [CameraPermissionState.granted].
   Future<void> initialize();
 
-  /// The live camera preview widget, valid after [initialize] completes.
   Widget buildPreview();
 
-  /// Captures a still frame as JPEG bytes, or throws
-  /// [ReceiptCaptureException] on failure.
   Future<Uint8List> capture();
 
   Future<void> dispose();
@@ -141,8 +126,6 @@ class SystemReceiptCamera implements ReceiptCameraController {
   }
 }
 
-/// DI seam: production code never overrides this. Widget tests inject a fake
-/// factory via `ProviderScope(overrides: [...])`, mirroring `hapticsProvider`.
-/// A factory (not a shared instance) because a controller is per-screen-visit
-/// stateful — each `ScanScreen` creates and disposes its own.
+/// DI seam: production never overrides this; widget tests inject a fake factory. A factory because each
+/// `ScanScreen` creates and disposes its own stateful controller.
 typedef ReceiptCameraControllerFactory = ReceiptCameraController Function();

@@ -1,11 +1,6 @@
-/// "Describe what you bought" — the text-only sibling of receipt scan
-/// reachable from the pantry `+` sheet
-/// whether the pantry is empty or full. Always lands on the
-/// shared review screen with `destination: pantry` and `returnToShop: false`
-/// — this entry point only ever exists inside the Pantry tab.
-///
-/// The form UI itself is shared with `ShopDescribeScreen` via
-/// `widgets/describe_form.dart` — see that file's doc comment for why.
+/// "Describe what you bought": the text-only sibling of receipt scan, reachable from the pantry `+` sheet.
+/// Always lands on the shared review screen with `destination: pantry` and `returnToShop: false`. The form UI is
+/// shared with `ShopDescribeScreen` via `widgets/describe_form.dart`.
 library;
 
 import 'package:flutter/material.dart';

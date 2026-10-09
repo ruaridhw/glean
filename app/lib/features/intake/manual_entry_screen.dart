@@ -1,12 +1,6 @@
-/// Manual pantry entry (FLUTTER_MIGRATION.md §6 Pantry) — dead code in the
-/// RN app (nothing routed to it); reachable here from the `+` sheet whether
-/// the pantry is empty or full (AC-PAN-03).
-///
-/// Unlike scan/describe, there is no LLM classification behind a manually
-/// typed item, so `PantryRepository.addItem` has nothing to infer a category
-/// from — this screen is the one intake surface that must ask for it
-/// directly (FINDINGS.md F-07/F-08), which is also what lets expiry
-/// inference (AC-PAN-01) fire for a manually-added item at all.
+/// Manual pantry entry, reachable from the `+` sheet whether the pantry is empty or full. With no LLM
+/// classification behind a typed item, this is the one intake surface that must ask for a category directly,
+/// which is also what lets expiry inference fire.
 library;
 
 import 'package:flutter/material.dart';
@@ -70,9 +64,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
       context.goNamed(AppRoutes.pantry.name);
     } catch (e) {
       if (!mounted) return;
-      // R-23: a unit mismatch gets its own targeted message — the generic
-      // "try again" below is misleading for it, since retrying the same
-      // chosen unit fails identically every time.
+      // A unit mismatch gets its own targeted message: the generic "try again" below is misleading, since retrying
+      // the same unit fails identically.
       GleanSnackBar.show(
         context,
         e is PantryUnitMismatchException
@@ -80,8 +73,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
             : 'Could not save this item. Try again.',
       );
     } finally {
-      // Always clears — an RN bug left the add button permanently disabled
-      // on any DB error because `setAdding(true)` had no `try/finally`.
+      // Always clears, so a DB error can't leave the add button permanently disabled.
       if (mounted) setState(() => _saving = false);
     }
   }

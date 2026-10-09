@@ -1,9 +1,6 @@
-/// "Describe your shopping list" — the text-only sibling of Shop's own
-/// receipt-scan capture (FLUTTER_MIGRATION.md §6), reached from Shop's `+`
-/// entry point. Always lands on the shared review screen with
-/// `destination: shop`, carrying through any clarifying questions the parse
-/// couldn't resolve on its own.
-/// The form UI itself is shared with `PantryDescribeScreen` via
+/// "Describe your shopping list": the text-only sibling of Shop's receipt scan, reached from Shop's `+` entry
+/// point. Always lands on the shared review screen with `destination: shop`, carrying through any clarifying
+/// questions the parse couldn't resolve. The form UI is shared with `PantryDescribeScreen` via
 /// `widgets/describe_form.dart`.
 library;
 

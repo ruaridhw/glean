@@ -1,15 +1,7 @@
-/// First-run setup (FLUTTER_MIGRATION.md §6, AC-UX-04) — new; there is no
-/// onboarding today. Captures dinners/week, servings and dietary flags —
-/// the values that steer meal-plan generation and, absent this screen, sit
-/// at their compile-time defaults forever — then offers receipt-scan on a
-/// final step of its own.
-///
-/// **Short and genuinely skippable**: four steps, a "Skip" escape hatch
-/// visible on every one of them, and reused controls (`IntegerSliderControl`,
-/// `DietaryFlagsControl`) rather than a bespoke duplicate set (§6 — "reuse
-/// the same controls as Settings"). See `onboarding_gate.dart` for how this
-/// screen is wired into real navigation (`OnboardingGate`, in the router's
-/// tab-shell builder).
+/// First-run setup: captures dinners/week, servings and dietary flags (which steer meal-plan generation and
+/// otherwise stay at their defaults), then offers receipt-scan on a final step of its own. Short and skippable:
+/// four steps, a "Skip" on every one, and the same controls as Settings (`IntegerSliderControl`,
+/// `DietaryFlagsControl`). Wired in by `OnboardingGate`.
 library;
 
 import 'dart:async';
@@ -47,10 +39,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     setState(() => _step = next);
   }
 
-  /// The single exit path, however it's reached: the top "Skip" (any step,
-  /// discards everything captured so far), "I'll do this later" (keeps what
-  /// was captured), or "Scan a receipt" (keeps it, and continues into
-  /// receipt-scan per AC-UX-04).
+  /// The single exit path, however it's reached: the top "Skip" (any step, discards everything captured so far),
+  /// "I'll do this later" (keeps what was captured), or "Scan a receipt" (keeps it, then continues into
+  /// receipt-scan).
   Future<void> _finish({
     required bool persistCaptured,
     required bool navigateToScan,

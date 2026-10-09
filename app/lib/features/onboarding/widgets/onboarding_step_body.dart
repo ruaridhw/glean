@@ -6,12 +6,8 @@ import '../../settings/widgets/dietary_flags_control.dart';
 import '../../settings/widgets/integer_slider_control.dart';
 import 'onboarding_step_scaffold.dart';
 
-/// Whichever question is current (AC-DS-14 — extracted into its own
-/// `const`-constructible class rather than an `OnboardingScreen` builder
-/// method, per R-12: a builder method shares its parent's rebuild scope, an
-/// extracted class gets its own). Keyed by [step] at the call site so
-/// `AnimatedSwitcher` still detects a step change and cross-fades between
-/// them.
+/// Whichever question is current, as its own `const` class for its own rebuild scope. Keyed by [step] at the
+/// call site so `AnimatedSwitcher` detects a step change and cross-fades.
 class OnboardingStepBody extends StatelessWidget {
   const OnboardingStepBody({
     required super.key,

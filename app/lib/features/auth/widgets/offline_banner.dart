@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// Network presence, not an Internet-reachability promise. Mirrors Expo's
-/// isConnected banner; unknown/plugin failure is not claimed to be offline.
+/// Network presence, not an Internet-reachability promise; unknown/plugin failure is not claimed to be offline.
 final offlineProvider = StreamProvider<bool>((ref) async* {
   final network = Connectivity();
   yield (await network.checkConnectivity()).contains(ConnectivityResult.none);

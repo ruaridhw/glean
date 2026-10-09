@@ -1,7 +1,5 @@
-/// The Search segment's content: one real inline search input, live results,
-/// empty/no-results/error states, and the import-from-URL affordance
-/// (AC-MEAL-07/10). Replaces the RN app's fake search pill *and* its
-/// separate pushed search screen — there is exactly one search affordance.
+/// The Search segment's content: one inline search input, live results, empty/no-results/error states, and the
+/// import-from-URL affordance.
 library;
 
 import 'dart:async';
@@ -53,9 +51,8 @@ class _MealsSearchPanelState extends ConsumerState<MealsSearchPanel> {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final String query = _controller.text.trim();
-    // R-08/AC-AUTH-04: both recipe search and URL import call the AI
-    // backend, so both are disabled while a session is expired — the
-    // [SignedOutBanner] mounted above every tab is what explains why.
+    // Recipe search and URL import both call the AI backend, so both are disabled while a session is expired; the
+    // [SignedOutBanner] above every tab explains why.
     final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return Column(
@@ -166,11 +163,8 @@ class _SearchResults extends ConsumerWidget {
     );
   }
 
-  /// AC-MEAL-01: preview, don't save. If this result is already in the
-  /// user's library (matched by `external_id`, the same dedupe key search
-  /// always used), go straight to the real saved detail and say so
-  /// (AC-MEAL-10) rather than opening a redundant "unsaved" preview of
-  /// something already curated.
+  /// Preview, don't save. A result already in the user's library (matched by `external_id`) goes straight to the
+  /// saved detail, with a snackbar saying so, rather than a redundant "unsaved" preview.
   Future<void> _onResultTap(
     BuildContext context,
     WidgetRef ref,

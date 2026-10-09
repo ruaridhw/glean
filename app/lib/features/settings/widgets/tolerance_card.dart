@@ -4,11 +4,9 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../settings_presentation.dart';
 
-/// The "purchase tolerance" slider card — settings-only (onboarding doesn't
-/// capture this), so it isn't one of the shared controls, but it follows the
-/// exact same step/commit haptic split as [IntegerSliderControl] (AC-SET-02,
-/// AC-HAP-05): `selectionClick` per 0.1 step while dragging, and
-/// [onCommitted] fired once on release.
+/// The "purchase tolerance" slider card, settings-only (onboarding doesn't capture it). Follows the same
+/// step/commit haptic split as [IntegerSliderControl]: `selectionClick` per 0.1 step while dragging,
+/// [onCommitted] once on release.
 class ToleranceCard extends ConsumerWidget {
   const ToleranceCard({
     super.key,

@@ -5,14 +5,10 @@ import 'package:glean/design_system/design_system.dart';
 import '../../pantry/pantry_presentation.dart';
 import '../intake_presentation.dart';
 
-/// One editable row on the shared intake review screen (AC-PAN-05).
-///
-/// Quantity is a free-typed [TextField], not a `String(quantity)` seed that
-/// re-derives itself from a numeric value on every keystroke — that
-/// round-trip is exactly what made decimals untypeable in the RN app (§11,
-/// AC-PAN-08). Validity (and therefore whether Confirm is enabled) is
-/// computed by the parent from the same controller text, never silently
-/// defaulted to `0`/`1` (AC-PAN-09).
+/// One editable row on the shared intake review screen. Quantity is a free-typed [TextField], not a seed that
+/// re-derives itself from a numeric value on every keystroke, which would make decimals untypeable. Validity
+/// (and so whether Confirm is enabled) is computed by the parent from the same controller text, never silently
+/// defaulted.
 class ReviewItemRow extends StatelessWidget {
   const ReviewItemRow({
     super.key,
@@ -38,11 +34,9 @@ class ReviewItemRow extends StatelessWidget {
   final String? selectedCategory;
   final ValueChanged<String?>? onCategoryChanged;
 
-  /// True only for a pantry-destined row whose parsed category came back
-  /// null (FINDINGS.md F-07/F-08) — expiry inference has no basis without
-  /// one, so this is the one place `PantryRepository.addItem`'s required
-  /// category gets supplied for an AI-parsed item. Shop rows never need
-  /// this: `ShoppingRepository`'s intake paths accept a null category fine.
+  /// True only for a pantry-destined row whose parsed category came back null: expiry inference has no basis
+  /// without one, so this is where `PantryRepository.addItem`'s required category is supplied. Shop rows never
+  /// need it.
   final bool requiresCategory;
 
   @override
