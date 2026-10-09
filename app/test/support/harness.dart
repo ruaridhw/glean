@@ -13,14 +13,16 @@
 //     tree throws the moment a tap tries to navigate. Pumping the real router
 //     over a real in-memory database means a screen test exercises its genuine
 //     navigation and data wiring instead of a stand-in.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/providers/database_providers.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -37,22 +39,14 @@ class AppTestHarness {
     this.userId = 'test-user',
     http.Client? httpClient,
     Haptics? haptics,
-    // R-01: `OnboardingGate` now wraps the real tab shell, so every widget
-    // test that pumps straight to a tab needs a resolved "already
-    // onboarded" status by default — otherwise the hundreds of existing
-    // screen tests across every feature would suddenly land on
-    // `OnboardingScreen` instead. A test that wants to exercise the gate
-    // itself (see `test/router/onboarding_gate_wiring_test.dart`) passes
-    // its own store here, e.g. `InMemoryOnboardingStatusStore()`. A named
-    // parameter rather than a generic `overrides` entry, like [haptics] and
-    // [httpClient] above — Riverpod asserts if the same provider is
-    // overridden twice in one `ProviderContainer`, so this and a
-    // caller-supplied `overrides` entry for the same provider can't coexist.
-    OnboardingStatusStore? onboardingStatusStore,
+    // `OnboardingGate` wraps the tab shell, so by default the user is
+    // seeded as already onboarded (through the real repository). Pass
+    // `onboarded: false` to exercise the first-run flow.
+    bool onboarded = true,
     List<Override> overrides = const <Override>[],
   }) : haptics = haptics ?? RecordingHaptics(),
        db = createTestDatabase() {
-    container = ProviderContainer(
+    _container = ProviderContainer(
       overrides: <Override>[
         gleanDatabaseProvider.overrideWithValue(db),
         currentUserIdProvider.overrideWithValue(userId),
@@ -60,18 +54,13 @@ class AppTestHarness {
         // request should fail fast rather than reach the network.
         apiBaseUrlProvider.overrideWithValue('http://localhost:9999'),
         hapticsProvider.overrideWithValue(this.haptics),
-        onboardingStatusStoreProvider.overrideWithValue(
-          onboardingStatusStore ??
-              InMemoryOnboardingStatusStore(
-                initiallyCompleted: <String>{userId},
-              ),
-        ),
         if (httpClient != null)
           httpClientProvider.overrideWithValue(httpClient),
         ...overrides,
       ],
     );
-    router = container.read(goRouterProvider);
+    _seedOnboarded = onboarded;
+    router = _container.read(goRouterProvider);
   }
 
   final String userId;
@@ -81,8 +70,29 @@ class AppTestHarness {
   /// (AC-HAP-01..05) without extra setup.
   final Haptics haptics;
 
-  late final ProviderContainer container;
+  late final ProviderContainer _container;
+  late final bool _seedOnboarded;
+  bool _prepared = false;
+
+  /// The provider container. First access seeds the onboarding state (see
+  /// the `onboarded` parameter) — deferred out of the constructor, which runs
+  /// in `setUp` outside the test's fake-async zone, because drift work started
+  /// there is serviced on the real event loop and wedges `pumpAndSettle`. The
+  /// write is queued ahead of the gate's first read, so it sees `true`.
+  ProviderContainer get container {
+    if (!_prepared) {
+      _prepared = true;
+      if (_seedOnboarded) unawaited(markOnboardingCompleted());
+    }
+    return _container;
+  }
+
   late final GoRouter router;
+
+  /// Marks [userId] as having completed onboarding, via the real repository.
+  Future<void> markOnboardingCompleted() => container
+      .read(userConfigRepositoryProvider)
+      .markOnboardingCompleted(userId);
 
   /// The recorded haptic weights, when [haptics] is the default recorder.
   List<HapticWeight> get hapticCalls => (haptics as RecordingHaptics).calls;
@@ -109,7 +119,7 @@ class AppTestHarness {
   /// released between tests — a leaked drift connection surfaces later as an
   /// unrelated-looking failure in a different suite.
   Future<void> dispose() async {
-    container.dispose();
+    _container.dispose();
     await db.close();
   }
 }

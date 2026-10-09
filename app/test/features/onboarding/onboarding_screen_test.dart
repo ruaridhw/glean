@@ -11,7 +11,6 @@ import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/onboarding/onboarding_screen.dart';
-import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,11 +20,7 @@ const String _userId = 'user-1';
 const String _scanStepQuestion = 'Stock your pantry';
 const Key _selectedValue = ValueKey<String>('onboarding.selectedValue');
 
-Widget _buildApp({
-  required GleanDatabase db,
-  required InMemoryOnboardingStatusStore store,
-  Haptics? haptics,
-}) {
+Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
   final GoRouter router = GoRouter(
     initialLocation: '/',
     routes: <RouteBase>[
@@ -41,7 +36,6 @@ Widget _buildApp({
     overrides: [
       gleanDatabaseProvider.overrideWithValue(db),
       currentUserIdProvider.overrideWithValue(_userId),
-      onboardingStatusStoreProvider.overrideWithValue(store),
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
     ],
     child: MaterialApp.router(theme: gleanLightTheme, routerConfig: router),
@@ -61,8 +55,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(420, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final store = InMemoryOnboardingStatusStore();
-      await tester.pumpWidget(_buildApp(db: db, store: store));
+      await tester.pumpWidget(_buildApp(db: db));
       await tester.pumpAndSettle();
 
       expect(
@@ -105,7 +98,10 @@ void main() {
 
       final saved = await UserConfigRepository(db).get(_userId);
       expect(saved.dietaryFlags, <String>['Vegan']);
-      expect(await store.watch(_userId).first, isTrue);
+      expect(
+        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        isTrue,
+      );
     },
   );
 
@@ -116,15 +112,17 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(420, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final store = InMemoryOnboardingStatusStore();
-      await tester.pumpWidget(_buildApp(db: db, store: store));
+      await tester.pumpWidget(_buildApp(db: db));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
 
       expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
-      expect(await store.watch(_userId).first, isTrue);
+      expect(
+        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        isTrue,
+      );
 
       final saved = await UserConfigRepository(db).get(_userId);
       expect(saved.dietaryFlags, isEmpty);
@@ -138,8 +136,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(420, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final store = InMemoryOnboardingStatusStore();
-      await tester.pumpWidget(_buildApp(db: db, store: store));
+      await tester.pumpWidget(_buildApp(db: db));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Next'));
@@ -157,7 +154,10 @@ void main() {
       expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
       final saved = await UserConfigRepository(db).get(_userId);
       expect(saved.dietaryFlags, <String>['Vegetarian']);
-      expect(await store.watch(_userId).first, isTrue);
+      expect(
+        (await db.select(db.userConfig).getSingle()).onboardingCompleted,
+        isTrue,
+      );
     },
   );
 

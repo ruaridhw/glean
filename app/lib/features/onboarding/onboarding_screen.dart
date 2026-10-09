@@ -24,7 +24,6 @@ import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
-import 'providers/onboarding_status.dart';
 import 'widgets/onboarding_footer.dart';
 import 'widgets/onboarding_step_body.dart';
 
@@ -81,7 +80,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         }
       }
     }
-    await ref.read(onboardingStatusStoreProvider).markCompleted(userId);
+    await ref
+        .read(userConfigRepositoryProvider)
+        .markOnboardingCompleted(userId);
     if (!mounted) return;
     ref.read(hapticsProvider).mediumImpact();
     // Skipping/finishing without scanning needs no navigation: `OnboardingGate`

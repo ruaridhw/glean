@@ -32,11 +32,9 @@ class UserConfigRepository {
     return row == null ? UserConfigView.defaults(userId) : _map(row);
   }
 
-  /// R-04: backs `OnboardingStatusStore` (`lib/features/onboarding/providers/
-  /// onboarding_status.dart`) so first-run completion lives in this table
-  /// instead of a standalone file. `false` for a user with no row at all —
-  /// the same "no row yet" fallback [get]/[watch] already apply to every
-  /// other column.
+  /// First-run completion for [userId]. `false` for a user with no row at
+  /// all — the same "no row yet" fallback [get]/[watch] apply to every other
+  /// column.
   Stream<bool> watchOnboardingCompleted(String userId) {
     final query = _db.select(_db.userConfig)..where((t) => t.id.equals(userId));
     return query.watchSingleOrNull().map(
