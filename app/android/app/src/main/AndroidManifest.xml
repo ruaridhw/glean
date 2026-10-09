@@ -41,7 +41,7 @@
              build.gradle.kts) keeps the whole contract visible in one file. -->
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:theme="@style/Theme.AppCompat.Translucent.NoTitleBar"
             android:exported="true"
             tools:node="replace">
             <intent-filter>

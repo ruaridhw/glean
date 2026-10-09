@@ -32,4 +32,24 @@ void main() {
 
     expect(mainActivity, isNot(contains('android:taskAffinity')));
   });
+
+  // AppAuth's RedirectUriReceiverActivity is an AppCompatActivity, so a
+  // platform theme makes it throw "You need to use a Theme.AppCompat theme"
+  // the moment Cognito redirects back, killing the app mid sign-in (seen on
+  // the second Codemagic build). Our manifest replaces the plugin's
+  // declaration, so it has to carry the AppCompat theme itself.
+  test('RedirectUriReceiverActivity uses an AppCompat theme so the Cognito '
+      'redirect does not crash the app', () {
+    final String manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final String receiver = RegExp(
+      r'<activity\s[^>]*android:name="net\.openid\.appauth\.RedirectUriReceiverActivity"[^>]*>',
+    ).firstMatch(manifest)![0]!;
+
+    expect(
+      receiver,
+      contains('android:theme="@style/Theme.AppCompat.Translucent.NoTitleBar"'),
+    );
+  });
 }
