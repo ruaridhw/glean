@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:glean/design_system/design_system.dart';
 import 'package:go_router/go_router.dart';
 
 import 'app_routes.dart';
@@ -34,7 +35,7 @@ class RouteErrorScreen extends StatelessWidget {
       appBar: AppBar(leading: BackButton(onPressed: () => _recover(context))),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(context.tokens.spacing.xl),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,

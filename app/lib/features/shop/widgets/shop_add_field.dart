@@ -92,16 +92,16 @@ class _ShopAddFieldState extends ConsumerState<ShopAddField> {
               tooltip: 'Add item',
               style: IconButton.styleFrom(
                 backgroundColor: colorScheme.primary,
-                foregroundColor: Colors.white,
+                foregroundColor: colorScheme.onPrimary,
                 disabledBackgroundColor: colorScheme.surfaceContainerHighest,
               ),
               icon: _adding
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: colorScheme.onPrimary,
                       ),
                     )
                   : const Icon(Icons.add_rounded),

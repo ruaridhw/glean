@@ -26,7 +26,10 @@ class ShoppingRow extends StatelessWidget {
         onTap: onToggle,
         borderRadius: BorderRadius.circular(tokens.radius.lg),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: tokens.spacing.lg,
+            vertical: tokens.spacing.md,
+          ),
           child: Row(
             children: <Widget>[
               _CheckCircle(checked: checked),
@@ -84,7 +87,7 @@ class _CheckCircle extends StatelessWidget {
         ),
       ),
       child: checked
-          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+          ? Icon(Icons.check_rounded, size: 14, color: colorScheme.onPrimary)
           : null,
     );
   }

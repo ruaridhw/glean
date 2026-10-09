@@ -21,17 +21,13 @@ class CameraPermissionPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     return Container(
-      color: const Color(0xFF111511),
+      color: tokens.cameraBackdrop,
       alignment: Alignment.center,
       padding: EdgeInsets.all(tokens.spacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Icon(
-            Icons.no_photography_rounded,
-            color: Colors.white,
-            size: 48,
-          ),
+          Icon(Icons.no_photography_rounded, color: tokens.onCamera, size: 48),
           SizedBox(height: tokens.spacing.lg),
           Text(
             permanentlyDenied
@@ -41,7 +37,7 @@ class CameraPermissionPrompt extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
-            ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+            ).textTheme.bodyLarge?.copyWith(color: tokens.onCamera),
           ),
           SizedBox(height: tokens.spacing.lg),
           FilledButton(

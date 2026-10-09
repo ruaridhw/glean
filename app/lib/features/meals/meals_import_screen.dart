@@ -152,12 +152,12 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
                 FilledButton(
                   onPressed: (_importing || !_canImport) ? null : _import,
                   child: _importing
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : const Text('Import'),

@@ -119,7 +119,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         if (!didPop) _exit();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF111511),
+        backgroundColor: context.tokens.cameraBackdrop,
         body: Stack(
           fit: StackFit.expand,
           children: <Widget>[

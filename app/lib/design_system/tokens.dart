@@ -124,6 +124,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.warningLight,
     required this.success,
     required this.successLight,
+    required this.onCamera,
+    required this.cameraScrim,
+    required this.cameraBackdrop,
     required this.radius,
     required this.spacing,
     required this.shadow,
@@ -135,6 +138,12 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color warningLight;
   final Color success;
   final Color successLight;
+
+  /// Over a live camera preview the brand palette is unreadable; these are the
+  /// only non-brand colours and they stay tokens so a dark theme can retune them.
+  final Color onCamera;
+  final Color cameraScrim;
+  final Color cameraBackdrop;
   final AppRadius radius;
   final AppSpacing spacing;
   final AppShadow shadow;
@@ -148,6 +157,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     warningLight: Color(0xFFFBE9D6),
     success: Color(0xFF1C6B41),
     successLight: Color(0xFFE3F2E7),
+    onCamera: Color(0xFFFFFFFF),
+    cameraScrim: Color(0x73000000), // black at 45% alpha
+    cameraBackdrop: Color(0xFF111511),
     radius: AppRadius.standard,
     spacing: AppSpacing.standard,
     shadow: AppShadow.standard,
@@ -161,6 +173,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? warningLight,
     Color? success,
     Color? successLight,
+    Color? onCamera,
+    Color? cameraScrim,
+    Color? cameraBackdrop,
     AppRadius? radius,
     AppSpacing? spacing,
     AppShadow? shadow,
@@ -172,6 +187,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warningLight: warningLight ?? this.warningLight,
       success: success ?? this.success,
       successLight: successLight ?? this.successLight,
+      onCamera: onCamera ?? this.onCamera,
+      cameraScrim: cameraScrim ?? this.cameraScrim,
+      cameraBackdrop: cameraBackdrop ?? this.cameraBackdrop,
       radius: radius ?? this.radius,
       spacing: spacing ?? this.spacing,
       shadow: shadow ?? this.shadow,
@@ -194,6 +212,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warningLight: Color.lerp(warningLight, other.warningLight, t)!,
       success: Color.lerp(success, other.success, t)!,
       successLight: Color.lerp(successLight, other.successLight, t)!,
+      onCamera: Color.lerp(onCamera, other.onCamera, t)!,
+      cameraScrim: Color.lerp(cameraScrim, other.cameraScrim, t)!,
+      cameraBackdrop: Color.lerp(cameraBackdrop, other.cameraBackdrop, t)!,
       radius: t < 0.5 ? radius : other.radius,
       spacing: t < 0.5 ? spacing : other.spacing,
       shadow: t < 0.5 ? shadow : other.shadow,

@@ -6,18 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// each allowlist names files that violated the rule when the rule was
 /// introduced. Entries may only ever be removed.
 const Set<String> _featureDataImportAllowlist = <String>{};
-const Set<String> _rawColourAllowlist = <String>{
-  'lib/bootstrap.dart',
-  'lib/features/shop/widgets/shop_add_field.dart',
-  'lib/features/shop/widgets/shopping_row.dart',
-  'lib/features/shop/widgets/shop_checkout_bar.dart',
-  'lib/features/meals/meals_import_screen.dart',
-  'lib/features/auth/sign_in_screen.dart',
-  'lib/features/intake/scan_screen.dart',
-  'lib/features/intake/widgets/scan_back_button.dart',
-  'lib/features/intake/widgets/camera_permission_prompt.dart',
-  'lib/features/intake/widgets/scan_overlay.dart',
-};
+const Set<String> _rawColourAllowlist = <String>{};
 
 const Set<String> _citationAllowlist = <String>{
   'lib/api/api_client.dart',

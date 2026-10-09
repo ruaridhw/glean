@@ -107,7 +107,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: context.tokens.spacing.sm),
       // Flutter's TextStyle has no text-transform (FINDINGS.md F-04) — the
       // uppercase look RN got from CSS is applied explicitly here instead.
       child: Text(

@@ -74,16 +74,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       : () => unawaited(_handleSignIn()),
                   style: FilledButton.styleFrom(
                     backgroundColor: tokens.ink,
-                    foregroundColor: Colors.white,
                     disabledBackgroundColor: tokens.ink.withValues(alpha: 0.5),
                   ),
                   child: _isSigningIn
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : const Text('Sign in with Google'),

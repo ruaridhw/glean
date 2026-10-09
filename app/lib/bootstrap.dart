@@ -102,7 +102,10 @@ class _SplashHolding extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: gleanLightTheme,
-      home: const ColoredBox(color: Color(0xFF2E9D63)),
+      home: Builder(
+        builder: (BuildContext context) =>
+            ColoredBox(color: Theme.of(context).colorScheme.primary),
+      ),
     );
   }
 }
@@ -118,41 +121,43 @@ class _DatabaseErrorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: gleanLightTheme,
       home: Scaffold(
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Icon(
-                Icons.error_outline_rounded,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "Glean couldn't open its storage",
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your pantry, recipes and plan all live on this device, so the '
-                'app cannot continue without them. Restarting usually fixes '
-                'it; if it keeps happening, reinstalling will clear the '
-                'damaged database.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              // Shown verbatim on purpose: this is unrecoverable in-app, so the
-              // only useful thing left is something the user can report.
-              Text(
-                '$error',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+        body: Builder(
+          builder: (BuildContext context) => Padding(
+            padding: EdgeInsets.all(context.tokens.spacing.xl),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Glean couldn't open its storage",
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your pantry, recipes and plan all live on this device, so the '
+                  'app cannot continue without them. Restarting usually fixes '
+                  'it; if it keeps happening, reinstalling will clear the '
+                  'damaged database.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                // Shown verbatim on purpose: this is unrecoverable in-app, so the
+                // only useful thing left is something the user can report.
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ),
       ),

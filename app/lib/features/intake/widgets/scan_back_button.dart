@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:glean/design_system/design_system.dart';
 
 /// The always-present back affordance on every Scan screen phase (AC-PAN-13):
 /// permission-denied and permission-pending previously had no way out at all
@@ -11,15 +12,16 @@ class ScanBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppTokens tokens = context.tokens;
     return Positioned(
       top: 16,
       left: 16,
       child: SafeArea(
         child: Material(
-          color: Colors.black.withValues(alpha: 0.45),
+          color: tokens.cameraScrim,
           shape: const CircleBorder(),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            icon: Icon(Icons.arrow_back_rounded, color: tokens.onCamera),
             tooltip: 'Cancel',
             onPressed: onPressed,
           ),

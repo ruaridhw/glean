@@ -46,6 +46,7 @@ class ShopCheckoutBar extends StatelessWidget {
 
     final AppTokens tokens = context.tokens;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final Color onPrimary = Theme.of(context).colorScheme.onPrimary;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -72,13 +73,15 @@ class ShopCheckoutBar extends StatelessWidget {
             Text(
               cartCountLabel(checkedCount),
               style: textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
+                color: onPrimary,
                 fontWeight: FontWeight.w800,
               ),
             ),
             Text(
               'Scan a receipt or finish without one',
-              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style: textTheme.bodySmall?.copyWith(
+                color: onPrimary.withValues(alpha: 0.7),
+              ),
             ),
             SizedBox(height: tokens.spacing.sm),
             Row(
@@ -86,7 +89,7 @@ class ShopCheckoutBar extends StatelessWidget {
                 Expanded(
                   child: TextButton(
                     onPressed: busy ? null : onDoneShopping,
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
+                    style: TextButton.styleFrom(foregroundColor: onPrimary),
                     child: const Text('Done shopping'),
                   ),
                 ),
