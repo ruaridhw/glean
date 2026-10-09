@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'api_exception.dart';
 import 'models/meal_plan.dart';
@@ -23,8 +24,8 @@ typedef AccessTokenProvider = Future<String?> Function();
 /// Typed HTTP client for the Glean FastAPI backend.
 ///
 /// The backend holds no user state (FLUTTER_MIGRATION.md §3): its complete
-/// route surface is recipe search/detail/import, meal-plan generation, the
-/// three parse endpoints, and health. Every method here returns an
+/// route surface is recipe search/detail/import, meal-plan generation, and the
+/// three parse endpoints. Every method here returns an
 /// *ephemeral proposal* — a DTO for the caller to review and, if accepted,
 /// persist via a DATA mutation. Nothing in this file writes to a database.
 ///
@@ -54,19 +55,9 @@ class GleanApiClient {
 
   // --- Recipes ---
 
-  Future<RecipeSearchResponse> searchRecipes({
-    String? q,
-    String? cuisine,
-    String? dietary,
-    int page = 1,
-    int perPage = 20,
-  }) {
+  Future<RecipeSearchResponse> searchRecipes({String? q}) {
     final uri = _uri('/recipes/search', {
       if (q != null && q.isNotEmpty) 'q': q,
-      if (cuisine != null && cuisine.isNotEmpty) 'cuisine': cuisine,
-      if (dietary != null && dietary.isNotEmpty) 'dietary': dietary,
-      'page': '$page',
-      'per_page': '$perPage',
     });
     return _send(
       uri,
@@ -118,23 +109,19 @@ class GleanApiClient {
   Future<ScanResponse> scanReceipt(
     Uint8List imageBytes, {
     String filename = 'receipt.jpg',
-    String contentType = 'image/jpeg',
-  }) async {
+  }) {
     final uri = _uri('/receipts/scan');
-    final boundary =
-        'glean-boundary-${identityHashCode(imageBytes)}-${imageBytes.length}';
     return _send(uri, () async {
-      final request = http.Request('POST', uri);
-      request.headers.addAll(await _authHeaders());
-      request.headers['Content-Type'] =
-          'multipart/form-data; boundary=$boundary';
-      request.bodyBytes = _multipartBody(
-        boundary: boundary,
-        fieldName: 'file',
-        filename: filename,
-        contentType: contentType,
-        bytes: imageBytes,
-      );
+      final request = http.MultipartRequest('POST', uri)
+        ..headers.addAll(await _authHeaders())
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            imageBytes,
+            filename: filename,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
       return http.Response.fromStream(await httpClient.send(request));
     }, (dynamic json) => ScanResponse.fromJson(json as Map<String, dynamic>));
   }
@@ -167,17 +154,6 @@ class GleanApiClient {
       ),
       (dynamic json) =>
           ShoppingParseResponse.fromJson(json as Map<String, dynamic>),
-    );
-  }
-
-  // --- Health ---
-
-  Future<bool> health() {
-    final uri = _uri('/health');
-    return _send(
-      uri,
-      () async => httpClient.get(uri),
-      (dynamic json) => json is Map && json['status'] == 'ok',
     );
   }
 
@@ -281,26 +257,5 @@ class GleanApiClient {
           .join('; ');
     }
     return null;
-  }
-
-  Uint8List _multipartBody({
-    required String boundary,
-    required String fieldName,
-    required String filename,
-    required String contentType,
-    required List<int> bytes,
-  }) {
-    final builder = BytesBuilder();
-    void writeLine(String line) => builder.add(utf8.encode('$line\r\n'));
-    writeLine('--$boundary');
-    writeLine(
-      'Content-Disposition: form-data; name="$fieldName"; filename="$filename"',
-    );
-    writeLine('Content-Type: $contentType');
-    writeLine('');
-    builder.add(bytes);
-    writeLine('');
-    writeLine('--$boundary--');
-    return builder.toBytes();
   }
 }

@@ -64,11 +64,7 @@ void main() {
           }),
         );
 
-        final result = await client.searchRecipes(
-          q: 'soup',
-          page: 2,
-          perPage: 10,
-        );
+        final result = await client.searchRecipes(q: 'soup');
 
         final requestUri =
             verify(
@@ -80,8 +76,6 @@ void main() {
                 as Uri;
         expect(requestUri.path, '/recipes/search');
         expect(requestUri.queryParameters['q'], 'soup');
-        expect(requestUri.queryParameters['page'], '2');
-        expect(requestUri.queryParameters['per_page'], '10');
 
         expect(result.total, 1);
         expect(result.results.single.externalId, 'r1');
@@ -211,20 +205,28 @@ void main() {
       'scanReceipt sends a multipart request and parses category/food_group per item',
       () async {
         when(() => httpClient.send(any())).thenAnswer((invocation) async {
-          final request = invocation.positionalArguments.single as http.Request;
-          // Sanity-check the multipart envelope actually carries the image
-          // bytes and a boundary consistent with its own Content-Type header.
+          final request =
+              invocation.positionalArguments.single as http.MultipartRequest;
+          expect(request.method, 'POST');
+          expect(request.url.path, '/receipts/scan');
+          // `finalize()` is what a real client calls; it fixes the boundary
+          // header and yields the encoded body.
+          final body = await request.finalize().toBytes();
           expect(
             request.headers['content-type'],
-            contains('multipart/form-data; boundary='),
+            matches(r'^multipart/form-data; boundary=.+'),
           );
           expect(request.headers['authorization'], 'Bearer test-token');
+          final file = request.files.single;
+          expect(file.field, 'file');
+          expect(file.filename, 'receipt.jpg');
+          expect(file.contentType.mimeType, 'image/jpeg');
           expect(
-            utf8.decode(request.bodyBytes, allowMalformed: true),
-            contains('name="file"'),
+            latin1.decode(body),
+            allOf(contains('name="file"'), contains('\x01\x02\x03')),
           );
 
-          final body = jsonEncode({
+          final responseBody = jsonEncode({
             'items': [
               {
                 'name': 'Milk',
@@ -238,7 +240,7 @@ void main() {
             ],
           });
           return http.StreamedResponse(
-            Stream.value(utf8.encode(body)),
+            Stream.value(utf8.encode(responseBody)),
             200,
             headers: {'content-type': 'application/json'},
           );

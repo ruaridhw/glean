@@ -43,6 +43,7 @@ dependencies:
   flutter_svg: ^2.3.0
   permission_handler: ^12.0.3
   http: ^1.6.0
+  http_parser: ^4.1.2
   drift_flutter: ^0.3.1
   riverpod: ^3.3.2
   url_launcher: ^6.3.2
