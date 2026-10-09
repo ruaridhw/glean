@@ -19,9 +19,7 @@ import 'widgets/account_section.dart';
 import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
-import 'widgets/section_label.dart';
 import 'widgets/settings_stats_row.dart';
-import 'widgets/tolerance_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -185,7 +183,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Preferences'),
+        const _SectionLabel('Preferences'),
         SizedBox(height: tokens.spacing.sm),
         ToleranceCard(
           sliderKey: const Key('settings.toleranceSlider'),
@@ -229,7 +227,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           onChanged: _onMaxTimeChanged,
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Dietary preferences'),
+        const _SectionLabel('Dietary preferences'),
         SizedBox(height: tokens.spacing.sm),
         DietaryPreferencesCard(
           selected: _dietaryFlags,
@@ -245,10 +243,26 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           },
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Account'),
+        const _SectionLabel('Account'),
         SizedBox(height: tokens.spacing.sm),
         AccountSection(onSignOut: () => unawaited(_handleSignOut())),
       ],
+    );
+  }
+}
+
+/// A small uppercase section heading. `labelSmall` already carries the right size/weight/letter-spacing, so this
+/// only adds `.toUpperCase()` once rather than at every call site.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall,
     );
   }
 }

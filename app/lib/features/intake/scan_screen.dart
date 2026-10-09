@@ -15,7 +15,6 @@ import 'package:go_router/go_router.dart';
 import 'camera/receipt_camera_controller.dart';
 import 'camera/receipt_camera_providers.dart';
 import 'widgets/camera_permission_prompt.dart';
-import 'widgets/scan_back_button.dart';
 import 'widgets/scan_overlay.dart';
 
 enum _ScanPhase { checkingPermission, denied, permanentlyDenied, ready }
