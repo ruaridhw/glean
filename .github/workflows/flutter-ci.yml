@@ -62,5 +62,5 @@ jobs:
         working-directory: .
         run: |
           ! grep -rn 'main_e2e' app/ios/fastlane codemagic.yaml .github/workflows \
-            | grep -v 'flutter-ci.yml' | grep -v -i 'integration\|e2e-job' \
+            --exclude=flutter-ci.yml --exclude=flutter-integration.yml \
             || { echo 'A release path references main_e2e.dart'; exit 1; }

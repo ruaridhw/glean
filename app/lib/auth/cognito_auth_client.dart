@@ -38,9 +38,7 @@ class CognitoAuthClient {
 
   /// Must equal what `backend/template.yaml`'s Cognito app client declares
   /// as a `CallbackURL`, and what the native custom-scheme intent filter on
-  /// each platform hands back to AppAuth (AC-TEST-19 —
-  /// `test/auth/redirect_uri_contract_test.dart` asserts this against the
-  /// backend template directly).
+  /// each platform hands back to AppAuth.
   static const String redirectUri = 'glean://auth/callback';
 
   final String clientId;
