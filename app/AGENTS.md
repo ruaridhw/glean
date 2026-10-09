@@ -39,14 +39,9 @@ run`/the `integration_test` suite do need a real toolchain; see
 ## Architecture
 
 Feature-first Flutter app: `go_router` + `flutter_riverpod` + `drift`
-(SQLite), replacing the Expo/React Native app that used to live in this
-repository (see git history). All app state lives on-device; the FastAPI
-backend (`../backend/`) is a stateless AI processing service with no user data of
-its own — see the root `FLUTTER_MIGRATION.md` for the full spec this app was
-built against, and `.scratch/flutter-port/ACCEPTANCE.md` for the criteria it
-was verified against.
-
-### Module layout
+(SQLite). All user state lives on-device; the FastAPI backend (`../backend/`)
+is a stateless AI processing service. `FLUTTER_MIGRATION.md` at the repo root
+is the behavioural spec.
 
 ```
 lib/
@@ -54,36 +49,62 @@ lib/
 ├── main_e2e.dart             # integration_test entrypoint — the ONLY importer of auth_bypass.dart
 ├── bootstrap.dart            # Shared startup wiring both entrypoints call into
 ├── app.dart                  # MaterialApp.router root widget
-├── data/                     # drift tables/DAOs, repositories, `providers/` (Stream/Future providers)
-├── design_system/            # ThemeData, AppTokens (ThemeExtension), Haptics ladder, GleanBadge, SkeletonBox
-├── router/                   # go_router table, route name/path constants, the five-tab shell
-├── api/                      # Typed HTTP client + request/response models, `providers/` (command providers)
-└── features/<feature>/       # Screen + its own widgets/ + its providers, one dir per tab/flow
-test/                          # Unit + widget tests, mirroring lib/
+├── data/                     # drift tables, repositories, providers.dart (Stream providers)
+├── design_system/            # ThemeData, AppTokens (ThemeExtension), Haptics, GleanSnackBar, ListSkeleton
+├── router/                   # go_router table, route constants, the five-tab shell
+├── api/                      # Typed HTTP client + models + api_providers.dart
+└── features/<feature>/       # Screen + widgets/ + providers, one dir per tab/flow
+test/                          # Unit + widget tests mirroring lib/, plus test/standards/
 integration_test/              # The one integration_test suite (app_test.dart), against main_e2e.dart
 ```
 
-**House rule that's grepped for:** nothing under `lib/features/**` imports
-`drift` or the API client directly — always through a provider
-(`lib/data/providers/*.dart` / `lib/api/providers/*.dart`). See
-`FLUTTER_MIGRATION.md` §3/§4 for the reasoning (no manual reload, no
-`ref.invalidate` after a mutation, tokens via `Theme.of(context)` only).
+## Standards
 
-### Auth bypass
+Enforced by `test/standards/house_rules_test.dart`; `flutter analyze` and
+`dart format` cover the rest. Do not add allowlist entries to that test to get
+a change through.
 
-`lib/main_e2e.dart` is the only file (besides `lib/auth/auth_bypass.dart`
-itself) allowed to import it — `test/auth/auth_bypass_test.dart` scans
-`lib/` to enforce this, and `test/build/release_entrypoint_test.dart`
-complements it at the build-configuration level (the iOS Fastlane lane,
-`codemagic.yaml` and CI workflows can never target `main_e2e.dart` for a
-release build). Never loosen
-either check to get a change to pass.
+1. **Data access only through providers.** Nothing under `lib/features/**`
+   imports `package:drift`, `lib/data/database.dart`, `lib/data/tables.dart`
+   or `lib/data/deletion_snapshots.dart`, and nothing constructs a repository
+   or `GleanApiClient`. Read them with `ref.read(xRepositoryProvider)` /
+   `ref.read(apiClientProvider)`. Importing a repository file for an
+   exception type is fine.
+2. **Colours and spacing come from the theme.** Outside `lib/design_system/`
+   there is no `Colors.*` (except `Colors.transparent`) and no `Color(0x…)`.
+   Use `Theme.of(context).colorScheme` and `context.tokens`. Camera-overlay
+   colours are tokens too (`tokens.color.onCamera`, `cameraScrim`,
+   `cameraBackdrop`).
+3. **No process citations in code.** Comments explain the current
+   constraint, not the ticket that introduced it: no `AC-…`, `R-nn`, `F-nn`,
+   `FINDINGS.md`, `REMEDIATION.md`, `.scratch/`, "Wave", "orchestrator", or
+   React Native history.
+4. **Delete rather than wrap.** No abstract class with a single production
+   implementation unless the real dependency cannot run under `flutter test`
+   (today: `Haptics`, `ReceiptCameraController`). Use mocktail on the
+   concrete class instead.
+5. **Mutations just write.** Reads are drift `.watch()` streams; there is no
+   `ref.invalidate` after a mutation and no manual reload on focus.
+6. **One API call needs no controller.** Screens call
+   `ref.read(apiClientProvider)` and hold their own pending flag.
+7. **Destructive actions go through `GleanSnackBar.runUndoable`.** It owns
+   the try/catch, undo snackbar and failure messages.
 
-### Testing
+## Testing
 
-One shared in-memory `drift` fixture (`test/data/fixture.dart`,
-`NativeDatabase.memory()` — works headless, no native SQLite install needed)
-and one widget-test harness (`test/support/harness.dart`) that pumps a real
-`GoRouter` + real database over `UncontrolledProviderScope`. Prefer both over
-hand-rolled mocks; `RecordingHaptics` (also in the harness) asserts the
-haptic ladder without extra setup.
+- One in-memory drift fixture (`test/data/fixture.dart`) and one widget harness
+  (`test/support/harness.dart`) that pumps a real `GoRouter` + real database.
+  Use them; do not hand-roll fake repositories or databases. To make a
+  repository fail, use a SQLite trigger on the fixture (see
+  `shop_screen_test.dart`).
+- Tests assert behaviour through the widget or repository seam. No test reads
+  files under `lib/` or scans YAML/Fastfiles/PNGs except
+  `test/standards/house_rules_test.dart`.
+- No golden images.
+- `RecordingHaptics` in the harness asserts the haptic ladder.
+
+## Auth bypass
+
+`lib/main_e2e.dart` is the only file besides `lib/auth/auth_bypass.dart`
+allowed to import it; `test/standards/house_rules_test.dart` enforces this.
+Never loosen it.

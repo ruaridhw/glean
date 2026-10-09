@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_bypass.dart';
 import 'package:glean/auth/auth_controller.dart';
@@ -50,40 +48,5 @@ void main() {
         returnsNormally,
       );
     });
-  });
-
-  test('AC-AUTH-06: no file under lib/ other than auth_bypass.dart itself and '
-      'the (orchestrator-owned) main_e2e.dart entrypoint imports/exports it — '
-      'the structural guarantee that a production binary cannot reach it', () {
-    final RegExp importOfBypass = RegExp(
-      '''^\\s*(import|export)\\s+['"][^'"]*auth_bypass\\.dart['"]''',
-      multiLine: true,
-    );
-    const Set<String> allowedReferrers = <String>{
-      'lib/auth/auth_bypass.dart',
-      'lib/main_e2e.dart',
-    };
-
-    final List<String> violations = <String>[];
-    for (final FileSystemEntity entity in Directory(
-      'lib',
-    ).listSync(recursive: true)) {
-      if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      final String normalizedPath = entity.path.replaceAll('\\', '/');
-      if (allowedReferrers.any(normalizedPath.endsWith)) continue;
-
-      final String source = entity.readAsStringSync();
-      if (importOfBypass.hasMatch(source)) {
-        violations.add(normalizedPath);
-      }
-    }
-
-    expect(
-      violations,
-      isEmpty,
-      reason:
-          'These files reference auth_bypass.dart and would pull the test '
-          'bypass into a production build: $violations',
-    );
   });
 }
