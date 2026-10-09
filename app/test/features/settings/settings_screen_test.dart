@@ -23,7 +23,6 @@ import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
-import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
@@ -36,22 +35,10 @@ import '../../data/fixture.dart';
 const String _userId = 'user-1';
 const Key _dinnersSliderKey = Key('settings.dinnersSlider');
 
-/// Throws on `save`, leaving `watch`/`get` real — simulates a config-save
-/// failure (AC-SET-03) without needing to break the whole in-memory DB.
-class _ThrowingUserConfigRepository extends UserConfigRepository {
-  _ThrowingUserConfigRepository(super.db);
-
-  @override
-  Future<void> save(UserConfigView config) {
-    throw Exception('disk full');
-  }
-}
-
 Widget _buildApp({
   required GleanDatabase db,
   Haptics? haptics,
   AuthController Function()? authController,
-  bool throwOnSave = false,
 }) {
   return ProviderScope(
     overrides: [
@@ -60,10 +47,6 @@ Widget _buildApp({
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
       if (authController != null)
         authControllerProvider.overrideWith(authController),
-      if (throwOnSave)
-        userConfigRepositoryProvider.overrideWithValue(
-          _ThrowingUserConfigRepository(db),
-        ),
     ],
     child: MaterialApp(theme: gleanLightTheme, home: const SettingsScreen()),
   );
@@ -259,10 +242,16 @@ void main() {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        final haptics = RecordingHaptics();
-        await tester.pumpWidget(
-          _buildApp(db: db, haptics: haptics, throwOnSave: true),
+        // A save is an upsert, so failing every INSERT fails every save
+        // while reads stay real.
+        await tester.runAsync(
+          () => db.customStatement(
+            'CREATE TRIGGER fail_insert_user_config BEFORE INSERT ON '
+            "user_config BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+          ),
         );
+        final haptics = RecordingHaptics();
+        await tester.pumpWidget(_buildApp(db: db, haptics: haptics));
         await _waitForContent(tester);
 
         await tester.tap(find.text('Vegan'));

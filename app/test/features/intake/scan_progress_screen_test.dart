@@ -211,6 +211,8 @@ void main() {
       when(() => httpClient.send(any())).thenAnswer((_) => completer.future);
 
       await pumpProgress(tester);
+      // The scan really is in flight, so the pop below races a live request.
+      verify(() => httpClient.send(any())).called(1);
       harness.router.pop();
       await tester.pumpAndSettle();
       expect(find.byType(ScanProgressScreen), findsNothing);

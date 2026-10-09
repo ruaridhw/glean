@@ -144,8 +144,16 @@ class AppTestHarness {
   /// Makes every INSERT into [table] abort, via a SQLite trigger — the way to
   /// exercise a repository failure without hand-rolling a fake repository.
   Future<void> failInsertsOn(String table, {String message = 'test failure'}) =>
+      _failOn('INSERT', table, message);
+
+  /// Makes every DELETE from [table] abort; see [failInsertsOn].
+  Future<void> failDeletesOn(String table, {String message = 'test failure'}) =>
+      _failOn('DELETE', table, message);
+
+  Future<void> _failOn(String operation, String table, String message) =>
       db.customStatement(
-        'CREATE TRIGGER fail_insert_$table BEFORE INSERT ON $table '
+        'CREATE TRIGGER fail_${operation.toLowerCase()}_$table '
+        'BEFORE $operation ON $table '
         "BEGIN SELECT RAISE(ABORT, '$message'); END",
       );
 

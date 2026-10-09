@@ -100,8 +100,9 @@ that review checks. `flutter analyze` and `dart format` cover style.
 - One in-memory drift fixture (`test/data/fixture.dart`) and one widget harness
   (`test/support/harness.dart`) that pumps a real `GoRouter` + real database.
   Use them; do not hand-roll fake repositories or databases. To make a
-  repository fail, use a SQLite trigger on the fixture (see
-  `shop_screen_test.dart`).
+  repository fail, use a SQLite trigger on the fixture
+  (`AppTestHarness.failInsertsOn` / `failDeletesOn`, or `db.customStatement`
+  for a narrower trigger).
 - Tests assert behaviour through the widget or repository seam. No test reads
   files under `lib/` or scans YAML/Fastfiles/PNGs except
   `test/standards/house_rules_test.dart`.
