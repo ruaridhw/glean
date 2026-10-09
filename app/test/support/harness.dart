@@ -82,7 +82,11 @@ class AppTestHarness {
       ],
     );
     _seedOnboarded = onboarded;
-    router = _container.read(goRouterProvider);
+    // Listened, not read, as `GleanApp` watches it in production: Riverpod
+    // pauses a provider nobody listens to, and with it the router's auth
+    // listener, so a sign-out would redirect only if some widget on screen
+    // happened to watch the auth state. Disposing the container closes it.
+    router = _container.listen(goRouterProvider, (_, _) {}).read();
   }
 
   final String userId;

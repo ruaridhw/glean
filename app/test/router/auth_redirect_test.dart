@@ -4,6 +4,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth.dart';
 import 'package:glean/features/auth/sign_in_screen.dart';
+import 'package:glean/features/intake/manual_entry_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
 
@@ -68,6 +69,26 @@ void main() {
 
     expect(find.byType(SignInScreen), findsOneWidget);
   });
+
+  testWidgets(
+    'signing out redirects even when nothing on screen watches auth',
+    (tester) async {
+      // Manual entry sits outside the tab shell and shows no signed-out banner,
+      // so the router's own auth listener is the only thing that can redirect.
+      final harness = AppTestHarness();
+      addTearDown(harness.dispose);
+
+      await harness.pumpAt(tester, AppRoutes.intakeManualEntry.path);
+      await tester.pumpAndSettle();
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
+
+      await harness.container.read(authControllerProvider.notifier).signOut();
+      await tester.pumpAndSettle();
+
+      expect(harness.router.state.matchedLocation, AppRoutes.signIn.path);
+      expect(find.byType(SignInScreen), findsOneWidget);
+    },
+  );
 
   testWidgets('landing on sign-in while already active sends you to Pantry', (
     tester,
