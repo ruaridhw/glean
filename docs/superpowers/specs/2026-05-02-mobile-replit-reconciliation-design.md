@@ -1,5 +1,7 @@
 # Mobile Replit Reconciliation Design
 
+> **Superseded (2026-07-25):** describes the pre-port React Native app (`mobile/`), deleted in the Flutter cutover. Kept as a historical record only — do not follow its instructions against the current app (`app/`); see the root `FLUTTER_MIGRATION.md` for what actually shipped.
+
 ## Summary
 
 This project reconciles the working Replit mobile prototype in `mobile_replit/` with the real Expo app in `mobile/`.

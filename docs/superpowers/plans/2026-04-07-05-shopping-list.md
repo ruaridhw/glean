@@ -1,5 +1,7 @@
 # Shopping List Implementation Plan
 
+> **Superseded (2026-07-25):** describes the pre-port React Native app (`mobile/`), deleted in the Flutter cutover. Kept as a historical record only — do not follow its instructions against the current app (`app/`); see the root `FLUTTER_MIGRATION.md` for what actually shipped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the Shop tab — shopping list display, manual item addition, individual check-off, and the "Completed checkout" flow. Also complete the Settings screen with all configurable user preferences.

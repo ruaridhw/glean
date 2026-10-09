@@ -1,10 +1,5 @@
 # Mobile
 mobile_replit/
-mobile/node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/.env
-# mobile/drizzle/ — tracked: migrations are required at runtime
 
 # Backend
 backend/.venv/
@@ -45,10 +40,12 @@ infra/.bootstrap-outputs
 .agents/
 .claude/
 skills-lock.json
-docs/
+docs/*
+!docs/pre-release-checklist.md
+!docs/flutter-test-audit.md
+!docs/ANDROID_TEST_DISTRIBUTION.md
 plans/
 
 # macOS
 .DS_Store
 .DS_Store?
-mobile/coverage

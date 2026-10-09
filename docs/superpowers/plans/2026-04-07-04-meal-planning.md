@@ -1,5 +1,7 @@
 # Meal Planning & Suggestions Implementation Plan
 
+> **Superseded (2026-07-25):** describes the pre-port React Native app (`mobile/`), deleted in the Flutter cutover. Kept as a historical record only — do not follow its instructions against the current app (`app/`); see the root `FLUTTER_MIGRATION.md` for what actually shipped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the Plan tab (N configurable meal slots), single-slot AI suggestions, full-week generation via Claude, mark-as-cooked with pantry decrement, and auto-population of the shopping list when a recipe is added to the plan.

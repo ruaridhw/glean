@@ -6,9 +6,9 @@ from typing import Any
 from glean.recipes.import_normalization import normalise_public_text
 from glean.recipes.stored import StoredIngredient
 
-# Keep this aligned with mobile/src/normalization/units.ts and
-# mobile/src/meals/presentation.ts. Recipe imports and mobile display need the
-# same canonical unit vocabulary.
+# Keep this aligned with app/lib/data/util/unit_normalization.dart and
+# app/lib/features/meals/presentation.dart. Recipe imports and client display need
+# the same canonical unit vocabulary.
 _MEASURE_UNITS = {
     "g": (1.0, "g"),
     "gram": (1.0, "g"),

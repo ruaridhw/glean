@@ -1,0 +1,447 @@
+# Cross-wave findings
+
+Issues surfaced by porting agents that don't belong to one wave. Recorded here so they
+survive context compaction and get resolved before the final review, rather than being
+lost in an agent report.
+
+Status: `OPEN` needs action · `RESOLVED` done · `ACCEPTED` deliberate, no action
+
+---
+
+## F-01 — Brand SVGs contain `<filter>` elements `flutter_svg` cannot render
+**Status:** RESOLVED · surfaced by: design-system agent · affects: AC-DS-07
+
+**Resolution (polish/verification pass, R-13):** the `<filter>`/`feDropShadow` defs and their
+`filter="url(#...)"` references are stripped from all three vendored SVGs
+(`app/assets/brand/glean-b1-{icon,splash-logo,adaptive-foreground}.svg`) — each edit leaves an
+in-file comment naming this finding. The dropped shadow is reapplied in Flutter instead:
+`GleanMark` (`app/lib/design_system/brand_mark.dart`) now wraps the rendered `SvgPicture` in a
+`DecoratedBox` using the design system's own `AppTokens.shadow.card` `BoxShadow` (tokens, not a
+hand-rolled constant, per AC-DS-03) — so every rendering of the mark keeps a shadow, not just the
+one instance a call site happened to add a container to. `test/design_system/brand_mark_test.dart`
+asserts the shadow is present; a full `flutter test` run has zero `unhandled element <filter/>`
+occurrences (previously one per `GleanMark` render, i.e. every test touching sign-in or
+onboarding). The native splash screen is unaffected — `flutter_native_splash.yaml` points at
+`glean-b1-splash-logo.png`, a pre-rasterised export taken before this edit, not re-derived from
+the SVG at build time.
+
+Original finding below.
+
+All three vendored brand SVGs (`app/assets/brand/glean-b1-{icon,splash-logo,adaptive-foreground}.svg`)
+contain `<filter>` elements that `flutter_svg` 2.3.0 does not support. It logs
+`unhandled element <filter/>`, skips the filter and renders the rest. Almost certainly
+drops an authored drop-shadow.
+
+Not a crash, but it is a **silent visual regression against the RN app** and it spams the
+console. Options: bake the shadow into the path/gradient at export time, or drop the filter
+from the SVG and reapply it in Flutter (`BoxShadow`/`DropShadow`) where the mark is used.
+Decide during the polish/verification wave — do not leave the warning in place.
+
+## F-02 — Spec names a brand asset that does not exist
+**Status:** RESOLVED (spec inaccuracy, not a code problem) · affects: AC-DS-07
+
+`FLUTTER_MIGRATION.md` §2 cites `assets/source/glean-mark.svg`. No such file exists; the real
+assets are the three `glean-b1-*.svg` files. Code uses the real ones and documents it.
+The spec line is wrong, not the implementation.
+
+## F-03 — `Override` is not importable from `flutter_riverpod` 3.3.2
+**Status:** RESOLVED · surfaced by: design-system agent
+
+**Resolution (orchestrator):** `riverpod` was promoted from a transitive to a **direct**
+dependency in `app/pubspec.yaml`, so `import 'package:riverpod/misc.dart';` now gives the
+`Override` type without tripping `depend_on_referenced_packages`. `List<Override>` can be
+spelled explicitly again; the inline-literal workaround is no longer needed anywhere.
+Verified: `misc.dart` does export `Override`; `riverpod.dart` does not.
+
+The original diagnosis and the AUTH agent's correction are kept below for context.
+
+---
+
+
+`ProviderScope.overrides` documents its element type as `Override`, but that name does not
+resolve as an import from `flutter_riverpod` 3.3.2, so a `List<Override>` cannot be written
+explicitly. Worked around by letting the list literal infer. Harmless, but if a later wave
+needs the explicit type, import it from `package:riverpod` directly rather than re-deriving
+the workaround.
+
+**Correction (AUTH agent):** the "import it from `package:riverpod` directly" suggestion
+above doesn't actually work — `riverpod` is only a *transitive* dependency here (pulled in by
+`flutter_riverpod`), not a direct one in `app/pubspec.yaml`, so importing
+`package:riverpod/misc.dart` (the one entrypoint that does export `Override`) trips the
+`depend_on_referenced_packages` lint, and `pubspec.yaml` is orchestrator-owned so no other
+wave can add the dependency itself. The only clean fix is the original one: never spell
+`Override`/`List<Override>` anywhere, and always construct the overrides list as an inline
+literal at the exact `ProviderScope`/`ProviderContainer` call site (so Dart infers the
+element type from the parameter's declared type) rather than from a variable or a
+function with a declared return type. `test/features/meals/test_harness.dart:30` currently
+writes `overrides: <Override>[...]` and fails `flutter analyze` with `non_type_as_type_argument`
+as a result — drop the explicit `<Override>` type argument there (`overrides: [...]`) to fix it;
+not touched here since it's outside the AUTH module's owned files.
+
+## F-04 — Flutter has no `text-transform: uppercase`
+**Status:** ACCEPTED · surfaced by: design-system agent
+
+The RN `sectionLabel` style relied on CSS-style uppercasing. Flutter's `TextStyle` has no
+equivalent, so any screen wanting that look must call `.toUpperCase()` on the string.
+Documented in `theme.dart`. Feature agents must not reintroduce a wrapper widget for this.
+
+## F-05 — `add_recipe_id` has no routing equivalent, by design
+**Status:** ACCEPTED · surfaced by: router agent · affects: AC-MEAL-08, AC-PLAN-11
+
+The RN app passed `add_recipe_id` as a nav param and re-added the recipe inside
+`useFocusEffect`, which is the **duplicate-plan-entry bug** (§11): leaving the Plan tab and
+returning re-added the recipe every time. §6 instead requires staying on the recipe after
+"Add to plan" with the button reflecting "In plan", so add-to-plan is a same-screen mutation
+with **no navigation and no param**. The Plan wave must not reintroduce the param.
+
+## F-06 — `sqlite3_flutter_libs` is end-of-life upstream
+**Status:** RESOLVED · affects: AC-BUILD-02
+
+Its own pub description reads *"Not used anymore, update to version 3.x of package:sqlite3"*.
+Native sqlite comes via `drift_flutter` instead. A forced deviation from the spec's literal
+package list in §2; `drift_flutter` is the drift team's current Flutter integration package.
+
+## F-07 — `category` stays nullable while `food_group` does not
+**Status:** RESOLVED · affects: AC-BE-01, AC-DATA-11
+
+The backend's first cut let an out-of-taxonomy LLM value coerce `category` to null, which made
+`food_group` null too and left the meal-plan 422 reachable — the exact failure §9 exists to
+remove. Now `food_group` is non-nullable and falls back to `"other"` (already a client-side
+bucket, so zero client work), while `category` stays nullable to stay honest about an unknown
+fine-grained category. Consequence the Pantry wave must handle: **expiry inference cannot fire
+for a null category**, so it must degrade gracefully rather than assume a category is present.
+
+## F-08 — The parse-endpoint contract is deliberately asymmetric
+**Status:** RESOLVED · affects: AC-BE-04, AC-DATA-11, AC-PAN-01
+
+**Every wave touching parsed ingredients must model it this way:**
+
+| Field | Nullability | On absence |
+|---|---|---|
+| `food_group` | **non-nullable `String`** | contract violation — throw |
+| `category` | **nullable `String?`** | fine, degrade |
+
+The asymmetry is the point. `food_group` is what `POST /meal-plan` validates non-nullably, so it
+is the field whose absence caused the 422; it always resolves, worst case to `"other"`.
+`category` is finer-grained (pantry grouping detail, per-category shelf life) and its absence
+degrades acceptably.
+
+The API agent initially had this exactly inverted — `category` required and throwing, `food_group`
+absent from the model altogether — which would have failed an entire 20-item receipt parse on one
+unclassifiable item, i.e. worse than the bug §9 set out to fix. Corrected. Watch for this
+inversion recurring in the data layer and the Pantry/Shop review flows.
+
+## F-09 — Landing a real Meals screen breaks pre-existing router-owned tests that hard-code its placeholder
+**Status:** RESOLVED (superseded by F-11) · surfaced by: meals agent · affects: AC-TEST-14, AC-MEAL-07/12
+
+Landing the real `MealsScreen`/`SavedRecipeDetail` initially broke several `test/router/*.dart`
+tests two ways: (1) a missing `theme:` in those tests' bare `MaterialApp.router(...)` — see F-11,
+which covers this precisely (`StatefulShellRoute.indexedStack` builds every tab branch eagerly, so
+this hits router tests that look unrelated to Meals too, e.g. `auth_redirect_test.dart`); and
+(2) several assertions hard-coded the placeholder copy ("Meals screen", "Search recipes", "Recipe
+42") this wave was explicitly asked to replace.
+
+**Re-verified after F-11's fix landed: `flutter test test/router` now passes 21/21.** Both the
+theme wiring (via `test/support/harness.dart`'s `AppTestHarness`) and the placeholder-text
+assertions have already been updated by other agents — no action remains here. Left as a record of
+what broke and why, since the same two-part collision (missing theme + stale placeholder-text
+assertions) will recur for Pantry/Plan/Shop/Settings as their own waves land real screens; F-11's
+`AppTestHarness` prevents the theme half project-wide, and the placeholder-text half needs the same
+per-tab swap `test/router/*.dart` already did for Meals.
+
+Additionally, `AppRoutes.mealsSearch` (`/meals/search`) is now **intentionally dead**: AC-MEAL-07
+requires one inline search affordance inside the Meals tab's Search segment, not a separate pushed
+screen, so nothing in `lib/features/meals/**` navigates to this route any more. The route itself
+still exists in `router.dart` (out of this wave's remit) pointing at a stub `MealsSearchScreen`
+that says as much. Recommended: the router owner should prune `AppRoutes.mealsSearch` and its
+`GoRoute` entry once this wave lands, and drop `MealsSearchScreen`.
+
+## F-10 — No `url_launcher` dependency for AC-MEAL-05's tappable source-url attribution
+**Status:** RESOLVED · surfaced by: meals agent · affects: AC-MEAL-05, AC-SET-04
+
+**Resolution (orchestrator):** `url_launcher` added to `app/pubspec.yaml`. Two waves hit this
+independently — Meals for `source_url` attribution and Settings for Terms/Privacy — and in both
+cases the clipboard fallback satisfied the criterion's letter while missing its point. §2's
+package list was never meant to be exhaustive about utility packages; two acceptance criteria
+genuinely require opening an external URL. Both waves have been asked to swap to `launchUrl`.
+
+Original finding below.
+
+**Meals side done:** `_SourceAttribution` in
+`lib/features/meals/widgets/recipe_detail_view.dart` now calls
+`launchUrl(uri, mode: LaunchMode.externalApplication)` instead of copying to the clipboard, with a
+snackbar only on failure (bad URL or nothing installed to handle it). `flutter analyze`/`flutter
+test` for `lib/features/meals` and `test/features/meals` stay clean — no test taps this row, so no
+platform-channel mock was needed for `url_launcher` itself.
+
+`pubspec.yaml` is orchestrator-owned (module contract), and §2 of the spec doesn't list
+`url_launcher` among the sanctioned packages. AC-MEAL-05 asks for `source_url` to be "tappable
+attribution" for imported recipes; with no way to open a browser, `RecipeDetailView`'s
+`_SourceAttribution` row (`lib/features/meals/widgets/recipe_detail_view.dart`) instead copies the
+link to the clipboard via `package:flutter/services.dart` (no new dependency) and shows a
+confirmation snackbar. This satisfies "tappable" and "attribution" literally, but not "open the
+original" in spirit. Recommended: add `url_launcher` to `pubspec.yaml` and swap the tap handler for
+`launchUrl(Uri.parse(sourceUrl))` — a one-line change once the dependency exists.
+
+## F-11 — `app.dart` doesn't wire `gleanLightTheme`, and it's no longer harmless
+**Status:** RESOLVED
+
+**Resolution (orchestrator), two parts:**
+
+1. **Production:** `lib/app.dart` now defaults `theme` to `gleanLightTheme` and the bare
+   `ColorScheme.fromSeed` fallback is **deleted**. A theme without the brand tokens was never a
+   useful degradation — it is a crash one frame later — so the only default is the real one.
+2. **Tests:** added `app/test/support/harness.dart` (`AppTestHarness`) as shared infrastructure.
+   It pumps the real `goRouterProvider` over an in-memory drift database with `gleanLightTheme`
+   applied, a `RecordingHaptics` by default, and a deliberately unroutable API base URL, plus
+   `pumpAt()` and `dispose()`. It generalises the pattern the Meals agent had independently
+   arrived at. **Every feature widget test should use it** rather than building its own — this
+   finding recurring once per feature is exactly what it prevents.
+
+A related consequence, also being fixed: `test/router/**` asserted on **placeholder screen copy**
+(`find.text('Settings screen')`), which breaks as each real screen lands. Those assertions are
+being made structural instead — routing correctness must not depend on any screen's copy.
+
+Original finding below.
+
+**Status:** OPEN · surfaced by: AUTH agent · affects: AC-DS-02/03, `test/router/**`, every feature screen
+
+`lib/app.dart`'s own doc comment already flags this as a known gap: `GleanApp.theme` defaults to a
+bare `ThemeData(colorScheme: ColorScheme.fromSeed(...))` fallback because design-system didn't exist
+yet when it was written, with a note to wire `gleanLightTheme` in "once it does."
+
+Design-system has landed since, and its `context.tokens` extension (`lib/design_system/tokens.dart`)
+is not merely cosmetically wrong without it — it's a hard crash. `AppTokensX.tokens` asserts
+`Theme.of(this).extension<AppTokens>() != null`, and Flutter's test binding runs with assertions
+enabled, so **any widget that reads `context.tokens` while mounted under a theme with no
+`AppTokens` extension throws an `AssertionError` during build** (verified directly: a bare
+`MaterialApp(home: Builder(builder: (c) => Text('${c.tokens.spacing.md}')))` throws). This is not
+theoretical — `test/router/*.dart` pumps `MaterialApp`/`MaterialApp.router` **with no `theme:` at
+all**, bypassing `GleanApp`/`app.dart` entirely, and:
+
+- `SignInScreen` (AUTH, this wave) uses `context.tokens` — throws under that harness.
+- `SettingsScreen` and the onboarding flow (Settings wave) already use `context.tokens`
+  throughout — same landmine, already present before this wave touched anything.
+
+Running `flutter test test/router` today shows failures in `auth_redirect_test.dart`,
+`route_table_test.dart` (`sign-in resolves outside the shell`, `each tab branch root renders its
+placeholder`), `tab_stack_test.dart`, and `error_handling_test.dart`. Some of those (e.g. Settings'
+placeholder text no longer matching `find.text('Settings screen')` because a real screen now
+exists) are a separate, unrelated staleness issue in the same test file — but the sign-in one **is**
+this theme crash, confirmed by isolating `SignInScreen` alone under a themeless `MaterialApp` in a
+throwaway test.
+
+**Fix (not made here — `lib/app.dart` and `test/router/**` are Router-owned, not AUTH's):**
+1. `lib/app.dart`: pass `theme: gleanLightTheme` (from `package:glean/design_system/design_system.dart`)
+   instead of the bare fallback.
+2. `test/router/*.dart`: every `MaterialApp`/`MaterialApp.router(...)` construction needs
+   `theme: gleanLightTheme` too, since those tests build their own widget tree independent of
+   `GleanApp`.
+
+Until this lands, **any** feature screen using `context.tokens` will fail when exercised through
+the router's own test harnesses — this is not specific to AUTH's `SignInScreen`, and will resurface
+for Meals/Plan/Pantry/Shop the moment their real screens replace today's plain-text placeholders.
+
+## F-12 — drift stream teardown vs. widget-test FakeAsync
+**Status:** RESOLVED (pattern established) · surfaced by: meals + settings agents
+**Affects:** every feature widget test that touches a drift stream
+
+`testWidgets` runs inside a `FakeAsync` zone. drift interacts badly with it in **two distinct
+ways**, with **two different fixes**. They are easy to conflate — the first note in this file
+prescribed the wrong one for the second case.
+
+### Symptom A — a direct stream/query read in the test body hangs
+A bare `await repository.watchXxx(...).first` (or any direct query) never completes while a widget
+in the tree holds a live `.watch()` subscription: the manual query queues behind that stream's
+bookkeeping on the same connection and nothing drives it.
+
+**Fix:** wrap it in `tester.runAsync(...)`, which steps **outside** the fake zone so real async can
+progress.
+
+### Symptom B — a zero-duration timer is still pending at test end
+```
+A Timer is still pending even after the widget tree was disposed.
+Pending timers: Timer (duration: 0:00:00.000000, periodic: false)
+```
+Unmounting disposes the `ProviderScope` → disposes the `StreamProvider` element → cancels the drift
+stream → `StreamQueryStore.markAsClosed` schedules a zero-duration timer to finish its bookkeeping.
+Confirmed from the pending timer's own creation stack.
+
+Consequence is worse than one red test: it **wedges the isolate**, so the whole *file* times out
+(~4 min) and every other test in it is reported as a load failure.
+
+**Fix — three things, all necessary:**
+1. Unmount first: `await tester.pumpWidget(const SizedBox.shrink());`
+2. Then **`await tester.pump(const Duration(milliseconds: 1))`** — a *pump*, not `runAsync`, and a
+   **non-zero** advance. The timer is a `FakeTimer`, so `runAsync` steps outside the very zone that
+   would service it; and because it is scheduled *during* the unmount pump, a zero-duration advance
+   does not reach it.
+3. Do it **inside the test body** (wrap the body in `try/finally`). The binding verifies
+   `!timersPending` *before* `addTearDown` callbacks run, so registering it as a teardown is too
+   late — verified, it still trips.
+
+`test/features/settings/settings_screen_test.dart` has the worked example: `_releaseTree` plus a
+`_settingsWidgetTest` wrapper. Prefer lifting that wrapper into `test/support/harness.dart` if a
+third wave needs it.
+
+**Misdiagnosis warning:** the obvious suspect is an app-level debounce or auto-save timer in the
+widget under test, and it is the wrong one. Check the pending timer's **duration** first — a real
+debounce reports its configured duration; drift's cleanup reports zero.
+
+## F-13 — `pumpAndSettle` is unusable where a skeleton or indeterminate indicator is on screen
+**Status:** RESOLVED (helpers added) · surfaced by: pantry + plan agents
+
+`SkeletonBox` animates perpetually (AC-DS-11 puts it on a `TweenAnimationBuilder`) and the scan
+progress indicator is *required* to be genuinely indeterminate (AC-PAN-06). Neither ever reaches a
+quiescent frame, so `pumpAndSettle` times out. It surfaces as a **hang**, not a clear failure —
+and because a timed-out test wedges the isolate, the whole file reports as a load error.
+
+A correct implementation is precisely what makes `pumpAndSettle` unusable here. Do not "fix" it by
+making the animation finite.
+
+**Use** `pumpUntil(tester, condition)` or `pumpPastSkeleton(tester)` from
+`test/support/harness.dart` instead.
+
+## F-14 — command providers read snapshots by subscribing to a stream and cancelling it
+**Status:** RESOLVED · surfaced by: orchestrator while fixing the Plan suite
+**Affects:** AC-DATA-06, AC-PLAN-09/10, test stability generally
+
+**Resolution:** `lib/features/plan/providers/generate_week_controller.dart`'s `_generate` now
+takes one-shot snapshots via `getAll`/`getSaved`/`getWeek`/`get` Future getters instead of
+`.watch().first`, with a comment at the call site naming this finding directly. Verified in
+the current source (2026-07-25).
+
+Original finding below.
+
+`lib/features/plan/providers/generate_week_controller.dart:60-69` reads three snapshots as
+`repository.watchXxx(...).first` — i.e. it opens a live drift query stream, takes one value, and
+cancels it, three times per generation.
+
+Wrong on three counts:
+1. **Semantically.** A command needs a *snapshot*, not a subscription. §3 reserves streams for
+   screen reads; a mutation path has no business subscribing.
+2. **Mechanically.** Every such read creates and tears down a `StreamQueryStore` subscription,
+   which is what schedules the deferred cleanup timers behind F-12. It manufactures the very
+   churn that made three suites flaky.
+3. **Testability.** It cannot complete inside a `FakeAsync` zone without `runAsync` gymnastics,
+   which is why AC-PLAN-09's test could not be made to pass honestly.
+
+The repositories already expose one-shot `Future` getters for some of this
+(`uncookedCountForWeek`, `remainingCapacityForWeek`) — the gap is one-shot reads for "all pantry
+items", "saved recipes" and "this week's entries". **Fix: add those getters and have the controller
+use them.** Reserve `.watch()` for what the UI subscribes to.
+
+## F-15 — `autoDispose` command providers can be disposed mid-network-call
+**Status:** RESOLVED · surfaced independently by: meals agent, then the plan fix agent
+**Affects:** AC-DATA-06, AC-PAN-14, AC-MEAL-10, AC-PLAN-09/10 — and it is a **production** risk
+
+**Resolution:** every provider in the table below now holds `ref.keepAlive()` for the duration
+of its async work and closes the link when done, each with a comment naming this finding
+directly: `generateMealPlanControllerProvider` (`lib/api/providers/meal_plan_providers.dart`),
+`scanReceiptControllerProvider`/`describeReceiptControllerProvider`
+(`lib/api/providers/receipts_providers.dart`), `importRecipeControllerProvider`
+(`lib/api/providers/recipe_providers.dart`), and
+`parseShoppingDescriptionControllerProvider` (`lib/api/providers/shopping_providers.dart`) — the
+last of these is also no longer dead: F-16 wired it to `ShopDescribeScreen`. Verified in the
+current source (2026-07-25).
+
+Original finding below.
+
+Every remote command provider in `lib/api/providers/` is an `AsyncNotifierProvider.autoDispose`.
+If nothing holds the provider alive across its `await`, Riverpod disposes it mid-flight and the
+notifier throws `Cannot use the Ref ... after it has been disposed` when it next assigns `state`.
+
+**In the UI that presents as the action silently doing nothing** — precisely the dead-end class §11
+catalogues (RN's scan hanging forever on "Almost done…"). It is not a test-only artefact.
+
+Audit at the time of writing — five such providers, three different outcomes:
+
+| Provider | Kept alive? |
+|---|---|
+| `importRecipeControllerProvider` | yes — a `ref.watch` added *after* hitting the crash |
+| `generateMealPlanControllerProvider` | yes — a throwaway `ref.listen` keep-alive in the **caller** |
+| `scanReceiptControllerProvider` | **no** |
+| `describeReceiptControllerProvider` | **no** |
+| `parseShoppingDescriptionControllerProvider` | **no — and referenced nowhere at all** |
+
+Two independent agents hit this and each patched their own call site differently. That is the tell
+that the fix belongs in the **provider**, not in every caller: a caller that forgets gets a silent
+failure, and nothing makes the requirement visible.
+
+The `autoDispose` *intent* is right and documented ("leaving the scan flow drops any in-flight or
+last result") — the defect is that disposal can happen **mid-await**, which is not the same thing as
+disposing when the screen leaves.
+
+**Fix:** inside each notifier's async method, hold `ref.keepAlive()` for the duration of the work and
+release it when done. That keeps the drop-on-leave behaviour while making mid-flight disposal
+impossible, and removes the need for callers to know anything about it. Then unwind the two
+call-site workarounds.
+
+Also resolve `parseShoppingDescriptionControllerProvider`: either wire it to Shop's describe flow or
+delete it. An unreferenced command provider for a live endpoint is either a missing feature or dead
+code, and both want a decision.
+
+## F-16 — the Shop "describe" flow was never built (ownership seam gap)
+**Status:** RESOLVED · surfaced by: API agent while resolving F-15
+
+**Resolution:** `ShopDescribeScreen` built, and the shared presentational parts extracted into
+`lib/features/intake/widgets/describe_form.dart` so the two describe screens don't repeat the
+RN app's twin-review-screen mistake. The split is presentation vs orchestration: the form is
+destination-agnostic UI, while each screen keeps its own provider and its own response→`ReviewArgs`
+mapping (different response types, and shop carries `clarifyingQuestions` where pantry carries
+`unitPrice`). Forcing those into one generic widget would have needed a type parameter and a
+mapping callback for ~15 lines of real difference.
+**Affects:** AC-SHOP parity with the RN app, AC-PAN-05
+
+`lib/features/intake/shop_describe_screen.dart` is still the router wave's placeholder. Shop
+routes to it (`AppRoutes.intakeDescribeShop`), so the flow dead-ends on a screen reading
+"Describe list".
+
+The RN app had a real one (`mobile/app/(tabs)/shop/describe.tsx`, 107 lines), so this is a
+**regression against the app being replaced**, not a deferred nicety.
+
+How it slipped: Shop's brief said route into the shared intake screens and don't build a second
+describe/review screen — correct. Pantry+Intake owned `lib/features/intake/**` and built
+`pantry_describe_screen.dart`, but the *shop* variant wasn't named in either brief. Each wave
+reasonably assumed the other had it. A seam nobody owned.
+
+Everything downstream is already built and waiting: `ReviewArgs`/`ReviewDestination.shop` carries a
+`clarifyingQuestions` field, and `review_screen.dart` already renders it through
+`ClarifyingQuestionsCard` — whose doc comment names `ShoppingParseResponse.clarifyingQuestions`
+explicitly. `parseShoppingDescriptionControllerProvider` exists and is now keep-alive-safe. It is
+only the screen that is missing, which is also why nothing failed: no test asserted the flow.
+
+**Lesson for the remaining waves:** a screen owned by one feature but reached only from another is
+exactly where work falls through. When verifying, check every route resolves to a real screen, not
+just that the route table is correct.
+
+## F-17 — Concurrent agents in one worktree silently revert each other's uncommitted work
+**Status:** OPEN (process, not code) · **my orchestration error**
+
+Two separate agents reported their edits vanishing mid-session. The docs/guard agent found most of its
+work reverted on disk and had to redo it; the pubspec cleanup (R-05) has now been reverted **twice**.
+
+Cause: many agents sharing one worktree with a large uncommitted working set, some of them running
+`git checkout -- <path>` to restore their own temporary probes. That restores from HEAD, so it also
+discards *other* agents' uncommitted edits to those paths.
+
+It compounded a second mistake: I authorised verifiers to temporarily break code to prove tests
+weren't vacuous, and ran five of them **concurrently in the same worktree**. They saw each other's
+probes, which is why one reported a red tree that was actually green.
+
+**Mitigations for the rest of this effort:**
+- Commit after every wave, so the uncommitted surface stays small and `git checkout` is harmless.
+- Never run mutation-testing verifiers concurrently in a shared worktree — give each an isolated one
+  (the Agent tool supports `isolation: "worktree"`), or run them one at a time.
+- Re-check any "fixed" item after a later wave; a fix is not durable until committed.
+
+## F-18 — Isolated worktrees can start at the repository base, not the active branch
+**Status:** OPEN (process, not code)
+
+The final verifier's assigned isolated worktree started at `624c70d`, before
+the Flutter port, and contained `mobile/` but no `app/`. The verifier caught
+the mismatch and created a clean worktree at `bf748cd`.
+
+**Mitigation:** prepare verification worktrees explicitly at a named commit,
+then require the verifier to confirm both the commit and expected project
+layout before running commands.

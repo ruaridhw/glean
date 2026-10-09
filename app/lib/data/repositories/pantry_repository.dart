@@ -1,0 +1,567 @@
+// Ported from the Expo app's `src/db/pantry.ts` (see git history), with
+// the schema changes from FLUTTER_MIGRATION.md §3/§6: every query is
+// scoped by `userId`
+// (AC-DATA-02/03), and `addItem` infers an expiry date from the ingredient's
+// category shelf life (AC-PAN-01) — RN's `addPantryItem` never accepted or
+// wrote one at all.
+import 'package:drift/drift.dart';
+
+import '../database.dart';
+import '../models/pantry_item_view.dart';
+import '../util/unit_normalization.dart';
+import '../util/week.dart';
+import 'ingredients_repository.dart';
+
+/// One accepted row from the review screen, ready to commit
+/// (`addItems`/AC-PAN-10).
+class PantryItemInput {
+  const PantryItemInput({
+    required this.name,
+    required this.quantity,
+    required this.unit,
+    required this.category,
+    this.unitPrice,
+  });
+
+  final String name;
+  final double quantity;
+  final String unit;
+  final String category;
+  final double? unitPrice;
+}
+
+/// What was actually removed from a pantry row for one ingredient during
+/// "Cooked" — the exact figures `PlanRepository` needs to record in
+/// `cooked_adjustments` so undo can restore them precisely (AC-UX-03).
+class PantryCookDelta {
+  const PantryCookDelta({
+    required this.unit,
+    required this.amountApplied,
+    required this.previousLastUsedAt,
+  });
+
+  final String unit;
+  final double amountApplied;
+  final String? previousLastUsedAt;
+}
+
+/// Thrown by [PantryRepository.addItem] (via `_upsert`) when an add would
+/// merge into an existing pantry row under a unit no conversion path
+/// connects to that row's actual unit — e.g. an ingredient already stocked
+/// in `'g'` being added to in `'units'`. Summing across incompatible units
+/// would silently corrupt the quantity (R-18); this fails loudly instead, so
+/// the caller's existing catch-and-`GleanSnackBar` path (`ReviewScreen`,
+/// `ManualEntryScreen`) surfaces it rather than the pantry quietly holding a
+/// wrong number.
+///
+/// R-23: callers must show [userMessage], not a generic "try again" —
+/// retrying the *same* incoming unit fails identically every time, so a
+/// message implying a retry might help is actively misleading. The only way
+/// out is entering the quantity in [existingUnit] instead (or editing the
+/// existing row's unit, if that's what's actually wrong).
+class PantryUnitMismatchException implements Exception {
+  const PantryUnitMismatchException({
+    required this.ingredientId,
+    required this.canonicalName,
+    required this.existingUnit,
+    required this.incomingUnit,
+  });
+
+  final int ingredientId;
+  final String canonicalName;
+  final String existingUnit;
+  final String incomingUnit;
+
+  /// What to show the user: names the ingredient, both units, and the one
+  /// thing that actually fixes it — never "try again".
+  String get userMessage =>
+      '$canonicalName is stocked in $existingUnit — enter this amount in '
+      '$existingUnit instead of $incomingUnit.';
+
+  @override
+  String toString() =>
+      'PantryUnitMismatchException: cannot merge $incomingUnit into the '
+      'existing pantry row for ingredient $ingredientId ($canonicalName), '
+      'stocked in $existingUnit — no conversion path exists between them.';
+}
+
+class PantryRepository {
+  PantryRepository(this._db, this._ingredients);
+
+  final GleanDatabase _db;
+  final IngredientsRepository _ingredients;
+
+  /// All of [userId]'s pantry items, ordered like the RN app: soonest
+  /// expiry first, then longest-unused first within the same expiry bucket.
+  ///
+  /// `ingredients` is joined with `innerJoin` — `pantryItems.ingredientId`
+  /// is a NOT NULL FK, so that join can never fail to match. But
+  /// `ingredients.category` is nullable (the ingredient catalog is shared
+  /// and non-user-scoped, and recipe import creates ingredients with no
+  /// category source at all, §9), so `ingredient_categories` is joined with
+  /// `leftOuterJoin`: a category-less ingredient must still surface its
+  /// pantry row rather than vanish from the list. `_mapRow` coalesces the
+  /// missing food group to `"other"` — the same fallback the backend
+  /// (`backend/src/glean/receipts/schemas.py`) and the RN UI
+  /// (`getPantryCategoryMeta`, the Expo app's `src/pantry/presentation.ts:47`,
+  /// see git history) both already use, so all three layers agree
+  /// (FINDINGS.md F-07/F-08).
+  /// `foodGroup` stays non-null on this view model either way (AC-DATA-11
+  /// is about non-nullability where the value is consumed, not about
+  /// discarding rows to force it at the join).
+  Stream<List<PantryItemView>> watchAll(String userId) {
+    final query =
+        _db.select(_db.pantryItems).join([
+            innerJoin(
+              _db.ingredients,
+              _db.ingredients.id.equalsExp(_db.pantryItems.ingredientId),
+            ),
+            leftOuterJoin(
+              _db.ingredientCategories,
+              _db.ingredientCategories.category.equalsExp(
+                _db.ingredients.category,
+              ),
+            ),
+          ])
+          ..where(_db.pantryItems.userId.equals(userId))
+          ..orderBy([
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.expiryDate,
+                const Constant('9999-12-31'),
+              ]),
+            ),
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.lastUsedAt,
+                const Constant('0000-01-01'),
+              ]),
+            ),
+          ]);
+    return query.watch().map((rows) => rows.map(_mapRow).toList());
+  }
+
+  /// One-shot twin of [watchAll] — same join, ordering and
+  /// coalesced-to-`"other"` `foodGroup` shape, but a plain `.get()` rather
+  /// than a `.watch()` subscription. Command paths (e.g. meal-plan
+  /// generation) need a snapshot of the pantry, not a live subscription
+  /// they immediately cancel — that pattern opens and tears down a
+  /// `StreamQueryStore` subscription for nothing, which is what made
+  /// FINDINGS.md F-14's callers flaky.
+  Future<List<PantryItemView>> getAll(String userId) async {
+    final query =
+        _db.select(_db.pantryItems).join([
+            innerJoin(
+              _db.ingredients,
+              _db.ingredients.id.equalsExp(_db.pantryItems.ingredientId),
+            ),
+            leftOuterJoin(
+              _db.ingredientCategories,
+              _db.ingredientCategories.category.equalsExp(
+                _db.ingredients.category,
+              ),
+            ),
+          ])
+          ..where(_db.pantryItems.userId.equals(userId))
+          ..orderBy([
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.expiryDate,
+                const Constant('9999-12-31'),
+              ]),
+            ),
+            OrderingTerm(
+              expression: coalesce([
+                _db.pantryItems.lastUsedAt,
+                const Constant('0000-01-01'),
+              ]),
+            ),
+          ]);
+    final rows = await query.get();
+    return rows.map(_mapRow).toList();
+  }
+
+  // The fallback for a pantry item whose ingredient has no taxonomy
+  // category — matches the backend's and the RN UI's "other" bucket
+  // (FINDINGS.md F-07/F-08) rather than inventing a new vocabulary.
+  static const String _uncategorisedFoodGroup = 'other';
+
+  PantryItemView _mapRow(TypedResult row) {
+    final item = row.readTable(_db.pantryItems);
+    final ingredient = row.readTable(_db.ingredients);
+    final category = row.readTableOrNull(_db.ingredientCategories);
+    return PantryItemView(
+      id: item.id,
+      userId: item.userId,
+      ingredientId: item.ingredientId,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      expiryDate: item.expiryDate == null ? null : parseDate(item.expiryDate!),
+      lastUsedAt: item.lastUsedAt == null
+          ? null
+          : DateTime.parse(item.lastUsedAt!),
+      updatedAt: DateTime.parse(item.updatedAt),
+      canonicalName: ingredient.canonicalName,
+      isStaple: ingredient.isStaple,
+      category: category?.category,
+      foodGroup: category?.foodGroup ?? _uncategorisedFoodGroup,
+      shelfLifeDays: category?.shelfLifeDays,
+    );
+  }
+
+  /// Resolves (or creates) the ingredient for [name], normalizes the
+  /// quantity/unit against its canonical unit, infers an expiry date from
+  /// the category's shelf life, and upserts the pantry row — the single
+  /// entry point for adding to the pantry, mirroring RN's `addPantryItem`
+  /// but with a required [category] (see `IngredientsRepository`) and real
+  /// expiry inference. Top-up (an existing row for the same ingredient)
+  /// adds to the existing quantity and refreshes the expiry, since the
+  /// freshly-added stock is what's now on the shelf.
+  Future<int> addItem({
+    required String userId,
+    required String name,
+    required double quantity,
+    required String unit,
+    required String category,
+    double? unitPrice,
+    DateTime? now,
+  }) async {
+    final effectiveNow = now ?? DateTime.now();
+    // R-23: a blank `unit` (e.g. the review screen's unit field left empty)
+    // still needs *some* concrete string for the row itself and for
+    // `normalizeUnit` below, so it defaults to `'units'` here — but that
+    // fallback must never reach `resolveOrCreate`'s seeding parameter. Only
+    // an explicitly non-blank `unit` seeds/upgrades `canonicalUnit` (R-18);
+    // a defaulted one would otherwise become the ingredient's *permanent*
+    // canonical unit on first resolution, with no in-app way to correct it.
+    final String trimmedUnit = unit.trim();
+    final String effectiveUnit = trimmedUnit.isEmpty ? 'units' : trimmedUnit;
+    final ingredient = await _ingredients.resolveOrCreate(
+      canonicalName: name,
+      category: category,
+      unit: trimmedUnit.isEmpty ? null : trimmedUnit,
+    );
+    final normalized = normalizeUnit(
+      quantity: quantity,
+      unit: effectiveUnit,
+      canonicalUnit: ingredient.canonicalUnit,
+      canonicalName: ingredient.canonicalName,
+    );
+    final shelfLifeDays = await _shelfLifeDaysFor(ingredient.category!);
+    final expiry = effectiveNow.add(Duration(days: shelfLifeDays));
+
+    await _upsert(
+      userId: userId,
+      ingredientId: ingredient.id,
+      canonicalName: ingredient.canonicalName,
+      quantity: normalized?.quantity ?? quantity,
+      unit: normalized?.unit ?? effectiveUnit,
+      unitPrice: unitPrice,
+      expiryDate: expiry,
+      now: effectiveNow,
+    );
+    return ingredient.id;
+  }
+
+  /// Commits every accepted row from a review screen as a single
+  /// transaction (AC-PAN-10): a failure partway through persists nothing —
+  /// unlike RN's review-confirm loop, which called `addPantryItem` per row
+  /// with no transaction, so a failure on row 3 of 5 left rows 1-2 already
+  /// incremented, and retrying the whole list doubled them. Here, a failed
+  /// attempt leaves nothing committed, so retrying starts from the same
+  /// clean slate and cannot double anything.
+  Future<List<int>> addItems({
+    required String userId,
+    required List<PantryItemInput> items,
+    DateTime? now,
+  }) {
+    return _db.transaction(() async {
+      final ids = <int>[];
+      for (final item in items) {
+        ids.add(
+          await addItem(
+            userId: userId,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            category: item.category,
+            unitPrice: item.unitPrice,
+            now: now,
+          ),
+        );
+      }
+      return ids;
+    });
+  }
+
+  Future<int> _shelfLifeDaysFor(String category) async {
+    final row = await (_db.select(
+      _db.ingredientCategories,
+    )..where((t) => t.category.equals(category))).getSingle();
+    return row.shelfLifeDays;
+  }
+
+  /// [canonicalName] is only needed for the density fallback in the
+  /// mismatch-reconciliation path below — it plays no part when [unit]
+  /// already matches the existing row.
+  Future<void> _upsert({
+    required String userId,
+    required int ingredientId,
+    required String canonicalName,
+    required double quantity,
+    required String unit,
+    double? unitPrice,
+    required DateTime? expiryDate,
+    required DateTime now,
+  }) async {
+    final existing =
+        await (_db.select(_db.pantryItems)..where(
+              (t) =>
+                  t.userId.equals(userId) & t.ingredientId.equals(ingredientId),
+            ))
+            .getSingleOrNull();
+
+    if (existing != null) {
+      // `unit` reaching here should already have been normalized into the
+      // ingredient's `canonicalUnit` by `addItem`, so this ordinarily
+      // matches `existing.unit` already. This is still the last line of
+      // defence against R-18 (mixed-unit pantry adds silently summing under
+      // the wrong unit) rather than trusting that upstream normalization
+      // always ran cleanly — e.g. a row that predates `canonicalUnit` being
+      // set at all, or an ingredient whose canonical unit has no
+      // conversion path from the incoming one. Re-normalize straight
+      // against *this row's own* unit — the ground truth of what's actually
+      // on the shelf — before deciding whether to merge.
+      final normalizedUnit = unit.toLowerCase().trim();
+      double mergeQuantity = quantity;
+      if (normalizedUnit != existing.unit) {
+        final reconciled = normalizeUnit(
+          quantity: quantity,
+          unit: unit,
+          canonicalUnit: existing.unit,
+          canonicalName: canonicalName,
+        );
+        if (reconciled == null) {
+          throw PantryUnitMismatchException(
+            ingredientId: ingredientId,
+            canonicalName: canonicalName,
+            existingUnit: existing.unit,
+            incomingUnit: unit,
+          );
+        }
+        mergeQuantity = reconciled.quantity;
+      }
+
+      await (_db.update(
+        _db.pantryItems,
+      )..where((t) => t.id.equals(existing.id))).write(
+        PantryItemsCompanion(
+          quantity: Value(existing.quantity + mergeQuantity),
+          unitPrice: unitPrice != null
+              ? Value(unitPrice)
+              : const Value.absent(),
+          expiryDate: Value(expiryDate == null ? null : formatDate(expiryDate)),
+          updatedAt: Value(now.toIso8601String()),
+        ),
+      );
+    } else {
+      await _db
+          .into(_db.pantryItems)
+          .insert(
+            PantryItemsCompanion.insert(
+              userId: userId,
+              ingredientId: ingredientId,
+              quantity: quantity,
+              unit: unit,
+              unitPrice: Value(unitPrice),
+              expiryDate: Value(
+                expiryDate == null ? null : formatDate(expiryDate),
+              ),
+              updatedAt: now.toIso8601String(),
+            ),
+          );
+    }
+  }
+
+  /// Backs the quantity/unit/expiry edit sheet (AC-PAN-07) — every field is
+  /// optional so the sheet can save just what changed.
+  Future<void> updateItem({
+    required int id,
+    required String userId,
+    double? quantity,
+    String? unit,
+    DateTime? expiryDate,
+    DateTime? now,
+  }) {
+    return (_db.update(
+      _db.pantryItems,
+    )..where((t) => t.id.equals(id) & t.userId.equals(userId))).write(
+      PantryItemsCompanion(
+        quantity: quantity != null ? Value(quantity) : const Value.absent(),
+        unit: unit != null ? Value(unit) : const Value.absent(),
+        expiryDate: expiryDate != null
+            ? Value(formatDate(expiryDate))
+            : const Value.absent(),
+        updatedAt: Value((now ?? DateTime.now()).toIso8601String()),
+      ),
+    );
+  }
+
+  Future<void> deleteItem({required int id, required String userId}) {
+    return (_db.delete(
+      _db.pantryItems,
+    )..where((t) => t.id.equals(id) & t.userId.equals(userId))).go();
+  }
+
+  /// Restores deleted stock without treating it as a fresh purchase. If new
+  /// stock was added meanwhile, merge quantity but retain that row's metadata.
+  Future<void> restoreDeletedItem({
+    required String userId,
+    required PantryItemView item,
+  }) {
+    if (item.userId != userId) {
+      throw StateError('Cannot restore another user\'s stock');
+    }
+    return _db.transaction(() async {
+      final existing =
+          await (_db.select(_db.pantryItems)..where(
+                (t) =>
+                    t.userId.equals(userId) &
+                    t.ingredientId.equals(item.ingredientId),
+              ))
+              .getSingleOrNull();
+      final now = DateTime.now();
+      if (existing != null) {
+        await _upsert(
+          userId: userId,
+          ingredientId: item.ingredientId,
+          canonicalName: item.canonicalName,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: existing.unitPrice,
+          expiryDate: existing.expiryDate == null
+              ? null
+              : DateTime.parse(existing.expiryDate!),
+          now: now,
+        );
+        return;
+      }
+      await _db
+          .into(_db.pantryItems)
+          .insert(
+            PantryItemsCompanion.insert(
+              id: Value(item.id),
+              userId: userId,
+              ingredientId: item.ingredientId,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: Value(item.unitPrice),
+              expiryDate: Value(
+                item.expiryDate == null ? null : formatDate(item.expiryDate!),
+              ),
+              lastUsedAt: Value(item.lastUsedAt?.toIso8601String()),
+              updatedAt: now.toIso8601String(),
+            ),
+          );
+    });
+  }
+
+  /// Decrements the pantry row for [ingredientId], floored at zero, as part
+  /// of marking a meal "Cooked". Returns the amount actually removed (which
+  /// may be less than [amount] if the pantry held less than that) and the
+  /// row's previous `lastUsedAt` — both are what `PlanRepository` needs to
+  /// reverse this exactly later. Returns null if there is no pantry row for
+  /// this ingredient (nothing to decrement, nothing to undo).
+  Future<PantryCookDelta?> decrementForCook({
+    required String userId,
+    required int ingredientId,
+    required double amount,
+    required DateTime now,
+  }) async {
+    final row =
+        await (_db.select(_db.pantryItems)..where(
+              (t) =>
+                  t.userId.equals(userId) & t.ingredientId.equals(ingredientId),
+            ))
+            .getSingleOrNull();
+    if (row == null) return null;
+
+    final applied = amount > row.quantity ? row.quantity : amount;
+    await (_db.update(
+      _db.pantryItems,
+    )..where((t) => t.id.equals(row.id))).write(
+      PantryItemsCompanion(
+        quantity: Value(row.quantity - applied),
+        lastUsedAt: Value(now.toIso8601String()),
+        updatedAt: Value(now.toIso8601String()),
+      ),
+    );
+    return PantryCookDelta(
+      unit: row.unit,
+      amountApplied: applied,
+      previousLastUsedAt: row.lastUsedAt,
+    );
+  }
+
+  /// Reverses [decrementForCook] exactly: restores the applied quantity
+  /// always, and the prior `lastUsedAt` only when [restoreLastUsedAt] is
+  /// true. If the user deleted the pantry row after cooking, recreates it
+  /// best-effort (there is no prior expiry to restore in that case).
+  ///
+  /// [restoreLastUsedAt] defaults to `true` for direct callers (e.g.
+  /// `test/data/pantry_repository_test.dart`'s single-cook case, where
+  /// there is nothing else to clobber). `PlanRepository.undoCooked` passes
+  /// it explicitly (R-15): quantity is additive and safe to always restore,
+  /// but `lastUsedAt` is last-writer-wins, so undoing an *earlier* cook
+  /// while a *later* one on the same ingredient is still standing must
+  /// leave the later cook's timestamp alone rather than overwrite it with
+  /// the earlier cook's stale snapshot.
+  Future<void> restoreFromCook({
+    required String userId,
+    required int ingredientId,
+    required double amount,
+    required String unit,
+    required String? previousLastUsedAt,
+    required DateTime now,
+    bool restoreLastUsedAt = true,
+  }) async {
+    final row =
+        await (_db.select(_db.pantryItems)..where(
+              (t) =>
+                  t.userId.equals(userId) & t.ingredientId.equals(ingredientId),
+            ))
+            .getSingleOrNull();
+
+    if (row == null) {
+      // Nothing exists to "leave alone" — there is no current value, only
+      // the snapshot this adjustment carries — so restore it regardless of
+      // [restoreLastUsedAt].
+      await _db
+          .into(_db.pantryItems)
+          .insert(
+            PantryItemsCompanion.insert(
+              userId: userId,
+              ingredientId: ingredientId,
+              quantity: amount,
+              unit: unit,
+              lastUsedAt: Value(previousLastUsedAt),
+              updatedAt: now.toIso8601String(),
+            ),
+          );
+      return;
+    }
+
+    await (_db.update(
+      _db.pantryItems,
+    )..where((t) => t.id.equals(row.id))).write(
+      PantryItemsCompanion(
+        quantity: Value(row.quantity + amount),
+        lastUsedAt: restoreLastUsedAt
+            ? Value(previousLastUsedAt)
+            : const Value.absent(),
+        updatedAt: Value(now.toIso8601String()),
+      ),
+    );
+  }
+}

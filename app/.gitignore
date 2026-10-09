@@ -1,0 +1,65 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Release signing (FLUTTER_MIGRATION.md §8) — generated locally on the
+# release Mac, never committed. `android/key.properties` points at the
+# upload keystore; the keystore file itself may live anywhere outside the
+# repo, but is excluded here too in case it's ever placed alongside it.
+/android/key.properties
+/android/*.jks
+/android/*.keystore
+
+# Fastlane run artifacts/secrets — none of these are release configuration,
+# they're local output from running a lane.
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots/**/*.png
+**/fastlane/test_output
+**/fastlane/.env
+**/fastlane/.env.*
+*.p8
+*.p12
+*.mobileprovision

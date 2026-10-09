@@ -16,7 +16,7 @@ uv run pytest -k "test_name"           # single test by name
 
 ## Architecture
 
-Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device (SQLite via expo-sqlite). The backend is responsible for:
+Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device (Expo SQLite in the live app; Drift SQLite in the proposed Flutter port). The backend is responsible for:
 
 - **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal-plan generation — all LLM calls go through OpenRouter via LangChain and the feature-specific `LLMRouter` policy from `get_llm_router`.
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
