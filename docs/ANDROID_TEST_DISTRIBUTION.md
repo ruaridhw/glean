@@ -1,7 +1,7 @@
 # Android test distribution
 
-**Status: implemented in `codemagic.yaml`; the [one-time setup](#one-time-setup)
-is still to do.** This replaced the Android half of `FLUTTER_MIGRATION.md` §8
+**Status: implemented in `codemagic.yaml`, and the [one-time setup](#one-time-setup)
+is done. The first build is still to run.** This replaced the Android half of `FLUTTER_MIGRATION.md` §8
 (a Fastlane lane run from the Mac). It copies the
 model in [`ruaridhw/routingapp`'s `docs/ANDROID_TEST_DISTRIBUTION.md`](https://github.com/ruaridhw/routingapp/blob/main/docs/ANDROID_TEST_DISTRIBUTION.md).
 iOS is out of scope for now.
@@ -101,9 +101,10 @@ reason it fails with.
 
 1. Create Firebase project `glean` and register Android app
    `com.ruaridhw.glean`. Glean needs no Firebase runtime packages for binary
-   distribution.
+   distribution. Done: project ID `glean-ruaridhw`, app ID
+   `1:801300264613:android:43bd5374b41c3d9ff53f4c`.
 2. In **App Distribution**, create tester group `glean-testers` and add testers.
-3. Create service account `codemagic-app-distribution@<project>.iam.gserviceaccount.com`
+3. Create service account `codemagic-app-distribution@glean-ruaridhw.iam.gserviceaccount.com`
    with the **Firebase App Distribution Admin** role. Store its JSON key in
    Codemagic and back it up at
    `op://Homelab/Glean Firebase App Distribution/credential`.
@@ -118,7 +119,9 @@ keytool -genkeypair -v -keystore glean-release.jks -alias glean \
 ```
 
 Keep the JKS and its passwords in 1Password at
-`op://Homelab/Glean Android Release Signing`. **Never replace it**: Android
+`op://Homelab/Glean Android Release Signing`. The JKS is attached there as
+`glean-release/jks`, and the item records the certificate SHA-256. The key is
+PKCS12, so the key password is the store password. **Never replace it**: Android
 accepts an update only if it is signed by the same key. Codemagic rebuilds the
 JKS on each builder from the `keystore_credentials` group, so nothing goes
 under Codemagic's **Code signing identities**.
