@@ -1,4 +1,9 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'recipes.g.dart';
+
 /// Recipe ingredient as returned inside a [RecipeOut].
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class RecipeIngredientOut {
   const RecipeIngredientOut({
     required this.canonicalName,
@@ -10,31 +15,23 @@ class RecipeIngredientOut {
     this.substitutions = const [],
   });
 
-  factory RecipeIngredientOut.fromJson(Map<String, dynamic> json) {
-    final rawSubstitutions = json['substitutions'] as List<dynamic>?;
-    return RecipeIngredientOut(
-      apiIngredientId: json['api_ingredient_id'] as String?,
-      canonicalName: json['canonical_name'] as String,
-      quantity: (json['quantity'] as num).toDouble(),
-      unit: json['unit'] as String,
-      preparation: json['preparation'] as String?,
-      isOptional: json['is_optional'] as bool? ?? false,
-      substitutions:
-          rawSubstitutions?.map((s) => s as String).toList() ?? const [],
-    );
-  }
+  factory RecipeIngredientOut.fromJson(Map<String, dynamic> json) =>
+      _$RecipeIngredientOutFromJson(json);
 
   final String? apiIngredientId;
   final String canonicalName;
   final double quantity;
   final String unit;
   final String? preparation;
+  @JsonKey(defaultValue: false)
   final bool isOptional;
+  @JsonKey(defaultValue: <String>[])
   final List<String> substitutions;
 }
 
 /// The 7 canonical nutrition fields, mirroring the backend's `NutritionFields` (`backend/src/glean/nutrition.py`).
 /// Stored but not shown in the UI yet; modelled so it round-trips without data loss.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class NutritionOut {
   const NutritionOut({
     this.calories = 0,
@@ -46,29 +43,27 @@ class NutritionOut {
     this.sodiumMg = 0,
   });
 
-  factory NutritionOut.fromJson(Map<String, dynamic> json) {
-    double field(String key) => (json[key] as num? ?? 0).toDouble();
-    return NutritionOut(
-      calories: field('calories'),
-      proteinG: field('protein_g'),
-      carbohydratesG: field('carbohydrates_g'),
-      fatG: field('fat_g'),
-      fibreG: field('fibre_g'),
-      sugarG: field('sugar_g'),
-      sodiumMg: field('sodium_mg'),
-    );
-  }
+  factory NutritionOut.fromJson(Map<String, dynamic> json) =>
+      _$NutritionOutFromJson(json);
 
+  @JsonKey(defaultValue: 0.0)
   final double calories;
+  @JsonKey(defaultValue: 0.0)
   final double proteinG;
+  @JsonKey(defaultValue: 0.0)
   final double carbohydratesG;
+  @JsonKey(defaultValue: 0.0)
   final double fatG;
+  @JsonKey(defaultValue: 0.0)
   final double fibreG;
+  @JsonKey(defaultValue: 0.0)
   final double sugarG;
+  @JsonKey(defaultValue: 0.0)
   final double sodiumMg;
 }
 
 /// An ordered recipe instruction step.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class InstructionOut {
   const InstructionOut({
     required this.stepNumber,
@@ -76,13 +71,8 @@ class InstructionOut {
     required this.text,
   });
 
-  factory InstructionOut.fromJson(Map<String, dynamic> json) {
-    return InstructionOut(
-      stepNumber: json['step_number'] as int,
-      phase: json['phase'] as String,
-      text: json['text'] as String,
-    );
-  }
+  factory InstructionOut.fromJson(Map<String, dynamic> json) =>
+      _$InstructionOutFromJson(json);
 
   final int stepNumber;
   final String phase;
@@ -91,6 +81,7 @@ class InstructionOut {
 
 /// Recipe detail — the response of `GET /recipes/{id}` and
 /// `POST /recipes/import-url`.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class RecipeOut {
   const RecipeOut({
     required this.externalId,
@@ -108,42 +99,8 @@ class RecipeOut {
     this.ingredients = const [],
   });
 
-  factory RecipeOut.fromJson(Map<String, dynamic> json) {
-    final rawNutrition = json['nutrition'] as Map<String, dynamic>?;
-    final rawInstructions = json['instructions'] as List<dynamic>?;
-    final rawIngredients = json['ingredients'] as List<dynamic>?;
-    final rawDietaryFlags = json['dietary_flags'] as List<dynamic>?;
-    final rawNotSuitableFor = json['not_suitable_for'] as List<dynamic>?;
-    return RecipeOut(
-      externalId: json['external_id'] as String,
-      title: json['title'] as String,
-      sourceUrl: json['source_url'] as String?,
-      cuisine: json['cuisine'] as String?,
-      difficulty: json['difficulty'] as String?,
-      activeTimeMins: json['active_time_mins'] as int?,
-      totalTimeMins: json['total_time_mins'] as int?,
-      dietaryFlags:
-          rawDietaryFlags?.map((f) => f as String).toList() ?? const [],
-      notSuitableFor:
-          rawNotSuitableFor?.map((f) => f as String).toList() ?? const [],
-      yieldCount: json['yield_count'] as int?,
-      nutrition: rawNutrition == null
-          ? null
-          : NutritionOut.fromJson(rawNutrition),
-      instructions:
-          rawInstructions
-              ?.map((i) => InstructionOut.fromJson(i as Map<String, dynamic>))
-              .toList() ??
-          const [],
-      ingredients:
-          rawIngredients
-              ?.map(
-                (i) => RecipeIngredientOut.fromJson(i as Map<String, dynamic>),
-              )
-              .toList() ??
-          const [],
-    );
-  }
+  factory RecipeOut.fromJson(Map<String, dynamic> json) =>
+      _$RecipeOutFromJson(json);
 
   final String externalId;
   final String title;
@@ -154,15 +111,20 @@ class RecipeOut {
   final String? difficulty;
   final int? activeTimeMins;
   final int? totalTimeMins;
+  @JsonKey(defaultValue: <String>[])
   final List<String> dietaryFlags;
+  @JsonKey(defaultValue: <String>[])
   final List<String> notSuitableFor;
   final int? yieldCount;
   final NutritionOut? nutrition;
+  @JsonKey(defaultValue: <InstructionOut>[])
   final List<InstructionOut> instructions;
+  @JsonKey(defaultValue: <RecipeIngredientOut>[])
   final List<RecipeIngredientOut> ingredients;
 }
 
 /// Compact recipe result inside a [RecipeSearchResponse].
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class RecipeSearchResult {
   const RecipeSearchResult({
     required this.externalId,
@@ -173,46 +135,32 @@ class RecipeSearchResult {
     this.dietaryFlags = const [],
   });
 
-  factory RecipeSearchResult.fromJson(Map<String, dynamic> json) {
-    final rawDietaryFlags = json['dietary_flags'] as List<dynamic>?;
-    return RecipeSearchResult(
-      externalId: json['external_id'] as String,
-      title: json['title'] as String,
-      cuisine: json['cuisine'] as String?,
-      difficulty: json['difficulty'] as String?,
-      totalTimeMins: json['total_time_mins'] as int?,
-      dietaryFlags:
-          rawDietaryFlags?.map((f) => f as String).toList() ?? const [],
-    );
-  }
+  factory RecipeSearchResult.fromJson(Map<String, dynamic> json) =>
+      _$RecipeSearchResultFromJson(json);
 
   final String externalId;
   final String title;
   final String? cuisine;
   final String? difficulty;
   final int? totalTimeMins;
+  @JsonKey(defaultValue: <String>[])
   final List<String> dietaryFlags;
 }
 
 /// Response body for `GET /recipes/search`.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class RecipeSearchResponse {
   const RecipeSearchResponse({required this.results, required this.total});
 
-  factory RecipeSearchResponse.fromJson(Map<String, dynamic> json) {
-    final rawResults = json['results'] as List<dynamic>;
-    return RecipeSearchResponse(
-      results: rawResults
-          .map((r) => RecipeSearchResult.fromJson(r as Map<String, dynamic>))
-          .toList(),
-      total: json['total'] as int,
-    );
-  }
+  factory RecipeSearchResponse.fromJson(Map<String, dynamic> json) =>
+      _$RecipeSearchResponseFromJson(json);
 
   final List<RecipeSearchResult> results;
   final int total;
 }
 
 /// Request body for `POST /recipes/import-url`.
+@JsonSerializable(fieldRename: FieldRename.snake, createFactory: false)
 class ImportUrlRequest {
   const ImportUrlRequest({
     required this.url,
@@ -224,9 +172,5 @@ class ImportUrlRequest {
   final String? renderedHtml;
   final String? fetchedUrl;
 
-  Map<String, dynamic> toJson() => {
-    'url': url,
-    'rendered_html': renderedHtml,
-    'fetched_url': fetchedUrl,
-  };
+  Map<String, dynamic> toJson() => _$ImportUrlRequestToJson(this);
 }

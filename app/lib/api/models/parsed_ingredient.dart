@@ -1,3 +1,7 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'parsed_ingredient.g.dart';
+
 /// A parsed grocery ingredient with a normalised quantity, returned by all
 /// three parse endpoints: `POST /receipts/scan`, `POST /receipts/describe`
 /// and `POST /shopping/parse-description`.
@@ -11,6 +15,7 @@
 ///   `POST /meal-plan` validates it non-nullably. A missing `food_group` is a contract violation:
 ///   [ParsedIngredient.fromJson] throws [FormatException], which [GleanApiClient] turns into an
 ///   [ApiParseException].
+@JsonSerializable(fieldRename: FieldRename.snake)
 class ParsedIngredient {
   const ParsedIngredient({
     required this.name,
@@ -22,23 +27,8 @@ class ParsedIngredient {
     this.unitPrice,
   });
 
-  factory ParsedIngredient.fromJson(Map<String, dynamic> json) {
-    final foodGroup = json['food_group'];
-    if (foodGroup is! String || foodGroup.isEmpty) {
-      throw FormatException(
-        'ParsedIngredient.food_group missing or empty in response: $json',
-      );
-    }
-    return ParsedIngredient(
-      name: json['name'] as String,
-      quantity: (json['quantity'] as num).toDouble(),
-      unit: json['unit'] as String,
-      foodGroup: foodGroup,
-      confidence: (json['confidence'] as num).toDouble(),
-      category: json['category'] as String?,
-      unitPrice: (json['unit_price'] as num?)?.toDouble(),
-    );
-  }
+  factory ParsedIngredient.fromJson(Map<String, dynamic> json) =>
+      _$ParsedIngredientFromJson(json);
 
   /// LLM-normalised concise grocery item name suitable for a shopping list.
   final String name;
@@ -51,6 +41,7 @@ class ParsedIngredient {
 
   /// Food group derived deterministically from [category] server-side;
   /// `"other"` when [category] is null. Required — see the class-level note.
+  @JsonKey(fromJson: requireFoodGroup)
   final String foodGroup;
 
   /// Confidence from 0.0 to 1.0 that the item matches the request.
@@ -63,13 +54,15 @@ class ParsedIngredient {
   /// Price per requested unit, when the user provided enough pricing detail.
   final double? unitPrice;
 
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'quantity': quantity,
-    'unit': unit,
-    'food_group': foodGroup,
-    'confidence': confidence,
-    'category': category,
-    'unit_price': unitPrice,
-  };
+  Map<String, dynamic> toJson() => _$ParsedIngredientToJson(this);
+}
+
+/// Decodes `food_group`, which the backend always sends; a missing or empty value is a contract violation.
+String requireFoodGroup(Object? value) {
+  if (value is! String || value.isEmpty) {
+    throw FormatException(
+      'ParsedIngredient.food_group missing or empty in response: $value',
+    );
+  }
+  return value;
 }
