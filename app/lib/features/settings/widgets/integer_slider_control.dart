@@ -58,6 +58,7 @@ class IntegerSliderControl extends ConsumerWidget {
           min: min.toDouble(),
           max: max.toDouble(),
           divisions: max > min ? max - min : null,
+          label: '$value',
           onChanged: (double raw) {
             final int next = raw.round();
             if (next == value) return;
@@ -71,8 +72,8 @@ class IntegerSliderControl extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              Text('$min', style: Theme.of(context).textTheme.bodySmall),
-              Text('$max', style: Theme.of(context).textTheme.bodySmall),
+              Text('$min', style: Theme.of(context).textTheme.bodyMedium),
+              Text('$max', style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
