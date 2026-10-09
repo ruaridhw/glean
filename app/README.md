@@ -122,8 +122,10 @@ trail). Trigger it from the Actions tab or `gh workflow run flutter-integration.
 ## CI
 
 - **`.github/workflows/flutter-ci.yml`** — the only job that runs
-  automatically (on push/PR to `app/**`): format check, `flutter analyze`,
-  `flutter test`. No device involved.
+  automatically (on push/PR touching `app/**`, `codemagic.yaml` or
+  `.github/workflows/**`): format check, `flutter analyze`, `flutter test`,
+  and a guard that no release path references `main_e2e.dart`. No device
+  involved.
 - **`.github/workflows/flutter-integration.yml`** — `workflow_dispatch` only;
   see [Integration tests](#integration-tests) above.
 
@@ -207,6 +209,10 @@ This works headless (verified on this box) and writes native assets under
 `android/app/src/main/res/**` and
 `ios/Runner/Assets.xcassets/LaunchImage.imageset/**` /
 `ios/Runner/Base.lproj/LaunchScreen.storyboard` — commit whatever it changes.
+
+Launcher icons are committed assets rendered from `assets/brand/glean-b1-icon.svg`;
+their generator, `scripts/generate_launcher_icons.py`, was removed, so recover it
+from git history if they need regenerating.
 
 ## Web target: deferred
 

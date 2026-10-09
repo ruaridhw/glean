@@ -10,11 +10,13 @@ on:
     branches: [main]
     paths:
       - 'app/**'
-      - '.github/workflows/flutter-ci.yml'
+      - 'codemagic.yaml'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'app/**'
-      - '.github/workflows/flutter-ci.yml'
+      - 'codemagic.yaml'
+      - '.github/workflows/**'
 
 env:
   FLUTTER_VERSION: '3.44.8'
@@ -58,9 +60,18 @@ jobs:
       # unit + widget only, never the device-bound suite (AC-CI-01).
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: flutter test
+      # grep exits 1 only when every path was scanned and nothing matched. A
+      # match (0) or a missing path (2) both fail, so a renamed directory
+      # cannot turn this guard into a no-op.
       - name: Release lanes never target main_e2e.dart
         working-directory: .
         run: |
-          ! grep -rn 'main_e2e' app/ios/fastlane codemagic.yaml .github/workflows \
-            --exclude=flutter-ci.yml --exclude=flutter-integration.yml \
-            || { echo 'A release path references main_e2e.dart'; exit 1; }
+          set +e
+          grep -rn 'main_e2e' app/fastlane app/ios/fastlane codemagic.yaml .github/workflows \
+            --exclude=flutter-ci.yml --exclude=flutter-integration.yml
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo 'A release path references main_e2e.dart, or a scanned path is missing'
+            exit 1
+          fi

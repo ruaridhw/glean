@@ -8,20 +8,20 @@ Original locations are relative to `app/test/`, unless prefixed with `backend/`.
 
 | Original case(s) | Count | Disposition and replacement/retained contract |
 | --- | ---: | --- |
-| Tokens ambient constants | 1 | Rewrite: rendered warning badge under alternate ambient tokens; golden fails if production ignores the override. |
+| Tokens ambient constants | 1 | Rewrite: `AppTokens.lerp` and the camera-overlay token values (`design_system/tokens_test.dart`). The alternate-token golden was later removed with every other golden. |
 | Tokens extension count | 1 | Delete: registry anatomy is not a UI outcome. |
-| Theme typography/palette constants | 2 | Rewrite: rendered typography and actual primary/warning/error components. |
+| Theme typography/palette constants | 2 | Rewrite: rendered typography and palette goldens, later removed with every other golden; no replacement. |
 | Theme Cupertino substring scan | 1 | Delete: comments/file lists cannot prove platform rendering. |
-| Filled/outlined/button-icon/chip styles | 4 | Rewrite: rendered goldens plus activation, toggling and accessible action labels. |
+| Filled/outlined/button-icon/chip styles | 4 | Rewrite: activation, toggling and accessible action labels (`design_system/buttons_test.dart`). |
 | Badge Container ancestry | 1 | Rewrite: readable, accessible status pills at 2x text scale. |
 | Skeleton source scan | 1 | Delete; retain real shimmer/state-transition coverage. |
-| List opacity/slide anatomy | 2 | Rewrite: visible insertion and preservation of existing rows through rendered frames. |
-| Brand SVG/shadow anatomy | 2 | Rewrite: real vendored artwork rendered at app sizes, including visible stem/shadow. |
+| List opacity/slide anatomy | 2 | Rewrite: an inserted Pantry/Shop/Meals row fades in while existing rows keep their element (`features/list_entrance_test.dart`). |
+| Brand SVG/shadow anatomy | 2 | Rewrite: rendered artwork goldens, later removed with every other golden; no replacement. |
 | Haptics recorder/source/default-constructor cases | 3 | Delete those three cases. Add one independent production-provider/platform-channel test; do not count a test recorder as production proof. |
 | Progress painter fractions | 2 | Rewrite: rendered empty/count/progress frames and animation, without casting the painter. |
 | Self-installed auth bypass wiring | 1 | Delete; retain the independent production import-graph/release guard. |
 | Self-throwing auth override | 1 | Rewrite: production `sessionOverrides`, genuinely signed-out identity and assembled bootstrap wiring. |
-| In-memory-only token storage contracts | 3 | Rewrite: actual `SecureTokenStorage` adapter at the secure-storage plugin boundary. |
+| In-memory-only token storage contracts | 3 | Rewrite: the concrete `TokenStorage` at the secure-storage plugin boundary (`auth/token_storage_test.dart`). |
 | Standalone corpus null-ID decoder | 1 | Merge into corpus request/decode/persistence contract cases. |
 | Obsolete saved-ID Generate fixtures | 2 | Rewrite as real Plan/router/SQLite flows using corpus external IDs/details, request settings, persisted meals/gaps and visible retry. |
 | Obsolete controller double-tap case | 1 | Merge into corpus detail-pending single-flight coverage; add real manual/Generate overlap coverage. |
@@ -35,7 +35,7 @@ Original locations are relative to `app/test/`, unless prefixed with `backend/`.
 
 Retained tests outside those deletions still cover legitimate contracts: HTTP wire shapes, production import/build guards, unique route names, exact taxonomy membership/derivation, real shimmer/crossfade transitions and real SQL persistence. They are not release/device proof.
 
-Seventeen widget golden images were visually inspected. A controlled mutation making the production badge ignore ambient tokens failed the alternate-token golden; restoring the production implementation passed. This is headless rendering evidence only.
+The widget golden images this audit originally added have since been removed (`app/AGENTS.md`: no golden images). The rows above name the assertions that remain.
 
 ## Three misleading cases repaired separately
 

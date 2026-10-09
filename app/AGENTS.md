@@ -26,9 +26,10 @@ below for targeted runs within this directory:
 ```bash
 flutter test test/data/pantry_repository_test.dart   # single file
 flutter test --plain-name "adds an item"             # single test by name
+memcap flutter test --concurrency=4                   # default concurrency flakes with flutter_tester load errors on some machines
 flutter analyze                                       # must be zero errors/warnings/infos
 dart format --output=none --set-exit-if-changed lib test integration_test  # check only
-dart run build_runner build --delete-conflicting-outputs  # after touching drift tables
+dart run build_runner build --delete-conflicting-outputs  # after touching drift tables or API models (lib/api/models)
 ```
 
 None of the above need an Android SDK, Java, or Xcode — they run on any
@@ -49,10 +50,11 @@ lib/
 ├── main_e2e.dart             # integration_test entrypoint — the ONLY importer of auth_bypass.dart
 ├── bootstrap.dart            # Shared startup wiring both entrypoints call into
 ├── app.dart                  # MaterialApp.router root widget
-├── data/                     # drift tables, repositories, providers.dart (Stream providers)
+├── auth/                     # AuthController, Cognito client, TokenStorage; auth_bypass.dart (e2e only)
+├── data/                     # drift tables, repositories/, providers/ (stream + repository providers)
 ├── design_system/            # ThemeData, AppTokens (ThemeExtension), Haptics, GleanSnackBar, ListSkeleton
 ├── router/                   # go_router table, route constants, the five-tab shell
-├── api/                      # Typed HTTP client + models + api_providers.dart
+├── api/                      # Typed HTTP client, models/ (json_serializable), providers/
 └── features/<feature>/       # Screen + widgets/ + providers, one dir per tab/flow
 test/                          # Unit + widget tests mirroring lib/, plus test/standards/
 integration_test/              # The one integration_test suite (app_test.dart), against main_e2e.dart
@@ -60,9 +62,12 @@ integration_test/              # The one integration_test suite (app_test.dart),
 
 ## Standards
 
-Enforced by `test/standards/house_rules_test.dart`; `flutter analyze` and
-`dart format` cover the rest. Do not add allowlist entries to that test to get
-a change through.
+`test/standards/house_rules_test.dart` enforces the import half of rule 1,
+the colour half of rule 2, rule 3's citation patterns, and the auth-bypass
+import graph (see [Auth bypass](#auth-bypass)). The test has no exemptions;
+fix the code. The rest — spacing from `context.tokens`, not constructing a
+repository or `GleanApiClient` in a feature, and rules 4–7 — is convention
+that review checks. `flutter analyze` and `dart format` cover style.
 
 1. **Data access only through providers.** Nothing under `lib/features/**`
    imports `package:drift`, `lib/data/database.dart`, `lib/data/tables.dart`
@@ -73,8 +78,8 @@ a change through.
 2. **Colours and spacing come from the theme.** Outside `lib/design_system/`
    there is no `Colors.*` (except `Colors.transparent`) and no `Color(0x…)`.
    Use `Theme.of(context).colorScheme` and `context.tokens`. Camera-overlay
-   colours are tokens too (`tokens.color.onCamera`, `cameraScrim`,
-   `cameraBackdrop`).
+   colours are tokens too (`tokens.onCamera`, `tokens.cameraScrim`,
+   `tokens.cameraBackdrop`).
 3. **No process citations in code.** Comments explain the current
    constraint, not the ticket that introduced it: no `AC-…`, `R-nn`, `F-nn`,
    `FINDINGS.md`, `REMEDIATION.md`, `.scratch/`, "Wave", "orchestrator", or
