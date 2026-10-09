@@ -110,28 +110,37 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF111511),
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          switch (_phase) {
-            _ScanPhase.checkingPermission => const SizedBox.shrink(),
-            _ScanPhase.ready => _camera.buildPreview(),
-            _ScanPhase.denied ||
-            _ScanPhase.permanentlyDenied => CameraPermissionPrompt(
-              permanentlyDenied: _phase == _ScanPhase.permanentlyDenied,
-              onRequestPermission: () => unawaited(_requestPermission()),
-              onOpenSettings: () => unawaited(_camera.openAppSettings()),
-            ),
-          },
-          if (_phase == _ScanPhase.ready)
-            ScanOverlay(
-              capturing: _capturing,
-              onCapture: () => unawaited(_capture()),
-            ),
-          ScanBackButton(onPressed: _exit),
-        ],
+    // With nothing underneath (reached by `go`, e.g. a deep link), the system
+    // back gesture would otherwise close the app; route it through [_exit],
+    // the same fallback the on-screen back button uses.
+    return PopScope(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (!didPop) _exit();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF111511),
+        body: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            switch (_phase) {
+              _ScanPhase.checkingPermission => const SizedBox.shrink(),
+              _ScanPhase.ready => _camera.buildPreview(),
+              _ScanPhase.denied ||
+              _ScanPhase.permanentlyDenied => CameraPermissionPrompt(
+                permanentlyDenied: _phase == _ScanPhase.permanentlyDenied,
+                onRequestPermission: () => unawaited(_requestPermission()),
+                onOpenSettings: () => unawaited(_camera.openAppSettings()),
+              ),
+            },
+            if (_phase == _ScanPhase.ready)
+              ScanOverlay(
+                capturing: _capturing,
+                onCapture: () => unawaited(_capture()),
+              ),
+            ScanBackButton(onPressed: _exit),
+          ],
+        ),
       ),
     );
   }

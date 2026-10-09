@@ -81,6 +81,30 @@ void main() {
       expect(find.byType(ScanScreen), findsNothing);
     });
 
+    testWidgets('system back with nothing underneath returns to Pantry '
+        'instead of leaving the app', (WidgetTester tester) async {
+      setUpHarness(CameraPermissionState.granted);
+      // `go`, not `push`: the scan screen is the only route in the stack,
+      // which is how a deep link or first-run setup can land on it.
+      harness.router.goNamed(
+        AppRoutes.intakeScan.name,
+        extra: const ScanArgs(),
+      );
+      await tester.pumpWidget(harness.app());
+      await tester.pumpAndSettle();
+      expect(find.byType(ScanScreen), findsOneWidget);
+
+      final bool handled = await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(handled, isTrue);
+      expect(find.byType(ScanScreen), findsNothing);
+      expect(
+        harness.router.routerDelegate.currentConfiguration.uri.path,
+        AppRoutes.pantry.path,
+      );
+    });
+
     testWidgets('granted: tapping the shutter fires a haptic and navigates '
         'to scan-progress with the captured bytes', (
       WidgetTester tester,
