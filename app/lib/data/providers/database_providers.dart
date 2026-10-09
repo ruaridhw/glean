@@ -6,9 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/auth_controller.dart';
 import '../database.dart';
 
-/// The single `GleanDatabase` instance for the app's lifetime. Local SQLite
-/// is the sole source of truth for user data (FLUTTER_MIGRATION.md §3), so
-/// this provider is the root of the whole data layer.
+/// The single `GleanDatabase` instance for the app's lifetime; the root of the data layer.
 final Provider<GleanDatabase> gleanDatabaseProvider = Provider<GleanDatabase>((
   ref,
 ) {
@@ -37,11 +35,8 @@ final Provider<String> currentUserIdProvider = Provider<String>((ref) {
   return id;
 });
 
-/// Resolves once the database has successfully opened, or surfaces the
-/// `AsyncValue.error` from a failed open. The app shell (router/orchestrator)
-/// watches this to show a real error state instead of proceeding with a
-/// possibly-unusable database (§6 Settings & auth; AC-DATA-12) — RN's
-/// DB-init failure was caught and silently ignored.
+/// Resolves once the database has opened, or surfaces the `AsyncValue.error` from a failed open, so the app
+/// shows a real error state instead of proceeding with an unusable database.
 final FutureProvider<void> databaseReadyProvider = FutureProvider<void>((
   ref,
 ) async {

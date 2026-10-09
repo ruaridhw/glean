@@ -1,7 +1,5 @@
-// Pantry reads for the current user. Screens watch [pantryItemsProvider]
-// and never call the repository's read methods directly (AC-DATA-07) — the
-// stream re-emits on every write, so there is no on-focus reload
-// (AC-DATA-04).
+// Pantry reads for the current user. Screens watch [pantryItemsProvider] rather than calling the
+// repository's reads; the stream re-emits on every write, so there is no on-focus reload.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/pantry_item_view.dart';

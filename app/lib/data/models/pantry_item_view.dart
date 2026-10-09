@@ -1,17 +1,8 @@
-// Read-side shape for a pantry item joined with its ingredient and category
-// (mirrors the `PantryItem` interface in the Expo app's `src/types/index.ts`,
-// see git history, plus `userId`).
+// Read-side shape for a pantry item joined with its ingredient and category.
 //
-// `foodGroup` is non-nullable (AC-DATA-11), but that is enforced by
-// coalescing in `PantryRepository._mapRow`, not by requiring the join to
-// match: `ingredients.category` is nullable (the ingredient catalog is
-// shared, and recipe import can create a category-less ingredient), so a
-// pantry item whose ingredient has no taxonomy category still surfaces here
-// with `foodGroup == 'other'` — the same fallback the backend and the RN UI
-// both already use (FINDINGS.md F-07/F-08) — rather than silently
-// disappearing from the list. `category` and `shelfLifeDays` stay honestly
-// nullable: there is no fine-grained category to report, and no shelf life
-// to infer an expiry from, in that case.
+// `foodGroup` is non-nullable by coalescing in `PantryRepository._mapRow`: `ingredients.category` is nullable,
+// so an item whose ingredient has no taxonomy category surfaces with `foodGroup == 'other'` (the backend's
+// fallback too) rather than vanishing. `category` and `shelfLifeDays` stay nullable.
 class PantryItemView {
   const PantryItemView({
     required this.id,

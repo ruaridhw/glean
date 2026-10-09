@@ -1,12 +1,6 @@
-/// Trim/validate wrapper for free-text API request bodies.
-///
-/// Ported from the Expo app's `src/normalization/text-input.ts` (see git
-/// history), which — per the API module brief — was the only logic in the
-/// RN `api/hooks.ts` its own
-/// tests actually exercised. Behaviour, not structure: outer whitespace is
-/// trimmed, intentional internal newlines/spacing (a multi-line shopping
-/// description) are preserved, and text that is empty after trimming is
-/// rejected before anything is sent over the wire.
+/// Trim/validate wrapper for free-text API request bodies. Outer whitespace is trimmed, intentional internal
+/// newlines/spacing (a multi-line shopping description) are preserved, and text that is empty after trimming
+/// is rejected before anything is sent.
 library;
 
 /// Thrown by [requireSubmittedText] when a piece of user-submitted text is

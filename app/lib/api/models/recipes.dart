@@ -33,10 +33,8 @@ class RecipeIngredientOut {
   final List<String> substitutions;
 }
 
-/// The 7 canonical nutrition fields, mirroring the backend's shared
-/// `NutritionFields` (`backend/src/glean/nutrition.py`). Stored but not
-/// shown in the UI yet (FLUTTER_MIGRATION.md §1 — out of scope for this
-/// port); modelled here so it round-trips without data loss.
+/// The 7 canonical nutrition fields, mirroring the backend's `NutritionFields` (`backend/src/glean/nutrition.py`).
+/// Stored but not shown in the UI yet; modelled so it round-trips without data loss.
 class NutritionOut {
   const NutritionOut({
     this.calories = 0,
@@ -126,8 +124,6 @@ class RecipeOut {
       totalTimeMins: json['total_time_mins'] as int?,
       dietaryFlags:
           rawDietaryFlags?.map((f) => f as String).toList() ?? const [],
-      // AC-MEAL-04: surfaced prominently on the recipe detail — stored and
-      // displayed nowhere in the RN app.
       notSuitableFor:
           rawNotSuitableFor?.map((f) => f as String).toList() ?? const [],
       yieldCount: json['yield_count'] as int?,
@@ -152,7 +148,7 @@ class RecipeOut {
   final String externalId;
   final String title;
 
-  /// AC-MEAL-05: surfaced as tappable attribution for imported recipes.
+  /// Shown as tappable attribution for imported recipes.
   final String? sourceUrl;
   final String? cuisine;
   final String? difficulty;

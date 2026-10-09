@@ -1,8 +1,5 @@
-/// Top-N urgency-scored pantry item sent to `POST /meal-plan`. Building the
-/// urgency score and top-N compression is the DATA module's job (ported
-/// from the Expo app's `src/meal-plan/compress.ts`, see git history); this
-/// model is just the wire
-/// shape the backend's `CompressedPantryItem` schema expects.
+/// Top-N urgency-scored pantry item sent to `POST /meal-plan`; the wire shape of the backend's
+/// `CompressedPantryItem`. Scoring and compression happen in the data layer.
 class CompressedPantryItem {
   const CompressedPantryItem({
     required this.id,
@@ -30,14 +27,8 @@ class CompressedPantryItem {
   };
 }
 
-/// One saved recipe's cook history, sent to `POST /meal-plan` so the LLM can
-/// avoid recent repeats and balance food-group coverage.
-///
-/// [foodGroups] is part of AC-PLAN-08: the RN client hardcoded
-/// `food_group_coverage` empty everywhere, which made the backend's
-/// "balance food group coverage" prompt rule permanently inert
-/// (FLUTTER_MIGRATION.md §6). This field — the food groups each recipe
-/// covers — is what the caller populates to make that rule live again.
+/// One saved recipe's cook history, sent to `POST /meal-plan` so the LLM can avoid recent repeats. [foodGroups]
+/// (the groups each recipe covers) must be populated, or the backend's "balance food group coverage" rule is inert.
 class RecipeHistoryItem {
   const RecipeHistoryItem({
     required this.recipeId,
@@ -61,12 +52,8 @@ class RecipeHistoryItem {
   };
 }
 
-/// Request body for `POST /meal-plan`.
-///
-/// [foodGroupCoverage] is the other half of AC-PLAN-08 alongside
-/// [RecipeHistoryItem.foodGroups] — the number of meals cooked this week
-/// per food group. The caller (DATA/features) must compute and pass a real
-/// map here; this model does not default it to empty, unlike the RN client.
+/// Request body for `POST /meal-plan`. [foodGroupCoverage] (meals cooked this week per food group) is not
+/// defaulted to empty: the caller must compute it.
 class MealPlanRequest {
   const MealPlanRequest({
     required this.pantry,
@@ -84,7 +71,6 @@ class MealPlanRequest {
   /// excluded).
   final List<CompressedPantryItem> pantry;
 
-  /// All saved recipes with their last-cooked timestamps.
   final List<RecipeHistoryItem> recipeHistory;
 
   /// Number of meals cooked this week per food group, e.g.
@@ -95,13 +81,11 @@ class MealPlanRequest {
   /// regardless of missing items.
   final double purchaseTolerance;
 
-  /// Number of meal-plan slots to fill (may be less than a full week if the
-  /// plan is partially filled — generation is top-up only, AC-PLAN-06).
+  /// Number of meal-plan slots to fill (may be less than a full week; generation is top-up only).
   final int mealsPerWeek;
 
   final List<String> dietaryFlags;
 
-  /// Null means no limit.
   final int? maxActiveTimeMins;
 
   final String source;
@@ -120,9 +104,8 @@ class MealPlanRequest {
   };
 }
 
-/// A single LLM-suggested recipe returned by `POST /meal-plan`. This is an
-/// ephemeral proposal (AC-DATA-06) — nothing is persisted until the user
-/// reviews and commits it via a DATA mutation.
+/// A single LLM-suggested recipe returned by `POST /meal-plan`: an ephemeral proposal, persisted only when the
+/// user commits it.
 class MealPlanRecipe {
   const MealPlanRecipe({
     this.recipeId,
@@ -151,7 +134,6 @@ class MealPlanRecipe {
   final List<String> missingIngredients;
 }
 
-/// Response body for `POST /meal-plan`.
 class MealPlanResponse {
   const MealPlanResponse({required this.suggestions});
 

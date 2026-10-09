@@ -1,7 +1,4 @@
-// Ported from the Expo app's `src/db/config.ts` (see git history). `id` is
-// the Cognito user sub, so
-// this table was already user-scoped in RN — no schema change needed here,
-// unlike the other four tables (FLUTTER_MIGRATION.md §3).
+// User-config persistence. `id` is the Cognito user sub, so this table is user-scoped by construction.
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -14,10 +11,8 @@ class UserConfigRepository {
 
   final GleanDatabase _db;
 
-  /// Emits [UserConfigView.defaults] until [userId] has ever saved
-  /// settings, then the saved row — mirrors RN's "no row yet" fallback in
-  /// `getUserConfig`, but as a stream so the settings screen never needs a
-  /// manual reload.
+  /// Emits [UserConfigView.defaults] until [userId] has saved settings, then the saved row; a stream, so the
+  /// settings screen never needs a manual reload.
   Stream<UserConfigView> watch(String userId) {
     final query = _db.select(_db.userConfig)..where((t) => t.id.equals(userId));
     return query.watchSingleOrNull().map(

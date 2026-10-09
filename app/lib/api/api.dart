@@ -1,5 +1,4 @@
-/// Barrel export for the API module. Other modules (DATA, features) should
-/// import this rather than reaching into `lib/api/**` file-by-file.
+/// Barrel export for the API module.
 library;
 
 export 'api_client.dart';

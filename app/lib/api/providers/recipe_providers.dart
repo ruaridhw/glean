@@ -10,24 +10,12 @@ import 'api_providers.dart';
 /// search request.
 const Duration recipeSearchDebounce = Duration(milliseconds: 350);
 
-/// Debounced recipe search — the only endpoint that wants query-style
-/// caching (FLUTTER_MIGRATION.md §3, AC-DATA-08).
-///
-/// `family` keys each in-flight search by its raw query text; `autoDispose`
-/// is what makes debouncing work without a separate timer/cancel-token
-/// abstraction: when the UI moves on to a new keystroke, the *previous*
-/// family instance loses its last listener and Riverpod tears it down. If
-/// that happens before its `Future.delayed` below elapses, `ref.mounted`
-/// is false when execution resumes and the network call is never issued —
-/// so rapid typing produces exactly one request (for whichever query the
-/// user stopped on long enough), not one per keystroke. This is not request
-/// *cancellation* (a Dart `Future` can't be cancelled once started); it's
-/// debouncing the point at which the request is issued in the first place.
-// No explicit type annotation: `FutureProviderFamily` is only exported from
-// `package:riverpod/misc.dart`, not the `flutter_riverpod` barrel this file
-// otherwise relies on, and pubspec.yaml (orchestrator-owned) declares only
-// `flutter_riverpod`. Letting Dart infer the type avoids an
-// `depend_on_referenced_packages` lint on a package we don't declare.
+/// Debounced recipe search. `autoDispose` makes the debounce work without a timer abstraction: when the UI moves
+/// to a new keystroke the previous family instance loses its last listener and is torn down; if that happens
+/// before its `Future.delayed` elapses, `ref.mounted` is false and the request is never issued. This debounces
+/// when the request is issued; it does not cancel one in flight.
+// No explicit type annotation: `FutureProviderFamily` is only exported from `package:riverpod/misc.dart`, which
+// pubspec.yaml doesn't declare; inferring avoids a `depend_on_referenced_packages` lint.
 // Surface remote failures promptly. Riverpod's automatic retries otherwise
 // keep auth rejections behind a loading skeleton instead of showing recovery.
 final recipeSearchProvider = FutureProvider.autoDispose
@@ -46,10 +34,8 @@ final recipeSearchProvider = FutureProvider.autoDispose
       return client.searchRecipes(q: query);
     }, retry: (retryCount, error) => null);
 
-/// Recipe detail lookup by external id (`GET /recipes/{id}`). `family` +
-/// `autoDispose` so a screen that navigates away drops the fetch rather
-/// than holding it cached forever — recipe detail isn't the query-caching
-/// case AC-DATA-08 calls out (that's search only).
+/// Recipe detail lookup by external id. `autoDispose` so a screen that navigates away drops the fetch rather
+/// than caching it.
 final recipeDetailProvider = FutureProvider.autoDispose
     .family<RecipeOut, String>((ref, recipeId) async {
       final client = ref.watch(apiClientProvider);

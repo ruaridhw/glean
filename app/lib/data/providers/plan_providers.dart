@@ -1,4 +1,4 @@
-// Week-scoped plan reads for the current user (AC-PLAN-01/02).
+// Week-scoped plan reads for the current user.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/meal_plan_entry_view.dart';
@@ -6,10 +6,8 @@ import 'database_providers.dart';
 import 'repository_providers.dart';
 import 'user_config_providers.dart';
 
-/// Entries in the week starting [weekStart] (a Monday — see
-/// `lib/data/util/week.dart`'s `startOfWeek`), for the current user.
-/// Callers key this `.family` by whichever week they're paginated to
-/// (AC-PLAN-02); cooked entries are included (AC-PLAN-03).
+/// Entries in the week starting [weekStart] (a Monday, see `startOfWeek`), including cooked entries.
+/// Callers key this `.family` by the week they're paginated to.
 final planWeekProvider =
     StreamProvider.family<List<MealPlanEntryView>, DateTime>((ref, weekStart) {
       final userId = ref.watch(currentUserIdProvider);
@@ -18,11 +16,8 @@ final planWeekProvider =
           .watchWeek(userId: userId, weekStart: weekStart);
     });
 
-/// How many more meals can be added to the week starting [weekStart],
-/// derived from the same watched [planWeekProvider] stream plus the user's
-/// `mealsPerWeek` setting — not a separate one-shot query, so it updates
-/// the instant either changes, with no invalidation call (AC-PLAN-04,
-/// AC-DATA-05).
+/// How many more meals can be added to the week starting [weekStart]: derived from [planWeekProvider] and
+/// `mealsPerWeek`, so it updates the instant either changes.
 final planWeekRemainingCapacityProvider =
     Provider.family<AsyncValue<int>, DateTime>((ref, weekStart) {
       final entries = ref.watch(planWeekProvider(weekStart));

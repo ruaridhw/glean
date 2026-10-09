@@ -1,9 +1,5 @@
-// One `Provider` per repository, each a thin, cheap-to-construct wrapper
-// around `GleanDatabase` (plus whichever other repository it composes).
-// Mutations are plain async methods on these — `ref.read(xRepositoryProvider
-// ).someMutation(...)` — with no notifier/cache-invalidation machinery,
-// because every read is a drift stream that re-emits on its own
-// (FLUTTER_MIGRATION.md §3, AC-DATA-05).
+// One `Provider` per repository, each a thin wrapper around `GleanDatabase`. Mutations are plain async
+// methods; no invalidation machinery is needed because every read is a drift stream that re-emits on its own.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../repositories/ingredients_repository.dart';

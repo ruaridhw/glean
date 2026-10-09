@@ -12,26 +12,13 @@ import 'models/recipes.dart';
 import 'models/shopping.dart';
 import 'text_input.dart';
 
-/// Supplies the current user's bearer token, or `null` if signed out.
-///
-/// **Seam:** the AUTH module (`lib/auth/**`) owns tokens. [GleanApiClient]
-/// takes this as an injected callback rather than reading token storage
-/// itself, so it stays testable and never depends on `lib/auth/` directly —
-/// `lib/main.dart` wires in [AuthController.getValidAccessToken] via
-/// `lib/api/providers/api_providers.dart`'s `apiAccessTokenProvider`.
+/// Supplies the current user's bearer token, or `null` if signed out. Injected rather than read from token
+/// storage, so the client stays testable and independent of `lib/auth/`.
 typedef AccessTokenProvider = Future<String?> Function();
 
-/// Typed HTTP client for the Glean FastAPI backend.
-///
-/// The backend holds no user state (FLUTTER_MIGRATION.md §3): its complete
-/// route surface is recipe search/detail/import, meal-plan generation, and the
-/// three parse endpoints. Every method here returns an
-/// *ephemeral proposal* — a DTO for the caller to review and, if accepted,
-/// persist via a DATA mutation. Nothing in this file writes to a database.
-///
-/// [baseUrl] is passed in, never read from `--dart-define` here — the
-/// entrypoint (`main.dart` vs `main_e2e.dart`) owns which backend a build
-/// talks to.
+/// Typed HTTP client for the Glean FastAPI backend, which holds no user state. Every method returns an
+/// ephemeral proposal (a DTO) for the caller to review and persist; nothing here writes to a database.
+/// [baseUrl] is passed in: the entrypoint owns which backend a build talks to.
 class GleanApiClient {
   GleanApiClient({
     required this.baseUrl,
@@ -43,9 +30,7 @@ class GleanApiClient {
   /// e.g. `http://localhost:8000` locally, or the deployed API Gateway URL.
   final String baseUrl;
 
-  /// Every request is bounded by this (AC-PAN-14): the RN app had no
-  /// client-side timeout on the LLM call, so a stalled request hung the
-  /// scan-progress screen on "Almost done..." forever with no way out.
+  /// Every request is bounded by this, so a stalled LLM call can't hang a screen forever.
   final Duration timeout;
 
   final http.Client httpClient;
@@ -180,11 +165,8 @@ class GleanApiClient {
     'Content-Type': 'application/json',
   };
 
-  /// Runs [send], applying the shared timeout/network/decode handling every
-  /// endpoint above needs. Nothing thrown from here is a bare `Exception`
-  /// or `Error` — everything is one of the [ApiException] subtypes so a
-  /// caller can distinguish "signed out" from "timed out" from "server
-  /// rejected it" (AC-SET-03 / AC-MEAL-10 client half).
+  /// Runs [send], applying shared timeout/network/decode handling. Everything thrown is an [ApiException]
+  /// subtype, so a caller can tell "signed out" from "timed out" from "server rejected it".
   Future<T> _send<T>(
     Uri uri,
     Future<http.Response> Function() send,

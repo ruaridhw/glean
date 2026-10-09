@@ -9,15 +9,9 @@ class ShoppingParseRequest {
   Map<String, dynamic> toJson() => {'text': text};
 }
 
-/// A shopping-item proposal parsed from a free-text description. Adds
-/// [apiIngredientId] to the fields every parse endpoint returns — the
-/// trusted ingredient-catalogue id, still always null until server-side
-/// ingredient resolution exists (`backend/src/glean/shopping/schemas.py`).
-///
-/// On the backend, `ShoppingProposalItem` *inherits* `category`/`food_group`
-/// from `ParsedIngredient` unchanged (same taxonomy, same nullability, same
-/// `"other"` fallback) — so this subclass carries the identical asymmetry:
-/// [category] nullable, [foodGroup] (inherited) required.
+/// A shopping-item proposal parsed from a free-text description. Adds [apiIngredientId], the trusted
+/// ingredient-catalogue id, still always null until server-side ingredient resolution exists. Inherits
+/// `category`/`food_group` from `ParsedIngredient` unchanged: [category] nullable, [foodGroup] required.
 class ShoppingProposalItem extends ParsedIngredient {
   const ShoppingProposalItem({
     required super.name,

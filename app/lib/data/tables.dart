@@ -1,39 +1,20 @@
 // Table definitions for the Glean drift database.
 //
-// Ported from the Expo app's `src/db/schema.ts` (Drizzle over expo-sqlite;
-// see git history), with the schema changes required by
-// FLUTTER_MIGRATION.md §3 and §6:
+// - Every user-data table carries a `userId` column, so switching accounts on one device never exposes
+//   another user's data.
+// - `ingredient_categories.shelfLifeDays` is the basis for automatic expiry inference.
+// - `meal_plan_entries.recipeId` is nullable with `onDelete: setNull`, and the entry snapshots `recipeTitle`,
+//   so deleting a recipe only drops the link.
+// - `shopping_list_items.ingredientId` is NOT NULL, and `sourceMealPlanEntryId` cascades a deleted plan
+//   entry's shopping rows away.
+// - `cooked_adjustments` records exactly what "Cooked" took from the pantry so it can be reversed.
 //
-//   1. Every user-data table carries a `userId` column (AC-DATA-02). RN only
-//      scoped `user_config`; `pantry_items`, `recipes`, `meal_plan_entries`
-//      and `shopping_list_items` had none, so switching accounts on one
-//      device inherited the previous user's groceries.
-//   2. `ingredient_categories` gains `shelfLifeDays`, the basis for
-//      automatic expiry inference (§6 Pantry) — nothing in the RN app ever
-//      wrote an expiry date.
-//   3. `meal_plan_entries.recipeId` is nullable with `onDelete: setNull`, and
-//      the entry snapshots `recipeTitle` at creation time, so deleting a
-//      recipe only drops the link rather than destroying the record of what
-//      was cooked (AC-MEAL-03).
-//   4. `shopping_list_items.ingredientId` is NOT NULL (AC-SHOP-03) and gains
-//      `sourceMealPlanEntryId` so a deleted plan entry cascades its
-//      plan-derived shopping rows away (AC-SHOP-06) without a manual sweep.
-//   5. A new `cooked_adjustments` table records exactly what "Cooked" took
-//      out of the pantry so it can be reversed (AC-UX-03).
-//
-// Dates/timestamps are stored as ISO-8601 TEXT throughout (matching the RN
-// schema) rather than drift's `dateTime()` column, which defaults to unix
-// timestamps and would need extra build config to match. ISO-8601 text also
-// sorts and range-filters correctly with plain SQL comparisons, which the
-// week-scoped plan queries rely on.
-//
-// Column and table SQL names are drift's default camelCase -> snake_case
-// conversion; no `.named()` overrides are needed to match the original
-// snake_case schema.
+// Dates/timestamps are ISO-8601 TEXT rather than drift's `dateTime()`; text sorts and range-filters correctly
+// with plain SQL comparisons, which the week-scoped plan queries rely on. SQL names are drift's default
+// camelCase to snake_case.
 import 'package:drift/drift.dart';
 
-/// The 23-category ingredient taxonomy (FLUTTER_MIGRATION.md §9), each with
-/// the shelf-life-in-days used to infer pantry expiry automatically.
+/// The 23-category ingredient taxonomy, each with the shelf life in days used to infer pantry expiry.
 class IngredientCategories extends Table {
   TextColumn get category => text()();
   TextColumn get foodGroup => text()();
@@ -43,17 +24,12 @@ class IngredientCategories extends Table {
   Set<Column> get primaryKey => {category};
 }
 
-/// A resolved ingredient identity, shared across pantry, recipes and
-/// shopping. Not user-scoped: it is a catalog of ingredient names, not user
-/// data.
+/// A resolved ingredient identity shared across pantry, recipes and shopping. Not user-scoped: it is a
+/// catalog of names.
 ///
-/// `category` stays nullable at the schema level because recipe-import
-/// ingredients still have no source of category (recipe endpoints are
-/// outside the §9 backend change) — but every pantry/shopping intake path in
-/// this data layer requires a non-null, taxonomy-valid category when
-/// resolving an ingredient, which is what actually makes `food_group`
-/// non-nullable where it matters (AC-DATA-11): pantry item reads. See
-/// `IngredientsRepository.resolveOrCreate`.
+/// `category` is nullable because recipe-import ingredients have no category source, but every pantry/shopping
+/// intake path requires a non-null, taxonomy-valid one, which makes `food_group` non-nullable on pantry reads.
+/// See `IngredientsRepository.resolveOrCreate`.
 class Ingredients extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get canonicalName => text().unique()();
@@ -76,8 +52,7 @@ class PantryItems extends Table {
   TextColumn get lastUsedAt => text().nullable()();
   TextColumn get updatedAt => text()();
 
-  // `upsertItem` depends on at most one row per (user, ingredient); the RN
-  // schema never enforced this at the DB level.
+  // `upsertItem` depends on at most one row per (user, ingredient).
   @override
   List<Set<Column>> get uniqueKeys => [
     {userId, ingredientId},
@@ -102,7 +77,7 @@ class Recipes extends Table {
   TextColumn get instructions => text().withDefault(const Constant('[]'))();
   TextColumn get lastCookedAt => text().nullable()();
 
-  // "already saved" dedupe (AC-MEAL-10) is per user, not global.
+  // "Already saved" dedupe is per user, not global.
   @override
   List<Set<Column>> get uniqueKeys => [
     {userId, externalId},
@@ -130,10 +105,8 @@ class RecipeIngredients extends Table {
   TextColumn get substitutions => text().withDefault(const Constant('[]'))();
 }
 
-/// A planned meal. `recipeId` is nullable with `onDelete: setNull` and
-/// `recipeTitle` is captured at creation time so deleting the recipe from the
-/// library keeps this entry showing what was (or is being) cooked
-/// (AC-MEAL-03) instead of losing the row or dangling on a missing FK.
+/// A planned meal. `recipeId` is nullable with `onDelete: setNull` and `recipeTitle` is captured at creation,
+/// so deleting the recipe keeps the entry.
 class MealPlanEntries extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get userId => text()();
@@ -143,23 +116,18 @@ class MealPlanEntries extends Table {
     onDelete: KeyAction.setNull,
   )();
   TextColumn get recipeTitle => text()();
-  // ISO date (YYYY-MM-DD), the day within the entry's plan week. Now
-  // load-bearing: week-scoped queries and rollover both filter/write it
-  // (AC-PLAN-01).
+  // ISO date (YYYY-MM-DD), the day within the entry's plan week; week-scoped queries and rollover use it.
   TextColumn get plannedDate => text()();
   TextColumn get cookedAt => text().nullable()();
   // Survives library deletion so corpus exclusion keeps its identity.
   TextColumn get externalIdSnapshot => text().nullable()();
   // Undo restores/forwards this history snapshot, just like pantry deltas.
   TextColumn get previousRecipeCookedAt => text().nullable()();
-  // No default: every call site must state servings explicitly so
-  // `preferred_servings` can never be silently re-hardcoded to 1
-  // (AC-PLAN-07) the way RN's `addMealPlanEntry` did.
+  // No default: every call site must state servings so `preferred_servings` can't be silently hardcoded to 1.
   IntColumn get servings => integer()();
 }
 
-/// The exact pantry delta "Cooked" applied for one plan entry, so it can be
-/// reversed precisely (AC-UX-03) rather than approximated. One row per
+/// The exact pantry delta "Cooked" applied for one plan entry, so it can be reversed precisely. One row per
 /// ingredient the recipe touched.
 class CookedAdjustments extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -180,13 +148,11 @@ class CookedAdjustments extends Table {
   TextColumn get createdAt => text()();
 }
 
-/// `ingredientId` is NOT NULL (AC-SHOP-03) — manual entries resolve an
-/// ingredient identity through `IngredientsRepository` rather than storing a
-/// bare name, which is what let them dodge every receipt match in RN.
+/// `ingredientId` is NOT NULL: manual entries resolve an ingredient identity through `IngredientsRepository`
+/// so they can match a receipt.
 ///
-/// `sourceMealPlanEntryId` links a plan-derived row back to the entry that
-/// created it, so deleting the entry cascades away just its own gap rows
-/// (AC-SHOP-06) instead of requiring a manual sweep.
+/// `sourceMealPlanEntryId` links a plan-derived row to its entry, so deleting the entry cascades away just its
+/// own gap rows.
 class ShoppingListItems extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get userId => text()();
@@ -216,12 +182,7 @@ class UserConfig extends Table {
   IntColumn get mealsPerWeek => integer().withDefault(const Constant(5))();
   TextColumn get dietaryFlags => text().withDefault(const Constant('[]'))();
   IntColumn get maxActiveTimeMins => integer().nullable()();
-  // R-04 (.scratch/flutter-port/REMEDIATION.md): backs first-run onboarding
-  // completion so it lives in SQLite, the sole source of truth for user
-  // data (§3), instead of the standalone `onboarding_completed.txt` this
-  // replaces. Defaults false so a user with no row yet — the common case,
-  // since a row is only ever created by an explicit settings save or by
-  // finishing/skipping onboarding — reads as "not yet onboarded".
+  // Backs first-run onboarding completion. Defaults false so a user with no row yet reads as not onboarded.
   BoolColumn get onboardingCompleted =>
       boolean().withDefault(const Constant(false))();
 
