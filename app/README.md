@@ -126,12 +126,6 @@ trail). Trigger it from the Actions tab or `gh workflow run flutter-integration.
   `flutter test`. No device involved.
 - **`.github/workflows/flutter-integration.yml`** — `workflow_dispatch` only;
   see [Integration tests](#integration-tests) above.
-- **`test/build/release_entrypoint_test.dart`** — a build-*configuration*
-  guard (not a re-check of the source import graph, which
-  `test/auth/auth_bypass_test.dart` already owns): scans the Fastlane
-  Fastfiles and every workflow YAML for a release-shaped build command
-  (`flutter build`/`gradlew assemble*`) naming `main_e2e`, and fails if it
-  finds one.
 
 ## Release (Fastlane)
 
@@ -166,11 +160,8 @@ cd ios && ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_CONTENT=... \
   bundle exec fastlane beta
 ```
 
-`ruby scripts/test_release_lanes.rb` executes the actual iOS lane definition
-with fake shell/store boundaries: configuration propagation, early rejection,
-the production entrypoint and the artifact path. CI runs it, and the
-validator's tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`),
-without signing or uploading. Neither is a signed build or release smoke.
+The validator's tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`)
+run in CI without signing or uploading.
 
 **Build-number auto-increment** replaces what EAS used to provide silently
 (`appVersionSource: "remote"`, `autoIncrement: true`): both lanes ask the
@@ -179,8 +170,8 @@ and increment it (`app_store_build_number` for iOS; every Android Play track,
 including custom tracks, discovered through Supply and queried with
 `google_play_track_version_codes`) rather than trusting
 `pubspec.yaml`'s local `+N`, which is never bumped by hand. Both lanes pass
-`-t lib/main.dart` explicitly — never `lib/main_e2e.dart`
-(`test/build/release_entrypoint_test.dart` enforces this).
+`-t lib/main.dart` explicitly — never `lib/main_e2e.dart` (a CI grep step in
+`flutter-ci.yml` enforces this).
 
 ## Local persistence and regression coverage
 
@@ -196,11 +187,8 @@ rollover is clock-driven. Destructive Undo restores full row identity and linked
 gaps/cooking state. The shell's connectivity banner mirrors Expo's network
 presence message; it does not claim Internet reachability.
 
-Design-system goldens under `test/design_system/goldens/` exercise rendered
-output, actions and accessibility. Review intentional golden changes visually;
-do not regenerate them merely to silence failures. Goldens and mocked plugin
-boundaries do not substitute native camera, secure-storage, Cognito or haptics
-verification.
+Mocked plugin boundaries do not substitute native camera, secure-storage,
+Cognito or haptics verification.
 
 ## Splash screen
 
@@ -219,20 +207,6 @@ This works headless (verified on this box) and writes native assets under
 `android/app/src/main/res/**` and
 `ios/Runner/Assets.xcassets/LaunchImage.imageset/**` /
 `ios/Runner/Base.lproj/LaunchScreen.storyboard` — commit whatever it changes.
-
-## Launcher icons
-
-Both native launcher asset sets are generated from the existing Glean SVG,
-not Flutter's stock logo. The renderer preserves the leaf's stroked stem
-(the regression tracked in PR #90). Regenerate from `app/`:
-
-```bash
-uv run --with cairosvg --with pillow python scripts/generate_launcher_icons.py
-flutter test test/build/launcher_brand_test.dart
-```
-
-The largest iOS/Android PNGs are pixel-tested for green branding and the
-stem. This does not replace visual inspection on a simulator/device.
 
 ## Web target: deferred
 

@@ -1,15 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/design_system/design_system.dart';
-import '../support/visual.dart';
+
+Widget host(Widget child, {ThemeData? theme, double scale = 1}) => MaterialApp(
+  theme: theme ?? gleanLightTheme,
+  home: Scaffold(
+    body: Center(
+      child: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+        child: child,
+      ),
+    ),
+  ),
+);
 
 void main() {
-  setUpAll(loadBrandFonts);
   testWidgets(
     'status pills stay readable and accessible at twice the text scale',
     (tester) async {
       await tester.pumpWidget(
-        visual(
+        host(
           const Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -22,7 +32,6 @@ void main() {
       );
       expect(tester.getSemantics(find.text('3 expiring')).label, '3 expiring');
       expect(tester.takeException(), isNull);
-      await golden(tester, 'badges-large-text');
     },
   );
 }

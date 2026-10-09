@@ -57,9 +57,8 @@ platform :ios do
     UI.message("Building #{version_name}+#{build_number} (-t lib/main.dart)")
 
     # `-t lib/main.dart` is explicit, not incidental: this lane must never
-    # build `lib/main_e2e.dart` (AC-AUTH-07) — `test/build/release_entrypoint_test.dart`
-    # extracts the resolved `-t` target from the `sh(...)` call below and
-    # asserts it is exactly `lib/main.dart`.
+    # build the e2e entrypoint (AC-AUTH-07); a CI grep step in
+    # flutter-ci.yml fails if any release path names the e2e entrypoint.
     sh(
       'cd ../.. && flutter build ipa --release ' \
       "-t lib/main.dart --build-number=#{build_number} #{defines}",

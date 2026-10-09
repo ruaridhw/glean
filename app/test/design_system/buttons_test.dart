@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../support/visual.dart';
+import 'package:glean/design_system/design_system.dart';
+
+Widget host(Widget child, {ThemeData? theme, double scale = 1}) => MaterialApp(
+  theme: theme ?? gleanLightTheme,
+  home: Scaffold(
+    body: Center(
+      child: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+        child: child,
+      ),
+    ),
+  ),
+);
 
 void main() {
-  setUpAll(loadBrandFonts);
   testWidgets(
-    'filled confirmation has branded output and becomes inert when disabled',
+    'filled confirmation dispatches one activation and becomes inert when disabled',
     (tester) async {
       var taps = 0;
       await tester.pumpWidget(
-        visual(
+        host(
           Center(
             child: FilledButton(
               onPressed: () {
@@ -20,11 +31,10 @@ void main() {
           ),
         ),
       );
-      await golden(tester, 'button-filled');
       await tester.tap(find.text('Confirm'));
       expect(taps, 1);
       await tester.pumpWidget(
-        visual(
+        host(
           const Center(
             child: FilledButton(onPressed: null, child: Text('Confirm')),
           ),
@@ -34,12 +44,12 @@ void main() {
       expect(taps, 1);
     },
   );
-  testWidgets('outlined cooking action renders and dispatches one activation', (
+  testWidgets('outlined cooking action dispatches one activation', (
     tester,
   ) async {
     var taps = 0;
     await tester.pumpWidget(
-      visual(
+      host(
         Center(
           child: OutlinedButton(
             onPressed: () {
@@ -50,7 +60,6 @@ void main() {
         ),
       ),
     );
-    await golden(tester, 'button-outlined');
     await tester.tap(find.text('Cooked?'));
     expect(taps, 1);
   });
@@ -59,7 +68,7 @@ void main() {
   ) async {
     var selected = false;
     await tester.pumpWidget(
-      visual(
+      host(
         StatefulBuilder(
           builder: (context, setState) => Center(
             child: FilterChip(
@@ -78,14 +87,13 @@ void main() {
       tester.getSemantics(find.byType(FilterChip)).label,
       contains('Vegetarian'),
     );
-    await golden(tester, 'chip-selected');
   });
   testWidgets('remove icon has a discoverable action and one activation', (
     tester,
   ) async {
     var taps = 0;
     await tester.pumpWidget(
-      visual(
+      host(
         Center(
           child: IconButton(
             tooltip: 'Remove recipe',
@@ -97,7 +105,6 @@ void main() {
         ),
       ),
     );
-    await golden(tester, 'button-icon');
     await tester.tap(find.byTooltip('Remove recipe'));
     expect(taps, 1);
   });

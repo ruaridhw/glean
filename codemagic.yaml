@@ -43,7 +43,7 @@ workflows:
           test -n "$APP_VERSION"
           printf 'APP_VERSION=%s\n' "$APP_VERSION" >> "$CM_ENV"
       # -t lib/main.dart is explicit so the auth-bypass entrypoint can never
-      # ship (test/build/release_entrypoint_test.dart checks this file).
+      # ship (a flutter-ci.yml grep step checks this file).
       - name: Build signed universal APK
         script: |
           #!/usr/bin/env bash

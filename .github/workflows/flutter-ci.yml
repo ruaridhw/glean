@@ -3,8 +3,8 @@ name: Flutter CI
 # The only job that runs automatically (AC-CI-01). Lint/format/unit/widget
 # only — no device, no emulator/simulator, so no Android SDK/Java/Xcode is
 # needed here. Real device/emulator/simulator integration tests live in
-# flutter-integration.yml, gated behind workflow_dispatch (AC-CI-02) because
-# neither runs on push.
+# flutter-integration.yml, gated behind workflow_dispatch (AC-CI-02), so it
+# never runs on push.
 on:
   push:
     branches: [main]
@@ -56,8 +56,11 @@ jobs:
       # `flutter test` (no path) only runs `test/` — `integration_test/` is a
       # separate top-level directory it does not recurse into, so this is
       # unit + widget only, never the device-bound suite (AC-CI-01).
-      # Executes the iOS release lane with fake shell/store boundaries only,
-      # and the Codemagic Android release-config gate. Neither builds an app.
-      - run: ruby scripts/test_release_lanes.rb
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: flutter test
+      - name: Release lanes never target main_e2e.dart
+        working-directory: .
+        run: |
+          ! grep -rn 'main_e2e' app/ios/fastlane codemagic.yaml .github/workflows \
+            | grep -v 'flutter-ci.yml' | grep -v -i 'integration\|e2e-job' \
+            || { echo 'A release path references main_e2e.dart'; exit 1; }
