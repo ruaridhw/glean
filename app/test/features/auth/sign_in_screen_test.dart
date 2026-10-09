@@ -50,6 +50,14 @@ void main() {
     expect(find.text('Sign in with Google'), findsOneWidget);
   });
 
+  testWidgets('does not cite Terms or a Privacy Policy that are not hosted '
+      'yet', (tester) async {
+    await pumpSignIn(tester);
+
+    expect(find.textContaining('Terms of Service'), findsNothing);
+    expect(find.textContaining('Privacy Policy'), findsNothing);
+  });
+
   testWidgets(
     'AC-HAP-05: the tap fires exactly one lightImpact immediately, before '
     'sign-in resolves',

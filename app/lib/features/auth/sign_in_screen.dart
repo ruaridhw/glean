@@ -89,12 +89,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       : const Text('Sign in with Google'),
                 ),
               ),
-              SizedBox(height: tokens.spacing.lg),
-              Text(
-                'By continuing you agree to our Terms of Service and Privacy '
-                'Policy.',
-                style: textTheme.bodySmall,
-              ),
             ],
           ),
         ),

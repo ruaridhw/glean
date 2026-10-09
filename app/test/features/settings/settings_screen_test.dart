@@ -1,7 +1,7 @@
 // Widget tests for the Settings screen's headline behaviour changes:
 // auto-save with no Save button, commit-on-release (not per drag frame),
-// surfaced save failures, the cooking-time bound/unit, real Terms/Privacy
-// links, and sign-out leaving local data untouched.
+// surfaced save failures, the cooking-time bound/unit, no Terms/Privacy
+// links until those pages exist, and sign-out leaving local data untouched.
 //
 // Every direct repository call made *from the test body* (as opposed to
 // through the widget's own pumped interactions) is wrapped in
@@ -24,11 +24,9 @@ import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/features/settings/providers/link_opener.dart';
 import 'package:glean/features/settings/providers/sign_out_action.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
 import 'package:glean/features/settings/settings_screen.dart';
-import 'package:glean/features/settings/widgets/legal_links_section.dart';
 import 'package:glean/features/settings/widgets/max_time_field.dart';
 
 import '../../data/fixture.dart';
@@ -51,7 +49,6 @@ Widget _buildApp({
   required GleanDatabase db,
   Haptics? haptics,
   SignOutAction? signOut,
-  LinkOpener? linkOpener,
   bool throwOnSave = false,
 }) {
   return ProviderScope(
@@ -60,7 +57,6 @@ Widget _buildApp({
       currentUserIdProvider.overrideWithValue(_userId),
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
       if (signOut != null) signOutActionProvider.overrideWithValue(signOut),
-      if (linkOpener != null) linkOpenerProvider.overrideWithValue(linkOpener),
       if (throwOnSave)
         userConfigRepositoryProvider.overrideWithValue(
           _ThrowingUserConfigRepository(db),
@@ -346,54 +342,17 @@ void main() {
     });
   });
 
-  group('Terms and Privacy (AC-SET-04)', () {
-    _settingsWidgetTest(
-      'are tappable and each open a real URL via url_launcher',
-      (WidgetTester tester) async {
-        await tester.binding.setSurfaceSize(const Size(420, 2000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+  _settingsWidgetTest('shows no Terms or Privacy links until those pages '
+      'are hosted', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        final openedUrls = <Uri>[];
-        await tester.pumpWidget(
-          _buildApp(
-            db: db,
-            linkOpener: (Uri uri) async {
-              openedUrls.add(uri);
-              return true;
-            },
-          ),
-        );
-        await _waitForContent(tester);
+    await tester.pumpWidget(_buildApp(db: db));
+    await _waitForContent(tester);
 
-        await tester.tap(find.text('Terms of Service'));
-        await tester.pump();
-        expect(openedUrls, <Uri>[Uri.parse(termsOfServiceUrl)]);
-
-        await tester.tap(find.text('Privacy Policy'));
-        await tester.pump();
-        expect(openedUrls, <Uri>[
-          Uri.parse(termsOfServiceUrl),
-          Uri.parse(privacyPolicyUrl),
-        ]);
-      },
-    );
-
-    _settingsWidgetTest('surfaces an error if the link fails to open', (
-      WidgetTester tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(420, 2000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(
-        _buildApp(db: db, linkOpener: (Uri uri) async => false),
-      );
-      await _waitForContent(tester);
-
-      await tester.tap(find.text('Terms of Service'));
-      await tester.pump();
-
-      expect(find.text('Could not open the link.'), findsOneWidget);
-    });
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsNothing);
+    expect(find.text('Privacy Policy'), findsNothing);
   });
 
   group('Sign out (AC-DATA-09, AC-HAP-05)', () {

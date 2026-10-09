@@ -24,7 +24,6 @@ import 'providers/sign_out_action.dart';
 import 'settings_presentation.dart';
 import 'widgets/account_section.dart';
 import 'widgets/dietary_preferences_card.dart';
-import 'widgets/legal_links_section.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
 import 'widgets/section_label.dart';
@@ -239,10 +238,6 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
         const SectionLabel('Account'),
         SizedBox(height: tokens.spacing.sm),
         AccountSection(onSignOut: () => unawaited(_handleSignOut())),
-        SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Legal'),
-        SizedBox(height: tokens.spacing.sm),
-        const LegalLinksSection(),
       ],
     );
   }

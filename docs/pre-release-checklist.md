@@ -67,9 +67,9 @@ If either platform fails, stop before signing or uploading.
 
 - [ ] `app/pubspec.yaml`’s marketing version is the version intended for
       release; builds set build numbers, not the marketing version.
-- [ ] The Terms of Service and Privacy Policy URLs configured in
-      `lib/features/settings/widgets/legal_links_section.dart` are hosted and
-      reachable.
+- [ ] Terms of Service and Privacy Policy are hosted, and Settings links to
+      them again. The links were removed while testing because no pages
+      exist yet (`legal_links_section.dart` is in git history).
 - [ ] iOS usage-description strings, including
       `NSCameraUsageDescription`, are user-facing and accurate.
 - [ ] Complete a real Cognito sign-in on a physical device for each platform.
