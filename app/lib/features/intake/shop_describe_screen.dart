@@ -3,22 +3,14 @@
 /// entry point. Always lands on the shared review screen with
 /// `destination: shop`, carrying through any clarifying questions the parse
 /// couldn't resolve on its own.
-///
-/// This screen was the one gap in the intake surface (FINDINGS.md F-16):
-/// Shop's brief said "route into the shared intake screens, don't build a
-/// second review screen" — correct, and everything downstream (the review
-/// screen, `ReviewArgs.clarifyingQuestions`,
-/// `parseShoppingDescriptionControllerProvider`) was already built and
-/// waiting — but no brief named *this* screen, so it stayed the router
-/// wave's placeholder. The form UI itself is shared with
-/// `PantryDescribeScreen` via `widgets/describe_form.dart` — see that
-/// file's doc comment for why.
+/// The form UI itself is shared with `PantryDescribeScreen` via
+/// `widgets/describe_form.dart`.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/shopping.dart';
-import 'package:glean/api/providers/shopping_providers.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
@@ -35,8 +27,35 @@ class ShopDescribeScreen extends ConsumerStatefulWidget {
 
 class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
   String _originalDescription = '';
+  bool _pending = false;
+  bool _failed = false;
 
-  void _onSuccess(BuildContext context, ShoppingParseResponse response) {
+  Future<void> _submit(String text) async {
+    if (_pending) return;
+    _originalDescription = text;
+    setState(() {
+      _pending = true;
+      _failed = false;
+    });
+    final ShoppingParseResponse response;
+    try {
+      response = await ref
+          .read(apiClientProvider)
+          .parseShoppingDescription(text);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pending = false;
+        _failed = true;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _pending = false);
+    _onSuccess(response);
+  }
+
+  void _onSuccess(ShoppingParseResponse response) {
     final List<ReviewItemDraft> items = <ReviewItemDraft>[
       for (int i = 0; i < response.items.length; i++)
         ReviewItemDraft(
@@ -65,19 +84,6 @@ class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<ShoppingParseResponse?>>(
-      parseShoppingDescriptionControllerProvider,
-      (
-        AsyncValue<ShoppingParseResponse?>? previous,
-        AsyncValue<ShoppingParseResponse?> next,
-      ) {
-        final ShoppingParseResponse? response = next.value;
-        if (response != null) _onSuccess(context, response);
-      },
-    );
-    final AsyncValue<ShoppingParseResponse?> async = ref.watch(
-      parseShoppingDescriptionControllerProvider,
-    );
     final AppTokens tokens = context.tokens;
 
     return Scaffold(
@@ -90,17 +96,12 @@ class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
                 'Type what you need now. Dictation can feed the same text later.',
             placeholder: 'Stuff for tacos, milk, bananas, and lunchbox snacks',
             buttonLabel: 'Review items',
-            isLoading: async.isLoading,
-            errorMessage: async.hasError
+            isLoading: _pending,
+            errorMessage: _failed
                 ? 'Could not turn that into a list. Try being more specific, '
                       'e.g. "milk, bananas, taco shells".'
                 : null,
-            onSubmit: (String text) {
-              _originalDescription = text;
-              ref
-                  .read(parseShoppingDescriptionControllerProvider.notifier)
-                  .parse(text);
-            },
+            onSubmit: _submit,
           ),
         ),
       ),

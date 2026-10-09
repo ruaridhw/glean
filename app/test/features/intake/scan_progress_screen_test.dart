@@ -204,5 +204,28 @@ void main() {
       // directly.
       expect(harness.hapticCalls, contains(HapticWeight.medium));
     });
+
+    testWidgets('popping during an in-flight scan neither throws nor '
+        'navigates', (WidgetTester tester) async {
+      final completer = Completer<http.StreamedResponse>();
+      when(() => httpClient.send(any())).thenAnswer((_) => completer.future);
+
+      await pumpProgress(tester);
+      harness.router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(ScanProgressScreen), findsNothing);
+
+      completer.complete(
+        http.StreamedResponse(
+          Stream.value(utf8.encode(jsonEncode({'items': []}))),
+          200,
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ReviewScreen), findsNothing);
+    });
   });
 }

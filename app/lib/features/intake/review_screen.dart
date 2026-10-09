@@ -8,7 +8,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:glean/api/providers/shopping_providers.dart';
+import 'package:glean/api/models/shopping.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/pantry_repository.dart'
@@ -100,20 +101,19 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final text =
         '${widget.args.originalDescription}\n\nAnswers: ${_answers.entries.where((e) => e.value.isNotEmpty).map((e) => '${e.key}: ${e.value}').join('; ')}';
     setState(() => _reparsing = true);
-    final command = ref.read(
-      parseShoppingDescriptionControllerProvider.notifier,
-    );
-    await command.parse(text);
-    if (!mounted) return;
-    final result = ref.read(parseShoppingDescriptionControllerProvider);
-    if (result.hasError || result.value == null) {
+    final ShoppingParseResponse result;
+    try {
+      result = await ref.read(apiClientProvider).parseShoppingDescription(text);
+    } catch (_) {
+      if (!mounted) return;
       setState(() => _reparsing = false);
       GleanSnackBar.show(context, 'Could not update suggestions. Try again.');
       return;
     }
+    if (!mounted) return;
     final previous = {for (final row in _rows) row.originalName: row};
     final next = <ReviewRow>[];
-    for (final item in result.value!.items) {
+    for (final item in result.items) {
       final key = item.name.trim().toLowerCase();
       if (_removedNames.contains(key)) continue;
       final existing = previous.remove(key);
@@ -142,7 +142,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     }
     setState(() {
       _rows = next;
-      _questions = result.value!.clarifyingQuestions;
+      _questions = result.clarifyingQuestions;
       _reparsing = false;
     });
   }
@@ -237,7 +237,6 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(parseShoppingDescriptionControllerProvider);
     final AppTokens tokens = context.tokens;
     final int acceptedCount = _activeRows.length;
 

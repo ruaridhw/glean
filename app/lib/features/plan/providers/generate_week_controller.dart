@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/api/models/recipes.dart';
-import 'package:glean/api/providers/meal_plan_providers.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
 import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
@@ -77,16 +77,13 @@ class GenerateWeekController extends AsyncNotifier<int> {
       dietaryFlags: config.dietaryFlags,
       maxActiveTimeMins: config.maxActiveTimeMins,
     );
-    final command = ref.read(generateMealPlanControllerProvider.notifier);
-    await command.generate(request);
-    final result = command.state;
-    if (result.hasError) {
-      Error.throwWithStackTrace(result.error!, result.stackTrace!);
-    }
+    final MealPlanResponse response = await ref
+        .read(apiClientProvider)
+        .generateMealPlan(request);
 
     final resolved = <RecipeView>[];
     final seenIds = <int>{};
-    for (final pick in result.value?.suggestions ?? <MealPlanRecipe>[]) {
+    for (final pick in response.suggestions) {
       if (resolved.length >= slots) break;
       RecipeView? recipe;
       if (pick.externalId != null) {

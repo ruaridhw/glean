@@ -55,33 +55,3 @@ final recipeDetailProvider = FutureProvider.autoDispose
       final client = ref.watch(apiClientProvider);
       return client.getRecipe(recipeId);
     }, retry: (retryCount, error) => null);
-
-/// Command controller for `POST /recipes/import-url`. The imported recipe
-/// is an ephemeral proposal (AC-DATA-06): the caller still has to run it
-/// through the DATA module's save/dedupe mutation (AC-MEAL-10 — import
-/// dedupes and says "already saved") for it to become a persisted recipe.
-class ImportRecipeController extends AsyncNotifier<RecipeOut?> {
-  @override
-  FutureOr<RecipeOut?> build() => null;
-
-  /// See `ScanReceiptController.scan`'s doc comment
-  /// (`lib/api/providers/receipts_providers.dart`) for why the
-  /// [Ref.keepAlive] hold-and-release is here (FINDINGS.md F-15). Callers no
-  /// longer need their own keep-alive workaround for this reason — see
-  /// `lib/features/meals/meals_import_screen.dart`.
-  Future<void> importFromUrl(ImportUrlRequest request) async {
-    state = const AsyncLoading();
-    final keepAliveLink = ref.keepAlive();
-    try {
-      final client = ref.read(apiClientProvider);
-      state = await AsyncValue.guard(() => client.importRecipeFromUrl(request));
-    } finally {
-      keepAliveLink.close();
-    }
-  }
-}
-
-final AsyncNotifierProvider<ImportRecipeController, RecipeOut?>
-importRecipeControllerProvider = AsyncNotifierProvider.autoDispose(
-  ImportRecipeController.new,
-);
