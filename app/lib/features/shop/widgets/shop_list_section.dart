@@ -14,7 +14,6 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../actions.dart';
 import '../presentation.dart';
-import 'shop_skeleton.dart';
 import 'shop_states.dart';
 import 'shopping_row.dart';
 
@@ -25,14 +24,18 @@ class ShopListSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return GleanCrossFade(
-      showSkeleton: !itemsAsync.hasValue,
-      skeleton: const ShopListSkeleton(),
-      content: itemsAsync.maybeWhen(
-        data: (List<ShoppingListItemView> items) => items.isEmpty
-            ? const ShopEmptyState()
-            : _ShopItemsList(items: items),
-        orElse: () => const ShopErrorState(),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(!itemsAsync.hasValue),
+        child: !itemsAsync.hasValue
+            ? const ListSkeleton(rowHeight: 56, padding: false)
+            : itemsAsync.maybeWhen(
+                data: (List<ShoppingListItemView> items) => items.isEmpty
+                    ? const ShopEmptyState()
+                    : _ShopItemsList(items: items),
+                orElse: () => const ShopErrorState(),
+              ),
       ),
     );
   }
@@ -59,18 +62,20 @@ class _ShopItemsList extends ConsumerWidget {
       children: <Widget>[
         if (toBuy.isNotEmpty) const _SectionHeader(title: toBuySectionTitle),
         for (final ShoppingListItemView item in toBuy)
-          GleanListEntrance(
+          _Row(
             key: ValueKey<int>(item.id),
-            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+            item: item,
+            bottomGap: tokens.spacing.sm,
           ),
         if (inCart.isNotEmpty) ...<Widget>[
           SizedBox(height: tokens.spacing.xs),
           const _SectionHeader(title: inCartSectionTitle),
         ],
         for (final ShoppingListItemView item in inCart)
-          GleanListEntrance(
+          _Row(
             key: ValueKey<int>(item.id),
-            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+            item: item,
+            bottomGap: tokens.spacing.sm,
           ),
       ],
     );
@@ -78,7 +83,7 @@ class _ShopItemsList extends ConsumerWidget {
 }
 
 class _Row extends ConsumerWidget {
-  const _Row({required this.item, required this.bottomGap});
+  const _Row({super.key, required this.item, required this.bottomGap});
 
   final ShoppingListItemView item;
   final double bottomGap;

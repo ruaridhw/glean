@@ -19,7 +19,6 @@ import 'package:glean/design_system/design_system.dart';
 import 'actions.dart';
 import 'widgets/pantry_add_sheet.dart';
 import 'widgets/pantry_body.dart';
-import 'widgets/pantry_skeleton.dart';
 
 class PantryScreen extends ConsumerStatefulWidget {
   const PantryScreen({super.key});
@@ -48,18 +47,23 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: !async.hasValue,
-        skeleton: const PantrySkeleton(),
-        content: async.maybeWhen(
-          data: (List<PantryItemView> items) => PantryBody(
-            items: items,
-            filterKey: _filterKey,
-            onFilterChanged: (String? key) => setState(() => _filterKey = key),
-            onDelete: (PantryItemView item) =>
-                unawaited(deletePantryItemWithUndo(context, ref, item)),
-          ),
-          orElse: () => const _PantryLoadError(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!async.hasValue),
+          child: !async.hasValue
+              ? const ListSkeleton(rows: 4, headerHeight: 20)
+              : async.maybeWhen(
+                  data: (List<PantryItemView> items) => PantryBody(
+                    items: items,
+                    filterKey: _filterKey,
+                    onFilterChanged: (String? key) =>
+                        setState(() => _filterKey = key),
+                    onDelete: (PantryItemView item) =>
+                        unawaited(deletePantryItemWithUndo(context, ref, item)),
+                  ),
+                  orElse: () => const _PantryLoadError(),
+                ),
         ),
       ),
     );

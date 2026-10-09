@@ -1,12 +1,7 @@
-// Coverage for the splash → app hand-off (FLUTTER_MIGRATION.md §7, R-09):
-// `GleanRoot` used to resolve the database gate with a bare `.when()` — a
-// hard cut reproducing the exact unanimated RN splash pop §7 removes
-// elsewhere. This asserts the mechanism (`GleanCrossFade`, i.e. an
-// `AnimatedSwitcher`) is actually wrapping the transition — present before
-// the gate resolves (with the real app not yet mounted) and still present
-// once it has — rather than sampling an intermediate animation frame (see
-// `test/support/harness.dart`'s guidance on why that's the wrong thing to
-// assert on here).
+// Coverage for the splash → app hand-off: `GleanRoot` wraps the database
+// gate in an `AnimatedSwitcher`, present before the gate resolves (real app
+// not yet mounted) and still present once it has — rather than sampling an
+// intermediate animation frame (see `test/support/harness.dart`).
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/app.dart';
 import 'package:glean/bootstrap.dart';
 import 'package:glean/data/providers/database_providers.dart';
-import 'package:glean/design_system/design_system.dart';
 import 'package:riverpod/misc.dart';
 
 import 'support/harness.dart';
@@ -51,7 +45,6 @@ void main() {
 
         // Still resolving: the cross-fade mechanism is already in the tree
         // and the real app hasn't mounted yet.
-        expect(find.byType(GleanCrossFade), findsOneWidget);
         expect(find.byType(AnimatedSwitcher), findsOneWidget);
         expect(find.byType(GleanApp), findsNothing);
 
@@ -68,7 +61,7 @@ void main() {
         // that swapped it out mid-transition (there are now two: this outer
         // one, plus whichever tab screen mounted underneath also uses its
         // own for its skeleton→content load).
-        expect(find.byType(GleanCrossFade), findsAtLeastNWidgets(1));
+        expect(find.byType(AnimatedSwitcher), findsAtLeastNWidgets(1));
       },
     );
   });

@@ -74,21 +74,18 @@ class GleanRoot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<void> ready = ref.watch(databaseReadyProvider);
-    // R-09: the gate's three states used to swap via a bare `.when()` — a
-    // hard cut reproducing the exact unanimated RN pop §7 calls out. Each
-    // branch below is still its own full `MaterialApp` (no shared shell to
-    // cross-fade a body under), so `GleanCrossFade` is used at the top —
-    // its `skeleton` here is the pre-database-ready state, and `content`
-    // covers ready-and-error (both post-decision terminal states; a switch
-    // between them, if it ever happened, doesn't need this fade — that's
-    // not the hand-off §7 is about).
-    return GleanCrossFade(
-      showSkeleton: ready.isLoading,
-      skeleton: const _SplashHolding(),
-      content: ready.when(
-        data: (_) => const GleanApp(),
-        loading: () => const _SplashHolding(),
-        error: (Object error, StackTrace _) => _DatabaseErrorApp(error: error),
+    // Each branch is its own full `MaterialApp`, so the splash cross-fades
+    // into whichever terminal state (app or error) the gate resolves to.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(ready.isLoading),
+        child: ready.when(
+          data: (_) => const GleanApp(),
+          loading: () => const _SplashHolding(),
+          error: (Object error, StackTrace _) =>
+              _DatabaseErrorApp(error: error),
+        ),
       ),
     );
   }

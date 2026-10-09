@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
-import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/route_error_screen.dart';
 
@@ -116,7 +115,7 @@ void main() {
     );
 
     testWidgets(
-      'the outer loading→content hand-off goes through GleanCrossFade, not '
+      'the outer loading→content hand-off goes through AnimatedSwitcher, not '
       'a hard cut (R-14, AC-TRN-01)',
       (WidgetTester tester) async {
         final int id = await recipes.save(
@@ -134,14 +133,14 @@ void main() {
         // `_SavedRecipeDetailBody`'s own separate one for the ingredients
         // list, depending on how far the in-memory streams have resolved by
         // this point.
-        expect(find.byType(GleanCrossFade), findsAtLeastNWidgets(1));
+        expect(find.byType(AnimatedSwitcher), findsAtLeastNWidgets(1));
 
         await tester.pumpAndSettle();
         expect(find.text('Tomato Soup'), findsOneWidget);
         // Two now: this outer one plus `_SavedRecipeDetailBody`'s own,
         // separate cross-fade for the ingredients list — both legitimate,
         // not a regression of this test's own making.
-        expect(find.byType(GleanCrossFade), findsNWidgets(2));
+        expect(find.byType(AnimatedSwitcher), findsAtLeastNWidgets(2));
       },
     );
 

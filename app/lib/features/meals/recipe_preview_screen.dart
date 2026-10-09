@@ -21,7 +21,6 @@ import 'package:glean/design_system/design_system.dart';
 import 'actions.dart';
 import 'presentation.dart';
 import 'saved_recipe_detail.dart';
-import 'widgets/meals_skeletons.dart';
 import 'widgets/recipe_detail_view.dart';
 
 class RecipePreviewScreen extends ConsumerStatefulWidget {
@@ -70,30 +69,36 @@ class _RecipePreviewScreenState extends ConsumerState<RecipePreviewScreen> {
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: !detailAsync.hasValue && !detailAsync.hasError,
-        skeleton: const RecipeDetailSkeleton(),
-        content: detailAsync.when(
-          data: (RecipeOut detail) => SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: RecipeDetailView(data: RecipeDetailData.fromApi(detail)),
-          ),
-          // A cold-start-deep-link-style dead end doesn't apply here (this
-          // screen is only ever reached by tapping a live search result,
-          // never a deep link), so a plain in-body message plus the app
-          // bar's own back button — not `RouteErrorScreen` — is the right
-          // recovery affordance.
-          error: (Object error, StackTrace stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Could not load this recipe. Go back and try again.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ),
-          loading: () => const SizedBox.shrink(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!detailAsync.hasValue && !detailAsync.hasError),
+          child: !detailAsync.hasValue && !detailAsync.hasError
+              ? const ListSkeleton(rows: 3, rowHeight: 160, headerHeight: 96)
+              : detailAsync.when(
+                  data: (RecipeOut detail) => SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: RecipeDetailView(
+                      data: RecipeDetailData.fromApi(detail),
+                    ),
+                  ),
+                  // A cold-start-deep-link-style dead end doesn't apply here (this
+                  // screen is only ever reached by tapping a live search result,
+                  // never a deep link), so a plain in-body message plus the app
+                  // bar's own back button — not `RouteErrorScreen` — is the right
+                  // recovery affordance.
+                  error: (Object error, StackTrace stackTrace) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Could not load this recipe. Go back and try again.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                ),
         ),
       ),
     );

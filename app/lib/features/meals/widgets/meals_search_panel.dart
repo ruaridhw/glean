@@ -21,7 +21,6 @@ import 'package:go_router/go_router.dart';
 import '../presentation.dart';
 import '../recipe_preview_screen.dart';
 import 'meals_states.dart';
-import 'meals_skeletons.dart';
 import 'search_result_card.dart';
 
 class MealsSearchPanel extends ConsumerStatefulWidget {
@@ -127,38 +126,42 @@ class _SearchResults extends ConsumerWidget {
       recipeSearchProvider(query),
     );
 
-    // AC-TRN-01: skeleton → content cross-fades everywhere, including a
-    // live search re-querying as the user keeps typing — never a hard cut.
-    return GleanCrossFade(
-      showSkeleton: resultsAsync.isLoading,
-      skeleton: const RecipeListSkeleton(),
-      content: resultsAsync.when(
-        loading: () => const SizedBox.shrink(),
-        error: (Object error, StackTrace stackTrace) => MealsMessagePanel(
-          icon: Icons.error_outline_rounded,
-          title: 'Search failed',
-          message: describeRecipeSearchError(error),
-        ),
-        data: (RecipeSearchResponse response) {
-          if (response.results.isEmpty) {
-            return MealsMessagePanel(
-              icon: Icons.search_off_rounded,
-              title: 'No recipes found',
-              message: 'No results for "$query". Try a different search.',
-            );
-          }
-          return ListView.separated(
-            itemCount: response.results.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (BuildContext context, int index) {
-              final RecipeSearchResult result = response.results[index];
-              return SearchResultCard(
-                result: result,
-                onTap: () => _onResultTap(context, ref, result),
-              );
-            },
-          );
-        },
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(resultsAsync.isLoading),
+        child: resultsAsync.isLoading
+            ? const ListSkeleton(rows: 4, rowHeight: 96)
+            : resultsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (Object error, StackTrace stackTrace) =>
+                    MealsMessagePanel(
+                      icon: Icons.error_outline_rounded,
+                      title: 'Search failed',
+                      message: describeRecipeSearchError(error),
+                    ),
+                data: (RecipeSearchResponse response) {
+                  if (response.results.isEmpty) {
+                    return MealsMessagePanel(
+                      icon: Icons.search_off_rounded,
+                      title: 'No recipes found',
+                      message:
+                          'No results for "$query". Try a different search.',
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: response.results.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int index) {
+                      final RecipeSearchResult result = response.results[index];
+                      return SearchResultCard(
+                        result: result,
+                        onTap: () => _onResultTap(context, ref, result),
+                      );
+                    },
+                  );
+                },
+              ),
       ),
     );
   }

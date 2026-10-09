@@ -29,7 +29,6 @@ import 'package:go_router/go_router.dart';
 import 'actions.dart';
 import 'presentation.dart';
 import 'providers/meal_providers.dart';
-import 'widgets/meals_skeletons.dart';
 import 'widgets/recipe_detail_view.dart';
 
 class SavedRecipeDetail extends ConsumerWidget {
@@ -43,35 +42,40 @@ class SavedRecipeDetail extends ConsumerWidget {
       recipeByIdProvider(recipeId),
     );
 
-    // R-14: this outer loading→content switch used to be a bare `.when()`
-    // hard cut — the one place that pattern survived after every sibling
-    // screen (Pantry/Plan/Meals/`RecipePreviewScreen`) standardised on
-    // `GleanCrossFade`. Wrapped the same way here: `showSkeleton` covers
-    // only the genuine first-load wait, and `content` still resolves
-    // data/error/missing-recipe exactly as before.
-    return GleanCrossFade(
-      showSkeleton: !recipeAsync.hasValue && !recipeAsync.hasError,
-      skeleton: Scaffold(
-        appBar: AppBar(title: const Text('Recipe')),
-        body: const RecipeDetailSkeleton(),
-      ),
-      content: recipeAsync.when(
-        data: (RecipeView? recipe) {
-          // AC-MEAL-12: a missing recipe (never existed for this user, or
-          // was deleted while this screen was open) is a recoverable error,
-          // never a permanent spinner — reusing `RouteErrorScreen` per its
-          // own doc comment rather than calling `pop()` on a possibly-empty
-          // stack.
-          if (recipe == null) {
-            return const RouteErrorScreen(
-              message: 'This recipe could not be found.',
-            );
-          }
-          return _SavedRecipeDetailBody(recipe: recipe);
-        },
-        loading: () => const SizedBox.shrink(),
-        error: (Object error, StackTrace stackTrace) =>
-            const RouteErrorScreen(message: 'This recipe could not be loaded.'),
+    final bool loading = !recipeAsync.hasValue && !recipeAsync.hasError;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(loading),
+        child: loading
+            ? Scaffold(
+                appBar: AppBar(title: const Text('Recipe')),
+                body: const ListSkeleton(
+                  rows: 3,
+                  rowHeight: 160,
+                  headerHeight: 96,
+                ),
+              )
+            : recipeAsync.when(
+                data: (RecipeView? recipe) {
+                  // AC-MEAL-12: a missing recipe (never existed for this user, or
+                  // was deleted while this screen was open) is a recoverable error,
+                  // never a permanent spinner — reusing `RouteErrorScreen` per its
+                  // own doc comment rather than calling `pop()` on a possibly-empty
+                  // stack.
+                  if (recipe == null) {
+                    return const RouteErrorScreen(
+                      message: 'This recipe could not be found.',
+                    );
+                  }
+                  return _SavedRecipeDetailBody(recipe: recipe);
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (Object error, StackTrace stackTrace) =>
+                    const RouteErrorScreen(
+                      message: 'This recipe could not be loaded.',
+                    ),
+              ),
       ),
     );
   }
@@ -137,35 +141,37 @@ class _SavedRecipeDetailBodyState
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: data == null,
-        skeleton: const RecipeDetailSkeleton(),
-        content: data == null
-            ? const SizedBox.shrink()
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    RecipeDetailView(data: data),
-                    const SizedBox(height: 24),
-                    _AddToPlanButton(
-                      isInPlan: isInPlan,
-                      onPressed: _adding
-                          ? null
-                          : () => _onAddToPlan(
-                              context,
-                              ref,
-                              isInPlan: isInPlan,
-                              remaining: remainingAsync,
-                              servings:
-                                  configAsync.value?.preferredServings ??
-                                  UserConfigView.defaultPreferredServings,
-                            ),
-                    ),
-                  ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(data == null),
+          child: data == null
+              ? const ListSkeleton(rows: 3, rowHeight: 160, headerHeight: 96)
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      RecipeDetailView(data: data),
+                      const SizedBox(height: 24),
+                      _AddToPlanButton(
+                        isInPlan: isInPlan,
+                        onPressed: _adding
+                            ? null
+                            : () => _onAddToPlan(
+                                context,
+                                ref,
+                                isInPlan: isInPlan,
+                                remaining: remainingAsync,
+                                servings:
+                                    configAsync.value?.preferredServings ??
+                                    UserConfigView.defaultPreferredServings,
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

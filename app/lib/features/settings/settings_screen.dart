@@ -27,7 +27,6 @@ import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
 import 'widgets/section_label.dart';
-import 'widgets/settings_skeleton.dart';
 import 'widgets/settings_stats_row.dart';
 import 'widgets/tolerance_card.dart';
 
@@ -41,14 +40,35 @@ class SettingsScreen extends ConsumerWidget {
     );
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      // Skeleton -> content cross-fade (AC-TRN-01), never a hard cut.
-      body: GleanCrossFade(
-        showSkeleton: !asyncConfig.hasValue,
-        skeleton: const SettingsSkeleton(),
-        content: asyncConfig.maybeWhen(
-          data: (UserConfigView config) => _SettingsContent(config: config),
-          orElse: () => const SettingsLoadError(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!asyncConfig.hasValue),
+          child: !asyncConfig.hasValue
+              ? const ListSkeleton(rows: 3, rowHeight: 120, headerHeight: 72)
+              : asyncConfig.maybeWhen(
+                  data: (UserConfigView config) =>
+                      _SettingsContent(config: config),
+                  orElse: () => const SettingsLoadError(),
+                ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown if `userConfigProvider` surfaces an `AsyncValue.error` (a genuine DB
+/// error, distinct from "no row saved yet", which resolves to defaults).
+class SettingsLoadError extends StatelessWidget {
+  const SettingsLoadError({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'Could not load settings. Check your connection and try again.',
+        style: Theme.of(context).textTheme.bodyMedium,
+        textAlign: TextAlign.center,
       ),
     );
   }
