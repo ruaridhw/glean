@@ -2,10 +2,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'tokens.dart';
 
-/// Everything [TokenStorage] can read back — the raw, possibly-partial
-/// strings backing a [CognitoTokens], plus the identity fields
-/// ([userSub]/[email]) that survive a token-only clear (see
-/// [TokenStorage.clearTokensKeepIdentity]).
+/// Everything [TokenStorage] can read back: the raw, possibly-partial strings backing a [CognitoTokens],
+/// plus the identity fields that survive [TokenStorage.clearTokensKeepIdentity].
 class StoredTokenValues {
   const StoredTokenValues({
     this.accessToken,
@@ -82,10 +80,8 @@ class TokenStorage {
     ]);
   }
 
-  /// Clears **every** stored value, including identity (`userSub`/`email`).
-  /// The only sign-out path: iOS Keychain items survive an
-  /// uninstall/reinstall, so "reinstall == signed out" is never a valid
-  /// assumption — this explicit clear is the sole mechanism.
+  /// Clears every stored value, including identity. The only sign-out path: iOS Keychain items survive
+  /// uninstall/reinstall.
   Future<void> clearAll() =>
       _deleteKeys(<String>[..._tokenKeys, ..._identityKeys]);
 

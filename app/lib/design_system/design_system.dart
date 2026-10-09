@@ -1,10 +1,4 @@
-/// The Glean design system. Feature/router code should import this barrel
-/// rather than reaching into individual files.
-///
-/// Exports (per the module contract in `.scratch/flutter-port/IMPLEMENTATION.md`):
-/// `gleanLightTheme`, `AppTokens` + `context.tokens`, the `Haptics` ladder
-/// (+ `hapticsProvider`), `GleanBadge`, `SkeletonBox`, `GleanMark`, plus the
-/// swipe-to-delete row, undo snackbar and list skeleton helpers.
+/// The Glean design system. Feature and router code imports this barrel rather than individual files.
 library;
 
 export 'badge.dart';

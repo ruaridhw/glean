@@ -1,12 +1,8 @@
 /// **E2E-ONLY.** Backs `main_e2e.dart`'s fake auth session.
 ///
-/// It must **never** be imported by `main.dart` or anything `main.dart`
-/// transitively imports — that is what makes the bypass structurally
-/// unreachable from a production binary, rather than a flag someone could
-/// flip on a production build. `lib/auth/auth.dart` (the barrel every other
-/// file imports) deliberately does **not** export this file, and
-/// `test/standards/house_rules_test.dart` fails if anything besides
-/// `lib/main_e2e.dart` imports it.
+/// Never import this from `main.dart` or anything it imports: that keeps the bypass structurally
+/// unreachable from a production binary. The `auth.dart` barrel does not export it, and
+/// `test/standards/house_rules_test.dart` fails if anything besides `lib/main_e2e.dart` imports it.
 library;
 
 import '../router/auth_state.dart';

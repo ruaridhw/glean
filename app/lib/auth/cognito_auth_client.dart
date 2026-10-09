@@ -15,13 +15,8 @@ class AuthException implements Exception {
   String toString() => 'AuthException: $message';
 }
 
-/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth`.
-///
-/// Owns no session *state* (that's [AuthController]'s job) — just the two
-/// network operations: exchange an authorization for tokens, and exchange a
-/// refresh token for new ones. Never touches [TokenStorage] either; it hands
-/// back [CognitoTokens] or `null`/an exception and lets the caller decide
-/// what to persist.
+/// Cognito Hosted UI -> Google, PKCE, via `flutter_appauth`. Owns no session state and never touches
+/// [TokenStorage]; it returns [CognitoTokens] or `null`/an exception and the caller decides what to persist.
 class CognitoAuthClient {
   CognitoAuthClient({
     required String cognitoDomain,
@@ -41,14 +36,9 @@ class CognitoAuthClient {
   final AuthorizationServiceConfiguration _config;
   final FlutterAppAuth _appAuth;
 
-  /// Opens Cognito Hosted UI -> Google and exchanges the returned
-  /// authorization code for tokens in one native round trip.
-  ///
-  /// Consumes [FlutterAppAuth.authorizeAndExchangeCode]'s **return value**
-  /// directly: that call blocks until the native
-  /// `ASWebAuthenticationSession`/Custom Tab round trip (including the code
-  /// exchange) is complete, so there is no separate deep-link listener that
-  /// could miss the redirect and dead-end silently.
+  /// Opens Cognito Hosted UI -> Google and exchanges the authorization code for tokens in one native
+  /// round trip. Consumes the call's return value directly, so there is no deep-link listener that could
+  /// miss the redirect.
   Future<CognitoTokens> signIn() async {
     AuthorizationTokenResponse response;
     try {
@@ -96,14 +86,8 @@ class CognitoAuthClient {
     }
   }
 
-  /// Exchanges [refreshToken] for a new access/id token pair.
-  ///
-  /// Returns `null` on **any** failure — a thrown platform/network error, or
-  /// a 200 response missing a usable access or id token — rather than
-  /// throwing, so [AuthController] has one uniform "treat this refresh as
-  /// failed" signal. A structurally successful response with an empty access
-  /// token is treated exactly like a network failure: never returned, so a
-  /// caller can never persist it and keep reporting a valid session.
+  /// Exchanges [refreshToken] for a new access/id token pair. Returns `null` on any failure, including a
+  /// 200 response missing a usable access or id token, so [AuthController] has one uniform failure signal.
   Future<CognitoTokens?> refresh(String refreshToken) async {
     TokenResponse response;
     try {

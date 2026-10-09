@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// A shimmering placeholder block for loading content.
-///
-/// The RN `SkeletonBox` drove its pulse with a manual
-/// `Animated.loop(Animated.sequence([...]))`, which needs its own
-/// mount/unmount bookkeeping (`anim.start()` / `anim.stop()` in a `useEffect`
-/// cleanup). Flutter's [TweenAnimationBuilder] gets the same infinite pulse
-/// with **no `AnimationController`** (AC-DS-11): each time the animation
-/// reaches its target opacity, [TweenAnimationBuilder]'s `onEnd` flips the
-/// target and lets `setState` re-trigger the next leg — the widget tree
-/// owns the animation's lifecycle instead of a controller needing manual
-/// disposal.
+/// A shimmering placeholder block. [TweenAnimationBuilder] drives the pulse with no `AnimationController`:
+/// each `onEnd` flips the target and `setState` starts the next leg.
 class SkeletonBox extends StatefulWidget {
   const SkeletonBox({
     super.key,

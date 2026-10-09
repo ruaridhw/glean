@@ -2,10 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-/// Snackbar helpers built on `ScaffoldMessenger`/`SnackBar`, themed centrally
-/// by `SnackBarThemeData` in `theme.dart` (AC-DS-10). Replaces
-/// `Toast.tsx` + `react-native-toast-message` — there is no bespoke toast
-/// widget or queue; `ScaffoldMessenger` already queues.
+/// Snackbar helpers on `ScaffoldMessenger`, themed centrally by `SnackBarThemeData`. There is no bespoke
+/// toast or queue; `ScaffoldMessenger` already queues.
 class GleanSnackBar {
   const GleanSnackBar._();
 
@@ -58,9 +56,7 @@ class GleanSnackBar {
     return true;
   }
 
-  /// A plain informational/error snackbar for moments with no undo affordance
-  /// (e.g. a config-save failure surfacing per AC-SET-03). Still routes
-  /// through the same themed `SnackBar`, never a bespoke toast.
+  /// A plain informational/error snackbar for moments with no undo affordance.
   static void show(BuildContext context, String message) {
     showOn(ScaffoldMessenger.of(context), message);
   }

@@ -1,13 +1,5 @@
-/// The Glean auth module. Other code imports this barrel rather than
-/// reaching into individual files — with one deliberate exception:
-/// **`auth_bypass.dart` is never exported here.** `main.dart` importing
-/// `package:glean/auth/auth.dart` must not be able to reach the e2e bypass
-/// transitively — only `main_e2e.dart` imports that file, by its own
-/// explicit path.
-///
-/// Exports: [AuthController]/`authControllerProvider`,
-/// `aiFeaturesAvailableProvider`, [CognitoAuthClient], [TokenStorage] and
-/// [isProductionApiBaseUrl].
+/// The Glean auth module barrel. `auth_bypass.dart` is deliberately never exported:
+/// only `main_e2e.dart` imports it, by explicit path, so `main.dart` cannot reach the e2e bypass transitively.
 library;
 
 export 'auth_controller.dart';

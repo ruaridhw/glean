@@ -1,9 +1,5 @@
-/// Shared startup wiring for both entrypoints.
-///
-/// `main.dart` and `main_e2e.dart` differ *only* in how they satisfy the auth
-/// seams; everything else — config, the database gate, `runApp` — lives here so
-/// the two cannot drift apart. Keeping the bypass out of this file is what lets
-/// `main.dart`'s import graph stay free of it (AC-AUTH-06).
+/// Shared startup wiring for both entrypoints, which differ only in how they satisfy the auth seams.
+/// Keeping the bypass out of this file keeps `main.dart`'s import graph free of it.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -15,13 +11,8 @@ import 'app.dart';
 import 'data/providers/database_providers.dart';
 import 'design_system/design_system.dart';
 
-/// Build-time configuration, supplied via `--dart-define`.
-///
-/// The RN app read these from `EXPO_PUBLIC_*` environment variables, which Expo
-/// inlined at build time — the same mechanism, and the same caveat: these are
-/// baked into the binary, so nothing secret belongs here. (A Cognito domain and
-/// public client id are not secrets; a client *secret* would be, and the PKCE
-/// flow deliberately has none.)
+/// Build-time configuration, supplied via `--dart-define`. Baked into the binary, so nothing secret
+/// belongs here (the PKCE flow has no client secret).
 abstract final class GleanConfig {
   static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL');
   static const String cognitoDomain = String.fromEnvironment('COGNITO_DOMAIN');
@@ -29,9 +20,7 @@ abstract final class GleanConfig {
     'COGNITO_CLIENT_ID',
   );
 
-  /// Fails loudly at startup rather than surfacing later as a confusing
-  /// "sign-in did nothing" or a request to `https:///oauth2/authorize`. The RN
-  /// app defaulted these to `""` and carried on.
+  /// Fails loudly at startup rather than surfacing later as a confusing sign-in failure.
   static void assertComplete() {
     final missing = <String>[
       if (apiBaseUrl.isEmpty) 'API_BASE_URL',
@@ -63,11 +52,8 @@ Future<void> showStatusBarAfterSplash() async {
   );
 }
 
-/// Wraps [GleanApp] in the database gate.
-///
-/// The RN app caught its DB-init failure and ignored it, then proceeded with a
-/// possibly-unusable database — so every subsequent read failed for
-/// unexplained reasons. Here a failed open is shown to the user (AC-DATA-12).
+/// Wraps [GleanApp] in the database gate. A failed open is shown to the user rather than proceeding
+/// with an unusable database.
 class GleanRoot extends ConsumerWidget {
   const GleanRoot({super.key});
 

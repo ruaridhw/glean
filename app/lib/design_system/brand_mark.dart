@@ -15,11 +15,8 @@ enum GleanMarkAsset {
   /// screen composition (`flutter_native_splash.yaml`).
   splashLogo,
 
-  /// `glean-b1-adaptive-foreground.svg` — the Android adaptive-icon
-  /// foreground layer. Included for completeness; not expected to be drawn
-  /// by app UI (it's consumed by the platform launcher-icon pipeline), but
-  /// kept alongside its siblings so all three vendored brand assets are
-  /// reachable through one enum.
+  /// `glean-b1-adaptive-foreground.svg` — the Android adaptive-icon foreground layer; consumed by the
+  /// launcher-icon pipeline, not drawn by app UI.
   adaptiveForeground,
 }
 
@@ -30,12 +27,8 @@ const Map<GleanMarkAsset, String> _assetPaths = <GleanMarkAsset, String>{
       'assets/brand/glean-b1-adaptive-foreground.svg',
 };
 
-/// Renders the Glean brand mark from a vendored SVG via `flutter_svg`
-/// (AC-DS-07). Defaults to [GleanMarkAsset.icon].
-///
-/// The vendored SVGs carry no drop shadow (`flutter_svg` cannot render
-/// `feDropShadow`), so the shadow is applied here from the theme's `card`
-/// token.
+/// Renders the Glean brand mark from a vendored SVG via `flutter_svg`. The SVGs carry no drop shadow
+/// (`flutter_svg` cannot render `feDropShadow`), so the shadow is applied here from the theme's `card` token.
 class GleanMark extends StatelessWidget {
   const GleanMark({super.key, this.asset = GleanMarkAsset.icon, this.size});
 

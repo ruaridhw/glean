@@ -39,20 +39,15 @@ class AuthSessionSnapshot {
   int get hashCode => Object.hash(status, userId, tokens);
 }
 
-/// Owns the signed-in session end to end: Cognito sign-in/refresh/sign-out
-/// and its secure-storage persistence. It is the only place session state is
-/// held — [authStatusProvider], `currentUserIdProvider` and
-/// `apiAccessTokenProvider` all derive from [authControllerProvider].
+/// Owns the signed-in session end to end: Cognito sign-in/refresh/sign-out and its secure-storage
+/// persistence. [authStatusProvider], `currentUserIdProvider` and `apiAccessTokenProvider` all derive from it.
 ///
-/// Seeded with a snapshot computed **before** `runApp`
-/// ([loadInitialAuthSnapshot]): `currentUserIdProvider` is a synchronous
-/// `Provider<String>` every repository depends on, so it must be correct on
-/// its very first read, with no "still checking secure storage" state.
+/// Seeded with a snapshot computed before `runApp` ([loadInitialAuthSnapshot]): `currentUserIdProvider` is
+/// synchronous, so it must be correct on its first read.
 ///
-/// Every await is guarded by a session epoch: sign-out (or a new sign-in)
-/// bumps it, so a refresh or storage write that completes afterwards neither
-/// republishes state nor persists stale tokens. Storage writes run one at a
-/// time, and sign-out's clear always runs.
+/// Every await is guarded by a session epoch: sign-out (or a new sign-in) bumps it, so a late refresh or
+/// storage write neither republishes state nor persists stale tokens. Storage writes run one at a time,
+/// and sign-out's clear always runs.
 class AuthController extends Notifier<AuthSessionSnapshot> {
   AuthController(this._seed, {required this._storage, required this._client});
 
@@ -74,16 +69,11 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   @override
   AuthSessionSnapshot build() => _seed;
 
-  /// Replaces the session outright, for tests that flip status on a live
-  /// app (e.g. `active` to `expired`) without driving a real refresh.
+  /// Replaces the session outright, for tests.
   @visibleForTesting
   void debugSetSnapshot(AuthSessionSnapshot snapshot) => state = snapshot;
 
-  /// Awaits and consumes [CognitoAuthClient.signIn]'s return value directly.
-  ///
-  /// Fires no haptic itself — `SignInScreen` fires both the tap
-  /// acknowledgement and the success commit, so a sign-in never buzzes
-  /// twice.
+  /// Fires no haptic itself: `SignInScreen` fires them, so a sign-in never buzzes twice.
   Future<void> signIn() async {
     final epoch = ++_sessionEpoch;
     _refreshing = null;
@@ -158,9 +148,7 @@ class AuthController extends Notifier<AuthSessionSnapshot> {
   }
 }
 
-/// The session. Has no default: `main.dart`, `main_e2e.dart` and the test
-/// harness each override it with an [AuthController] seeded for their
-/// context.
+/// The session. No default: each entrypoint and the test harness overrides it.
 final NotifierProvider<AuthController, AuthSessionSnapshot>
 authControllerProvider = NotifierProvider<AuthController, AuthSessionSnapshot>(
   () => throw UnimplementedError(
@@ -169,9 +157,7 @@ authControllerProvider = NotifierProvider<AuthController, AuthSessionSnapshot>(
   ),
 );
 
-/// Reads secure storage once to compute the [AuthSessionSnapshot]
-/// `main.dart` seeds [AuthController] with, **before** `runApp` — see
-/// [AuthController]'s doc comment for why.
+/// Reads secure storage once, before `runApp`, to seed [AuthController].
 Future<AuthSessionSnapshot> loadInitialAuthSnapshot(
   TokenStorage storage,
 ) async {
@@ -218,10 +204,7 @@ Future<AuthSessionSnapshot> loadInitialAuthSnapshot(
   );
 }
 
-/// "Are AI-backed features usable right now?" — what Meals/Plan/Pantry/Shop
-/// gate Scan/Describe/Import/Generate on. `false` for both `expired` and
-/// `signedOut` — the latter is unreachable in practice (the router redirects
-/// away first) but is included defensively.
+/// Are AI-backed features usable right now? False for `expired` and `signedOut`.
 final Provider<bool> aiFeaturesAvailableProvider = Provider<bool>((Ref ref) {
   return ref.watch(authStatusProvider) == AuthStatus.active;
 });

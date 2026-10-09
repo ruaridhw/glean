@@ -4,18 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import 'app_routes.dart';
 
-/// Recoverable error page for a navigation failure.
-///
-/// Used both as the [GoRouter.errorBuilder] (an unmatched location) and as
-/// the target of a route-level redirect guard (e.g. a malformed path
-/// parameter). Both back affordances fall back to the Pantry tab rather than
-/// calling `pop()` blindly — the RN bug this replaces called `router.back()`
-/// on a cold-start deep link with nothing to pop, which hung on a permanent
-/// spinner (§11, AC-MEAL-12). There is always a way out.
-///
-/// Feature waves needing a "valid route, no matching data" error (e.g. a
-/// deep link to a recipe id that doesn't exist) should reuse this widget
-/// rather than inventing another one.
+/// Recoverable error page for a navigation failure: the [GoRouter.errorBuilder] and the target of
+/// route-level redirect guards. Both back affordances fall back to the Pantry tab rather than calling
+/// `pop()` blindly, since a cold-start deep link may have nothing to pop.
 class RouteErrorScreen extends StatelessWidget {
   const RouteErrorScreen({required this.message, super.key});
 

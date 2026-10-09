@@ -8,12 +8,8 @@ const Set<String> _nonProductionHosts = <String>{
   '::1',
 };
 
-/// Is [apiBaseUrl] a production backend? Fails **safe**: anything that
-/// doesn't parse, or whose host isn't a recognized local/loopback address,
-/// counts as production. Deliberately broader than "matches our known prod
-/// domain" — the e2e entrypoint must refuse to run against *any* real
-/// deployed backend, staging included, not just a hardcoded production
-/// hostname a future environment could rename.
+/// Is [apiBaseUrl] a production backend? Fails safe: anything unparseable or not a recognised
+/// local/loopback host counts as production, so the e2e entrypoint refuses any real deployed backend.
 bool isProductionApiBaseUrl(String apiBaseUrl) {
   final Uri? uri = Uri.tryParse(apiBaseUrl);
   if (uri == null || uri.host.isEmpty) return true;

@@ -4,25 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'haptics.dart';
 import 'tokens.dart';
 
-/// A themed swipe-to-delete row built on the built-in [Dismissible]
-/// (AC-DS-09).
-///
-/// The RN app implemented this with `swipe-delete-row.tsx` — ~100 lines of
-/// `PanResponder` + `Animated` — plus a hand-written distance/velocity
-/// threshold in `swipe-action.ts` (`shouldRunSwipeAction`). None of that
-/// exists here: [Dismissible] already owns the drag gesture, the
-/// distance/fling threshold, and the exit/resize animation. This wrapper
-/// adds only what's specific to Glean:
-///
-/// - the themed "revealed" background (danger-tinted, trailing trash icon),
-///   coloured from [Theme.of(context)] rather than a local constant;
-/// - firing exactly **one** [Haptics.mediumImpact] on commit (AC-HAP-03 — the
-///   RN app buzzed twice here because both the row and a separate delete
-///   `IconButton` fired their own haptic; there is only one delete affordance
-///   here, and only one haptic call site).
-///
-/// Callers only ever get a callback ([onDelete]) — there is no
-/// threshold/gesture maths for a caller to get wrong.
+/// A themed swipe-to-delete row on [Dismissible], which owns the gesture, threshold and exit animation.
+/// Adds the danger-tinted reveal background and exactly one [Haptics.mediumImpact] on commit.
 class SwipeToDeleteRow extends ConsumerWidget {
   const SwipeToDeleteRow({
     super.key,
@@ -37,15 +20,13 @@ class SwipeToDeleteRow extends ConsumerWidget {
   /// list-mutation animations.
   final Key dismissibleKey;
 
-  /// Called once the swipe commits. Callers do the actual delete (and should
-  /// show an undo snackbar via `GleanSnackBar.runUndoable` — AC-UX-02); this
-  /// widget's only added responsibility is the single haptic.
+  /// Called once the swipe commits. Callers do the actual delete, ideally with an undo snackbar via
+  /// `GleanSnackBar.runUndoable`.
   final VoidCallback onDelete;
 
   final Widget child;
 
-  /// RN only ever swiped one way (left, revealing a trailing action) — kept
-  /// as the default, but overridable for a row that reads right-to-left.
+  /// Defaults to a left swipe revealing a trailing action; overridable for right-to-left rows.
   final DismissDirection direction;
 
   @override
