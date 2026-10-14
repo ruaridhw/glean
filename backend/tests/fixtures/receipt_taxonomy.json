@@ -1,0 +1,220 @@
+{
+  "items": [
+    {
+      "name": "contract leafy_greens",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "leafy_greens",
+      "food_group": "vegetables"
+    },
+    {
+      "name": "contract brassicas",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "brassicas",
+      "food_group": "vegetables"
+    },
+    {
+      "name": "contract alliums",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "alliums",
+      "food_group": "vegetables"
+    },
+    {
+      "name": "contract root_vegetables",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "root_vegetables",
+      "food_group": "vegetables"
+    },
+    {
+      "name": "contract nightshades",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "nightshades",
+      "food_group": "vegetables"
+    },
+    {
+      "name": "contract legumes",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "legumes",
+      "food_group": "protein"
+    },
+    {
+      "name": "contract citrus",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "citrus",
+      "food_group": "fruit"
+    },
+    {
+      "name": "contract tropical_fruit",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "tropical_fruit",
+      "food_group": "fruit"
+    },
+    {
+      "name": "contract stone_fruit",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "stone_fruit",
+      "food_group": "fruit"
+    },
+    {
+      "name": "contract berries",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "berries",
+      "food_group": "fruit"
+    },
+    {
+      "name": "contract red_meat",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "red_meat",
+      "food_group": "protein"
+    },
+    {
+      "name": "contract poultry",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "poultry",
+      "food_group": "protein"
+    },
+    {
+      "name": "contract seafood",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "seafood",
+      "food_group": "protein"
+    },
+    {
+      "name": "contract eggs",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "eggs",
+      "food_group": "protein"
+    },
+    {
+      "name": "contract dairy",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "dairy",
+      "food_group": "dairy"
+    },
+    {
+      "name": "contract grains",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "grains",
+      "food_group": "carbohydrates"
+    },
+    {
+      "name": "contract pasta_rice",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "pasta_rice",
+      "food_group": "carbohydrates"
+    },
+    {
+      "name": "contract bread",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "bread",
+      "food_group": "carbohydrates"
+    },
+    {
+      "name": "contract oils_fats",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "oils_fats",
+      "food_group": "fats"
+    },
+    {
+      "name": "contract herbs_fresh",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "herbs_fresh",
+      "food_group": "condiments"
+    },
+    {
+      "name": "contract herbs_dried",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "herbs_dried",
+      "food_group": "condiments"
+    },
+    {
+      "name": "contract spices",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "spices",
+      "food_group": "condiments"
+    },
+    {
+      "name": "contract condiments",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": "condiments",
+      "food_group": "condiments"
+    },
+    {
+      "name": "contract None",
+      "quantity": 2.0,
+      "unit": "g",
+      "unit_price": null,
+      "confidence": 1.0,
+      "category": null,
+      "food_group": "other"
+    }
+  ]
+}

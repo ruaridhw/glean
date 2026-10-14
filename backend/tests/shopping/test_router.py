@@ -26,7 +26,7 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
                 "quantity": 1,
                 "unit": "pack",
                 "unit_price": None,
-                "category": "bakery",
+                "category": "grains",
                 "confidence": 0.82,
             }
         ],
@@ -52,13 +52,47 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
             "unit_price": None,
             "confidence": 0.82,
             "api_ingredient_id": None,
-            "category": "bakery",
+            "category": "grains",
+            "food_group": "carbohydrates",
         }
     ]
     assert body["clarifying_questions"] == ["What kind of salsa do you want?"]
     args, _ = llm_router.invoke.call_args
     assert args[0] == Feature.SHOPPING_LIST_DESCRIPTION
     assert args[1] is ShoppingParseResponse
+
+
+def test_parse_shopping_description_falls_back_to_other_food_group_for_out_of_taxonomy_category(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """An LLM response outside the 23-category taxonomy must not reach the client verbatim, and
+    food_group must still resolve (non-null) so meal-plan generation doesn't 422 on it."""
+    structured_response = ShoppingParseResponse(
+        items=[
+            {
+                "name": "lunchbox snacks",
+                "quantity": 1,
+                "unit": "units",
+                "unit_price": None,
+                "category": "snacks",  # not in the taxonomy
+                "confidence": 0.55,
+            }
+        ],
+    )
+
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = structured_response
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    response = client.post(
+        "/shopping/parse-description",
+        headers=auth_headers,
+        json={"text": "some lunchbox snacks"},
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["category"] is None
+    assert item["food_group"] == "other"
 
 
 def test_parse_shopping_description_requires_auth(test_settings: Settings) -> None:

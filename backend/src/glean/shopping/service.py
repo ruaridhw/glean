@@ -6,13 +6,18 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.llm import Feature
 from glean.observability import logger, tracer
+from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 
 if TYPE_CHECKING:
     from glean.llm import LLMRouter
 
 
-SHOPPING_PARSE_SYSTEM_PROMPT = """You are a grocery shopping list parser for the Glean app.
+# Built from the taxonomy dict, not hand-copied, so the prompt text can't drift from the
+# Literal enum the response schema actually enforces.
+_CATEGORY_LIST = ", ".join(INGREDIENT_CATEGORY_FOOD_GROUPS)
+
+SHOPPING_PARSE_SYSTEM_PROMPT = f"""You are a grocery shopping list parser for the Glean app.
 Turn a user's natural-language shopping list into structured shopping item proposals.
 
 Return structured data containing shopping item proposals and any clarifying questions.
@@ -24,7 +29,7 @@ Rules:
 - Use practical shopping units such as "g", "ml", "units", "pack", "bottle", "bag", or "box".
 - When the user did not specify an amount, choose a sensible shopping-list default such as quantity 1 and unit "units".
 - Set unit_price to null unless the user explicitly provides enough pricing detail.
-- Set category to a broad grocery category when obvious, otherwise null.
+- Set category to exactly one of: {_CATEGORY_LIST}. Choose the single best fit; use null only if genuinely none apply.
 - Set confidence from 0.0 to 1.0.
 - When the user names a dish or meal instead of listing items (e.g. "tacos", "roast dinner"), propose the typical
   ingredients to buy for it as separate items, each with confidence of 0.6 or lower.

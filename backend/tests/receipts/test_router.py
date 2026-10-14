@@ -64,6 +64,10 @@ def test_scan_receipt_returns_parsed_items(client: TestClient, auth_headers: dic
     assert items[0]["quantity"] == 500
     assert items[0]["unit"] == "g"
     assert items[0]["unit_price"] == pytest.approx(0.007)
+    assert items[0]["category"] == "red_meat"
+    assert items[0]["food_group"] == "protein"
+    assert items[1]["category"] == "dairy"
+    assert items[1]["food_group"] == "dairy"
     mock_s3.put_object.assert_called_once()
     mock_s3.delete_object.assert_called_once()
     args, _ = llm_router.invoke.call_args
@@ -136,10 +140,54 @@ def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[st
     )
 
     assert response.status_code == 200
-    assert len(response.json()["items"]) == 2
+    items = response.json()["items"]
+    assert len(items) == 2
+    assert items[0]["category"] == "red_meat"
+    assert items[0]["food_group"] == "protein"
     args, _ = llm_router.invoke.call_args
     assert args[0] == Feature.PANTRY_PURCHASE_DESCRIPTION
     assert args[1] is ScanResponse
+
+
+def test_scan_receipt_falls_back_to_other_food_group_for_out_of_taxonomy_category(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """An LLM response outside the 23-category taxonomy must not reach the client verbatim, and
+    food_group must still resolve (non-null) so meal-plan generation doesn't 422 on it."""
+    mock_s3 = MagicMock()
+    mock_textract = MagicMock()
+    mock_textract.analyze_expense.return_value = _mock_textract_response()
+
+    def boto3_client_factory(service_name: str, **kwargs):
+        if service_name == "s3":
+            return mock_s3
+        return mock_textract
+
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = ScanResponse(
+        items=[
+            ParsedIngredient(
+                name="chicken breast",
+                quantity=500,
+                unit="g",
+                unit_price=0.007,
+                confidence=0.92,
+                category="artisanal-cheese-boutique",  # not in the taxonomy
+            )
+        ]
+    )
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    with patch("boto3.client", side_effect=boto3_client_factory):
+        response = client.post(
+            "/receipts/scan",
+            headers=auth_headers,
+            files={"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["category"] is None
+    assert item["food_group"] == "other"
 
 
 def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
