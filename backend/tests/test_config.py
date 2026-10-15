@@ -2,6 +2,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from glean.config import SecretsManagerSource, Settings, configure_langsmith_environment, get_settings
 from glean.llm import Feature
@@ -192,3 +193,20 @@ class TestConfigureLangSmithEnvironment:
             assert os.environ["LANGSMITH_API_KEY"] == "test-langsmith-key"
             assert os.environ["LANGSMITH_PROJECT"] == "glean"
             assert os.environ["LANGCHAIN_CALLBACKS_BACKGROUND"] == "false"
+
+
+SYNTHETIC_SECRET = "sk-synthetic-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789"
+# Pydantic's default error text keeps the first character and ~22 trailing characters of a value.
+SECRET_FRAGMENTS = (SYNTHETIC_SECRET, SYNTHETIC_SECRET[-22:], "ABCDEFGHIJ", "0123456789")
+
+
+class TestSettingsValidationErrorsHideSecrets:
+    def test_error_names_missing_field_but_not_env_supplied_secret(self) -> None:
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": SYNTHETIC_SECRET}, clear=True):
+            with pytest.raises(ValidationError) as excinfo:
+                Settings(_env_file=None)  # ty: ignore[missing-argument]
+
+        message = str(excinfo.value)
+        assert "recipe_api_key" in message
+        for fragment in SECRET_FRAGMENTS:
+            assert fragment not in message
