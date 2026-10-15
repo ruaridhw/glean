@@ -7,71 +7,137 @@ part of 'catalogue.dart';
 // **************************************************************************
 
 CatalogueGroup _$CatalogueGroupFromJson(Map<String, dynamic> json) =>
-    CatalogueGroup(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      kind: json['kind'] as String,
-      foodGroup: json['food_group'] as String,
-      trackingMode: json['tracking_mode'] as String,
-      allowedForms: (json['allowed_forms'] as List<dynamic>)
-          .map((e) => e as String)
-          .toList(),
-      unopenedShelfLifeDays: Map<String, int?>.from(
-        json['unopened_shelf_life_days'] as Map,
-      ),
-      onceOpenedShelfLifeDays: Map<String, int?>.from(
-        json['once_opened_shelf_life_days'] as Map,
-      ),
-      stockUnit: json['stock_unit'] as String?,
+    $checkedCreate(
+      'CatalogueGroup',
+      json,
+      ($checkedConvert) {
+        final val = CatalogueGroup(
+          id: $checkedConvert('id', (v) => v as String),
+          name: $checkedConvert('name', (v) => v as String),
+          kind: $checkedConvert('kind', (v) => v as String),
+          foodGroup: $checkedConvert('food_group', (v) => v as String),
+          trackingMode: $checkedConvert('tracking_mode', (v) => v as String),
+          allowedForms: $checkedConvert(
+            'allowed_forms',
+            (v) => (v as List<dynamic>).map((e) => e as String).toList(),
+          ),
+          unopenedShelfLifeDays: $checkedConvert(
+            'unopened_shelf_life_days',
+            (v) => Map<String, int?>.from(v as Map),
+          ),
+          onceOpenedShelfLifeDays: $checkedConvert(
+            'once_opened_shelf_life_days',
+            (v) => Map<String, int?>.from(v as Map),
+          ),
+          stockUnit: $checkedConvert('stock_unit', (v) => v as String?),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'foodGroup': 'food_group',
+        'trackingMode': 'tracking_mode',
+        'allowedForms': 'allowed_forms',
+        'unopenedShelfLifeDays': 'unopened_shelf_life_days',
+        'onceOpenedShelfLifeDays': 'once_opened_shelf_life_days',
+        'stockUnit': 'stock_unit',
+      },
     );
 
 CatalogueItemOverrides _$CatalogueItemOverridesFromJson(
   Map<String, dynamic> json,
-) => CatalogueItemOverrides(
-  trackingMode: json['tracking_mode'] as String?,
-  stockUnit: json['stock_unit'] as String?,
-  unopenedShelfLifeDays: (json['unopened_shelf_life_days'] as num?)?.toInt(),
-  onceOpenedShelfLifeDays: (json['once_opened_shelf_life_days'] as num?)
-      ?.toInt(),
+) => $checkedCreate(
+  'CatalogueItemOverrides',
+  json,
+  ($checkedConvert) {
+    final val = CatalogueItemOverrides(
+      trackingMode: $checkedConvert('tracking_mode', (v) => v as String?),
+      stockUnit: $checkedConvert('stock_unit', (v) => v as String?),
+      unopenedShelfLifeDays: $checkedConvert(
+        'unopened_shelf_life_days',
+        (v) => (v as num?)?.toInt(),
+      ),
+      onceOpenedShelfLifeDays: $checkedConvert(
+        'once_opened_shelf_life_days',
+        (v) => (v as num?)?.toInt(),
+      ),
+    );
+    return val;
+  },
+  fieldKeyMap: const {
+    'trackingMode': 'tracking_mode',
+    'stockUnit': 'stock_unit',
+    'unopenedShelfLifeDays': 'unopened_shelf_life_days',
+    'onceOpenedShelfLifeDays': 'once_opened_shelf_life_days',
+  },
 );
 
 CatalogueItemDto _$CatalogueItemDtoFromJson(Map<String, dynamic> json) =>
-    CatalogueItemDto(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      group: json['group'] as String,
-      form: json['form'] as String,
-      overrides: CatalogueItemOverrides.fromJson(
-        json['overrides'] as Map<String, dynamic>,
-      ),
-      source: json['source'] as String,
-      densityGPerMl: (json['density_g_per_ml'] as num?)?.toDouble(),
-      section: json['section'] as String?,
-      formerIds:
-          (json['former_ids'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          [],
+    $checkedCreate(
+      'CatalogueItemDto',
+      json,
+      ($checkedConvert) {
+        final val = CatalogueItemDto(
+          id: $checkedConvert('id', (v) => v as String),
+          name: $checkedConvert('name', (v) => v as String),
+          group: $checkedConvert('group', (v) => v as String),
+          form: $checkedConvert('form', (v) => v as String),
+          overrides: $checkedConvert(
+            'overrides',
+            (v) => CatalogueItemOverrides.fromJson(v as Map<String, dynamic>),
+          ),
+          source: $checkedConvert('source', (v) => v as String),
+          densityGPerMl: $checkedConvert(
+            'density_g_per_ml',
+            (v) => (v as num?)?.toDouble(),
+          ),
+          section: $checkedConvert('section', (v) => v as String?),
+          formerIds: $checkedConvert(
+            'former_ids',
+            (v) =>
+                (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+          ),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'densityGPerMl': 'density_g_per_ml',
+        'formerIds': 'former_ids',
+      },
     );
 
 CatalogueAliasDto _$CatalogueAliasDtoFromJson(Map<String, dynamic> json) =>
-    CatalogueAliasDto(
-      key: json['key'] as String,
-      name: json['name'] as String,
-      itemId: json['item_id'] as String,
-    );
+    $checkedCreate('CatalogueAliasDto', json, ($checkedConvert) {
+      final val = CatalogueAliasDto(
+        key: $checkedConvert('key', (v) => v as String),
+        name: $checkedConvert('name', (v) => v as String),
+        itemId: $checkedConvert('item_id', (v) => v as String),
+      );
+      return val;
+    }, fieldKeyMap: const {'itemId': 'item_id'});
 
 CatalogueSyncResponse _$CatalogueSyncResponseFromJson(
   Map<String, dynamic> json,
-) => CatalogueSyncResponse(
-  version: (json['version'] as num).toInt(),
-  groups: (json['groups'] as List<dynamic>)
-      .map((e) => CatalogueGroup.fromJson(e as Map<String, dynamic>))
-      .toList(),
-  items: (json['items'] as List<dynamic>)
-      .map((e) => CatalogueItemDto.fromJson(e as Map<String, dynamic>))
-      .toList(),
-  aliases: (json['aliases'] as List<dynamic>)
-      .map((e) => CatalogueAliasDto.fromJson(e as Map<String, dynamic>))
-      .toList(),
-);
+) => $checkedCreate('CatalogueSyncResponse', json, ($checkedConvert) {
+  final val = CatalogueSyncResponse(
+    version: $checkedConvert('version', (v) => (v as num).toInt()),
+    groups: $checkedConvert(
+      'groups',
+      (v) => (v as List<dynamic>)
+          .map((e) => CatalogueGroup.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
+    items: $checkedConvert(
+      'items',
+      (v) => (v as List<dynamic>)
+          .map((e) => CatalogueItemDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
+    aliases: $checkedConvert(
+      'aliases',
+      (v) => (v as List<dynamic>)
+          .map((e) => CatalogueAliasDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
+  );
+  return val;
+});
