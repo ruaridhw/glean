@@ -7,6 +7,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/text_input.dart';
@@ -59,11 +60,13 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
       detail = await ref
           .read(apiClientProvider)
           .importRecipeFromUrl(ImportUrlRequest(url: url));
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _importing = false;
-        _error = 'Could not import this recipe. Check the link and try again.';
+        _error = error is ApiRateLimitException
+            ? error.userMessage
+            : 'Could not import this recipe. Check the link and try again.';
       });
       return;
     }
