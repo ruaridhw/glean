@@ -1,5 +1,7 @@
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
@@ -55,4 +57,15 @@ Future<void> deleteEntryWithUndo(
 void onAddDinnerTapped(BuildContext context, WidgetRef ref) {
   ref.read(hapticsProvider).lightImpact();
   context.go(AppRoutes.meals.path);
+}
+
+/// Opens the recipe behind a planned meal, inside the Plan tab.
+void openPlannedRecipe(BuildContext context, WidgetRef ref, int recipeId) {
+  ref.read(hapticsProvider).lightImpact();
+  unawaited(
+    context.pushNamed(
+      AppRoutes.planRecipe.name,
+      pathParameters: <String, String>{'id': '$recipeId'},
+    ),
+  );
 }

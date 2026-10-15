@@ -28,6 +28,11 @@ abstract final class AppRoutes {
   static const RouteSpec mealsDetail = RouteSpec('/meals/:id', 'meals-detail');
 
   static const RouteSpec plan = RouteSpec('/plan', 'plan');
+  // A planned meal's saved recipe, pushed inside the Plan tab so Back returns to Plan.
+  static const RouteSpec planRecipe = RouteSpec(
+    '/plan/recipe/:id',
+    'plan-recipe',
+  );
 
   static const RouteSpec shop = RouteSpec('/shop', 'shop');
 
@@ -64,4 +69,7 @@ abstract final class AppRoutes {
   /// Builds a concrete path for [mealsDetail] — the one place that formats
   /// this path, so feature code never hand-interpolates it.
   static String mealsDetailPath(String id) => '/meals/$id';
+
+  /// Builds a concrete path for [planRecipe].
+  static String planRecipePath(String id) => '/plan/recipe/$id';
 }
