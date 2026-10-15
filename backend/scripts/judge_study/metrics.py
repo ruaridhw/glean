@@ -95,14 +95,25 @@ class ReliabilityBin:
     accuracy: float
 
 
-def reliability_bins(items: list[OutputItem], bins: int = 5) -> list[ReliabilityBin]:
-    """Does the decision judge's confidence track whether it matches the human? Empty bins are omitted."""
+def reliability_bins(
+    items: list[OutputItem], bins: int = 5, reference: Literal["human", "panel"] = "human"
+) -> list[ReliabilityBin]:
+    """Does the decision judge's confidence track whether it matches the reference? Empty bins are omitted.
+
+    Against the panel, a match is equalling either panel score, and contested outputs have no reference.
+    """
     points: list[tuple[float, bool]] = []
     for item in items:
         confidences = [j.confidence for j in item.judgements if j.judge == "decision" and j.confidence is not None]
-        score, human = item_score(item, "decision"), item.human_score
-        if confidences and score is not None and human is not None:
-            points.append((sum(confidences) / len(confidences), score == human))
+        score = item_score(item, "decision")
+        if not confidences or score is None:
+            continue
+        if reference == "human":
+            if item.human_score is not None:
+                points.append((sum(confidences) / len(confidences), score == item.human_score))
+        elif panel_reference(item).score is not None:
+            panel = (item_score(item, "panel_claude"), item_score(item, "panel_gpt"))
+            points.append((sum(confidences) / len(confidences), score in panel))
     result = []
     for index in range(bins):
         lower, upper = index / bins, (index + 1) / bins
