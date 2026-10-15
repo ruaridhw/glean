@@ -10,6 +10,7 @@ from scripts import compute_dietary_decisions
 from glean.decisions import JEV_MODEL, DecisionClient
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.search_index import INDEX_KEY
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 if TYPE_CHECKING:
@@ -66,3 +67,15 @@ def test_an_incomplete_run_exits_nonzero_so_the_gate_can_fail(tmp_path: Path, ca
 
     assert code == 1
     assert "rec_tomato" in capsys.readouterr().out
+
+
+def test_a_missing_corpus_index_exits_nonzero_instead_of_passing_the_gate(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    _local_corpus(tmp_path)
+    (tmp_path / "corpus" / INDEX_KEY).unlink()
+
+    code = compute_dietary_decisions.main(["--cache-dir", str(tmp_path)], client=_jev())
+
+    assert code != 0
+    assert "Coverage: 100" not in capsys.readouterr().out

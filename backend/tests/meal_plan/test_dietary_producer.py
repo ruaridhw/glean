@@ -13,12 +13,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from glean.decisions import JEV_MODEL, DecisionClient
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
+    CorpusUnavailableError,
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
@@ -26,6 +28,7 @@ from glean.meal_plan.dietary_decisions import (
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.search_index import INDEX_KEY
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 if TYPE_CHECKING:
@@ -150,6 +153,22 @@ def test_a_changed_recipe_jev_cant_answer_is_reported_uncovered(tmp_path) -> Non
 
     assert report.uncovered == ["rec_tomato"]
     assert report.coverage < 1.0
+
+
+def test_a_corpus_whose_search_index_is_missing_fails_loudly_instead_of_reporting_coverage(tmp_path) -> None:
+    _corpus(tmp_path)  # recipe blobs exist...
+    (tmp_path / INDEX_KEY).unlink()  # ...but Generate, which selects through the index, can see none of them
+    jev = FakeJev()
+
+    with pytest.raises(CorpusUnavailableError):
+        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), jev.client())
+
+    assert jev.requests == []
+
+
+def test_an_empty_corpus_fails_loudly(tmp_path) -> None:
+    with pytest.raises(CorpusUnavailableError):
+        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), FakeJev().client())
 
 
 def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
