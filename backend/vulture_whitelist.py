@@ -108,3 +108,8 @@ __context__  # as above
 produce_missing_decisions  # used by scripts/compute_dietary_decisions.py
 render  # CoverageReport.render, printed by the producer script
 failures  # CoverageReport field, asserted in tests and read by operators in the report
+
+# catalogue/normalise.py: NormalisedName response fields and the route handler are read by FastAPI / the app
+catalogue_item_id  # NormalisedName field
+ingredient_group  # NormalisedName field
+normalise_names  # POST /catalogue/normalise route
