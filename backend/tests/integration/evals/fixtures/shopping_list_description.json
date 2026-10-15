@@ -10,7 +10,9 @@
         "whole milk",
         "limes",
         "lunchbox snacks"
-      ]
+      ],
+      "items": {},
+      "max_clarifying_questions": null
     }
   },
   {
@@ -24,7 +26,22 @@
         "chopped tomatoes",
         "parmesan",
         "spinach"
-      ]
+      ],
+      "items": {
+        "pasta": [
+          500,
+          "g"
+        ],
+        "chopped tomatoes": [
+          2,
+          "units"
+        ],
+        "spinach": [
+          1,
+          "bag"
+        ]
+      },
+      "max_clarifying_questions": 0
     }
   },
   {
@@ -38,7 +55,14 @@
         "greek yogurt",
         "blueberries",
         "orange juice"
-      ]
+      ],
+      "items": {
+        "orange juice": [
+          1,
+          "bottle"
+        ]
+      },
+      "max_clarifying_questions": 0
     }
   },
   {
@@ -51,7 +75,22 @@
         "semi-skimmed milk",
         "eggs",
         "bread"
-      ]
+      ],
+      "items": {
+        "semi-skimmed milk": [
+          2,
+          "l"
+        ],
+        "eggs": [
+          6,
+          "units"
+        ],
+        "bread": [
+          1,
+          "units"
+        ]
+      },
+      "max_clarifying_questions": 0
     }
   },
   {
@@ -64,7 +103,46 @@
         "bacon",
         "cereal",
         "fruit"
-      ]
+      ],
+      "items": {
+        "bacon": [
+          1,
+          "pack"
+        ],
+        "cereal": [
+          1,
+          "box"
+        ]
+      },
+      "max_clarifying_questions": null
+    }
+  },
+  {
+    "input": {
+      "text": "500g pasta, 2 litres of milk and 6 eggs."
+    },
+    "expected": {
+      "count": 3,
+      "names": [
+        "pasta",
+        "milk",
+        "eggs"
+      ],
+      "items": {
+        "pasta": [
+          500,
+          "g"
+        ],
+        "milk": [
+          2,
+          "l"
+        ],
+        "eggs": [
+          6,
+          "units"
+        ]
+      },
+      "max_clarifying_questions": 0
     }
   }
 ]

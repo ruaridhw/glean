@@ -108,6 +108,67 @@ class TestShoppingListDescriptionHeuristic:
         assert not failures, "Unit/quantity/confidence check failures:\n" + "\n".join(failures)
 
 
+def _find_item(response: ShoppingParseResponse, expected_name: str) -> Any:
+    return next((item for item in response.items if expected_name in item.name.lower()), None)
+
+
+VAGUE_INPUTS = ["some snacks", "something for lunch"]
+
+
+@pytest.mark.soft_gate
+class TestShoppingListDescriptionExpectations:
+    """Expectations written from the input text, independent of the prompt and the schema."""
+
+    def test_quantities_and_units_match_what_the_text_says(
+        self,
+        eval_model: BaseChatModel,
+        shopping_list_description_dataset: list[dict[str, Any]],
+    ) -> None:
+        failures = []
+        for i, example in enumerate(shopping_list_description_dataset):
+            response = _invoke_shopping_list_description(eval_model, example["input"]["text"], example_idx=i)
+            for name, (quantity, unit) in example["expected"]["items"].items():
+                item = _find_item(response, name)
+                if item is None:
+                    failures.append(f"Example {i}: no item matching {name!r} in {[x.name for x in response.items]}")
+                elif (item.quantity, item.unit.value) != (quantity, unit):
+                    failures.append(
+                        f"Example {i}: {name!r} got {item.quantity} {item.unit.value}, want {quantity} {unit}"
+                    )
+        assert not failures, "Quantity/unit failures:\n" + "\n".join(failures)
+
+    def test_clarifying_questions_only_appear_when_the_text_is_ambiguous(
+        self,
+        eval_model: BaseChatModel,
+        shopping_list_description_dataset: list[dict[str, Any]],
+    ) -> None:
+        failures = []
+        for i, example in enumerate(shopping_list_description_dataset):
+            limit = example["expected"]["max_clarifying_questions"]
+            if limit is None:
+                continue
+            response = _invoke_shopping_list_description(eval_model, example["input"]["text"], example_idx=i)
+            if len(response.clarifying_questions) > limit:
+                failures.append(f"Example {i}: asked {response.clarifying_questions} for a clear list")
+        assert not failures, "Unneeded clarifying questions:\n" + "\n".join(failures)
+
+    def test_vague_requests_still_propose_items_with_low_confidence(self, eval_model: BaseChatModel) -> None:
+        for i, text in enumerate(VAGUE_INPUTS):
+            response = _invoke_shopping_list_description(eval_model, text, example_idx=200 + i)
+            assert response.items, f"{text!r}: no items proposed"
+            assert all(item.confidence <= 0.7 for item in response.items), f"{text!r}: overconfident {response.items}"
+
+    def test_deprecated_fields_stay_null(
+        self,
+        eval_model: BaseChatModel,
+        shopping_list_description_dataset: list[dict[str, Any]],
+    ) -> None:
+        for i, example in enumerate(shopping_list_description_dataset):
+            response = _invoke_shopping_list_description(eval_model, example["input"]["text"], example_idx=i)
+            dumped = response.model_dump()["items"]
+            assert all(item["unit_price"] is None and item["api_ingredient_id"] is None for item in dumped)
+
+
 @pytest.mark.soft_gate
 class TestShoppingListDescriptionJudge:
     def test_judge_scores_above_threshold(
