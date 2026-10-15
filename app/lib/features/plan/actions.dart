@@ -83,11 +83,9 @@ Future<void> openPlannedRecipe(
   ref.read(hapticsProvider).lightImpact();
   final int? recipeId = entry.recipeId;
   if (recipeId != null) {
-    unawaited(
-      context.pushNamed(
-        AppRoutes.planRecipe.name,
-        pathParameters: <String, String>{'id': '$recipeId'},
-      ),
+    await context.pushNamed<void>(
+      AppRoutes.planRecipe.name,
+      pathParameters: <String, String>{'id': '$recipeId'},
     );
     return;
   }
