@@ -43,6 +43,30 @@ AI_ROUTES = [
             }
         },
     ),
+    AiRoute(
+        name="receipt scan",
+        path="/receipts/scan",
+        service_function="glean.receipts.router.service.scan_receipt",
+        request_kwargs={"files": {"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")}},
+    ),
+    AiRoute(
+        name="receipt describe",
+        path="/receipts/describe",
+        service_function="glean.receipts.router.service.describe_purchase",
+        request_kwargs={"json": {"text": "a kilo of chicken and 2 litres of milk"}},
+    ),
+    AiRoute(
+        name="shopping parse description",
+        path="/shopping/parse-description",
+        service_function="glean.shopping.router.service.parse_shopping_description",
+        request_kwargs={"json": {"text": "stuff for tacos"}},
+    ),
+    AiRoute(
+        name="recipe import url",
+        path="/recipes/import-url",
+        service_function="glean.recipes.router.service.import_recipe_from_url",
+        request_kwargs={"json": {"url": "https://example.com/carbonara"}},
+    ),
 ]
 
 
