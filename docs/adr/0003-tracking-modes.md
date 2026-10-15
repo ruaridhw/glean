@@ -17,3 +17,4 @@ Recipes keep their amounts as written, and teaspoons stay teaspoons. But the pan
 - **A recipe never subtracts from presence or perishable stock.** Cooking only sets a perishable item's opened date, and its once-opened shelf life counts from then.
 - **Mode is set per group, overridable per ingredient,** because perishability cuts across groups: ginger is root veg, yet perishable.
 - **Conversions:** counted items convert within one dimension, or through a known density. An unconvertible recipe amount becomes its own shopping item rather than an error.
+- **Once-opened shelf life depends on form, like unopened.** An opened tin keeps about 3 days, but an opened bag of dried pulses or pasta, or a frozen pack, keeps months. Groups with forms carry one once-opened value per form; groups without forms carry one value. Individual items override it (hard cheese keeps weeks, milk days).

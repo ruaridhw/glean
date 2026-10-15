@@ -87,7 +87,7 @@ The unit a recipe states an amount in, kept as written for spoons and metric amo
 _Avoid_: display unit
 
 **Shelf life**:
-How many days an ingredient keeps. There are two: **unopened**, and **once opened**.
+How many days an ingredient keeps. There are two: **unopened**, and **once opened**. Both depend on the form where a group has forms: an opened tin keeps days, an opened bag of dried pulses or frozen peas keeps months. Groups without forms have one value of each.
 _Avoid_: expiry period, best-before
 
 **Opened date**:
@@ -95,7 +95,7 @@ The day a pantry item was first used. Its once-opened shelf life counts from her
 _Avoid_: open date, first-use date
 
 **Food group**:
-The broad nutritional bucket an ingredient counts towards when the meal plan balances a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments. Each ingredient group maps to one food group.
+The broad nutritional bucket an ingredient counts towards when the meal plan balances a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments. Each ingredient group maps to one food group. Drinks, Snacks & treats and the non-food groups (Household, Health & beauty, Baby, Pet, Other) map to **other**, which doesn't count towards the week's balance.
 _Avoid_: meal-plan group, nutrition group
 
 **Store section**:
