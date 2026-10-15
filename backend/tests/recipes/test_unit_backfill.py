@@ -191,3 +191,14 @@ def test_backfill_still_fixes_cloves_of_garlic(tmp_path: Path, name: str, quanti
 
     ingredient = corpus.get("import:garlic").ingredients[0]
     assert (ingredient.canonical_name, ingredient.quantity, ingredient.unit) == ("Garlic", quantity, "clove")
+
+
+def test_backfill_leaves_a_row_untouched_rather_than_produce_a_name_that_starts_with_a_number(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    original = _recipe("import:odd", _leaked("Oz 2 tomatoes", 1))
+    corpus.save(original)
+
+    result = backfill_unit_words(corpus, dry_run=False)
+
+    assert corpus.get("import:odd") == original
+    assert result.ingredients_changed == 0
