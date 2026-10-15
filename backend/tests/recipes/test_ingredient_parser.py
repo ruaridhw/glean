@@ -258,14 +258,18 @@ def test_parse_ingredient_text_keeps_a_parenthetical_size_out_of_the_name(
     ("raw", "expected_name", "expected_quantity", "expected_unit", "expected_preparation"),
     [
         ("1 cheddar (8 oz)", "Cheddar", 226.8, "g", None),
-        ("2 cheddar (8 oz)", "Cheddar", 453.6, "g", "2 x 8 oz"),
-        ("2.0 Cheddar (8 oz)", "Cheddar", 453.6, "g", "2 x 8 oz"),
-        ("3 Cheddar (8 ounces)", "Cheddar", 680.4, "g", "3 x 8 ounces"),
+        # A trailing weight after a count and noun is the total, never multiplied.
+        ("2 tomatoes (400g)", "Tomatoes", 400, "g", "2 tomatoes"),
+        ("2 cheddar (8 oz)", "Cheddar", 226.8, "g", "2 cheddar"),
+        ("2.0 Cheddar (8 oz)", "Cheddar", 226.8, "g", "2 Cheddar"),
         ("Cheddar (8 oz) x2", "Cheddar", 453.6, "g", None),
-        ("2 Cheddar (8 oz) x2", "Cheddar", 907.2, "g", "2 x 8 oz"),
+        # An explicit package size before a container noun does multiply.
+        ("2 x 400g tins chopped tomatoes", "Chopped tomatoes", 800, "g", "2 tins"),
+        ("2 (14 oz) cans chopped tomatoes", "Chopped tomatoes", 793.8, "g", "2 cans"),
+        ("1 x 400g tin chopped tomatoes", "Chopped tomatoes", 400, "g", "1 tin"),
     ],
 )
-def test_parse_ingredient_text_multiplies_a_count_by_a_per_item_parenthetical_size(
+def test_parse_ingredient_text_treats_a_trailing_size_as_the_total_and_a_package_size_as_per_package(
     raw: str,
     expected_name: str,
     expected_quantity: float,

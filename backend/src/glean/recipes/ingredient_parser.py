@@ -270,7 +270,7 @@ def _parse_measure_prefix(text: str) -> tuple[str, float, str, str | None] | Non
 
 def _parse_suffix_measure_or_count(text: str) -> tuple[str, float, str, str | None] | None:
     if match := re.match(
-        # An optional leading count multiplies out a per-item size: "2 cheddar (8 oz)" is 2 x 8 oz.
+        # A trailing size after a count and noun is the total: "2 tomatoes (400g)" is 400 g, not 2 x 400 g.
         rf"^(?:(?P<lead>{_NUMBER_PATTERN})\s+)?(?P<name>.+?)\s+\((?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s*"
         rf"(?:x(?P<count>{_NUMBER_PATTERN}))?$",
         text,
@@ -279,14 +279,13 @@ def _parse_suffix_measure_or_count(text: str) -> tuple[str, float, str, str | No
         lead = _parse_quantity(match.group("lead")) if match.group("lead") else 1.0
         count = _parse_quantity(match.group("count")) if match.group("count") else 1.0
         amount = _parse_quantity(match.group("amount"))
-        converted = _convert_measure(amount * count * lead, match.group("unit"))
+        converted = _convert_measure(amount * count, match.group("unit"))
         if converted is None:
             return None
         quantity, unit = converted
-        preparation = (
-            f"{_format_quantity(lead)} x {_format_quantity(amount)} {match.group('unit')}" if lead != 1 else None
-        )
-        return match.group("name").strip(), quantity, unit, preparation
+        name = match.group("name").strip()
+        preparation = f"{_format_quantity(lead)} {name}" if lead != 1 else None
+        return name, quantity, unit, preparation
 
     if match := re.match(rf"^(?P<name>.+?)\s+x(?P<count>{_NUMBER_PATTERN})$", text, flags=re.IGNORECASE):
         return match.group("name").strip(), _parse_quantity(match.group("count")), "pcs", None
