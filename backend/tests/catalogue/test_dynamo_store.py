@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -144,11 +145,20 @@ class _IndexView:
     def __init__(self) -> None:
         self.lagging = False
         self.hidden: set[str] = set()
+        self.stale: set[str] = set()  # rows served as the revision last seen while the index was healthy
+        self._last_seen: dict[str, Any] = {}
 
     def __call__(self, parsed: dict[str, Any], **_: Any) -> None:
-        if not self.lagging or "Items" not in parsed:
+        if "Items" not in parsed:
             return
-        parsed["Items"] = [row for row in parsed["Items"] if _plain(row["pk"]) not in self.hidden]
+        if not self.lagging:
+            self._last_seen.update({_plain(row["pk"]): copy.deepcopy(row) for row in parsed["Items"]})
+            return
+        parsed["Items"] = [
+            self._last_seen[_plain(row["pk"])] if _plain(row["pk"]) in self.stale else row
+            for row in parsed["Items"]
+            if _plain(row["pk"]) not in self.hidden
+        ]
 
 
 def _plain(value: Any) -> str:
@@ -213,3 +223,37 @@ def test_reseeding_with_a_new_seed_alias_makes_it_resolve_and_keeps_item_and_loo
     assert found is not None
     assert "coriander leaf" in found.aliases
     assert [item.id for item in dynamo_store.shortlist("coriander leaf")][:1] == ["coriander"]
+
+
+def test_a_snapshot_with_a_stale_revision_is_not_kept_even_when_the_count_and_newest_version_match(table: Any) -> None:
+    view = _IndexView()
+    session = boto3.Session(region_name=REGION)
+    session.events.register("after-call.dynamodb.Query", view)
+    store = DynamoCatalogueStore(TABLE_NAME, region=REGION, session=session)
+    store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    store.shortlist("dragon fruit")  # the healthy index shows the first revision
+    store.upsert_alias("dragon-fruit", "pitaya")
+    store.create_provisional("Birthday Candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
+
+    view.lagging, view.stale = True, {"ITEM#dragon-fruit"}
+    assert store.shortlist("pitaya") == []  # the index serves the old revision of the older item
+
+    view.lagging = False
+    assert [item.id for item in store.shortlist("pitaya")] == ["dragon-fruit"]
+
+
+def test_reseeding_a_renamed_item_keeps_its_old_name_as_an_alias(dynamo_store: DynamoCatalogueStore) -> None:
+    renamed = [
+        item.model_copy(update={"name": "jeera", "aliases": ()}) if item.id == "ground-cumin" else item
+        for item in seed_items()
+    ]
+
+    assert dynamo_store.seed(renamed) == 1
+
+    for name in ("ground cumin", "jeera"):
+        found = dynamo_store.get_by_name(name)
+        assert found is not None
+        assert found.id == "ground-cumin"
+        assert {"ground cumin", "jeera"} <= {found.name, *found.aliases}
+        assert [item.id for item in dynamo_store.shortlist(name)][:1] == ["ground-cumin"]
+    assert dynamo_store.seed(renamed) == 0
