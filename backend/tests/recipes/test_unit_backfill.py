@@ -148,3 +148,46 @@ def test_backfill_reads_a_non_filesystem_store_only_with_explicit_opt_in() -> No
 
     assert result.recipes_scanned == 0
     assert store.calls == ["list"]
+
+
+@pytest.mark.parametrize(
+    ("stored_quantity", "expected_grams", "expected_preparation"),
+    [(1, 226.8, None), (2, 453.6, "2 x 8 oz"), (3, 680.4, "3 x 8 oz")],
+)
+def test_backfill_multiplies_a_stored_count_by_the_parenthetical_size(
+    tmp_path: Path, stored_quantity: int, expected_grams: float, expected_preparation: str | None
+) -> None:
+    # The old parser stored "2 cheddar (8 oz)" and "Cheddar (8 oz) x2" alike as 2 pcs "Cheddar (8 oz)".
+    corpus = _corpus(tmp_path)
+    corpus.save(_recipe("import:suffix", _leaked("Cheddar (8 oz)", stored_quantity)))
+
+    backfill_unit_words(corpus, dry_run=False)
+
+    ingredient = corpus.get("import:suffix").ingredients[0]
+    assert ingredient.canonical_name == "Cheddar"
+    assert ingredient.quantity == pytest.approx(expected_grams)
+    assert (ingredient.unit, ingredient.preparation) == ("g", expected_preparation)
+
+
+@pytest.mark.parametrize("stored_quantity", [1, 2])
+@pytest.mark.parametrize("name", ["Clove oil", "Clove"])
+def test_backfill_leaves_a_clove_named_ingredient_alone(tmp_path: Path, name: str, stored_quantity: int) -> None:
+    corpus = _corpus(tmp_path)
+    original = _recipe("import:clove", _leaked(name, stored_quantity))
+    corpus.save(original)
+
+    result = backfill_unit_words(corpus, dry_run=False)
+
+    assert corpus.get("import:clove") == original
+    assert result.ingredients_changed == 0
+
+
+@pytest.mark.parametrize(("name", "quantity"), [("Clove garlic", 1), ("Cloves garlic", 3), ("Clove of garlic", 1)])
+def test_backfill_still_fixes_cloves_of_garlic(tmp_path: Path, name: str, quantity: int) -> None:
+    corpus = _corpus(tmp_path)
+    corpus.save(_recipe("import:garlic", _leaked(name, quantity)))
+
+    backfill_unit_words(corpus, dry_run=False)
+
+    ingredient = corpus.get("import:garlic").ingredients[0]
+    assert (ingredient.canonical_name, ingredient.quantity, ingredient.unit) == ("Garlic", quantity, "clove")

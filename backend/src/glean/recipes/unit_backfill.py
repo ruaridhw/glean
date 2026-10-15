@@ -7,6 +7,7 @@ the recipe-api HTTP cache holds raw API payloads, whose quantities pass through 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -50,10 +51,15 @@ def backfill_unit_words(
 
 
 def _reparsed(ingredient: StoredIngredient) -> StoredIngredient:
-    if ingredient.unit != "pcs":
+    if ingredient.unit != "pcs" or _is_clove_ingredient(ingredient.canonical_name):
         return ingredient
     parsed = parse_ingredient_text(f"{float(ingredient.quantity)!r} {ingredient.canonical_name}")
-    if parsed is None or (parsed.canonical_name, parsed.unit) == (ingredient.canonical_name, ingredient.unit):
+    # Never trade a leaked unit word for a dirty name: leave the row alone instead.
+    if (
+        parsed is None
+        or re.match(r"\s*\d", parsed.canonical_name)
+        or (parsed.canonical_name, parsed.unit) == (ingredient.canonical_name, ingredient.unit)
+    ):
         return ingredient
     return ingredient.model_copy(
         update={
@@ -63,6 +69,18 @@ def _reparsed(ingredient: StoredIngredient) -> StoredIngredient:
             "preparation": parsed.preparation or ingredient.preparation,
         }
     )
+
+
+def _is_clove_ingredient(name: str) -> bool:
+    """A name led by "clove" is only a clove *measure* when it is "clove of ..." or cloves of garlic.
+
+    Otherwise it is a plain ingredient such as "Clove oil", which a re-parse would turn into "Oil".
+    """
+    match = re.match(r"cloves?\b\s*(?P<rest>.*)$", name.strip(), flags=re.IGNORECASE)
+    if match is None:
+        return False
+    rest = match.group("rest").lower()
+    return not (rest.startswith("of ") or "garlic" in rest)
 
 
 def _with_ingredients(recipe: StoredRecipe, ingredients: list[StoredIngredient]) -> StoredRecipe:
