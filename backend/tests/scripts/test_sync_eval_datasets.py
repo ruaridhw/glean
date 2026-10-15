@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pytest
 from scripts import sync_eval_datasets
+
+if TYPE_CHECKING:
+    import pytest
 
 
 class FakeLangSmithClient:

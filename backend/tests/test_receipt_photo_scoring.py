@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +14,9 @@ from tests.integration.evals.receipt_photos import (
     load_photo_cases,
     score_scan,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _expected(*items: ExpectedItem) -> ExpectedReceipt:
