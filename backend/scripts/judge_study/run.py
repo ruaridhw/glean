@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -34,15 +33,16 @@ from glean.llm import Feature, LLMRouter, ModelPurpose, create_chat_model
 from judge_study.decision_judge import DecisionJudge
 from judge_study.freeze import freeze_feature
 from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
+from judge_study.orchestrate import run_jobs
 from judge_study.report import Narrative, build_report
-from judge_study.results import Failure, Results
+from judge_study.results import Results
 from judge_study.scoring_page import make_server, select_for_scoring
 from judge_study.stress import stress_variant
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from judge_study.results import FeatureName, OutputItem
+    from judge_study.results import Attempt, FeatureName, OutputItem
 
 FIXTURES = Path(__file__).parents[2] / "tests" / "integration" / "evals" / "fixtures"
 BACKEND_ENV = Path(__file__).parents[2] / ".env"
@@ -114,66 +114,56 @@ def add_stress(out: Path) -> None:
     print(f"{len(added)} stress variants added")
 
 
-def judge(out: Path, repeats: int) -> None:
+def _llm_judge_id(feature: FeatureName, router: LLMRouter) -> str:
+    return os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(SOURCES[feature][1], purpose=ModelPurpose.EVAL)
+
+
+def judge(out: Path, repeats: int, cap: float, *, fresh: bool) -> None:
+    """The candidate judges, `repeats` times each, every attempt logged. `fresh` drops earlier candidate runs."""
     key = _api_key()
     router = LLMRouter(api_key=key)
     results = Results.load(out / "results.json")
+    if fresh:
+        results = results.model_copy(
+            update={
+                "items": [
+                    i.model_copy(update={"judgements": [j for j in i.judgements if j.judge.startswith("panel")]})
+                    for i in results.items
+                ],
+                "failures": [f for f in results.failures if f.judge.startswith("panel")],
+                "attempts": [a for a in results.attempts if a.judge.startswith("panel")],
+            }
+        )
     client = DecisionClient(api_key=key, timeout_s=60.0)
-    decision_judge = DecisionJudge(client)
-    judge_ids = {
-        os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(feature, purpose=ModelPurpose.EVAL)
-        for _, feature, _ in SOURCES.values()
-    }
-    prices = fetch_prices(sorted(judge_ids))
-    models = dict(results.models)
-    todo = [
-        (item, repeat, kind)
+    prices = fetch_prices(sorted({_llm_judge_id(i.feature, router) for i in results.items}))
+
+    def make_judge(name: str, item: OutputItem, ledger: list[Attempt]) -> DecisionJudge | LlmJudge:
+        if name == "decision":
+            return DecisionJudge(client, ledger=ledger)
+        model_id = _llm_judge_id(item.feature, router)
+        recorder = UsageRecorder()
+        model = create_chat_model(model_id, api_key=key, callbacks=[recorder], request_timeout=120_000)
+        return LlmJudge(model, model_id=model_id, recorder=recorder, prices=prices[model_id], ledger=ledger)
+
+    jobs = [
+        (item.item_id, kind, repeat)
         for repeat in range(1, repeats + 1)
         for item in results.items
         for kind in ("llm", "decision")
     ]
-    todo = [
-        (item, repeat, kind)
-        for item, repeat, kind in todo
-        if not any(j.judge == kind and j.repeat == repeat for j in item.judgements)
-    ]
-    failures: list[Failure] = []
-
-    def run_one(job: tuple[OutputItem, int, str]) -> None:
-        item, repeat, kind = job
-        for attempt in (1, 2):
-            try:
-                if kind == "decision":
-                    judgement = decision_judge.judge(item, repeat)
-                else:
-                    judge_model_id = os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(
-                        SOURCES[item.feature][1], purpose=ModelPurpose.EVAL
-                    )
-                    recorder = UsageRecorder()
-                    model = create_chat_model(
-                        judge_model_id, api_key=key, callbacks=[recorder], request_timeout=120_000
-                    )
-                    judgement = LlmJudge(
-                        model, model_id=judge_model_id, recorder=recorder, prices=prices[judge_model_id]
-                    ).judge(item, repeat)
-                item.judgements.append(judgement)
-                models[f"{kind}:{item.feature}"] = judgement.model
-                return
-            except Exception as error:
-                if attempt == 2:
-                    failures.append(
-                        f"{item.item_id} {kind} repeat {repeat}: {type(error).__name__}: {str(error)[:200]}"
-                    )
-
-    with ThreadPoolExecutor(WORKERS) as pool:
-        list(pool.map(run_one, todo))
-    for item in results.items:
-        item.judgements.sort(key=lambda j: (j.judge, j.repeat))
-    results.model_copy(update={"models": models, "failures": [*results.failures, *failures]}).save(out / "results.json")
-    spend = sum(j.cost_usd or 0.0 for item in results.items for j in item.judgements)
-    print(f"{len(todo) - len(failures)} judgements added, {len(failures)} failed; judge spend ${spend:.4f}")
-    for failure in failures:
-        print("FAILED", failure.item_id, failure.judge, failure.repeat, failure.error)
+    before = len(results.attempts)
+    updated = run_jobs(results, jobs, make_judge, workers=WORKERS, spend_cap=cap)
+    models = dict(updated.models)
+    for item in updated.items:
+        for j in item.judgements:
+            models[f"{j.judge}:{item.feature}"] = j.model
+    updated = updated.model_copy(update={"models": models})
+    updated.save(out / "results.json")
+    new = updated.attempts[before:]
+    spend = sum(a.cost_usd or 0.0 for a in new)
+    print(f"{len(new)} calls made, {sum(a.outcome != 'ok' for a in new)} failed; spend ${spend:.4f} (cap ${cap})")
+    for failure in updated.failures:
+        print("MISSING", failure.item_id, failure.judge, failure.repeat, failure.error)
 
 
 PANEL = {"panel_claude": "anthropic/claude-sonnet-5.5", "panel_gpt": "openai/gpt-6.1-sol"}
@@ -184,36 +174,20 @@ def panel(out: Path, cap: float) -> None:
     key = _api_key()
     results = Results.load(out / "results.json")
     prices = fetch_prices(list(PANEL.values()))
-    spent = 0.0
-    failures = list(results.failures)
 
-    def run_one(job: tuple[OutputItem, str]) -> None:
-        nonlocal spent
-        item, name = job
-        if spent >= cap:
-            return
-        model_id = PANEL[name]
+    def make_judge(name: str, item: OutputItem, ledger: list[Attempt]) -> LlmJudge:
         recorder = UsageRecorder()
-        model = create_chat_model(model_id, api_key=key, callbacks=[recorder], request_timeout=180_000)
-        try:
-            judgement = LlmJudge(
-                model, model_id=model_id, recorder=recorder, prices=prices[model_id], judge_name=name
-            ).judge(item, 1)
-        except Exception as error:
-            failures.append(
-                Failure(judge=name, item_id=item.item_id, repeat=1, error=f"{type(error).__name__}: {str(error)[:150]}")
-            )
-            return
-        spent += judgement.cost_usd or 0.0
-        item.judgements.append(judgement)
+        model = create_chat_model(PANEL[name], api_key=key, callbacks=[recorder], request_timeout=180_000)
+        return LlmJudge(
+            model, model_id=PANEL[name], recorder=recorder, prices=prices[PANEL[name]], judge_name=name, ledger=ledger
+        )
 
-    todo = [
-        (item, name) for item in results.items for name in PANEL if not any(j.judge == name for j in item.judgements)
-    ]
-    with ThreadPoolExecutor(WORKERS) as pool:
-        list(pool.map(run_one, todo))
-    results.model_copy(update={"failures": failures}).save(out / "results.json")
-    print(f"panel spend ${spent:.4f} (cap ${cap}); {len(failures) - len(results.failures)} failures")
+    jobs = [(item.item_id, name, 1) for item in results.items for name in PANEL]
+    before = len(results.attempts)
+    updated = run_jobs(results, jobs, make_judge, workers=WORKERS, spend_cap=cap)
+    updated.save(out / "results.json")
+    new = updated.attempts[before:]
+    print(f"panel spend ${sum(a.cost_usd or 0.0 for a in new):.4f} (cap ${cap}); {len(new)} calls")
 
 
 def report(out: Path) -> None:
@@ -246,7 +220,8 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--host", default="100.98.190.46")
     parser.add_argument("--port", type=int, default=8124)
-    parser.add_argument("--cap", type=float, default=1.0, help="USD spend cap for the panel step")
+    parser.add_argument("--fresh", action="store_true", help="judge: discard earlier candidate judgements first")
+    parser.add_argument("--cap", type=float, default=1.0, help="USD spend cap for the judge or panel step")
     parser.add_argument("--count", type=int, default=25)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -257,7 +232,7 @@ def main() -> None:
     elif args.step == "panel":
         panel(args.out, args.cap)
     elif args.step == "judge":
-        judge(args.out, args.repeats)
+        judge(args.out, args.repeats, args.cap, fresh=args.fresh)
     elif args.step == "serve":
         serve(args.out, args.host, args.port, args.count)
     else:
