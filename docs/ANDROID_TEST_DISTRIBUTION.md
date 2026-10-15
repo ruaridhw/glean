@@ -180,9 +180,8 @@ shopping list.
 - [x] Signature verification passed.
 - [x] Firebase lists the expected version and build number.
 - [x] After uninstalling the Expo app, the APK installs on a phone.
-- [ ] Sign in with Google, then run one AI flow (shop describe) and one corpus
-      flow (Generate) against prod. Sign-in and Generate are confirmed; shop
-      describe is still to be tried.
+- [x] Sign in with Google, then run one AI flow (shop describe) and one corpus
+      flow (Generate) against prod.
 - [x] Start a second build from a harmless change and confirm it updates in
       place. Builds 3 and 8 updated over earlier builds with the user's data
       kept.
