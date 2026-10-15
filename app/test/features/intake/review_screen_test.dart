@@ -2,7 +2,7 @@
 // quantities round-trip, zero/NaN is rejected, the
 // commit is atomic and a retry can't double, a pantry-only
 // review never touches the shopping list, and a null-category
-// pantry row requires a category pick before it can be confirmed.
+// pantry row can be confirmed with or without a category pick.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -265,8 +265,8 @@ void main() {
       expect(after!.single.name, 'bread');
     });
 
-    testWidgets('a null-category pantry row requires a category pick before '
-        'it can be confirmed', (WidgetTester tester) async {
+    testWidgets('a null-category pantry row can be given a category before '
+        'it is confirmed', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -288,11 +288,6 @@ void main() {
         find.text("We couldn't identify a category for this item."),
         findsOneWidget,
       );
-      expect(
-        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-        isNull,
-      );
-
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Leafy Greens').last);
@@ -312,6 +307,36 @@ void main() {
       expect(saved.category, 'leafy_greens');
       // Expiry inference fired now that a category exists.
       expect(saved.expiryDate, isNotNull);
+    });
+
+    testWidgets('a null-category pantry row is confirmed as is, stored with no '
+        'category', (WidgetTester tester) async {
+      await pumpReview(
+        tester,
+        const ReviewArgs(
+          destination: ReviewDestination.pantry,
+          items: <ReviewItemDraft>[
+            ReviewItemDraft(
+              reviewId: 'a',
+              name: 'mystery vegetable',
+              quantity: 1,
+              unit: 'unit',
+              confidence: 0.5,
+              category: null,
+            ),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Add 1 item'));
+      await tester.pumpAndSettle();
+
+      final saved = (await tester.runAsync(
+        () => pantry.watchAll('test-user').first,
+      ))!.single;
+      expect(saved.canonicalName, 'mystery vegetable');
+      expect(saved.category, isNull);
+      expect(saved.foodGroup, 'other');
     });
 
     testWidgets('shop destination never requires a category, and persists a '

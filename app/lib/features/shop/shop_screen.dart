@@ -32,11 +32,11 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
   // Guards "Done shopping" against a double-tap firing the checkout twice.
   bool _completingCheckout = false;
 
-  Future<void> _doneShopping(List<ShoppingListItemView> checkedItems) async {
+  Future<void> _doneShopping() async {
     if (_completingCheckout) return;
     setState(() => _completingCheckout = true);
     try {
-      await completeCheckoutWithoutReceipt(context, ref, checkedItems);
+      await completeCheckoutWithoutReceipt(context, ref);
     } finally {
       if (mounted) setState(() => _completingCheckout = false);
     }
@@ -127,7 +127,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
               busy: _completingCheckout,
               aiFeaturesAvailable: aiAvailable,
               onScanReceipt: _scanReceipt,
-              onDoneShopping: () => _doneShopping(checkedItems),
+              onDoneShopping: _doneShopping,
             ),
           ],
         ),

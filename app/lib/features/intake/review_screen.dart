@@ -75,13 +75,9 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   bool get _isPantry => widget.args.destination == ReviewDestination.pantry;
 
-  /// A pantry row additionally needs a category: expiry inference has no basis without one, and
-  /// `PantryRepository.addItem` requires it. Shop rows never need this.
-  bool _rowIsValid(ReviewRow row) {
-    if (row.parsedQuantity == null) return false;
-    if (_isPantry && row.category == null) return false;
-    return true;
-  }
+  /// A pantry row's category is optional: without one the Pantry item is stored uncategorised (no expiry is
+  /// inferred), which must never block confirming a row that came from the shopping list.
+  bool _rowIsValid(ReviewRow row) => row.parsedQuantity != null;
 
   List<ReviewRow> get _activeRows =>
       _rows.where((ReviewRow r) => r.isActive).toList();
@@ -156,6 +152,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
     final String userId = ref.read(currentUserIdProvider);
     final List<ReviewRow> accepted = _activeRows;
+    if (widget.args.fromCheckedItems) {
+      await _confirmCheckout(userId, accepted);
+      return;
+    }
     try {
       if (_isPantry) {
         await ref
@@ -188,24 +188,68 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     );
   }
 
+  /// "Done shopping": adds the rows to the pantry and clears the checked Shopping items they came from in one
+  /// transaction, then offers one Undo that reverses both.
+  Future<void> _confirmCheckout(String userId, List<ReviewRow> accepted) async {
+    final pantry = ref.read(pantryRepositoryProvider);
+    final shopping = ref.read(shoppingRepositoryProvider);
+    final db = ref.read(gleanDatabaseProvider);
+    final int count = accepted.length;
+    final bool done = await GleanSnackBar.runUndoable(
+      context,
+      perform: () => db.transaction(() async {
+        final receipt = await pantry.addItemsWithReceipt(
+          userId: userId,
+          items: _pantryInputs(accepted),
+        );
+        final cleared = await shopping.resolveCheckoutWithSnapshot(
+          userId: userId,
+          resolvedIngredientIds: <int>[
+            for (final addition in receipt.additions) addition.ingredientId,
+          ],
+        );
+        return (receipt: receipt, cleared: cleared);
+      }),
+      undo: (checkout) => db.transaction(() async {
+        await pantry.undoAdditions(userId: userId, receipt: checkout.receipt);
+        await shopping.restoreRows(rows: checkout.cleared, userId: userId);
+      }),
+      message: 'Added $count item${count == 1 ? '' : 's'} to your pantry',
+      failureMessage: 'Could not save. Please try again.',
+      undoFailureMessage: 'Could not undo. Please try again.',
+      describeError: (Object e) => e is PantryUnitMismatchException
+          ? e.userMessage
+          : 'Could not save. Please try again.',
+      onSuccess: ref.read(hapticsProvider).mediumImpact,
+    );
+    if (!mounted) return;
+    if (!done) {
+      setState(() => _saving = false);
+      return;
+    }
+    context.goNamed(AppRoutes.shop.name);
+  }
+
+  List<PantryItemInput> _pantryInputs(List<ReviewRow> accepted) =>
+      <PantryItemInput>[
+        for (final ReviewRow row in accepted)
+          PantryItemInput(
+            name: row.nameController.text.trim(),
+            quantity: row.parsedQuantity!,
+            unit: row.unitController.text.trim(),
+            category: row.category,
+            unitPrice: row.unitPrice,
+          ),
+      ];
+
   /// One transaction via `PantryRepository.addItems`: a failure partway persists nothing, so a retry can't double
   /// quantities. The shopping list is only touched when this pantry review was reached via Shop's "scan receipt"
   /// (`returnToShop`), and then only the ingredients this batch resolved are checked off. Pass raw units:
   /// repositories default blanks without seeding the ingredient's canonical unit from an implicit value.
   Future<void> _confirmPantry(String userId, List<ReviewRow> accepted) async {
-    final List<PantryItemInput> items = <PantryItemInput>[
-      for (final ReviewRow row in accepted)
-        PantryItemInput(
-          name: row.nameController.text.trim(),
-          quantity: row.parsedQuantity!,
-          unit: row.unitController.text.trim(),
-          category: row.category!,
-          unitPrice: row.unitPrice,
-        ),
-    ];
     final List<int> ingredientIds = await ref
         .read(pantryRepositoryProvider)
-        .addItems(userId: userId, items: items);
+        .addItems(userId: userId, items: _pantryInputs(accepted));
 
     if (widget.args.returnToShop) {
       await ref
