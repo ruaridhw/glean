@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import httpx
@@ -16,13 +17,15 @@ if TYPE_CHECKING:
 
 
 def _ambiguous_decision(request: httpx.Request) -> httpx.Response:
+    names = json.loads(request.content)["questions"]
+    scores = {"names_a_dish": 0.5, "lists_several_items": 0.1}
     return httpx.Response(
         200,
         json={
             "id": "gen-dec-1",
             "model": "typesafe/jev-1.14-20261014",
             "provider": "TypeSafe",
-            "answers": {"names_a_dish": {"type": "noul", "noul": 0.5}},
+            "answers": {name: {"type": "noul", "noul": scores[name]} for name in names},
             "usage": {"input_tokens": 10, "output_tokens": 1, "cost": 0.0},
         },
     )

@@ -9,13 +9,19 @@ from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
-from glean.shopping.schemas import ShoppingParseResponse
+from glean.shopping.schemas import ShoppingBatchParseResponse, ShoppingParseResponse
 
 
 @pytest.fixture
 def unauth_client(test_settings: Settings) -> TestClient:
     app.dependency_overrides[get_settings] = lambda: test_settings
     return TestClient(app)
+
+
+def _batch_of(response: ShoppingParseResponse) -> ShoppingBatchParseResponse:
+    """The batch reply that carries one phrase's parse."""
+    stored = response.model_dump(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}})
+    return ShoppingBatchParseResponse.model_validate({"units": [{"number": 1, **stored}]})
 
 
 def test_parse_shopping_description_returns_items(client: TestClient, auth_headers: dict[str, str]) -> None:
@@ -34,7 +40,7 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
     )
 
     llm_router = MagicMock()
-    llm_router.invoke.return_value = structured_response
+    llm_router.invoke.return_value = _batch_of(structured_response)
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/shopping/parse-description",
@@ -59,7 +65,7 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
     assert body["clarifying_questions"] == ["What kind of salsa do you want?"]
     args, _ = llm_router.invoke.call_args
     assert args[0] == Feature.SHOPPING_LIST_DESCRIPTION
-    assert args[1] is ShoppingParseResponse
+    assert args[1] is ShoppingBatchParseResponse
 
 
 def test_parse_shopping_description_falls_back_to_other_food_group_for_out_of_taxonomy_category(
@@ -81,7 +87,7 @@ def test_parse_shopping_description_falls_back_to_other_food_group_for_out_of_ta
     )
 
     llm_router = MagicMock()
-    llm_router.invoke.return_value = structured_response
+    llm_router.invoke.return_value = _batch_of(structured_response)
     app.dependency_overrides[get_llm_router] = lambda: llm_router
     response = client.post(
         "/shopping/parse-description",
@@ -121,23 +127,25 @@ def test_parse_shopping_description_rejects_empty_text(client: TestClient, auth_
 def test_a_multi_item_description_returns_the_merged_proposals_in_the_existing_response_shape(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
-    replies = {
-        "milk": ShoppingParseResponse(
-            items=[{"name": "milk", "quantity": 1, "unit": "bottle", "category": "dairy", "confidence": 0.9}]
-        ),
-        "snacks": ShoppingParseResponse(
-            items=[{"name": "snacks", "quantity": 1, "unit": "units", "confidence": 0.5}],
-            clarifying_questions=["Which snacks?"],
-        ),
-    }
+    batch = ShoppingBatchParseResponse(
+        units=[
+            {
+                "number": 1,
+                "items": [{"name": "milk", "quantity": 1, "unit": "bottle", "category": "dairy", "confidence": 0.9}],
+            },
+            {
+                "number": 2,
+                "items": [{"name": "snacks", "quantity": 1, "unit": "units", "confidence": 0.5}],
+                "clarifying_questions": ["Which snacks?"],
+            },
+        ]
+    )
     llm_router = MagicMock()
     llm_router.model_id_for.return_value = "test/model"
-    llm_router.invoke.side_effect = lambda _feature, _schema, messages: replies[
-        messages[1].content.removeprefix("Parse this shopping list description: ")
-    ]
+    llm_router.invoke.return_value = batch
     app.dependency_overrides[get_llm_router] = lambda: llm_router
 
-    response = client.post("/shopping/parse-description", headers=auth_headers, json={"text": "milk and snacks"})
+    response = client.post("/shopping/parse-description", headers=auth_headers, json={"text": "milk, snacks"})
 
     assert response.status_code == 200
     body = response.json()
