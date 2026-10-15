@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from glean.decisions import JEV_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
-from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore
+from glean.meal_plan.dietary_decisions import DIETARY_DECISIONS_KEY, DietaryDecision, DietaryDecisionStore
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -44,6 +44,59 @@ def test_jev_never_clears_a_recipe_the_regex_excludes(tmp_path) -> None:
     _store_decisions(corpus, {("rec_satay", "nut-free"): 0.0, ("rec_tomato", "nut-free"): 0.0})
 
     assert _ids(corpus, ["nut-free"]) == {"rec_tomato"}
+
+
+def test_nut_free_excludes_a_recipe_with_no_stored_decision(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_decided", "Tomato Pasta", ["spaghetti", "tomato"]),
+            ("rec_new", "Courgette Pasta", ["spaghetti", "courgette"]),
+        ],
+    )
+    _store_decisions(corpus, {("rec_decided", "nut-free"): 0.01})
+
+    assert _ids(corpus, ["nut-free"]) == {"rec_decided"}
+
+
+def test_nut_free_excludes_everything_when_no_decisions_are_stored(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
+
+    assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_nut_free_excludes_a_recipe_judged_under_an_older_model(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
+    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, model="typesafe/jev-1.12-20260801")
+
+    assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_nut_free_excludes_a_recipe_whose_stored_decision_is_unreadable(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
+    corpus.store.write(DIETARY_DECISIONS_KEY, '{"recipe_id": "rec_tomato", "flag": "nut-fr\n')
+
+    assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_preference_flags_without_a_stored_decision_are_judged_by_the_regex_alone(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_chicken", "Chicken Curry", ["chicken thigh", "tomato"]),
+            ("rec_dal", "Tomato Dal", ["red lentils", "tomato"]),
+        ],
+    )
+
+    assert _ids(corpus, ["vegetarian"]) == {"rec_dal"}
+    assert _ids(corpus, ["dairy-free", "gluten-free"]) == {"rec_chicken", "rec_dal"}
+
+
+def test_nut_free_decisions_do_not_leak_into_other_flags(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"])])
+    _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9})
+
+    assert _ids(corpus, ["vegetarian"]) == {"rec_pesto"}
 
 
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
