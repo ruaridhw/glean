@@ -52,22 +52,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-2
-      - name: Fetch Google OAuth credentials
-        run: |
-          GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value --secret-id glean/prod/google-oauth-client-id --query SecretString --output text)
-          GOOGLE_CLIENT_SECRET=$(aws secretsmanager get-secret-value --secret-id glean/prod/google-oauth-client-secret --query SecretString --output text)
-          echo "::add-mask::$GOOGLE_CLIENT_ID"
-          echo "::add-mask::$GOOGLE_CLIENT_SECRET"
-          echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> "$GITHUB_ENV"
-          echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> "$GITHUB_ENV"
-      - name: SAM build
-        run: sam build
-      # --parameter-overrides replaces samconfig.toml's prod parameter_overrides
-      # wholesale, so every non-secret value there must be repeated here.
-      - name: SAM deploy
-        run: |
-          sam deploy \
-            --config-env prod \
-            --parameter-overrides "Environment=prod GoogleClientId=$GOOGLE_CLIENT_ID GoogleClientSecret=$GOOGLE_CLIENT_SECRET CognitoDomainPrefix=glean-auth-040396448697 LangSmithTracing=true" \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset
+      # The same script `make deploy-prod` runs: it reads every prod parameter from backend/samconfig.toml
+      # (the template resolves the OAuth client from Secrets Manager), stamps the commit and checks the
+      # live stack afterwards, so CI and manual deploys of one commit are identical.
+      - name: Deploy
+        run: python3 scripts/deploy_prod.py

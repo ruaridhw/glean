@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 BACKEND = Path(__file__).resolve().parents[1]
+WORKFLOWS = BACKEND.parent / ".github" / "workflows"
 
 
 class _CfnLoader(yaml.SafeLoader):
@@ -69,3 +70,10 @@ def test_template_stamps_the_deployed_commit_onto_the_lambda() -> None:
     assert template["Parameters"]["GitSha"]["Default"] == "unknown"
     assert template["Globals"]["Function"]["Environment"]["Variables"]["GIT_SHA"] == "GitSha"
 
+
+
+def test_ci_deploys_through_the_shared_script_without_its_own_parameters() -> None:
+    workflow = (WORKFLOWS / "backend-deploy.yml").read_text()
+    assert "deploy_prod.py" in workflow
+    assert "parameter-overrides" not in workflow
+    assert "google" not in workflow.lower()
