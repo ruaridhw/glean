@@ -13,7 +13,9 @@ abstract interface class PlatformLogSink {
   });
 }
 
-/// Sends lines to the native `glean/log` channel (see `MainActivity.kt`).
+/// Sends lines to the native `glean/log` channel (see `MainActivity.kt`), which exists on Android only. Other
+/// platforms keep the file sink alone rather than carrying a native handler nobody reads; a missing handler is
+/// swallowed, so this can never throw.
 class MethodChannelLogSink implements PlatformLogSink {
   const MethodChannelLogSink();
 
@@ -24,12 +26,17 @@ class MethodChannelLogSink implements PlatformLogSink {
     required String level,
     required String tag,
     required String message,
-  }) {
-    return _channel.invokeMethod<void>('log', <String, Object?>{
-      'tag': tag,
-      'level': level,
-      'message': message,
-    });
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _channel.invokeMethod<void>('log', <String, Object?>{
+        'tag': tag,
+        'level': level,
+        'message': message,
+      });
+    } on MissingPluginException {
+      // No native handler registered: the file sink still has the line.
+    }
   }
 }
 
