@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/shopping_list_item_view.dart';
+import 'package:glean/data/models/store_section.dart';
 import 'package:glean/design_system/design_system.dart';
 
 import '../actions.dart';
@@ -14,9 +15,16 @@ import 'shop_states.dart';
 import 'shopping_row.dart';
 
 class ShopListSection extends ConsumerWidget {
-  const ShopListSection({required this.itemsAsync, super.key});
+  const ShopListSection({
+    required this.itemsAsync,
+    required this.grouped,
+    super.key,
+  });
 
   final AsyncValue<List<ShoppingListItemView>> itemsAsync;
+
+  /// Group rows under store sections instead of the flat To buy / In cart split.
+  final bool grouped;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,7 +37,7 @@ class ShopListSection extends ConsumerWidget {
             : itemsAsync.maybeWhen(
                 data: (List<ShoppingListItemView> items) => items.isEmpty
                     ? const ShopEmptyState()
-                    : _ShopItemsList(items: items),
+                    : _ShopItemsList(items: items, grouped: grouped),
                 orElse: () => const ShopErrorState(),
               ),
       ),
@@ -38,9 +46,10 @@ class ShopListSection extends ConsumerWidget {
 }
 
 class _ShopItemsList extends ConsumerWidget {
-  const _ShopItemsList({required this.items});
+  const _ShopItemsList({required this.items, required this.grouped});
 
   final List<ShoppingListItemView> items;
+  final bool grouped;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,6 +62,19 @@ class _ShopItemsList extends ConsumerWidget {
       for (final ShoppingListItemView item in items)
         if (item.isChecked) item,
     ];
+
+    if (grouped) {
+      return ListView(
+        children: <Widget>[
+          // Only sections that hold a row, in the fixed store order; within one, To buy rows precede In cart.
+          for (final StoreSection section in StoreSection.values)
+            ..._sectionRows(tokens, section, <ShoppingListItemView>[
+              ...toBuy.where((i) => i.section == section),
+              ...inCart.where((i) => i.section == section),
+            ]),
+        ],
+      );
+    }
 
     return ListView(
       children: <Widget>[
@@ -75,6 +97,24 @@ class _ShopItemsList extends ConsumerWidget {
           ),
       ],
     );
+  }
+
+  List<Widget> _sectionRows(
+    AppTokens tokens,
+    StoreSection section,
+    List<ShoppingListItemView> rows,
+  ) {
+    if (rows.isEmpty) return const <Widget>[];
+    return <Widget>[
+      _SectionHeader(title: section.label),
+      for (final ShoppingListItemView item in rows)
+        _Row(
+          key: ValueKey<int>(item.id),
+          item: item,
+          bottomGap: tokens.spacing.sm,
+        ),
+      SizedBox(height: tokens.spacing.xs),
+    ];
   }
 }
 

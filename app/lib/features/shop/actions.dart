@@ -11,6 +11,13 @@ import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
+Future<void> setGroupShoppingBySection(WidgetRef ref, bool grouped) {
+  ref.read(hapticsProvider).lightImpact();
+  return ref
+      .read(userConfigRepositoryProvider)
+      .setGroupShoppingBySection(ref.read(currentUserIdProvider), grouped);
+}
+
 Future<void> toggleShoppingItem(WidgetRef ref, ShoppingListItemView item) {
   ref.read(hapticsProvider).lightImpact();
   return ref
