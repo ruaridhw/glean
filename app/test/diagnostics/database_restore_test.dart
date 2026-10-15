@@ -26,6 +26,12 @@ void main() {
   });
   tearDown(() => dir.deleteSync(recursive: true));
 
+  List<String> stagingLeftovers() => dir
+      .listSync()
+      .map((e) => e.path.split('/').last)
+      .where((n) => n.contains('restore-staging'))
+      .toList();
+
   GleanDatabase open(File file) => GleanDatabase(NativeDatabase(file));
 
   test(
@@ -141,7 +147,7 @@ void main() {
         containsAll(<String>['glean.sqlite']),
       );
       expect(
-        File('${liveFile.path}.restore-staging').existsSync(),
+        stagingLeftovers().isNotEmpty,
         isFalse,
         reason: 'a refused backup leaves no staging file behind',
       );
@@ -162,7 +168,7 @@ void main() {
     addTearDown(reopened.close);
     expect(await _mealsPerWeek(reopened, 'mine'), 6);
     expect(
-      File('${liveFile.path}.restore-staging').existsSync(),
+      stagingLeftovers().isNotEmpty,
       isFalse,
       reason: 'a refused backup leaves no staging file behind',
     );
@@ -295,7 +301,94 @@ void main() {
       final GleanDatabase reopened = open(liveFile);
       addTearDown(reopened.close);
       expect(await _mealsPerWeek(reopened, 'mine'), 6);
-      expect(File('${liveFile.path}.restore-staging').existsSync(), isFalse);
+      expect(stagingLeftovers().isNotEmpty, isFalse);
+    },
+  );
+
+  /// What a process killed mid-migration leaves beside the live file: a staging database whose write-ahead log
+  /// still holds uncheckpointed pages from the first backup.
+  Future<void> abandonStagingWithPendingWal(String stagingName) async {
+    final File stagedByFirst = File('${liveFile.path}.$stagingName');
+    final GleanDatabase first = open(File('${dir.path}/first.sqlite'));
+    await first.customStatement(
+      "INSERT INTO user_config (id, meals_per_week) VALUES ('first', 1)",
+    );
+    final File firstBackup = await snapshotDatabase(first, dir);
+    await first.close();
+    firstBackup.copySync(stagedByFirst.path);
+    final sqlite.Database raw = sqlite.sqlite3.open(stagedByFirst.path);
+    raw.execute('PRAGMA journal_mode = WAL');
+    raw.execute('PRAGMA wal_autocheckpoint = 0');
+    raw.execute(
+      "INSERT INTO user_config (id, meals_per_week) VALUES ('first-wal', 2)",
+    );
+    // Copy the files while the connection is still open, as a kill would leave them, then let go.
+    final Directory crashed = Directory('${dir.path}/crashed')..createSync();
+    for (final String suffix in <String>['', '-wal', '-shm']) {
+      final File f = File('${stagedByFirst.path}$suffix');
+      if (f.existsSync()) f.copySync('${crashed.path}/$stagingName$suffix');
+    }
+    raw.close();
+    for (final String suffix in <String>['', '-wal', '-shm']) {
+      final File f = File('${stagedByFirst.path}$suffix');
+      if (f.existsSync()) f.deleteSync();
+      final File c = File('${crashed.path}/$stagingName$suffix');
+      if (c.existsSync()) c.copySync(f.path);
+    }
+    expect(
+      File('${stagedByFirst.path}-wal').lengthSync(),
+      greaterThan(0),
+      reason: 'precondition: an abandoned write-ahead log is on disk',
+    );
+  }
+
+  test(
+    'a retry after a migration was killed restores wholly from the newly chosen backup, never mixing in the abandoned one',
+    () async {
+      await abandonStagingWithPendingWal('restore-staging');
+      final GleanDatabase second = open(File('${dir.path}/second.sqlite'));
+      await second.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('second', 3)",
+      );
+      final File secondBackup = await snapshotDatabase(second, dir);
+      await second.close();
+      final GleanDatabase live = await liveWithUserConfig();
+
+      await restoreDatabase(
+        backup: secondBackup,
+        live: live,
+        liveFile: liveFile,
+      );
+
+      final GleanDatabase restored = open(liveFile);
+      addTearDown(restored.close);
+      final rows = await restored
+          .customSelect('SELECT id FROM user_config ORDER BY id')
+          .get();
+      expect(rows.map((r) => r.read<String>('id')), <String>['second']);
+    },
+  );
+
+  test(
+    'abandoned staging files from earlier attempts are cleared, and the live database and its files are not touched',
+    () async {
+      await abandonStagingWithPendingWal('restore-staging-1700000000000000');
+      File('${liveFile.path}.restore-staging-ab12').writeAsStringSync('junk');
+      final GleanDatabase source = open(File('${dir.path}/source.sqlite'));
+      await source.customStatement('SELECT 1');
+      final File backup = await snapshotDatabase(source, dir);
+      await source.close();
+      final GleanDatabase live = await liveWithUserConfig();
+
+      await restoreDatabase(backup: backup, live: live, liveFile: liveFile);
+
+      final List<String> leftovers = dir
+          .listSync()
+          .map((e) => e.path.split('/').last)
+          .where((n) => n.startsWith('glean.sqlite.restore-staging'))
+          .toList();
+      expect(leftovers, isEmpty);
+      expect(File('${liveFile.path}.pre-restore').existsSync(), isTrue);
     },
   );
 }

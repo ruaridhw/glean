@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -99,8 +100,16 @@ Future<void> restoreDatabase({
     );
   }
 
-  final File staged = File('${liveFile.path}.restore-staging');
+  _deleteAbandonedStaging(liveFile);
+  // A path no earlier attempt has used, so SQLite sidecars an interrupted attempt left behind can never be
+  // associated with this backup.
+  final File staged = File(
+    '${liveFile.path}$_stagingMarker${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}',
+  );
   try {
+    if (_sidecarsOf(staged).any((File f) => f.existsSync())) {
+      throw StateError('Staging file ${staged.path} has leftover sidecars');
+    }
     backup.copySync(staged.path);
     await _migrateAndVerify(staged);
 
@@ -121,8 +130,31 @@ Future<void> restoreDatabase({
       throw RestoreInterruptedException(error);
     }
   } on Object {
-    if (staged.existsSync()) staged.deleteSync();
+    _deleteStaging(staged);
     rethrow;
+  }
+}
+
+const String _stagingMarker = '.restore-staging-';
+
+List<File> _sidecarsOf(File db) => <File>[
+  for (final String suffix in <String>['-wal', '-shm', '-journal'])
+    File('${db.path}$suffix'),
+];
+
+void _deleteStaging(File staged) {
+  for (final File f in <File>[staged, ..._sidecarsOf(staged)]) {
+    if (f.existsSync()) f.deleteSync();
+  }
+}
+
+/// Removes staging files (and their SQLite sidecars) an earlier, interrupted restore left beside [liveFile].
+/// Only names carrying the staging marker are touched, never the live database or its own sidecars.
+void _deleteAbandonedStaging(File liveFile) {
+  final String prefix =
+      '${liveFile.uri.pathSegments.last}${_stagingMarker.substring(0, _stagingMarker.length - 1)}';
+  for (final FileSystemEntity e in liveFile.parent.listSync()) {
+    if (e is File && e.uri.pathSegments.last.startsWith(prefix)) e.deleteSync();
   }
 }
 
