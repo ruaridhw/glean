@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 type FeatureName = Literal[
     "receipt_scan", "meal_plan", "recipe_import", "pantry_description", "shopping_list_description"
 ]
-type JudgeName = Literal["llm", "decision"]
+type JudgeName = Literal["llm", "decision", "panel_claude", "panel_gpt"]
 
 SCORE_FIELD = Field(ge=1, le=5, description="Integer rubric score from 1 (bad) to 5 (perfect).")
 
@@ -20,7 +20,12 @@ SCORE_FIELD = Field(ge=1, le=5, description="Integer rubric score from 1 (bad) t
 class Judgement(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    judge: JudgeName = Field(description="`llm` is today's eval judge; `decision` is the decision model's `score`.")
+    judge: JudgeName = Field(
+        description=(
+            "`llm` is today's eval judge; `decision` is the decision model's `score`; "
+            "`panel_*` are the strong reference judges."
+        )
+    )
     repeat: int = Field(ge=1, description="Which of the repeated runs of this judge produced this judgement.")
     score: int = SCORE_FIELD
     model: str = Field(description="Model id, or the dated snapshot for the decision model.")
@@ -53,11 +58,23 @@ class OutputItem(BaseModel):
     human_score: int | None = Field(default=None, ge=1, le=5, description="The maintainer's score, if they gave one.")
 
 
+class Failure(BaseModel):
+    """A judge call that produced no usable score, kept so reliability can be reported."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    judge: JudgeName
+    item_id: str
+    repeat: int = Field(ge=1)
+    error: str = Field(description="Exception type and the start of its message.")
+
+
 class Results(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     models: dict[str, str] = Field(description="Which model produced outputs and served each judge.")
     items: list[OutputItem]
+    failures: list[Failure] = Field(default_factory=list)
 
     def save(self, path: Path) -> None:
         path.write_text(self.model_dump_json(indent=2) + "\n")

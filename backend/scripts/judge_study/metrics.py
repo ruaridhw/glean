@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -57,7 +58,7 @@ def confusion_matrix(pairs: list[tuple[int, int]]) -> list[list[int]]:
     return matrix
 
 
-type Rater = Literal["llm", "decision", "human"]
+type Rater = Literal["llm", "decision", "human", "panel_claude", "panel_gpt"]
 
 
 def item_score(item: OutputItem, rater: Rater) -> int | None:
@@ -176,3 +177,42 @@ def _percentile(sorted_values: list[float], percent: float) -> float | None:
     below = int(position)
     above = min(below + 1, len(sorted_values) - 1)
     return sorted_values[below] + (sorted_values[above] - sorted_values[below]) * (position - below)
+
+
+@dataclass(frozen=True)
+class PanelReference:
+    """What the two strong judges agree an output deserves. `contested` means they differ by two or more."""
+
+    score: float | None
+    contested: bool
+
+
+def panel_reference(item: OutputItem) -> PanelReference:
+    first, second = item_score(item, "panel_claude"), item_score(item, "panel_gpt")
+    if first is None or second is None:
+        return PanelReference(None, False)
+    if abs(first - second) >= 2:
+        return PanelReference(None, True)
+    mean = (first + second) / 2
+    return PanelReference(int(mean) if mean == int(mean) else mean, False)
+
+
+def agreement_with_panel(items: list[OutputItem], candidate: Literal["llm", "decision"]) -> Agreement:
+    """A candidate judge against the panel reference, leaving out contested outputs.
+
+    Exact means the candidate equals one of the two panel scores; within-one means it is within a point of one of
+    them. Kappa compares against the reference with a half point rounded up.
+    """
+    exact = within_one = 0
+    pairs: list[tuple[int, int]] = []
+    for item in items:
+        reference, score = panel_reference(item), item_score(item, candidate)
+        if reference.score is None or score is None:
+            continue
+        panel = [item_score(item, "panel_claude"), item_score(item, "panel_gpt")]
+        exact += score in panel
+        within_one += any(abs(score - p) <= 1 for p in panel if p is not None)
+        pairs.append((score, math.floor(reference.score + 0.5)))
+    if not pairs:
+        return Agreement(0, None, None, None)
+    return Agreement(len(pairs), exact / len(pairs), within_one / len(pairs), _weighted_kappa(pairs))

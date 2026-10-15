@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.outputs import LLMResult
 
-    from judge_study.results import OutputItem
+    from judge_study.results import JudgeName, OutputItem
 
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 
@@ -67,12 +67,14 @@ class LlmJudge:
         model_id: str,
         recorder: UsageRecorder,
         prices: Prices | None,
+        judge_name: JudgeName = "llm",
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._model = model
         self._model_id = model_id
         self._recorder = recorder
         self._prices = prices
+        self._judge_name = judge_name
         self._clock = clock
 
     def judge(self, item: OutputItem, repeat: int) -> Judgement:
@@ -87,7 +89,7 @@ class LlmJudge:
             else None
         )
         return Judgement(
-            judge="llm",
+            judge=self._judge_name,
             repeat=repeat,
             score=score,
             model=self._model_id,
