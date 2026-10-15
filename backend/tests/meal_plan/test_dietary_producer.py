@@ -8,6 +8,7 @@ HTTP boundary with `httpx.MockTransport`.
 from __future__ import annotations
 
 import json
+import random
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -15,10 +16,12 @@ import httpx
 from pydantic import SecretStr
 
 from glean.decisions import JEV_MODEL, DecisionClient
+from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
     DietaryDecision,
     DietaryDecisionStore,
+    content_fingerprint,
     produce_missing_decisions,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
@@ -123,6 +126,32 @@ def test_one_request_per_recipe_carries_its_title_ingredients_and_every_missing_
     assert {question["type"] for question in pesto_request["questions"].values()} == {"noul"}
 
 
+def test_a_recipe_whose_ingredients_change_is_excluded_until_its_decision_is_recomputed(tmp_path) -> None:
+    corpus = _corpus(tmp_path)
+    produce_missing_decisions(corpus, FakeJev().client())
+    assert "rec_tomato" in _nut_free_ids(corpus)
+
+    _save(corpus, "rec_tomato", "Tomato Pasta", ["spaghetti", "basil pesto"])  # same id, tomato swapped for pesto
+
+    assert "rec_tomato" not in _nut_free_ids(corpus)  # the old "safe" answer assessed different content
+    jev = FakeJev()
+    report = produce_missing_decisions(corpus, jev.client())
+    assert [request["state"]["recipe_title"] for request in jev.requests] == ["Tomato Pasta"]
+    assert (report.computed, report.coverage) == (5, 1.0)
+    assert "rec_tomato" not in _nut_free_ids(corpus)  # recomputed: Jev now says pesto contains nuts
+
+
+def test_a_changed_recipe_jev_cant_answer_is_reported_uncovered(tmp_path) -> None:
+    corpus = _corpus(tmp_path)
+    produce_missing_decisions(corpus, FakeJev().client())
+    _save(corpus, "rec_tomato", "Tomato Pasta", ["spaghetti", "tomato", "basil pesto"])
+
+    report = produce_missing_decisions(corpus, FakeJev(fail_when=lambda _body: True).client())
+
+    assert report.uncovered == ["rec_tomato"]
+    assert report.coverage < 1.0
+
+
 def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
     corpus = _corpus(tmp_path)
     jev = FakeJev()
@@ -152,6 +181,19 @@ def test_a_recipe_jev_couldnt_answer_stays_uncovered_while_the_others_are_stored
     assert report.failures == 1
 
 
+def _nut_free_ids(corpus: RecipeCorpusStore) -> set[str]:
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry_names=[],
+        dietary_flags=["nut-free"],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=50,
+    )
+    return {candidate.external_id for candidate in candidates}
+
+
 def _seed_old_model_decisions(corpus: RecipeCorpusStore) -> None:
     DietaryDecisionStore(corpus.store).save(
         [
@@ -160,9 +202,13 @@ def _seed_old_model_decisions(corpus: RecipeCorpusStore) -> None:
                 flag=flag,
                 probability=0.0,
                 model="typesafe/jev-1.12-20260801",
+                content_hash=content_fingerprint(title, ingredients),
                 computed_at=datetime(2026, 8, 1, tzinfo=UTC),
             )
-            for rid in ("rec_pesto", "rec_tomato")
+            for rid, title, ingredients in (
+                ("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"]),
+                ("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"]),
+            )
             for flag in DIETARY_FLAGS
         ]
     )

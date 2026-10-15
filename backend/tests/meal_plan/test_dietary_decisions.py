@@ -21,6 +21,7 @@ from glean.meal_plan.dietary_decisions import (
     PREFERENCE_THRESHOLD,
     DietaryDecision,
     DietaryDecisionStore,
+    content_fingerprint,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -163,11 +164,17 @@ def _store_decisions(
                 flag=flag,
                 probability=probability,
                 model=model,
+                content_hash=_hash(corpus, recipe_id),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )
             for (recipe_id, flag), probability in probabilities.items()
         ]
     )
+
+
+def _hash(corpus: RecipeCorpusStore, recipe_id: str) -> str:
+    summary = next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
+    return content_fingerprint(summary.title, summary.ingredient_names)
 
 
 def _corpus(tmp_path, recipes: list[tuple[str, str, list[str]]]) -> RecipeCorpusStore:

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from glean.decisions import JEV_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
-from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore
+from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore, content_fingerprint
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -220,6 +220,7 @@ def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, s
                 flag=flag,
                 probability=probability,
                 model=f"{JEV_MODEL}-20260917",
+                content_hash=_hash(corpus, recipe_id),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )
             for (recipe_id, flag), probability in probabilities.items()
@@ -237,6 +238,11 @@ def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list
         rng=random.Random(0),
         sample_size=10,
     )
+
+
+def _hash(corpus: RecipeCorpusStore, recipe_id: str) -> str:
+    summary = next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
+    return content_fingerprint(summary.title, summary.ingredient_names)
 
 
 def _corpus(tmp_path, recipes: list[tuple[str, str, list[str], int | None]]) -> RecipeCorpusStore:

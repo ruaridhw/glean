@@ -243,7 +243,7 @@ def sample_corpus_candidates(
         if summary.external_id not in excluded
         and _fits_time(summary, max_total_time_mins)
         and _fits_diet(summary, rules)
-        and not any(decisions.excludes(summary.external_id, flag) for flag in flags)
+        and not any(decisions.excludes(summary, flag) for flag in flags)
     }
 
     pantry_matches: Counter[str] = Counter()
