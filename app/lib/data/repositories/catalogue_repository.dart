@@ -56,7 +56,7 @@ class CatalogueRepository {
           override?.onceOpenedShelfLifeDays ??
           item.overrideOnceOpenedShelfLifeDays ??
           onceOpened[item.form] as int?,
-      section: 'Other',
+      section: override?.section ?? item.section ?? 'Other',
     );
   }
 
