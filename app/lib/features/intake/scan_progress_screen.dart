@@ -10,7 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/receipts.dart';
 import 'package:glean/api/providers/api_providers.dart';
+import 'package:glean/data/models/shopping_list_item_view.dart';
+import 'package:glean/data/providers/shopping_providers.dart';
 import 'package:glean/design_system/design_system.dart';
+import 'package:glean/features/shop/actions.dart' show checkedItemsReviewArgs;
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
@@ -80,6 +83,14 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
     );
   }
 
+  /// Replaces this failed scan with the same pre-filled review "Done shopping" opens.
+  Future<void> _addCheckedItems() async {
+    final ReviewArgs? args = await checkedItemsReviewArgs(ref);
+    if (args == null || !mounted || _navigated) return;
+    _navigated = true;
+    context.goNamed(AppRoutes.intakeReview.name, extra: args);
+  }
+
   String _errorMessage(Object error) {
     if (error is ApiRateLimitException) return error.userMessage;
     if (error is ApiTimeoutException) {
@@ -103,6 +114,11 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
   @override
   Widget build(BuildContext context) {
     final Object? error = _error;
+    final bool hasCheckedItems =
+        widget.args.returnToShop &&
+        (ref.watch(shoppingListProvider).value ??
+                const <ShoppingListItemView>[])
+            .any((ShoppingListItemView item) => item.isChecked);
     return Scaffold(
       appBar: AppBar(title: const Text('Reading receipt')),
       body: SafeArea(
@@ -112,6 +128,7 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
                 message: _errorMessage(error),
                 onRetry: _submit,
                 onBack: _back,
+                onAddCheckedItems: hasCheckedItems ? _addCheckedItems : null,
               ),
       ),
     );

@@ -44,11 +44,16 @@ class ScanProgressError extends StatelessWidget {
     required this.message,
     required this.onRetry,
     required this.onBack,
+    this.onAddCheckedItems,
   });
 
   final String message;
   final VoidCallback onRetry;
   final VoidCallback onBack;
+
+  /// Offered when the Shop tab has checked items: opens the pantry review pre-filled with them, the way
+  /// "Done shopping" does, so a failed scan is not a dead end.
+  final VoidCallback? onAddCheckedItems;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +73,13 @@ class ScanProgressError extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             SizedBox(height: tokens.spacing.xl),
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
+            if (onAddCheckedItems != null) ...<Widget>[
+              SizedBox(height: tokens.spacing.sm),
+              OutlinedButton(
+                onPressed: onAddCheckedItems,
+                child: const Text('Add checked items instead'),
+              ),
+            ],
             SizedBox(height: tokens.spacing.sm),
             TextButton(onPressed: onBack, child: const Text('Back')),
           ],
