@@ -8,6 +8,7 @@ the stamp becomes `<sha>-dirty` and the deploy is logged.
 from __future__ import annotations
 
 import getpass
+import json
 import os
 import shlex
 import subprocess
@@ -34,12 +35,53 @@ def _tree_problems() -> list[str]:
     return problems
 
 
+def _deploy_config() -> dict[str, str]:
+    return tomllib.loads((BACKEND / "samconfig.toml").read_text())[CONFIG_ENV]["deploy"]["parameters"]
+
+
 def _config_overrides() -> dict[str, str]:
     """samconfig's prod parameters. Passing --parameter-overrides on the CLI replaces this list wholesale,
     so the deploy re-passes all of it rather than leaving samconfig to be silently dropped."""
-    config = tomllib.loads((BACKEND / "samconfig.toml").read_text())
-    pairs = shlex.split(config[CONFIG_ENV]["deploy"]["parameters"]["parameter_overrides"])
+    pairs = shlex.split(_deploy_config()["parameter_overrides"])
     return dict(pair.split("=", 1) for pair in pairs)
+
+
+def _aws(*args: str) -> dict:
+    out = subprocess.run(["aws", *args, "--output", "json"], check=True, capture_output=True, text=True).stdout
+    return json.loads(out)
+
+
+def _live_mismatches(overrides: dict[str, str], stamp: str) -> list[str]:
+    """Compare the deployed stack and Lambda with what this deploy asked for."""
+    stack_name, region = _deploy_config()["stack_name"], _deploy_config()["region"]
+    stack = _aws("cloudformation", "describe-stacks", "--stack-name", stack_name, "--region", region)["Stacks"][0]
+    function = _aws(
+        "cloudformation",
+        "describe-stack-resource",
+        "--stack-name",
+        stack_name,
+        "--logical-resource-id",
+        "GleanFunction",
+        "--region",
+        region,
+    )["StackResourceDetail"]["PhysicalResourceId"]
+    lambda_env = _aws("lambda", "get-function-configuration", "--function-name", function, "--region", region)[
+        "Environment"
+    ]["Variables"]
+
+    live_params = {p["ParameterKey"]: p["ParameterValue"] for p in stack.get("Parameters", [])}
+    live_tags = {t["Key"]: t["Value"] for t in stack.get("Tags", [])}
+    expected_env = {
+        "ENVIRONMENT": overrides["Environment"],
+        "LANGSMITH_TRACING": overrides.get("LangSmithTracing", "false"),
+        "GIT_SHA": stamp,
+    }
+    checks = [
+        *((f"stack parameter {key}", live_params.get(key), value) for key, value in overrides.items()),
+        ("stack tag commit", live_tags.get("commit"), stamp),
+        *((f"Lambda env {key}", lambda_env.get(key), value) for key, value in expected_env.items()),
+    ]
+    return [f"{what}: live {live!r}, expected {want!r}" for what, live, want in checks if live != want]
 
 
 def _log_deploy(stamp: str, problems: list[str]) -> None:
@@ -81,7 +123,11 @@ def main() -> int:
         cwd=BACKEND,
         check=True,
     )
-    return 0
+
+    mismatches = _live_mismatches(overrides, stamp)
+    for mismatch in mismatches:
+        print(f"Post-deploy mismatch: {mismatch}", file=sys.stderr)
+    return 2 if mismatches else 0
 
 
 if __name__ == "__main__":
