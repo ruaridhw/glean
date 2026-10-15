@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from glean.decisions import DecisionError, NoulCriteria, NoulQuestion
+from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
 from glean.llm import Feature
 from glean.observability import logger, tracer
-from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
+from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse, ShoppingUnit
 
 if TYPE_CHECKING:
     from glean.decisions import DecisionClient
@@ -86,9 +87,12 @@ def parse_shopping_description(
         first_spelling.setdefault(_unit_key(unit), unit)
     units = list(first_spelling.values())
     logger.info("parsing shopping description", extra={"text_length": len(request.text), "units": len(units)})
+    version = _behaviour_version(llm_router)
 
     def parse(unit: str) -> ShoppingParseResponse:
-        return _parse_unit_cached(unit, llm_router=llm_router, decision_client=decision_client, cache=cache)
+        return _parse_unit_cached(
+            unit, version=version, llm_router=llm_router, decision_client=decision_client, cache=cache
+        )
 
     with ThreadPoolExecutor(max_workers=_MAX_PARALLEL_UNITS) as pool:
         parsed = list(pool.map(parse, units))
@@ -105,14 +109,26 @@ def _unit_key(unit: str) -> str:
     return " ".join(unit.lower().split())
 
 
-def _cache_path(unit: str) -> str:
-    return f"shopping_parse/{hashlib.sha256(_unit_key(unit).encode()).hexdigest()}.json"
+def _behaviour_version(llm_router: LLMRouter) -> str:
+    """Fingerprint of everything that shapes a parse, so a change to any of it misses old cache entries."""
+    behaviour = {
+        "prompts": [SHOPPING_PARSE_SYSTEM_PROMPT, ITEM_PARSE_SYSTEM_PROMPT, DISH_PARSE_SYSTEM_PROMPT],
+        "schema": ShoppingParseResponse.model_json_schema(),
+        "units": [unit.value for unit in ShoppingUnit],
+        "decision": [DECISION_MODEL, _DISH_QUESTION.model_dump(), _DISH_AT_LEAST, _ITEM_AT_MOST],
+        "llm_model": llm_router.model_id_for(Feature.SHOPPING_LIST_DESCRIPTION),
+    }
+    return hashlib.sha256(json.dumps(behaviour, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _cache_path(version: str, unit: str) -> str:
+    return f"shopping_parse/{version}/{hashlib.sha256(_unit_key(unit).encode()).hexdigest()}.json"
 
 
 def _parse_unit_cached(
-    unit: str, *, llm_router: LLMRouter, decision_client: DecisionClient, cache: BlobStore
+    unit: str, *, version: str, llm_router: LLMRouter, decision_client: DecisionClient, cache: BlobStore
 ) -> ShoppingParseResponse:
-    path = _cache_path(unit)
+    path = _cache_path(version, unit)
     if (hit := cache.read(path)) is not None:
         return ShoppingParseResponse.model_validate_json(hit)
     prompt = _choose_prompt(unit, decision_client)
