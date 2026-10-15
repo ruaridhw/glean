@@ -63,6 +63,7 @@ class GleanDatabase extends _$GleanDatabase {
         }
         if (from < 3) {
           await m.addColumn(ingredients, ingredients.storeSection);
+          await m.addColumn(userConfig, userConfig.groupShoppingBySection);
         }
       },
       beforeOpen: (details) async {

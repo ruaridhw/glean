@@ -4788,6 +4788,21 @@ class $UserConfigTable extends UserConfig
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _groupShoppingBySectionMeta =
+      const VerificationMeta('groupShoppingBySection');
+  @override
+  late final GeneratedColumn<bool> groupShoppingBySection =
+      GeneratedColumn<bool>(
+        'group_shopping_by_section',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("group_shopping_by_section" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4797,6 +4812,7 @@ class $UserConfigTable extends UserConfig
     dietaryFlags,
     maxActiveTimeMins,
     onboardingCompleted,
+    groupShoppingBySection,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4869,6 +4885,15 @@ class $UserConfigTable extends UserConfig
         ),
       );
     }
+    if (data.containsKey('group_shopping_by_section')) {
+      context.handle(
+        _groupShoppingBySectionMeta,
+        groupShoppingBySection.isAcceptableOrUnknown(
+          data['group_shopping_by_section']!,
+          _groupShoppingBySectionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4906,6 +4931,10 @@ class $UserConfigTable extends UserConfig
         DriftSqlType.bool,
         data['${effectivePrefix}onboarding_completed'],
       )!,
+      groupShoppingBySection: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}group_shopping_by_section'],
+      )!,
     );
   }
 
@@ -4923,6 +4952,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
   final String dietaryFlags;
   final int? maxActiveTimeMins;
   final bool onboardingCompleted;
+  final bool groupShoppingBySection;
   const UserConfigData({
     required this.id,
     required this.purchaseTolerance,
@@ -4931,6 +4961,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     required this.dietaryFlags,
     this.maxActiveTimeMins,
     required this.onboardingCompleted,
+    required this.groupShoppingBySection,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4944,6 +4975,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       map['max_active_time_mins'] = Variable<int>(maxActiveTimeMins);
     }
     map['onboarding_completed'] = Variable<bool>(onboardingCompleted);
+    map['group_shopping_by_section'] = Variable<bool>(groupShoppingBySection);
     return map;
   }
 
@@ -4958,6 +4990,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
           ? const Value.absent()
           : Value(maxActiveTimeMins),
       onboardingCompleted: Value(onboardingCompleted),
+      groupShoppingBySection: Value(groupShoppingBySection),
     );
   }
 
@@ -4976,6 +5009,9 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       onboardingCompleted: serializer.fromJson<bool>(
         json['onboardingCompleted'],
       ),
+      groupShoppingBySection: serializer.fromJson<bool>(
+        json['groupShoppingBySection'],
+      ),
     );
   }
   @override
@@ -4989,6 +5025,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       'dietaryFlags': serializer.toJson<String>(dietaryFlags),
       'maxActiveTimeMins': serializer.toJson<int?>(maxActiveTimeMins),
       'onboardingCompleted': serializer.toJson<bool>(onboardingCompleted),
+      'groupShoppingBySection': serializer.toJson<bool>(groupShoppingBySection),
     };
   }
 
@@ -5000,6 +5037,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     String? dietaryFlags,
     Value<int?> maxActiveTimeMins = const Value.absent(),
     bool? onboardingCompleted,
+    bool? groupShoppingBySection,
   }) => UserConfigData(
     id: id ?? this.id,
     purchaseTolerance: purchaseTolerance ?? this.purchaseTolerance,
@@ -5010,6 +5048,8 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
         ? maxActiveTimeMins.value
         : this.maxActiveTimeMins,
     onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+    groupShoppingBySection:
+        groupShoppingBySection ?? this.groupShoppingBySection,
   );
   UserConfigData copyWithCompanion(UserConfigCompanion data) {
     return UserConfigData(
@@ -5032,6 +5072,9 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
       onboardingCompleted: data.onboardingCompleted.present
           ? data.onboardingCompleted.value
           : this.onboardingCompleted,
+      groupShoppingBySection: data.groupShoppingBySection.present
+          ? data.groupShoppingBySection.value
+          : this.groupShoppingBySection,
     );
   }
 
@@ -5044,7 +5087,8 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
           ..write('mealsPerWeek: $mealsPerWeek, ')
           ..write('dietaryFlags: $dietaryFlags, ')
           ..write('maxActiveTimeMins: $maxActiveTimeMins, ')
-          ..write('onboardingCompleted: $onboardingCompleted')
+          ..write('onboardingCompleted: $onboardingCompleted, ')
+          ..write('groupShoppingBySection: $groupShoppingBySection')
           ..write(')'))
         .toString();
   }
@@ -5058,6 +5102,7 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
     dietaryFlags,
     maxActiveTimeMins,
     onboardingCompleted,
+    groupShoppingBySection,
   );
   @override
   bool operator ==(Object other) =>
@@ -5069,7 +5114,8 @@ class UserConfigData extends DataClass implements Insertable<UserConfigData> {
           other.mealsPerWeek == this.mealsPerWeek &&
           other.dietaryFlags == this.dietaryFlags &&
           other.maxActiveTimeMins == this.maxActiveTimeMins &&
-          other.onboardingCompleted == this.onboardingCompleted);
+          other.onboardingCompleted == this.onboardingCompleted &&
+          other.groupShoppingBySection == this.groupShoppingBySection);
 }
 
 class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
@@ -5080,6 +5126,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
   final Value<String> dietaryFlags;
   final Value<int?> maxActiveTimeMins;
   final Value<bool> onboardingCompleted;
+  final Value<bool> groupShoppingBySection;
   final Value<int> rowid;
   const UserConfigCompanion({
     this.id = const Value.absent(),
@@ -5089,6 +5136,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     this.dietaryFlags = const Value.absent(),
     this.maxActiveTimeMins = const Value.absent(),
     this.onboardingCompleted = const Value.absent(),
+    this.groupShoppingBySection = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   UserConfigCompanion.insert({
@@ -5099,6 +5147,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     this.dietaryFlags = const Value.absent(),
     this.maxActiveTimeMins = const Value.absent(),
     this.onboardingCompleted = const Value.absent(),
+    this.groupShoppingBySection = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
   static Insertable<UserConfigData> custom({
@@ -5109,6 +5158,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     Expression<String>? dietaryFlags,
     Expression<int>? maxActiveTimeMins,
     Expression<bool>? onboardingCompleted,
+    Expression<bool>? groupShoppingBySection,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5120,6 +5170,8 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
       if (maxActiveTimeMins != null) 'max_active_time_mins': maxActiveTimeMins,
       if (onboardingCompleted != null)
         'onboarding_completed': onboardingCompleted,
+      if (groupShoppingBySection != null)
+        'group_shopping_by_section': groupShoppingBySection,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5132,6 +5184,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     Value<String>? dietaryFlags,
     Value<int?>? maxActiveTimeMins,
     Value<bool>? onboardingCompleted,
+    Value<bool>? groupShoppingBySection,
     Value<int>? rowid,
   }) {
     return UserConfigCompanion(
@@ -5142,6 +5195,8 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
       dietaryFlags: dietaryFlags ?? this.dietaryFlags,
       maxActiveTimeMins: maxActiveTimeMins ?? this.maxActiveTimeMins,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+      groupShoppingBySection:
+          groupShoppingBySection ?? this.groupShoppingBySection,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5170,6 +5225,11 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
     if (onboardingCompleted.present) {
       map['onboarding_completed'] = Variable<bool>(onboardingCompleted.value);
     }
+    if (groupShoppingBySection.present) {
+      map['group_shopping_by_section'] = Variable<bool>(
+        groupShoppingBySection.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5186,6 +5246,7 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
           ..write('dietaryFlags: $dietaryFlags, ')
           ..write('maxActiveTimeMins: $maxActiveTimeMins, ')
           ..write('onboardingCompleted: $onboardingCompleted, ')
+          ..write('groupShoppingBySection: $groupShoppingBySection, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9788,6 +9849,7 @@ typedef $$UserConfigTableCreateCompanionBuilder =
       Value<String> dietaryFlags,
       Value<int?> maxActiveTimeMins,
       Value<bool> onboardingCompleted,
+      Value<bool> groupShoppingBySection,
       Value<int> rowid,
     });
 typedef $$UserConfigTableUpdateCompanionBuilder =
@@ -9799,6 +9861,7 @@ typedef $$UserConfigTableUpdateCompanionBuilder =
       Value<String> dietaryFlags,
       Value<int?> maxActiveTimeMins,
       Value<bool> onboardingCompleted,
+      Value<bool> groupShoppingBySection,
       Value<int> rowid,
     });
 
@@ -9843,6 +9906,11 @@ class $$UserConfigTableFilterComposer
 
   ColumnFilters<bool> get onboardingCompleted => $composableBuilder(
     column: $table.onboardingCompleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get groupShoppingBySection => $composableBuilder(
+    column: $table.groupShoppingBySection,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -9890,6 +9958,11 @@ class $$UserConfigTableOrderingComposer
     column: $table.onboardingCompleted,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get groupShoppingBySection => $composableBuilder(
+    column: $table.groupShoppingBySection,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UserConfigTableAnnotationComposer
@@ -9933,6 +10006,11 @@ class $$UserConfigTableAnnotationComposer
     column: $table.onboardingCompleted,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get groupShoppingBySection => $composableBuilder(
+    column: $table.groupShoppingBySection,
+    builder: (column) => column,
+  );
 }
 
 class $$UserConfigTableTableManager
@@ -9973,6 +10051,7 @@ class $$UserConfigTableTableManager
                 Value<String> dietaryFlags = const Value.absent(),
                 Value<int?> maxActiveTimeMins = const Value.absent(),
                 Value<bool> onboardingCompleted = const Value.absent(),
+                Value<bool> groupShoppingBySection = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UserConfigCompanion(
                 id: id,
@@ -9982,6 +10061,7 @@ class $$UserConfigTableTableManager
                 dietaryFlags: dietaryFlags,
                 maxActiveTimeMins: maxActiveTimeMins,
                 onboardingCompleted: onboardingCompleted,
+                groupShoppingBySection: groupShoppingBySection,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -9993,6 +10073,7 @@ class $$UserConfigTableTableManager
                 Value<String> dietaryFlags = const Value.absent(),
                 Value<int?> maxActiveTimeMins = const Value.absent(),
                 Value<bool> onboardingCompleted = const Value.absent(),
+                Value<bool> groupShoppingBySection = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UserConfigCompanion.insert(
                 id: id,
@@ -10002,6 +10083,7 @@ class $$UserConfigTableTableManager
                 dietaryFlags: dietaryFlags,
                 maxActiveTimeMins: maxActiveTimeMins,
                 onboardingCompleted: onboardingCompleted,
+                groupShoppingBySection: groupShoppingBySection,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

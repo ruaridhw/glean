@@ -1,6 +1,9 @@
 // Real-outcome tests for user config defaults and persistence, ported from
 // the "no row yet" fallback intent of the Expo app's `src/db/config.ts`
 // (see git history).
+import 'dart:io';
+
+import 'package:drift/native.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
@@ -22,6 +25,59 @@ void main() {
     });
 
     tearDown(() => db.close());
+
+    test('the group-by-section preference starts off, is scoped per user, and '
+        'is remembered after the database is reopened', () async {
+      final directory = await Directory.systemTemp.createTemp('glean-pref-');
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/glean.sqlite');
+
+      var fileDb = GleanDatabase(NativeDatabase(file));
+      var fileRepository = UserConfigRepository(fileDb);
+      expect(
+        await fileRepository.watchGroupShoppingBySection(userId).first,
+        isFalse,
+      );
+
+      await fileRepository.setGroupShoppingBySection(userId, true);
+      expect(
+        await fileRepository.watchGroupShoppingBySection(userId).first,
+        isTrue,
+      );
+      expect(
+        await fileRepository.watchGroupShoppingBySection('user-b').first,
+        isFalse,
+      );
+      await fileDb.close();
+
+      fileDb = GleanDatabase(NativeDatabase(file));
+      addTearDown(fileDb.close);
+      fileRepository = UserConfigRepository(fileDb);
+      expect(
+        await fileRepository.watchGroupShoppingBySection(userId).first,
+        isTrue,
+      );
+
+      await fileRepository.setGroupShoppingBySection(userId, false);
+      expect(
+        await fileRepository.watchGroupShoppingBySection(userId).first,
+        isFalse,
+      );
+    });
+
+    test(
+      'saving settings leaves the group-by-section preference alone',
+      () async {
+        await repository.setGroupShoppingBySection(userId, true);
+
+        await repository.save(UserConfigView.defaults(userId));
+
+        expect(
+          await repository.watchGroupShoppingBySection(userId).first,
+          isTrue,
+        );
+      },
+    );
 
     test('watchOnboardingCompleted is scoped per user', () async {
       await repository.markOnboardingCompleted('user-a');

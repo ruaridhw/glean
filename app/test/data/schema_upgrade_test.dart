@@ -9,6 +9,7 @@ import 'package:glean/data/models/store_section.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
+import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
@@ -36,6 +37,13 @@ void main() {
       );
       expect(recipe?.title, 'Persisted dinner');
       expect((await db.select(db.ingredients).get()).length, greaterThan(9));
+
+      expect(
+        await UserConfigRepository(
+          db,
+        ).watchGroupShoppingBySection('reopen-user').first,
+        isFalse,
+      );
 
       final shopping = ShoppingRepository(db, ingredients);
       final pepper = await ingredients.resolveOrCreate(

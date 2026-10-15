@@ -10,3 +10,12 @@ final StreamProvider<UserConfigView> userConfigProvider =
       final userId = ref.watch(currentUserIdProvider);
       return ref.watch(userConfigRepositoryProvider).watch(userId);
     });
+
+/// Whether the Shopping tab groups rows by store section on this device.
+final StreamProvider<bool> groupShoppingBySectionProvider =
+    StreamProvider<bool>((ref) {
+      final userId = ref.watch(currentUserIdProvider);
+      return ref
+          .watch(userConfigRepositoryProvider)
+          .watchGroupShoppingBySection(userId);
+    });
