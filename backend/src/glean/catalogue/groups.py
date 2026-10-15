@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping  # noqa: TC003 - Pydantic resolves this field type at runtime.
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Kind(StrEnum):
@@ -89,21 +87,27 @@ _FORMS = (Form.FRESH, Form.FROZEN, Form.TINNED_JARRED, Form.DRIED)
 _NOT_APPLICABLE = (Form.NOT_APPLICABLE,)
 
 
-@dataclass(frozen=True, slots=True)
-class GroupRules:
+class GroupRules(BaseModel):
     """The defaults a catalogue item takes from its ingredient group."""
 
-    name: str
-    kind: Kind
-    food_group: FoodGroup
-    tracking_mode: TrackingMode
-    # Only counted groups keep a quantity, so only they have a stock unit.
-    stock_unit: StockUnit | None
-    allowed_forms: tuple[Form, ...]
-    # Unopened shelf life in days, per allowed form. Shelf life is never derived from form alone.
-    unopened_shelf_life_days: Mapping[Form, int]
-    # Once-opened shelf life in days per allowed form; None where an opened pack has no meaningful limit.
-    once_opened_shelf_life_days: Mapping[Form, int | None]
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="Plain-English display name of the group.")
+    kind: Kind = Field(description="Whether items in the group are ingredients or household items.")
+    food_group: FoodGroup = Field(description="The one food group the meal plan counts the group towards.")
+    tracking_mode: TrackingMode = Field(description="Default tracking mode for items in the group.")
+    stock_unit: StockUnit | None = Field(
+        description="Unit a counted item's quantity is kept in. None for presence and perishable groups."
+    )
+    allowed_forms: tuple[Form, ...] = Field(
+        description="The forms an item in the group may have. Only not_applicable where the group has no forms."
+    )
+    unopened_shelf_life_days: Mapping[Form, int] = Field(
+        description="Unopened shelf life in days for each allowed form. Never derived from form alone."
+    )
+    once_opened_shelf_life_days: Mapping[Form, int | None] = Field(
+        description="Once-opened shelf life in days for each allowed form. None where an opened pack has no limit."
+    )
 
     @property
     def has_forms(self) -> bool:
