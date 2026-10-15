@@ -25,6 +25,28 @@ class PantryItemInput {
   final double? unitPrice;
 }
 
+/// What one checkout did to the Pantry item of one ingredient: the row as it stood before (null when the
+/// checkout created it) and the quantity the checkout added, so Undo can take back exactly that.
+class PantryAddition {
+  const PantryAddition({
+    required this.ingredientId,
+    required this.previous,
+    required this.quantityAdded,
+  });
+
+  final int ingredientId;
+  final PantryItem? previous;
+  final double quantityAdded;
+}
+
+/// Short-lived Undo receipt for [PantryRepository.addItemsWithReceipt].
+class PantryAdditionReceipt {
+  PantryAdditionReceipt(List<PantryAddition> additions)
+    : additions = List.unmodifiable(additions);
+
+  final List<PantryAddition> additions;
+}
+
 /// What was actually removed from a pantry row for one ingredient during "Cooked", so `PlanRepository` can
 /// record it in `cooked_adjustments` and undo can restore it precisely.
 class PantryCookDelta {
@@ -217,6 +239,78 @@ class PantryRepository {
         );
       }
       return ids;
+    });
+  }
+
+  /// [addItems], plus a receipt of what each touched Pantry item looked like before and how much was added to
+  /// it, for [undoAdditions].
+  Future<PantryAdditionReceipt> addItemsWithReceipt({
+    required String userId,
+    required List<PantryItemInput> items,
+    DateTime? now,
+  }) {
+    return _db.transaction(() async {
+      final before = {
+        for (final row in await (_db.select(
+          _db.pantryItems,
+        )..where((t) => t.userId.equals(userId))).get())
+          row.ingredientId: row,
+      };
+      final ids = await addItems(userId: userId, items: items, now: now);
+      final additions = <PantryAddition>[];
+      for (final id in ids.toSet()) {
+        final after =
+            await (_db.select(_db.pantryItems)..where(
+                  (t) => t.userId.equals(userId) & t.ingredientId.equals(id),
+                ))
+                .getSingle();
+        additions.add(
+          PantryAddition(
+            ingredientId: id,
+            previous: before[id],
+            quantityAdded: after.quantity - (before[id]?.quantity ?? 0),
+          ),
+        );
+      }
+      return PantryAdditionReceipt(additions);
+    });
+  }
+
+  /// Reverses [addItemsWithReceipt]: deletes the Pantry items it created and subtracts exactly the added
+  /// quantity (and restores the expiry and price the merge overwrote) on the ones that already existed.
+  Future<void> undoAdditions({
+    required String userId,
+    required PantryAdditionReceipt receipt,
+    DateTime? now,
+  }) {
+    return _db.transaction(() async {
+      for (final addition in receipt.additions) {
+        final row =
+            await (_db.select(_db.pantryItems)..where(
+                  (t) =>
+                      t.userId.equals(userId) &
+                      t.ingredientId.equals(addition.ingredientId),
+                ))
+                .getSingleOrNull();
+        if (row == null) continue;
+        final previous = addition.previous;
+        if (previous == null) {
+          await (_db.delete(
+            _db.pantryItems,
+          )..where((t) => t.id.equals(row.id))).go();
+        } else {
+          await (_db.update(
+            _db.pantryItems,
+          )..where((t) => t.id.equals(row.id))).write(
+            PantryItemsCompanion(
+              quantity: Value(row.quantity - addition.quantityAdded),
+              unitPrice: Value(previous.unitPrice),
+              expiryDate: Value(previous.expiryDate),
+              updatedAt: Value((now ?? DateTime.now()).toIso8601String()),
+            ),
+          );
+        }
+      }
     });
   }
 
