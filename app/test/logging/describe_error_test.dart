@@ -66,7 +66,7 @@ void main() {
       'a FormatException is described without the source text it carries',
       () {
         final String described = describeError(
-          FormatException('bad input', _body, 0),
+          const FormatException('bad input', _body, 0),
         );
 
         expect(described, contains('FormatException'));
