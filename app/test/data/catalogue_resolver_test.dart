@@ -327,4 +327,117 @@ void main() {
       },
     );
   });
+
+  group('a merged item', () {
+    test('asked for by a former id, resolves to the surviving item', () async {
+      await syncItems([
+        _item('coriander', group: 'fresh_herbs', formerIds: ['cilantro']),
+      ]);
+
+      final resolved = await catalogue.effectiveIngredient('cilantro');
+
+      expect(resolved!.id, 'coriander');
+      expect(resolved.name, 'coriander');
+    });
+
+    test(
+      'keeps a household override that was keyed on the former id',
+      () async {
+        await syncItems([
+          _item('coriander', group: 'fresh_herbs', formerIds: ['cilantro']),
+        ]);
+        await householdOverride(
+          'cilantro',
+          unopenedShelfLifeDays: 9,
+          section: 'Baking',
+        );
+
+        final resolved = await catalogue.effectiveIngredient('coriander');
+
+        expect(resolved!.unopenedShelfLifeDays, 9);
+        expect(resolved.section, 'Baking');
+      },
+    );
+
+    test('takes the surviving id\'s override first, then a former id\'s, '
+        'then the item\'s own value, field by field', () async {
+      await syncItems([
+        _item(
+          'coriander',
+          group: 'fresh_herbs',
+          formerIds: ['cilantro', 'fresh-coriander'],
+          overrides: {
+            'unopened_shelf_life_days': 4,
+            'once_opened_shelf_life_days': 2,
+          },
+        ),
+      ]);
+      await householdOverride('coriander', unopenedShelfLifeDays: 8);
+      await householdOverride(
+        'cilantro',
+        unopenedShelfLifeDays: 99,
+        onceOpenedShelfLifeDays: 6,
+      );
+      await householdOverride('fresh-coriander', section: 'Pet');
+
+      final resolved = await catalogue.effectiveIngredient('cilantro');
+
+      expect(resolved!.unopenedShelfLifeDays, 8);
+      expect(resolved.onceOpenedShelfLifeDays, 6);
+      expect(resolved.section, 'Pet');
+      expect(resolved.trackingMode, 'perishable');
+    });
+
+    test('is resolved when the sync delivering the merge arrives after the '
+        'override already exists', () async {
+      await syncItems([
+        _item('cilantro', group: 'fresh_herbs'),
+        _item('coriander', group: 'fresh_herbs'),
+      ]);
+      await householdOverride('cilantro', unopenedShelfLifeDays: 12);
+      expect((await catalogue.effectiveIngredient('cilantro'))!.id, 'cilantro');
+
+      await syncItems([
+        _item('coriander', group: 'fresh_herbs', formerIds: ['cilantro']),
+      ]);
+
+      final resolved = await catalogue.effectiveIngredient('cilantro');
+      expect(resolved!.id, 'coriander');
+      expect(resolved.unopenedShelfLifeDays, 12);
+      expect(
+        (await catalogue.effectiveIngredient(
+          'coriander',
+        ))!.unopenedShelfLifeDays,
+        12,
+      );
+    });
+
+    test('through a chain of merges, still reaches the survivor with the '
+        'oldest id\'s override', () async {
+      await syncItems([
+        _item('c', group: 'fresh_herbs', formerIds: ['b']),
+        _item('b', group: 'fresh_herbs', formerIds: ['a']),
+      ]);
+      await householdOverride('a', unopenedShelfLifeDays: 5);
+
+      final resolved = await catalogue.effectiveIngredient('a');
+
+      expect(resolved!.id, 'c');
+      expect(resolved.unopenedShelfLifeDays, 5);
+    });
+
+    test('that was merged into each other by mistake still resolves, rather '
+        'than looping', () async {
+      await syncItems([
+        _item('a', group: 'fresh_herbs', formerIds: ['b']),
+        _item('b', group: 'fresh_herbs', formerIds: ['a']),
+      ]);
+
+      final resolved = await catalogue
+          .effectiveIngredient('a')
+          .timeout(const Duration(seconds: 5));
+
+      expect(resolved, isNotNull);
+    });
+  });
 }
