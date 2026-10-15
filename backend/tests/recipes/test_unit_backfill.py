@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -37,7 +39,7 @@ def test_backfill_reparses_pcs_ingredients_that_start_with_a_unit_word(tmp_path:
         )
     )
 
-    result = backfill_unit_words(corpus)
+    result = backfill_unit_words(corpus, dry_run=False)
 
     ingredients = corpus.get("import:leaky").ingredients
     assert [(i.canonical_name, round(i.quantity, 1), i.unit, i.preparation) for i in ingredients] == [
@@ -72,7 +74,7 @@ def test_backfill_leaves_clean_recipes_and_other_ingredient_fields_alone(tmp_pat
     corpus.save(clean)
     corpus.save(mixed)
 
-    result = backfill_unit_words(corpus)
+    result = backfill_unit_words(corpus, dry_run=False)
 
     assert corpus.get("import:clean") == clean
     rewritten = corpus.get("import:mixed").ingredients[0]
@@ -84,19 +86,65 @@ def test_backfill_leaves_clean_recipes_and_other_ingredient_fields_alone(tmp_pat
 def test_backfill_is_idempotent(tmp_path: Path) -> None:
     corpus = _corpus(tmp_path)
     corpus.save(_recipe("import:leaky", _leaked("Cup butter", 1)))
-    backfill_unit_words(corpus)
+    backfill_unit_words(corpus, dry_run=False)
 
-    second = backfill_unit_words(corpus)
+    second = backfill_unit_words(corpus, dry_run=False)
 
     assert (second.recipes_changed, second.ingredients_changed) == (0, 0)
 
 
-def test_dry_run_reports_changes_without_writing(tmp_path: Path) -> None:
+def test_backfill_defaults_to_a_dry_run(tmp_path: Path) -> None:
     corpus = _corpus(tmp_path)
     leaky = _recipe("import:leaky", _leaked("Oz cheddar", 8))
     corpus.save(leaky)
 
-    result = backfill_unit_words(corpus, dry_run=True)
+    result = backfill_unit_words(corpus)
 
     assert result.ingredients_changed == 1
     assert corpus.get("import:leaky") == leaky
+
+
+def test_backfill_keeps_a_parenthetical_size_out_of_the_name(tmp_path: Path) -> None:
+    # The old parser stored "Cheddar (8 oz)" as 1 pcs with the size left in the name.
+    corpus = _corpus(tmp_path)
+    corpus.save(_recipe("import:suffix", _leaked("Cheddar (8 oz)", 1)))
+
+    backfill_unit_words(corpus, dry_run=False)
+
+    ingredient = corpus.get("import:suffix").ingredients[0]
+    assert (ingredient.canonical_name, ingredient.quantity, ingredient.unit) == ("Cheddar", pytest.approx(226.8), "g")
+
+
+class _InMemoryBlobStore:
+    """Stands in for a remote store such as S3; records every call."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def read(self, key: str) -> str | None:
+        self.calls.append(f"read {key}")
+
+    def write(self, key: str, content: str) -> None:
+        self.calls.append(f"write {key}")
+
+    def list_keys(self, prefix: str = "") -> list[str]:
+        self.calls.append("list")
+        return []
+
+
+def test_backfill_refuses_a_non_filesystem_store_without_touching_it() -> None:
+    store = _InMemoryBlobStore()
+
+    with pytest.raises(ValueError, match="filesystem"):
+        backfill_unit_words(RecipeCorpusStore(store), dry_run=False)
+
+    assert store.calls == []
+
+
+def test_backfill_reads_a_non_filesystem_store_only_with_explicit_opt_in() -> None:
+    store = _InMemoryBlobStore()
+
+    result = backfill_unit_words(RecipeCorpusStore(store), allow_remote_store=True)
+
+    assert result.recipes_scanned == 0
+    assert store.calls == ["list"]

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.ingredient_parser import parse_ingredient_text
 
 if TYPE_CHECKING:
@@ -24,8 +25,16 @@ class UnitBackfillResult:
     ingredients_changed: int
 
 
-def backfill_unit_words(corpus: RecipeCorpusStore, *, dry_run: bool = False) -> UnitBackfillResult:
-    """Re-parse `pcs` ingredients whose name starts with a unit word. Idempotent."""
+def backfill_unit_words(
+    corpus: RecipeCorpusStore, *, dry_run: bool = True, allow_remote_store: bool = False
+) -> UnitBackfillResult:
+    """Re-parse `pcs` ingredients that leaked a unit word into their name. Idempotent.
+
+    Dry run unless told otherwise, and local filesystem corpora only: a remote (S3) store is refused before
+    anything is read unless the caller opts in with `allow_remote_store`.
+    """
+    if not allow_remote_store and not isinstance(corpus.store, FilesystemBlobStore):
+        raise ValueError("unit backfill only runs against a filesystem corpus; pass allow_remote_store to override")
     scanned = changed_recipes = changed_ingredients = 0
     for recipe in corpus.all_recipes():
         scanned += 1
