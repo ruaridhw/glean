@@ -195,16 +195,18 @@ class TestConfigureLangSmithEnvironment:
             assert os.environ["LANGCHAIN_CALLBACKS_BACKGROUND"] == "false"
 
 
-SYNTHETIC_SECRET = "sk-synthetic-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789"
+SYNTHETIC_SECRET = "sk-synthetic-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789"  # noqa: S105 - not a real credential
 # Pydantic's default error text keeps the first character and ~22 trailing characters of a value.
 SECRET_FRAGMENTS = (SYNTHETIC_SECRET, SYNTHETIC_SECRET[-22:], "ABCDEFGHIJ", "0123456789")
 
 
 class TestSettingsValidationErrorsHideSecrets:
     def test_error_names_missing_field_but_not_env_supplied_secret(self) -> None:
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": SYNTHETIC_SECRET}, clear=True):
-            with pytest.raises(ValidationError) as excinfo:
-                Settings(_env_file=None)  # ty: ignore[missing-argument]
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": SYNTHETIC_SECRET}, clear=True),
+            pytest.raises(ValidationError) as excinfo,
+        ):
+            Settings(_env_file=None)  # ty: ignore[missing-argument]
 
         message = str(excinfo.value)
         assert "recipe_api_key" in message
@@ -213,10 +215,12 @@ class TestSettingsValidationErrorsHideSecrets:
 
     def test_error_names_missing_field_but_not_secrets_manager_supplied_secret(self) -> None:
         lambda_env = {"AWS_LAMBDA_FUNCTION_NAME": "glean-api-prod", "ENVIRONMENT": "prod"}
-        with patch.dict(os.environ, lambda_env, clear=True), patch("glean.config.parameters.get_secret") as mock_get:
-            mock_get.return_value = SYNTHETIC_SECRET
-            with pytest.raises(ValidationError) as excinfo:
-                Settings(_env_file=None)  # ty: ignore[missing-argument]
+        with (
+            patch.dict(os.environ, lambda_env, clear=True),
+            patch("glean.config.parameters.get_secret", return_value=SYNTHETIC_SECRET),
+            pytest.raises(ValidationError) as excinfo,
+        ):
+            Settings(_env_file=None)  # ty: ignore[missing-argument]
 
         message = str(excinfo.value)
         assert "cognito_user_pool_id" in message
