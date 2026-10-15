@@ -791,6 +791,58 @@
     "dairy-free": true,
     "gluten-free": false
    }
+  },
+  {
+   "id": "policy-nut-korma-paste",
+   "title": "Korma Curry Paste rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "korma curry paste"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "policy-nut-pasanda-paste",
+   "title": "Pasanda Curry Paste rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pasanda curry paste"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "policy-nut-tikka-masala-paste",
+   "title": "Tikka Masala Seasoning rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tikka masala seasoning"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "policy-nut-free-korma-paste",
+   "title": "Nut-Free Korma Curry Paste rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nut-free korma curry paste"
+   ],
+   "violates": {
+    "nut-free": false
+   }
   }
  ]
 }

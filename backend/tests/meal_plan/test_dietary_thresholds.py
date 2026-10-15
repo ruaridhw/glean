@@ -48,8 +48,11 @@ MODELS = {measured["model"] for measured in _MEASURED}
 # (tahini 0.18, hummus wrap 0.15). Anything else it drops is a regression.
 ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
 
+# candidate selection treats recipes sharing this fraction of their ingredients as variants of one dish
+_NEAR_DUPLICATE_OVERLAP = 0.7
+
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
-PREFERENCE_MARGIN = 0.15
+PREFERENCE_MARGIN = 0.09
 NUT_FREE_MARGIN_ABOVE_CLEAN = 0.02
 NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
 
@@ -58,14 +61,34 @@ NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
 def offered_by_flag(tmp_path_factory) -> dict[str, set[str]]:
     """Ids offered under each flag by corpora of the sample recipes, each decided from its measured probabilities.
 
-    Each fixture gets its own corpus: candidate selection drops near-duplicate recipes, and the two fixtures
-    share ingredients (coconut milk) that would otherwise knock each other out.
+    Candidate selection drops near-duplicate recipes, and rows from the two fixtures (and within the sample)
+    share ingredient lists (coconut milk, basil pesto), so the rows are split into corpora with no near-duplicates.
     """
     offered = {flag: set() for flag in DIETARY_FLAGS}
-    for rows in (SAMPLE_ROWS, COVERAGE_ROWS):
+    for rows in _without_near_duplicates(ROWS):
         for flag, ids in _offered(tmp_path_factory.mktemp("corpus"), rows).items():
             offered[flag] |= ids
     return offered
+
+
+def _without_near_duplicates(rows: list[dict]) -> list[list[dict]]:
+    groups: list[list[dict]] = []
+    for row in rows:
+        ingredients = {name.casefold() for name in row["ingredients"]}
+        for group in groups:
+            if all(
+                len(ingredients & other) / len(ingredients | other) < _NEAR_DUPLICATE_OVERLAP
+                for other in group_sets(group)
+            ):
+                group.append(row)
+                break
+        else:
+            groups.append([row])
+    return groups
+
+
+def group_sets(group: list[dict]) -> list[set[str]]:
+    return [{name.casefold() for name in row["ingredients"]} for row in group]
 
 
 def _offered(root: Path, rows: list[dict]) -> dict[str, set[str]]:

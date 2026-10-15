@@ -40,18 +40,21 @@ NUT_FREE = "nut-free"
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the 56-row labelled sample (tests/fixtures/decisions/dietary_sample.json) plus one recipe per term
-# of the former regex rules (dietary_regex_coverage.json, 182 recipes), 238 in all, answered by
-# typesafe/jev-1.14-20261014 on 2026-10-15 under the criteria below:
-#   recipes that break a flag:  nut-free >= 0.92, vegetarian >= 0.85, vegan >= 0.83,
-#                               dairy-free >= 0.87, gluten-free >= 0.75
-#   recipes that don't:         nut-free <= 0.18 (tahini 0.18, a tahini-like wrap 0.15; the rest <= 0.09),
-#                               vegetarian <= 0.14, dairy-free <= 0.11, gluten-free <= 0.30, vegan <= 0.38
+# Set from the 60-row labelled sample (tests/fixtures/decisions/dietary_sample.json) plus one recipe per term
+# of the former regex rules (dietary_regex_coverage.json, 182 recipes), 242 in all, answered by
+# typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all 632 prod-corpus
+# recipes (no nut-free false negative):
+#   recipes that break a flag:  nut-free >= 0.91, vegetarian >= 0.84, vegan >= 0.82,
+#                               dairy-free >= 0.88, gluten-free >= 0.74
+#   recipes that don't:         nut-free <= 0.20 (tahini 0.20, a tahini-like wrap 0.16; the rest <= 0.09),
+#                               vegetarian <= 0.17, dairy-free <= 0.12, gluten-free <= 0.31, vegan <= 0.40
 # Nut-free is an allergy, so its threshold sits 1.3x above the model's noise floor (0.09) and trades two
-# tahini-like false exclusions for a margin of 0.80 to the nearest violator. Preferences sit between
-# the clusters: 0.17 above the highest clean recipe (vegan), 0.20 below the lowest violator (gluten-free).
+# tahini-like false exclusions for a margin of 0.79 to the nearest violator. Preferences sit between
+# the clusters: 0.10 above the highest clean recipe (vegan), 0.24 below the lowest violator (gluten-free).
+# 0.50 rather than higher because the gluten-free recipe `rec_d1cddd00fba23e5a` of the prod corpus scores
+# 0.52 and must be excluded.
 NUT_FREE_THRESHOLD = 0.12
-PREFERENCE_THRESHOLD = 0.55
+PREFERENCE_THRESHOLD = 0.5
 
 
 class CorpusUnavailableError(Exception):
@@ -194,11 +197,13 @@ _QUESTIONS: dict[str, NoulQuestion] = {
         instructions=(
             "Does this recipe contain nuts, peanuts or anything made from them? "
             "Pine nuts count as nuts, so pesto counts. Marzipan, frangipane, Nutella and other hazelnut "
-            "spreads, dukkah, romesco, praline, satay and almond milk count. Coconut, coconut milk, nutmeg and seeds "
-            "are not nuts, and an ingredient labelled nut-free is not a nut."
+            "spreads, dukkah, romesco, praline, satay and almond milk count, as do korma, pasanda and tikka masala "
+            "curry pastes and seasonings (commonly made with nuts) unless labelled nut-free. Coconut, coconut milk, "
+            "nutmeg and seeds are not nuts, and an ingredient labelled nut-free is not a nut."
         ),
         criteria=NoulCriteria(
-            true="At least one ingredient is or contains a tree nut, peanut or pine nut, or a product made from them.",
+            true="At least one ingredient is or contains a tree nut, peanut or pine nut, or a product made from them, "
+            "including korma, pasanda and tikka masala pastes or seasonings not labelled nut-free.",
             false="No ingredient is or contains a nut or peanut. Coconut, coconut milk and nutmeg are not nuts.",
         ),
     ),
