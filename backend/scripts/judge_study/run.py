@@ -34,7 +34,7 @@ from glean.llm import Feature, LLMRouter, ModelPurpose, create_chat_model
 from judge_study.decision_judge import DecisionJudge
 from judge_study.freeze import freeze_feature
 from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
-from judge_study.results import Results
+from judge_study.results import Failure, Results
 from judge_study.scoring_page import make_server, select_for_scoring
 from judge_study.stress import stress_variant
 
@@ -136,7 +136,7 @@ def judge(out: Path, repeats: int) -> None:
         for item, repeat, kind in todo
         if not any(j.judge == kind and j.repeat == repeat for j in item.judgements)
     ]
-    failures: list[str] = []
+    failures: list[Failure] = []
 
     def run_one(job: tuple[OutputItem, int, str]) -> None:
         item, repeat, kind = job
@@ -168,11 +168,51 @@ def judge(out: Path, repeats: int) -> None:
         list(pool.map(run_one, todo))
     for item in results.items:
         item.judgements.sort(key=lambda j: (j.judge, j.repeat))
-    results.model_copy(update={"models": models}).save(out / "results.json")
+    results.model_copy(update={"models": models, "failures": [*results.failures, *failures]}).save(out / "results.json")
     spend = sum(j.cost_usd or 0.0 for item in results.items for j in item.judgements)
     print(f"{len(todo) - len(failures)} judgements added, {len(failures)} failed; judge spend ${spend:.4f}")
     for failure in failures:
-        print("FAILED", failure)
+        print("FAILED", failure.item_id, failure.judge, failure.repeat, failure.error)
+
+
+PANEL = {"panel_claude": "anthropic/claude-sonnet-5.5", "panel_gpt": "openai/gpt-6.1-sol"}
+
+
+def panel(out: Path, cap: float) -> None:
+    """One blind run of each strong reference judge over every output, stopping before the spend cap."""
+    key = _api_key()
+    results = Results.load(out / "results.json")
+    prices = fetch_prices(list(PANEL.values()))
+    spent = 0.0
+    failures = list(results.failures)
+
+    def run_one(job: tuple[OutputItem, str]) -> None:
+        nonlocal spent
+        item, name = job
+        if spent >= cap:
+            return
+        model_id = PANEL[name]
+        recorder = UsageRecorder()
+        model = create_chat_model(model_id, api_key=key, callbacks=[recorder], request_timeout=180_000)
+        try:
+            judgement = LlmJudge(
+                model, model_id=model_id, recorder=recorder, prices=prices[model_id], judge_name=name
+            ).judge(item, 1)
+        except Exception as error:
+            failures.append(
+                Failure(judge=name, item_id=item.item_id, repeat=1, error=f"{type(error).__name__}: {str(error)[:150]}")
+            )
+            return
+        spent += judgement.cost_usd or 0.0
+        item.judgements.append(judgement)
+
+    todo = [
+        (item, name) for item in results.items for name in PANEL if not any(j.judge == name for j in item.judgements)
+    ]
+    with ThreadPoolExecutor(WORKERS) as pool:
+        list(pool.map(run_one, todo))
+    results.model_copy(update={"failures": failures}).save(out / "results.json")
+    print(f"panel spend ${spent:.4f} (cap ${cap}); {len(failures) - len(results.failures)} failures")
 
 
 def serve(out: Path, host: str, port: int, count: int) -> None:
@@ -192,11 +232,12 @@ def serve(out: Path, host: str, port: int, count: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("step", choices=["freeze", "stress", "judge", "serve", "report"])
+    parser.add_argument("step", choices=["freeze", "stress", "judge", "panel", "serve", "report"])
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--host", default="100.98.190.46")
     parser.add_argument("--port", type=int, default=8124)
+    parser.add_argument("--cap", type=float, default=1.0, help="USD spend cap for the panel step")
     parser.add_argument("--count", type=int, default=25)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -204,6 +245,8 @@ def main() -> None:
         freeze(args.out)
     elif args.step == "stress":
         add_stress(args.out)
+    elif args.step == "panel":
+        panel(args.out, args.cap)
     elif args.step == "judge":
         judge(args.out, args.repeats)
     elif args.step == "serve":
