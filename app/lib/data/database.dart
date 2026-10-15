@@ -97,3 +97,19 @@ class GleanDatabase extends _$GleanDatabase {
     });
   }
 }
+
+/// Closes [db], even while screens still hold stream subscriptions.
+///
+/// drift awaits inside a loop over its active streams, and a subscriber cancelling at the same moment changes
+/// that collection and throws [ConcurrentModificationError] before the connection is closed. The streams are
+/// gone by the second attempt, so a retry completes the close.
+Future<void> closeDatabase(GleanDatabase db) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      await db.close();
+      return;
+    } on ConcurrentModificationError {
+      if (attempt >= 2) rethrow;
+    }
+  }
+}
