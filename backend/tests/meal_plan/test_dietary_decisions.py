@@ -1,4 +1,4 @@
-"""Jev dietary decisions in corpus candidate selection (#125).
+"""dietary decisions in corpus candidate selection (#125).
 
 Seams: `sample_corpus_candidates` (the dietary-filtering step) and the decisions
 stored beside the corpus. Decisions are placed through the stored-decision store,
@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from glean.decisions import JEV_MODEL
+from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_DECISIONS_KEY,
@@ -27,10 +27,10 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
-CURRENT_MODEL = f"{JEV_MODEL}-20260917"
+CURRENT_MODEL = f"{DECISION_MODEL}-20261014"
 
 
-def test_a_recipe_jev_flags_is_excluded_though_the_regex_keeps_it(tmp_path) -> None:
+def test_a_recipe_a_stored_decision_flags_is_excluded_though_the_regex_keeps_it(tmp_path) -> None:
     corpus = _corpus(
         tmp_path,
         [
@@ -43,7 +43,7 @@ def test_a_recipe_jev_flags_is_excluded_though_the_regex_keeps_it(tmp_path) -> N
     assert _ids(corpus, ["Nut-Free"]) == {"rec_tomato"}
 
 
-def test_jev_never_clears_a_recipe_the_regex_excludes(tmp_path) -> None:
+def test_a_stored_decision_never_clears_a_recipe_the_regex_excludes(tmp_path) -> None:
     corpus = _corpus(
         tmp_path,
         [
@@ -77,7 +77,7 @@ def test_nut_free_excludes_everything_when_no_decisions_are_stored(tmp_path) -> 
 
 def test_nut_free_excludes_a_recipe_judged_under_an_older_model(tmp_path) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
-    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, model="typesafe/jev-1.12-20260801")
+    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, model="typesafe/jev-1.13-20260917")
 
     assert _ids(corpus, ["nut-free"]) == set()
 
@@ -134,7 +134,7 @@ def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> Non
     _store_decisions(corpus, {("rec_tomato", flag): 0.0 for flag in DIETARY_FLAGS})
 
     def refuse(*_args, **_kwargs):
-        raise AssertionError("Generate must not call Jev")
+        raise AssertionError("Generate must not call the decision model")
 
     monkeypatch.setattr(httpx.Client, "send", refuse)
 

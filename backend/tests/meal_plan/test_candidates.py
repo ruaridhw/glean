@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from datetime import UTC, datetime
 
-from glean.decisions import JEV_MODEL
+from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore, content_fingerprint
 from glean.recipe_api.blob_store import FilesystemBlobStore
@@ -219,7 +219,7 @@ def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, s
                 recipe_id=recipe_id,
                 flag=flag,
                 probability=probability,
-                model=f"{JEV_MODEL}-20260917",
+                model=f"{DECISION_MODEL}-20261014",
                 content_hash=_hash(corpus, recipe_id),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )

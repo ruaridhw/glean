@@ -1,6 +1,6 @@
-"""Jev dietary decisions: stored beside the corpus, read when candidates are chosen.
+"""dietary decisions: stored beside the corpus, read when candidates are chosen.
 
-Generate never calls Jev. A producer computes one probability per (recipe, flag),
+Generate never calls the decision model. A producer computes one probability per (recipe, flag),
 stores them as one JSONL blob in the corpus store, and candidate selection reads
 them. A decision can only add an exclusion to the regex rules, never lift one.
 """
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, ValidationError
 
-from glean.decisions import JEV_MODEL, DecisionError, NoulCriteria, NoulQuestion
+from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
 from glean.observability import logger
 from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from glean.recipes.corpus import RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
 
-_CURRENT_MODEL = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")  # as DecisionClient accepts it
+_CURRENT_MODEL = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")  # as DecisionClient accepts it
 _EVERYTHING = 1_000_000
 _CHECKPOINT_EVERY = 25
 
@@ -36,19 +36,20 @@ _CHECKPOINT_EVERY = 25
 DIETARY_DECISIONS_KEY = "_decisions/dietary.jsonl"
 
 NUT_FREE = "nut-free"
-# Flags Jev is asked about. Others (Keto, Paleo) are left to the meal-plan model.
+# Flags the decision model is asked about. Others (Keto, Paleo) are left to the meal-plan model.
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the 55-row labelled sample (tests/fixtures/jev/dietary_sample.json) answered by
-# typesafe/jev-1.13-20260917 on 2026-10-15:
-#   recipes that break a flag:  nut-free >= 0.92, vegetarian >= 0.65, vegan >= 0.80,
-#                               dairy-free >= 0.85, gluten-free >= 0.89
-#   recipes that don't:         nut-free <= 0.24 (tahini, hummus wrap; the rest <= 0.07),
-#                               preference flags <= 0.24 (the rest <= 0.22)
-# Nut-free is an allergy, so its threshold sits just above Jev's noise floor and trades a couple of
-# tahini-like false exclusions for headroom. Preferences sit between the two clusters.
-NUT_FREE_THRESHOLD = 0.15
+# Set from the 55-row labelled sample (tests/fixtures/decisions/dietary_sample.json) answered by
+# typesafe/jev-1.14-20261014 on 2026-10-15 (re-derived after the retarget from 1.13):
+#   recipes that break a flag:  nut-free >= 0.93, vegetarian >= 0.68, vegan >= 0.84,
+#                               dairy-free >= 0.87, gluten-free >= 0.88
+#   recipes that don't:         nut-free <= 0.23 (tahini 0.23, hummus wrap 0.16; the rest <= 0.08),
+#                               preference flags <= 0.25
+# Nut-free is an allergy, so its threshold sits 1.5x above the model's noise floor (0.08) and trades two
+# tahini-like false exclusions for a margin of 0.81 to the nearest violator. Preferences sit between
+# the clusters: 0.15 above the highest clean recipe, 0.28 below the lowest violator.
+NUT_FREE_THRESHOLD = 0.12
 PREFERENCE_THRESHOLD = 0.4
 
 
@@ -57,14 +58,14 @@ class CorpusUnavailableError(Exception):
 
 
 class DietaryDecision(BaseModel):
-    """Jev's probability that a recipe breaks a dietary flag, with what produced it."""
+    """The model's probability that a recipe breaks a dietary flag, with what produced it."""
 
-    recipe_id: str
-    flag: str
-    probability: float = Field(ge=0.0, le=1.0)
-    model: str  # the dated snapshot that answered
-    content_hash: str  # `content_fingerprint` of the recipe state Jev assessed
-    computed_at: datetime
+    recipe_id: str = Field(description="External id of the corpus recipe that was assessed.")
+    flag: str = Field(description="Normalised dietary flag the question was about, e.g. nut-free.")
+    probability: float = Field(ge=0.0, le=1.0, description="Probability that the recipe breaks the flag.")
+    model: str = Field(description="Dated snapshot of the decision model that answered.")
+    content_hash: str = Field(description="`content_fingerprint` of the recipe state (title, ingredients) assessed.")
+    computed_at: datetime = Field(description="When the decision was computed.")
 
 
 def content_fingerprint(title: str, ingredient_names: Iterable[str]) -> str:
@@ -119,14 +120,14 @@ class DietaryDecisions:
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
-    # Thresholds are calibrated to one model version (`model` is Jev's dated snapshot of it), and a
+    # Thresholds are calibrated to one model version (`model` is the model's dated snapshot of it), and a
     # decision only speaks for the title and ingredients it was asked about.
     return _CURRENT_MODEL.fullmatch(decision.model) is not None and decision.content_hash == content_fingerprint(
         summary.title, summary.ingredient_names
     )
 
 
-# What each question asks, and the household's ingredient policy, given to Jev as criteria.
+# What each question asks, and the household's ingredient policy, given to the model as criteria.
 _QUESTIONS: dict[str, NoulQuestion] = {
     "vegetarian": NoulQuestion(
         instructions=(
@@ -224,9 +225,9 @@ def produce_missing_decisions(
     flags: tuple[str, ...] = DIETARY_FLAGS,
     max_workers: int = 8,
 ) -> CoverageReport:
-    """Ask Jev about every (recipe, flag) that has no decision from the pinned model, and store the answers.
+    """Ask the decision model about each (recipe, flag) lacking a current decision, and store the answers.
 
-    One request per recipe carries all its missing flags. A recipe Jev can't answer is
+    One request per recipe carries all its missing flags. A recipe the model can't answer is
     left uncovered (and so excluded under nut-free) and retried on the next run.
     """
     store = DietaryDecisionStore(corpus.store)

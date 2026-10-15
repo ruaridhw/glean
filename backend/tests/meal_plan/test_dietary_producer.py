@@ -1,7 +1,7 @@
-"""The producer that fills the stored Jev dietary decisions (#125).
+"""The producer that fills the stored dietary decisions (#125).
 
 Seams: `produce_missing_decisions` (the command's entry point), the stored decisions
-it writes, and the `DecisionClient` requests it makes. Jev itself is faked at the
+it writes, and the `DecisionClient` requests it makes. The decision API itself is faked at the
 HTTP boundary with `httpx.MockTransport`.
 """
 
@@ -16,7 +16,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from glean.decisions import JEV_MODEL, DecisionClient
+from glean.decisions import DECISION_MODEL, DecisionClient
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
@@ -34,10 +34,10 @@ from glean.recipes.stored import StoredIngredient, StoredRecipe
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SNAPSHOT = f"{JEV_MODEL}-20260917"
+SNAPSHOT = f"{DECISION_MODEL}-20261014"
 
 
-class FakeJev:
+class FakeDecisionApi:
     """Answers every question with 0.9 when the state mentions pesto, else 0.01. Records requests."""
 
     def __init__(self, *, snapshot: str = SNAPSHOT, fail_when: Callable[[dict], bool] | None = None) -> None:
@@ -68,9 +68,9 @@ class FakeJev:
 
 def test_first_run_stores_a_decision_for_every_recipe_and_flag_and_reports_full_coverage(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
-    report = produce_missing_decisions(corpus, jev.client())
+    report = produce_missing_decisions(corpus, api.client())
 
     stored = {(d.recipe_id, d.flag): d for d in DietaryDecisionStore(corpus.store).load()}
     assert set(stored) == {(rid, flag) for rid in ("rec_pesto", "rec_tomato") for flag in DIETARY_FLAGS}
@@ -83,8 +83,8 @@ def test_first_run_stores_a_decision_for_every_recipe_and_flag_and_reports_full_
 
 def test_second_run_computes_nothing(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    produce_missing_decisions(corpus, FakeJev().client())
-    second = FakeJev()
+    produce_missing_decisions(corpus, FakeDecisionApi().client())
+    second = FakeDecisionApi()
 
     report = produce_missing_decisions(corpus, second.client())
 
@@ -94,36 +94,36 @@ def test_second_run_computes_nothing(tmp_path) -> None:
 
 def test_a_recipe_added_later_is_the_only_one_computed(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    produce_missing_decisions(corpus, FakeJev().client())
+    produce_missing_decisions(corpus, FakeDecisionApi().client())
     _save(corpus, "rec_new", "Courgette Soup", ["courgette", "stock"])
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
-    report = produce_missing_decisions(corpus, jev.client())
+    report = produce_missing_decisions(corpus, api.client())
 
-    assert [request["state"]["recipe_title"] for request in jev.requests] == ["Courgette Soup"]
+    assert [request["state"]["recipe_title"] for request in api.requests] == ["Courgette Soup"]
     assert (report.computed, report.coverage) == (5, 1.0)
 
 
 def test_decisions_from_an_older_model_are_recomputed(tmp_path) -> None:
     corpus = _corpus(tmp_path)
     _seed_old_model_decisions(corpus)
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
-    report = produce_missing_decisions(corpus, jev.client())
+    report = produce_missing_decisions(corpus, api.client())
 
-    assert len(jev.requests) == 2
+    assert len(api.requests) == 2
     assert (report.computed, report.coverage) == (10, 1.0)
     assert {d.model for d in DietaryDecisionStore(corpus.store).load()} == {SNAPSHOT}
 
 
 def test_one_request_per_recipe_carries_its_title_ingredients_and_every_missing_flag(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
-    produce_missing_decisions(corpus, jev.client())
+    produce_missing_decisions(corpus, api.client())
 
-    pesto_request = next(r for r in jev.requests if r["state"]["recipe_title"] == "Pesto Pasta")
-    assert pesto_request["model"] == JEV_MODEL
+    pesto_request = next(r for r in api.requests if r["state"]["recipe_title"] == "Pesto Pasta")
+    assert pesto_request["model"] == DECISION_MODEL
     assert pesto_request["state"] == {"recipe_title": "Pesto Pasta", "ingredients": ["spaghetti", "basil pesto"]}
     assert set(pesto_request["questions"]) == set(DIETARY_FLAGS)
     assert {question["type"] for question in pesto_request["questions"].values()} == {"noul"}
@@ -131,25 +131,25 @@ def test_one_request_per_recipe_carries_its_title_ingredients_and_every_missing_
 
 def test_a_recipe_whose_ingredients_change_is_excluded_until_its_decision_is_recomputed(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    produce_missing_decisions(corpus, FakeJev().client())
+    produce_missing_decisions(corpus, FakeDecisionApi().client())
     assert "rec_tomato" in _nut_free_ids(corpus)
 
     _save(corpus, "rec_tomato", "Tomato Pasta", ["spaghetti", "basil pesto"])  # same id, tomato swapped for pesto
 
     assert "rec_tomato" not in _nut_free_ids(corpus)  # the old "safe" answer assessed different content
-    jev = FakeJev()
-    report = produce_missing_decisions(corpus, jev.client())
-    assert [request["state"]["recipe_title"] for request in jev.requests] == ["Tomato Pasta"]
+    api = FakeDecisionApi()
+    report = produce_missing_decisions(corpus, api.client())
+    assert [request["state"]["recipe_title"] for request in api.requests] == ["Tomato Pasta"]
     assert (report.computed, report.coverage) == (5, 1.0)
-    assert "rec_tomato" not in _nut_free_ids(corpus)  # recomputed: Jev now says pesto contains nuts
+    assert "rec_tomato" not in _nut_free_ids(corpus)  # recomputed: the model now says pesto contains nuts
 
 
-def test_a_changed_recipe_jev_cant_answer_is_reported_uncovered(tmp_path) -> None:
+def test_a_changed_recipe_the_model_cant_answer_is_reported_uncovered(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    produce_missing_decisions(corpus, FakeJev().client())
+    produce_missing_decisions(corpus, FakeDecisionApi().client())
     _save(corpus, "rec_tomato", "Tomato Pasta", ["spaghetti", "tomato", "basil pesto"])
 
-    report = produce_missing_decisions(corpus, FakeJev(fail_when=lambda _body: True).client())
+    report = produce_missing_decisions(corpus, FakeDecisionApi(fail_when=lambda _body: True).client())
 
     assert report.uncovered == ["rec_tomato"]
     assert report.coverage < 1.0
@@ -158,27 +158,27 @@ def test_a_changed_recipe_jev_cant_answer_is_reported_uncovered(tmp_path) -> Non
 def test_a_corpus_whose_search_index_is_missing_fails_loudly_instead_of_reporting_coverage(tmp_path) -> None:
     _corpus(tmp_path)  # recipe blobs exist...
     (tmp_path / INDEX_KEY).unlink()  # ...but Generate, which selects through the index, can see none of them
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
     with pytest.raises(CorpusUnavailableError):
-        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), jev.client())
+        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), api.client())
 
-    assert jev.requests == []
+    assert api.requests == []
 
 
 def test_an_empty_corpus_fails_loudly(tmp_path) -> None:
     with pytest.raises(CorpusUnavailableError):
-        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), FakeJev().client())
+        produce_missing_decisions(RecipeCorpusStore(FilesystemBlobStore(tmp_path)), FakeDecisionApi().client())
 
 
 def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    jev = FakeJev()
+    api = FakeDecisionApi()
 
-    produce_missing_decisions(corpus, jev.client())
+    produce_missing_decisions(corpus, api.client())
 
     def wording(flag: str) -> str:
-        question = jev.requests[0]["questions"][flag]
+        question = api.requests[0]["questions"][flag]
         return f"{question['instructions']} {question['criteria']['true']} {question['criteria']['false']}".casefold()
 
     assert "pine nuts count as nuts" in wording("nut-free")
@@ -188,11 +188,11 @@ def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
     assert "unless the recipe says gluten-free oats" in wording("gluten-free")
 
 
-def test_a_recipe_jev_couldnt_answer_stays_uncovered_while_the_others_are_stored(tmp_path) -> None:
+def test_a_recipe_the_model_couldnt_answer_stays_uncovered_while_the_others_are_stored(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    jev = FakeJev(fail_when=lambda body: body["state"]["recipe_title"] == "Pesto Pasta")
+    api = FakeDecisionApi(fail_when=lambda body: body["state"]["recipe_title"] == "Pesto Pasta")
 
-    report = produce_missing_decisions(corpus, jev.client())
+    report = produce_missing_decisions(corpus, api.client())
 
     assert {d.recipe_id for d in DietaryDecisionStore(corpus.store).load()} == {"rec_tomato"}
     assert report.uncovered == ["rec_pesto"]
@@ -220,9 +220,9 @@ def _seed_old_model_decisions(corpus: RecipeCorpusStore) -> None:
                 recipe_id=rid,
                 flag=flag,
                 probability=0.0,
-                model="typesafe/jev-1.12-20260801",
+                model="typesafe/jev-1.13-20260917",
                 content_hash=content_fingerprint(title, ingredients),
-                computed_at=datetime(2026, 8, 1, tzinfo=UTC),
+                computed_at=datetime(2026, 9, 17, tzinfo=UTC),
             )
             for rid, title, ingredients in (
                 ("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"]),

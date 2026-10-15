@@ -70,10 +70,9 @@ _drop_unit_price  # Pydantic field validator (ShoppingProposalItem.unit_price)
 # TODO: the first consuming PRs (#125's dietary check, #123's normalisation) must remove the
 # decisions.py entries below as they start using each name.
 # decisions.py: public API, first used by #125 (dietary check) and #123 (normalisation)
-true  # NoulCriteria field
-false  # NoulCriteria field
+true  # NoulCriteria field, set by keyword in dietary_decisions.py
+false  # NoulCriteria field, as above
 probabilities  # ChoiceAnswer / ScoreAnswer field
-noul  # NoulAnswer field, and Decision.noul accessor
 score  # ScoreAnswer field, and Decision.score accessor
 input_tokens  # Usage field
 output_tokens  # Usage field
