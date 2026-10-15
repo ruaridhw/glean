@@ -1,0 +1,8 @@
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          # Checked mode throws CheckedFromJsonException naming the missing or invalid key,
+          # which the API client logs when a response can't be decoded.
+          checked: true

@@ -12,15 +12,27 @@ Map<String, dynamic> _$ShoppingParseRequestToJson(
 
 ShoppingProposalItem _$ShoppingProposalItemFromJson(
   Map<String, dynamic> json,
-) => ShoppingProposalItem(
-  name: json['name'] as String,
-  quantity: (json['quantity'] as num).toDouble(),
-  unit: json['unit'] as String,
-  foodGroup: requireFoodGroup(json['food_group']),
-  confidence: (json['confidence'] as num).toDouble(),
-  ingredientGroup: json['ingredient_group'] as String?,
-  category: json['category'] as String?,
-  unitPrice: (json['unit_price'] as num?)?.toDouble(),
+) => $checkedCreate(
+  'ShoppingProposalItem',
+  json,
+  ($checkedConvert) {
+    final val = ShoppingProposalItem(
+      name: $checkedConvert('name', (v) => v as String),
+      quantity: $checkedConvert('quantity', (v) => (v as num).toDouble()),
+      unit: $checkedConvert('unit', (v) => v as String),
+      foodGroup: $checkedConvert('food_group', (v) => requireFoodGroup(v)),
+      confidence: $checkedConvert('confidence', (v) => (v as num).toDouble()),
+      ingredientGroup: $checkedConvert('ingredient_group', (v) => v as String?),
+      category: $checkedConvert('category', (v) => v as String?),
+      unitPrice: $checkedConvert('unit_price', (v) => (v as num?)?.toDouble()),
+    );
+    return val;
+  },
+  fieldKeyMap: const {
+    'foodGroup': 'food_group',
+    'ingredientGroup': 'ingredient_group',
+    'unitPrice': 'unit_price',
+  },
 );
 
 Map<String, dynamic> _$ShoppingProposalItemToJson(
@@ -38,13 +50,25 @@ Map<String, dynamic> _$ShoppingProposalItemToJson(
 
 ShoppingParseResponse _$ShoppingParseResponseFromJson(
   Map<String, dynamic> json,
-) => ShoppingParseResponse(
-  items: (json['items'] as List<dynamic>)
-      .map((e) => ShoppingProposalItem.fromJson(e as Map<String, dynamic>))
-      .toList(),
-  clarifyingQuestions:
-      (json['clarifying_questions'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList() ??
-      [],
+) => $checkedCreate(
+  'ShoppingParseResponse',
+  json,
+  ($checkedConvert) {
+    final val = ShoppingParseResponse(
+      items: $checkedConvert(
+        'items',
+        (v) => (v as List<dynamic>)
+            .map(
+              (e) => ShoppingProposalItem.fromJson(e as Map<String, dynamic>),
+            )
+            .toList(),
+      ),
+      clarifyingQuestions: $checkedConvert(
+        'clarifying_questions',
+        (v) => (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      ),
+    );
+    return val;
+  },
+  fieldKeyMap: const {'clarifyingQuestions': 'clarifying_questions'},
 );

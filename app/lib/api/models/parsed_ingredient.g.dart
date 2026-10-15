@@ -6,17 +6,30 @@ part of 'parsed_ingredient.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-ParsedIngredient _$ParsedIngredientFromJson(Map<String, dynamic> json) =>
-    ParsedIngredient(
-      name: json['name'] as String,
-      quantity: (json['quantity'] as num).toDouble(),
-      unit: json['unit'] as String,
-      foodGroup: requireFoodGroup(json['food_group']),
-      confidence: (json['confidence'] as num).toDouble(),
-      ingredientGroup: json['ingredient_group'] as String?,
-      category: json['category'] as String?,
-      unitPrice: (json['unit_price'] as num?)?.toDouble(),
+ParsedIngredient _$ParsedIngredientFromJson(
+  Map<String, dynamic> json,
+) => $checkedCreate(
+  'ParsedIngredient',
+  json,
+  ($checkedConvert) {
+    final val = ParsedIngredient(
+      name: $checkedConvert('name', (v) => v as String),
+      quantity: $checkedConvert('quantity', (v) => (v as num).toDouble()),
+      unit: $checkedConvert('unit', (v) => v as String),
+      foodGroup: $checkedConvert('food_group', (v) => requireFoodGroup(v)),
+      confidence: $checkedConvert('confidence', (v) => (v as num).toDouble()),
+      ingredientGroup: $checkedConvert('ingredient_group', (v) => v as String?),
+      category: $checkedConvert('category', (v) => v as String?),
+      unitPrice: $checkedConvert('unit_price', (v) => (v as num?)?.toDouble()),
     );
+    return val;
+  },
+  fieldKeyMap: const {
+    'foodGroup': 'food_group',
+    'ingredientGroup': 'ingredient_group',
+    'unitPrice': 'unit_price',
+  },
+);
 
 Map<String, dynamic> _$ParsedIngredientToJson(ParsedIngredient instance) =>
     <String, dynamic>{
