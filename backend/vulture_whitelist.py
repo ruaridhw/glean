@@ -80,7 +80,5 @@ output_tokens  # Usage field
 cost  # Usage field
 provider  # Decision field
 usage  # Decision field
-DecisionClient  # decisions client, first used by #125
-decide  # DecisionClient.decide, first used by #125
 __cause__  # exception chain cleared in DecisionClient.decide so upstream text can't leak via causes
 __context__  # as above

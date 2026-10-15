@@ -5,13 +5,12 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import httpx
-import pytest
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
 from glean.recipe_api.blob_store import FilesystemBlobStore
-from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 from glean.shopping import service
+from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 from glean.shopping.service import (
     DISH_PARSE_SYSTEM_PROMPT,
     ITEM_PARSE_SYSTEM_PROMPT,
@@ -22,6 +21,8 @@ from glean.shopping.service import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+    import pytest
 
     from glean.llm import Feature
 
@@ -138,7 +139,12 @@ def _system_prompts(router: _FakeLLMRouter) -> dict[str, str]:
 def test_a_phrase_that_names_a_dish_is_parsed_with_the_dish_decomposition_prompt(tmp_path: Path) -> None:
     router = _FakeLLMRouter()
 
-    _parse("tacos, milk", router=router, tmp_path=tmp_path, decisions=_decision_client(lambda p: 0.95 if p == "tacos" else 0.02))
+    _parse(
+        "tacos, milk",
+        router=router,
+        tmp_path=tmp_path,
+        decisions=_decision_client(lambda p: 0.95 if p == "tacos" else 0.02),
+    )
 
     assert _system_prompts(router) == {"tacos": DISH_PARSE_SYSTEM_PROMPT, "milk": ITEM_PARSE_SYSTEM_PROMPT}
 
@@ -148,8 +154,12 @@ def test_an_ambiguous_phrase_falls_back_to_the_combined_prompt_and_keeps_its_cla
 ) -> None:
     router = _FakeLLMRouter(
         {
-            "snacks": ShoppingParseResponse(items=[_item("snacks", confidence=0.5)], clarifying_questions=["Which snacks?"]),
-            "treats": ShoppingParseResponse(items=[_item("treats", confidence=0.5)], clarifying_questions=["Which snacks?"]),
+            "snacks": ShoppingParseResponse(
+                items=[_item("snacks", confidence=0.5)], clarifying_questions=["Which snacks?"]
+            ),
+            "treats": ShoppingParseResponse(
+                items=[_item("treats", confidence=0.5)], clarifying_questions=["Which snacks?"]
+            ),
         }
     )
 
