@@ -1,0 +1,779 @@
+{
+ "rows": [
+  {
+   "id": "table-nut-pesto",
+   "title": "Basil Pesto rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "basil pesto"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-nut-marzipan",
+   "title": "Marzipan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "marzipan"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-nut-frangipane",
+   "title": "Frangipane rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "frangipane"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-nut-nutella",
+   "title": "Nutella rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "Nutella"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-nut-dukkah",
+   "title": "Dukkah rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "dukkah"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-nut-romesco",
+   "title": "Romesco Sauce rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "romesco sauce"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "table-veg-caesar",
+   "title": "Caesar Dressing rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "Caesar dressing"
+   ],
+   "violates": {
+    "vegetarian": true
+   }
+  },
+  {
+   "id": "table-veg-thai-red-curry-paste",
+   "title": "Thai Red Curry Paste rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "Thai red curry paste"
+   ],
+   "violates": {
+    "vegetarian": true
+   }
+  },
+  {
+   "id": "table-veg-pesto",
+   "title": "Basil Pesto rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "basil pesto"
+   ],
+   "violates": {
+    "vegetarian": true
+   }
+  },
+  {
+   "id": "table-vegan-pesto",
+   "title": "Basil Pesto with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "basil pesto"
+   ],
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "table-vegan-naan",
+   "title": "Naan Bread with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "naan bread"
+   ],
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "table-dairy-whey",
+   "title": "Whey Protein Powder with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "whey protein powder"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "table-dairy-buttermilk",
+   "title": "Buttermilk with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "buttermilk"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "table-dairy-pesto",
+   "title": "Basil Pesto with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "basil pesto"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "table-dairy-naan",
+   "title": "Naan Bread with salad",
+   "ingredients": [
+    "mixed salad leaves",
+    "cucumber",
+    "naan bread"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "table-gluten-malt-vinegar",
+   "title": "Malt Vinegar with potatoes",
+   "ingredients": [
+    "new potatoes",
+    "green beans",
+    "malt vinegar"
+   ],
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "table-gluten-oats",
+   "title": "Rolled Oats with potatoes",
+   "ingredients": [
+    "new potatoes",
+    "green beans",
+    "rolled oats"
+   ],
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "allowed-coconut-milk",
+   "title": "Coconut milk rice",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut milk"
+   ],
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "allowed-nutmeg",
+   "title": "Nutmeg rice pudding",
+   "ingredients": [
+    "pudding rice",
+    "nutmeg",
+    "sugar"
+   ],
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "allowed-parmesan",
+   "title": "Parmesan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "parmesan"
+   ],
+   "violates": {
+    "vegetarian": false
+   }
+  },
+  {
+   "id": "allowed-gf-oats",
+   "title": "Porridge with gluten-free oats",
+   "ingredients": [
+    "gluten-free oats",
+    "blueberries",
+    "maple syrup"
+   ],
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "allowed-butternut",
+   "title": "Butternut squash soup",
+   "ingredients": [
+    "butternut squash",
+    "onion",
+    "vegetable stock"
+   ],
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-00",
+   "title": "Spaghetti bolognese",
+   "ingredients": [
+    "spaghetti",
+    "beef mince",
+    "tomato",
+    "onion"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": true,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-01",
+   "title": "Vegetable chilli",
+   "ingredients": [
+    "kidney beans",
+    "tomato",
+    "onion",
+    "basmati rice"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-02",
+   "title": "Cheese omelette",
+   "ingredients": [
+    "eggs",
+    "cheddar cheese",
+    "butter"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-03",
+   "title": "Salmon with rice",
+   "ingredients": [
+    "salmon fillet",
+    "basmati rice",
+    "broccoli"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-04",
+   "title": "Red lentil dal",
+   "ingredients": [
+    "red lentils",
+    "coconut milk",
+    "tomato",
+    "basmati rice"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-05",
+   "title": "Beef stew",
+   "ingredients": [
+    "beef",
+    "plain flour",
+    "carrot",
+    "onion"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": true,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-06",
+   "title": "Chicken satay",
+   "ingredients": [
+    "chicken breast",
+    "peanut butter",
+    "basmati rice"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "ordinary-07",
+   "title": "Almond cake",
+   "ingredients": [
+    "ground almonds",
+    "eggs",
+    "caster sugar",
+    "butter"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "ordinary-08",
+   "title": "Banana pancakes",
+   "ingredients": [
+    "plain flour",
+    "banana",
+    "milk",
+    "eggs"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": true,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-09",
+   "title": "Greek salad",
+   "ingredients": [
+    "feta",
+    "cucumber",
+    "tomato",
+    "olive oil"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-10",
+   "title": "Mushroom risotto",
+   "ingredients": [
+    "arborio rice",
+    "mushrooms",
+    "white wine",
+    "parmesan",
+    "butter"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-11",
+   "title": "Tuna pasta bake",
+   "ingredients": [
+    "pasta",
+    "tuna",
+    "cheddar cheese",
+    "tomato"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": true,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-12",
+   "title": "Walnut and pear salad",
+   "ingredients": [
+    "walnuts",
+    "pear",
+    "rocket",
+    "olive oil"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "ordinary-13",
+   "title": "Chickpea curry",
+   "ingredients": [
+    "chickpeas",
+    "tomato",
+    "onion",
+    "coconut milk",
+    "basmati rice"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-14",
+   "title": "Prawn stir fry",
+   "ingredients": [
+    "prawns",
+    "rice noodles",
+    "pepper",
+    "ginger"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-15",
+   "title": "Hummus wrap",
+   "ingredients": [
+    "tortilla wrap",
+    "hummus",
+    "cucumber"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": true,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-16",
+   "title": "Roast vegetable quinoa",
+   "ingredients": [
+    "quinoa",
+    "courgette",
+    "pepper",
+    "olive oil"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": false,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-17",
+   "title": "Tomato soup",
+   "ingredients": [
+    "tomato",
+    "onion",
+    "vegetable stock",
+    "double cream"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "ordinary-18",
+   "title": "Cashew chicken",
+   "ingredients": [
+    "chicken thigh",
+    "cashew nuts",
+    "basmati rice",
+    "pepper"
+   ],
+   "violates": {
+    "vegetarian": true,
+    "vegan": true,
+    "dairy-free": false,
+    "gluten-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "ordinary-19",
+   "title": "Baked potato with cheese",
+   "ingredients": [
+    "potato",
+    "cheddar cheese",
+    "butter"
+   ],
+   "violates": {
+    "vegetarian": false,
+    "vegan": true,
+    "dairy-free": true,
+    "gluten-free": false,
+    "nut-free": false
+   }
+  },
+  {
+   "id": "heldout-nut-gianduja",
+   "title": "Gianduja spread breakfast",
+   "ingredients": [
+    "gianduja spread",
+    "banana",
+    "strawberries"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "heldout-nut-amaretti",
+   "title": "Amaretti peaches",
+   "ingredients": [
+    "amaretti biscuits",
+    "peaches",
+    "mascarpone"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "heldout-nut-almond-milk",
+   "title": "Almond milk smoothie",
+   "ingredients": [
+    "almond milk",
+    "banana",
+    "spinach"
+   ],
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "heldout-nut-tahini",
+   "title": "Tahini rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tahini",
+    "pumpkin seeds"
+   ],
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "heldout-veg-oyster-sauce",
+   "title": "Oyster sauce rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "oyster sauce"
+   ],
+   "violates": {
+    "vegetarian": true
+   }
+  },
+  {
+   "id": "heldout-veg-stock-cube",
+   "title": "Chicken stock cube rice",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chicken stock cube"
+   ],
+   "violates": {
+    "vegetarian": true
+   }
+  },
+  {
+   "id": "heldout-vegan-honey",
+   "title": "Honey glazed carrots",
+   "ingredients": [
+    "carrots",
+    "honey",
+    "thyme"
+   ],
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "heldout-dairy-ghee",
+   "title": "Ghee rice",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ghee"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "heldout-dairy-milk-chocolate",
+   "title": "Milk chocolate fruit bowl",
+   "ingredients": [
+    "strawberries",
+    "milk chocolate",
+    "banana"
+   ],
+   "violates": {
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "heldout-dairy-oat-milk",
+   "title": "Oat milk porridge bowl",
+   "ingredients": [
+    "gluten-free oats",
+    "oat milk",
+    "blueberries"
+   ],
+   "violates": {
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "heldout-gluten-soy-sauce",
+   "title": "Soy sauce rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "soy sauce"
+   ],
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "heldout-gluten-couscous",
+   "title": "Couscous salad",
+   "ingredients": [
+    "couscous",
+    "cucumber",
+    "mint"
+   ],
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "heldout-gluten-rice-noodles",
+   "title": "Rice noodle salad",
+   "ingredients": [
+    "rice noodles",
+    "cornflour",
+    "lime",
+    "coriander"
+   ],
+   "violates": {
+    "gluten-free": false
+   }
+  }
+ ]
+}

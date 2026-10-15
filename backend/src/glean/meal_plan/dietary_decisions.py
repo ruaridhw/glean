@@ -34,8 +34,16 @@ NUT_FREE = "nut-free"
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-NUT_FREE_THRESHOLD = 0.2
-PREFERENCE_THRESHOLD = 0.5
+# Set from the 55-row labelled sample (tests/fixtures/jev/dietary_sample.json) answered by
+# typesafe/jev-1.13-20260917 on 2026-10-15:
+#   recipes that break a flag:  nut-free >= 0.92, vegetarian >= 0.65, vegan >= 0.80,
+#                               dairy-free >= 0.85, gluten-free >= 0.89
+#   recipes that don't:         nut-free <= 0.24 (tahini, hummus wrap; the rest <= 0.07),
+#                               preference flags <= 0.24 (the rest <= 0.22)
+# Nut-free is an allergy, so its threshold sits just above Jev's noise floor and trades a couple of
+# tahini-like false exclusions for headroom. Preferences sit between the two clusters.
+NUT_FREE_THRESHOLD = 0.15
+PREFERENCE_THRESHOLD = 0.4
 
 
 class DietaryDecision(BaseModel):
@@ -100,38 +108,55 @@ def _is_current(decision: DietaryDecision) -> bool:
 # What each question asks, and the household's ingredient policy, given to Jev as criteria.
 _QUESTIONS: dict[str, NoulQuestion] = {
     "vegetarian": NoulQuestion(
-        instructions="Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product?",
+        instructions=(
+            "Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product? "
+            "Caesar dressing (anchovies), Thai curry paste (shrimp paste), fish and oyster sauce, meat stock "
+            "and pesto all count. Parmesan on its own does not count."
+        ),
         criteria=NoulCriteria(
-            true="At least one ingredient is or contains meat, fish, shellfish, gelatine or anchovy.",
-            false="No ingredient is or contains meat, fish or shellfish.",
+            true="At least one ingredient is or contains meat, fish, shellfish, gelatine, anchovy or shrimp paste.",
+            false="No ingredient is or contains meat, fish or shellfish. Parmesan is allowed.",
         ),
     ),
     "vegan": NoulQuestion(
-        instructions="Does this recipe contain any animal product?",
+        instructions=(
+            "Does this recipe contain any animal product? "
+            "Naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count."
+        ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains meat, fish, dairy, eggs or honey.",
-            false="No ingredient is or contains an animal product.",
+            false="No ingredient is or contains an animal product. Coconut milk and plant milks are fine.",
         ),
     ),
     "dairy-free": NoulQuestion(
-        instructions="Does this recipe contain dairy?",
+        instructions=(
+            "Does this recipe contain dairy? "
+            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count."
+        ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains milk, cheese, butter, cream, yoghurt, whey or buttermilk.",
-            false="No ingredient is or contains dairy.",
+            false="No ingredient is or contains dairy. Coconut milk and plant milks are fine.",
         ),
     ),
     "gluten-free": NoulQuestion(
-        instructions="Does this recipe contain gluten?",
+        instructions=(
+            "Does this recipe contain gluten? Oats count as gluten unless the recipe says gluten-free oats. "
+            "Malt vinegar, soy sauce, couscous, barley and rye count."
+        ),
         criteria=NoulCriteria(
-            true="At least one ingredient is or contains wheat, barley, rye, malt or oats.",
-            false="No ingredient is or contains gluten.",
+            true="At least one ingredient is or contains wheat, barley, rye, malt or oats that aren't gluten-free.",
+            false="No ingredient is or contains gluten. Gluten-free oats, rice and cornflour are fine.",
         ),
     ),
     NUT_FREE: NoulQuestion(
-        instructions="Does this recipe contain nuts?",
+        instructions=(
+            "Does this recipe contain nuts, peanuts or anything made from them? "
+            "Pine nuts count as nuts, so pesto counts. Marzipan, frangipane, Nutella and other hazelnut "
+            "spreads, dukkah, romesco and almond milk count. Coconut, coconut milk, nutmeg and seeds are not nuts."
+        ),
         criteria=NoulCriteria(
-            true="At least one ingredient is or contains nuts or peanuts.",
-            false="No ingredient is or contains nuts or peanuts.",
+            true="At least one ingredient is or contains a tree nut, peanut or pine nut, or a product made from them.",
+            false="No ingredient is or contains a nut or peanut. Coconut, coconut milk and nutmeg are not nuts.",
         ),
     ),
 }
