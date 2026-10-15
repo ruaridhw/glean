@@ -10,6 +10,8 @@ from __future__ import annotations
 import random
 from datetime import UTC, datetime
 
+import httpx
+
 from glean.decisions import JEV_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
@@ -124,6 +126,18 @@ def test_a_probability_at_the_threshold_excludes(tmp_path) -> None:
 
     assert _ids(corpus, ["nut-free"]) == set()
     assert _ids(corpus, ["vegan"]) == set()
+
+
+def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> None:
+    corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
+    _store_decisions(corpus, {("rec_tomato", flag): 0.0 for flag in DIETARY_FLAGS})
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("Generate must not call Jev")
+
+    monkeypatch.setattr(httpx.Client, "send", refuse)
+
+    assert _ids(corpus, ["nut-free", "vegetarian"]) == {"rec_tomato"}
 
 
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:

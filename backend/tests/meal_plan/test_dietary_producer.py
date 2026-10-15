@@ -123,6 +123,23 @@ def test_one_request_per_recipe_carries_its_title_ingredients_and_every_missing_
     assert {question["type"] for question in pesto_request["questions"].values()} == {"noul"}
 
 
+def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
+    corpus = _corpus(tmp_path)
+    jev = FakeJev()
+
+    produce_missing_decisions(corpus, jev.client())
+
+    def wording(flag: str) -> str:
+        question = jev.requests[0]["questions"][flag]
+        return f"{question['instructions']} {question['criteria']['true']} {question['criteria']['false']}".casefold()
+
+    assert "pine nuts count as nuts" in wording("nut-free")
+    assert "coconut" in wording("nut-free")
+    assert "nutmeg" in wording("nut-free")
+    assert "parmesan" in wording("vegetarian")
+    assert "unless the recipe says gluten-free oats" in wording("gluten-free")
+
+
 def test_a_recipe_jev_couldnt_answer_stays_uncovered_while_the_others_are_stored(tmp_path) -> None:
     corpus = _corpus(tmp_path)
     jev = FakeJev(fail_when=lambda body: body["state"]["recipe_title"] == "Pesto Pasta")
