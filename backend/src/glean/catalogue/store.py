@@ -41,15 +41,6 @@ class CatalogueStore(Protocol):
         """Add a provisional item (source llm). Its kind follows its group. Reuses an item that already has the name."""
         ...
 
-    def _free_id(self, name: str) -> str:
-        # Slugs are lossy ("a-b" and "a b" collide), so number the id until it is unclaimed.
-        base = slugify(name)
-        candidate, number = base, 1
-        while candidate in self._items:
-            number += 1
-            candidate = f"{base}-{number}"
-        return candidate
-
     def record_unmatched(self, name: str) -> None:
         """Remember that *name* was confirmed to match no catalogue item."""
         ...
@@ -128,6 +119,15 @@ class InMemoryCatalogueStore:
         )
         self._add(item)
         return item
+
+    def _free_id(self, name: str) -> str:
+        # Slugs are lossy ("a-b" and "a b" collide), so number the id until it is unclaimed.
+        base = slugify(name)
+        candidate, number = base, 1
+        while candidate in self._items:
+            number += 1
+            candidate = f"{base}-{number}"
+        return candidate
 
     def record_unmatched(self, name: str) -> None:
         self._unmatched.add(name_key(name))
