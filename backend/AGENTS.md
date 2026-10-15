@@ -43,6 +43,7 @@ src/glean/
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
+│                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation
 ```
 
