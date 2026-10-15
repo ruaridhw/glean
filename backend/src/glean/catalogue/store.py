@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key, slugify
 
 if TYPE_CHECKING:
@@ -20,6 +22,15 @@ class DuplicateIdError(ValueError):
 
 class UnknownItemError(KeyError):
     """No catalogue item has this id."""
+
+
+class CatalogueChanges(BaseModel):
+    """The catalogue items written after some version, and the version a reader that applies them has reached."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int = Field(description="The catalogue version these changes bring a reader up to.")
+    items: list[CatalogueItem] = Field(description="Every item written after the requested version, as it is now.")
 
 
 class CatalogueStore(Protocol):
@@ -63,6 +74,14 @@ class CatalogueStore(Protocol):
         """Every recorded unmatched name, exactly as written."""
         ...
 
+    def catalogue_version(self) -> int:
+        """How many content writes the catalogue has had. Zero for an empty catalogue."""
+        ...
+
+    def changes_since(self, version: int) -> CatalogueChanges:
+        """The items written after *version* (zero is the whole catalogue), and the version they bring a reader to."""
+        ...
+
 
 def _tokens(text: str) -> set[str]:
     # Drop a trailing plural "s" so "chickpeas" and "chickpea" share a token.
@@ -74,6 +93,8 @@ class InMemoryCatalogueStore:
         self._items: dict[str, CatalogueItem] = {}
         self._by_key: dict[str, str] = {}
         self._unmatched: dict[str, None] = {}
+        self._versions: dict[str, int] = {}
+        self._version = 0
         for item in items:
             self._add(item)
 
@@ -86,8 +107,20 @@ class InMemoryCatalogueStore:
             if owner is not None and owner != item.id:
                 raise AliasConflictError(f"{key!r} already names {owner}")
         self._items[item.id] = item
+        self._stamp(item.id)
         for key in {name_key(item.name), *(name_key(alias) for alias in item.aliases)}:
             self._by_key[key] = item.id
+
+    def _stamp(self, item_id: str) -> None:
+        self._version += 1
+        self._versions[item_id] = self._version
+
+    def catalogue_version(self) -> int:
+        return self._version
+
+    def changes_since(self, version: int) -> CatalogueChanges:
+        items = [item for item_id, item in self._items.items() if self._versions[item_id] > version]
+        return CatalogueChanges(version=self._version, items=items)
 
     def get_by_name(self, name: str) -> CatalogueItem | None:
         item_id = self._by_key.get(name_key(name))
@@ -123,6 +156,7 @@ class InMemoryCatalogueStore:
             return item
         updated = item.model_copy(update={"aliases": (*item.aliases, alias.strip())})
         self._items[item_id] = updated
+        self._stamp(item_id)
         self._by_key[key] = item_id
         return updated
 

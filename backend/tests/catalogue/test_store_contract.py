@@ -161,6 +161,48 @@ class CatalogueStoreContract:
         retry = store.create_provisional("fresh thing", GroupId.SPICES, Form.NOT_APPLICABLE)
         assert retry.id == "fresh-thing"
 
+    def test_the_full_catalogue_is_every_item_changed_since_version_zero(self, store: CatalogueStore) -> None:
+        changes = store.changes_since(0)
+        assert {item.id for item in changes.items} == {item.id for item in seed_items()}
+        assert changes.version == store.catalogue_version()
+
+    def test_nothing_has_changed_since_the_current_version(self, store: CatalogueStore) -> None:
+        current = store.catalogue_version()
+        changes = store.changes_since(current)
+        assert changes.items == []
+        assert changes.version == current
+
+    def test_a_new_provisional_item_is_the_only_change_after_the_version_a_device_holds(
+        self, store: CatalogueStore
+    ) -> None:
+        held = store.changes_since(0).version
+        created = store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH, aliases=("pitaya",))
+        changes = store.changes_since(held)
+        assert [item.id for item in changes.items] == [created.id]
+        assert changes.items[0].aliases == ("pitaya",)
+        assert changes.version > held
+
+    def test_a_learned_alias_brings_its_item_back_into_the_changes(self, store: CatalogueStore) -> None:
+        held = store.changes_since(0).version
+        store.upsert_alias("coriander", "Tesco Fresh Cut Coriander 30g")
+        changes = store.changes_since(held)
+        assert [item.id for item in changes.items] == ["coriander"]
+        assert "Tesco Fresh Cut Coriander 30g" in changes.items[0].aliases
+
+    def test_a_refused_write_changes_nothing(self, store: CatalogueStore) -> None:
+        held = store.changes_since(0).version
+        with pytest.raises(AliasConflictError):
+            store.upsert_alias("coriander", "Ground Cumin")
+        assert store.changes_since(held).items == []
+
+    def test_catching_up_in_steps_reaches_the_same_catalogue_as_one_full_sync(self, store: CatalogueStore) -> None:
+        first = store.changes_since(0)
+        store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
+        store.upsert_alias("ginger", "root ginger")
+        second = store.changes_since(first.version)
+        merged = {item.id: item for item in [*first.items, *second.items]}
+        assert merged == {item.id: item for item in store.changes_since(0).items}
+
 
 class TestInMemoryCatalogueStore(CatalogueStoreContract):
     @pytest.fixture

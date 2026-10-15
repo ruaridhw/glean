@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key, slugify
 from glean.catalogue.store import (
     AliasConflictError,
+    CatalogueChanges,
     DuplicateIdError,
     InMemoryCatalogueStore,
     UnknownItemError,
@@ -59,6 +60,12 @@ class DynamoCatalogueStore:
     def catalogue_version(self) -> int:
         """How many content writes the catalogue has had; the newest item row carries this version."""
         return self._meta()[0]
+
+    def changes_since(self, version: int) -> CatalogueChanges:
+        # The counter is read first, so a write that lands during the query is re-sent next time rather than skipped.
+        current = self.catalogue_version()
+        rows = self._query(_CATALOGUE_GSI_PK, after_version=version)
+        return CatalogueChanges(version=current, items=[_to_item(row) for row in rows])
 
     def _meta(self) -> tuple[int, int, int]:
         """The version counter, how many items the catalogue holds, and the sum of their stamped versions."""
@@ -260,12 +267,13 @@ class DynamoCatalogueStore:
     def _get(self, pk: str) -> dict[str, Any] | None:
         return self._client.get_item(TableName=self._table_name, Key={"pk": pk}, ConsistentRead=True).get("Item")
 
-    def _query(self, gsi_pk: str) -> list[dict[str, Any]]:
+    def _query(self, gsi_pk: str, after_version: int = 0) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
+        condition = Key("gsi_pk").eq(gsi_pk)
         kwargs: dict[str, Any] = {
             "TableName": self._table_name,
             "IndexName": _INDEX,
-            "KeyConditionExpression": Key("gsi_pk").eq(gsi_pk),
+            "KeyConditionExpression": condition & Key("version").gt(after_version) if after_version else condition,
         }
         while True:
             page = self._client.query(**kwargs)
