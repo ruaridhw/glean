@@ -24,7 +24,7 @@ from glean.decisions import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-FIXTURES = Path(__file__).parent / "fixtures" / "jev"
+FIXTURES = Path(__file__).parent / "fixtures" / "decisions"
 API_KEY = "sk-or-test-key"
 _QUESTION_SET = TypeAdapter(
     dict[str, Annotated[ChoiceQuestion | NoulQuestion | ScoreQuestion, Field(discriminator="type")]]
@@ -73,7 +73,7 @@ class TestRequest:
         assert request.headers["Authorization"] == f"Bearer {API_KEY}"
         assert json.loads(request.content) == _probe_request()
 
-    def test_an_empty_question_set_is_rejected_without_calling_jev(self) -> None:
+    def test_an_empty_question_set_is_rejected_without_calling_the_endpoint(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             raise AssertionError(f"unexpected request to {request.url}")
 
@@ -87,14 +87,14 @@ class TestAnswers:
 
         decision = _client(_respond_with(_recorded_response())).decide(state, questions)
 
-        assert decision.noul("contains_nuts").noul == 0.63
+        assert decision.noul("contains_nuts").noul == 0.64
         group = decision.choice("ingredient_group")
         assert (group.choice, group.confidence) == ("condiments", 1)
         assert group.probabilities == {"condiments": 1, "fresh_herbs": 0, "dairy": 0, "none": 0}
         quality = decision.score("quality")
-        assert (quality.score, quality.confidence) == (3.69, 0.75)
-        assert quality.probabilities == {0: 0, 1: 0, 2: 0, 3: 0.3, 4: 0.7}
-        assert decision.model == "typesafe/jev-1.13-20260917"
+        assert (quality.score, quality.confidence) == (3.8, 0.84)
+        assert quality.probabilities == {0: 0, 1: 0, 2: 0, 3: 0.19, 4: 0.81}
+        assert decision.model == "typesafe/jev-1.14-20261014"
         assert (decision.usage.input_tokens, decision.usage.output_tokens) == (513, 84)
         assert decision.usage.cost == 2.1546e-05
 
@@ -144,11 +144,12 @@ class TestMalformedAnswers:
     @pytest.mark.parametrize(
         "model",
         [
-            "typesafe/jev-1.14",
-            "typesafe/jev-1.130-20260917",
-            "typesafe/jev-1.13-latest",
-            "typesafe/jev-1.13-2026091",
-            "other-provider/jev-1.13-20260917",
+            "typesafe/jev-1.13",
+            "typesafe/jev-1.13-20260917",
+            "typesafe/jev-1.140-20261014",
+            "typesafe/jev-1.14-latest",
+            "typesafe/jev-1.14-2026101",
+            "other-provider/jev-1.14-20261014",
         ],
     )
     def test_an_answer_from_another_model_version_is_rejected(self, model: str) -> None:
@@ -159,7 +160,7 @@ class TestMalformedAnswers:
         with pytest.raises(DecisionResponseError, match="pinned"):
             _client(_respond_with(body)).decide(state, questions)
 
-    @pytest.mark.parametrize("model", ["typesafe/jev-1.13", "typesafe/jev-1.13-20261231"])
+    @pytest.mark.parametrize("model", ["typesafe/jev-1.14", "typesafe/jev-1.14-20261231"])
     def test_the_pinned_model_and_any_dated_snapshot_of_it_are_accepted(self, model: str) -> None:
         body = _recorded_response()
         body["model"] = model
@@ -211,7 +212,7 @@ class TestSemanticallyInvalidAnswers:
     @pytest.mark.parametrize("literal", ["NaN", "Infinity"])
     def test_non_finite_numbers_are_rejected(self, literal: str) -> None:
         recorded = json.dumps(_recorded_response())
-        raw = recorded.replace('"noul": 0.63', f'"noul": {literal}')
+        raw = recorded.replace('"noul": 0.64', f'"noul": {literal}')
         assert literal in raw
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -221,7 +222,7 @@ class TestSemanticallyInvalidAnswers:
         with pytest.raises(DecisionResponseError, match="contains_nuts"):
             _client(handler).decide(state, questions)
 
-    @pytest.mark.parametrize("top", [0.68, 0.69, 0.71, 0.72])  # totals 0.98, 0.99, 1.01 and 1.02
+    @pytest.mark.parametrize("top", [0.79, 0.8, 0.82, 0.83])  # totals 0.98, 0.99, 1.01 and 1.02
     def test_probabilities_that_sum_to_one_within_tolerance_are_accepted(self, top: float) -> None:
         body = _recorded_response()
         body["answers"]["quality"]["probabilities"]["4"] = top
@@ -231,7 +232,7 @@ class TestSemanticallyInvalidAnswers:
 
         assert decision.score("quality").probabilities[4] == top
 
-    @pytest.mark.parametrize("top", [0.67, 0.73])  # totals 0.97 and 1.03
+    @pytest.mark.parametrize("top", [0.78, 0.84])  # totals 0.97 and 1.03
     def test_probabilities_that_sum_outside_tolerance_are_rejected(self, top: float) -> None:
         body = _recorded_response()
         body["answers"]["quality"]["probabilities"]["4"] = top
@@ -340,6 +341,6 @@ class TestSuccessfulTraceNeverLeaksTheKey:
         with tracing_context(enabled=True, client=client):
             decision = _client(_respond_with(body)).decide(state, questions)
 
-        assert decision.model == "typesafe/jev-1.13-20260917"
+        assert decision.model == "typesafe/jev-1.14-20261014"
         assert any(run.get("outputs") for run in runs)
         assert API_KEY not in json.dumps(runs, default=str)

@@ -1,9 +1,9 @@
 {
-  "model": "typesafe/jev-1.13-20260917",
+  "model": "typesafe/jev-1.14-20261014",
   "answers": {
     "contains_nuts": {
       "type": "noul",
-      "noul": 0.63
+      "noul": 0.64
     },
     "ingredient_group": {
       "type": "choice",
@@ -18,7 +18,7 @@
     },
     "quality": {
       "type": "score",
-      "score": 3.69,
+      "score": 3.8,
       "legend": {
         "0": "Unrelated",
         "1": "Weak match",
@@ -30,10 +30,10 @@
         "0": 0,
         "1": 0,
         "2": 0,
-        "3": 0.3,
-        "4": 0.7
+        "3": 0.19,
+        "4": 0.81
       },
-      "confidence": 0.75
+      "confidence": 0.84
     }
   },
   "usage": {
@@ -41,6 +41,6 @@
     "output_tokens": 84,
     "cost": 2.1546e-05
   },
-  "id": "gen-dec-1792092235-KaItwK83TB2OJrHYMNh7",
+  "id": "gen-dec-1792101113-HuhiIgzJRY88eOEQWuh8",
   "provider": "TypeSafe"
 }

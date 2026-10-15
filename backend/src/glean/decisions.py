@@ -1,4 +1,4 @@
-"""Client for Jev, TypeSafe's decision model, on OpenRouter's alpha decisions endpoint.
+"""Glean Decisions client, for OpenRouter's alpha decisions endpoint.
 
 This module is the only code that calls the endpoint. Features that need a typed
 decision (#123 normalisation, #125 dietary checks, #124 eval judging) go through
@@ -23,28 +23,28 @@ if TYPE_CHECKING:
 
 # Pinned, never "-latest": callers set thresholds on this snapshot's probabilities,
 # and those thresholds don't carry over to another version.
-JEV_MODEL = "typesafe/jev-1.13"
+DECISION_MODEL = "typesafe/jev-1.14"
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
 
 class DecisionError(Exception):
-    """A Jev decision couldn't be obtained."""
+    """A decision couldn't be obtained."""
 
 
 class DecisionTimeoutError(DecisionError):
-    """Jev didn't answer within the client's timeout."""
+    """The decisions endpoint didn't answer within the client's timeout."""
 
 
 class DecisionHTTPError(DecisionError):
     """The decisions endpoint answered with a non-2xx status."""
 
     def __init__(self, status_code: int, body: str) -> None:
-        super().__init__(f"Jev decisions endpoint returned HTTP {status_code}: {body[:300]}")
+        super().__init__(f"Decisions endpoint returned HTTP {status_code}: {body[:300]}")
         self.status_code = status_code
 
 
 class DecisionResponseError(DecisionError):
-    """Jev answered, but not with what was asked."""
+    """The decisions endpoint answered, but not with what was asked."""
 
 
 class _Question(BaseModel):
@@ -86,7 +86,7 @@ Question = ChoiceQuestion | NoulQuestion | ScoreQuestion
 
 type Probability = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 
-# A probability distribution from Jev must sum to 1, give or take rounding in the response.
+# A probability distribution must sum to 1, give or take rounding in the response.
 _SUM_TOLERANCE = 0.02
 
 
@@ -99,12 +99,15 @@ class ChoiceAnswer(BaseModel):
 
 class NoulAnswer(BaseModel):
     type: Literal["noul"]
-    noul: Probability  # probability of `true`
+    noul: Probability = Field(description="Probability that the answer is `true`.")
 
 
 class ScoreAnswer(BaseModel):
     type: Literal["score"]
-    score: float = Field(allow_inf_nan=False)  # probability-weighted position on the scale; 0 is criteria[0]
+    score: float = Field(
+        allow_inf_nan=False,
+        description="Probability-weighted position on the scale; 0 is the first criterion.",
+    )
     probabilities: dict[int, Probability]
     confidence: Probability
 
@@ -115,7 +118,7 @@ Answer = ChoiceAnswer | NoulAnswer | ScoreAnswer
 class Usage(BaseModel):
     input_tokens: int
     output_tokens: int
-    cost: float  # USD, as reported by OpenRouter
+    cost: float = Field(description="Cost in USD, as reported by OpenRouter.")
 
 
 class Decision(BaseModel):
@@ -143,15 +146,15 @@ class Decision(BaseModel):
         return answer
 
 
-# Jev reports the pinned model either as-is or as a dated snapshot of it (`<pinned>-YYYYMMDD`).
-_PINNED_MODEL_REPLY = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")
+# The endpoint reports the pinned model either as-is or as a dated snapshot of it (`<pinned>-YYYYMMDD`).
+_PINNED_MODEL_REPLY = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")
 
 
 def _check_distribution(name: str, probabilities: Mapping[Any, float], allowed: Collection[Any]) -> None:
     if not set(probabilities) <= set(allowed):
-        raise DecisionResponseError(f"Jev gave probabilities for unknown entries in {name!r}: {sorted(probabilities)}")
+        raise DecisionResponseError(f"Probabilities for unknown entries in {name!r}: {sorted(probabilities)}")
     if not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0.0, abs_tol=_SUM_TOLERANCE + 1e-9):
-        raise DecisionResponseError(f"Jev's probabilities for {name!r} don't sum to 1")
+        raise DecisionResponseError(f"Probabilities for {name!r} don't sum to 1")
 
 
 def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
@@ -159,7 +162,7 @@ def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
         if isinstance(question, ChoiceQuestion):
             choice = ChoiceAnswer.model_validate(raw)
             if choice.choice not in question.criteria:
-                raise DecisionResponseError(f"Jev chose {choice.choice!r} for {name!r}, which wasn't offered")
+                raise DecisionResponseError(f"Answer chose {choice.choice!r} for {name!r}, which wasn't offered")
             _check_distribution(name, choice.probabilities, question.criteria)
             return choice
         if isinstance(question, NoulQuestion):
@@ -167,7 +170,7 @@ def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
         score = ScoreAnswer.model_validate(raw)
         levels = len(question.criteria)
         if not 0 <= score.score <= levels - 1:
-            raise DecisionResponseError(f"Jev scored {name!r} {score.score}, outside its {levels} levels")
+            raise DecisionResponseError(f"Answer scored {name!r} {score.score}, outside its {levels} levels")
         _check_distribution(name, score.probabilities, range(len(question.criteria)))
         return score
     except ValidationError as exc:
@@ -176,12 +179,12 @@ def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
 
 def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
     if not isinstance(body, dict) or not isinstance(body.get("answers"), dict):
-        raise DecisionResponseError("Jev response has no answers object")
+        raise DecisionResponseError("Response has no answers object")
     raw_answers = body["answers"]
     answers: dict[str, Answer] = {}
     for name, question in questions.items():
         if name not in raw_answers:
-            raise DecisionResponseError(f"Jev returned no answer for question {name!r}")
+            raise DecisionResponseError(f"No answer returned for question {name!r}")
         answers[name] = _parse_answer(name, question, raw_answers[name])
     try:
         decision = Decision(
@@ -192,9 +195,9 @@ def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
             usage=body.get("usage"),
         )
     except ValidationError as exc:
-        raise DecisionResponseError(f"Unexpected Jev response envelope: {exc}") from exc
+        raise DecisionResponseError(f"Unexpected response envelope: {exc}") from exc
     if not _PINNED_MODEL_REPLY.fullmatch(decision.model):
-        raise DecisionResponseError(f"Jev answered with {decision.model!r}, not the pinned {JEV_MODEL!r}")
+        raise DecisionResponseError(f"Response came from {decision.model!r}, not the pinned {DECISION_MODEL!r}")
     return decision
 
 
@@ -206,7 +209,7 @@ def _redact(value: Any, secret: str) -> Any:
 
 
 class DecisionClient:
-    """Asks Jev typed questions about a `state`. One call is one HTTP request.
+    """Asks typed questions about a `state`. One call is one HTTP request.
 
     Questions in one call are answered in parallel and can't see each other's answers.
     """
@@ -227,9 +230,9 @@ class DecisionClient:
         # Built per client so traced inputs and outputs can be scrubbed of this client's key:
         # a response that echoes it back would otherwise reach LangSmith.
         traced = traceable(
-            name="jev_decide",
+            name="decide",
             run_type="chain",
-            metadata={"ls_provider": "openrouter", "ls_model_name": JEV_MODEL},
+            metadata={"ls_provider": "openrouter", "ls_model_name": DECISION_MODEL},
             process_inputs=lambda inputs: _redact(inputs, self._secret),
             process_outputs=lambda outputs: _redact(outputs, self._secret),
         )(self._decide)
@@ -240,7 +243,7 @@ class DecisionClient:
 
     def _decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         if not questions:
-            raise ValueError("Ask Jev at least one question")
+            raise ValueError("Ask at least one question")
         try:
             return self._request(state, questions)
         except DecisionError as exc:
@@ -254,20 +257,20 @@ class DecisionClient:
 
     def _request(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         payload = {
-            "model": JEV_MODEL,
+            "model": DECISION_MODEL,
             "state": dict(state),
             "questions": {name: question.model_dump() for name, question in questions.items()},
         }
         try:
             response = self._http.post(DECISIONS_URL, json=payload)
         except httpx.TimeoutException as exc:
-            raise DecisionTimeoutError(f"Jev didn't answer within the timeout: {exc}") from exc
+            raise DecisionTimeoutError(f"No answer within the timeout: {exc}") from exc
         except httpx.TransportError as exc:
-            raise DecisionError(f"Jev decisions request failed: {exc}") from exc
+            raise DecisionError(f"Decisions request failed: {exc}") from exc
         if not response.is_success:
             raise DecisionHTTPError(response.status_code, response.text)
         try:
             body = response.json()
         except ValueError as exc:
-            raise DecisionResponseError("Jev returned a body that isn't JSON") from exc
+            raise DecisionResponseError("Response body isn't JSON") from exc
         return _parse(body, questions)
