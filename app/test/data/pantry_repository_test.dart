@@ -545,5 +545,51 @@ void main() {
         },
       );
     });
+
+    test(
+      'undoing a recorded batch of additions removes the Pantry items it created and '
+      'returns merged stock to its previous quantity',
+      () async {
+        await repository.addItem(
+          userId: userId,
+          name: 'milk',
+          quantity: 1,
+          unit: 'l',
+          category: 'dairy',
+          now: DateTime(2026, 1, 1),
+        );
+
+        final receipt = await repository.addItemsWithReceipt(
+          userId: userId,
+          items: const <PantryItemInput>[
+            PantryItemInput(
+              name: 'milk',
+              quantity: 2,
+              unit: 'l',
+              category: 'dairy',
+            ),
+            PantryItemInput(
+              name: 'eggs',
+              quantity: 6,
+              unit: 'units',
+              category: 'dairy',
+            ),
+          ],
+          now: DateTime(2026, 1, 2),
+        );
+        final afterAdd = await repository.watchAll(userId).first;
+        expect(
+          {for (final i in afterAdd) i.canonicalName: i.quantity},
+          {'milk': 3000.0, 'eggs': 6.0},
+        );
+
+        await repository.undoAdditions(userId: userId, receipt: receipt);
+
+        final afterUndo = await repository.watchAll(userId).first;
+        expect({for (final i in afterUndo) i.canonicalName: i.quantity}, {
+          'milk': 1000.0,
+        });
+      },
+    );
   });
 }
