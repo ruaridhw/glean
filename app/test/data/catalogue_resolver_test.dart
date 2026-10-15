@@ -56,6 +56,7 @@ void main() {
         'aliases': <Object?>[],
       }),
       now: DateTime.utc(2026, 10, 15),
+      fullSync: version == 1,
     );
   }
 
