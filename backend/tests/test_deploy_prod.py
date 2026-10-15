@@ -213,3 +213,42 @@ def test_clean_deploy_is_not_logged_as_dirty(sandbox: Sandbox) -> None:
 
     assert not sandbox.log_file.exists() or "dirty" not in sandbox.log_file.read_text()
 
+
+
+def test_deploy_reports_a_live_mismatch_against_samconfig(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live(
+        parameters={
+            "Environment": "prod",
+            "CognitoDomainPrefix": "glean-auth-040396448697",
+            "LangSmithTracing": "false",
+            "GitSha": sha,
+        },
+        lambda_env={"ENVIRONMENT": "prod", "LANGSMITH_TRACING": "false", "GIT_SHA": sha},
+        tags={"commit": sha},
+    )
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "LangSmithTracing" in result.stderr
+    assert "LANGSMITH_TRACING" in result.stderr
+
+
+def test_deploy_reports_when_the_lambda_does_not_carry_the_stamp(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live(
+        parameters={
+            "Environment": "prod",
+            "CognitoDomainPrefix": "glean-auth-040396448697",
+            "LangSmithTracing": "true",
+            "GitSha": sha,
+        },
+        lambda_env={"ENVIRONMENT": "prod", "LANGSMITH_TRACING": "true", "GIT_SHA": "unknown"},
+        tags={"commit": sha},
+    )
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "GIT_SHA" in result.stderr
