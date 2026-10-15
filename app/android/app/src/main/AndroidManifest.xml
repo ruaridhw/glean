@@ -6,10 +6,15 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+    <!-- android:debuggable comes from the gleanDebuggable placeholder in app/build.gradle.kts: false everywhere
+         except the owner build. Lint's HardcodedDebugMode flags any value here, so it is ignored on purpose;
+         scripts/check_apk.py checks the built APK instead (Codemagic: not debuggable; owner build: debuggable). -->
     <application
+        tools:ignore="HardcodedDebugMode"
         android:label="Glean"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:debuggable="${gleanDebuggable}"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules">
