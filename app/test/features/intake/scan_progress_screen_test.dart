@@ -131,6 +131,29 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
+    testWidgets('a rate-limited scan says the hourly limit was reached', (
+      WidgetTester tester,
+    ) async {
+      when(() => httpClient.send(any())).thenAnswer(
+        (_) async => http.StreamedResponse(
+          Stream.value(
+            utf8.encode(jsonEncode({'detail': 'AI request limit reached'})),
+          ),
+          429,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+
+      await pumpProgress(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('hourly limit'), findsOneWidget);
+      expect(
+        find.textContaining('Could not process the receipt'),
+        findsNothing,
+      );
+    });
+
     testWidgets('a timeout surfaces a distinct, recoverable message', (
       WidgetTester tester,
     ) async {
