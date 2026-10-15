@@ -55,3 +55,21 @@ fat_g  # NutritionFields
 fibre_g  # NutritionFields
 sugar_g  # NutritionFields
 sodium_mg  # NutritionFields
+
+# TODO: the first consuming PRs (#125's dietary check, #123's normalisation) must remove the
+# decisions.py entries below as they start using each name.
+# decisions.py: public API, first used by #125 (dietary check) and #123 (normalisation)
+true  # NoulCriteria field
+false  # NoulCriteria field
+probabilities  # ChoiceAnswer / ScoreAnswer field
+noul  # NoulAnswer field, and Decision.noul accessor
+score  # ScoreAnswer field, and Decision.score accessor
+input_tokens  # Usage field
+output_tokens  # Usage field
+cost  # Usage field
+provider  # Decision field
+usage  # Decision field
+DecisionClient  # decisions client, first used by #125
+decide  # DecisionClient.decide, first used by #125
+__cause__  # exception chain cleared in DecisionClient.decide so upstream text can't leak via causes
+__context__  # as above

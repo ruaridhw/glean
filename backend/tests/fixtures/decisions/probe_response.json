@@ -1,0 +1,46 @@
+{
+  "model": "typesafe/jev-1.14-20261014",
+  "answers": {
+    "contains_nuts": {
+      "type": "noul",
+      "noul": 0.64
+    },
+    "ingredient_group": {
+      "type": "choice",
+      "choice": "condiments",
+      "probabilities": {
+        "condiments": 1,
+        "fresh_herbs": 0,
+        "dairy": 0,
+        "none": 0
+      },
+      "confidence": 1
+    },
+    "quality": {
+      "type": "score",
+      "score": 3.8,
+      "legend": {
+        "0": "Unrelated",
+        "1": "Weak match",
+        "2": "Partial match",
+        "3": "Good match",
+        "4": "Exact match"
+      },
+      "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0.19,
+        "4": 0.81
+      },
+      "confidence": 0.84
+    }
+  },
+  "usage": {
+    "input_tokens": 513,
+    "output_tokens": 84,
+    "cost": 2.1546e-05
+  },
+  "id": "gen-dec-1792101113-HuhiIgzJRY88eOEQWuh8",
+  "provider": "TypeSafe"
+}
