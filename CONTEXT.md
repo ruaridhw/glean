@@ -94,9 +94,9 @@ _Avoid_: expiry period, best-before
 The day a pantry item was first used. Its once-opened shelf life counts from here.
 _Avoid_: open date, first-use date
 
-**Meal-plan group**:
-The broad nutritional bucket an ingredient counts towards when balancing a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments.
-_Avoid_: food group
+**Food group**:
+The broad nutritional bucket an ingredient counts towards when the meal plan balances a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments. Each ingredient group maps to one food group.
+_Avoid_: meal-plan group, nutrition group
 
 **Store section**:
 The part of a supermarket where something is found, at a level shared by every UK supermarket, e.g. Fruit & Veg, Food Cupboard, Baking, Frozen.
