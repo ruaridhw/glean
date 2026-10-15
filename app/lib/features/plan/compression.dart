@@ -1,10 +1,6 @@
-/// Pantry compression for `POST /meal-plan` — ported faithfully from the
-/// Expo app's `src/meal-plan/compress.ts` (see git history;
-/// FLUTTER_MIGRATION.md's "highest-value logic to port" table). Scores
-/// every non-staple, in-stock pantry item by
-/// urgency (expiry proximity, time since last use, low quantity) and keeps
-/// only the top [defaultTopN], so the LLM request payload stays small
-/// regardless of pantry size.
+/// Pantry compression for `POST /meal-plan`. Scores every non-staple, in-stock pantry item by urgency (expiry
+/// proximity, time since last use, low quantity) and keeps the top [defaultTopN], so the LLM request payload
+/// stays small regardless of pantry size.
 library;
 
 import 'dart:math' as math;
@@ -14,8 +10,7 @@ import 'package:glean/data/models/pantry_item_view.dart';
 
 const int defaultTopN = 15;
 
-/// Scores [item]'s urgency to use up (higher = more urgent). Matches
-/// `scorePantryItem` in `compress.ts` exactly:
+/// Scores [item]'s urgency to use up (higher = more urgent):
 ///  - expiring within 1/3/7 days adds 100/50/20;
 ///  - days since last use adds up to 30 (capped), or a flat 15 if never
 ///    used;

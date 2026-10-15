@@ -3,10 +3,8 @@ import 'package:glean/design_system/design_system.dart';
 
 import 'pantry_add_sheet.dart';
 
-/// Empty pantry state. The single CTA opens the same `+` sheet the populated
-/// screen uses (AC-PAN-03) — there is exactly one place all three intake
-/// modes live, not a separate empty-state-only shortcut that only covers two
-/// of them (the RN app's empty state offered Scan/Describe but not Manual).
+/// Empty pantry state. The single CTA opens the same `+` sheet the populated screen uses, so all three intake
+/// modes live in one place.
 class PantryEmptyState extends StatelessWidget {
   const PantryEmptyState({super.key});
 

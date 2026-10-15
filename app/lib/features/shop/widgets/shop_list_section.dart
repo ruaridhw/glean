@@ -1,20 +1,15 @@
-/// The shopping list's body: skeleton/error/empty states, then the "to buy"
-/// and "in cart" sections (AC-SHOP-07's unified naming) each rendered as
-/// swipe-to-delete rows with an animated-closed gap on commit (AC-TRN-02 —
-/// inherited free from `Dismissible`, no `AnimatedList` needed; see
-/// `MealsScreen`'s identical choice and its comment on why the two would
-/// fight each other) and a fade/settle on insertion via [GleanListEntrance]
-/// (AC-TRN-02, R-10).
+/// The shopping list's body: skeleton/error/empty states, then the "to buy" and "in cart" sections of swipe-to-delete
+/// rows. Each row fades and slides in once, keyed by item id, so only newly inserted rows animate.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/shopping_list_item_view.dart';
 import 'package:glean/design_system/design_system.dart';
 
 import '../actions.dart';
 import '../presentation.dart';
-import 'shop_skeleton.dart';
 import 'shop_states.dart';
 import 'shopping_row.dart';
 
@@ -25,14 +20,18 @@ class ShopListSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return GleanCrossFade(
-      showSkeleton: !itemsAsync.hasValue,
-      skeleton: const ShopListSkeleton(),
-      content: itemsAsync.maybeWhen(
-        data: (List<ShoppingListItemView> items) => items.isEmpty
-            ? const ShopEmptyState()
-            : _ShopItemsList(items: items),
-        orElse: () => const ShopErrorState(),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(!itemsAsync.hasValue),
+        child: !itemsAsync.hasValue
+            ? const ListSkeleton(rowHeight: 56, padding: false)
+            : itemsAsync.maybeWhen(
+                data: (List<ShoppingListItemView> items) => items.isEmpty
+                    ? const ShopEmptyState()
+                    : _ShopItemsList(items: items),
+                orElse: () => const ShopErrorState(),
+              ),
       ),
     );
   }
@@ -59,18 +58,20 @@ class _ShopItemsList extends ConsumerWidget {
       children: <Widget>[
         if (toBuy.isNotEmpty) const _SectionHeader(title: toBuySectionTitle),
         for (final ShoppingListItemView item in toBuy)
-          GleanListEntrance(
+          _Row(
             key: ValueKey<int>(item.id),
-            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+            item: item,
+            bottomGap: tokens.spacing.sm,
           ),
         if (inCart.isNotEmpty) ...<Widget>[
           SizedBox(height: tokens.spacing.xs),
           const _SectionHeader(title: inCartSectionTitle),
         ],
         for (final ShoppingListItemView item in inCart)
-          GleanListEntrance(
+          _Row(
             key: ValueKey<int>(item.id),
-            child: _Row(item: item, bottomGap: tokens.spacing.sm),
+            item: item,
+            bottomGap: tokens.spacing.sm,
           ),
       ],
     );
@@ -78,7 +79,7 @@ class _ShopItemsList extends ConsumerWidget {
 }
 
 class _Row extends ConsumerWidget {
-  const _Row({required this.item, required this.bottomGap});
+  const _Row({super.key, required this.item, required this.bottomGap});
 
   final ShoppingListItemView item;
   final double bottomGap;
@@ -86,16 +87,19 @@ class _Row extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: EdgeInsets.only(bottom: bottomGap),
-      child: SwipeToDeleteRow(
-        dismissibleKey: ValueKey<int>(item.id),
-        onDelete: () => deleteShoppingItemWithUndo(context, ref, item),
-        child: ShoppingRow(
-          item: item,
-          onToggle: () => toggleShoppingItem(ref, item),
-        ),
-      ),
-    );
+          padding: EdgeInsets.only(bottom: bottomGap),
+          child: SwipeToDeleteRow(
+            dismissibleKey: ValueKey<int>(item.id),
+            onDelete: () => deleteShoppingItemWithUndo(context, ref, item),
+            child: ShoppingRow(
+              item: item,
+              onToggle: () => toggleShoppingItem(ref, item),
+            ),
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 220.ms, curve: Curves.easeOut)
+        .slideY(begin: 0.08, end: 0);
   }
 }
 
@@ -107,9 +111,8 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      // Flutter's TextStyle has no text-transform (FINDINGS.md F-04) — the
-      // uppercase look RN got from CSS is applied explicitly here instead.
+      padding: EdgeInsets.only(bottom: context.tokens.spacing.sm),
+      // Flutter's TextStyle has no text-transform, so the uppercase look is applied explicitly here.
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall,

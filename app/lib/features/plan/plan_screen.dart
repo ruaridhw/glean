@@ -1,13 +1,6 @@
-/// The Plan tab: a week-scoped dinner plan (AC-PLAN-01/02) replacing RN's
-/// dateless "This Week", which never filtered on `planned_date`, let cooked
-/// meals occupy slots forever, and gated capacity on a *lifetime* entry
-/// count that eventually blocked every add, permanently
-/// (FLUTTER_MIGRATION.md §6 Plan).
-///
-/// See `providers/generate_week_controller.dart` for generation,
-/// `actions.dart` for the cooked/delete mutations, and
-/// `presentation.dart`/`compression.dart`/`food_groups.dart` for the ported
-/// pure logic this screen renders.
+/// The Plan tab: a week-scoped dinner plan. See `providers/generate_week_controller.dart` for generation,
+/// `actions.dart` for the cooked/delete mutations, and `presentation.dart`/`compression.dart`/`food_groups.dart`
+/// for the pure logic this screen renders.
 library;
 
 import 'dart:async';
@@ -33,7 +26,6 @@ import 'providers/generate_week_controller.dart';
 import 'widgets/generate_button.dart';
 import 'widgets/plan_expiry_banner.dart';
 import 'widgets/plan_progress_card.dart';
-import 'widgets/plan_skeleton.dart';
 import 'widgets/plan_slot_row.dart';
 import 'widgets/plan_week_pager.dart';
 
@@ -146,12 +138,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
       pantryItemsProvider,
     );
 
-    // Surfaces generation's outcome exactly once per attempt — guarded by
-    // `wasPending` so this doesn't fire on the controller's own initial,
-    // never-pending `build()` state. Generation completion is the
-    // highest-value haptic moment in the app (§7); a failure (a guarded,
-    // aborted half-write per AC-PLAN-10) always surfaces here too, never
-    // silently.
+    // Surfaces generation's outcome exactly once per attempt, guarded by `wasPending` so it doesn't fire on the
+    // controller's initial, never-pending `build()` state. A failure (a guarded, aborted half-write) always
+    // surfaces here too.
     ref.listen<AsyncValue<int>>(generateWeekControllerProvider, (
       AsyncValue<int>? previous,
       AsyncValue<int> next,
@@ -197,40 +186,49 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
         ],
       ),
       body: SafeArea(
-        child: GleanCrossFade(
-          showSkeleton: loading,
-          skeleton: const PlanSkeleton(),
-          content: ListView(
-            padding: EdgeInsets.all(tokens.spacing.lg),
-            children: <Widget>[
-              PlanWeekPager(
-                weekStart: _weekStart,
-                onPrevious: _goToPreviousWeek,
-                onNext: _goToNextWeek,
-              ),
-              SizedBox(height: tokens.spacing.md),
-              PlanProgressCard(
-                planned: entries.where((entry) => !entry.isCooked).length,
-                target: target,
-                remaining: remaining,
-              ),
-              SizedBox(height: tokens.spacing.lg),
-              Text('Dinners', style: Theme.of(context).textTheme.titleSmall),
-              SizedBox(height: tokens.spacing.sm),
-              for (final PlanSlot slot in slots)
-                Padding(
-                  padding: EdgeInsets.only(bottom: tokens.spacing.sm),
-                  child: PlanSlotRow(
-                    key: ValueKey<String>(slot.key),
-                    slot: slot,
-                    onEmptyTap: () => onAddDinnerTapped(context, ref),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: KeyedSubtree(
+            key: ValueKey<bool>(loading),
+            child: loading
+                ? const ListSkeleton(headerHeight: 88)
+                : ListView(
+                    padding: EdgeInsets.all(tokens.spacing.lg),
+                    children: <Widget>[
+                      PlanWeekPager(
+                        weekStart: _weekStart,
+                        onPrevious: _goToPreviousWeek,
+                        onNext: _goToNextWeek,
+                      ),
+                      SizedBox(height: tokens.spacing.md),
+                      PlanProgressCard(
+                        planned: entries
+                            .where((entry) => !entry.isCooked)
+                            .length,
+                        target: target,
+                        remaining: remaining,
+                      ),
+                      SizedBox(height: tokens.spacing.lg),
+                      Text(
+                        'Dinners',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      SizedBox(height: tokens.spacing.sm),
+                      for (final PlanSlot slot in slots)
+                        Padding(
+                          padding: EdgeInsets.only(bottom: tokens.spacing.sm),
+                          child: PlanSlotRow(
+                            key: ValueKey<String>(slot.key),
+                            slot: slot,
+                            onEmptyTap: () => onAddDinnerTapped(context, ref),
+                          ),
+                        ),
+                      if (nudge != null) ...<Widget>[
+                        SizedBox(height: tokens.spacing.md),
+                        PlanExpiryBanner(nudge: nudge),
+                      ],
+                    ],
                   ),
-                ),
-              if (nudge != null) ...<Widget>[
-                SizedBox(height: tokens.spacing.md),
-                PlanExpiryBanner(nudge: nudge),
-              ],
-            ],
           ),
         ),
       ),

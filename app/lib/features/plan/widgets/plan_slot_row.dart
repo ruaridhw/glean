@@ -94,8 +94,7 @@ class _FilledSlotRow extends StatelessWidget {
         padding: EdgeInsets.all(tokens.spacing.md),
         child: Row(
           children: <Widget>[
-            // The leading status circle → checkmark swap (AC-PLAN-13 — RN
-            // swapped these two `View`s with no transition at all).
+            // The leading status circle -> checkmark swap is animated.
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               transitionBuilder: (Widget child, Animation<double> animation) =>
@@ -144,9 +143,7 @@ class _FilledSlotRow extends StatelessWidget {
               ),
             ),
             SizedBox(width: tokens.spacing.md),
-            // The trailing "Cooked?" pill (a themed `OutlinedButton`, AC-DS-05
-            // — never a hand-rolled pill) fades out once cooked, rather than
-            // vanishing outright.
+            // The trailing "Cooked?" pill (a themed `OutlinedButton`) fades out once cooked rather than vanishing outright.
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               transitionBuilder: (Widget child, Animation<double> animation) =>

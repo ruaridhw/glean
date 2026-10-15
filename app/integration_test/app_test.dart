@@ -1,12 +1,11 @@
-/// The single `integration_test` suite (FLUTTER_MIGRATION.md §10, AC-TEST-15).
+/// The single `integration_test` suite.
 ///
 /// Ports the Expo app's `e2e/smoke.yaml` (see git history) intent onto
 /// real widgets driving the real
 /// router/database/camera stack — not the 11 Maestro files it replaces, one
 /// of which (`smoke.yaml`) was the only one worth keeping as an automated
-/// suite (the other 10 either fold into widget tests or drop outright, see
-/// §10). It runs against `lib/main_e2e.dart` — the auth bypass lives only
-/// there (FLUTTER_MIGRATION.md §5) — never `lib/main.dart`.
+/// suite (the other 10 either fold into widget tests or drop outright). It runs against `lib/main_e2e.dart` — the auth bypass lives only
+/// there — never `lib/main.dart`.
 ///
 /// This file only *compiles* on this box (no Android SDK/Java/Xcode here);
 /// `flutter analyze` covers that. Running it for real needs a device/
@@ -16,7 +15,7 @@
 /// Deliberately avoids `pumpAndSettle()` throughout: `SkeletonBox`
 /// (`lib/design_system/skeleton.dart`) drives its shimmer with a
 /// `TweenAnimationBuilder` that loops forever for as long as a skeleton is on
-/// screen (AC-DS-11), and `StatefulShellRoute.indexedStack` keeps every
+/// screen, and `StatefulShellRoute.indexedStack` keeps every
 /// visited tab's branch mounted (off-stage, not disposed) once first visited.
 /// A skeleton still looping anywhere in that stack — even off-stage — makes
 /// `pumpAndSettle()` time out, because it pumps until *no* frame is
@@ -90,8 +89,8 @@ void main() {
       await _pumpUntilFound(tester, find.text('Plan'));
 
       await _tapTab(tester, 'Shop');
-      // The Shop tab's own heading is "Shopping", not "Shop" (AC-SHOP-07
-      // unifies in-screen cart wording; the tab label itself stays short).
+      // The Shop tab's own heading is "Shopping", not "Shop" (in-screen
+      // cart wording is unified; the tab label itself stays short).
       await _pumpUntilFound(tester, find.text('Shopping'));
 
       await _tapTab(tester, 'Settings');
@@ -100,7 +99,7 @@ void main() {
       await _tapTab(tester, 'Pantry');
       await _pumpUntilFound(tester, find.byTooltip('Add to pantry'));
 
-      // --- Camera-permission handling (AC-TEST-16, AC-PAN-13) ---
+      // --- Camera-permission handling ---
       //
       // Opens the `+` sheet, chooses Scan, and lets `ScanScreen` run its real
       // `checkPermission()` against the device/emulator/simulator — this is
@@ -112,8 +111,7 @@ void main() {
       // driven from `WidgetTester`. Instead it asserts the back affordance
       // is present and usable in whatever permission state the device
       // starts in — denied, permanently denied, or already granted (the
-      // live preview) — and uses it, which is exactly the dead end AC-PAN-13
-      // fixes: every one of those states must have a way out.
+      // live preview) — and uses it, so every one of those states must have a way out.
       await tester.tap(find.byTooltip('Add to pantry'));
       await _pumpUntilFound(tester, find.text('Scan receipt'));
       await tester.tap(find.text('Scan receipt'));
@@ -133,12 +131,12 @@ void main() {
         findsOneWidget,
         reason:
             'the Scan screen must always offer a way out, in every '
-            'permission state (AC-PAN-13) — the RN app dead-ended here',
+            'permission state — the RN app dead-ended here',
       );
       await tester.tap(find.byTooltip('Cancel'));
       await _pumpUntilFound(tester, find.byTooltip('Add to pantry'));
 
-      // --- Add item via manual entry (AC-PAN-03, AC-TEST-15) ---
+      // --- Add item via manual entry ---
       //
       // Dead code in the RN app — nothing routed to it there at all. Reaches
       // it the same way a real user would: through the `+` sheet, which is
@@ -163,8 +161,8 @@ void main() {
 
       await tester.tap(find.text('Add to pantry'));
 
-      // --- Verify the item lands back on Pantry (AC-PAN-03/AC-DATA-04: a
-      // plain drift write, no invalidation call — the stream just re-emits). ---
+      // --- Verify the item lands back on Pantry: a plain drift write, no
+      // invalidation call — the stream just re-emits. ---
       await _pumpUntilFound(tester, find.text('test chicken'));
       expect(find.text('test chicken'), findsWidgets);
     },

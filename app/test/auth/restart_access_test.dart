@@ -4,7 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/auth/auth_controller.dart';
-import 'package:glean/auth/session_overrides.dart';
 import 'package:glean/auth/token_storage.dart';
 import 'package:glean/bootstrap.dart';
 import 'package:glean/data/providers/database_providers.dart';
@@ -24,7 +23,7 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({
         'glean_user_sub': 'reopen-user',
       });
-      final storage = SecureTokenStorage();
+      final storage = TokenStorage();
       final snapshot = await loadInitialAuthSnapshot(storage);
       final db = createTestDatabase();
       addTearDown(db.close);
@@ -40,10 +39,12 @@ void main() {
         overrides: [
           gleanDatabaseProvider.overrideWithValue(db),
           apiBaseUrlProvider.overrideWithValue('https://api.example.test'),
-          ...sessionOverrides(
-            snapshot,
-            storage: storage,
-            client: MockCognitoAuthClient(),
+          authControllerProvider.overrideWith(
+            () => AuthController(
+              snapshot,
+              storage: storage,
+              client: MockCognitoAuthClient(),
+            ),
           ),
         ],
       );

@@ -1,8 +1,24 @@
-// Read-side shape for a shopping list row — mirrors `ShoppingListItem` in
-// the Expo app's `src/types/index.ts` (see git history), plus `userId`.
-// `ingredientId` is non-nullable
-// (AC-SHOP-03): every row, including manual entries, resolves an ingredient
-// identity on the way in via `IngredientsRepository`.
+// Read-side shape for a shopping list row. `ingredientId` is non-nullable: every row, including manual
+// entries, resolves an ingredient identity via `IngredientsRepository`.
+/// Where a shopping row came from. Stored as TEXT in
+/// `shopping_list_items.source` using [dbValue].
+enum ShoppingSource {
+  manual('manual'),
+  ai('ai'),
+  mealPlan('meal_plan');
+
+  const ShoppingSource(this.dbValue);
+
+  final String dbValue;
+
+  /// Deliberately fail-fast: an unknown stored value means corrupt or newer-schema data, which must surface
+  /// rather than be coerced to a default source.
+  static ShoppingSource fromDb(String value) => values.firstWhere(
+    (s) => s.dbValue == value,
+    orElse: () => throw StateError('Unknown shopping source "$value"'),
+  );
+}
+
 class ShoppingListItemView {
   const ShoppingListItemView({
     required this.id,
@@ -25,10 +41,9 @@ class ShoppingListItemView {
   final String name;
   final double? quantity;
   final String? unit;
-  final String source;
+  final ShoppingSource source;
   final bool isChecked;
 
-  /// Non-null when this row was inserted as a meal-plan shopping gap;
-  /// deleting that plan entry cascades this row away (AC-SHOP-06).
+  /// Non-null when inserted as a meal-plan shopping gap; deleting that plan entry cascades this row away.
   final int? sourceMealPlanEntryId;
 }

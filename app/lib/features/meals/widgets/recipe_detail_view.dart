@@ -51,9 +51,7 @@ class RecipeDetailView extends StatelessWidget {
   }
 }
 
-/// AC-MEAL-04: allergen-ish information, made hard to miss rather than a
-/// footnote — a warning-toned banner near the top of the screen, not folded
-/// into the tag row.
+/// Allergen-ish information made hard to miss: a warning-toned banner near the top, not folded into the tag row.
 class _NotSuitableForBanner extends StatelessWidget {
   const _NotSuitableForBanner({required this.flags});
 
@@ -141,8 +139,7 @@ class _StatCell extends StatelessWidget {
   }
 }
 
-/// AC-MEAL-05: tappable attribution for imported recipes — opens the
-/// original source in an external browser.
+/// Tappable attribution for imported recipes; opens the original source in an external browser.
 class _SourceAttribution extends StatelessWidget {
   const _SourceAttribution({required this.sourceUrl});
 

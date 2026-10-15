@@ -1,4 +1,4 @@
-// Route-table structure (AC-TEST-14): the five tab branches exist, every
+// Route-table structure: the five tab branches exist, every
 // route resolves to real content, names are unique, and the intake flow
 // resolves outside the tab shell (no `NavigationBar` while it's active).
 //
@@ -20,7 +20,7 @@ import 'package:glean/features/plan/plan_screen.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/shop/shop_screen.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:glean/router/auth_state.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/router/route_error_screen.dart';
 
 import '../support/harness.dart';
@@ -28,7 +28,23 @@ import '../support/harness.dart';
 void main() {
   group('AppRoutes structure', () {
     test('every route name is unique', () {
-      final names = AppRoutes.all.map((route) => route.name).toList();
+      final names = <RouteSpec>[
+        AppRoutes.signIn,
+        AppRoutes.pantry,
+        AppRoutes.meals,
+        AppRoutes.plan,
+        AppRoutes.shop,
+        AppRoutes.settings,
+        AppRoutes.mealsImport,
+        AppRoutes.mealsDetail,
+        AppRoutes.intakeScan,
+        AppRoutes.intakeScanProgress,
+        AppRoutes.intakeDescribePantry,
+        AppRoutes.intakeDescribeShop,
+        AppRoutes.intakeManualEntry,
+        AppRoutes.intakeReview,
+        AppRoutes.error,
+      ].map((route) => route.name).toList();
       expect(names.toSet(), hasLength(names.length));
     });
   });
@@ -82,27 +98,28 @@ void main() {
       expect(find.byType(MealDetailScreen), findsOneWidget);
     });
 
-    testWidgets(
-      'a deep link to the old /meals/search path is not reachable (AC-MEAL-07)',
-      (tester) async {
-        // With the dedicated route gone, 'search' now falls through to the
-        // `:id` catch-all, fails the numeric-id guard, and lands on the
-        // error page — it must not resolve to any meals screen.
-        await pumpAt(tester, '/meals/search');
-        expect(find.byType(MealDetailScreen), findsNothing);
-        expect(find.byType(MealsScreen), findsNothing);
-        expect(find.byType(RouteErrorScreen), findsOneWidget);
-      },
-    );
+    testWidgets('a deep link to the old /meals/search path is not reachable', (
+      tester,
+    ) async {
+      // With the dedicated route gone, 'search' now falls through to the
+      // `:id` catch-all, fails the numeric-id guard, and lands on the
+      // error page — it must not resolve to any meals screen.
+      await pumpAt(tester, '/meals/search');
+      expect(find.byType(MealDetailScreen), findsNothing);
+      expect(find.byType(MealsScreen), findsNothing);
+      expect(find.byType(RouteErrorScreen), findsOneWidget);
+    });
 
     testWidgets('sign-in resolves outside the shell', (tester) async {
       // Signed-in users get bounced off /sign-in by design (see
-      // auth_redirect_test.dart) — go signedOut here to test that the route
-      // itself resolves, independent of that redirect policy.
-      harness.container
-          .read(authStatusProvider.notifier)
-          .setStatus(AuthStatus.signedOut);
-      await pumpAt(tester, AppRoutes.signIn.path);
+      // auth_redirect_test.dart) — start signedOut here to test that the
+      // route itself resolves, independent of that redirect policy.
+      final AppTestHarness signedOut = AppTestHarness(
+        authStatus: AuthStatus.signedOut,
+      );
+      addTearDown(signedOut.dispose);
+      await signedOut.pumpAt(tester, AppRoutes.signIn.path);
+      await tester.pumpAndSettle();
       expect(find.byType(SignInScreen), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
     });
@@ -115,8 +132,7 @@ void main() {
       expect(
         find.byType(NavigationBar),
         findsNothing,
-        reason:
-            'AC-PAN-04: intake is a modal task, the tab bar must not be present',
+        reason: 'intake is a modal task, the tab bar must not be present',
       );
 
       await pumpAt(tester, AppRoutes.intakeDescribePantry.path);

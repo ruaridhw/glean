@@ -12,7 +12,7 @@
   </defs>
   <rect width="1024" height="1024" fill="none"/>
   <!--
-    F-01: this group used to carry `filter="url(#tileShadow)"`, an
+    This group used to carry `filter="url(#tileShadow)"`, an
     `feDropShadow` `flutter_svg` 2.3.0 cannot render (it logs "unhandled
     element <filter/>" and silently drops it). Stripped here; see
     `glean-b1-icon.svg`'s equivalent comment. Unaffected: the native splash

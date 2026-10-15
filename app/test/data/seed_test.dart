@@ -1,4 +1,4 @@
-// Verifies the seed data by querying a real in-memory database (AC-DATA-10),
+// Verifies the seed data by querying a real in-memory database,
 // not by counting SQL calls — see the Expo app's
 // `src/db/ingredient-categories.ts` and `src/db/seed.ts` (see git history)
 // for the ported source of truth.

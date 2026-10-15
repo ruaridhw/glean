@@ -1,9 +1,5 @@
-/// Shared startup wiring for both entrypoints.
-///
-/// `main.dart` and `main_e2e.dart` differ *only* in how they satisfy the auth
-/// seams; everything else — config, the database gate, `runApp` — lives here so
-/// the two cannot drift apart. Keeping the bypass out of this file is what lets
-/// `main.dart`'s import graph stay free of it (AC-AUTH-06).
+/// Shared startup wiring for both entrypoints, which differ only in how they satisfy the auth seams.
+/// Keeping the bypass out of this file keeps `main.dart`'s import graph free of it.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -15,13 +11,8 @@ import 'app.dart';
 import 'data/providers/database_providers.dart';
 import 'design_system/design_system.dart';
 
-/// Build-time configuration, supplied via `--dart-define`.
-///
-/// The RN app read these from `EXPO_PUBLIC_*` environment variables, which Expo
-/// inlined at build time — the same mechanism, and the same caveat: these are
-/// baked into the binary, so nothing secret belongs here. (A Cognito domain and
-/// public client id are not secrets; a client *secret* would be, and the PKCE
-/// flow deliberately has none.)
+/// Build-time configuration, supplied via `--dart-define`. Baked into the binary, so nothing secret
+/// belongs here (the PKCE flow has no client secret).
 abstract final class GleanConfig {
   static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL');
   static const String cognitoDomain = String.fromEnvironment('COGNITO_DOMAIN');
@@ -29,9 +20,7 @@ abstract final class GleanConfig {
     'COGNITO_CLIENT_ID',
   );
 
-  /// Fails loudly at startup rather than surfacing later as a confusing
-  /// "sign-in did nothing" or a request to `https:///oauth2/authorize`. The RN
-  /// app defaulted these to `""` and carried on.
+  /// Fails loudly at startup rather than surfacing later as a confusing sign-in failure.
   static void assertComplete() {
     final missing = <String>[
       if (apiBaseUrl.isEmpty) 'API_BASE_URL',
@@ -63,32 +52,26 @@ Future<void> showStatusBarAfterSplash() async {
   );
 }
 
-/// Wraps [GleanApp] in the database gate.
-///
-/// The RN app caught its DB-init failure and ignored it, then proceeded with a
-/// possibly-unusable database — so every subsequent read failed for
-/// unexplained reasons. Here a failed open is shown to the user (AC-DATA-12).
+/// Wraps [GleanApp] in the database gate. A failed open is shown to the user rather than proceeding
+/// with an unusable database.
 class GleanRoot extends ConsumerWidget {
   const GleanRoot({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<void> ready = ref.watch(databaseReadyProvider);
-    // R-09: the gate's three states used to swap via a bare `.when()` — a
-    // hard cut reproducing the exact unanimated RN pop §7 calls out. Each
-    // branch below is still its own full `MaterialApp` (no shared shell to
-    // cross-fade a body under), so `GleanCrossFade` is used at the top —
-    // its `skeleton` here is the pre-database-ready state, and `content`
-    // covers ready-and-error (both post-decision terminal states; a switch
-    // between them, if it ever happened, doesn't need this fade — that's
-    // not the hand-off §7 is about).
-    return GleanCrossFade(
-      showSkeleton: ready.isLoading,
-      skeleton: const _SplashHolding(),
-      content: ready.when(
-        data: (_) => const GleanApp(),
-        loading: () => const _SplashHolding(),
-        error: (Object error, StackTrace _) => _DatabaseErrorApp(error: error),
+    // Each branch is its own full `MaterialApp`, so the splash cross-fades
+    // into whichever terminal state (app or error) the gate resolves to.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(ready.isLoading),
+        child: ready.when(
+          data: (_) => const GleanApp(),
+          loading: () => const _SplashHolding(),
+          error: (Object error, StackTrace _) =>
+              _DatabaseErrorApp(error: error),
+        ),
       ),
     );
   }
@@ -102,7 +85,10 @@ class _SplashHolding extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: gleanLightTheme,
-      home: const ColoredBox(color: Color(0xFF2E9D63)),
+      home: Builder(
+        builder: (BuildContext context) =>
+            ColoredBox(color: Theme.of(context).colorScheme.primary),
+      ),
     );
   }
 }
@@ -118,41 +104,43 @@ class _DatabaseErrorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: gleanLightTheme,
       home: Scaffold(
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Icon(
-                Icons.error_outline_rounded,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "Glean couldn't open its storage",
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your pantry, recipes and plan all live on this device, so the '
-                'app cannot continue without them. Restarting usually fixes '
-                'it; if it keeps happening, reinstalling will clear the '
-                'damaged database.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              // Shown verbatim on purpose: this is unrecoverable in-app, so the
-              // only useful thing left is something the user can report.
-              Text(
-                '$error',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+        body: Builder(
+          builder: (BuildContext context) => Padding(
+            padding: EdgeInsets.all(context.tokens.spacing.xl),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Glean couldn't open its storage",
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your pantry, recipes and plan all live on this device, so the '
+                  'app cannot continue without them. Restarting usually fixes '
+                  'it; if it keeps happening, reinstalling will clear the '
+                  'damaged database.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                // Shown verbatim on purpose: this is unrecoverable in-app, so the
+                // only useful thing left is something the user can report.
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ),
       ),

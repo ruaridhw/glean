@@ -13,23 +13,28 @@
 //     tree throws the moment a tap tries to navigate. Pumping the real router
 //     over a real in-memory database means a screen test exercises its genuine
 //     navigation and data wiring instead of a stand-in.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/providers/database_providers.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 import 'package:glean/router/router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
 // `Override` is only exported from riverpod's `misc.dart` entrypoint, not from
 // the `flutter_riverpod` barrel. `riverpod` is a direct dependency precisely so
-// this import is legitimate — see FINDINGS.md F-03.
+// this import is legitimate.
 import 'package:riverpod/misc.dart';
 
+import '../auth/support/fakes.dart';
 import '../data/fixture.dart';
 
 class AppTestHarness {
@@ -37,52 +42,83 @@ class AppTestHarness {
     this.userId = 'test-user',
     http.Client? httpClient,
     Haptics? haptics,
-    // R-01: `OnboardingGate` now wraps the real tab shell, so every widget
-    // test that pumps straight to a tab needs a resolved "already
-    // onboarded" status by default — otherwise the hundreds of existing
-    // screen tests across every feature would suddenly land on
-    // `OnboardingScreen` instead. A test that wants to exercise the gate
-    // itself (see `test/router/onboarding_gate_wiring_test.dart`) passes
-    // its own store here, e.g. `InMemoryOnboardingStatusStore()`. A named
-    // parameter rather than a generic `overrides` entry, like [haptics] and
-    // [httpClient] above — Riverpod asserts if the same provider is
-    // overridden twice in one `ProviderContainer`, so this and a
-    // caller-supplied `overrides` entry for the same provider can't coexist.
-    OnboardingStatusStore? onboardingStatusStore,
+    // `OnboardingGate` wraps the tab shell, so by default the user is
+    // seeded as already onboarded (through the real repository). Pass
+    // `onboarded: false` to exercise the first-run flow.
+    bool onboarded = true,
+    // The session the app starts in. `expired` keeps [userId] (local data
+    // stays readable); `signedOut` has none. To flip it on a live app, use
+    // the controller's synchronous `debugSetSnapshot`. Only `await signOut()`
+    // on a harness built inside the test body: one built in `setUp` creates
+    // the controller outside the fake-async zone, and awaiting its storage
+    // write then never completes.
+    AuthStatus authStatus = AuthStatus.active,
     List<Override> overrides = const <Override>[],
   }) : haptics = haptics ?? RecordingHaptics(),
        db = createTestDatabase() {
-    container = ProviderContainer(
+    // A real TokenStorage over the plugin's in-memory test platform, so
+    // signing out clears it for real.
+    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    _container = ProviderContainer(
       overrides: <Override>[
         gleanDatabaseProvider.overrideWithValue(db),
-        currentUserIdProvider.overrideWithValue(userId),
+        authControllerProvider.overrideWith(
+          () => AuthController(
+            AuthSessionSnapshot(
+              status: authStatus,
+              userId: authStatus == AuthStatus.signedOut ? null : userId,
+            ),
+            storage: TokenStorage(),
+            client: inertCognitoClient(),
+          ),
+        ),
         // Deliberately unroutable: a test that accidentally performs a real
         // request should fail fast rather than reach the network.
         apiBaseUrlProvider.overrideWithValue('http://localhost:9999'),
         hapticsProvider.overrideWithValue(this.haptics),
-        onboardingStatusStoreProvider.overrideWithValue(
-          onboardingStatusStore ??
-              InMemoryOnboardingStatusStore(
-                initiallyCompleted: <String>{userId},
-              ),
-        ),
         if (httpClient != null)
           httpClientProvider.overrideWithValue(httpClient),
         ...overrides,
       ],
     );
-    router = container.read(goRouterProvider);
+    _seedOnboarded = onboarded;
+    // Listened, not read, as `GleanApp` watches it in production: Riverpod
+    // pauses a provider nobody listens to, and with it the router's auth
+    // listener, so a sign-out would redirect only if some widget on screen
+    // happened to watch the auth state. Disposing the container closes it.
+    router = _container.listen(goRouterProvider, (_, _) {}).read();
   }
 
   final String userId;
   final GleanDatabase db;
 
   /// Defaults to a [RecordingHaptics] so any test can assert the ladder
-  /// (AC-HAP-01..05) without extra setup.
+  /// without extra setup.
   final Haptics haptics;
 
-  late final ProviderContainer container;
+  late final ProviderContainer _container;
+  late final bool _seedOnboarded;
+  bool _prepared = false;
+
+  /// The provider container. First access seeds the onboarding state (see
+  /// the `onboarded` parameter) — deferred out of the constructor, which runs
+  /// in `setUp` outside the test's fake-async zone, because drift work started
+  /// there is serviced on the real event loop and wedges `pumpAndSettle`. The
+  /// write is queued ahead of the gate's first read, so it sees `true`.
+  ProviderContainer get container {
+    if (!_prepared) {
+      _prepared = true;
+      if (_seedOnboarded) unawaited(markOnboardingCompleted());
+    }
+    return _container;
+  }
+
   late final GoRouter router;
+
+  /// Marks [userId] as having completed onboarding, via the real repository.
+  Future<void> markOnboardingCompleted() => container
+      .read(userConfigRepositoryProvider)
+      .markOnboardingCompleted(userId);
 
   /// The recorded haptic weights, when [haptics] is the default recorder.
   List<HapticWeight> get hapticCalls => (haptics as RecordingHaptics).calls;
@@ -105,11 +141,27 @@ class AppTestHarness {
     await tester.pump();
   }
 
+  /// Makes every INSERT into [table] abort, via a SQLite trigger — the way to
+  /// exercise a repository failure without hand-rolling a fake repository.
+  Future<void> failInsertsOn(String table, {String message = 'test failure'}) =>
+      _failOn('INSERT', table, message);
+
+  /// Makes every DELETE from [table] abort; see [failInsertsOn].
+  Future<void> failDeletesOn(String table, {String message = 'test failure'}) =>
+      _failOn('DELETE', table, message);
+
+  Future<void> _failOn(String operation, String table, String message) =>
+      db.customStatement(
+        'CREATE TRIGGER fail_${operation.toLowerCase()}_$table '
+        'BEFORE $operation ON $table '
+        "BEGIN SELECT RAISE(ABORT, '$message'); END",
+      );
+
   /// Call from `addTearDown` so the in-memory database and provider graph are
   /// released between tests — a leaked drift connection surfaces later as an
   /// unrelated-looking failure in a different suite.
   Future<void> dispose() async {
-    container.dispose();
+    _container.dispose();
     await db.close();
   }
 }
@@ -118,8 +170,7 @@ class AppTestHarness {
 /// down its stream subscriptions.
 ///
 /// **Any widget test whose tree holds a drift `.watch()` subscription must end
-/// with this**, or the test wedges the whole isolate — see the wrapper below and
-/// `.scratch/flutter-port/FINDINGS.md` F-12.
+/// with this**, or the test wedges the whole isolate — see the wrapper below.
 ///
 /// Unmounting disposes the `ProviderScope`, which disposes the `StreamProvider`
 /// element, which cancels the drift stream — and `StreamQueryStore.markAsClosed`
@@ -141,8 +192,8 @@ Future<void> releaseDriftTree(WidgetTester tester) async {
 ///
 /// **Use this instead of `pumpAndSettle` anywhere a skeleton or an indeterminate
 /// progress indicator may be on screen.** Both are *required* to animate
-/// perpetually (AC-DS-11 puts `SkeletonBox` on a `TweenAnimationBuilder`, and
-/// AC-PAN-06 requires a genuinely indeterminate scan indicator), so
+/// perpetually (`SkeletonBox` sits on a `TweenAnimationBuilder`, and the scan
+/// indicator is genuinely indeterminate), so
 /// `pumpAndSettle` has no quiescent frame to settle on and times out — which
 /// reads as a hang, not as a clear failure. A correct implementation is exactly
 /// what makes `pumpAndSettle` unusable here.

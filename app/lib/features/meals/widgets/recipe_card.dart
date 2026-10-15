@@ -4,10 +4,8 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../presentation.dart';
 
-/// One row in the saved-recipe library list. Wrapped in `SwipeToDeleteRow`
-/// by the caller (`MealsScreen`) — this widget only renders the card
-/// content, keeping the delete affordance owned by exactly one place
-/// (AC-UX-01).
+/// One row in the saved-recipe library list. The caller (`MealsScreen`) wraps it in `SwipeToDeleteRow`, so the
+/// delete affordance is owned in one place.
 class RecipeCard extends StatelessWidget {
   const RecipeCard({required this.recipe, required this.onTap, super.key});
 

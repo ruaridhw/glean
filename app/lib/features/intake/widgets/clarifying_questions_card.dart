@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// Optional shopping hints, with an answer box per question (#96).
+/// Optional shopping hints, with an answer box per question.
 class ClarifyingQuestionsCard extends StatefulWidget {
   const ClarifyingQuestionsCard({
     super.key,

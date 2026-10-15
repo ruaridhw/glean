@@ -1,8 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- AC-BUILD-10: receipt scanning (`camera` package). No RECORD_AUDIO —
-         §2 established it as vestigial in the RN app (the "describe" screens
-         are plain text inputs, not audio capture), so it is not carried over. -->
+    <!-- receipt scanning (`camera` package). No RECORD_AUDIO: the
+         "describe" screens are plain text inputs, not audio capture. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>

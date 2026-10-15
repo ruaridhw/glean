@@ -1,13 +1,12 @@
-/// The `go_router` route table: a [StatefulShellRoute.indexedStack] for the
-/// five tabs, plus the intake flow and sign-in as top-level siblings outside
-/// it. See FLUTTER_MIGRATION.md §2/§4/§5/§6 and `app_routes.dart` for the
-/// path/name constants referenced throughout.
+/// The `go_router` route table: a [StatefulShellRoute.indexedStack] for the five tabs, plus the intake
+/// flow and sign-in as top-level siblings outside it. Path/name constants are in `app_routes.dart`.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/intake/manual_entry_screen.dart';
 import '../features/intake/pantry_describe_screen.dart';
@@ -25,7 +24,6 @@ import '../features/settings/settings_screen.dart';
 import '../features/shop/shop_screen.dart';
 import 'app_routes.dart';
 import 'app_shell.dart';
-import 'auth_state.dart';
 import 'intake_params.dart';
 import 'route_error_screen.dart';
 
@@ -43,10 +41,8 @@ class _AuthRefreshNotifier extends ChangeNotifier {
   }
 }
 
-/// AC-AUTH-04: redirect gates on `signedOut` only. `expired` deliberately
-/// falls through untouched — the user keeps reading their local data behind
-/// a banner that a feature module gates AI-backed actions on; routing them
-/// away for a network-only concern would be the wrong trade.
+/// Redirect gates on `signedOut` only. `expired` falls through: the user keeps reading local data behind
+/// the banner that gates AI-backed actions.
 String? _authRedirect(AuthStatus status, GoRouterState state) {
   final bool atSignIn = state.matchedLocation == AppRoutes.signIn.path;
   if (status == AuthStatus.signedOut) {
@@ -77,7 +73,7 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
             const SignInScreen(),
       ),
 
-      // --- Intake: modal task, outside every tab branch (AC-PAN-04). ---
+      // --- Intake: modal task, outside every tab branch. ---
       GoRoute(
         path: AppRoutes.intakeScan.path,
         name: AppRoutes.intakeScan.name,
@@ -138,16 +134,10 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
         },
       ),
 
-      // --- The five-tab shell. Each branch is its own Navigator, so a push
-      // in one tab survives switching away and back (AC-TEST-14). ---
+      // --- The five-tab shell. Each branch is its own Navigator, so a push in one tab survives switching away and back. ---
       StatefulShellRoute.indexedStack(
-        // R-01: gates the whole tab shell behind first-run setup
-        // (AC-UX-04) — a first-run user sees `OnboardingScreen` instead of
-        // any tab; a returning user passes straight through. Wrapped here,
-        // not at `MaterialApp.router` in `lib/app.dart`, so
-        // `OnboardingScreen` still has a `GoRouter` in its `BuildContext`
-        // to navigate to receipt-scan with once setup finishes — see
-        // `OnboardingGate`'s own doc comment.
+        // Gates the whole tab shell behind first-run setup. Wrapped here, not at `MaterialApp.router`, so
+        // `OnboardingScreen` has a `GoRouter` in its context.
         builder:
             (
               BuildContext context,
@@ -188,11 +178,8 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                   GoRoute(
                     path: ':id',
                     name: AppRoutes.mealsDetail.name,
-                    // Guards the decode at the router level: a malformed id
-                    // (non-numeric) never reaches the screen. "Valid id, no
-                    // such recipe" is a data lookup the Meals wave still
-                    // owns (AC-MEAL-12's other half) — see
-                    // `MealDetailScreen`'s doc comment.
+                    // Guards the decode: a malformed (non-numeric) id never reaches the screen. "Valid id, no such recipe"
+                    // is handled by `MealDetailScreen`.
                     redirect: (BuildContext context, GoRouterState state) {
                       final String? id = state.pathParameters['id'];
                       if (id == null || int.tryParse(id) == null) {

@@ -1,11 +1,6 @@
-// Ported faithfully from the Expo app's `src/normalization/units.ts` (see
-// git history). Keep aligned with the backend's recipe-import unit parsing
-// (backend/src/glean/recipes/ingredient_parser.py) — recipe imports and
-// meal-plan pantry math must agree on canonical units.
-//
-// Used by the pantry/plan repositories wherever a quantity needs converting
-// into an ingredient's canonical/pantry unit (adding stock, decrementing on
-// "Cooked").
+// Unit conversion. Keep aligned with the backend's recipe-import unit parsing
+// (backend/src/glean/recipes/ingredient_parser.py): imports and meal-plan pantry math must agree on canonical
+// units.
 
 /// Deterministic lookup: source unit -> conversion factor and target unit.
 const Map<String, ({double factor, String to})> _unitConversions = {
@@ -64,17 +59,10 @@ const Map<String, double> _ingredientDensity = {
   'water': 1.0,
 };
 
-/// The canonical unit a *newly-resolved* ingredient should normalise into,
-/// derived from the first unit it was ever added under (see
-/// `IngredientsRepository.resolveOrCreate`, R-18). A recognised mass/volume
-/// unit resolves to its common base (`'g'` for mass, `'ml'` for volume) —
-/// e.g. a first add in `'kg'` yields `'g'`, so a later add in plain `'g'`
-/// still merges correctly, and the first add itself gets normalised too. An
-/// unrecognised, typically count-based unit (`'unit'`, `'clove'`, `'punnet'`,
-/// ...) has no conversion target, so it becomes the canonical unit verbatim
-/// — a later add in a genuinely different, unconvertible unit then has
-/// something concrete to fail loudly against, instead of silently summing
-/// (see `PantryRepository._upsert`).
+/// The canonical unit a newly-resolved ingredient should normalise into, derived from the first unit it was
+/// added under (see `IngredientsRepository.resolveOrCreate`). A recognised mass/volume unit resolves to its base
+/// (`'g'`/`'ml'`); an unrecognised count-based unit becomes canonical verbatim, so a later unconvertible add
+/// fails loudly (see `PantryRepository._upsert`).
 String canonicalUnitFor(String unit) {
   final normalized = unit.toLowerCase().trim();
   return _unitConversions[normalized]?.to ?? normalized;

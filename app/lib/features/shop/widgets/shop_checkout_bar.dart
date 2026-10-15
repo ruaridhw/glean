@@ -1,14 +1,8 @@
-/// The checkout bar (AC-SHOP-10): RN's floated ~90px above the screen
-/// bottom, leaving a dead band. `ShopScreen` places this as the last child of
-/// a `SafeArea(top: false)`-wrapped column with no extra bottom margin, so it
-/// sits flush against the safe area instead.
+/// The checkout bar. `ShopScreen` places it as the last child of a `SafeArea(top: false)`-wrapped column with no
+/// extra bottom margin, so it sits flush against the safe area.
 ///
-/// Stacked as a header row over a button row, rather than everything in one
-/// `Row` — RN only ever had one button here ("Scan receipt"); adding "Done
-/// shopping" (AC-SHOP-02) alongside it in a single row overflows on a
-/// 360dp-wide phone (the two button labels alone need more width than a
-/// typical bar leaves once its padding is subtracted). Two `Expanded`
-/// buttons sharing a row underneath the text can't overflow at any width.
+/// Stacked as a header row over a button row: "Scan receipt" and "Done shopping" in a single row overflow on a
+/// 360dp-wide phone, while two `Expanded` buttons under the text can't overflow at any width.
 library;
 
 import 'package:flutter/material.dart';
@@ -32,20 +26,20 @@ class ShopCheckoutBar extends StatelessWidget {
   /// double-tap can't fire the checkout (or a second scan) twice.
   final bool busy;
 
-  /// R-08/AC-AUTH-04: "Scan receipt" calls the AI backend, so it — but not
-  /// "Done shopping", a purely local write — is disabled while this is
-  /// false.
+  /// "Scan receipt" calls the AI backend, so it (but not "Done shopping", a local write) is disabled while this
+  /// is false.
   final bool aiFeaturesAvailable;
   final VoidCallback onScanReceipt;
   final VoidCallback onDoneShopping;
 
   @override
   Widget build(BuildContext context) {
-    // Nothing to check out — RN's `CheckoutBar` returned null here too.
+    // Nothing to check out.
     if (checkedCount == 0) return const SizedBox.shrink();
 
     final AppTokens tokens = context.tokens;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final Color onPrimary = Theme.of(context).colorScheme.onPrimary;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -60,8 +54,7 @@ class ShopCheckoutBar extends StatelessWidget {
           vertical: tokens.spacing.md,
         ),
         decoration: BoxDecoration(
-          // `tokens.ink` is documented for exactly this use — the checkout
-          // bar is one of the "inverted surfaces" it names (tokens.dart).
+          // `tokens.ink` is documented for exactly this use: the checkout bar is one of its "inverted surfaces".
           color: tokens.ink,
           borderRadius: BorderRadius.circular(tokens.radius.xl),
         ),
@@ -72,13 +65,15 @@ class ShopCheckoutBar extends StatelessWidget {
             Text(
               cartCountLabel(checkedCount),
               style: textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
+                color: onPrimary,
                 fontWeight: FontWeight.w800,
               ),
             ),
             Text(
               'Scan a receipt or finish without one',
-              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+              style: textTheme.bodySmall?.copyWith(
+                color: onPrimary.withValues(alpha: 0.7),
+              ),
             ),
             SizedBox(height: tokens.spacing.sm),
             Row(
@@ -86,7 +81,7 @@ class ShopCheckoutBar extends StatelessWidget {
                 Expanded(
                   child: TextButton(
                     onPressed: busy ? null : onDoneShopping,
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
+                    style: TextButton.styleFrom(foregroundColor: onPrimary),
                     child: const Text('Done shopping'),
                   ),
                 ),

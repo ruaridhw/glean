@@ -6,13 +6,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  group('SecureTokenStorage through the secure-storage plugin boundary', () {
-    late SecureTokenStorage storage;
+  group('TokenStorage through the secure-storage plugin boundary', () {
+    late TokenStorage storage;
     late CognitoTokens tokens;
 
     setUp(() {
       FlutterSecureStorage.setMockInitialValues({'unrelated_key': 'keep'});
-      storage = SecureTokenStorage();
+      storage = TokenStorage();
       tokens = CognitoTokens(
         accessToken: 'access-123',
         refreshToken: 'refresh-123',
@@ -43,11 +43,7 @@ void main() {
       expect(stored.accessToken, isNull);
       expect(stored.refreshToken, isNull);
       expect(stored.idToken, isNull);
-      expect(
-        stored.userSub,
-        isNull,
-        reason: 'AC-AUTH-03: sign-out clears everything',
-      );
+      expect(stored.userSub, isNull, reason: 'sign-out clears everything');
       expect(stored.email, isNull);
       expect(stored.expiresAt, isNull);
       expect(
@@ -56,18 +52,20 @@ void main() {
       );
     });
 
-    test('clearTokensKeepIdentity clears tokens but keeps userSub/email '
-        '(AC-AUTH-04)', () async {
-      await storage.saveTokens(tokens);
-      await storage.clearTokensKeepIdentity();
-      final StoredTokenValues stored = await storage.readTokens();
+    test(
+      'clearTokensKeepIdentity clears tokens but keeps userSub/email',
+      () async {
+        await storage.saveTokens(tokens);
+        await storage.clearTokensKeepIdentity();
+        final StoredTokenValues stored = await storage.readTokens();
 
-      expect(stored.accessToken, isNull);
-      expect(stored.refreshToken, isNull);
-      expect(stored.idToken, isNull);
-      expect(stored.expiresAt, isNull);
-      expect(stored.userSub, 'user-sub-123');
-      expect(stored.email, 'test@gmail.com');
-    });
+        expect(stored.accessToken, isNull);
+        expect(stored.refreshToken, isNull);
+        expect(stored.idToken, isNull);
+        expect(stored.expiresAt, isNull);
+        expect(stored.userSub, 'user-sub-123');
+        expect(stored.email, 'test@gmail.com');
+      },
+    );
   });
 }

@@ -1,13 +1,6 @@
-// Read-side shapes for recipes and their ingredients — mirrors `Recipe`,
-// `RecipeIngredient` and `Ingredient` in the Expo app's `src/types/index.ts`
-// (see git history), decoded from their JSON-text columns, plus `userId`
-// (AC-DATA-02).
+// Read-side shapes for recipes and their ingredients, decoded from JSON-text columns, plus `userId`.
 //
-// `instructions` is a typed list of steps rather than the RN app's
-// `string[]` — that TS type never matched what `saveRecipe` actually stored
-// (`{step_number, phase, text}` objects; see the Expo app's
-// `src/db/recipes.ts:70` and `schema.ts`'s default `"[]"`), so porting it
-// verbatim would just carry the mismatch into Dart.
+// `instructions` is a typed list of steps (`{step_number, phase, text}`).
 class RecipeInstructionStep {
   const RecipeInstructionStep({
     required this.stepNumber,
@@ -113,8 +106,7 @@ class RecipeView {
   final DateTime? lastCookedAt;
   final List<String> dietaryFlags;
 
-  /// Returns a copy with [flags] attached — used once the dietary-flags
-  /// join has been resolved separately (mirrors RN's `attachDietaryFlags`).
+  /// Returns a copy with [flags] attached, once the dietary-flags join is resolved separately.
   RecipeView withDietaryFlags(List<String> flags) => RecipeView(
     id: id,
     userId: userId,

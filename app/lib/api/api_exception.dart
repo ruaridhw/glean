@@ -1,50 +1,32 @@
-/// Typed error hierarchy for [GleanApiClient].
-///
-/// The RN client (the Expo app's `src/api/client.ts`, see git history) had
-/// exactly one error type
-/// (`ApiError`, a status code + message) and no client timeout at all, so a
-/// stalled `fetch` in scan-progress just hung on "Almost done..." forever
-/// (FLUTTER_MIGRATION.md §11). The UI needs to tell "you're signed out"
-/// apart from "that took too long" apart from "the server rejected it", so
-/// every failure this client can produce is exactly one of the five
-/// subtypes below — never a bare `Exception`, never swallowed.
+/// Typed error hierarchy for [GleanApiClient]. The UI must tell "signed out" from "took too long" from "server
+/// rejected it", so every failure is exactly one of the subtypes below, never a bare `Exception`, never swallowed.
 library;
 
-/// Base type for every error [GleanApiClient] can throw. Catch this to
-/// handle "any API failure"; switch on the concrete subtype (or use a
-/// sealed `switch`) to handle them differently.
+/// Base type for every error [GleanApiClient] can throw; switch on the concrete subtype.
 sealed class ApiException implements Exception {
   const ApiException(this.message);
 
-  /// Human-readable description. Not necessarily fit for direct display —
-  /// callers own how they present a given subtype to the user.
+  /// Human-readable description; callers own how to present it.
   final String message;
 
   @override
   String toString() => '$runtimeType: $message';
 }
 
-/// The request never reached the server, or the connection dropped before a
-/// response arrived (DNS failure, connection refused, TLS error, socket
-/// reset, ...). Distinct from [ApiTimeoutException]: this is "couldn't
-/// connect", not "connected but too slow".
+/// The request never reached the server, or the connection dropped before a response (DNS, refused, TLS,
+/// reset). Distinct from [ApiTimeoutException].
 final class ApiNetworkException extends ApiException {
   const ApiNetworkException(super.message);
 }
 
-/// The request exceeded [GleanApiClient.timeout] (AC-PAN-14). Every request
-/// this client makes has a timeout, so this is always reachable — no
-/// endpoint can hang indefinitely the way the RN scan-progress screen did.
+/// The request exceeded [GleanApiClient.timeout]. Every request has a timeout, so no endpoint can hang.
 final class ApiTimeoutException extends ApiException {
   const ApiTimeoutException(this.path) : super('Request to $path timed out');
 
-  /// The request path that timed out, e.g. `/receipts/scan`.
   final String path;
 }
 
-/// The server returned 401 or 403 — the caller has no token, an expired
-/// token, or a token the server rejects. The UI's job on catching this is
-/// to route to (or surface) sign-in, never to retry silently.
+/// The server returned 401 or 403. The UI should route to or surface sign-in, never retry silently.
 final class ApiAuthException extends ApiException {
   const ApiAuthException({required this.statusCode, required String message})
     : super(message);
@@ -52,10 +34,8 @@ final class ApiAuthException extends ApiException {
   final int statusCode;
 }
 
-/// The server returned 422 — it rejected the request body/query as invalid
-/// (a FastAPI/Pydantic validation failure). [detail] carries the raw
-/// `detail` payload from the response body — either a string or a list of
-/// Pydantic error objects — for a caller that wants field-level detail.
+/// The server returned 422 (a FastAPI/Pydantic validation failure). [detail] is the raw `detail` payload: a
+/// string or a list of error objects.
 final class ApiValidationException extends ApiException {
   const ApiValidationException({required String message, this.detail})
     : super(message);
@@ -63,10 +43,7 @@ final class ApiValidationException extends ApiException {
   final Object? detail;
 }
 
-/// Any other non-2xx response: 5xx, or a 4xx not already special-cased
-/// above. Treated as "the server rejected or failed the request" — the UI
-/// shows a generic failure rather than pretending it's offline or a client
-/// bug.
+/// Any other non-2xx response; the UI shows a generic failure.
 final class ApiServerException extends ApiException {
   const ApiServerException({required this.statusCode, required String message})
     : super(message);
@@ -74,10 +51,8 @@ final class ApiServerException extends ApiException {
   final int statusCode;
 }
 
-/// The response body wasn't shaped the way this client expects — malformed
-/// JSON, a missing required field (e.g. a parsed ingredient with no
-/// `category`), or a type mismatch. A decode failure must never crash the
-/// caller; it always surfaces as this instead.
+/// The response body wasn't shaped as expected (malformed JSON, a missing required field, a type mismatch); a
+/// decode failure surfaces as this rather than crashing the caller.
 final class ApiParseException extends ApiException {
   const ApiParseException(super.message);
 }

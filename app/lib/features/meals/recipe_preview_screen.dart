@@ -1,15 +1,7 @@
-/// A search result **preview** — AC-MEAL-01: tapping a search result opens
-/// this, and nothing is persisted until the user explicitly taps the
-/// bookmark. Pushed with a plain `Navigator.push`/`MaterialPageRoute`
-/// (deliberately *not* a `go_router` route): a preview is ephemeral and not
-/// deep-linkable, so it needs no place in the route table, and `MealsScreen`
-/// (the only place that pushes this) already dedupes against the saved
-/// library before ever reaching here — see its `_onResultTap`.
-///
-/// Once saved, this screen simply *becomes* [SavedRecipeDetail] in place —
-/// there is exactly one implementation of "what a saved recipe looks like",
-/// reused by both this screen and the `go_router`-routed
-/// `MealDetailScreen`.
+/// A search result preview: nothing is persisted until the user taps the bookmark. Pushed with a plain
+/// `Navigator.push` rather than a `go_router` route, since a preview is ephemeral and not deep-linkable;
+/// `MealsScreen` already dedupes against the saved library before pushing it (see `_onResultTap`). Once saved,
+/// this screen becomes [SavedRecipeDetail] in place.
 library;
 
 import 'package:flutter/material.dart';
@@ -21,7 +13,6 @@ import 'package:glean/design_system/design_system.dart';
 import 'actions.dart';
 import 'presentation.dart';
 import 'saved_recipe_detail.dart';
-import 'widgets/meals_skeletons.dart';
 import 'widgets/recipe_detail_view.dart';
 
 class RecipePreviewScreen extends ConsumerStatefulWidget {
@@ -40,8 +31,7 @@ class _RecipePreviewScreenState extends ConsumerState<RecipePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Once saved, this screen *is* the saved detail screen — no navigation,
-    // just swapping which widget this route builds (AC-MEAL-02/08).
+    // Once saved, this screen is the saved detail screen: swap which widget this route builds, no navigation.
     final int? savedId = _savedRecipeId;
     if (savedId != null) {
       return SavedRecipeDetail(recipeId: savedId);
@@ -70,30 +60,33 @@ class _RecipePreviewScreenState extends ConsumerState<RecipePreviewScreen> {
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: !detailAsync.hasValue && !detailAsync.hasError,
-        skeleton: const RecipeDetailSkeleton(),
-        content: detailAsync.when(
-          data: (RecipeOut detail) => SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: RecipeDetailView(data: RecipeDetailData.fromApi(detail)),
-          ),
-          // A cold-start-deep-link-style dead end doesn't apply here (this
-          // screen is only ever reached by tapping a live search result,
-          // never a deep link), so a plain in-body message plus the app
-          // bar's own back button — not `RouteErrorScreen` — is the right
-          // recovery affordance.
-          error: (Object error, StackTrace stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Could not load this recipe. Go back and try again.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ),
-          loading: () => const SizedBox.shrink(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!detailAsync.hasValue && !detailAsync.hasError),
+          child: !detailAsync.hasValue && !detailAsync.hasError
+              ? const ListSkeleton(rows: 3, rowHeight: 160, headerHeight: 96)
+              : detailAsync.when(
+                  data: (RecipeOut detail) => SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: RecipeDetailView(
+                      data: RecipeDetailData.fromApi(detail),
+                    ),
+                  ),
+                  // This screen is only reached from a live search result, never a deep link, so a plain in-body message plus the
+                  // app bar's back button is the right recovery, not `RouteErrorScreen`.
+                  error: (Object error, StackTrace stackTrace) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Could not load this recipe. Go back and try again.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                ),
         ),
       ),
     );
@@ -101,7 +94,7 @@ class _RecipePreviewScreenState extends ConsumerState<RecipePreviewScreen> {
 
   Future<void> _onSave(RecipeOut detail) async {
     setState(() => _saving = true);
-    ref.read(hapticsProvider).mediumImpact(); // data commit (AC-HAP-05).
+    ref.read(hapticsProvider).mediumImpact(); // data commit.
     try {
       final int id = await saveApiRecipe(ref, detail);
       if (!mounted) return;

@@ -3,10 +3,8 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../onboarding_screen.dart';
 
-/// "Back"/"Next" on every step but the last, "Scan a receipt"/"I'll do
-/// this later" on the final receipt-scan step (AC-DS-14, R-12 — extracted into its own
-/// `const`-constructible class rather than an `OnboardingScreen` builder
-/// method, for its own rebuild scope).
+/// "Back"/"Next" on every step but the last, "Scan a receipt"/"I'll do this later" on it. Its own `const`
+/// class rather than an `OnboardingScreen` builder method, for its own rebuild scope.
 class OnboardingFooter extends StatelessWidget {
   const OnboardingFooter({
     super.key,

@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Radius scale, ported 1:1 from the Expo app's `src/theme/index.ts`
-/// (`theme.radius`; see git history).
-///
-/// `pill` uses a large-but-finite value (not `double.infinity`) because it
-/// feeds [BorderRadius.circular], which requires a finite radius; any value
-/// at least half the shortest side renders as a full stadium/pill, same as
-/// React Native's `999`.
+/// Radius scale. `pill` is large-but-finite because [BorderRadius.circular] needs a finite radius; any
+/// value at least half the shortest side renders as a full pill.
 @immutable
 class AppRadius {
   const AppRadius({
@@ -32,8 +27,7 @@ class AppRadius {
   );
 }
 
-/// Spacing scale, ported 1:1 from the Expo app's `src/theme/index.ts`
-/// (`theme.spacing`; see git history).
+/// Spacing scale.
 @immutable
 class AppSpacing {
   const AppSpacing({
@@ -62,13 +56,7 @@ class AppSpacing {
   );
 }
 
-/// Elevation shadow presets, ported from the Expo app's `src/theme/index.ts`
-/// (`theme.shadow`; see git history).
-///
-/// RN expressed these as `{shadowColor, shadowOffset, shadowOpacity, shadowRadius,
-/// elevation}` for `Platform`-conditional rendering. Flutter has one shadow model
-/// ([BoxShadow]) that works identically on both platforms, so each preset collapses
-/// to a single [BoxShadow] rather than needing an elevation fallback.
+/// Elevation shadow presets. Each is a single [BoxShadow], which renders identically on both platforms.
 @immutable
 class AppShadow {
   const AppShadow({required this.card, required this.sheet, required this.fab});
@@ -96,25 +84,15 @@ class AppShadow {
   );
 }
 
-/// The single [ThemeExtension] for brand tokens that don't fit `ColorScheme`/
-/// `TextTheme` (FLUTTER_MIGRATION.md §4, AC-DS-02). Everything else — the
-/// primary/error/surface family — is mapped onto `ColorScheme` in `theme.dart`
-/// so built-in widgets inherit the brand automatically.
+/// The single [ThemeExtension] for brand tokens that don't fit `ColorScheme`/`TextTheme`. Everything else
+/// is mapped onto `ColorScheme` in `theme.dart` so built-in widgets inherit the brand.
 ///
-/// What lives here and why:
-/// - `ink`: a dark neutral used for a handful of *inverted* surfaces (the
-///   checkout bar, the selected filter chip, the sign-in background). It has
-///   no `ColorScheme` role of its own — closest is `inverseSurface`, but that
-///   slot is reserved for `SnackBar`'s theme below, so it stays a plain token.
-/// - `primaryLight`: kept as a directly-named token (not just read back off
-///   `colorScheme.primaryContainer`) because call sites porting from
-///   `theme.colors.primaryLight` should find an obviously-corresponding name.
-/// - `warning`/`warningLight`, `success`/`successLight`: Material's
-///   `ColorScheme` has no "warning" or "success" role, only `error`. `danger`/
-///   `dangerLight` from the RN theme *does* have a natural home — it maps onto
-///   `colorScheme.error`/`errorContainer` and is deliberately not duplicated
-///   here (see `theme.dart`).
-/// - `radius`/`spacing`/`shadow`: the scales themselves, unchanged from RN.
+/// - `ink`: a dark neutral for a few inverted surfaces (checkout bar, selected filter chip, sign-in
+///   background). The nearest `ColorScheme` slot, `inverseSurface`, is reserved for the `SnackBar` theme.
+/// - `primaryLight`: a directly-named token rather than `colorScheme.primaryContainer`.
+/// - `warning`/`success` (and their light variants): `ColorScheme` has no such roles. `danger` maps onto
+///   `colorScheme.error`/`errorContainer` and is not duplicated here.
+/// - `radius`/`spacing`/`shadow`: the scales themselves.
 @immutable
 class AppTokens extends ThemeExtension<AppTokens> {
   const AppTokens({
@@ -124,6 +102,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.warningLight,
     required this.success,
     required this.successLight,
+    required this.onCamera,
+    required this.cameraScrim,
+    required this.cameraBackdrop,
     required this.radius,
     required this.spacing,
     required this.shadow,
@@ -135,12 +116,17 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color warningLight;
   final Color success;
   final Color successLight;
+
+  /// Over a live camera preview the brand palette is unreadable; these are the
+  /// only non-brand colours and they stay tokens so a dark theme can retune them.
+  final Color onCamera;
+  final Color cameraScrim;
+  final Color cameraBackdrop;
   final AppRadius radius;
   final AppSpacing spacing;
   final AppShadow shadow;
 
-  /// The brand's one and only token set today (no dark variant exists yet —
-  /// FLUTTER_MIGRATION.md §1 rules dark mode out of scope for this port).
+  /// The brand's one token set; there is no dark variant.
   static const AppTokens standard = AppTokens(
     ink: Color(0xFF26362B),
     primaryLight: Color(0xFFE3F2E7),
@@ -148,6 +134,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     warningLight: Color(0xFFFBE9D6),
     success: Color(0xFF1C6B41),
     successLight: Color(0xFFE3F2E7),
+    onCamera: Color(0xFFFFFFFF),
+    cameraScrim: Color(0x73000000), // black at 45% alpha
+    cameraBackdrop: Color(0xFF111511),
     radius: AppRadius.standard,
     spacing: AppSpacing.standard,
     shadow: AppShadow.standard,
@@ -161,6 +150,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? warningLight,
     Color? success,
     Color? successLight,
+    Color? onCamera,
+    Color? cameraScrim,
+    Color? cameraBackdrop,
     AppRadius? radius,
     AppSpacing? spacing,
     AppShadow? shadow,
@@ -172,6 +164,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warningLight: warningLight ?? this.warningLight,
       success: success ?? this.success,
       successLight: successLight ?? this.successLight,
+      onCamera: onCamera ?? this.onCamera,
+      cameraScrim: cameraScrim ?? this.cameraScrim,
+      cameraBackdrop: cameraBackdrop ?? this.cameraBackdrop,
       radius: radius ?? this.radius,
       spacing: spacing ?? this.spacing,
       shadow: shadow ?? this.shadow,
@@ -194,6 +189,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warningLight: Color.lerp(warningLight, other.warningLight, t)!,
       success: Color.lerp(success, other.success, t)!,
       successLight: Color.lerp(successLight, other.successLight, t)!,
+      onCamera: Color.lerp(onCamera, other.onCamera, t)!,
+      cameraScrim: Color.lerp(cameraScrim, other.cameraScrim, t)!,
+      cameraBackdrop: Color.lerp(cameraBackdrop, other.cameraBackdrop, t)!,
       radius: t < 0.5 ? radius : other.radius,
       spacing: t < 0.5 ? spacing : other.spacing,
       shadow: t < 0.5 ? shadow : other.shadow,
@@ -201,9 +199,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
   }
 }
 
-/// Reaches [AppTokens] through `Theme.of(context)` — never a global const at
-/// the call site (AC-DS-03). This is what keeps a future dark theme a second
-/// `ThemeData` instead of a codebase-wide refactor.
+/// Reaches [AppTokens] through `Theme.of(context)`, never a global const.
 extension AppTokensX on BuildContext {
   AppTokens get tokens {
     final AppTokens? extension = Theme.of(this).extension<AppTokens>();

@@ -1,17 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/auth/widgets/signed_out_banner.dart';
-import 'package:glean/router/auth_state.dart';
+
+import '../../auth/support/fakes.dart';
+
+AuthSessionSnapshot _snapshot(AuthStatus status) => AuthSessionSnapshot(
+  status: status,
+  userId: status == AuthStatus.signedOut ? null : 'user-sub-123',
+);
 
 void main() {
   Future<ProviderContainer> pumpBanner(
     WidgetTester tester,
     AuthStatus status,
   ) async {
-    final ProviderContainer container = ProviderContainer();
-    container.read(authStatusProvider.notifier).setStatus(status);
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        authControllerProvider.overrideWith(
+          () => AuthController(
+            _snapshot(status),
+            storage: TokenStorage(),
+            client: inertCognitoClient(),
+          ),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -35,9 +51,7 @@ void main() {
     expect(find.textContaining('Signed out'), findsNothing);
   });
 
-  testWidgets('AC-AUTH-04: shows the banner when the session has expired', (
-    tester,
-  ) async {
+  testWidgets('shows the banner when the session has expired', (tester) async {
     await pumpBanner(tester, AuthStatus.expired);
     await tester.pumpAndSettle();
 
@@ -57,22 +71,23 @@ void main() {
     expect(find.textContaining('Signed out'), findsOneWidget);
   });
 
-  testWidgets(
-    'AC-TRN-04: cross-fades in when status flips from active to expired',
-    (tester) async {
-      final ProviderContainer container = await pumpBanner(
-        tester,
-        AuthStatus.active,
-      );
-      expect(find.textContaining('Signed out'), findsNothing);
+  testWidgets('cross-fades in when status flips from active to expired', (
+    tester,
+  ) async {
+    final ProviderContainer container = await pumpBanner(
+      tester,
+      AuthStatus.active,
+    );
+    expect(find.textContaining('Signed out'), findsNothing);
 
-      container.read(authStatusProvider.notifier).setStatus(AuthStatus.expired);
-      await tester.pump();
+    container
+        .read(authControllerProvider.notifier)
+        .debugSetSnapshot(_snapshot(AuthStatus.expired));
+    await tester.pump();
 
-      // Mid-transition: AnimatedSwitcher is cross-fading, not popping instantly.
-      expect(find.byType(AnimatedSwitcher), findsOneWidget);
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Signed out'), findsOneWidget);
-    },
-  );
+    // Mid-transition: AnimatedSwitcher is cross-fading, not popping instantly.
+    expect(find.byType(AnimatedSwitcher), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Signed out'), findsOneWidget);
+  });
 }

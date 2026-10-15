@@ -1,7 +1,5 @@
-/// The Search segment's content: one real inline search input, live results,
-/// empty/no-results/error states, and the import-from-URL affordance
-/// (AC-MEAL-07/10). Replaces the RN app's fake search pill *and* its
-/// separate pushed search screen — there is exactly one search affordance.
+/// The Search segment's content: one inline search input, live results, empty/no-results/error states, and the
+/// import-from-URL affordance.
 library;
 
 import 'dart:async';
@@ -21,7 +19,6 @@ import 'package:go_router/go_router.dart';
 import '../presentation.dart';
 import '../recipe_preview_screen.dart';
 import 'meals_states.dart';
-import 'meals_skeletons.dart';
 import 'search_result_card.dart';
 
 class MealsSearchPanel extends ConsumerStatefulWidget {
@@ -54,9 +51,8 @@ class _MealsSearchPanelState extends ConsumerState<MealsSearchPanel> {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final String query = _controller.text.trim();
-    // R-08/AC-AUTH-04: both recipe search and URL import call the AI
-    // backend, so both are disabled while a session is expired — the
-    // [SignedOutBanner] mounted above every tab is what explains why.
+    // Recipe search and URL import both call the AI backend, so both are disabled while a session is expired; the
+    // [SignedOutBanner] above every tab explains why.
     final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return Column(
@@ -127,47 +123,48 @@ class _SearchResults extends ConsumerWidget {
       recipeSearchProvider(query),
     );
 
-    // AC-TRN-01: skeleton → content cross-fades everywhere, including a
-    // live search re-querying as the user keeps typing — never a hard cut.
-    return GleanCrossFade(
-      showSkeleton: resultsAsync.isLoading,
-      skeleton: const RecipeListSkeleton(),
-      content: resultsAsync.when(
-        loading: () => const SizedBox.shrink(),
-        error: (Object error, StackTrace stackTrace) => MealsMessagePanel(
-          icon: Icons.error_outline_rounded,
-          title: 'Search failed',
-          message: describeRecipeSearchError(error),
-        ),
-        data: (RecipeSearchResponse response) {
-          if (response.results.isEmpty) {
-            return MealsMessagePanel(
-              icon: Icons.search_off_rounded,
-              title: 'No recipes found',
-              message: 'No results for "$query". Try a different search.',
-            );
-          }
-          return ListView.separated(
-            itemCount: response.results.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (BuildContext context, int index) {
-              final RecipeSearchResult result = response.results[index];
-              return SearchResultCard(
-                result: result,
-                onTap: () => _onResultTap(context, ref, result),
-              );
-            },
-          );
-        },
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(resultsAsync.isLoading),
+        child: resultsAsync.isLoading
+            ? const ListSkeleton(rows: 4, rowHeight: 96)
+            : resultsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (Object error, StackTrace stackTrace) =>
+                    MealsMessagePanel(
+                      icon: Icons.error_outline_rounded,
+                      title: 'Search failed',
+                      message: describeRecipeSearchError(error),
+                    ),
+                data: (RecipeSearchResponse response) {
+                  if (response.results.isEmpty) {
+                    return MealsMessagePanel(
+                      icon: Icons.search_off_rounded,
+                      title: 'No recipes found',
+                      message:
+                          'No results for "$query". Try a different search.',
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: response.results.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int index) {
+                      final RecipeSearchResult result = response.results[index];
+                      return SearchResultCard(
+                        result: result,
+                        onTap: () => _onResultTap(context, ref, result),
+                      );
+                    },
+                  );
+                },
+              ),
       ),
     );
   }
 
-  /// AC-MEAL-01: preview, don't save. If this result is already in the
-  /// user's library (matched by `external_id`, the same dedupe key search
-  /// always used), go straight to the real saved detail and say so
-  /// (AC-MEAL-10) rather than opening a redundant "unsaved" preview of
-  /// something already curated.
+  /// Preview, don't save. A result already in the user's library (matched by `external_id`) goes straight to the
+  /// saved detail, with a snackbar saying so, rather than a redundant "unsaved" preview.
   Future<void> _onResultTap(
     BuildContext context,
     WidgetRef ref,

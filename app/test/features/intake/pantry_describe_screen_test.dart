@@ -1,6 +1,6 @@
 // Widget coverage for "describe what you bought" — the text-only sibling of
-// receipt scan (AC-PAN-03), always landing on the shared review screen with
-// destination pantry (AC-PAN-05).
+// receipt scan, always landing on the shared review screen with
+// destination pantry.
 import 'dart:async';
 import 'dart:convert';
 

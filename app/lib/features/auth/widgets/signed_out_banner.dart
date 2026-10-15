@@ -1,13 +1,9 @@
-/// The "signed out" banner AC-AUTH-04 requires: a token expiry gates
-/// AI-backed features behind this, but never evicts the user from their
-/// (fully local) data or routes them anywhere — nothing here touches
-/// navigation.
+/// The "signed out" banner: a token expiry gates AI-backed features behind this, but never evicts the user from
+/// their (fully local) data or routes them anywhere.
 ///
-/// Feature screens that offer an AI-backed action (Scan/Describe/Import/
-/// Generate) should mount `const SignedOutBanner()` near the top of their
-/// body; it renders nothing while AI features are available, so it is
-/// always safe to include unconditionally rather than conditionally
-/// building it.
+/// Screens that offer an AI-backed action (Scan/Describe/Import/Generate) mount `const SignedOutBanner()` near
+/// the top of their body; it renders nothing while AI features are available, so it is safe to include
+/// unconditionally.
 library;
 
 import 'package:flutter/material.dart';
@@ -22,7 +18,7 @@ class SignedOutBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool available = ref.watch(aiFeaturesAvailableProvider);
-    // AC-TRN-04: fades in/out rather than popping.
+    // Fades in/out rather than popping.
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
       child: available

@@ -1,7 +1,5 @@
-// Real-outcome tests for pantry reads/writes (AC-TEST-02), covering the
-// schema changes FLUTTER_MIGRATION.md §6 Pantry requires that the RN app
-// never had: automatic expiry inference (AC-PAN-01, AC-TEST-10) and a
-// guaranteed non-null `foodGroup` on every row (AC-DATA-11).
+// Real-outcome tests for pantry reads/writes, including automatic expiry
+// inference and a guaranteed non-null `foodGroup` on every row.
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -64,7 +62,7 @@ void main() {
       () async {
         // Simulates an ingredient that reached the pantry with no
         // category at all — e.g. one first created by recipe import
-        // (which has no category source, §9) and never since resolved
+        // (which has no category source) and never since resolved
         // through a categorised pantry/shopping intake path. `addItem`
         // itself always supplies a category, so this bypasses it
         // deliberately, the same way a future insert path that forgets to
@@ -132,7 +130,7 @@ void main() {
 
     test(
       'addItem normalizes units into the ingredient canonical unit '
-      '(R-18 — even the very first add, which is also what sets the target)',
+      '(even the very first add, which is also what sets the target)',
       () async {
         // 'plain flour' is a seeded staple with no canonicalUnit yet. This
         // first add both establishes it (as 'g', derived from 'kg' — see
@@ -154,9 +152,8 @@ void main() {
     );
 
     test('a mixed-unit top-up converts and sums correctly instead of '
-        'corrupting the quantity (R-18 regression)', () async {
-      // The exact scenario R-18 describes: "2 kg flour" then "500 g
-      // flour" must total 2500g, never the RN/pre-fix bug's "502 kg".
+        'corrupting the quantity', () async {
+      // "2 kg flour" then "500 g flour" must total 2500g, never "502 kg".
       await repository.addItem(
         userId: userId,
         name: 'plain flour',
@@ -181,7 +178,7 @@ void main() {
     });
 
     test('a genuinely incompatible unit merge throws rather than silently '
-        'summing under the wrong unit (R-18)', () async {
+        'summing under the wrong unit', () async {
       // First add establishes 'units' as garlic's canonical unit (not a
       // recognised mass/volume unit, so it becomes the literal unit).
       await repository.addItem(
@@ -218,7 +215,7 @@ void main() {
     test('a blank unit defaults to "units" for the row, but never seeds the '
         "ingredient's shared canonical unit — a later, explicit add (even "
         'from another user, since the ingredient catalog is shared) still '
-        'can (R-23)', () async {
+        'can', () async {
       final ingredients = IngredientsRepository(db);
 
       // The review screen's exact scenario: the unit field was left
@@ -395,7 +392,7 @@ void main() {
       );
     });
 
-    group('getAll (one-shot snapshot, FINDINGS.md F-14)', () {
+    group('getAll (one-shot snapshot)', () {
       test('matches watchAll\'s rows for the same user', () async {
         await repository.addItem(
           userId: userId,
@@ -446,7 +443,7 @@ void main() {
         },
       );
 
-      test('only returns the given user\'s items (AC-DATA-02/03)', () async {
+      test('only returns the given user\'s items', () async {
         await repository.addItem(
           userId: userId,
           name: 'garlic',
@@ -470,7 +467,7 @@ void main() {
       });
     });
 
-    group('addItems (review-screen commit, AC-PAN-10)', () {
+    group('addItems (review-screen commit)', () {
       test('commits every item in one transaction', () async {
         final ids = await repository.addItems(
           userId: userId,

@@ -1,35 +1,25 @@
-/// The Settings screen (FLUTTER_MIGRATION.md §6 "Settings & auth").
-///
-/// **Auto-save, no Save button (AC-SET-01).** Every control persists on its
-/// own commit point — a slider's release, a chip's tap, the max-time field's
-/// debounce — through [UserConfigRepository.save]. There is no separate
-/// "unsaved" copy of the form for switching tabs to silently discard (the RN
-/// dirty-state trap): [_SettingsContentState] seeds its local fields once
-/// from the `config` its parent already resolved, and from then on the only
-/// writer of that row is this screen itself, so the stream re-emitting after
-/// a save never fights with an in-progress edit (AC-DATA-04/05 — no
-/// `ref.invalidate` anywhere below; the stream already re-emits on its own).
+/// The Settings screen. Auto-save, no Save button: every control persists on its own commit point (a slider's
+/// release, a chip's tap, the max-time field's debounce) through [UserConfigRepository.save].
+/// [_SettingsContentState] seeds its local fields once from the resolved `config`, and thereafter this screen is
+/// the only writer of that row, so the stream re-emitting after a save never fights an in-progress edit.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 
-import 'providers/sign_out_action.dart';
 import 'settings_presentation.dart';
 import 'widgets/account_section.dart';
 import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
-import 'widgets/section_label.dart';
-import 'widgets/settings_skeleton.dart';
 import 'widgets/settings_stats_row.dart';
-import 'widgets/tolerance_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -41,14 +31,35 @@ class SettingsScreen extends ConsumerWidget {
     );
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      // Skeleton -> content cross-fade (AC-TRN-01), never a hard cut.
-      body: GleanCrossFade(
-        showSkeleton: !asyncConfig.hasValue,
-        skeleton: const SettingsSkeleton(),
-        content: asyncConfig.maybeWhen(
-          data: (UserConfigView config) => _SettingsContent(config: config),
-          orElse: () => const SettingsLoadError(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!asyncConfig.hasValue),
+          child: !asyncConfig.hasValue
+              ? const ListSkeleton(rows: 3, rowHeight: 120, headerHeight: 72)
+              : asyncConfig.maybeWhen(
+                  data: (UserConfigView config) =>
+                      _SettingsContent(config: config),
+                  orElse: () => const SettingsLoadError(),
+                ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown if `userConfigProvider` surfaces an `AsyncValue.error` (a genuine DB
+/// error, distinct from "no row saved yet", which resolves to defaults).
+class SettingsLoadError extends StatelessWidget {
+  const SettingsLoadError({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'Could not load settings. Check your connection and try again.',
+        style: Theme.of(context).textTheme.bodyMedium,
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -107,10 +118,8 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
     return text.isEmpty ? null : int.tryParse(text);
   }
 
-  /// The single write path for every control (AC-SET-01/AC-SET-03).
-  /// [fireCommitHaptic] is false for dietary chips, which are on the
-  /// `selectionClick` rung, not `mediumImpact` (AC-HAP-05) — see
-  /// `DietaryFlagsControl`'s doc comment.
+  /// The single write path for every control. [fireCommitHaptic] is false for dietary chips, which are on the
+  /// `selectionClick` rung, not `mediumImpact`.
   Future<void> _persist({required bool fireCommitHaptic}) async {
     try {
       await ref.read(userConfigRepositoryProvider).save(_snapshot());
@@ -118,8 +127,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
       if (fireCommitHaptic) ref.read(hapticsProvider).mediumImpact();
     } catch (_) {
       if (!mounted) return;
-      // AC-SET-03: a config-save failure must surface. RN's `saveUserConfig`
-      // failing showed the user nothing at all.
+      // A config-save failure must surface to the user.
       GleanSnackBar.show(context, 'Could not save your settings. Try again.');
     }
   }
@@ -147,7 +155,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
 
   Future<void> _handleSignOut() async {
     try {
-      await ref.read(signOutActionProvider)();
+      await ref.read(authControllerProvider.notifier).signOut();
       if (!mounted) return;
       ref.read(hapticsProvider).mediumImpact();
     } catch (_) {
@@ -169,13 +177,13 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           tolerancePercent: (_tolerance * 100).round(),
         ),
         SizedBox(height: tokens.spacing.md),
-        // AC-UX-05: settings copy must state these values steer generation.
+        // Settings copy must state these values steer generation.
         Text(
           'These preferences steer how Glean plans your meals each week.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Preferences'),
+        const _SectionLabel('Preferences'),
         SizedBox(height: tokens.spacing.sm),
         ToleranceCard(
           sliderKey: const Key('settings.toleranceSlider'),
@@ -219,7 +227,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           onChanged: _onMaxTimeChanged,
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Dietary preferences'),
+        const _SectionLabel('Dietary preferences'),
         SizedBox(height: tokens.spacing.sm),
         DietaryPreferencesCard(
           selected: _dietaryFlags,
@@ -235,10 +243,26 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           },
         ),
         SizedBox(height: tokens.spacing.lg),
-        const SectionLabel('Account'),
+        const _SectionLabel('Account'),
         SizedBox(height: tokens.spacing.sm),
         AccountSection(onSignOut: () => unawaited(_handleSignOut())),
       ],
+    );
+  }
+}
+
+/// A small uppercase section heading. `labelSmall` already carries the right size/weight/letter-spacing, so this
+/// only adds `.toUpperCase()` once rather than at every call site.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall,
     );
   }
 }

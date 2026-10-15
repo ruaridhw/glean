@@ -15,19 +15,16 @@ void main() {
     registerFallbackValue(Uri.parse('http://localhost:8000/'));
   });
 
-  test(
-    'AC-DATA-08: recipeSearchProvider is a FutureProvider.family + autoDispose',
-    () {
-      // `.family` applied: calling it with an argument yields a concrete
-      // FutureProvider for that query.
-      expect(
-        recipeSearchProvider('soup'),
-        isA<FutureProvider<RecipeSearchResponse>>(),
-      );
-      // `.autoDispose` applied.
-      expect(recipeSearchProvider.isAutoDispose, isTrue);
-    },
-  );
+  test('recipeSearchProvider is a FutureProvider.family + autoDispose', () {
+    // `.family` applied: calling it with an argument yields a concrete
+    // FutureProvider for that query.
+    expect(
+      recipeSearchProvider('soup'),
+      isA<FutureProvider<RecipeSearchResponse>>(),
+    );
+    // `.autoDispose` applied.
+    expect(recipeSearchProvider.isAutoDispose, isTrue);
+  });
 
   test('debounced search: rapid input produces exactly one request', () async {
     final httpClient = MockHttpClient();
@@ -46,6 +43,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         apiBaseUrlProvider.overrideWithValue('http://localhost:8000'),
+        apiAccessTokenProvider.overrideWithValue(() async => null),
         httpClientProvider.overrideWithValue(httpClient),
       ],
     );
@@ -86,6 +84,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         apiBaseUrlProvider.overrideWithValue('http://localhost:8000'),
+        apiAccessTokenProvider.overrideWithValue(() async => null),
         httpClientProvider.overrideWithValue(httpClient),
       ],
     );

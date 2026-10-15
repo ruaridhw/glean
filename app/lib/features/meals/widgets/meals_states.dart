@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// A centred icon + message + optional action — the shared shape for every
-/// Meals empty/no-results/error state (AC-MEAL-10). No shared design-system
-/// primitive for this exists yet (unlike RN's `EmptyState`/`ErrorState`), so
-/// this stays local to Meals rather than inventing one on another module's
-/// behalf.
+/// A centred icon + message + optional action: the shared shape for every Meals empty/no-results/error state.
+/// Local to Meals since no design-system primitive exists for it.
 class MealsMessagePanel extends StatelessWidget {
   const MealsMessagePanel({
     required this.icon,

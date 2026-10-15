@@ -1,8 +1,8 @@
-// New coverage 2 (FLUTTER_MIGRATION.md §10): user-scoped data isolation.
+// User-scoped data isolation.
 // Today only `user_config` is keyed by user — `pantry_items`, `recipes`,
 // `meal_plan_entries` and `shopping_list_items` have none, so signing in as
 // a different account on the same device inherited the previous user's
-// groceries (AC-DATA-02/03, AC-TEST-07).
+// groceries.
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fixture.dart';
 
 void main() {
-  group('user-scoped isolation (AC-TEST-07)', () {
+  group('user-scoped isolation', () {
     late GleanDatabase db;
     late PantryRepository pantry;
     late RecipesRepository recipes;
@@ -117,16 +117,26 @@ void main() {
       },
     );
 
-    test('writes scoped by id and userId cannot cross users', () async {
+    test('writes scoped by userId cannot cross users', () async {
       await shopping.addManualItem(userId: userA, name: 'flour');
       final item = (await shopping.watchAll(userA).first).single;
 
-      // user B attempting to toggle/delete user A's row by id has no effect.
-      await shopping.toggleItem(id: item.id, userId: userB, checked: true);
+      // user B attempting to toggle user A's row by id has no effect.
+      await shopping.toggleRows(ids: [item.id], userId: userB, checked: true);
       final stillA = (await shopping.watchAll(userA).first).single;
       expect(stillA.isChecked, isFalse);
+    });
 
-      await shopping.deleteItem(id: item.id, userId: userB);
+    test("another user cannot delete user A's shopping row", () async {
+      await shopping.addManualItem(userId: userA, name: 'flour');
+      final item = (await shopping.watchAll(userA).first).single;
+
+      final deleted = await shopping.deleteRowsWithSnapshot(
+        ids: [item.id],
+        userId: userB,
+      );
+
+      expect(deleted, isEmpty);
       expect(await shopping.watchAll(userA).first, hasLength(1));
     });
   });

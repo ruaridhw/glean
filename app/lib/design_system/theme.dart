@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Brand hex constants used exactly once, to build [gleanLightTheme]. This is
-/// deliberately the *only* file in the design system that references raw
-/// hex — everywhere else (including feature code) reaches the brand through
-/// `Theme.of(context)` (AC-DS-03). Values are ported 1:1 from the Expo
-/// app's `src/theme/index.ts` (see git history).
+/// Brand hex constants, used once to build [gleanLightTheme]. The only design-system file that references
+/// raw hex; everything else reads `Theme.of(context)`.
 class _Brand {
   const _Brand._();
 
@@ -35,23 +32,13 @@ class _Brand {
   static const Color ink = Color(0xFF26362B); // dark surfaces
 }
 
-/// Family name declared in `pubspec.yaml` with weight descriptors 400–800
-/// (AC-BUILD-03). Because Flutter resolves `fontWeight` against those
-/// descriptors — unlike React Native, which resolves weight from the family
-/// *name* — a single family plus plain `fontWeight` is enough; no `AppText`
-/// primitive is needed to enforce it (AC-DS-08).
+/// Family name declared in `pubspec.yaml` with weight descriptors 400–800, so plain `fontWeight` resolves
+/// against them.
 const String _fontFamily = 'PlusJakartaSans';
 
-/// Maps the RN `theme.colors` palette onto [ColorScheme], builds a
-/// [TextTheme] off the RN `theme.typography` scale, and themes every relevant
-/// built-in centrally — the core inversion versus the RN app (which must
-/// *wrap* every primitive because React Native ships no themed ones;
-/// FLUTTER_MIGRATION.md §4).
-///
-/// Dark mode is explicitly out of scope (§1), but every token below is only
-/// ever reached via `Theme.of(context)` (AC-DS-03), so adding a
-/// `gleanDarkTheme` later is a second `ThemeData`, not a codebase-wide
-/// refactor.
+/// Maps the brand palette onto [ColorScheme], builds a [TextTheme], and themes the built-in widgets
+/// centrally. Dark mode is out of scope; every token is reached via `Theme.of(context)`, so a dark theme
+/// would be a second `ThemeData`.
 ThemeData get gleanLightTheme {
   const ColorScheme colorScheme = ColorScheme.light(
     brightness: Brightness.light,
@@ -59,23 +46,18 @@ ThemeData get gleanLightTheme {
     onPrimary: Colors.white,
     primaryContainer: _Brand.primaryLight,
     onPrimaryContainer: _Brand.primaryDark,
-    // RN's `accent` (a warm orange) has no dedicated ColorScheme role of its
-    // own; `secondary` is the closest Material slot for "the other brand
-    // colour used sparingly for emphasis".
+    // `secondary` is the closest Material slot for the second brand colour (warm orange).
     secondary: _Brand.accent,
     onSecondary: Colors.white,
     secondaryContainer: Color(0xFFF4E6CF),
     onSecondaryContainer: Color(0xFF96660F),
-    // The RN palette has exactly two brand hues (green + orange) — no third.
-    // Leaving `tertiary` unset would default to an unbranded Material teal
-    // wherever a built-in falls back to it, so it deliberately reuses
-    // primary's darker tone rather than introduce an off-brand colour.
+    // The palette has two brand hues. Leaving `tertiary` unset would default to an off-brand teal, so it
+    // reuses primary's darker tone.
     tertiary: _Brand.primaryDark,
     onTertiary: Colors.white,
     tertiaryContainer: _Brand.primaryLight,
     onTertiaryContainer: _Brand.primaryDark,
-    // RN's `danger`/`dangerLight` map directly onto `error`/`errorContainer`
-    // — deliberately not also duplicated into AppTokens (see tokens.dart).
+    // `danger`/`dangerLight` map onto `error`/`errorContainer` and are not duplicated into AppTokens.
     error: _Brand.danger,
     onError: Colors.white,
     errorContainer: _Brand.dangerLight,
@@ -187,10 +169,7 @@ ThemeData get gleanLightTheme {
       ),
     ),
 
-    // The pill-chip variant of the missing Button primitive (AC-DS-05):
-    // filter chips, dietary chips and similar toggleable pills use the
-    // built-in `FilterChip`/`ChoiceChip` family themed to a stadium shape,
-    // instead of a hand-rolled `Pressable` + `Container`.
+    // Pill-chip variant: filter and dietary chips use `FilterChip`/`ChoiceChip` themed to a stadium shape.
     chipTheme: ChipThemeData(
       backgroundColor: _Brand.muted,
       selectedColor: _Brand.primaryLight,
@@ -210,8 +189,7 @@ ThemeData get gleanLightTheme {
       labelPadding: EdgeInsets.zero,
     ),
 
-    // Undo snackbar (AC-UX-02, AC-DS-10) — see `snackbar.dart` for the
-    // `GleanSnackBar.showUndo` helper that rides on top of this theme.
+    // Undo snackbar; see `snackbar.dart` for `GleanSnackBar.runUndoable`.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: _Brand.ink,
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
@@ -280,11 +258,7 @@ ThemeData get gleanLightTheme {
       }),
     ),
 
-    // No `DismissThemeData`/`DismissibleThemeData` exists in the Flutter SDK
-    // (verified against the vendored framework source at this Flutter
-    // version) — `Dismissible` has no theme extension point to fill, so
-    // there is nothing to set here; see `swipe_to_delete.dart` for the thin
-    // themed wrapper instead (AC-DS-09).
+    // `Dismissible` has no theme extension point; see `swipe_to_delete.dart` for the themed wrapper.
     dividerTheme: const DividerThemeData(
       color: _Brand.border,
       space: 1,
@@ -293,30 +267,21 @@ ThemeData get gleanLightTheme {
   );
 }
 
-/// Builds a full Material [TextTheme] off the RN `theme.typography` scale.
-/// Every RN entry maps onto the nearest Material role by rendered size, with
-/// the RN size/weight applied verbatim rather than the Material default:
+/// Builds a Material [TextTheme] from the brand type scale, mapped onto the nearest Material role by size:
 ///
-/// | RN token       | size / weight | Material role  |
-/// |-----------------|---------------|-----------------|
-/// | `largeTitle`    | 30 / 800      | `headlineLarge` |
-/// | `title2`        | 22 / 700      | `titleLarge`    |
-/// | `headline`      | 17 / 700      | `titleMedium`   |
-/// | `body`          | 16 / 400      | `bodyLarge`     |
-/// | `subhead`       | 14 / 600      | `bodyMedium`    |
-/// | `caption`       | 12 / 600      | `bodySmall`     |
-/// | `sectionLabel`  | 12 / 800      | `labelSmall`    |
+/// | size / weight | Material role   |
+/// |---------------|-----------------|
+/// | 30 / 800      | `headlineLarge` |
+/// | 22 / 700      | `titleLarge`    |
+/// | 17 / 700      | `titleMedium`   |
+/// | 16 / 400      | `bodyLarge`     |
+/// | 14 / 600      | `bodyMedium`    |
+/// | 12 / 600      | `bodySmall`     |
+/// | 12 / 800      | `labelSmall`    |
 ///
-/// Roles the RN scale never defined (`displayLarge`/`Medium`/`Small`,
-/// `headlineMedium`/`Small`, `titleSmall`, `labelLarge`/`Medium`) fall back to
-/// Material's own scale with the brand family/colour applied, so nothing in
-/// the theme is left un-branded even where RN had no equivalent.
-///
-/// Flutter's `TextStyle` has no `textTransform` — RN's `sectionLabel` relies
-/// on `text-transform: uppercase` in the stylesheet, which has no direct
-/// Flutter equivalent. Callers that need the RN look must call
-/// `.toUpperCase()` on the string themselves; this is flagged in the final
-/// report as a spec gap, not silently ported around.
+/// Roles the brand scale doesn't define fall back to Material's own scale with the brand family/colour
+/// applied. `TextStyle` has no `textTransform`, so section labels that want uppercase must call
+/// `.toUpperCase()` themselves.
 TextTheme _buildTextTheme(ColorScheme colorScheme) {
   final TextTheme base =
       Typography.material2021(

@@ -17,50 +17,36 @@
 // timer (verified: `_maxTimeDebounce` is cancelled in `dispose()`).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
-import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/features/settings/providers/sign_out_action.dart';
 import 'package:glean/features/settings/settings_presentation.dart';
 import 'package:glean/features/settings/settings_screen.dart';
 import 'package:glean/features/settings/widgets/max_time_field.dart';
 
+import '../../auth/support/fakes.dart';
 import '../../data/fixture.dart';
 
 const String _userId = 'user-1';
 const Key _dinnersSliderKey = Key('settings.dinnersSlider');
 
-/// Throws on `save`, leaving `watch`/`get` real — simulates a config-save
-/// failure (AC-SET-03) without needing to break the whole in-memory DB.
-class _ThrowingUserConfigRepository extends UserConfigRepository {
-  _ThrowingUserConfigRepository(super.db);
-
-  @override
-  Future<void> save(UserConfigView config) {
-    throw Exception('disk full');
-  }
-}
-
 Widget _buildApp({
   required GleanDatabase db,
   Haptics? haptics,
-  SignOutAction? signOut,
-  bool throwOnSave = false,
+  AuthController Function()? authController,
 }) {
   return ProviderScope(
     overrides: [
       gleanDatabaseProvider.overrideWithValue(db),
       currentUserIdProvider.overrideWithValue(_userId),
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
-      if (signOut != null) signOutActionProvider.overrideWithValue(signOut),
-      if (throwOnSave)
-        userConfigRepositoryProvider.overrideWithValue(
-          _ThrowingUserConfigRepository(db),
-        ),
+      if (authController != null)
+        authControllerProvider.overrideWith(authController),
     ],
     child: MaterialApp(theme: gleanLightTheme, home: const SettingsScreen()),
   );
@@ -100,9 +86,8 @@ Future<T> _readDb<T>(WidgetTester tester, Future<T> Function() query) async {
 /// isolate so the whole *file* times out rather than just the one test.
 ///
 /// The zero duration is the tell: it is drift's cleanup, not this screen's
-/// 500ms auto-save debounce (which `dispose()` does cancel). See
-/// `.scratch/flutter-port/FINDINGS.md` F-12 — this was misdiagnosed as a leaked
-/// app timer more than once.
+/// 500ms auto-save debounce (which `dispose()` does cancel). This was
+/// misdiagnosed as a leaked app timer more than once.
 Future<void> _releaseTree(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   // A `pump`, deliberately, not `runAsync`: the pending timer is a *FakeTimer*
@@ -142,7 +127,7 @@ void main() {
   group('SettingsScreen auto-save', () {
     _settingsWidgetTest(
       'has no Save button; a slider commits once on release, not per drag '
-      'frame (AC-SET-01, AC-SET-02, AC-TEST-12)',
+      'frame',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -187,7 +172,7 @@ void main() {
 
     _settingsWidgetTest(
       'a dietary chip toggle fires selectionClick (not mediumImpact) and '
-      'still auto-saves immediately (AC-HAP-05)',
+      'still auto-saves immediately',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -250,32 +235,37 @@ void main() {
       },
     );
 
-    _settingsWidgetTest(
-      'a config-save failure surfaces a visible error (AC-SET-03)',
-      (WidgetTester tester) async {
-        await tester.binding.setSurfaceSize(const Size(420, 2000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+    _settingsWidgetTest('a config-save failure surfaces a visible error', (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(420, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        final haptics = RecordingHaptics();
-        await tester.pumpWidget(
-          _buildApp(db: db, haptics: haptics, throwOnSave: true),
-        );
-        await _waitForContent(tester);
+      // A save is an upsert, so failing every INSERT fails every save
+      // while reads stay real.
+      await tester.runAsync(
+        () => db.customStatement(
+          'CREATE TRIGGER fail_insert_user_config BEFORE INSERT ON '
+          "user_config BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+        ),
+      );
+      final haptics = RecordingHaptics();
+      await tester.pumpWidget(_buildApp(db: db, haptics: haptics));
+      await _waitForContent(tester);
 
-        await tester.tap(find.text('Vegan'));
-        await tester.pump();
+      await tester.tap(find.text('Vegan'));
+      await tester.pump();
 
-        expect(
-          find.text('Could not save your settings. Try again.'),
-          findsOneWidget,
-        );
-        // A failed save must not claim success.
-        expect(haptics.calls, isNot(contains(HapticWeight.medium)));
-      },
-    );
+      expect(
+        find.text('Could not save your settings. Try again.'),
+        findsOneWidget,
+      );
+      // A failed save must not claim success.
+      expect(haptics.calls, isNot(contains(HapticWeight.medium)));
+    });
   });
 
-  group('SettingsScreen cooking-time bound (AC-UX-05)', () {
+  group('SettingsScreen cooking-time bound', () {
     _settingsWidgetTest(
       'shows the minutes unit and the 1-480 bound before it is violated',
       (WidgetTester tester) async {
@@ -355,10 +345,10 @@ void main() {
     expect(find.text('Privacy Policy'), findsNothing);
   });
 
-  group('Sign out (AC-DATA-09, AC-HAP-05)', () {
+  group('Sign out', () {
     _settingsWidgetTest(
-      'calls the AUTH seam, fires a haptic, and touches no local '
-      'user data',
+      'signs the session out and clears secure storage, fires a haptic, and '
+      'touches no local user data',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -376,15 +366,32 @@ void main() {
           ),
         );
 
-        var signedOutCalled = false;
+        FlutterSecureStorage.setMockInitialValues(<String, String>{});
+        final TokenStorage storage = TokenStorage();
+        final CognitoTokens tokens = CognitoTokens(
+          accessToken: 'access-1',
+          refreshToken: 'refresh-1',
+          idToken: 'id-1',
+          userSub: _userId,
+          email: 'test@gmail.com',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
+        await storage.saveTokens(tokens);
+
         final haptics = RecordingHaptics();
         await tester.pumpWidget(
           _buildApp(
             db: db,
             haptics: haptics,
-            signOut: () async {
-              signedOutCalled = true;
-            },
+            authController: () => AuthController(
+              AuthSessionSnapshot(
+                status: AuthStatus.active,
+                userId: _userId,
+                tokens: tokens,
+              ),
+              storage: storage,
+              client: MockCognitoAuthClient(),
+            ),
           ),
         );
         await _waitForContent(tester);
@@ -393,7 +400,16 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(signedOutCalled, isTrue);
+        final ProviderContainer container = ProviderScope.containerOf(
+          tester.element(find.byType(SettingsScreen)),
+        );
+        expect(
+          container.read(authControllerProvider).status,
+          AuthStatus.signedOut,
+        );
+        final StoredTokenValues stored = await storage.readTokens();
+        expect(stored.accessToken, isNull);
+        expect(stored.userSub, isNull);
         expect(haptics.calls, contains(HapticWeight.medium));
 
         // Sign-out must not wipe local data — the row saved above survives.

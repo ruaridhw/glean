@@ -8,7 +8,7 @@ ShoppingListItemView _item({
   int id = 1,
   double? quantity,
   String? unit,
-  String source = 'manual',
+  ShoppingSource source = ShoppingSource.manual,
   bool isChecked = false,
 }) {
   return ShoppingListItemView(
@@ -51,13 +51,13 @@ void main() {
 
   group('isPlanDerived', () {
     test('true only for a meal_plan-sourced row', () {
-      expect(isPlanDerived(_item(source: 'meal_plan')), isTrue);
-      expect(isPlanDerived(_item(source: 'manual')), isFalse);
-      expect(isPlanDerived(_item(source: 'ai')), isFalse);
+      expect(isPlanDerived(_item(source: ShoppingSource.mealPlan)), isTrue);
+      expect(isPlanDerived(_item(source: ShoppingSource.manual)), isFalse);
+      expect(isPlanDerived(_item(source: ShoppingSource.ai)), isFalse);
     });
   });
 
-  group('AC-SHOP-07 — one phrase for the cart count', () {
+  group('one phrase for the cart count', () {
     test('cartCountLabel pluralizes correctly', () {
       expect(cartCountLabel(0), '0 items in cart');
       expect(cartCountLabel(1), '1 item in cart');

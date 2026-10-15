@@ -8,15 +8,15 @@ import 'support/fakes.dart';
 void main() {
   setUpAll(registerAuthFallbackValues);
 
-  late MockAppAuthGateway gateway;
+  late MockFlutterAppAuth appAuth;
   late CognitoAuthClient client;
 
   setUp(() {
-    gateway = MockAppAuthGateway();
+    appAuth = MockFlutterAppAuth();
     client = CognitoAuthClient(
       cognitoDomain: 'auth.example.com',
       clientId: 'client-123',
-      gateway: gateway,
+      appAuth: appAuth,
     );
   });
 
@@ -24,9 +24,9 @@ void main() {
       buildTestJwt(<String, dynamic>{'sub': sub, 'email': email});
 
   group('signIn', () {
-    test('AC-AUTH-08: consumes the gateway call\'s returned result directly, '
-        'exactly once, with no other interaction', () async {
-      when(() => gateway.authorizeAndExchangeCode(any())).thenAnswer(
+    test('consumes the AppAuth call\'s returned result directly, exactly '
+        'once, with no other interaction', () async {
+      when(() => appAuth.authorizeAndExchangeCode(any())).thenAnswer(
         (_) async => AuthorizationTokenResponse(
           'access-123',
           'refresh-123',
@@ -45,14 +45,14 @@ void main() {
       expect(tokens.refreshToken, 'refresh-123');
       expect(tokens.userSub, 'user-sub-123');
       expect(tokens.email, 'test@gmail.com');
-      verify(() => gateway.authorizeAndExchangeCode(any())).called(1);
-      verifyNoMoreInteractions(gateway);
+      verify(() => appAuth.authorizeAndExchangeCode(any())).called(1);
+      verifyNoMoreInteractions(appAuth);
     });
 
     test(
       'sends the redirect URI, Google IdP and PKCE-relevant config',
       () async {
-        when(() => gateway.authorizeAndExchangeCode(any())).thenAnswer(
+        when(() => appAuth.authorizeAndExchangeCode(any())).thenAnswer(
           (_) async => AuthorizationTokenResponse(
             'access-123',
             'refresh-123',
@@ -69,7 +69,7 @@ void main() {
 
         final AuthorizationTokenRequest request =
             verify(
-                  () => gateway.authorizeAndExchangeCode(captureAny()),
+                  () => appAuth.authorizeAndExchangeCode(captureAny()),
                 ).captured.single
                 as AuthorizationTokenRequest;
         expect(request.redirectUrl, 'glean://auth/callback');
@@ -85,7 +85,7 @@ void main() {
     test(
       'wraps a cancelled sign-in as a distinguishable AuthException',
       () async {
-        when(() => gateway.authorizeAndExchangeCode(any())).thenThrow(
+        when(() => appAuth.authorizeAndExchangeCode(any())).thenThrow(
           FlutterAppAuthUserCancelledException(
             code: 'cancelled',
             platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
@@ -106,7 +106,7 @@ void main() {
     );
 
     test('throws when the response is missing a required token', () async {
-      when(() => gateway.authorizeAndExchangeCode(any())).thenAnswer(
+      when(() => appAuth.authorizeAndExchangeCode(any())).thenAnswer(
         (_) async => AuthorizationTokenResponse(
           'access-123',
           null, // no refresh token
@@ -131,7 +131,7 @@ void main() {
   group('refresh', () {
     test('returns new tokens, reusing the old refresh token when Cognito '
         'omits one from the response', () async {
-      when(() => gateway.token(any())).thenAnswer(
+      when(() => appAuth.token(any())).thenAnswer(
         (_) async => TokenResponse(
           'new-access',
           null, // Cognito's refresh grant doesn't reissue one
@@ -150,19 +150,18 @@ void main() {
       expect(tokens.refreshToken, 'old-refresh-token');
     });
 
-    test('AC-AUTH-05: returns null (never throws, never a partial token) when '
-        'the platform call itself fails', () async {
-      when(() => gateway.token(any())).thenThrow(Exception('network down'));
+    test('returns null (never throws, never a partial token) when the '
+        'platform call itself fails', () async {
+      when(() => appAuth.token(any())).thenThrow(Exception('network down'));
 
       final tokens = await client.refresh('old-refresh-token');
 
       expect(tokens, isNull);
     });
 
-    test('AC-AUTH-05: returns null for a structurally-successful response with '
-        'an empty/missing access token — the exact RN bug this must not '
-        'reproduce', () async {
-      when(() => gateway.token(any())).thenAnswer(
+    test('returns null for a structurally-successful response with an '
+        'empty/missing access token', () async {
+      when(() => appAuth.token(any())).thenAnswer(
         (_) async => TokenResponse(
           '', // "succeeded" but the access token is empty
           null,
@@ -182,7 +181,7 @@ void main() {
     test(
       'returns null when the response has no id token to decode a sub from',
       () async {
-        when(() => gateway.token(any())).thenAnswer(
+        when(() => appAuth.token(any())).thenAnswer(
           (_) async => TokenResponse(
             'new-access',
             null,

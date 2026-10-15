@@ -1,6 +1,6 @@
 // Widget coverage for the receipt camera screen: permission denied/pending
-// back affordances (AC-PAN-13), capture failure surfaced (AC-PAN-14), and
-// the shutter haptic (AC-HAP-05) — all exercised through
+// back affordances, capture failure surfaced, and
+// the shutter haptic — all exercised through
 // `FakeReceiptCameraController` since `flutter test` has no real camera or
 // permission platform channel (see the controller's doc comment).
 import 'dart:async';
@@ -47,8 +47,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('permission denied shows a working back affordance '
-        '(AC-PAN-13)', (WidgetTester tester) async {
+    testWidgets('permission denied shows a working back affordance', (
+      WidgetTester tester,
+    ) async {
       setUpHarness(CameraPermissionState.denied);
       await pumpScan(tester);
 
@@ -67,7 +68,7 @@ void main() {
     });
 
     testWidgets('permanently denied shows Open Settings and a back '
-        'affordance (AC-PAN-13)', (WidgetTester tester) async {
+        'affordance', (WidgetTester tester) async {
       setUpHarness(CameraPermissionState.permanentlyDenied);
       await pumpScan(tester);
 
@@ -124,8 +125,9 @@ void main() {
       expect(find.text('Reading receipt'), findsOneWidget);
     });
 
-    testWidgets('a capture failure surfaces instead of hanging silently '
-        '(AC-PAN-14)', (WidgetTester tester) async {
+    testWidgets('a capture failure surfaces instead of hanging silently', (
+      WidgetTester tester,
+    ) async {
       setUpHarness(CameraPermissionState.granted);
       camera.captureError = const ReceiptCaptureException('boom');
       await pumpScan(tester);

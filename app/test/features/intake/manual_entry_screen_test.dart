@@ -1,8 +1,7 @@
 // Widget coverage for manual pantry entry — dead code in the RN app;
-// reachable here from the `+` sheet (AC-PAN-03). The one intake surface with
-// no LLM classification behind it, so it must ask for a category directly
-// (FINDINGS.md F-07/F-08) — that's what lets expiry inference fire at all
-// for a manually-added item (AC-PAN-01).
+// reachable here from the `+` sheet. The one intake surface with
+// no LLM classification behind it, so it must ask for a category directly;
+// that's what lets expiry inference fire at all for a manually-added item.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -49,9 +48,7 @@ void main() {
     });
 
     testWidgets('saving a valid item infers an expiry from the chosen '
-        'category (AC-PAN-01) and returns to Pantry', (
-      WidgetTester tester,
-    ) async {
+        'category and returns to Pantry', (WidgetTester tester) async {
       await pumpManualEntry(tester);
 
       await tester.enterText(
@@ -68,7 +65,7 @@ void main() {
       await tester.tap(find.text('Add to pantry'));
       await tester.pumpAndSettle();
 
-      // The mediumImpact data-commit haptic fires (AC-HAP-05).
+      // The mediumImpact data-commit haptic fires.
       expect(harness.hapticCalls, contains(HapticWeight.medium));
 
       final saved = (await tester.runAsync(
@@ -86,7 +83,7 @@ void main() {
 
     testWidgets(
       'a unit mismatch shows a targeted message, not the generic "try '
-      'again" (R-23)',
+      'again"',
       (WidgetTester tester) async {
         // Establishes 'units' as chives' canonical/row unit.
         await pantry.addItem(

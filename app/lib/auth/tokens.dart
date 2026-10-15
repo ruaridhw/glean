@@ -28,14 +28,8 @@ class CognitoTokens {
   bool get isExpired =>
       !DateTime.now().isBefore(expiresAt.subtract(const Duration(seconds: 30)));
 
-  /// Builds tokens from a fresh Cognito response, decoding `sub`/`email` out
-  /// of the ID token's JWT payload — Cognito's token responses don't return
-  /// them as separate fields (mirrors the Expo app's `src/auth/google.ts`'s
-  /// `decodeIdTokenPayload`, see git history).
-  ///
-  /// Throws [FormatException] if the ID token has no usable `sub` claim —
-  /// [CognitoAuthClient] treats that identically to a missing token
-  /// altogether, never returning tokens it can't attach a stable user id to.
+  /// Builds tokens from a fresh Cognito response, decoding `sub`/`email` from the ID token's JWT payload.
+  /// Throws [FormatException] if the ID token has no usable `sub` claim.
   factory CognitoTokens.fromIdToken({
     required String accessToken,
     required String idToken,

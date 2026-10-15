@@ -1,14 +1,6 @@
-/// The saved-recipe detail screen: shows the dish name in the header
-/// (AC-MEAL-06), a real save/unsave bookmark toggle (AC-MEAL-02), and a
-/// same-screen "Add to plan" mutation with no navigation and no nav param
-/// (AC-MEAL-08/09, FINDINGS.md F-05 — the RN `add_recipe_id` re-add-on-focus
-/// bug has no equivalent here to reintroduce).
-///
-/// Reused by both [MealDetailScreen] (reached via `go_router`, keyed by the
-/// saved recipe's local id) and `RecipePreviewScreen` once a previewed
-/// recipe has been saved — at that point a preview simply *becomes* this
-/// screen, so there is only one implementation of "what a saved recipe looks
-/// like".
+/// The saved-recipe detail screen: dish name in the header, a save/unsave bookmark toggle, and a same-screen
+/// "Add to plan" mutation with no navigation and no nav param. Reused by [MealDetailScreen] (via `go_router`)
+/// and by `RecipePreviewScreen` once a previewed recipe is saved.
 library;
 
 import 'package:flutter/material.dart';
@@ -29,7 +21,6 @@ import 'package:go_router/go_router.dart';
 import 'actions.dart';
 import 'presentation.dart';
 import 'providers/meal_providers.dart';
-import 'widgets/meals_skeletons.dart';
 import 'widgets/recipe_detail_view.dart';
 
 class SavedRecipeDetail extends ConsumerWidget {
@@ -43,35 +34,37 @@ class SavedRecipeDetail extends ConsumerWidget {
       recipeByIdProvider(recipeId),
     );
 
-    // R-14: this outer loading→content switch used to be a bare `.when()`
-    // hard cut — the one place that pattern survived after every sibling
-    // screen (Pantry/Plan/Meals/`RecipePreviewScreen`) standardised on
-    // `GleanCrossFade`. Wrapped the same way here: `showSkeleton` covers
-    // only the genuine first-load wait, and `content` still resolves
-    // data/error/missing-recipe exactly as before.
-    return GleanCrossFade(
-      showSkeleton: !recipeAsync.hasValue && !recipeAsync.hasError,
-      skeleton: Scaffold(
-        appBar: AppBar(title: const Text('Recipe')),
-        body: const RecipeDetailSkeleton(),
-      ),
-      content: recipeAsync.when(
-        data: (RecipeView? recipe) {
-          // AC-MEAL-12: a missing recipe (never existed for this user, or
-          // was deleted while this screen was open) is a recoverable error,
-          // never a permanent spinner — reusing `RouteErrorScreen` per its
-          // own doc comment rather than calling `pop()` on a possibly-empty
-          // stack.
-          if (recipe == null) {
-            return const RouteErrorScreen(
-              message: 'This recipe could not be found.',
-            );
-          }
-          return _SavedRecipeDetailBody(recipe: recipe);
-        },
-        loading: () => const SizedBox.shrink(),
-        error: (Object error, StackTrace stackTrace) =>
-            const RouteErrorScreen(message: 'This recipe could not be loaded.'),
+    final bool loading = !recipeAsync.hasValue && !recipeAsync.hasError;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: KeyedSubtree(
+        key: ValueKey<bool>(loading),
+        child: loading
+            ? Scaffold(
+                appBar: AppBar(title: const Text('Recipe')),
+                body: const ListSkeleton(
+                  rows: 3,
+                  rowHeight: 160,
+                  headerHeight: 96,
+                ),
+              )
+            : recipeAsync.when(
+                data: (RecipeView? recipe) {
+                  // A missing recipe (never existed for this user, or deleted while open) is a recoverable error, never a
+                  // permanent spinner: reuse `RouteErrorScreen` rather than `pop()` on a possibly-empty stack.
+                  if (recipe == null) {
+                    return const RouteErrorScreen(
+                      message: 'This recipe could not be found.',
+                    );
+                  }
+                  return _SavedRecipeDetailBody(recipe: recipe);
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (Object error, StackTrace stackTrace) =>
+                    const RouteErrorScreen(
+                      message: 'This recipe could not be loaded.',
+                    ),
+              ),
       ),
     );
   }
@@ -127,7 +120,7 @@ class _SavedRecipeDetailBodyState
 
     return Scaffold(
       appBar: AppBar(
-        // AC-MEAL-06: the dish name, not a static "Recipe".
+        // The dish name, not a static "Recipe".
         title: Text(recipe.title, overflow: TextOverflow.ellipsis),
         actions: <Widget>[
           IconButton(
@@ -137,35 +130,37 @@ class _SavedRecipeDetailBodyState
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: data == null,
-        skeleton: const RecipeDetailSkeleton(),
-        content: data == null
-            ? const SizedBox.shrink()
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    RecipeDetailView(data: data),
-                    const SizedBox(height: 24),
-                    _AddToPlanButton(
-                      isInPlan: isInPlan,
-                      onPressed: _adding
-                          ? null
-                          : () => _onAddToPlan(
-                              context,
-                              ref,
-                              isInPlan: isInPlan,
-                              remaining: remainingAsync,
-                              servings:
-                                  configAsync.value?.preferredServings ??
-                                  UserConfigView.defaultPreferredServings,
-                            ),
-                    ),
-                  ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(data == null),
+          child: data == null
+              ? const ListSkeleton(rows: 3, rowHeight: 160, headerHeight: 96)
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      RecipeDetailView(data: data),
+                      const SizedBox(height: 24),
+                      _AddToPlanButton(
+                        isInPlan: isInPlan,
+                        onPressed: _adding
+                            ? null
+                            : () => _onAddToPlan(
+                                context,
+                                ref,
+                                isInPlan: isInPlan,
+                                remaining: remainingAsync,
+                                servings:
+                                    configAsync.value?.preferredServings ??
+                                    UserConfigView.defaultPreferredServings,
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -174,9 +169,8 @@ class _SavedRecipeDetailBodyState
     ref.read(hapticsProvider).mediumImpact();
     final deleted = await deleteRecipeWithUndo(context, ref, recipe);
     if (!deleted || !context.mounted) return;
-    // Leaving a now-deleted recipe's own detail screen is the same "recover
-    // safely, never pop an empty stack" rule `RouteErrorScreen` follows —
-    // this route may have been reached via a deep link with nothing to pop.
+    // Leaving a now-deleted recipe's detail screen follows `RouteErrorScreen`'s rule: this route may have been
+    // reached via a deep link with nothing to pop.
     if (context.canPop()) {
       context.pop();
     } else {
@@ -184,9 +178,8 @@ class _SavedRecipeDetailBodyState
     }
   }
 
-  /// AC-MEAL-08/09: plan-full and already-planned are both checked — and, if
-  /// triggered, reported via snackbar — *before* any mutation is attempted,
-  /// and the user never leaves this screen either way.
+  /// Plan-full and already-planned are both checked, and reported via snackbar, before any mutation is
+  /// attempted; the user never leaves this screen either way.
   Future<void> _onAddToPlan(
     BuildContext context,
     WidgetRef ref, {

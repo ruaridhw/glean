@@ -4,9 +4,7 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../pantry_presentation.dart';
 
-/// The "All" + per-category filter row. Selection fires `selectionClick`
-/// (AC-HAP-05) via the themed [FilterChip] — no hand-rolled pill button
-/// (AC-DS-05).
+/// The "All" + per-category filter row; selection fires `selectionClick` via the themed [FilterChip].
 class PantryFilterChips extends ConsumerWidget {
   const PantryFilterChips({
     super.key,

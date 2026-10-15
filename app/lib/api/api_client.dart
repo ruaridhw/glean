@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'api_exception.dart';
 import 'models/meal_plan.dart';
@@ -11,26 +12,13 @@ import 'models/recipes.dart';
 import 'models/shopping.dart';
 import 'text_input.dart';
 
-/// Supplies the current user's bearer token, or `null` if signed out.
-///
-/// **Seam:** the AUTH module (`lib/auth/**`) owns tokens. [GleanApiClient]
-/// takes this as an injected callback rather than reading token storage
-/// itself, so it stays testable and never depends on `lib/auth/` directly —
-/// `lib/main.dart` wires in [AuthController.getValidAccessToken] via
-/// `lib/api/providers/api_providers.dart`'s `apiAccessTokenProvider`.
+/// Supplies the current user's bearer token, or `null` if signed out. Injected rather than read from token
+/// storage, so the client stays testable and independent of `lib/auth/`.
 typedef AccessTokenProvider = Future<String?> Function();
 
-/// Typed HTTP client for the Glean FastAPI backend.
-///
-/// The backend holds no user state (FLUTTER_MIGRATION.md §3): its complete
-/// route surface is recipe search/detail/import, meal-plan generation, the
-/// three parse endpoints, and health. Every method here returns an
-/// *ephemeral proposal* — a DTO for the caller to review and, if accepted,
-/// persist via a DATA mutation. Nothing in this file writes to a database.
-///
-/// [baseUrl] is passed in, never read from `--dart-define` here — the
-/// entrypoint (`main.dart` vs `main_e2e.dart`) owns which backend a build
-/// talks to.
+/// Typed HTTP client for the Glean FastAPI backend, which holds no user state. Every method returns an
+/// ephemeral proposal (a DTO) for the caller to review and persist; nothing here writes to a database.
+/// [baseUrl] is passed in: the entrypoint owns which backend a build talks to.
 class GleanApiClient {
   GleanApiClient({
     required this.baseUrl,
@@ -42,9 +30,7 @@ class GleanApiClient {
   /// e.g. `http://localhost:8000` locally, or the deployed API Gateway URL.
   final String baseUrl;
 
-  /// Every request is bounded by this (AC-PAN-14): the RN app had no
-  /// client-side timeout on the LLM call, so a stalled request hung the
-  /// scan-progress screen on "Almost done..." forever with no way out.
+  /// Every request is bounded by this, so a stalled LLM call can't hang a screen forever.
   final Duration timeout;
 
   final http.Client httpClient;
@@ -54,19 +40,9 @@ class GleanApiClient {
 
   // --- Recipes ---
 
-  Future<RecipeSearchResponse> searchRecipes({
-    String? q,
-    String? cuisine,
-    String? dietary,
-    int page = 1,
-    int perPage = 20,
-  }) {
+  Future<RecipeSearchResponse> searchRecipes({String? q}) {
     final uri = _uri('/recipes/search', {
       if (q != null && q.isNotEmpty) 'q': q,
-      if (cuisine != null && cuisine.isNotEmpty) 'cuisine': cuisine,
-      if (dietary != null && dietary.isNotEmpty) 'dietary': dietary,
-      'page': '$page',
-      'per_page': '$perPage',
     });
     return _send(
       uri,
@@ -118,23 +94,19 @@ class GleanApiClient {
   Future<ScanResponse> scanReceipt(
     Uint8List imageBytes, {
     String filename = 'receipt.jpg',
-    String contentType = 'image/jpeg',
-  }) async {
+  }) {
     final uri = _uri('/receipts/scan');
-    final boundary =
-        'glean-boundary-${identityHashCode(imageBytes)}-${imageBytes.length}';
     return _send(uri, () async {
-      final request = http.Request('POST', uri);
-      request.headers.addAll(await _authHeaders());
-      request.headers['Content-Type'] =
-          'multipart/form-data; boundary=$boundary';
-      request.bodyBytes = _multipartBody(
-        boundary: boundary,
-        fieldName: 'file',
-        filename: filename,
-        contentType: contentType,
-        bytes: imageBytes,
-      );
+      final request = http.MultipartRequest('POST', uri)
+        ..headers.addAll(await _authHeaders())
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            imageBytes,
+            filename: filename,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
       return http.Response.fromStream(await httpClient.send(request));
     }, (dynamic json) => ScanResponse.fromJson(json as Map<String, dynamic>));
   }
@@ -170,17 +142,6 @@ class GleanApiClient {
     );
   }
 
-  // --- Health ---
-
-  Future<bool> health() {
-    final uri = _uri('/health');
-    return _send(
-      uri,
-      () async => httpClient.get(uri),
-      (dynamic json) => json is Map && json['status'] == 'ok',
-    );
-  }
-
   // --- Internals ---
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -204,11 +165,8 @@ class GleanApiClient {
     'Content-Type': 'application/json',
   };
 
-  /// Runs [send], applying the shared timeout/network/decode handling every
-  /// endpoint above needs. Nothing thrown from here is a bare `Exception`
-  /// or `Error` — everything is one of the [ApiException] subtypes so a
-  /// caller can distinguish "signed out" from "timed out" from "server
-  /// rejected it" (AC-SET-03 / AC-MEAL-10 client half).
+  /// Runs [send], applying shared timeout/network/decode handling. Everything thrown is an [ApiException]
+  /// subtype, so a caller can tell "signed out" from "timed out" from "server rejected it".
   Future<T> _send<T>(
     Uri uri,
     Future<http.Response> Function() send,
@@ -281,26 +239,5 @@ class GleanApiClient {
           .join('; ');
     }
     return null;
-  }
-
-  Uint8List _multipartBody({
-    required String boundary,
-    required String fieldName,
-    required String filename,
-    required String contentType,
-    required List<int> bytes,
-  }) {
-    final builder = BytesBuilder();
-    void writeLine(String line) => builder.add(utf8.encode('$line\r\n'));
-    writeLine('--$boundary');
-    writeLine(
-      'Content-Disposition: form-data; name="$fieldName"; filename="$filename"',
-    );
-    writeLine('Content-Type: $contentType');
-    writeLine('');
-    builder.add(bytes);
-    writeLine('');
-    writeLine('--$boundary--');
-    return builder.toBytes();
   }
 }

@@ -2,7 +2,7 @@
 // shows at all — see its doc comment for the router wiring this still
 // needs. These tests cover the gating logic in isolation: shown on first
 // run, not shown once completed, and not shown again after a restart
-// (simulated by remounting against the same status store).
+// (simulated by remounting against the same database).
 //
 // Pumped through the shared `AppTestHarness` (`test/support/harness.dart`)
 // rather than a hand-rolled `MaterialApp` — a bare `MaterialApp` here
@@ -17,7 +17,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/onboarding/onboarding_gate.dart';
 import 'package:glean/features/onboarding/onboarding_screen.dart';
-import 'package:glean/features/onboarding/providers/onboarding_status.dart';
 
 import '../../support/harness.dart';
 
@@ -40,10 +39,7 @@ void main() {
   testWidgets('shows the first-run flow when nothing has completed it yet', (
     WidgetTester tester,
   ) async {
-    final harness = AppTestHarness(
-      userId: _userId,
-      onboardingStatusStore: InMemoryOnboardingStatusStore(),
-    );
+    final harness = AppTestHarness(userId: _userId, onboarded: false);
     addTearDown(harness.dispose);
 
     await tester.pumpWidget(_buildApp(harness));
@@ -57,12 +53,7 @@ void main() {
   testWidgets('shows the real app directly when onboarding is already done', (
     WidgetTester tester,
   ) async {
-    final harness = AppTestHarness(
-      userId: _userId,
-      onboardingStatusStore: InMemoryOnboardingStatusStore(
-        initiallyCompleted: <String>{_userId},
-      ),
-    );
+    final harness = AppTestHarness(userId: _userId);
     addTearDown(harness.dispose);
 
     await tester.pumpWidget(_buildApp(harness));
@@ -76,11 +67,7 @@ void main() {
   testWidgets(
     'does not show again after a restart once it has been completed',
     (WidgetTester tester) async {
-      final store = InMemoryOnboardingStatusStore();
-      final harness = AppTestHarness(
-        userId: _userId,
-        onboardingStatusStore: store,
-      );
+      final harness = AppTestHarness(userId: _userId, onboarded: false);
       addTearDown(harness.dispose);
 
       await tester.pumpWidget(_buildApp(harness));
@@ -88,10 +75,10 @@ void main() {
       await tester.pump();
       expect(find.byType(OnboardingScreen), findsOneWidget);
 
-      await store.markCompleted(_userId);
+      await harness.markOnboardingCompleted();
 
       // Simulate an app restart: tear the whole tree down and remount a
-      // fresh gate against the same (now-persisted) store and container.
+      // fresh gate against the same (now-persisted) database and container.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpWidget(_buildApp(harness));
       await tester.pump();

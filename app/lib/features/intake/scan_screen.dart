@@ -1,7 +1,5 @@
-/// The receipt camera (FLUTTER_MIGRATION.md §6 Pantry). Reached from the
-/// pantry `+` sheet or Shop's checkout bar (`args.returnToShop`); presented
-/// outside the tab shell (`router.dart`) so a mid-scan tab tap can no longer
-/// silently lose the capture (AC-PAN-04).
+/// The receipt camera. Reached from the pantry `+` sheet or Shop's checkout bar (`args.returnToShop`); presented
+/// outside the tab shell (`router.dart`) so a mid-scan tab tap can't lose the capture.
 library;
 
 import 'dart:async' show unawaited;
@@ -17,7 +15,6 @@ import 'package:go_router/go_router.dart';
 import 'camera/receipt_camera_controller.dart';
 import 'camera/receipt_camera_providers.dart';
 import 'widgets/camera_permission_prompt.dart';
-import 'widgets/scan_back_button.dart';
 import 'widgets/scan_overlay.dart';
 
 enum _ScanPhase { checkingPermission, denied, permanentlyDenied, ready }
@@ -119,7 +116,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         if (!didPop) _exit();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF111511),
+        backgroundColor: context.tokens.cameraBackdrop,
         body: Stack(
           fit: StackFit.expand,
           children: <Widget>[

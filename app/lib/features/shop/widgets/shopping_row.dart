@@ -4,10 +4,8 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../presentation.dart';
 
-/// One row in the shopping list. Wrapped in `SwipeToDeleteRow` by the caller
-/// — this widget only renders content and the tap-to-toggle, keeping the
-/// delete affordance owned by exactly one place (AC-UX-01: RN carried both
-/// this row's swipe *and* a separate "×" `Pressable` on checked rows).
+/// One row in the shopping list. The caller wraps it in `SwipeToDeleteRow`; this widget only renders content and
+/// the tap-to-toggle, so the delete affordance is owned in one place.
 class ShoppingRow extends StatelessWidget {
   const ShoppingRow({required this.item, required this.onToggle, super.key});
 
@@ -26,7 +24,10 @@ class ShoppingRow extends StatelessWidget {
         onTap: onToggle,
         borderRadius: BorderRadius.circular(tokens.radius.lg),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: tokens.spacing.lg,
+            vertical: tokens.spacing.md,
+          ),
           child: Row(
             children: <Widget>[
               _CheckCircle(checked: checked),
@@ -46,9 +47,8 @@ class ShoppingRow extends StatelessWidget {
                   ),
                 ),
               ),
-              // AC-SHOP-05: a plan-derived row is tagged on every render, not
-              // just announced once at insertion (which happens outside this
-              // module — see `presentation.dart`'s `isPlanDerived` doc).
+              // A plan-derived row is tagged on every render, not just announced once at insertion (see
+              // `presentation.dart`'s `isPlanDerived`).
               if (isPlanDerived(item)) ...<Widget>[
                 SizedBox(width: tokens.spacing.sm),
                 const GleanBadge(
@@ -84,7 +84,7 @@ class _CheckCircle extends StatelessWidget {
         ),
       ),
       child: checked
-          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+          ? Icon(Icons.check_rounded, size: 14, color: colorScheme.onPrimary)
           : null,
     );
   }

@@ -14,7 +14,7 @@
   <rect width="1024" height="1024" fill="url(#bg)"/>
 
   <!--
-    F-01: this group used to carry `filter="url(#softShadow)"`, an
+    This group used to carry `filter="url(#softShadow)"`, an
     `feDropShadow` `flutter_svg` 2.3.0 cannot render (it logs "unhandled
     element <filter/>" and silently drops it). Stripped here; the
     equivalent shadow is reapplied in Flutter, behind the rendered SVG, by

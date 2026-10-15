@@ -8,10 +8,7 @@ import 'package:glean/design_system/design_system.dart';
 
 import '../pantry_presentation.dart';
 
-/// Quantity + unit + expiry, with explicit Save/Cancel and real validation
-/// (AC-PAN-07) — replaces RN's inline tap-to-edit-commit-on-blur, which
-/// silently discarded invalid input, couldn't change units, and had no
-/// expiry path at all.
+/// Quantity + unit + expiry, with explicit Save/Cancel and real validation.
 class QuantityEditSheet extends ConsumerStatefulWidget {
   const QuantityEditSheet({super.key, required this.item});
 

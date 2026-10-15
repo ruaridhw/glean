@@ -1,18 +1,9 @@
-// Ported from the Expo app's `src/db/recipes.ts` (see git history), scoped
-// by `userId` (AC-DATA-02):
-// the local `recipes` table is a user's saved/imported library, not the
-// read-only server-side search corpus.
+// Recipe persistence, scoped by `userId`: the local `recipes` table is a user's saved/imported library, not
+// the server-side search corpus.
 //
-// `getByExternalId` attaches dietary flags like `getById`/`getSavedRecipes`
-// do (AC-MEAL-13) — RN's version skipped that step, so an already-saved
-// recipe reached by external id (the import-dedupe path) silently lost its
-// dietary tags.
-//
-// `deleteRecipe` needs no special-casing to preserve a referencing plan
-// entry (AC-MEAL-03): `meal_plan_entries.recipe_id` is declared
-// `onDelete: setNull` in the schema, and the entry's `recipeTitle` snapshot
-// was already captured when it was created, so the plain delete below is
-// enough — SQLite (with `PRAGMA foreign_keys = ON`) does the rest.
+// `getByExternalId` attaches dietary flags like `getById`, so an already-saved recipe reached by external id
+// keeps its tags. `deleteRecipe` needs no special-casing for referencing plan entries:
+// `meal_plan_entries.recipe_id` is `onDelete: setNull` and `recipeTitle` is snapshotted.
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -48,26 +39,20 @@ class RecipesRepository {
   final GleanDatabase _db;
   final IngredientsRepository _ingredients;
 
-  Stream<List<RecipeView>> watchSaved(String userId) {
-    final query = _db.select(_db.recipes)
-      ..where((t) => t.userId.equals(userId))
-      ..orderBy([(t) => OrderingTerm.desc(t.id)]);
-    return query.watch().asyncMap(
-      (rows) => _attachDietaryFlags(rows.map(_mapRecipe).toList()),
-    );
-  }
+  Stream<List<RecipeView>> watchSaved(String userId) => _savedQuery(userId)
+      .watch()
+      .asyncMap((rows) => _attachDietaryFlags(rows.map(_mapRecipe).toList()));
 
-  /// One-shot twin of [watchSaved]: same ordering and dietary-flag
-  /// attachment, but a plain `.get()`. Command paths (e.g. meal-plan
-  /// generation) need a snapshot of the saved-recipe library, not a
-  /// subscription opened and immediately cancelled (FINDINGS.md F-14).
-  Future<List<RecipeView>> getSaved(String userId) async {
-    final query = _db.select(_db.recipes)
-      ..where((t) => t.userId.equals(userId))
-      ..orderBy([(t) => OrderingTerm.desc(t.id)]);
-    final rows = await query.get();
-    return _attachDietaryFlags(rows.map(_mapRecipe).toList());
-  }
+  /// One-shot twin of [watchSaved]: same query, a plain `.get()` rather than
+  /// a subscription opened and immediately cancelled.
+  Future<List<RecipeView>> getSaved(String userId) async => _attachDietaryFlags(
+    (await _savedQuery(userId).get()).map(_mapRecipe).toList(),
+  );
+
+  SimpleSelectStatement<$RecipesTable, Recipe> _savedQuery(String userId) =>
+      _db.select(_db.recipes)
+        ..where((t) => t.userId.equals(userId))
+        ..orderBy([(t) => OrderingTerm.desc(t.id)]);
 
   Future<RecipeView?> getById({required int id, required String userId}) async {
     final row =
@@ -144,13 +129,9 @@ class RecipesRepository {
       }
 
       for (final ing in ingredients) {
-        // Recipe endpoints don't return a category (§9 scope is the parse
-        // endpoints only), so this ingredient may stay null-categoried
-        // until a pantry/shopping resolution upgrades it. Deliberately no
-        // `unit:` either (R-18): a recipe's unit reflects that recipe's
-        // phrasing ("2 cloves"), not how the ingredient is actually
-        // stocked, and would be the wrong thing to lock in as the pantry
-        // normalization target.
+        // Recipe endpoints return no category, so this ingredient may stay null-categoried until a pantry/shopping
+        // resolution upgrades it. Deliberately no `unit:`: a recipe's unit reflects that recipe's phrasing, not how
+        // the ingredient is stocked.
         final ingredient = await _ingredients.resolveOrCreate(
           canonicalName: ing.canonicalName,
           apiIngredientId: ing.apiIngredientId,

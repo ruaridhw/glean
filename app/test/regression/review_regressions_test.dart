@@ -618,7 +618,7 @@ void main() {
         quantity: 100,
         unit: 'g',
       );
-      await s.toggleItem(id: id, userId: h.userId, checked: true);
+      await s.toggleRows(ids: [id], userId: h.userId, checked: true);
       await h.db.customStatement(
         "CREATE TRIGGER fail_checkout BEFORE DELETE ON shopping_list_items BEGIN SELECT RAISE(ABORT, 'review checkout failure'); END",
       );

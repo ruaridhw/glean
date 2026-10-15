@@ -1,4 +1,4 @@
-# iOS release lane — TestFlight (FLUTTER_MIGRATION.md §8, AC-CI-04).
+# iOS release lane — TestFlight.
 #
 # Driven from the Mac laptop only: `bundle exec fastlane beta` from this
 # directory (`app/ios/fastlane`). **Not wired into CI** — GitHub-hosted
@@ -9,7 +9,7 @@
 #
 # No `match`: one Mac, one signer — Xcode's own "Automatically manage
 # signing" (already on: see `CODE_SIGN_STYLE = Automatic` in
-# `Runner.xcodeproj/project.pbxproj`) is adequate per §8. Adopt `match` only
+# `Runner.xcodeproj/project.pbxproj`) is adequate. Adopt `match` only
 # once a second signer/machine needs the same certificates.
 
 require_relative '../../fastlane/release_config'
@@ -39,7 +39,7 @@ platform :ios do
 
     version_name = pubspec_version_name
 
-    # AC-CI-05 — EAS used to silently provide remote build-number
+    # EAS used to silently provide remote build-number
     # auto-increment (`appVersionSource: "remote"`, `autoIncrement: true`).
     # This is the explicit replacement: ask App Store Connect for the
     # highest build number already uploaded for this version (across
@@ -57,9 +57,8 @@ platform :ios do
     UI.message("Building #{version_name}+#{build_number} (-t lib/main.dart)")
 
     # `-t lib/main.dart` is explicit, not incidental: this lane must never
-    # build `lib/main_e2e.dart` (AC-AUTH-07) — `test/build/release_entrypoint_test.dart`
-    # extracts the resolved `-t` target from the `sh(...)` call below and
-    # asserts it is exactly `lib/main.dart`.
+    # build the e2e entrypoint; a CI grep step in
+    # flutter-ci.yml fails if any release path names the e2e entrypoint.
     sh(
       'cd ../.. && flutter build ipa --release ' \
       "-t lib/main.dart --build-number=#{build_number} #{defines}",

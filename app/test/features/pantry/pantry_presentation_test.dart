@@ -1,5 +1,4 @@
-// Unit coverage for the pure Pantry presentation helpers (AC-TEST-05 style
-// port), ported from the Expo app's `src/pantry/presentation.ts` (see git
+// Unit coverage for the pure Pantry presentation helpers, ported from the Expo app's `src/pantry/presentation.ts` (see git
 // history).
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
@@ -87,7 +86,7 @@ void main() {
   group('expiryBadgeFor', () {
     final now = DateTime(2026, 1, 10);
 
-    test('null expiry produces no badge (degrade gracefully, F-07/F-08)', () {
+    test('null expiry produces no badge (degrade gracefully)', () {
       expect(expiryBadgeFor(null, now: now), isNull);
     });
 
@@ -135,7 +134,7 @@ void main() {
     });
   });
 
-  group('parsePositiveQuantity — the single fallback rule (AC-PAN-08/09)', () {
+  group('parsePositiveQuantity — the single fallback rule', () {
     test('parses a valid decimal', () {
       expect(parsePositiveQuantity('1.5'), 1.5);
     });

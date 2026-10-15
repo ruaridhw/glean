@@ -1,8 +1,6 @@
-// Real-outcome tests (AC-TEST-02) for the Plan schema changes
-// FLUTTER_MIGRATION.md §6 Plan requires: week scoping and pagination
-// (AC-PLAN-01/02), per-week rather than lifetime capacity (AC-PLAN-04),
-// idempotent rollover (AC-PLAN-05, AC-TEST-09), honoured `servings`
-// (AC-PLAN-07), and undoable "Cooked" (AC-UX-03, AC-TEST-08 data half).
+// Real-outcome tests for the Plan repository: week scoping and pagination,
+// per-week rather than lifetime capacity, idempotent rollover, honoured
+// `servings`, and undoable "Cooked".
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -86,72 +84,66 @@ void main() {
       expect(week1Entries.map((e) => e.recipeTitle), ['Week 1 meal']);
 
       // Pagination: last week's entries remain reachable by paging back
-      // (AC-PLAN-02) rather than disappearing.
+      // rather than disappearing.
       final week2Entries = await repository
           .watchWeek(userId: userId, weekStart: week2)
           .first;
       expect(week2Entries.map((e) => e.recipeTitle), ['Week 2 meal']);
     });
 
-    test(
-      'addEntry honours the given servings — never hardcodes 1 (AC-PLAN-07)',
-      () async {
-        final week = startOfWeek(DateTime(2026, 1, 5));
-        final recipeId = await createRecipe('Big batch');
-        await repository.addEntry(
-          userId: userId,
-          recipeId: recipeId,
-          recipeTitle: 'Big batch',
-          servings: 6,
-          plannedDate: week,
-        );
+    test('addEntry honours the given servings — never hardcodes 1', () async {
+      final week = startOfWeek(DateTime(2026, 1, 5));
+      final recipeId = await createRecipe('Big batch');
+      await repository.addEntry(
+        userId: userId,
+        recipeId: recipeId,
+        recipeTitle: 'Big batch',
+        servings: 6,
+        plannedDate: week,
+      );
 
-        final entries = await repository
-            .watchWeek(userId: userId, weekStart: week)
-            .first;
-        expect(entries.single.servings, 6);
-      },
-    );
+      final entries = await repository
+          .watchWeek(userId: userId, weekStart: week)
+          .first;
+      expect(entries.single.servings, 6);
+    });
 
-    test(
-      'getWeek is a one-shot snapshot scoped like watchWeek (FINDINGS.md F-14)',
-      () async {
-        final week1 = startOfWeek(DateTime(2026, 1, 5));
-        final week2 = startOfWeek(DateTime(2026, 1, 12));
-        final recipe1 = await createRecipe('Week 1 meal');
-        final recipe2 = await createRecipe('Week 2 meal');
+    test('getWeek is a one-shot snapshot scoped like watchWeek', () async {
+      final week1 = startOfWeek(DateTime(2026, 1, 5));
+      final week2 = startOfWeek(DateTime(2026, 1, 12));
+      final recipe1 = await createRecipe('Week 1 meal');
+      final recipe2 = await createRecipe('Week 2 meal');
 
-        await repository.addEntry(
-          userId: userId,
-          recipeId: recipe1,
-          recipeTitle: 'Week 1 meal',
-          servings: 2,
-          plannedDate: week1,
-        );
-        await repository.addEntry(
-          userId: userId,
-          recipeId: recipe2,
-          recipeTitle: 'Week 2 meal',
-          servings: 2,
-          plannedDate: week2,
-        );
+      await repository.addEntry(
+        userId: userId,
+        recipeId: recipe1,
+        recipeTitle: 'Week 1 meal',
+        servings: 2,
+        plannedDate: week1,
+      );
+      await repository.addEntry(
+        userId: userId,
+        recipeId: recipe2,
+        recipeTitle: 'Week 2 meal',
+        servings: 2,
+        plannedDate: week2,
+      );
 
-        final week1Snapshot = await repository.getWeek(
-          userId: userId,
-          weekStart: week1,
-        );
-        expect(week1Snapshot.map((e) => e.recipeTitle), ['Week 1 meal']);
+      final week1Snapshot = await repository.getWeek(
+        userId: userId,
+        weekStart: week1,
+      );
+      expect(week1Snapshot.map((e) => e.recipeTitle), ['Week 1 meal']);
 
-        final week2Snapshot = await repository.getWeek(
-          userId: userId,
-          weekStart: week2,
-        );
-        expect(week2Snapshot.map((e) => e.recipeTitle), ['Week 2 meal']);
-      },
-    );
+      final week2Snapshot = await repository.getWeek(
+        userId: userId,
+        weekStart: week2,
+      );
+      expect(week2Snapshot.map((e) => e.recipeTitle), ['Week 2 meal']);
+    });
 
     group('capacity', () {
-      test('is per-week, not lifetime (AC-PLAN-04)', () async {
+      test('is per-week, not lifetime', () async {
         await setMealsPerWeek(2);
         final week1 = startOfWeek(DateTime(2026, 1, 5));
         final week2 = startOfWeek(DateTime(2026, 1, 12));
@@ -192,7 +184,7 @@ void main() {
         );
       });
 
-      test('cooked meals free up their slot (AC-PLAN-03/04)', () async {
+      test('cooked meals free up their slot', () async {
         await setMealsPerWeek(2);
         final week = startOfWeek(DateTime(2026, 1, 5));
         final recipeA = await createRecipe('A');
@@ -228,10 +220,7 @@ void main() {
         final entries = await repository
             .watchWeek(userId: userId, weekStart: week)
             .first;
-        expect(
-          entries,
-          hasLength(2),
-        ); // cooked entry stays visible (AC-PLAN-03)
+        expect(entries, hasLength(2)); // cooked entry stays visible
         expect(
           await repository.remainingCapacityForWeek(
             userId: userId,
@@ -384,49 +373,46 @@ void main() {
         },
       );
 
-      test(
-        'undoCooked restores the exact pantry quantity (AC-UX-03, AC-TEST-08)',
-        () async {
-          await pantryRepository.addItem(
-            userId: userId,
-            name: 'chicken breast',
-            quantity: 500,
-            unit: 'g',
-            category: 'poultry',
-            now: DateTime(2026, 1, 1),
-          );
-          final recipeId = await saveChickenRecipe();
-          final entryId = await repository.addEntry(
-            userId: userId,
-            recipeId: recipeId,
-            recipeTitle: 'Chicken dinner',
-            servings: 2,
-            plannedDate: startOfWeek(DateTime(2026, 1, 5)),
-          );
-          await repository.markCooked(
-            entryId: entryId,
-            userId: userId,
-            now: DateTime(2026, 1, 6),
-          );
+      test('undoCooked restores the exact pantry quantity', () async {
+        await pantryRepository.addItem(
+          userId: userId,
+          name: 'chicken breast',
+          quantity: 500,
+          unit: 'g',
+          category: 'poultry',
+          now: DateTime(2026, 1, 1),
+        );
+        final recipeId = await saveChickenRecipe();
+        final entryId = await repository.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: 'Chicken dinner',
+          servings: 2,
+          plannedDate: startOfWeek(DateTime(2026, 1, 5)),
+        );
+        await repository.markCooked(
+          entryId: entryId,
+          userId: userId,
+          now: DateTime(2026, 1, 6),
+        );
 
-          await repository.undoCooked(
-            entryId: entryId,
-            userId: userId,
-            now: DateTime(2026, 1, 7),
-          );
+        await repository.undoCooked(
+          entryId: entryId,
+          userId: userId,
+          now: DateTime(2026, 1, 7),
+        );
 
-          final pantry = await pantryRepository.watchAll(userId).first;
-          expect(pantry.single.quantity, 500); // exactly restored
+        final pantry = await pantryRepository.watchAll(userId).first;
+        expect(pantry.single.quantity, 500); // exactly restored
 
-          final entries = await repository
-              .watchWeek(
-                userId: userId,
-                weekStart: startOfWeek(DateTime(2026, 1, 5)),
-              )
-              .first;
-          expect(entries.single.isCooked, isFalse);
-        },
-      );
+        final entries = await repository
+            .watchWeek(
+              userId: userId,
+              weekStart: startOfWeek(DateTime(2026, 1, 5)),
+            )
+            .first;
+        expect(entries.single.isCooked, isFalse);
+      });
 
       test(
         'undoCooked restores exactly even when the decrement was floored at zero',
@@ -498,7 +484,7 @@ void main() {
       );
 
       test('undoing an earlier cook does not clobber a later cook\'s '
-          'lastUsedAt while the later cook is still standing (R-15)', () async {
+          'lastUsedAt while the later cook is still standing', () async {
         await pantryRepository.addItem(
           userId: userId,
           name: 'chicken breast',
@@ -564,7 +550,7 @@ void main() {
 
       test(
         'undoing the later cook after the earlier one is already undone '
-        'still restores lastUsedAt, since no live adjustment remains (R-15)',
+        'still restores lastUsedAt, since no live adjustment remains',
         () async {
           await pantryRepository.addItem(
             userId: userId,

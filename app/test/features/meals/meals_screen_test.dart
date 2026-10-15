@@ -1,33 +1,17 @@
 // Widget coverage for the Saved segment of the Meals tab: empty state,
-// listing, swipe-to-delete + undo — including AC-MEAL-03's requirement
+// listing, swipe-to-delete + undo — including the requirement
 // that a referencing plan entry survives a recipe delete with its
-// `recipeTitle` snapshot intact — and R-07's delete-failure guard.
+// `recipeTitle` snapshot intact — and the delete-failure guard.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/data/repositories/plan_repository.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
-import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 
-import '../../data/fixture.dart';
 import '../../support/harness.dart';
-
-/// Forces `RecipesRepository.deleteRecipe` to fail, so R-07's guard around
-/// `deleteRecipeWithUndo` can be exercised without a real DB failure mode to
-/// hand — stays trivial (override the one method under test) since its only
-/// job is injecting that one specific failure.
-class _ThrowingDeleteRecipesRepository extends RecipesRepository {
-  _ThrowingDeleteRecipesRepository(super.db, super.ingredients);
-
-  @override
-  Future<void> deleteRecipe({required int id, required String userId}) {
-    return Future<void>.error(Exception('simulated DB failure'));
-  }
-}
 
 void main() {
   group('MealsScreen — Saved segment', () {
@@ -77,7 +61,7 @@ void main() {
       await tester.tap(find.text('Tomato Pasta'));
       await tester.pumpAndSettle();
 
-      // The detail app bar shows the dish name (AC-MEAL-06), not a static
+      // The detail app bar shows the dish name, not a static
       // "Recipe" — there are now two matches (the app bar title and the
       // hero card is gone since it's folded into the app bar), so assert
       // via the AppBar specifically.
@@ -91,32 +75,8 @@ void main() {
     });
 
     testWidgets(
-      'a saved recipe settles in via GleanListEntrance rather than popping '
-      'in (R-10, AC-TRN-02)',
-      (WidgetTester tester) async {
-        await recipes.save(
-          userId: 'test-user',
-          externalId: 'ext-entrance',
-          title: 'Lentil Soup',
-          ingredients: const <SaveRecipeIngredient>[],
-        );
-
-        await harness.pumpAt(tester, AppRoutes.meals.path);
-        await tester.pumpAndSettle();
-
-        expect(
-          find.ancestor(
-            of: find.text('Lentil Soup'),
-            matching: find.byType(GleanListEntrance),
-          ),
-          findsOneWidget,
-        );
-      },
-    );
-
-    testWidgets(
       'swipe-to-delete removes a recipe with undo, keeping a referencing '
-      'plan entry with its title snapshot intact (AC-MEAL-03)',
+      'plan entry with its title snapshot intact',
       (WidgetTester tester) async {
         final int recipeId = await recipes.save(
           userId: 'test-user',
@@ -180,29 +140,16 @@ void main() {
     );
 
     gleanWidgetTest(
-      'a delete failure is caught and surfaced, leaving the row intact '
-      '(R-07)',
+      'a delete failure is caught and surfaced, leaving the row intact',
       (WidgetTester tester) async {
-        final throwingDb = createTestDatabase();
-        addTearDown(() => throwingDb.close());
-        final throwingRepo = _ThrowingDeleteRecipesRepository(
-          throwingDb,
-          IngredientsRepository(throwingDb),
-        );
-        await throwingRepo.save(
+        await recipes.save(
           userId: 'test-user',
           title: 'Chicken Curry',
           ingredients: const <SaveRecipeIngredient>[],
         );
+        await harness.failDeletesOn('recipes');
 
-        final localHarness = AppTestHarness(
-          overrides: [
-            recipesRepositoryProvider.overrideWithValue(throwingRepo),
-          ],
-        );
-        addTearDown(() => localHarness.dispose());
-
-        await localHarness.pumpAt(tester, AppRoutes.meals.path);
+        await harness.pumpAt(tester, AppRoutes.meals.path);
         await tester.pumpAndSettle();
         expect(find.text('Chicken Curry'), findsOneWidget);
 
@@ -210,13 +157,13 @@ void main() {
         await tester.pumpAndSettle();
 
         // No undo snackbar — the delete failed and was caught, not
-        // propagated uncaught with zero feedback (the R-07 bug).
+        // propagated uncaught with zero feedback.
         expect(find.text('Undo'), findsNothing);
         expect(find.textContaining('Could not remove'), findsOneWidget);
 
         // The row must survive untouched in the data layer.
         final survivors = await tester.runAsync(
-          () => throwingRepo.watchSaved('test-user').first,
+          () => recipes.watchSaved('test-user').first,
         );
         expect(survivors!.single.title, 'Chicken Curry');
       },

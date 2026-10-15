@@ -21,6 +21,47 @@ void main() {
 
     tearDown(() => db.close());
 
+    test('watchOnboardingCompleted is scoped per user', () async {
+      await repository.markOnboardingCompleted('user-a');
+
+      expect(await repository.watchOnboardingCompleted('user-a').first, isTrue);
+      expect(
+        await repository.watchOnboardingCompleted('user-b').first,
+        isFalse,
+      );
+    });
+
+    test('markOnboardingCompleted leaves the other settings intact', () async {
+      await repository.save(
+        const UserConfigView(
+          id: userId,
+          purchaseTolerance: 0.2,
+          preferredServings: 4,
+          mealsPerWeek: 3,
+          dietaryFlags: ['vegan'],
+          maxActiveTimeMins: 30,
+        ),
+      );
+
+      await repository.markOnboardingCompleted(userId);
+
+      final config = await repository.get(userId);
+      expect(config.mealsPerWeek, 3);
+      expect(config.preferredServings, 4);
+      expect(config.dietaryFlags, ['vegan']);
+      expect(await repository.watchOnboardingCompleted(userId).first, isTrue);
+    });
+
+    test(
+      'a fresh repository over the same database reads the flag back',
+      () async {
+        await repository.markOnboardingCompleted(userId);
+
+        final restarted = UserConfigRepository(db);
+        expect(await restarted.watchOnboardingCompleted(userId).first, isTrue);
+      },
+    );
+
     test('returns defaults before any row has been saved', () async {
       final config = await repository.get(userId);
 

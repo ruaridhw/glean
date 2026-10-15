@@ -27,7 +27,7 @@ class ScanOverlay extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.75),
+                  color: tokens.onCamera.withValues(alpha: 0.75),
                   width: 2.5,
                 ),
                 borderRadius: BorderRadius.circular(tokens.radius.xl),
@@ -48,14 +48,14 @@ class ScanOverlay extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
+                  color: tokens.cameraScrim,
                   borderRadius: BorderRadius.circular(tokens.radius.pill),
                 ),
                 child: Text(
                   'Line the receipt up inside the frame',
                   style: Theme.of(
                     context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.white),
+                  ).textTheme.bodySmall?.copyWith(color: tokens.onCamera),
                 ),
               ),
               SizedBox(height: tokens.spacing.lg),
@@ -76,11 +76,12 @@ class _ShutterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppTokens tokens = context.tokens;
     return SizedBox(
       width: 72,
       height: 72,
       child: Material(
-        color: Colors.white.withValues(alpha: 0.3),
+        color: tokens.onCamera.withValues(alpha: 0.3),
         shape: const CircleBorder(),
         child: InkWell(
           key: const ValueKey<String>('scan-shutter'),
@@ -88,22 +89,50 @@ class _ShutterButton extends StatelessWidget {
           onTap: capturing ? null : onPressed,
           child: Center(
             child: capturing
-                ? const SizedBox(
+                ? SizedBox(
                     width: 28,
                     height: 28,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      color: Colors.white,
+                      color: tokens.onCamera,
                     ),
                   )
                 : Container(
                     width: 58,
                     height: 58,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
+                    decoration: BoxDecoration(
+                      color: tokens.onCamera,
                       shape: BoxShape.circle,
                     ),
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The always-present back affordance on every Scan screen phase, so permission-denied and
+/// permission-pending are never a dead end. Rendered identically across phases.
+class ScanBackButton extends StatelessWidget {
+  const ScanBackButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppTokens tokens = context.tokens;
+    return Positioned(
+      top: 16,
+      left: 16,
+      child: SafeArea(
+        child: Material(
+          color: tokens.cameraScrim,
+          shape: const CircleBorder(),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: tokens.onCamera),
+            tooltip: 'Cancel',
+            onPressed: onPressed,
           ),
         ),
       ),

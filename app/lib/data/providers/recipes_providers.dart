@@ -1,7 +1,5 @@
-// Saved-recipe-library reads for the current user. Recipe *search* against
-// the backend is a remote command provider, not a local read — it belongs
-// to the API module (FLUTTER_MIGRATION.md §3: only local drift reads live
-// here).
+// Saved-recipe-library reads for the current user. Backend recipe search is a remote command provider,
+// not a local read.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/recipe_view.dart';

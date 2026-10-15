@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
 import '../../settings/settings_presentation.dart';
-import '../../settings/widgets/dietary_flags_control.dart';
-import '../../settings/widgets/integer_slider_control.dart';
+import '../../settings/widgets/dietary_preferences_card.dart';
+import '../../settings/widgets/preference_slider_card.dart';
 import 'onboarding_step_scaffold.dart';
 
-/// Whichever question is current (AC-DS-14 — extracted into its own
-/// `const`-constructible class rather than an `OnboardingScreen` builder
-/// method, per R-12: a builder method shares its parent's rebuild scope, an
-/// extracted class gets its own). Keyed by [step] at the call site so
-/// `AnimatedSwitcher` still detects a step change and cross-fades between
-/// them.
+/// Whichever question is current, as its own `const` class for its own rebuild scope. Keyed by [step] at the
+/// call site so `AnimatedSwitcher` detects a step change and cross-fades.
 class OnboardingStepBody extends StatelessWidget {
   const OnboardingStepBody({
     required super.key,

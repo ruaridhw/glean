@@ -1,4 +1,4 @@
-// AC-TEST-19: the redirect-URI cross-repo contract. `flutter test` always
+// The redirect-URI contract shared with the backend. `flutter test` always
 // runs with the package root (`app/`) as the working directory, so
 // `../backend/template.yaml` resolves regardless of which test file this is
 // (mirrors the Expo app's tests/auth/redirect-uri.test.ts's equivalent

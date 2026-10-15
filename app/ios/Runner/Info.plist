@@ -45,9 +45,9 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-		<!-- AC-BUILD-10: honest, user-facing copy — no RECORD_AUDIO string exists
-		     anywhere in this file; §2 established it as vestigial (the "describe"
-		     screens are plain text inputs, not audio capture). -->
+		<!-- honest, user-facing copy — no RECORD_AUDIO string exists
+		     anywhere in this file: the "describe" screens are plain text inputs,
+		     not audio capture. -->
 		<key>NSCameraUsageDescription</key>
 		<string>Glean uses your camera to scan grocery receipts so their items can be added to your pantry automatically.</string>
 		<key>UIApplicationSceneManifest</key>

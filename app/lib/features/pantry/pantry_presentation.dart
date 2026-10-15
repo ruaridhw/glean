@@ -1,20 +1,13 @@
-/// Pure presentation helpers for the Pantry screen, ported from the Expo
-/// app's `src/pantry/presentation.ts` (see git history) — grouping, expiry
-/// badges and the
-/// "expiring soon" predicate the header chip and (eventually) the Plan nudge
-/// both rely on. Kept free of Flutter/Riverpod so it stays unit-testable in
-/// isolation from widgets (AC-TEST-05 style: this is the highest-value
-/// logic-port candidate in this feature).
+/// Pure presentation helpers for the Pantry screen: grouping, expiry badges and the "expiring soon" predicate
+/// used by the header chip and the Plan nudge. Free of Flutter/Riverpod so it stays unit-testable.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 
-/// Display metadata for a pantry section, keyed by food group. Several food
-/// groups fold into the same display section — RN groups `vegetables` and
-/// `fruit` under one "Veg & Fruit" header, and `carbohydrates`/`fats`/
-/// `condiments` under one "Cupboard" header — because the pantry UI groups
-/// coarser than the 23-category taxonomy.
+/// Display metadata for a pantry section, keyed by food group. Several food groups fold into one display
+/// section (`vegetables` and `fruit` under "Veg & Fruit"; `carbohydrates`/`fats`/`condiments` under "Cupboard"),
+/// since the pantry groups coarser than the 23-category taxonomy.
 @immutable
 class PantryCategoryMeta {
   const PantryCategoryMeta({
@@ -94,9 +87,8 @@ const PantryCategoryMeta _other = PantryCategoryMeta(
   icon: Icons.category_rounded,
 );
 
-/// Resolves display metadata for a raw `foodGroup` string, falling back to
-/// "Other" for anything unrecognised — mirrors `getPantryCategoryMeta` in the
-/// RN app, which never lets an unknown food group vanish from the UI.
+/// Resolves display metadata for a raw `foodGroup` string, falling back to "Other" so an unknown food group never
+/// vanishes from the UI.
 PantryCategoryMeta pantryCategoryMeta(String foodGroup) =>
     _byFoodGroup[foodGroup] ?? _other;
 
@@ -108,10 +100,8 @@ class PantrySection {
   final List<PantryItemView> items;
 }
 
-/// Groups [items] by display section (see [pantryCategoryMeta]), preserving
-/// each section's first-seen order — matches RN's `groupPantryItems`, which
-/// builds sections in the order their first item appears in the
-/// (expiry-sorted) input list.
+/// Groups [items] by display section (see [pantryCategoryMeta]), preserving each section's first-seen order from
+/// the (expiry-sorted) input.
 List<PantrySection> groupPantryItems(List<PantryItemView> items) {
   final Map<String, List<PantryItemView>> byKey =
       <String, List<PantryItemView>>{};
@@ -130,8 +120,7 @@ List<PantrySection> groupPantryItems(List<PantryItemView> items) {
   ];
 }
 
-/// Renders a quantity without a trailing ".0" for whole numbers, matching RN's
-/// `formatPantryQuantity`.
+/// Renders a quantity without a trailing ".0" for whole numbers.
 String formatPantryQuantity(double quantity, String unit) {
   final String qtyText = quantity == quantity.roundToDouble()
       ? quantity.toStringAsFixed(0)
@@ -148,7 +137,7 @@ String _trimTrailingZeros(double value) {
   return text;
 }
 
-/// Tone for an expiry badge, matching RN's `ExpiryBadgeModel.tone`.
+/// Tone for an expiry badge.
 enum ExpiryTone { expired, soon, later }
 
 @immutable
@@ -159,11 +148,8 @@ class ExpiryBadge {
   final ExpiryTone tone;
 }
 
-/// Builds the expiry badge for [expiryDate] relative to [now], or null when
-/// there is nothing to show (AC-PAN-02: driven from real stored data, so a
-/// null expiry — a category-less item degrading gracefully, FINDINGS.md
-/// F-07/F-08 — simply shows no badge rather than a fabricated one). Ported
-/// from RN's `getExpiryBadge`.
+/// Builds the expiry badge for [expiryDate] relative to [now], or null when there is nothing to show (a null
+/// expiry, e.g. a category-less item, shows no badge rather than a fabricated one).
 ExpiryBadge? expiryBadgeFor(DateTime? expiryDate, {DateTime? now}) {
   if (expiryDate == null) return null;
 
@@ -185,25 +171,18 @@ ExpiryBadge? expiryBadgeFor(DateTime? expiryDate, {DateTime? now}) {
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
-/// Whether [item] counts toward the "N expiring" chip/banner — expired or
-/// within a couple of days (`ExpiryTone.expired`/`.soon`). Shared by the
-/// pantry header and (via the same stored `expiryDate`) the Plan nudge, so
-/// both stay in lockstep — mirrors RN's `isExpiringSoon`.
+/// Whether [item] counts toward the "N expiring" chip/banner: expired or within a couple of days. Shared by the
+/// pantry header and the Plan nudge so both stay in lockstep.
 bool isExpiringSoon(PantryItemView item, {DateTime? now}) {
   final ExpiryBadge? badge = expiryBadgeFor(item.expiryDate, now: now);
   return badge?.tone == ExpiryTone.expired || badge?.tone == ExpiryTone.soon;
 }
 
-/// Parses a user-typed quantity, returning null for anything that isn't a
-/// finite positive number.
+/// Parses a user-typed quantity, returning null for anything that isn't a finite positive number.
 ///
-/// This is the single fallback rule shared by manual entry, the quantity
-/// edit sheet and the intake review screen — the direct fix for §11's
-/// "inconsistent numeric fallbacks between the twin review screens" (one
-/// fell back to `1`, the other to `0`). There is no fallback at all: an
-/// unparseable, zero, negative or NaN value is simply invalid (null), and
-/// every call site must block the destructive action rather than silently
-/// substituting a magic number (AC-PAN-08/09).
+/// This is the single fallback rule shared by manual entry, the quantity edit sheet and the review screen. There
+/// is no fallback: an unparseable, zero, negative or NaN value is invalid (null), and every call site must block
+/// the action rather than substitute a magic number.
 double? parsePositiveQuantity(String text) {
   final String trimmed = text.trim();
   if (trimmed.isEmpty) return null;
@@ -212,13 +191,8 @@ double? parsePositiveQuantity(String text) {
   return value;
 }
 
-/// Formats a quantity for an editable text field's seed text, dropping a
-/// trailing ".0" for whole numbers — the starting text a
-/// `TextEditingController` is built with (in the review screen's rows and
-/// the quantity edit sheet alike). Typing further is unrestricted free text
-/// (AC-PAN-08): unlike RN's `String(quantity)` seed, nothing here re-derives
-/// the text from the numeric value on every keystroke, so there is no
-/// round-trip to fight.
+/// Formats a quantity for an editable field's seed text, dropping a trailing ".0" for whole numbers. Typing
+/// further is unrestricted free text: nothing re-derives the text from the numeric value on every keystroke.
 String formatQuantitySeed(double quantity) {
   if (quantity == quantity.roundToDouble()) return quantity.toStringAsFixed(0);
   String text = quantity.toStringAsFixed(3);
@@ -227,11 +201,8 @@ String formatQuantitySeed(double quantity) {
   return text;
 }
 
-/// A human-readable label for a taxonomy category key (e.g. `leafy_greens`
-/// -> `Leafy Greens`). Shared by manual entry's category picker and the
-/// review screen's per-row category picker (shown when a parsed item has no
-/// category, FINDINGS.md F-07/F-08) — one label format everywhere a raw
-/// taxonomy key reaches the UI.
+/// A human-readable label for a taxonomy category key (e.g. `leafy_greens` -> `Leafy Greens`), shared by manual
+/// entry's and the review screen's category pickers.
 String categoryLabel(String key) => key
     .split('_')
     .map((String w) => '${w[0].toUpperCase()}${w.substring(1)}')

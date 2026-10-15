@@ -1,20 +1,8 @@
-// Week-boundary helpers backing the Plan schema change (FLUTTER_MIGRATION.md
-// §6 Plan): "This Week" gets an actual date filter, and rollover/capacity
-// become week-scoped instead of lifetime (AC-PLAN-01/04/05).
+// Week-boundary helpers. Weeks run Monday-Sunday (ISO 8601, Monday = 1): the spec states no boundary, so it
+// is fixed once here. Every repository method taking a `weekStart` expects a Monday from `startOfWeek`, and the
+// Plan feature must use these helpers rather than derive its own boundary.
 //
-// DELIBERATE CHOICE, not stated by the spec: weeks run Monday-Sunday (ISO
-// 8601 weekday numbering: Monday = 1). The spec never states a week
-// boundary, so this is the data layer's call, made once here rather than
-// left for each caller to assume independently — every repository method
-// that takes or returns a "week" (`PlanRepository.watchWeek`,
-// `remainingCapacityForWeek`, `rolloverUncookedMeals`) treats `weekStart` as
-// a Monday produced by `startOfWeek`, and the Plan feature (week pagination,
-// "This Week" header, etc.) must go through these helpers rather than
-// deriving its own week boundary, or the two will disagree.
-//
-// Dates are stored and compared as plain `YYYY-MM-DD` text — day-mapping
-// within a week is explicitly out of scope (FLUTTER_MIGRATION.md §1), so
-// only the date, never the time, matters here.
+// Dates are plain `YYYY-MM-DD` text; only the date, never the time, matters.
 
 /// Midnight-local, date-only `DateTime` for `date` — strips any time-of-day
 /// component so callers can't accidentally compare a `DateTime.now()` (which

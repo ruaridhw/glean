@@ -1,15 +1,11 @@
-// Widget coverage for the Shop "describe" flow (FINDINGS.md F-16): the
-// screen the router wave's placeholder was silently standing in for until
-// now. Parses a description, carries clarifying questions through to the
+// Widget coverage for the Shop "describe" flow. Parses a description, carries clarifying questions through to the
 // shared review screen with `ReviewDestination.shop`, and surfaces a
 // timeout / validation error recoverably rather than dead-ending.
 //
 // Uses `gleanWidgetTest` (releases the drift-watching tree in-body) and
 // `pumpUntil`/`pumpPastSkeleton` rather than `pumpAndSettle` — this screen's
 // submit button shows a genuinely indeterminate `CircularProgressIndicator`
-// while a request is pending (AC-PAN-06's honest-progress requirement
-// applies here too), which never reaches a quiescent frame (FINDINGS.md
-// F-12/F-13).
+// while a request is pending, which never reaches a quiescent frame.
 import 'dart:async';
 import 'dart:convert';
 
@@ -49,7 +45,7 @@ void main() {
     }
 
     gleanWidgetTest('the flow is reachable and no longer a dead-end '
-        'placeholder (FINDINGS.md F-16)', (WidgetTester tester) async {
+        'placeholder', (WidgetTester tester) async {
       await pumpDescribe(tester);
 
       expect(find.text('Describe list'), findsOneWidget);
@@ -170,7 +166,7 @@ void main() {
     });
 
     gleanWidgetTest('a timeout surfaces a distinct, recoverable message '
-        'rather than hanging (AC-PAN-14)', (WidgetTester tester) async {
+        'rather than hanging', (WidgetTester tester) async {
       // A never-completing Completer, not `Future.delayed` — the latter
       // owns a real `Timer` that would still be "pending" once the
       // client's own 30s `.timeout()` fires first (see
@@ -207,7 +203,7 @@ void main() {
 
       expect(find.byType(ReviewScreen), findsNothing);
       // Still on the describe screen, with a usable submit button — never a
-      // dead end (AC-PAN-14; the RN app's scan-progress equivalent hung
+      // dead end (the RN app's scan-progress equivalent hung
       // forever on "Almost done…").
       expect(find.byType(ShopDescribeScreen), findsOneWidget);
       expect(

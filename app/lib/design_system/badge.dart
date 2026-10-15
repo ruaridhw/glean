@@ -2,26 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Tone for [GleanBadge], mirroring the RN `Badge` component's `BadgeTone`.
+/// Tone for [GleanBadge].
 enum GleanBadgeTone { neutral, primary, warning, danger }
 
-/// A tinted, non-interactive label pill — a count, a category tag, an "In
-/// plan" status label.
+/// A tinted, non-interactive label pill: a count, a category tag, a status label.
 ///
-/// This is **the one sanctioned bespoke primitive** in the design system
-/// (AC-DS-12; FLUTTER_MIGRATION.md §4 names it explicitly as "likely to stay
-/// bespoke"). It is not built from either close built-in:
-/// - `Badge` (Material) is a notification-dot *overlay* anchored to another
-///   widget — it has no "standalone tinted label" mode at all.
-/// - `Chip` is themed and used elsewhere in this design system (see
-///   `theme.dart`'s `chipTheme`) as the pill-chip button variant, but its
-///   anatomy — ink response, selection state, optional avatar/delete-icon
-///   slots — exists for an *interactive* element. A purely decorative label
-///   fights that anatomy rather than using it.
-///
-/// Every colour and radius below comes from [Theme.of(context)]
-/// (`ColorScheme` for the primary/warning/danger tones, [AppTokens] for the
-/// pill radius), never a local constant (AC-DS-03).
+/// Bespoke because Material's `Badge` is a notification-dot overlay with no standalone mode, and
+/// `Chip` is built for interactive elements. Colours and radius come from the theme.
 class GleanBadge extends StatelessWidget {
   const GleanBadge({
     super.key,

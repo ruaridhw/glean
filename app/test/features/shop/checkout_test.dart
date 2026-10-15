@@ -1,5 +1,4 @@
-// AC-TEST-06 (non-negotiable, per IMPLEMENTATION.md) and the checkout half
-// of AC-SHOP-01/02/03: a receipt only removes the rows it actually
+// Checkout: a receipt only removes the rows it actually
 // resolved, "Done shopping" completes a receipt-less trip with undo, and a
 // manual item's resolved ingredient identity lets it participate in a
 // receipt match at all.
@@ -13,6 +12,7 @@
 // data-preserving behaviour, live, with no `ref.invalidate` anywhere.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/router/app_routes.dart';
@@ -22,24 +22,25 @@ import '../../support/harness.dart';
 void main() {
   group('Shop checkout', () {
     late AppTestHarness harness;
-    late ShoppingRepository shopping;
-    late IngredientsRepository ingredients;
 
-    setUp(() {
-      harness = AppTestHarness();
-      ingredients = IngredientsRepository(harness.db);
-      shopping = ShoppingRepository(harness.db, ingredients);
-    });
+    // Read lazily: touching `harness.container` in `setUp` would start drift
+    // work outside the test's fake-async zone.
+    ShoppingRepository shopping() =>
+        harness.container.read(shoppingRepositoryProvider);
+    IngredientsRepository ingredients() =>
+        harness.container.read(ingredientsRepositoryProvider);
+
+    setUp(() => harness = AppTestHarness());
 
     tearDown(() => harness.dispose());
 
     testWidgets(
       'a receipt resolving 4 of 12 checked rows removes exactly those 4 and '
-      'leaves 8 (AC-SHOP-01, AC-TEST-06)',
+      'leaves 8',
       (WidgetTester tester) async {
         final List<int> ingredientIds = <int>[];
         for (int i = 0; i < 12; i++) {
-          final int id = await shopping.addManualItem(
+          final int id = await shopping().addManualItem(
             userId: 'test-user',
             name: 'Item $i',
           );
@@ -47,11 +48,15 @@ void main() {
           // ingredient, same id `addManualItem` just resolved, since
           // `resolveOrCreate` is idempotent by name. Avoids subscribing to
           // and cancelling a drift stream twelve times over in a loop.
-          final ingredient = await ingredients.resolveOrCreate(
+          final ingredient = await ingredients().resolveOrCreate(
             canonicalName: 'Item $i',
           );
           ingredientIds.add(ingredient.id);
-          await shopping.toggleItem(id: id, userId: 'test-user', checked: true);
+          await shopping().toggleRows(
+            ids: [id],
+            userId: 'test-user',
+            checked: true,
+          );
         }
         final List<int> resolved = ingredientIds.sublist(0, 4);
 
@@ -69,7 +74,7 @@ void main() {
           expect(find.text('Item $i'), findsOneWidget);
         }
 
-        final int removedCount = await shopping.resolveCheckout(
+        final int removedCount = await shopping().resolveCheckout(
           userId: 'test-user',
           resolvedIngredientIds: resolved,
         );
@@ -83,23 +88,22 @@ void main() {
           expect(find.text('Item $i'), findsOneWidget);
         }
         expect(
-          await tester.runAsync(() => shopping.watchAll('test-user').first),
+          await tester.runAsync(() => shopping().watchAll('test-user').first),
           hasLength(8),
         );
       },
     );
 
     testWidgets(
-      '"Done shopping" completes a receipt-less trip, leaving unchecked rows '
-      '(AC-SHOP-02)',
+      '"Done shopping" completes a receipt-less trip, leaving unchecked rows',
       (WidgetTester tester) async {
-        await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
-        final int milkId = await shopping.addManualItem(
+        await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
+        final int milkId = await shopping().addManualItem(
           userId: 'test-user',
           name: 'Milk',
         );
-        await shopping.toggleItem(
-          id: milkId,
+        await shopping().toggleRows(
+          ids: [milkId],
           userId: 'test-user',
           checked: true,
         );
@@ -114,7 +118,7 @@ void main() {
         expect(find.text('Milk'), findsNothing);
         expect(find.text('1 item checked off'), findsOneWidget);
         expect(
-          await tester.runAsync(() => shopping.watchAll('test-user').first),
+          await tester.runAsync(() => shopping().watchAll('test-user').first),
           hasLength(1),
         );
 
@@ -123,7 +127,7 @@ void main() {
 
         expect(find.text('Milk'), findsOneWidget);
         expect(
-          await tester.runAsync(() => shopping.watchAll('test-user').first),
+          await tester.runAsync(() => shopping().watchAll('test-user').first),
           hasLength(2),
         );
       },

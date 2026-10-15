@@ -1,9 +1,6 @@
-/// Google-via-Cognito sign-in (FLUTTER_MIGRATION.md §5/§6 — Google-only sign-in
-/// is unchanged). "Sign in with Google" is called out in §7 as "the single
-/// most important tap in the app"; it and a successful sign-in both fire a
-/// haptic through the design-system ladder (AC-HAP-05), mirroring how
-/// `SettingsScreen._handleSignOut` fires sign-out's haptic — never inside
-/// `AuthController` itself, to avoid the double-buzz bug (AC-HAP-03).
+/// Google-via-Cognito sign-in. "Sign in with Google" and a successful sign-in both fire a haptic through the
+/// design-system ladder, mirroring `SettingsScreen._handleSignOut`; never inside `AuthController`, to avoid a
+/// double-buzz.
 library;
 
 import 'dart:async';
@@ -74,16 +71,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       : () => unawaited(_handleSignIn()),
                   style: FilledButton.styleFrom(
                     backgroundColor: tokens.ink,
-                    foregroundColor: Colors.white,
                     disabledBackgroundColor: tokens.ink.withValues(alpha: 0.5),
                   ),
                   child: _isSigningIn
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : const Text('Sign in with Google'),
@@ -97,8 +93,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-/// Extracted so it has its own `const` rebuild scope (AC-DS-14) — this
-/// screen's only sub-widget.
+/// Extracted for its own `const` rebuild scope; this screen's only sub-widget.
 class _BrandIconTile extends StatelessWidget {
   const _BrandIconTile();
 

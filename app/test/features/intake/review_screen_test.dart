@@ -1,9 +1,8 @@
-// Widget coverage for the shared intake review screen (AC-PAN-05): decimal
-// quantities round-trip (AC-PAN-08), zero/NaN is rejected (AC-PAN-09), the
-// commit is atomic and a retry can't double (AC-PAN-10), a pantry-only
-// review never touches the shopping list (AC-PAN-11), and a null-category
-// pantry row requires a category pick before it can be confirmed
-// (FINDINGS.md F-07/F-08).
+// Widget coverage for the shared intake review screen: decimal
+// quantities round-trip, zero/NaN is rejected, the
+// commit is atomic and a retry can't double, a pantry-only
+// review never touches the shopping list, and a null-category
+// pantry row requires a category pick before it can be confirmed.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -79,7 +78,7 @@ void main() {
       });
     }
 
-    testWidgets('decimal quantities are typeable and round-trip (AC-PAN-08)', (
+    testWidgets('decimal quantities are typeable and round-trip', (
       WidgetTester tester,
     ) async {
       await pumpReview(
@@ -92,8 +91,8 @@ void main() {
               name: 'olive oil',
               quantity: 1,
               // Deliberately not a recognised volume/mass unit ('l', 'kg',
-              // ...): this test is about decimal-typing round-trip
-              // (AC-PAN-08), not unit normalization (R-18) — a recognised
+              // ...): this test is about decimal-typing round-trip,
+              // not unit normalization — a recognised
               // unit would legitimately convert (e.g. 1.5 l -> 1500 ml),
               // which would conflate the two concerns here.
               unit: 'bottle',
@@ -122,7 +121,7 @@ void main() {
     });
 
     testWidgets('zero/NaN quantities fail validation — Confirm cannot write '
-        '0 units (AC-PAN-09)', (WidgetTester tester) async {
+        '0 units', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -170,7 +169,7 @@ void main() {
     });
 
     testWidgets('save is atomic: a mid-batch failure persists nothing, and '
-        'retrying does not double (AC-PAN-10)', (WidgetTester tester) async {
+        'retrying does not double', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -226,8 +225,9 @@ void main() {
       expect(items!.single.quantity, 3);
     });
 
-    testWidgets('a pantry-only review never touches the shopping list '
-        '(AC-PAN-11)', (WidgetTester tester) async {
+    testWidgets('a pantry-only review never touches the shopping list', (
+      WidgetTester tester,
+    ) async {
       await shopping.addManualItem(
         userId: 'test-user',
         name: 'bread',
@@ -266,7 +266,7 @@ void main() {
     });
 
     testWidgets('a null-category pantry row requires a category pick before '
-        'it can be confirmed (F-07/F-08)', (WidgetTester tester) async {
+        'it can be confirmed', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -348,17 +348,15 @@ void main() {
     });
 
     testWidgets('returnToShop: confirming a pantry review also resolves the '
-        'matching checked shopping rows (AC-SHOP-01)', (
-      WidgetTester tester,
-    ) async {
+        'matching checked shopping rows', (WidgetTester tester) async {
       final ingredientId = await shopping.addManualItem(
         userId: 'test-user',
         name: 'milk',
         quantity: 1,
         unit: 'l',
       );
-      await shopping.toggleItem(
-        id: ingredientId,
+      await shopping.toggleRows(
+        ids: [ingredientId],
         userId: 'test-user',
         checked: true,
       );
@@ -392,7 +390,7 @@ void main() {
 
     testWidgets('clearing the unit field before confirming does not seed the '
         "ingredient's canonical unit — asserted through the real screen, not "
-        'the repository directly (R-23)', (WidgetTester tester) async {
+        'the repository directly', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -435,10 +433,10 @@ void main() {
 
     testWidgets(
       'a unit mismatch shows a targeted message, not the generic "try '
-      'again" (R-23)',
+      'again"',
       (WidgetTester tester) async {
         // Establishes 'units' as garlic's canonical/row unit — mirrors
-        // `pantry_repository_test.dart`'s equivalent R-18 regression.
+        // `pantry_repository_test.dart`'s equivalent mixed-unit regression.
         await pantry.addItem(
           userId: 'test-user',
           name: 'garlic',

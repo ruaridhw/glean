@@ -32,18 +32,14 @@ class ReviewRow {
   double? unitPrice;
   String? category;
 
-  /// Whether this row will be persisted at all — clearing the name is an
-  /// alternate way to drop a row, without requiring the explicit remove
-  /// button (mirrors the RN review screens' name-based `acceptedItems`
-  /// filter).
+  /// Whether this row will be persisted at all: clearing the name is an alternate way to drop a row.
   bool get isActive => selected && nameController.text.trim().isNotEmpty;
 
-  /// Null for anything unparseable, non-finite, zero or negative — no
-  /// fallback value (AC-PAN-08/09; see `parsePositiveQuantity`'s doc for why
-  /// there is deliberately no fallback rule at all).
+  /// Null for anything unparseable, non-finite, zero or negative; there is deliberately no fallback (see
+  /// `parsePositiveQuantity`).
   double? get parsedQuantity => parsePositiveQuantity(quantityController.text);
 
-  /// Adopt refined values only in fields the user has not edited (#96).
+  /// Adopt refined values only in fields the user has not edited.
   void refine(ReviewItemDraft proposal) {
     if (nameController.text == _proposal.name) {
       nameController.text = proposal.name;

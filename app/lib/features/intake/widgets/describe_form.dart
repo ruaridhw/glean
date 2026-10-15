@@ -1,17 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// Shared UI for "describe what you [bought/need]" — the free-text sibling
-/// of receipt scan, used by both Pantry's and Shop's describe screens.
-///
-/// Pulled out because those two screens are otherwise near-identical
-/// (hint text, a multiline field, an inline error, a submit button that
-/// swaps to a spinner while pending) — duplicating that would repeat the
-/// exact mistake `review_screen.dart` was built to fix: two screens doing
-/// the same job with small, needless differences. This widget owns the text
-/// field's lifecycle; everything about *what happens* with the text —
-/// which endpoint parses it, what the response shape is, where it
-/// navigates — differs per destination and stays in each caller.
+/// Shared UI for "describe what you [bought/need]", the free-text sibling of receipt scan, used by both describe
+/// screens. It owns the text field's lifecycle; which endpoint parses the text and where it navigates stays in
+/// each caller.
 class DescribeForm extends StatefulWidget {
   const DescribeForm({
     super.key,
@@ -36,9 +28,8 @@ class DescribeForm extends StatefulWidget {
   /// state, so it can never drift from the real request.
   final bool isLoading;
 
-  /// Null when there is nothing to show. Kept as plain text rather than a
-  /// typed error (AC-PAN-14): callers already turned it into the right
-  /// message for their own failure modes before handing it down.
+  /// Null when there is nothing to show. Plain text rather than a typed error: callers have already turned it
+  /// into the right message for their failure mode.
   final String? errorMessage;
 
   /// Called with the trimmed text once the user taps submit. Never called

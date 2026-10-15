@@ -1,8 +1,5 @@
-/// The Generate button: disabled the instant a generation is pending
-/// (AC-PLAN-09) — RN's version wasn't, so a double-tap fired two mutations
-/// that each computed the empty-slot count from the same stale state and
-/// overfilled past `meals_per_week`. Plan-full is still checked up front so
-/// tapping it does nothing worse than tell you so.
+/// The Generate button: disabled the instant a generation is pending, so a double-tap can't fire two mutations
+/// that overfill the week. Plan-full is still checked up front so tapping it just says so.
 library;
 
 import 'package:flutter/material.dart';
@@ -31,9 +28,8 @@ class PlanGenerateButton extends ConsumerWidget {
     );
     final bool pending = ref.watch(generateWeekControllerProvider).isLoading;
     final bool ready = remainingAsync.hasValue && configAsync.hasValue;
-    // R-08/AC-AUTH-04: generation calls the AI backend, so an expired
-    // session disables it — the [SignedOutBanner] mounted above every tab is
-    // what explains why.
+    // Generation calls the AI backend, so an expired session disables it; the [SignedOutBanner] above every tab
+    // explains why.
     final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
 
     return FilledButton.icon(

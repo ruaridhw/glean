@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The "N items expiring soon" banner. Wrapped in an [AnimatedSwitcher] so
-/// it fades in/out as [expiringCount] crosses zero, rather than popping
-/// (AC-TRN-04) — appearing/disappearing with every pantry mutation would
-/// otherwise be an abrupt layout jump.
+/// The "N items expiring soon" banner. Wrapped in an [AnimatedSwitcher] so it fades as [expiringCount] crosses
+/// zero rather than popping in as an abrupt layout jump.
 class PantryExpiryBanner extends StatelessWidget {
   const PantryExpiryBanner({super.key, required this.expiringCount});
 

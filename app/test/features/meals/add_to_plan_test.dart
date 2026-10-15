@@ -1,5 +1,4 @@
-// Widget coverage for "Add to plan" (AC-MEAL-08/09, AC-PLAN-11's Meals
-// half): stays on the recipe, reflects "In plan" on the button, reports
+// Widget coverage for "Add to plan": stays on the recipe, reflects "In plan" on the button, reports
 // plan-full/already-planned *before* any mutation, and repeated
 // rebuilds/refocus never add the recipe twice.
 import 'package:flutter/material.dart';
@@ -77,7 +76,7 @@ void main() {
     });
 
     testWidgets('tapping "In plan" again reports it without adding a duplicate '
-        '(AC-PLAN-11 Meals half)', (WidgetTester tester) async {
+        'from Meals', (WidgetTester tester) async {
       final int id = await recipes.save(
         userId: 'test-user',
         externalId: 'ext-2',
@@ -92,7 +91,7 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'In plan'), findsOneWidget);
 
       // Simulate leaving and returning to the same screen — the RN bug
-      // this replaces (F-05) re-added on every focus; here there is no
+      // this replaces re-added the recipe on every focus; here there is no
       // focus effect to re-trigger at all, but assert the outcome anyway.
       await harness.pumpAt(tester, AppRoutes.meals.path);
       await tester.pumpAndSettle();
@@ -114,49 +113,45 @@ void main() {
       expect(entries, hasLength(1));
     });
 
-    testWidgets(
-      'plan-full is reported before any mutation is attempted (AC-MEAL-09)',
-      (WidgetTester tester) async {
-        await userConfig.save(
-          const UserConfigView(
-            id: 'test-user',
-            purchaseTolerance: 0.5,
-            preferredServings: 2,
-            mealsPerWeek: 0,
-            dietaryFlags: <String>[],
-            maxActiveTimeMins: null,
-          ),
-        );
-        final int id = await recipes.save(
-          userId: 'test-user',
-          externalId: 'ext-3',
-          title: 'Full Week Meal',
-          ingredients: const <SaveRecipeIngredient>[],
-        );
+    testWidgets('plan-full is reported before any mutation is attempted', (
+      WidgetTester tester,
+    ) async {
+      await userConfig.save(
+        const UserConfigView(
+          id: 'test-user',
+          purchaseTolerance: 0.5,
+          preferredServings: 2,
+          mealsPerWeek: 0,
+          dietaryFlags: <String>[],
+          maxActiveTimeMins: null,
+        ),
+      );
+      final int id = await recipes.save(
+        userId: 'test-user',
+        externalId: 'ext-3',
+        title: 'Full Week Meal',
+        ingredients: const <SaveRecipeIngredient>[],
+      );
 
-        await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
-        await tester.pumpAndSettle();
+      await harness.pumpAt(tester, AppRoutes.mealsDetailPath('$id'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add to plan'));
+      await tester.pumpAndSettle();
 
-        expect(find.text("This week's plan is full."), findsOneWidget);
-        expect(
-          await tester.runAsync(
-            () => plan
-                .watchWeek(
-                  userId: 'test-user',
-                  weekStart: startOfWeek(DateTime.now()),
-                )
-                .first,
-          ),
-          isEmpty,
-        );
-        // The button never flips, since nothing was added.
-        expect(
-          find.widgetWithText(FilledButton, 'Add to plan'),
-          findsOneWidget,
-        );
-      },
-    );
+      expect(find.text("This week's plan is full."), findsOneWidget);
+      expect(
+        await tester.runAsync(
+          () => plan
+              .watchWeek(
+                userId: 'test-user',
+                weekStart: startOfWeek(DateTime.now()),
+              )
+              .first,
+        ),
+        isEmpty,
+      );
+      // The button never flips, since nothing was added.
+      expect(find.widgetWithText(FilledButton, 'Add to plan'), findsOneWidget);
+    });
   });
 }

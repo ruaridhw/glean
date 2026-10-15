@@ -1,11 +1,5 @@
-/// The Pantry tab (FLUTTER_MIGRATION.md §6 Pantry) — the landing tab
-/// (AC-SET-05).
-///
-/// Reads are a `StreamProvider` over drift `.watch()` (AC-DATA-04): there is
-/// no on-focus reload and no manual `loading` flag, so — unlike the RN
-/// screen, which set `loading = true` unconditionally on every focus — the
-/// skeleton is structurally impossible to re-flash on a tab switch; it can
-/// only ever show before the very first stream event.
+/// The Pantry tab, the landing tab. Reads are a `StreamProvider` over drift `.watch()`, so there is no on-focus
+/// reload and no manual `loading` flag: the skeleton can only show before the very first stream event.
 library;
 
 import 'dart:async' show unawaited;
@@ -19,7 +13,6 @@ import 'package:glean/design_system/design_system.dart';
 import 'actions.dart';
 import 'widgets/pantry_add_sheet.dart';
 import 'widgets/pantry_body.dart';
-import 'widgets/pantry_skeleton.dart';
 
 class PantryScreen extends ConsumerStatefulWidget {
   const PantryScreen({super.key});
@@ -48,18 +41,23 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
           ),
         ],
       ),
-      body: GleanCrossFade(
-        showSkeleton: !async.hasValue,
-        skeleton: const PantrySkeleton(),
-        content: async.maybeWhen(
-          data: (List<PantryItemView> items) => PantryBody(
-            items: items,
-            filterKey: _filterKey,
-            onFilterChanged: (String? key) => setState(() => _filterKey = key),
-            onDelete: (PantryItemView item) =>
-                unawaited(deletePantryItemWithUndo(context, ref, item)),
-          ),
-          orElse: () => const _PantryLoadError(),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(!async.hasValue),
+          child: !async.hasValue
+              ? const ListSkeleton(rows: 4, headerHeight: 20)
+              : async.maybeWhen(
+                  data: (List<PantryItemView> items) => PantryBody(
+                    items: items,
+                    filterKey: _filterKey,
+                    onFilterChanged: (String? key) =>
+                        setState(() => _filterKey = key),
+                    onDelete: (PantryItemView item) =>
+                        unawaited(deletePantryItemWithUndo(context, ref, item)),
+                  ),
+                  orElse: () => const _PantryLoadError(),
+                ),
         ),
       ),
     );

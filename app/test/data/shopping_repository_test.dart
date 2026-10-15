@@ -1,8 +1,7 @@
-// Real-outcome tests (AC-TEST-02) for the shopping-list bugs
-// FLUTTER_MIGRATION.md §11/§6 Shop calls out by name: checkout deleting
-// unmatched items (AC-SHOP-01, AC-TEST-06), manual items never resolving an
-// ingredient identity (AC-SHOP-03), unscoped check-off (AC-SHOP-04), and
-// plan-derived rows outliving their plan entry (AC-SHOP-06). Also ports the
+// Real-outcome tests for the shopping-list regressions guarded by name:
+// checkout deleting unmatched items, manual items never resolving an
+// ingredient identity, unscoped check-off, and plan-derived rows outliving
+// their plan entry. Also ports the
 // shortfall-maths intent of the Expo app's `tests/db/shopping.test.ts`
 // (see git history) as outcome assertions rather than query-builder call
 // counts.
@@ -31,26 +30,20 @@ void main() {
 
     tearDown(() => db.close());
 
-    test(
-      'addManualItem always resolves an ingredient identity (AC-SHOP-03)',
-      () async {
-        await repository.addManualItem(
-          userId: userId,
-          name: 'Birthday candles',
-        );
+    test('addManualItem always resolves an ingredient identity', () async {
+      await repository.addManualItem(userId: userId, name: 'Birthday candles');
 
-        final items = await repository.watchAll(userId).first;
-        expect(items.single.ingredientId, isNotNull);
+      final items = await repository.watchAll(userId).first;
+      expect(items.single.ingredientId, isNotNull);
 
-        final ingredient = await ingredients.resolveOrCreate(
-          canonicalName: 'birthday candles',
-        );
-        expect(items.single.ingredientId, ingredient.id);
-      },
-    );
+      final ingredient = await ingredients.resolveOrCreate(
+        canonicalName: 'birthday candles',
+      );
+      expect(items.single.ingredientId, ingredient.id);
+    });
 
     test('addAiItems: a blank unit defaults to "units" for the row, but never '
-        "seeds the ingredient's shared canonical unit (R-23)", () async {
+        "seeds the ingredient's shared canonical unit", () async {
       await repository.addAiItems(
         userId: userId,
         items: const <AiShoppingItem>[
@@ -72,7 +65,7 @@ void main() {
       // But the shared ingredient's canonical unit was never seeded from
       // that fallback — a later, genuinely explicit unit must still be
       // free to seed it (proven at the Pantry side in
-      // `pantry_repository_test.dart`'s equivalent R-23 test, since
+      // `pantry_repository_test.dart`'s equivalent test, since
       // `Ingredients` is one shared, non-user-scoped catalog either way).
       final ingredient = await ingredients.resolveOrCreate(
         canonicalName: 'chia seeds',
@@ -81,7 +74,7 @@ void main() {
     });
 
     test(
-      'resolveCheckout removes only the rows the receipt resolved, leaving the rest (AC-SHOP-01, AC-TEST-06)',
+      'resolveCheckout removes only the rows the receipt resolved, leaving the rest',
       () async {
         final ingredientIds = <int>[];
         for (var i = 0; i < 12; i++) {
@@ -89,8 +82,8 @@ void main() {
         }
         final items = await repository.watchAll(userId).first;
         for (final item in items) {
-          await repository.toggleItem(
-            id: item.id,
+          await repository.toggleRows(
+            ids: [item.id],
             userId: userId,
             checked: true,
           );
@@ -118,10 +111,10 @@ void main() {
       },
     );
 
-    // AC-SHOP-04's scoping (never cross a user, never re-affect an
+    // Check-off scoping (never cross a user, never re-affect an
     // already-checked row) is exercised above, inside `resolveCheckout`'s
-    // own test — R-03 deleted the standalone `checkOffResolvedIngredients`
-    // (and this test's former sibling covering it) as genuinely redundant
+    // own test — the standalone `checkOffResolvedIngredients`
+    // (and this test's former sibling covering it) was deleted as redundant
     // once `resolveCheckout` did the matching and removal in one already-
     // scoped statement. See the doc comments on `resolveCheckout` and at the
     // top of `lib/data/repositories/shopping_repository.dart` for why.
@@ -137,8 +130,7 @@ void main() {
         plan = PlanRepository(db, pantry);
       });
 
-      // `sourceMealPlanEntryId` is a real foreign key (AC-SHOP-06 depends on
-      // it cascading), so every gap in these tests is linked to an actual
+      // `sourceMealPlanEntryId` is a real foreign key that cascades, so every gap in these tests is linked to an actual
       // plan entry rather than an arbitrary id.
       Future<({int recipeId, int entryId})> saveRecipeAndPlanEntry({
         required String ingredient,
@@ -452,7 +444,7 @@ void main() {
     });
 
     test(
-      'deleting the plan entry that created a gap row removes that row too (AC-SHOP-06)',
+      'deleting the plan entry that created a gap row removes that row too',
       () async {
         final recipes = RecipesRepository(db, ingredients);
         final pantry = PantryRepository(db, ingredients);
@@ -489,27 +481,24 @@ void main() {
       },
     );
 
-    test(
-      'completeCheckoutWithoutReceipt removes every checked row (AC-SHOP-02)',
-      () async {
-        final keep = await repository.addManualItem(
-          userId: userId,
-          name: 'keep me',
-        );
-        final remove = await repository.addManualItem(
-          userId: userId,
-          name: 'remove me',
-        );
-        await repository.toggleItem(id: remove, userId: userId, checked: true);
+    test('completeCheckoutWithoutReceipt removes every checked row', () async {
+      final keep = await repository.addManualItem(
+        userId: userId,
+        name: 'keep me',
+      );
+      final remove = await repository.addManualItem(
+        userId: userId,
+        name: 'remove me',
+      );
+      await repository.toggleRows(ids: [remove], userId: userId, checked: true);
 
-        final removedCount = await repository.completeCheckoutWithoutReceipt(
-          userId: userId,
-        );
+      final removedCount = await repository.completeCheckoutWithoutReceipt(
+        userId: userId,
+      );
 
-        expect(removedCount, 1);
-        final remaining = await repository.watchAll(userId).first;
-        expect(remaining.map((r) => r.id), [keep]);
-      },
-    );
+      expect(removedCount, 1);
+      final remaining = await repository.watchAll(userId).first;
+      expect(remaining.map((r) => r.id), [keep]);
+    });
   });
 }

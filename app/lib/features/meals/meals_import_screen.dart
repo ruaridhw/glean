@@ -1,8 +1,6 @@
-/// Import a recipe from a URL (`POST /recipes/import-url`). AC-MEAL-10:
-/// dedupes against the saved library like search does, and says "already
-/// saved" instead of silently inserting a duplicate row — the RN app had no
-/// dedupe here at all (`schema.ts` declares no unique index, and
-/// `saveRecipe` always inserts).
+/// Import a recipe from a URL (`POST /recipes/import-url`). Dedupes against
+/// the saved library like search does, and says "already saved" instead of
+/// inserting a duplicate row.
 library;
 
 import 'dart:async';
@@ -10,7 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/recipes.dart';
-import 'package:glean/api/providers/recipe_providers.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/text_input.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -56,22 +54,20 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
       _error = null;
     });
 
-    await ref
-        .read(importRecipeControllerProvider.notifier)
-        .importFromUrl(ImportUrlRequest(url: url));
-    if (!mounted) return;
-
-    final AsyncValue<RecipeOut?> result = ref.read(
-      importRecipeControllerProvider,
-    );
-    final RecipeOut? detail = result.value;
-    if (result.hasError || detail == null) {
+    final RecipeOut detail;
+    try {
+      detail = await ref
+          .read(apiClientProvider)
+          .importRecipeFromUrl(ImportUrlRequest(url: url));
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _importing = false;
         _error = 'Could not import this recipe. Check the link and try again.';
       });
       return;
     }
+    if (!mounted) return;
 
     final existing = await ref
         .read(recipesRepositoryProvider)
@@ -95,7 +91,7 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
 
     final int id = await saveApiRecipe(ref, detail);
     if (!mounted) return;
-    ref.read(hapticsProvider).mediumImpact(); // data commit (AC-HAP-05).
+    ref.read(hapticsProvider).mediumImpact();
     setState(() => _importing = false);
     unawaited(
       context.pushNamed(
@@ -107,12 +103,6 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // No `ref.watch(importRecipeControllerProvider)` keep-alive needed here:
-    // the provider now holds itself alive for the duration of its own
-    // network call (`lib/api/providers/recipe_providers.dart`,
-    // FINDINGS.md F-15), and this screen renders pending/error state from
-    // its own local `_importing`/`_error` fields rather than the provider's
-    // `AsyncValue`, so there is nothing left for a watch here to do.
     final AppTokens tokens = context.tokens;
     return Scaffold(
       appBar: AppBar(title: const Text('Import from URL')),
@@ -162,12 +152,12 @@ class _MealsImportScreenState extends ConsumerState<MealsImportScreen> {
                 FilledButton(
                   onPressed: (_importing || !_canImport) ? null : _import,
                   child: _importing
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : const Text('Import'),

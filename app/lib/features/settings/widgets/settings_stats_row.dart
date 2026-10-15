@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The at-a-glance summary row at the top of Settings (dinners, servings,
-/// diets, tolerance) — display-only, ported from RN's `StatsRow` usage in
-/// `settings/index.tsx`. Purely presentational: it never drives haptics or
-/// persistence itself, unlike the interactive controls below it.
+/// The at-a-glance summary row at the top of Settings (dinners, servings, diets, tolerance). Display-only: it
+/// never drives haptics or persistence.
 class SettingsStatsRow extends StatelessWidget {
   const SettingsStatsRow({
     super.key,

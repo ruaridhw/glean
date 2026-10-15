@@ -1,5 +1,5 @@
-// Widget coverage for the Search segment (AC-MEAL-01/07/10): a real inline
-// input, live results, and — the core AC-TEST-11 assertion — tapping a
+// Widget coverage for the Search segment: a real inline
+// input, live results, and, above all, tapping a
 // search result previews it without persisting anything.
 import 'dart:convert';
 
@@ -81,7 +81,7 @@ void main() {
 
     tearDown(() => harness.dispose());
 
-    testWidgets('shows empty and no-results states (AC-MEAL-10)', (
+    testWidgets('shows empty and no-results states', (
       WidgetTester tester,
     ) async {
       when(
@@ -109,46 +109,45 @@ void main() {
       expect(find.text('No recipes found'), findsOneWidget);
     });
 
-    testWidgets(
-      'tapping a search result previews it without saving (AC-TEST-11)',
-      (WidgetTester tester) async {
-        await harness.pumpAt(tester, AppRoutes.meals.path);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Search'));
-        await tester.pumpAndSettle();
+    testWidgets('tapping a search result previews it without saving', (
+      WidgetTester tester,
+    ) async {
+      await harness.pumpAt(tester, AppRoutes.meals.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
 
-        await tester.enterText(find.byType(TextField), 'miso');
-        await tester.pump(
-          recipeSearchDebounce + const Duration(milliseconds: 50),
-        );
-        await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'miso');
+      await tester.pump(
+        recipeSearchDebounce + const Duration(milliseconds: 50),
+      );
+      await tester.pumpAndSettle();
 
-        expect(find.text('Miso Soup'), findsOneWidget);
+      expect(find.text('Miso Soup'), findsOneWidget);
 
-        await tester.tap(find.text('Miso Soup'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Miso Soup'));
+      await tester.pumpAndSettle();
 
-        // Preview shows the fetched detail, including allergen info...
-        expect(find.textContaining('Not suitable for'), findsOneWidget);
-        // ...but nothing was persisted by the mere act of viewing it. (A raw
-        // repository stream query in a widget test must go through
-        // `tester.runAsync` — see `meals_screen_test.dart`'s comment.)
-        expect(
-          await tester.runAsync(() => recipes.watchSaved('test-user').first),
-          isEmpty,
-        );
-        expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
+      // Preview shows the fetched detail, including allergen info...
+      expect(find.textContaining('Not suitable for'), findsOneWidget);
+      // ...but nothing was persisted by the mere act of viewing it. (A raw
+      // repository stream query in a widget test must go through
+      // `tester.runAsync` — see `meals_screen_test.dart`'s comment.)
+      expect(
+        await tester.runAsync(() => recipes.watchSaved('test-user').first),
+        isEmpty,
+      );
+      expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
 
-        // Explicitly saving is what commits it.
-        await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
-        await tester.pumpAndSettle();
+      // Explicitly saving is what commits it.
+      await tester.tap(find.byIcon(Icons.bookmark_border_rounded));
+      await tester.pumpAndSettle();
 
-        expect(
-          await tester.runAsync(() => recipes.watchSaved('test-user').first),
-          hasLength(1),
-        );
-        expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
-      },
-    );
+      expect(
+        await tester.runAsync(() => recipes.watchSaved('test-user').first),
+        hasLength(1),
+      );
+      expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
+    });
   });
 }

@@ -1,11 +1,32 @@
 # Glean
 
-This branch contains Glean's proposed local-first Flutter replacement with a
-stateless FastAPI backend. **Production is still the Expo app**; the Flutter
-port has not landed or passed native/visual cutover verification. The app
-stores user state on device with SQLite (`drift`), while the backend handles
-AI-assisted receipt parsing, recipe import, meal-plan generation, auth
-validation, and rate limiting.
+Glean turns the food you already have into dinners you can actually make.
+Scan a receipt or describe what is in the kitchen to stock your pantry, plan
+your week around those ingredients, then shop only for the gaps.
+
+It is a local-first Flutter app (`app/`) with a stateless FastAPI backend
+(`backend/`). Pantry, recipes, meal plans and shopping state live on the
+device in SQLite (`drift`); the backend handles AI-assisted receipt parsing,
+recipe import, meal-plan generation, auth validation and rate limiting, and
+keeps no user data. The owner runs the Android app day to day, with
+release-signed builds delivered through Codemagic to Firebase App
+Distribution (see `docs/ANDROID_TEST_DISTRIBUTION.md`). iOS builds and runs
+locally but is not distributed yet.
+
+## What It Does
+
+- **Stock your pantry fast:** turn a receipt scan or a plain-language
+  description of your food into reviewable pantry items.
+- **Know what you have:** track quantities, categories and expiry dates.
+- **Find meals worth cooking:** search or import recipes and save the ones
+  worth cooking again.
+- **Plan around your kitchen:** build a weekly dinner plan from saved recipes
+  and what is already in the pantry.
+- **Shop with purpose:** missing ingredients become the shopping list, and
+  checking them off moves them into the pantry.
+
+One rule runs through all of it: review before saving. AI can propose pantry
+or shopping items, but nothing changes on the device until you confirm it.
 
 ## Project Layout
 
