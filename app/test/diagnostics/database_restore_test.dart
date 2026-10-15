@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/diagnostics/diagnostics.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 Future<int> _mealsPerWeek(GleanDatabase db, String user) async =>
     (await db
@@ -48,6 +49,41 @@ void main() {
       final GleanDatabase restored = open(liveFile);
       addTearDown(restored.close);
       expect(await _mealsPerWeek(restored, 'user-1'), 4);
+    },
+  );
+
+  /// A database file as the oldest shipped build wrote it (frozen schema_v1 fixture).
+  File versionOneBackup() {
+    final File file = File('${dir.path}/v1-backup.sqlite');
+    final sqlite.Database raw = sqlite.sqlite3.open(file.path);
+    raw.execute(File('test/data/fixtures/schema_v1.sql').readAsStringSync());
+    raw.close();
+    return file;
+  }
+
+  test(
+    'a backup from an older schema version is migrated forward as part of the restore',
+    () async {
+      final GleanDatabase freshInstall = open(liveFile);
+      await freshInstall.customStatement('SELECT 1');
+
+      await restoreDatabase(
+        backup: versionOneBackup(),
+        live: freshInstall,
+        liveFile: liveFile,
+      );
+
+      final sqlite.Database onDisk = sqlite.sqlite3.open(liveFile.path);
+      addTearDown(onDisk.close);
+      expect(onDisk.select('PRAGMA user_version').single.values.single, 2);
+      expect(
+        onDisk
+            .select('SELECT title FROM recipes')
+            .map((r) => r['title'])
+            .toList(),
+        <Object?>['Persisted dinner'],
+        reason: "the old build's recipes survive the migration",
+      );
     },
   );
 }
