@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.llm import LLMRouter
+from glean.rate_limit import enforce_ai_rate_limit
 from glean.recipes import service
 from glean.recipes.schemas import ImportUrlRequest, RecipeOut, RecipeSearchResponse
 
@@ -43,7 +44,7 @@ def get_recipe(
     )
 
 
-@router.post("/import-url", response_model=RecipeOut)
+@router.post("/import-url", response_model=RecipeOut, dependencies=[Depends(enforce_ai_rate_limit)])
 def import_recipe_from_url(
     request: ImportUrlRequest,
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],

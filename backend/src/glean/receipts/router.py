@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.llm import LLMRouter  # noqa: TC001 - FastAPI resolves this via Annotated/Depends at runtime.
+from glean.rate_limit import enforce_ai_rate_limit
 from glean.receipts import service
 from glean.receipts.schemas import DescribeRequest, ScanResponse
 
 router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(verify_cognito_token)])
 
 
-@router.post("/scan", response_model=ScanResponse)
+@router.post("/scan", response_model=ScanResponse, dependencies=[Depends(enforce_ai_rate_limit)])
 async def scan_receipt(
     file: Annotated[UploadFile, File()],
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
@@ -34,7 +35,7 @@ async def scan_receipt(
     )
 
 
-@router.post("/describe", response_model=ScanResponse)
+@router.post("/describe", response_model=ScanResponse, dependencies=[Depends(enforce_ai_rate_limit)])
 def describe_purchase(
     request: DescribeRequest,
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
