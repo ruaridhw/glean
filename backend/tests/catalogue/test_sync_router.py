@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from glean.catalogue.groups import GROUPS, Form, GroupId
+from glean.catalogue.models import CatalogueItem, Source
 from glean.catalogue.router import get_catalogue_store
 from glean.catalogue.seed import load_seed
 from glean.catalogue.store import InMemoryCatalogueStore
@@ -167,3 +168,37 @@ def test_the_groups_sent_are_the_ones_the_app_seeds_offline(wired: TestClient, a
         "The app's seeded groups drifted from the backend's. Regenerate app/test/data/fixtures/catalogue_groups.json "
         "from GET /catalogue and update app/lib/data/seed/ingredient_groups.dart to match."
     )
+
+
+def test_an_item_is_sent_with_the_store_section_its_group_and_form_give_it(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    items = [
+        CatalogueItem(id="onion", name="onion", group=GroupId.ONIONS_AND_GARLIC, form=Form.FRESH, source=Source.SEED),
+        CatalogueItem(id="peas", name="peas", group=GroupId.BEANS_AND_PULSES, form=Form.FROZEN, source=Source.SEED),
+        CatalogueItem(id="cumin", name="cumin", group=GroupId.SPICES, form=Form.NOT_APPLICABLE, source=Source.SEED),
+    ]
+    app.dependency_overrides[get_catalogue_store] = lambda: InMemoryCatalogueStore(items)
+
+    sent = {item["id"]: item["section"] for item in client.get("/catalogue", headers=auth_headers).json()["items"]}
+
+    assert sent == {"onion": "Fruit & Veg", "peas": "Frozen", "cumin": "Food Cupboard"}
+
+
+def test_an_item_is_sent_with_the_ids_merged_into_it(client: TestClient, auth_headers: dict[str, str]) -> None:
+    merged = CatalogueItem(
+        id="coriander",
+        name="coriander",
+        group=GroupId.FRESH_HERBS,
+        form=Form.NOT_APPLICABLE,
+        source=Source.SEED,
+        former_ids=("cilantro",),
+    )
+    plain = CatalogueItem(
+        id="parsley", name="parsley", group=GroupId.FRESH_HERBS, form=Form.NOT_APPLICABLE, source=Source.SEED
+    )
+    app.dependency_overrides[get_catalogue_store] = lambda: InMemoryCatalogueStore([merged, plain])
+
+    sent = {item["id"]: item["former_ids"] for item in client.get("/catalogue", headers=auth_headers).json()["items"]}
+
+    assert sent == {"coriander": ["cilantro"], "parsley": []}
