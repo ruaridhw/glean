@@ -11,6 +11,7 @@ Globals:
         ENVIRONMENT: !Ref Environment
         POWERTOOLS_SERVICE_NAME: glean
         LOG_LEVEL: INFO
+        GIT_SHA: !Ref GitSha
 
 Parameters:
   Environment:
@@ -34,13 +35,10 @@ Parameters:
     # deploy only if the workspace region changes.
     Default: "https://eu.api.smith.langchain.com"
 
-  GoogleClientId:
+  # Commit the deploy was built from, stamped by scripts/deploy_prod.py (`<sha>` or `<sha>-dirty`).
+  GitSha:
     Type: String
-    NoEcho: true
-
-  GoogleClientSecret:
-    Type: String
-    NoEcho: true
+    Default: unknown
 
 Resources:
   # Every user's on-device data is keyed by their Cognito `sub`. A new pool
@@ -77,8 +75,9 @@ Resources:
       ProviderName: Google
       ProviderType: Google
       ProviderDetails:
-        client_id: !Ref GoogleClientId
-        client_secret: !Ref GoogleClientSecret
+        # Resolved by CloudFormation at deploy time, so neither samconfig nor CI ever holds the values.
+        client_id: !Sub "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-id:SecretString}}"
+        client_secret: !Sub "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-secret:SecretString}}"
         authorize_scopes: "openid email profile"
       AttributeMapping:
         email: email
