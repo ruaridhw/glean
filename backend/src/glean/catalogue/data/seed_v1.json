@@ -846,16 +846,22 @@
    "aliases": [
     "fresh lemon"
    ],
-   "group": "citrus",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "lime",
    "aliases": [
     "fresh lime"
    ],
-   "group": "citrus",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "orange",
@@ -863,8 +869,11 @@
     "eating orange",
     "navel orange"
    ],
-   "group": "citrus",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "grapefruit",
@@ -872,8 +881,11 @@
     "pink grapefruit",
     "ruby grapefruit"
    ],
-   "group": "citrus",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "dried candied mixed peel",
@@ -881,7 +893,7 @@
     "mixed peel",
     "baking peel"
    ],
-   "group": "citrus",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -890,7 +902,7 @@
     "tinned easy peelers",
     "canned mandarins"
    ],
-   "group": "citrus",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -899,7 +911,7 @@
     "kent mango",
     "fruit"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -907,7 +919,7 @@
    "aliases": [
     "ananas"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -915,16 +927,17 @@
    "aliases": [
     "pawpaw"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
    "name": "kiwi",
    "aliases": [
     "kiwifruit",
-    "green kiwi"
+    "green kiwi",
+    "kiwi fruit"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -932,7 +945,7 @@
    "aliases": [
     "maracuya"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -941,7 +954,7 @@
     "canned pineapple",
     "pineapple pieces"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -949,7 +962,7 @@
    "aliases": [
     "mango pieces"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -957,7 +970,7 @@
    "aliases": [
     "dried mango pieces"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -965,7 +978,7 @@
    "aliases": [
     "tropical smoothie mix"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -973,7 +986,7 @@
    "aliases": [
     "canned lychees"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -981,7 +994,7 @@
    "aliases": [
     "soft dried apricots"
    ],
-   "group": "stone_fruit",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -990,7 +1003,7 @@
     "dessicated coconut",
     "coconut shreds"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -998,40 +1011,55 @@
    "aliases": [
     "peaches"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
   },
   {
    "name": "nectarine",
    "aliases": [
     "nectarines"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
   },
   {
    "name": "plum",
    "aliases": [
     "plums"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
   },
   {
    "name": "apricot",
    "aliases": [
     "apricots"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
   },
   {
    "name": "cherry",
    "aliases": [
     "cherries"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
   },
   {
    "name": "tinned peaches",
@@ -1040,7 +1068,7 @@
     "peaches in syrup",
     "peaches in juice"
    ],
-   "group": "stone_fruit",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -1048,7 +1076,7 @@
    "aliases": [
     "stoned cherries"
    ],
-   "group": "stone_fruit",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -1056,7 +1084,7 @@
    "aliases": [
     "stewed prunes"
    ],
-   "group": "stone_fruit",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -1064,15 +1092,18 @@
    "aliases": [
     "punnet of strawberries"
    ],
-   "group": "berries",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
   },
   {
    "name": "blueberries",
    "aliases": [
     "punnet of blueberries"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -1080,16 +1111,22 @@
    "aliases": [
     "punnet of raspberries"
    ],
-   "group": "berries",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
   },
   {
    "name": "blackberries",
    "aliases": [
     "brambles"
    ],
-   "group": "berries",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
   },
   {
    "name": "frozen mixed berries",
@@ -1097,7 +1134,7 @@
     "summer berry mix",
     "frozen berry mix"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -1105,7 +1142,7 @@
    "aliases": [
     "frozen whole strawberries"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -1113,7 +1150,7 @@
    "aliases": [
     "craisins"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -1121,7 +1158,7 @@
    "aliases": [
     "goji"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "dried"
   },
   {
@@ -1129,7 +1166,7 @@
    "aliases": [
     "tinned gooseberries"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "tinned_jarred"
   },
   {
@@ -1137,7 +1174,7 @@
    "aliases": [
     "frozen whole raspberries"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -1145,7 +1182,7 @@
    "aliases": [
     "frozen redcurrants"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "frozen"
   },
   {
@@ -4358,7 +4395,7 @@
    "aliases": [
     "avocados"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -4366,7 +4403,7 @@
    "aliases": [
     "bananas"
    ],
-   "group": "tropical_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -4375,15 +4412,18 @@
     "apples",
     "eating apple"
    ],
-   "group": "stone_fruit",
-   "form": "fresh"
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 30
+   }
   },
   {
    "name": "pear",
    "aliases": [
     "pears"
    ],
-   "group": "stone_fruit",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -4393,7 +4433,7 @@
     "green grapes",
     "seedless grapes"
    ],
-   "group": "berries",
+   "group": "fruit",
    "form": "fresh"
   },
   {
@@ -4709,6 +4749,21 @@
    "aliases": [],
    "group": "nuts_and_seeds",
    "form": "not_applicable"
+  },
+  {
+   "name": "melon",
+   "aliases": [
+    "cantaloupe melon",
+    "honeydew melon"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "watermelon",
+   "aliases": [],
+   "group": "fruit",
+   "form": "fresh"
   }
  ]
 }

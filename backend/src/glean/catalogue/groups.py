@@ -55,10 +55,7 @@ class GroupId(StrEnum):
     ROOT_VEG = "root_veg"
     TOMATOES_PEPPERS_AND_AUBERGINES = "tomatoes_peppers_and_aubergines"
     BEANS_AND_PULSES = "beans_and_pulses"
-    CITRUS = "citrus"
-    TROPICAL_FRUIT = "tropical_fruit"
-    STONE_FRUIT = "stone_fruit"
-    BERRIES = "berries"
+    FRUIT = "fruit"
     RED_MEAT = "red_meat"
     POULTRY = "poultry"
     FISH_AND_SEAFOOD = "fish_and_seafood"
@@ -217,17 +214,10 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             once_opened=3,
             once_opened_dried=365,
         ),
-        GroupId.CITRUS: _with_forms(
-            "Citrus", FoodGroup.FRUIT, fresh=14, frozen=270, tinned_jarred=730, dried=365, once_opened=3
-        ),
-        GroupId.TROPICAL_FRUIT: _with_forms(
-            "Tropical fruit", FoodGroup.FRUIT, fresh=7, frozen=270, tinned_jarred=730, dried=365, once_opened=3
-        ),
-        GroupId.STONE_FRUIT: _with_forms(
-            "Stone fruit", FoodGroup.FRUIT, fresh=5, frozen=270, tinned_jarred=730, dried=365, once_opened=3
-        ),
-        GroupId.BERRIES: _with_forms(
-            "Berries", FoodGroup.FRUIT, fresh=4, frozen=270, tinned_jarred=730, dried=365, once_opened=3
+        # One group for all fruit: each item carries its own fresh shelf life, so the default only has to suit fruit
+        # the catalogue doesn't know yet.
+        GroupId.FRUIT: _with_forms(
+            "Fruit", FoodGroup.FRUIT, fresh=7, frozen=270, tinned_jarred=730, dried=365, once_opened=3
         ),
         GroupId.RED_MEAT: _with_forms(
             "Red meat",
