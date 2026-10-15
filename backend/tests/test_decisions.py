@@ -93,7 +93,7 @@ class TestAnswers:
         assert sum(group.probabilities.values()) == pytest.approx(1.0, abs=0.01)
         quality = decision.score("quality")
         assert 0.0 <= quality.score <= len(questions["quality"].criteria) - 1
-        assert "jev-1.13" in decision.model
+        assert decision.model == "typesafe/jev-1.13-20260917"
         assert decision.usage.cost > 0
 
     def test_asking_for_the_wrong_answer_type_names_the_question(self) -> None:
@@ -139,13 +139,31 @@ class TestMalformedAnswers:
         with pytest.raises(DecisionResponseError, match="contains_nuts"):
             _client(_respond_with(body)).decide(state, questions)
 
-    def test_an_answer_from_another_model_version_is_rejected(self) -> None:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "typesafe/jev-1.14",
+            "typesafe/jev-1.130-20260917",
+            "typesafe/jev-1.13-latest",
+            "typesafe/jev-1.13-2026091",
+            "other-provider/jev-1.13-20260917",
+        ],
+    )
+    def test_an_answer_from_another_model_version_is_rejected(self, model: str) -> None:
         body = _recorded_response()
-        body["model"] = "typesafe/jev-1.14"
+        body["model"] = model
         state, questions = _probe()
 
         with pytest.raises(DecisionResponseError, match="pinned"):
             _client(_respond_with(body)).decide(state, questions)
+
+    @pytest.mark.parametrize("model", ["typesafe/jev-1.13", "typesafe/jev-1.13-20261231"])
+    def test_the_pinned_model_and_any_dated_snapshot_of_it_are_accepted(self, model: str) -> None:
+        body = _recorded_response()
+        body["model"] = model
+        state, questions = _probe()
+
+        assert _client(_respond_with(body)).decide(state, questions).model == model
 
     def test_a_non_json_body_is_rejected(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:

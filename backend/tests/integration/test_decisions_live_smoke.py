@@ -7,6 +7,7 @@ Set LANGSMITH_TRACING=true (and LANGSMITH_API_KEY) to see the call in LangSmith 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -31,7 +32,7 @@ def test_jev_answers_all_three_question_types_with_the_pinned_model(openrouter_a
 
     decision = client.decide(_PROBE["state"], _QUESTION_SET.validate_python(_PROBE["questions"]))
 
-    assert "jev-1.13" in decision.model
+    assert re.fullmatch(r"typesafe/jev-1\.13(-\d{8})?", decision.model)
     # 0.63 on 2026-10-15: pine nuts aren't a UK legal tree-nut allergen,
     # so don't assert a side here (#125 sets the policy).
     assert 0.0 <= decision.noul("contains_nuts").noul <= 1.0

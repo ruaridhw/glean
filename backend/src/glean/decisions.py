@@ -7,6 +7,7 @@ DecisionClient, so a change to the alpha API touches one place.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
@@ -131,8 +132,8 @@ class Decision(BaseModel):
         return answer
 
 
-# "jev-1.13": the dated snapshot Jev reports must belong to the pinned version.
-_PINNED_VERSION = JEV_MODEL.split("/", 1)[1]
+# Jev reports the pinned model either as-is or as a dated snapshot of it (`<pinned>-YYYYMMDD`).
+_PINNED_MODEL_REPLY = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")
 
 
 def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
@@ -168,7 +169,7 @@ def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
         )
     except ValidationError as exc:
         raise DecisionResponseError(f"Unexpected Jev response envelope: {exc}") from exc
-    if _PINNED_VERSION not in decision.model:
+    if not _PINNED_MODEL_REPLY.fullmatch(decision.model):
         raise DecisionResponseError(f"Jev answered with {decision.model!r}, not the pinned {JEV_MODEL!r}")
     return decision
 
