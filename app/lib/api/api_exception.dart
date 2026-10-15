@@ -64,5 +64,11 @@ final class ApiServerException extends ApiException {
 /// The response body wasn't shaped as expected (malformed JSON, a missing required field, a type mismatch); a
 /// decode failure surfaces as this rather than crashing the caller.
 final class ApiParseException extends ApiException {
-  const ApiParseException(super.message);
+  const ApiParseException(super.message, {this.field, this.reason});
+
+  /// The JSON key that was missing or invalid, when the decoder could name it.
+  final String? field;
+
+  /// A short, body-free reason, safe to log.
+  final String? reason;
 }
