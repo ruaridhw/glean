@@ -1,7 +1,6 @@
 // Widget tests for the first-run setup flow itself: stepping through
 // dinners/servings/dietary flags, persisting what was captured, being
-// skippable at any point, and ending on its own receipt-scan step
-// (AC-UX-04).
+// skippable at any point, and ending on its own receipt-scan step.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -173,8 +172,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(420, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final store = InMemoryOnboardingStatusStore();
-      await tester.pumpWidget(_buildApp(db: db, store: store));
+      await tester.pumpWidget(_buildApp(db: db));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Next'));
@@ -205,8 +203,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(420, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final store = InMemoryOnboardingStatusStore();
-    await tester.pumpWidget(_buildApp(db: db, store: store));
+    await tester.pumpWidget(_buildApp(db: db));
     await tester.pumpAndSettle();
 
     String shown() => tester.widget<Text>(find.byKey(_selectedValue)).data!;
