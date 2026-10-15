@@ -41,8 +41,7 @@ run`/the `integration_test` suite do need a real toolchain; see
 
 Feature-first Flutter app: `go_router` + `flutter_riverpod` + `drift`
 (SQLite). All user state lives on-device; the FastAPI backend (`../backend/`)
-is a stateless AI processing service. `FLUTTER_MIGRATION.md` at the repo root
-is the behavioural spec.
+is a stateless AI processing service.
 
 ```
 lib/
@@ -80,10 +79,10 @@ that review checks. `flutter analyze` and `dart format` cover style.
    Use `Theme.of(context).colorScheme` and `context.tokens`. Camera-overlay
    colours are tokens too (`tokens.onCamera`, `tokens.cameraScrim`,
    `tokens.cameraBackdrop`).
-3. **No process citations in code.** Comments explain the current
-   constraint, not the ticket that introduced it: no `AC-…`, `R-nn`, `F-nn`,
-   `FINDINGS.md`, `REMEDIATION.md`, `.scratch/`, "Wave", "orchestrator", or
-   React Native history.
+3. **No process citations in code or tests.** Comments and test names
+   explain the current constraint, not the ticket that introduced it: no
+   `AC-…`, `R-nn`, `F-nn`, `FINDINGS.md`, `REMEDIATION.md`, `.scratch/`,
+   "Wave", "orchestrator", or React Native history.
 4. **Delete rather than wrap.** No abstract class with a single production
    implementation unless the real dependency cannot run under `flutter test`
    (today: `Haptics`, `ReceiptCameraController`). Use mocktail on the
@@ -103,9 +102,11 @@ that review checks. `flutter analyze` and `dart format` cover style.
   repository fail, use a SQLite trigger on the fixture
   (`AppTestHarness.failInsertsOn` / `failDeletesOn`, or `db.customStatement`
   for a narrower trigger).
-- Tests assert behaviour through the widget or repository seam. No test reads
-  files under `lib/` or scans YAML/Fastfiles/PNGs except
-  `test/standards/house_rules_test.dart`.
+- Tests assert behaviour through the widget or repository seam. The only
+  tests that read source or config files are `test/standards/house_rules_test.dart`
+  and the Android manifest guards (`test/android_backup_test.dart`,
+  `test/auth/redirect_uri_contract_test.dart`), each of which pins a setting
+  that has lost user data or broken sign-in on a real device.
 - No golden images.
 - `RecordingHaptics` in the harness asserts the haptic ladder.
 

@@ -1,9 +1,9 @@
-// Real-outcome tests for `normalizeUnit`/`canonicalUnitFor` (AC-TEST-05).
+// Real-outcome tests for `normalizeUnit`/`canonicalUnitFor`.
 //
 // Ported from the Expo app's `src/normalization/units.ts` test suite
 // (`git show 906c9bb^:mobile/src/__tests__/normalization/units.test.ts`) —
-// this file previously had **no test at all** (FINDINGS.md R-22), which is
-// the direct reason R-18's normalisation-never-fires defect went unnoticed:
+// this file previously had **no test at all**, which is how a `canonicalUnit`
+// that was always null went unnoticed:
 // nothing exercised `normalizeUnit` in isolation, so a `canonicalUnit` that
 // was always null never tripped anything here.
 import 'package:glean/data/util/unit_normalization.dart';
@@ -126,7 +126,7 @@ void main() {
       // 'saffron' has no row in the density table, so a volume->mass
       // conversion has nothing to fall back on — must fail rather than
       // guess, since a wrong density would silently corrupt the quantity
-      // (exactly the class of bug R-18 exists to prevent).
+      // (exactly the class of bug `canonicalUnit` exists to prevent).
       final result = normalizeUnit(
         quantity: 1,
         unit: 'tsp',

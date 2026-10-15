@@ -1,7 +1,7 @@
 // Widget coverage for the Pantry screen: the `+` sheet's three modes from
-// both empty and populated pantry (AC-PAN-03), swipe delete + undo
-// (AC-UX-01/02), the AC-PAN-12 stranded-filter fix, the AC-HAP-05
-// filter-chip haptic, and R-07's delete-failure guard.
+// both empty and populated pantry, swipe delete + undo,
+// the stranded-filter fix, the filter-chip haptic, and the delete-failure
+// guard.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -23,8 +23,9 @@ void main() {
 
     tearDown(() => harness.dispose());
 
-    testWidgets('empty pantry: the + sheet offers all three intake modes '
-        '(AC-PAN-03)', (WidgetTester tester) async {
+    testWidgets('empty pantry: the + sheet offers all three intake modes', (
+      WidgetTester tester,
+    ) async {
       await harness.pumpAt(tester, AppRoutes.pantry.path);
       await tester.pumpAndSettle();
 
@@ -38,8 +39,9 @@ void main() {
       expect(find.text('Manual entry'), findsOneWidget);
     });
 
-    testWidgets('populated pantry: the + sheet still offers all three modes '
-        '(AC-PAN-03)', (WidgetTester tester) async {
+    testWidgets('populated pantry: the + sheet still offers all three modes', (
+      WidgetTester tester,
+    ) async {
       await pantry.addItem(
         userId: 'test-user',
         name: 'milk',
@@ -61,7 +63,7 @@ void main() {
     });
 
     testWidgets('swipe-to-delete removes the item and shows undo; undo '
-        'restores it (AC-UX-01/02)', (WidgetTester tester) async {
+        'restores it', (WidgetTester tester) async {
       await pantry.addItem(
         userId: 'test-user',
         name: 'butter',
@@ -91,8 +93,8 @@ void main() {
         isEmpty,
       );
 
-      // A single swipe-delete commit fires exactly one haptic (AC-HAP-03 —
-      // the RN app double-buzzed via row + IconButton).
+      // A single swipe-delete commit fires exactly one haptic (not one
+      // from the row and another from the IconButton).
       expect(harness.hapticCalls, <HapticWeight>[HapticWeight.medium]);
 
       await tester.tap(find.text('Undo'));
@@ -114,7 +116,7 @@ void main() {
     });
 
     testWidgets('deleting the last item of a filtered category does not '
-        'strand the list (AC-PAN-12)', (WidgetTester tester) async {
+        'strand the list', (WidgetTester tester) async {
       await pantry.addItem(
         userId: 'test-user',
         name: 'strawberries',
@@ -137,7 +139,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Select the "Veg" filter chip (the only category the berries item is
-      // in), firing the selection haptic (AC-HAP-05).
+      // in), firing the selection haptic.
       await tester.tap(find.text('Veg · 1'));
       await tester.pumpAndSettle();
       expect(harness.hapticCalls, contains(HapticWeight.selection));
@@ -156,8 +158,9 @@ void main() {
       expect(find.text('Nothing left to review.'), findsNothing);
     });
 
-    testWidgets('a tap on a row opens the quantity/unit/expiry sheet '
-        '(AC-PAN-07)', (WidgetTester tester) async {
+    testWidgets('a tap on a row opens the quantity/unit/expiry sheet', (
+      WidgetTester tester,
+    ) async {
       await pantry.addItem(
         userId: 'test-user',
         name: 'onion',
@@ -195,8 +198,7 @@ void main() {
     });
 
     gleanWidgetTest(
-      'a delete failure is caught and surfaced, leaving the row intact '
-      '(R-07)',
+      'a delete failure is caught and surfaced, leaving the row intact',
       (WidgetTester tester) async {
         await pantry.addItem(
           userId: 'test-user',
@@ -216,7 +218,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // No undo snackbar — the delete failed and was caught, not
-        // propagated uncaught with zero feedback (the R-07 bug).
+        // propagated uncaught with zero feedback (the bug).
         expect(find.text('Undo'), findsNothing);
         expect(find.textContaining('Could not remove'), findsOneWidget);
 

@@ -1,4 +1,4 @@
-// Route-table structure (AC-TEST-14): the five tab branches exist, every
+// Route-table structure: the five tab branches exist, every
 // route resolves to real content, names are unique, and the intake flow
 // resolves outside the tab shell (no `NavigationBar` while it's active).
 //
@@ -98,18 +98,17 @@ void main() {
       expect(find.byType(MealDetailScreen), findsOneWidget);
     });
 
-    testWidgets(
-      'a deep link to the old /meals/search path is not reachable (AC-MEAL-07)',
-      (tester) async {
-        // With the dedicated route gone, 'search' now falls through to the
-        // `:id` catch-all, fails the numeric-id guard, and lands on the
-        // error page — it must not resolve to any meals screen.
-        await pumpAt(tester, '/meals/search');
-        expect(find.byType(MealDetailScreen), findsNothing);
-        expect(find.byType(MealsScreen), findsNothing);
-        expect(find.byType(RouteErrorScreen), findsOneWidget);
-      },
-    );
+    testWidgets('a deep link to the old /meals/search path is not reachable', (
+      tester,
+    ) async {
+      // With the dedicated route gone, 'search' now falls through to the
+      // `:id` catch-all, fails the numeric-id guard, and lands on the
+      // error page — it must not resolve to any meals screen.
+      await pumpAt(tester, '/meals/search');
+      expect(find.byType(MealDetailScreen), findsNothing);
+      expect(find.byType(MealsScreen), findsNothing);
+      expect(find.byType(RouteErrorScreen), findsOneWidget);
+    });
 
     testWidgets('sign-in resolves outside the shell', (tester) async {
       // Signed-in users get bounced off /sign-in by design (see
@@ -133,8 +132,7 @@ void main() {
       expect(
         find.byType(NavigationBar),
         findsNothing,
-        reason:
-            'AC-PAN-04: intake is a modal task, the tab bar must not be present',
+        reason: 'intake is a modal task, the tab bar must not be present',
       );
 
       await pumpAt(tester, AppRoutes.intakeDescribePantry.path);

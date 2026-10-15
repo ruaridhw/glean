@@ -46,7 +46,7 @@ void main() {
     unawaited(
       harness.router.push(AppRoutes.intakeScanProgress.path, extra: args),
     );
-    // Not `pump(tester)`/`pumpAndSettle`: AC-PAN-06 requires a real
+    // Not `pump(tester)`/`pumpAndSettle`: this screen must show a real
     // indeterminate spinner on this screen while its scan request is in
     // flight, and an indeterminate `CircularProgressIndicator` schedules
     // frames forever by design — `pumpAndSettle` can never observe the tree

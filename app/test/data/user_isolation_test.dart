@@ -1,8 +1,8 @@
-// New coverage 2 (FLUTTER_MIGRATION.md §10): user-scoped data isolation.
+// User-scoped data isolation.
 // Today only `user_config` is keyed by user — `pantry_items`, `recipes`,
 // `meal_plan_entries` and `shopping_list_items` have none, so signing in as
 // a different account on the same device inherited the previous user's
-// groceries (AC-DATA-02/03, AC-TEST-07).
+// groceries.
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fixture.dart';
 
 void main() {
-  group('user-scoped isolation (AC-TEST-07)', () {
+  group('user-scoped isolation', () {
     late GleanDatabase db;
     late PantryRepository pantry;
     late RecipesRepository recipes;

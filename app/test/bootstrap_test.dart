@@ -17,8 +17,7 @@ import 'support/harness.dart';
 void main() {
   group('GleanRoot', () {
     gleanWidgetTest(
-      'cross-fades the database gate instead of hard-cutting to the app '
-      '(AC-TRN-05)',
+      'cross-fades the database gate instead of hard-cutting to the app',
       (WidgetTester tester) async {
         // Deliberately built *inside* the test body, not in `setUp` —
         // `setUp`/`tearDown` run outside `testWidgets`'s FakeAsync zone, and
@@ -51,7 +50,7 @@ void main() {
         gate.complete();
         // Advance in fixed steps rather than `pumpAndSettle` — Pantry (the
         // landing tab `GleanApp` resolves to) shows a perpetually-animating
-        // `SkeletonBox` on its first frame (F-13), which never reaches a
+        // `SkeletonBox` on its first frame, which never reaches a
         // quiescent frame for `pumpAndSettle` to settle on.
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));

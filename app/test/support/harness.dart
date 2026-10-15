@@ -31,7 +31,7 @@ import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
 // `Override` is only exported from riverpod's `misc.dart` entrypoint, not from
 // the `flutter_riverpod` barrel. `riverpod` is a direct dependency precisely so
-// this import is legitimate — see FINDINGS.md F-03.
+// this import is legitimate.
 import 'package:riverpod/misc.dart';
 
 import '../auth/support/fakes.dart';
@@ -93,7 +93,7 @@ class AppTestHarness {
   final GleanDatabase db;
 
   /// Defaults to a [RecordingHaptics] so any test can assert the ladder
-  /// (AC-HAP-01..05) without extra setup.
+  /// without extra setup.
   final Haptics haptics;
 
   late final ProviderContainer _container;
@@ -170,8 +170,7 @@ class AppTestHarness {
 /// down its stream subscriptions.
 ///
 /// **Any widget test whose tree holds a drift `.watch()` subscription must end
-/// with this**, or the test wedges the whole isolate — see the wrapper below and
-/// `.scratch/flutter-port/FINDINGS.md` F-12.
+/// with this**, or the test wedges the whole isolate — see the wrapper below.
 ///
 /// Unmounting disposes the `ProviderScope`, which disposes the `StreamProvider`
 /// element, which cancels the drift stream — and `StreamQueryStore.markAsClosed`
@@ -193,8 +192,8 @@ Future<void> releaseDriftTree(WidgetTester tester) async {
 ///
 /// **Use this instead of `pumpAndSettle` anywhere a skeleton or an indeterminate
 /// progress indicator may be on screen.** Both are *required* to animate
-/// perpetually (AC-DS-11 puts `SkeletonBox` on a `TweenAnimationBuilder`, and
-/// AC-PAN-06 requires a genuinely indeterminate scan indicator), so
+/// perpetually (`SkeletonBox` sits on a `TweenAnimationBuilder`, and the scan
+/// indicator is genuinely indeterminate), so
 /// `pumpAndSettle` has no quiescent frame to settle on and times out — which
 /// reads as a hang, not as a clear failure. A correct implementation is exactly
 /// what makes `pumpAndSettle` unusable here.

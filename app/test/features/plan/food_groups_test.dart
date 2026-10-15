@@ -1,4 +1,4 @@
-// Coverage for AC-PLAN-08: `food_groups`/`food_group_coverage` must be
+// `food_groups`/`food_group_coverage` must be
 // computed for real from the pantry/plan, not hardcoded empty the way RN's
 // client did (which permanently disabled the backend's food-group-balancing
 // prompt rule).
@@ -46,7 +46,7 @@ void main() {
     tearDown(() => db.close());
 
     test('a recipe\'s food groups are computed from its ingredients\' '
-        'categories, non-empty for a real recipe (AC-PLAN-08)', () async {
+        'categories, non-empty for a real recipe', () async {
       final recipeId = await recipes.save(
         userId: userId,
         title: 'Chicken and rice',
@@ -59,7 +59,7 @@ void main() {
         ],
       );
       // Give the ingredient a real category the way pantry/shopping
-      // intake would (recipe import alone leaves it uncategorised, §9).
+      // intake would (recipe import alone leaves it uncategorised).
       await IngredientsRepository(
         db,
       ).resolveOrCreate(canonicalName: 'chicken breast', category: 'poultry');

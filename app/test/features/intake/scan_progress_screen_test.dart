@@ -1,9 +1,9 @@
-// Widget coverage for the "honest progress" screen (AC-PAN-06): a real
+// Widget coverage for the "honest progress" screen: a real
 // indeterminate indicator (no fake staged steps), a scan timeout surfaces
-// and is recoverable (AC-PAN-14 — the RN app hung on "Almost done…"
+// and is recoverable (the RN app hung on "Almost done…"
 // forever), success lands on the shared review screen with the parsed items
-// and their categories carried through (AC-BE-04), and both success and
-// failure fire a `mediumImpact` haptic (R-11, AC-HAP-05).
+// and their categories carried through, and both success and
+// failure fire a `mediumImpact` haptic.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -110,8 +110,9 @@ void main() {
       }
     }
 
-    testWidgets('shows a real indeterminate spinner, not fake staged steps '
-        '(AC-PAN-06)', (WidgetTester tester) async {
+    testWidgets('shows a real indeterminate spinner, not fake staged steps', (
+      WidgetTester tester,
+    ) async {
       final completer = Completer<http.StreamedResponse>();
       when(() => httpClient.send(any())).thenAnswer((_) => completer.future);
 
@@ -130,8 +131,9 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('a timeout surfaces a distinct, recoverable message '
-        '(AC-PAN-14)', (WidgetTester tester) async {
+    testWidgets('a timeout surfaces a distinct, recoverable message', (
+      WidgetTester tester,
+    ) async {
       // A never-completing Completer, not `Future.delayed` — the latter
       // owns a real `Timer` that would still be "pending" (and fail the
       // test's own timer-leak check) once the client's own 30s
@@ -158,9 +160,9 @@ void main() {
       );
       expect(find.text('Try again'), findsOneWidget);
       expect(find.text('Back'), findsOneWidget);
-      // R-11: failure fires the ladder's data-commit weight — Flutter has
+      // failure fires the ladder's data-commit weight — Flutter has
       // no notification-style haptic, so this plus the message above stand
-      // in for one (§7).
+      // in for one.
       expect(harness.hapticCalls, contains(HapticWeight.medium));
 
       // Recoverable: "Back" pops out of the flow rather than being stuck.
@@ -170,7 +172,7 @@ void main() {
     });
 
     testWidgets('success lands on the review screen carrying category '
-        'through (AC-BE-04)', (WidgetTester tester) async {
+        'through', (WidgetTester tester) async {
       when(() => httpClient.send(any())).thenAnswer((_) async {
         final body = jsonEncode(<String, dynamic>{
           'items': <Map<String, dynamic>>[
@@ -199,8 +201,8 @@ void main() {
       expect(widget.args.destination, ReviewDestination.pantry);
       expect(widget.args.items.single.name, 'Milk');
       expect(widget.args.items.single.category, 'dairy');
-      // R-11: success also fires the ladder's data-commit weight, routed
-      // through `hapticsProvider` (AC-HAP-04) rather than `HapticFeedback`
+      // success also fires the ladder's data-commit weight, routed
+      // through `hapticsProvider` rather than `HapticFeedback`
       // directly.
       expect(harness.hapticCalls, contains(HapticWeight.medium));
     });

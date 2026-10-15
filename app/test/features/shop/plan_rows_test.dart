@@ -1,4 +1,4 @@
-// AC-SHOP-05/06: a plan-derived shopping row carries a visible "From plan"
+// a plan-derived shopping row carries a visible "From plan"
 // tag (this module's contribution to "announce" — see
 // `presentation.dart`'s `isPlanDerived` doc for why the insertion-time
 // snackbar itself is the Plan feature's job, not this one's), and deleting
@@ -32,7 +32,7 @@ void main() {
 
     testWidgets(
       'a plan-derived row is tagged "From plan" and disappears when its '
-      'plan entry is deleted (AC-SHOP-05/06)',
+      'plan entry is deleted',
       (WidgetTester tester) async {
         final int recipeId = await recipes().save(
           userId: 'test-user',
@@ -77,7 +77,7 @@ void main() {
         await plan().deleteEntry(id: entryId, userId: 'test-user');
         await tester.pumpAndSettle();
 
-        // No `ref.invalidate` anywhere in this module (AC-DATA-05) — the
+        // No `ref.invalidate` anywhere in this module — the
         // schema's `onDelete: cascade` removed the row, and the same
         // `shoppingListProvider` stream this screen already watches just
         // re-emitted without it.

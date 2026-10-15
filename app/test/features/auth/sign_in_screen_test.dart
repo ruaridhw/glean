@@ -61,32 +61,29 @@ void main() {
     expect(find.textContaining('Privacy Policy'), findsNothing);
   });
 
-  testWidgets(
-    'AC-HAP-05: the tap fires exactly one lightImpact immediately, before '
-    'sign-in resolves',
-    (tester) async {
-      final Completer<CognitoTokens> pending = Completer<CognitoTokens>();
-      when(() => client.signIn()).thenAnswer((_) => pending.future);
-      await pumpSignIn(tester);
+  testWidgets('the tap fires exactly one lightImpact immediately, before '
+      'sign-in resolves', (tester) async {
+    final Completer<CognitoTokens> pending = Completer<CognitoTokens>();
+    when(() => client.signIn()).thenAnswer((_) => pending.future);
+    await pumpSignIn(tester);
 
-      await tester.tap(find.text('Sign in with Google'));
-      await tester.pump();
+    await tester.tap(find.text('Sign in with Google'));
+    await tester.pump();
 
-      expect(haptics.calls, <HapticWeight>[HapticWeight.light]);
+    expect(haptics.calls, <HapticWeight>[HapticWeight.light]);
 
-      pending.complete(
-        CognitoTokens(
-          accessToken: 'a',
-          refreshToken: 'r',
-          idToken: 'i',
-          userSub: 'user-sub-123',
-          email: 'test@gmail.com',
-          expiresAt: DateTime.now().add(const Duration(hours: 1)),
-        ),
-      );
-      await tester.pumpAndSettle();
-    },
-  );
+    pending.complete(
+      CognitoTokens(
+        accessToken: 'a',
+        refreshToken: 'r',
+        idToken: 'i',
+        userSub: 'user-sub-123',
+        email: 'test@gmail.com',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      ),
+    );
+    await tester.pumpAndSettle();
+  });
 
   testWidgets(
     'a successful sign-in fires exactly light then medium, and no more',

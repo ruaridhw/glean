@@ -1,7 +1,7 @@
 // Widget coverage for the Shop tab's main list: empty state, grouped
-// sections with the unified cart wording (AC-SHOP-07), tap-to-toggle,
-// swipe-to-delete + undo (AC-UX-01/02), and the pinned add field staying put
-// with a long list and with the keyboard up (AC-SHOP-08/10).
+// sections with the unified cart wording, tap-to-toggle,
+// swipe-to-delete + undo, and the pinned add field staying put
+// with a long list and with the keyboard up.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -34,8 +34,7 @@ void main() {
     });
 
     testWidgets(
-      'lists items into "To buy"/"In cart" with one wording for the count '
-      '(AC-SHOP-07)',
+      'lists items into "To buy"/"In cart" with one wording for the count',
       (WidgetTester tester) async {
         await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
         final int milkId = await shopping().addManualItem(
@@ -53,8 +52,8 @@ void main() {
 
         expect(find.text('Bananas'), findsOneWidget);
         expect(find.text('Milk'), findsOneWidget);
-        // Section headers render uppercase (FINDINGS.md F-04 — Flutter has
-        // no `text-transform`, so the widget calls `.toUpperCase()` itself).
+        // Section headers render uppercase (Flutter has no `text-transform`,
+        // so the widget calls `.toUpperCase()` itself).
         expect(find.text('TO BUY'), findsOneWidget);
         expect(find.text('IN CART'), findsOneWidget);
         // The chip row, the checkout bar and the section header all agree on
@@ -83,7 +82,7 @@ void main() {
       expect(items!.single.isChecked, isTrue);
     });
 
-    testWidgets('swipe-to-delete removes a row with undo (AC-UX-01/02)', (
+    testWidgets('swipe-to-delete removes a row with undo', (
       WidgetTester tester,
     ) async {
       await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
@@ -101,7 +100,7 @@ void main() {
         isEmpty,
       );
       // SwipeToDeleteRow fires exactly one haptic for the commit — the
-      // undo snackbar itself must not add a second (AC-HAP-03).
+      // undo snackbar itself must not add a second.
       expect(
         harness.hapticCalls.where((w) => w == HapticWeight.medium),
         hasLength(1),
@@ -118,8 +117,7 @@ void main() {
     });
 
     gleanWidgetTest(
-      'a delete failure is caught and surfaced, leaving the row intact '
-      '(R-07)',
+      'a delete failure is caught and surfaced, leaving the row intact',
       (WidgetTester tester) async {
         await shopping().addManualItem(userId: harness.userId, name: 'Bananas');
         await harness.db.customStatement(
@@ -133,7 +131,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // No undo snackbar — the delete failed and was caught, not
-        // propagated uncaught with zero feedback (the R-07 bug).
+        // propagated uncaught with zero feedback (the bug).
         expect(find.text('Undo'), findsNothing);
         expect(find.textContaining('Could not remove'), findsOneWidget);
 
@@ -145,37 +143,37 @@ void main() {
       },
     );
 
-    testWidgets(
-      'the pinned add field stays visible with a long list (AC-SHOP-08)',
-      (WidgetTester tester) async {
-        for (int i = 0; i < 30; i++) {
-          await shopping().addManualItem(userId: 'test-user', name: 'Item $i');
-        }
+    testWidgets('the pinned add field stays visible with a long list', (
+      WidgetTester tester,
+    ) async {
+      for (int i = 0; i < 30; i++) {
+        await shopping().addManualItem(userId: 'test-user', name: 'Item $i');
+      }
 
-        await harness.pumpAt(tester, AppRoutes.shop.path);
-        await tester.pumpAndSettle();
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
 
-        expect(find.byType(TextField), findsOneWidget);
-        await tester.drag(find.byType(ListView), const Offset(0, -2000));
-        await tester.pump();
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, -2000));
+      await tester.pump();
 
-        // Still there after scrolling the *list* — it was never part of the
-        // scrollable, unlike RN's `SectionList` header.
-        expect(find.byType(TextField), findsOneWidget);
-        await tester.enterText(find.byType(TextField), 'Late addition');
-        await tester.pump();
-        await tester.tap(find.byIcon(Icons.add_rounded));
-        await tester.pumpAndSettle();
+      // Still there after scrolling the *list* — it was never part of the
+      // scrollable, unlike RN's `SectionList` header.
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Late addition');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.pumpAndSettle();
 
-        expect(
-          await tester.runAsync(() => shopping().watchAll('test-user').first),
-          hasLength(31),
-        );
-      },
-    );
+      expect(
+        await tester.runAsync(() => shopping().watchAll('test-user').first),
+        hasLength(31),
+      );
+    });
 
-    testWidgets('the pinned add field is not covered when the keyboard is up '
-        '(AC-SHOP-10)', (WidgetTester tester) async {
+    testWidgets('the pinned add field is not covered when the keyboard is up', (
+      WidgetTester tester,
+    ) async {
       await harness.pumpAt(tester, AppRoutes.shop.path);
       await tester.pumpAndSettle();
 

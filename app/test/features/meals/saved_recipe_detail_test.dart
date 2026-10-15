@@ -1,7 +1,7 @@
 // Widget coverage for the saved-recipe detail screen: `not_suitable_for`
-// and `source_url` render when present and degrade cleanly when absent
-// (AC-MEAL-04/05), the bookmark is a real unsave toggle (AC-MEAL-02), and a
-// missing recipe recovers instead of hanging (AC-MEAL-12).
+// and `source_url` render when present and degrade cleanly when absent,
+// the bookmark is a real unsave toggle, and a
+// missing recipe recovers instead of hanging.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -73,7 +73,7 @@ void main() {
 
     testWidgets(
       'the bookmark unsaves with undo and leaves this recipe\'s own detail '
-      'screen (AC-MEAL-02/12 — never left stranded on a deleted recipe)',
+      'screen (never left stranded on a deleted recipe)',
       (WidgetTester tester) async {
         final int id = await recipes.save(
           userId: 'test-user',
@@ -117,7 +117,7 @@ void main() {
 
     testWidgets(
       'the outer loading→content hand-off goes through AnimatedSwitcher, not '
-      'a hard cut (R-14, AC-TRN-01)',
+      'a hard cut',
       (WidgetTester tester) async {
         final int id = await recipes.save(
           userId: 'test-user',
@@ -147,7 +147,7 @@ void main() {
 
     testWidgets(
       'manually adding to plan also creates shopping gaps and announces '
-      'them (R-02, AC-SHOP-05) — asserted through the real "Add to plan" '
+      'them — asserted through the real "Add to plan" '
       'button, not by calling the repository directly',
       (WidgetTester tester) async {
         final int id = await recipes.save(
@@ -202,7 +202,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Recovered to *something* other than the permanent-spinner dead end
-      // the RN app hit here (§11) — not necessarily a specific screen,
+      // the RN app hit here — not necessarily a specific screen,
       // since whether this pops or falls back to `go(pantry)` depends on
       // go_router's stacking of the parent `/meals` route beneath it.
       expect(find.byType(RouteErrorScreen), findsNothing);

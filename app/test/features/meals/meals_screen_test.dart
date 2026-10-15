@@ -1,7 +1,7 @@
 // Widget coverage for the Saved segment of the Meals tab: empty state,
-// listing, swipe-to-delete + undo — including AC-MEAL-03's requirement
+// listing, swipe-to-delete + undo — including the requirement
 // that a referencing plan entry survives a recipe delete with its
-// `recipeTitle` snapshot intact — and R-07's delete-failure guard.
+// `recipeTitle` snapshot intact — and the delete-failure guard.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -61,7 +61,7 @@ void main() {
       await tester.tap(find.text('Tomato Pasta'));
       await tester.pumpAndSettle();
 
-      // The detail app bar shows the dish name (AC-MEAL-06), not a static
+      // The detail app bar shows the dish name, not a static
       // "Recipe" — there are now two matches (the app bar title and the
       // hero card is gone since it's folded into the app bar), so assert
       // via the AppBar specifically.
@@ -76,7 +76,7 @@ void main() {
 
     testWidgets(
       'swipe-to-delete removes a recipe with undo, keeping a referencing '
-      'plan entry with its title snapshot intact (AC-MEAL-03)',
+      'plan entry with its title snapshot intact',
       (WidgetTester tester) async {
         final int recipeId = await recipes.save(
           userId: 'test-user',
@@ -140,8 +140,7 @@ void main() {
     );
 
     gleanWidgetTest(
-      'a delete failure is caught and surfaced, leaving the row intact '
-      '(R-07)',
+      'a delete failure is caught and surfaced, leaving the row intact',
       (WidgetTester tester) async {
         await recipes.save(
           userId: 'test-user',
@@ -158,7 +157,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // No undo snackbar — the delete failed and was caught, not
-        // propagated uncaught with zero feedback (the R-07 bug).
+        // propagated uncaught with zero feedback (the bug).
         expect(find.text('Undo'), findsNothing);
         expect(find.textContaining('Could not remove'), findsOneWidget);
 

@@ -57,7 +57,7 @@ void main() {
     });
   });
 
-  group('AC-SHOP-07 — one phrase for the cart count', () {
+  group('one phrase for the cart count', () {
     test('cartCountLabel pluralizes correctly', () {
       expect(cartCountLabel(0), '0 items in cart');
       expect(cartCountLabel(1), '1 item in cart');

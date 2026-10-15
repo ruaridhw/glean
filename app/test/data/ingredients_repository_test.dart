@@ -1,4 +1,4 @@
-// Real-outcome tests for ingredient resolution (AC-TEST-02): assert what
+// Real-outcome tests for ingredient resolution: assert what
 // ends up in the ingredients table, never how many times a query method
 // was called.
 import 'package:glean/data/database.dart';
@@ -28,7 +28,7 @@ void main() {
       expect(ingredient.canonicalName, 'harissa paste');
       expect(ingredient.category, 'condiments');
 
-      // The 10 seeded staples (AC-DATA-10) plus this one new ingredient.
+      // The 10 seeded staples plus this one new ingredient.
       final all = await db.select(db.ingredients).get();
       expect(all, hasLength(11));
     });
@@ -46,7 +46,7 @@ void main() {
         );
 
         expect(second.id, first.id);
-        // The 10 seeded staples (AC-DATA-10) plus this one new ingredient.
+        // The 10 seeded staples plus this one new ingredient.
         final all = await db.select(db.ingredients).get();
         expect(all, hasLength(11));
       },
@@ -71,7 +71,7 @@ void main() {
       'upgrades a null category on an existing ingredient instead of keeping it null forever',
       () async {
         // Simulates an ingredient first created via recipe import, which has
-        // no category source (only the parse endpoints do, §9).
+        // no category source (only the parse endpoints do).
         final fromRecipeImport = await repository.resolveOrCreate(
           canonicalName: 'harissa paste',
         );
@@ -120,7 +120,7 @@ void main() {
       },
     );
 
-    group('canonicalUnit (R-18)', () {
+    group('canonicalUnit', () {
       test(
         'a recognised mass unit sets canonicalUnit to its base (g)',
         () async {

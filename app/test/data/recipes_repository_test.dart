@@ -1,8 +1,6 @@
-// Real-outcome tests for the saved-recipe library (AC-TEST-02), including
-// the two RN bugs FLUTTER_MIGRATION.md §11 calls out by name:
-// `getRecipeByExternalId` skipping `attachDietaryFlags` (AC-MEAL-13), and
-// recipe deletion destroying a plan entry's record of what was cooked
-// (AC-MEAL-03).
+// Real-outcome tests for the saved-recipe library, including two regressions
+// guarded by name: `getRecipeByExternalId` skipping `attachDietaryFlags`, and
+// recipe deletion destroying a plan entry's record of what was cooked.
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -87,7 +85,7 @@ void main() {
     );
 
     test(
-      'getByExternalId attaches dietary flags like getById and getSavedRecipes (AC-MEAL-13)',
+      'getByExternalId attaches dietary flags like getById and getSavedRecipes',
       () async {
         await saveSampleRecipe(externalId: 'ext-42');
 
@@ -114,7 +112,7 @@ void main() {
     });
 
     test('getSaved is a one-shot snapshot with the same ordering and dietary '
-        'flags as watchSaved (FINDINGS.md F-14)', () async {
+        'flags as watchSaved', () async {
       final firstId = await saveSampleRecipe(externalId: 'ext-a');
       final secondId = await saveSampleRecipe(externalId: 'ext-b');
 
@@ -128,7 +126,7 @@ void main() {
     });
 
     test(
-      'deleteRecipe keeps a referencing plan entry and only clears the link (AC-MEAL-03)',
+      'deleteRecipe keeps a referencing plan entry and only clears the link',
       () async {
         final plannedDate = DateTime(2026, 1, 5);
         final recipeId = await saveSampleRecipe();

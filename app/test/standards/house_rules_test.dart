@@ -30,6 +30,8 @@ Iterable<File> _dartFiles(String root) => Directory(root)
 
 String _rel(File f) => f.path.replaceAll('\\', '/');
 
+const String _thisFile = 'test/standards/house_rules_test.dart';
+
 void _expectNone({
   required Iterable<File> files,
   required bool Function(String source) violates,
@@ -67,11 +69,15 @@ void main() {
 
   test('no process citations in comments (rule 3)', () {
     _expectNone(
-      files: _dartFiles('lib'),
+      files: [
+        ..._dartFiles('lib'),
+        ..._dartFiles('test').where((f) => !_rel(f).endsWith(_thisFile)),
+        ..._dartFiles('integration_test'),
+      ],
       violates: _citation.hasMatch,
       rule:
           'no AC-/R-/F-/FINDINGS/REMEDIATION/.scratch/Wave/orchestrator '
-          'references in lib/',
+          'references in lib/, test/ or integration_test/',
     );
   });
 

@@ -188,7 +188,7 @@ void main() {
                 as String;
         final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
 
-        // AC-PLAN-08: the RN client hardcoded these empty, permanently
+        // The RN client hardcoded these empty, permanently
         // disabling the backend's food-group-balancing prompt rule.
         expect(decoded['food_group_coverage'], {'protein': 2, 'veg': 1});
         final historyItem =
@@ -249,7 +249,7 @@ void main() {
         final result = await client.scanReceipt(Uint8List.fromList([1, 2, 3]));
 
         expect(result.items.single.name, 'Milk');
-        // AC-BE-04 / AC-DATA-11: food_group is carried through, not dropped.
+        // food_group is carried through, not dropped.
         expect(result.items.single.category, 'dairy');
         expect(result.items.single.foodGroup, 'dairy');
       },
@@ -491,34 +491,36 @@ void main() {
       },
     );
 
-    test('a parsed ingredient missing food_group throws ApiParseException — '
-        'receipt proposals always emit this computed field, unlike nullable meal-plan inputs '
-        '(AC-DATA-11)', () async {
-      when(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).thenAnswer(
-        (_) async => jsonResponse({
-          'items': [
-            {
-              'name': 'Mystery item',
-              'quantity': 1,
-              'unit': 'units',
-              'confidence': 0.5,
-              'category': 'dairy',
-            },
-          ],
-        }),
-      );
+    test(
+      'a parsed ingredient missing food_group throws ApiParseException — '
+      'receipt proposals always emit this computed field, unlike nullable meal-plan inputs',
+      () async {
+        when(
+          () => httpClient.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => jsonResponse({
+            'items': [
+              {
+                'name': 'Mystery item',
+                'quantity': 1,
+                'unit': 'units',
+                'confidence': 0.5,
+                'category': 'dairy',
+              },
+            ],
+          }),
+        );
 
-      await expectLater(
-        client.describeReceipt('mystery item'),
-        throwsA(isA<ApiParseException>()),
-      );
-    });
+        await expectLater(
+          client.describeReceipt('mystery item'),
+          throwsA(isA<ApiParseException>()),
+        );
+      },
+    );
 
     test('a transport failure throws ApiNetworkException', () async {
       when(

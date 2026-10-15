@@ -86,9 +86,8 @@ Future<T> _readDb<T>(WidgetTester tester, Future<T> Function() query) async {
 /// isolate so the whole *file* times out rather than just the one test.
 ///
 /// The zero duration is the tell: it is drift's cleanup, not this screen's
-/// 500ms auto-save debounce (which `dispose()` does cancel). See
-/// `.scratch/flutter-port/FINDINGS.md` F-12 — this was misdiagnosed as a leaked
-/// app timer more than once.
+/// 500ms auto-save debounce (which `dispose()` does cancel). This was
+/// misdiagnosed as a leaked app timer more than once.
 Future<void> _releaseTree(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   // A `pump`, deliberately, not `runAsync`: the pending timer is a *FakeTimer*
@@ -128,7 +127,7 @@ void main() {
   group('SettingsScreen auto-save', () {
     _settingsWidgetTest(
       'has no Save button; a slider commits once on release, not per drag '
-      'frame (AC-SET-01, AC-SET-02, AC-TEST-12)',
+      'frame',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -173,7 +172,7 @@ void main() {
 
     _settingsWidgetTest(
       'a dietary chip toggle fires selectionClick (not mediumImpact) and '
-      'still auto-saves immediately (AC-HAP-05)',
+      'still auto-saves immediately',
       (WidgetTester tester) async {
         await tester.binding.setSurfaceSize(const Size(420, 2000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -236,38 +235,37 @@ void main() {
       },
     );
 
-    _settingsWidgetTest(
-      'a config-save failure surfaces a visible error (AC-SET-03)',
-      (WidgetTester tester) async {
-        await tester.binding.setSurfaceSize(const Size(420, 2000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+    _settingsWidgetTest('a config-save failure surfaces a visible error', (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(420, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        // A save is an upsert, so failing every INSERT fails every save
-        // while reads stay real.
-        await tester.runAsync(
-          () => db.customStatement(
-            'CREATE TRIGGER fail_insert_user_config BEFORE INSERT ON '
-            "user_config BEGIN SELECT RAISE(ABORT, 'disk full'); END",
-          ),
-        );
-        final haptics = RecordingHaptics();
-        await tester.pumpWidget(_buildApp(db: db, haptics: haptics));
-        await _waitForContent(tester);
+      // A save is an upsert, so failing every INSERT fails every save
+      // while reads stay real.
+      await tester.runAsync(
+        () => db.customStatement(
+          'CREATE TRIGGER fail_insert_user_config BEFORE INSERT ON '
+          "user_config BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+        ),
+      );
+      final haptics = RecordingHaptics();
+      await tester.pumpWidget(_buildApp(db: db, haptics: haptics));
+      await _waitForContent(tester);
 
-        await tester.tap(find.text('Vegan'));
-        await tester.pump();
+      await tester.tap(find.text('Vegan'));
+      await tester.pump();
 
-        expect(
-          find.text('Could not save your settings. Try again.'),
-          findsOneWidget,
-        );
-        // A failed save must not claim success.
-        expect(haptics.calls, isNot(contains(HapticWeight.medium)));
-      },
-    );
+      expect(
+        find.text('Could not save your settings. Try again.'),
+        findsOneWidget,
+      );
+      // A failed save must not claim success.
+      expect(haptics.calls, isNot(contains(HapticWeight.medium)));
+    });
   });
 
-  group('SettingsScreen cooking-time bound (AC-UX-05)', () {
+  group('SettingsScreen cooking-time bound', () {
     _settingsWidgetTest(
       'shows the minutes unit and the 1-480 bound before it is violated',
       (WidgetTester tester) async {

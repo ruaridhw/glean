@@ -1,6 +1,5 @@
 // A cold-start deep link to a missing/unknown route must show a recoverable
-// error, never a permanent spinner and never a `pop()` on an empty stack
-// (§11, AC-MEAL-12's routing half).
+// error, never a permanent spinner and never a `pop()` on an empty stack.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

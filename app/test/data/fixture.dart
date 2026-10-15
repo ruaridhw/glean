@@ -1,6 +1,4 @@
-// Shared in-memory drift fixture for data-layer tests (AC-TEST-01) — one
-// fixture, not the five copy-pasted fake-query-builder harnesses the RN
-// suite had (FLUTTER_MIGRATION.md §10).
+// Shared in-memory drift fixture for data-layer tests.
 //
 // `NativeDatabase.memory()` runs the same `onCreate` migration as
 // production (schema creation + seeding), verified working headless on

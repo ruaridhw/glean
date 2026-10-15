@@ -1,4 +1,4 @@
-// Widget coverage for import-from-URL (AC-MEAL-10): a fresh import saves and
+// Widget coverage for import-from-URL: a fresh import saves and
 // opens the new recipe; an import matching an already-saved `external_id`
 // dedupes and says "already saved" instead of inserting a duplicate.
 import 'dart:convert';

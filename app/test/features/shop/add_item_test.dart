@@ -1,6 +1,6 @@
 // Widget coverage for the pinned manual-add field: a normal add commits and
 // fires the data-commit haptic, and a DB failure surfaces inline while
-// leaving the button usable again (AC-SHOP-09 — RN's `setAdding(true)` had
+// leaving the button usable again (RN's `setAdding(true)` had
 // no `try`/`finally`, so a failure left the button permanently disabled with
 // no error shown).
 import 'package:flutter/material.dart';
@@ -34,8 +34,9 @@ void main() {
       expect(harness.hapticCalls, contains(HapticWeight.medium));
     });
 
-    testWidgets('a DB error surfaces inline and leaves the add button usable '
-        '(AC-SHOP-09)', (WidgetTester tester) async {
+    testWidgets('a DB error surfaces inline and leaves the add button usable', (
+      WidgetTester tester,
+    ) async {
       final AppTestHarness harness = AppTestHarness();
       addTearDown(harness.dispose);
       await harness.failInsertsOn('shopping_list_items');

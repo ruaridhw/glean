@@ -1,5 +1,4 @@
-// AC-TEST-06 (non-negotiable, per IMPLEMENTATION.md) and the checkout half
-// of AC-SHOP-01/02/03: a receipt only removes the rows it actually
+// Checkout: a receipt only removes the rows it actually
 // resolved, "Done shopping" completes a receipt-less trip with undo, and a
 // manual item's resolved ingredient identity lets it participate in a
 // receipt match at all.
@@ -37,7 +36,7 @@ void main() {
 
     testWidgets(
       'a receipt resolving 4 of 12 checked rows removes exactly those 4 and '
-      'leaves 8 (AC-SHOP-01, AC-TEST-06)',
+      'leaves 8',
       (WidgetTester tester) async {
         final List<int> ingredientIds = <int>[];
         for (int i = 0; i < 12; i++) {
@@ -96,8 +95,7 @@ void main() {
     );
 
     testWidgets(
-      '"Done shopping" completes a receipt-less trip, leaving unchecked rows '
-      '(AC-SHOP-02)',
+      '"Done shopping" completes a receipt-less trip, leaving unchecked rows',
       (WidgetTester tester) async {
         await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
         final int milkId = await shopping().addManualItem(

@@ -6,8 +6,7 @@
 // Assertions are on screen *widget type*, not copy — Meals already has a
 // real screen; Pantry doesn't yet, but must not matter to this test either
 // way. Uses the `import` nested route as the vehicle for exercising the
-// stack (search was dropped — AC-MEAL-07, there is no dedicated route for
-// it any more).
+// stack (search has no dedicated route any more).
 
 import 'dart:async';
 
@@ -44,9 +43,7 @@ void main() {
 
   tearDown(() => harness.dispose());
 
-  testWidgets('every tab tap fires the selection haptic (AC-HAP-05)', (
-    tester,
-  ) async {
+  testWidgets('every tab tap fires the selection haptic', (tester) async {
     await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
     harness.hapticCalls.clear();
