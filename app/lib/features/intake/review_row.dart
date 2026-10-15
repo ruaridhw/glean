@@ -19,11 +19,15 @@ class ReviewRow {
       unitController = TextEditingController(text: draft.unit),
       confidence = draft.confidence,
       unitPrice = draft.unitPrice,
-      category = draft.category;
+      category = draft.category,
+      sourceRowIds = draft.sourceRowIds;
 
   final String originalName;
   bool selected = true;
   final String reviewId;
+
+  /// The Shopping rows this row came from, when it was pre-filled from the list.
+  final List<int> sourceRowIds;
   final TextEditingController nameController;
   final TextEditingController quantityController;
   final TextEditingController unitController;

@@ -202,11 +202,9 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           userId: userId,
           items: _pantryInputs(accepted),
         );
-        final cleared = await shopping.resolveCheckoutWithSnapshot(
+        final cleared = await shopping.deleteRowsWithSnapshot(
           userId: userId,
-          resolvedIngredientIds: <int>[
-            for (final addition in receipt.additions) addition.ingredientId,
-          ],
+          ids: <int>[for (final row in accepted) ...row.sourceRowIds],
         );
         return (receipt: receipt, cleared: cleared);
       }),
