@@ -28,9 +28,9 @@ class PlanSlotRow extends ConsumerWidget {
       child: _FilledSlotRow(
         entry: entry,
         onCooked: () => markCookedWithUndo(context, ref, entry),
-        onOpen: entry.recipeId == null
-            ? null
-            : () => openPlannedRecipe(context, ref, entry.recipeId!),
+        onOpen: canOpenPlannedRecipe(entry)
+            ? () => openPlannedRecipe(context, ref, entry)
+            : null,
       ),
     );
   }
