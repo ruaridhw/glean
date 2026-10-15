@@ -47,3 +47,26 @@ def test_parse_ingredient_text_extracts_quantity_unit_name_and_package(
     assert parsed.quantity == pytest.approx(expected_quantity)
     assert parsed.unit == expected_unit
     assert parsed.preparation == expected_preparation
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("8 oz cheddar", "Cheddar", 226.8, "g"),
+        ("2 ounces grated parmesan", "Grated parmesan", 56.7, "g"),
+        ("1 lb minced beef", "Minced beef", 453.6, "g"),
+        ("8 fl oz double cream", "Double cream", 236.56, "ml"),
+        ("1 pint milk", "Milk", 568, "ml"),
+        ("2 pints vegetable stock", "Vegetable stock", 1136, "ml"),
+    ],
+)
+def test_parse_ingredient_text_converts_imperial_measures_to_metric(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-3)
+    assert parsed.unit == expected_unit
+    assert parsed.preparation is None
