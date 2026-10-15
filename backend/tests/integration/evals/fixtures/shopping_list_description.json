@@ -5,7 +5,12 @@
     },
     "expected": {
       "count": 4,
-      "names": ["taco shells", "whole milk", "limes", "lunchbox snacks"]
+      "names": [
+        "taco shells",
+        "whole milk",
+        "limes",
+        "lunchbox snacks"
+      ]
     }
   },
   {
@@ -14,7 +19,12 @@
     },
     "expected": {
       "count": 4,
-      "names": ["pasta", "chopped tomatoes", "parmesan", "spinach"]
+      "names": [
+        "pasta",
+        "chopped tomatoes",
+        "parmesan",
+        "spinach"
+      ]
     }
   },
   {
@@ -23,7 +33,38 @@
     },
     "expected": {
       "count": 4,
-      "names": ["oats", "greek yogurt", "blueberries", "orange juice"]
+      "names": [
+        "oats",
+        "greek yogurt",
+        "blueberries",
+        "orange juice"
+      ]
+    }
+  },
+  {
+    "input": {
+      "text": "Two litres of semi-skimmed milk, 6 eggs and a loaf of bread."
+    },
+    "expected": {
+      "count": 3,
+      "names": [
+        "semi-skimmed milk",
+        "eggs",
+        "bread"
+      ]
+    }
+  },
+  {
+    "input": {
+      "text": "A pack of bacon, a box of cereal and some fruit."
+    },
+    "expected": {
+      "count": 3,
+      "names": [
+        "bacon",
+        "cereal",
+        "fruit"
+      ]
     }
   }
 ]
