@@ -119,3 +119,27 @@ def test_parse_ingredient_text_gives_vague_measures_named_units_without_leaking_
     assert parsed.canonical_name == expected_name
     assert parsed.quantity == pytest.approx(expected_quantity)
     assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        # A US cup of butter weighs about 227 g.
+        ("1/4 cup butter", "Butter", 56.75, "g"),
+        ("1 cup butter, melted", "Butter, melted", 227, "g"),
+        ("2 cups plain flour", "Plain flour", 280.6, "g"),
+        ("1 cup milk", "Milk", 236.59, "ml"),
+        ("1 cup of vegetable stock", "Vegetable stock", 236.59, "ml"),
+        ("1 cup chickpeas", "Chickpeas", 1, "cup"),
+        ("2 Cups peanut butter", "Peanut butter", 2, "cup"),
+    ],
+)
+def test_parse_ingredient_text_converts_cups_by_density_then_to_ml_else_keeps_the_cup(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-2)
+    assert parsed.unit == expected_unit

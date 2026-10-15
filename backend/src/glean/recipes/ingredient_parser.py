@@ -96,6 +96,39 @@ _PIECE_WORDS = {
     "thigh",
     "thighs",
 }
+_ML_PER_CUP = 236.59
+# Interim stand-in for the ingredient catalogue's per-ingredient density (#119). Exact names only, so
+# "peanut butter" never borrows butter's density. Values (g per ml) match app/lib/data/util/unit_normalization.dart.
+_CUP_DENSITIES_G_PER_ML = {
+    **dict.fromkeys(("butter", "unsalted butter", "salted butter"), 0.959),
+    **dict.fromkeys(("flour", "plain flour", "all-purpose flour", "self-raising flour", "bread flour"), 0.593),
+    **dict.fromkeys(("sugar", "caster sugar", "granulated sugar", "white sugar"), 0.845),
+    **dict.fromkeys(("rice", "basmati rice", "long grain rice", "white rice"), 0.888),
+}
+_CUP_LIQUIDS = {
+    "water",
+    "milk",
+    "whole milk",
+    "skimmed milk",
+    "buttermilk",
+    "cream",
+    "double cream",
+    "single cream",
+    "stock",
+    "chicken stock",
+    "vegetable stock",
+    "beef stock",
+    "juice",
+    "orange juice",
+    "lemon juice",
+    "oil",
+    "olive oil",
+    "vegetable oil",
+    "wine",
+    "white wine",
+    "red wine",
+    "vinegar",
+}
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
     *_MEASURE_UNITS,
@@ -250,11 +283,23 @@ def _parse_unit_word(raw_unit: str, quantity: float, name: str) -> tuple[str, fl
         return name, quantity * factor, unit, None
     if raw_unit in _PIECE_WORDS:
         return name, quantity, "pcs", None
+    if raw_unit in {"cup", "cups"}:
+        return _convert_cups(name, quantity)
     if raw_unit in {"stick", "sticks"}:
         if _ingredient_key(name) in _BUTTER_NAMES:
             return name, quantity * _GRAMS_PER_BUTTER_STICK, "g", None
         return name, quantity, "pcs", None
     return None
+
+
+def _convert_cups(name: str, quantity: float) -> tuple[str, float, str, str | None]:
+    millilitres = quantity * _ML_PER_CUP
+    key = _ingredient_key(name)
+    if (density := _CUP_DENSITIES_G_PER_ML.get(key)) is not None:
+        return name, millilitres * density, "g", None
+    if key in _CUP_LIQUIDS:
+        return name, millilitres, "ml", None
+    return name, quantity, "cup", None
 
 
 def _ingredient_key(name: str) -> str:
