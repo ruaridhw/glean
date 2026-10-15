@@ -40,11 +40,12 @@ def decision(
     group_options = questions["ingredient_group"].criteria  # ty: ignore[unresolved-attribute]
     form_options = questions["form"].criteria  # ty: ignore[unresolved-attribute]
     answers: dict[str, Any] = {
-        "match": _choice({key: match.get(key, 0.0) for key in questions["match"].criteria}),  # ty: ignore[unresolved-attribute]
         "ingredient_group": _choice({key: 1.0 if key == group.value else 0.0 for key in group_options}),
         "form": _choice({key: 1.0 if key == form.value else 0.0 for key in form_options}),
         "perishable": NoulAnswer(type="noul", noul=perishable),
     }
+    if "match" in questions:
+        answers["match"] = _choice({key: match.get(key, 0.0) for key in questions["match"].criteria})  # ty: ignore[unresolved-attribute]
     return Decision(
         id="dec-test",
         model="typesafe/jev-1.14-20261014",

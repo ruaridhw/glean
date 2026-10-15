@@ -86,6 +86,13 @@ class Feature(StrEnum):
             eval_model="google/gemini-3.1-flash-lite",
         ),
     )
+    INGREDIENT_NORMALISATION = (
+        "ingredient-normalisation",
+        LLMModelPolicy(
+            production_model="google/gemini-2.5-flash-lite",
+            eval_model="google/gemini-3.1-flash-lite",
+        ),
+    )
 
 
 # Derived, not authored: kept for callers that want a plain mapping (e.g. the
