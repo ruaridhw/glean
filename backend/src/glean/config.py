@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr | None = None
     langsmith_project: str = "glean"
     langsmith_endpoint: str | None = None
+    # Commit the running deploy was built from; stamped by scripts/deploy_prod.py (suffix -dirty if uncommitted).
+    git_sha: str = "unknown"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore", hide_input_in_errors=True
