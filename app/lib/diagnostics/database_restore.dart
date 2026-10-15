@@ -75,6 +75,10 @@ Future<void> restoreDatabase({
   required File liveFile,
 }) async {
   final int backupVersion = _schemaVersionOf(backup);
+  if (backupVersion < 1) {
+    // Version 0 means "never created by Glean"; opening it would build a fresh empty database in its place.
+    throw const BackupInvalidException('it has no Glean schema version');
+  }
   if (backupVersion > live.schemaVersion) {
     throw BackupTooNewException(
       backupVersion: backupVersion,
@@ -114,6 +118,8 @@ Future<void> _migrateAndVerify(File staged) async {
             .values
             .single;
     if (verdict != 'ok') throw BackupInvalidException('$verdict');
+    final String? mismatch = await _schemaMismatch(candidate);
+    if (mismatch != null) throw BackupInvalidException(mismatch);
   } on BackupInvalidException {
     rethrow;
   } on Object catch (error) {
@@ -121,5 +127,49 @@ Future<void> _migrateAndVerify(File staged) async {
   } finally {
     await candidate.close();
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = warned;
+  }
+}
+
+/// Every table and column of the schema this build creates, read from a fresh database.
+Future<Map<String, Set<String>>> _columnsByTable(GleanDatabase db) async {
+  final tables = await db
+      .customSelect(
+        "SELECT name FROM sqlite_master WHERE type = 'table' "
+        "AND name NOT LIKE 'sqlite_%'",
+      )
+      .get();
+  return <String, Set<String>>{
+    for (final table in tables)
+      table.read<String>('name'): {
+        for (final column
+            in await db
+                .customSelect(
+                  'PRAGMA table_info("${table.read<String>('name')}")',
+                )
+                .get())
+          column.read<String>('name'),
+      },
+  };
+}
+
+/// Why the migrated [candidate] is not a usable Glean database, or `null` when every table and column this
+/// build expects is present. A file can be valid SQLite, even carry the right version number, and still be
+/// someone else's database.
+Future<String?> _schemaMismatch(GleanDatabase candidate) async {
+  final GleanDatabase reference = GleanDatabase(NativeDatabase.memory());
+  try {
+    final Map<String, Set<String>> expected = await _columnsByTable(reference);
+    final Map<String, Set<String>> actual = await _columnsByTable(candidate);
+    for (final MapEntry<String, Set<String>> table in expected.entries) {
+      final Set<String>? columns = actual[table.key];
+      if (columns == null) return 'table ${table.key} is missing';
+      final Set<String> missing = table.value.difference(columns);
+      if (missing.isNotEmpty) {
+        return 'table ${table.key} lacks ${missing.join(', ')}';
+      }
+    }
+    return null;
+  } finally {
+    await reference.close();
   }
 }
