@@ -268,4 +268,63 @@ void main() {
       });
     },
   );
+
+  group('store section', () {
+    test('is the household\'s override, else the section the item was synced '
+        'with, else Other', () async {
+      await syncItems([
+        _item(
+          'onion',
+          group: 'onions_and_garlic',
+          form: 'fresh',
+          section: 'Fruit & Veg',
+        ),
+        _item('mystery'),
+      ]);
+
+      expect(
+        (await catalogue.effectiveIngredient('onion'))!.section,
+        'Fruit & Veg',
+      );
+      expect(
+        (await catalogue.effectiveIngredient('mystery'))!.section,
+        'Other',
+      );
+
+      await householdOverride('onion', section: 'Baking');
+      await householdOverride('mystery', section: 'Pet');
+
+      expect((await catalogue.effectiveIngredient('onion'))!.section, 'Baking');
+      expect((await catalogue.effectiveIngredient('mystery'))!.section, 'Pet');
+    });
+
+    test(
+      'an override survives a sync that changes the item\'s own section',
+      () async {
+        await syncItems([
+          _item(
+            'onion',
+            group: 'onions_and_garlic',
+            form: 'fresh',
+            section: 'Fruit & Veg',
+          ),
+        ]);
+        await householdOverride('onion', section: 'Baking');
+
+        await syncItems([
+          _item(
+            'onion',
+            group: 'onions_and_garlic',
+            form: 'fresh',
+            section: 'Bakery',
+          ),
+        ]);
+
+        expect(
+          (await catalogue.effectiveIngredient('onion'))!.section,
+          'Baking',
+        );
+      },
+    );
+  });
 }
