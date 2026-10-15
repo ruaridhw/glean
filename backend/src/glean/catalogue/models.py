@@ -85,7 +85,7 @@ class CatalogueItem(BaseModel):
 
     @property
     def once_opened_shelf_life_days(self) -> int | None:
-        return self.overrides.once_opened_shelf_life_days or GROUPS[self.group].once_opened_shelf_life_days
+        return self.overrides.once_opened_shelf_life_days or GROUPS[self.group].once_opened_shelf_life_days[self.form]
 
     @property
     def section(self) -> Section:

@@ -101,7 +101,8 @@ class GroupRules:
     allowed_forms: tuple[Form, ...]
     # Unopened shelf life in days, per allowed form. Shelf life is never derived from form alone.
     unopened_shelf_life_days: Mapping[Form, int]
-    once_opened_shelf_life_days: int | None
+    # Once-opened shelf life in days per allowed form; None where an opened pack has no meaningful limit.
+    once_opened_shelf_life_days: Mapping[Form, int | None]
 
     @property
     def has_forms(self) -> bool:
@@ -117,6 +118,7 @@ def _with_forms(
     tinned_jarred: int,
     dried: int,
     once_opened: int,
+    once_opened_dried: int = 180,
     tracking_mode: TrackingMode = TrackingMode.COUNTED,
 ) -> GroupRules:
     return GroupRules(
@@ -129,7 +131,10 @@ def _with_forms(
         unopened_shelf_life_days=MappingProxyType(
             {Form.FRESH: fresh, Form.FROZEN: frozen, Form.TINNED_JARRED: tinned_jarred, Form.DRIED: dried}
         ),
-        once_opened_shelf_life_days=once_opened,
+        # Once opened: a tin or jar goes off in days; frozen food stays frozen; dried goods keep for months.
+        once_opened_shelf_life_days=MappingProxyType(
+            {Form.FRESH: once_opened, Form.FROZEN: 90, Form.TINNED_JARRED: 3, Form.DRIED: once_opened_dried}
+        ),
     )
 
 
@@ -153,7 +158,7 @@ def _plain(
         stock_unit=stock_unit if tracking_mode is TrackingMode.COUNTED else None,
         allowed_forms=_NOT_APPLICABLE,
         unopened_shelf_life_days=MappingProxyType({Form.NOT_APPLICABLE: shelf_life}),
-        once_opened_shelf_life_days=once_opened,
+        once_opened_shelf_life_days=MappingProxyType({Form.NOT_APPLICABLE: once_opened}),
     )
 
 
@@ -198,7 +203,14 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             once_opened=5,
         ),
         GroupId.BEANS_AND_PULSES: _with_forms(
-            "Beans & pulses", FoodGroup.PROTEIN, fresh=5, frozen=365, tinned_jarred=730, dried=730, once_opened=3
+            "Beans & pulses",
+            FoodGroup.PROTEIN,
+            fresh=5,
+            frozen=365,
+            tinned_jarred=730,
+            dried=730,
+            once_opened=3,
+            once_opened_dried=365,
         ),
         GroupId.CITRUS: _with_forms(
             "Citrus", FoodGroup.FRUIT, fresh=14, frozen=270, tinned_jarred=730, dried=365, once_opened=3
@@ -213,13 +225,34 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             "Berries", FoodGroup.FRUIT, fresh=4, frozen=270, tinned_jarred=730, dried=365, once_opened=3
         ),
         GroupId.RED_MEAT: _with_forms(
-            "Red meat", FoodGroup.PROTEIN, fresh=3, frozen=180, tinned_jarred=730, dried=180, once_opened=2
+            "Red meat",
+            FoodGroup.PROTEIN,
+            fresh=3,
+            frozen=180,
+            tinned_jarred=730,
+            dried=180,
+            once_opened=2,
+            once_opened_dried=90,
         ),
         GroupId.POULTRY: _with_forms(
-            "Poultry", FoodGroup.PROTEIN, fresh=2, frozen=180, tinned_jarred=730, dried=180, once_opened=2
+            "Poultry",
+            FoodGroup.PROTEIN,
+            fresh=2,
+            frozen=180,
+            tinned_jarred=730,
+            dried=180,
+            once_opened=2,
+            once_opened_dried=90,
         ),
         GroupId.FISH_AND_SEAFOOD: _with_forms(
-            "Fish & seafood", FoodGroup.PROTEIN, fresh=2, frozen=120, tinned_jarred=730, dried=180, once_opened=2
+            "Fish & seafood",
+            FoodGroup.PROTEIN,
+            fresh=2,
+            frozen=120,
+            tinned_jarred=730,
+            dried=180,
+            once_opened=2,
+            once_opened_dried=90,
         ),
         GroupId.EGGS: _plain(
             "Eggs", FoodGroup.PROTEIN, _C, shelf_life=21, once_opened=None, stock_unit=StockUnit.COUNT
@@ -239,7 +272,7 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
         GroupId.SAUCES_AND_CONDIMENTS: _plain(
             "Sauces & condiments", FoodGroup.CONDIMENTS, _P, shelf_life=365, once_opened=90
         ),
-        GroupId.BAKING: _plain("Baking", FoodGroup.CARBOHYDRATES, _P, shelf_life=240, once_opened=None),
+        GroupId.BAKING: _plain("Baking", FoodGroup.CARBOHYDRATES, _P, shelf_life=240, once_opened=240),
         GroupId.DRINKS: _plain(
             "Drinks", FoodGroup.OTHER, _C, shelf_life=365, once_opened=5, stock_unit=StockUnit.MILLILITRES
         ),
