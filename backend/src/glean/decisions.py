@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
+from langsmith import traceable
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
@@ -172,6 +173,11 @@ def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
     return decision
 
 
+def _trace_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Trace what was asked, never the client: its HTTP headers hold the API key."""
+    return {key: value for key, value in inputs.items() if key != "self"}
+
+
 class DecisionClient:
     """Asks Jev typed questions about a `state`. One call is one HTTP request.
 
@@ -191,6 +197,12 @@ class DecisionClient:
             transport=transport,
         )
 
+    @traceable(
+        name="jev_decide",
+        run_type="chain",
+        metadata={"ls_provider": "openrouter", "ls_model_name": JEV_MODEL},
+        process_inputs=_trace_inputs,
+    )
     def decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         if not questions:
             raise ValueError("Ask Jev at least one question")

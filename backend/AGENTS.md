@@ -32,6 +32,7 @@ src/glean/
 ├── config.py         # Pydantic BaseSettings (reads from .env / Secrets Manager in Lambda)
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
 ├── llm.py            # OpenRouter LangChain client; Feature enum; LLMRouter policy
+├── decisions.py      # Jev decisions client (DecisionClient): the only caller of /api/alpha/decisions
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3
