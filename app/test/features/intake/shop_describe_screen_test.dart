@@ -146,6 +146,60 @@ void main() {
       );
     });
 
+    gleanWidgetTest(
+      'a proposed unit outside the shopping vocabulary reaches the '
+      'review screen as a plain count',
+      (WidgetTester tester) async {
+        when(
+          () => httpClient.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'name': 'coriander',
+                  'quantity': 2,
+                  'unit': 'bunch',
+                  'confidence': 0.8,
+                  'food_group': 'condiments',
+                },
+                {
+                  'name': 'milk',
+                  'quantity': 1,
+                  'unit': 'bottle',
+                  'confidence': 0.9,
+                  'food_group': 'dairy',
+                },
+              ],
+              'clarifying_questions': <String>[],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          ),
+        );
+
+        await pumpDescribe(tester);
+        await tester.enterText(find.byType(TextField), 'coriander and milk');
+        await tester.pump();
+        await tester.tap(find.text('Review items'));
+        await pumpUntil(
+          tester,
+          () => find.byType(ReviewScreen).evaluate().isNotEmpty,
+          description: 'navigation to the review screen',
+        );
+
+        final items = tester
+            .widget<ReviewScreen>(find.byType(ReviewScreen))
+            .args
+            .items;
+        expect(items.map((i) => i.unit), <String>['units', 'bottle']);
+      },
+    );
+
     gleanWidgetTest('a validation error surfaces and is recoverable', (
       WidgetTester tester,
     ) async {

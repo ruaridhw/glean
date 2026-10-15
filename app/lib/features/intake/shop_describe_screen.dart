@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/shopping.dart';
 import 'package:glean/api/providers/api_providers.dart';
+import 'package:glean/data/util/unit_normalization.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
@@ -60,7 +61,7 @@ class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
           reviewId: 'shop-describe-$i',
           name: response.items[i].name,
           quantity: response.items[i].quantity,
-          unit: response.items[i].unit,
+          unit: acceptedShoppingUnit(response.items[i].unit),
           confidence: response.items[i].confidence,
           category: response.items[i].category,
           // `unitPrice` stays unset: it's pantry-only (see
