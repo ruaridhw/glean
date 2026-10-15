@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -32,21 +31,21 @@ def agreement(pairs: list[tuple[int, int]]) -> Agreement:
     )
 
 
-def _weighted_kappa(pairs: list[tuple[int, int]]) -> float | None:
-    """Cohen's kappa with quadratic weights: a miss by 3 costs nine times a miss by 1."""
+def _weighted_kappa(pairs: list[tuple[float, float]]) -> float | None:
+    """Cohen's kappa with squared-distance weights: a miss by 3 costs nine times a miss by 1.
+
+    Scores may be half points. The chance disagreement is the mean squared distance between every first-judge
+    score and every second-judge score, which is what the marginal distributions imply.
+    """
     n = len(pairs)
     observed = sum(_penalty(a, b) for a, b in pairs) / n
-    first = [sum(a == level for a, _ in pairs) / n for level in range(1, LEVELS + 1)]
-    second = [sum(b == level for _, b in pairs) / n for level in range(1, LEVELS + 1)]
-    expected = sum(
-        first[i - 1] * second[j - 1] * _penalty(i, j) for i in range(1, LEVELS + 1) for j in range(1, LEVELS + 1)
-    )
+    expected = sum(_penalty(a, b) for a, _ in pairs for _, b in pairs) / (n * n)
     if expected == 0:
         return None
     return 1 - observed / expected
 
 
-def _penalty(a: int, b: int) -> float:
+def _penalty(a: float, b: float) -> float:
     return (a - b) ** 2 / (LEVELS - 1) ** 2
 
 
@@ -100,7 +99,7 @@ def reliability_bins(
 ) -> list[ReliabilityBin]:
     """Does the decision judge's confidence track whether it matches the reference? Empty bins are omitted.
 
-    Against the panel, a match is equalling either panel score, and contested outputs have no reference.
+    Against the panel, a match is equalling the panel mean, and contested outputs have no reference.
     """
     points: list[tuple[float, bool]] = []
     for item in items:
@@ -111,9 +110,8 @@ def reliability_bins(
         if reference == "human":
             if item.human_score is not None:
                 points.append((sum(confidences) / len(confidences), score == item.human_score))
-        elif panel_reference(item).score is not None:
-            panel = (item_score(item, "panel_claude"), item_score(item, "panel_gpt"))
-            points.append((sum(confidences) / len(confidences), score in panel))
+        elif (panel_mean := panel_reference(item).score) is not None:
+            points.append((sum(confidences) / len(confidences), score == panel_mean))
     result = []
     for index in range(bins):
         lower, upper = index / bins, (index + 1) / bins
@@ -209,21 +207,37 @@ def panel_reference(item: OutputItem) -> PanelReference:
 
 
 def agreement_with_panel(items: list[OutputItem], candidate: Literal["llm", "decision"]) -> Agreement:
-    """A candidate judge against the panel reference, leaving out contested outputs.
+    """A candidate judge against the panel mean, leaving out contested outputs.
 
-    Exact means the candidate equals one of the two panel scores; within-one means it is within a point of one of
-    them. Kappa compares against the reference with a half point rounded up.
+    Exact means equal to the mean, so a candidate can never be exact on a half-point reference. Within one means
+    no more than a point from the mean. Kappa uses the half-point references as they are.
     """
-    exact = within_one = 0
-    pairs: list[tuple[int, int]] = []
-    for item in items:
-        reference, score = panel_reference(item), item_score(item, candidate)
-        if reference.score is None or score is None:
-            continue
-        panel = [item_score(item, "panel_claude"), item_score(item, "panel_gpt")]
-        exact += score in panel
-        within_one += any(abs(score - p) <= 1 for p in panel if p is not None)
-        pairs.append((score, math.floor(reference.score + 0.5)))
+    pairs = candidate_reference_pairs(items, candidate)
     if not pairs:
         return Agreement(0, None, None, None)
-    return Agreement(len(pairs), exact / len(pairs), within_one / len(pairs), _weighted_kappa(pairs))
+    n = len(pairs)
+    return Agreement(
+        n=n,
+        exact=sum(score == reference for score, reference in pairs) / n,
+        within_one=sum(abs(score - reference) <= 1 for score, reference in pairs) / n,
+        kappa=_weighted_kappa(pairs),
+    )
+
+
+def candidate_reference_pairs(
+    items: list[OutputItem], candidate: Literal["llm", "decision"]
+) -> list[tuple[int, float]]:
+    pairs = []
+    for item in items:
+        reference, score = panel_reference(item).score, item_score(item, candidate)
+        if reference is not None and score is not None:
+            pairs.append((score, reference))
+    return pairs
+
+
+def reference_matrix(pairs: list[tuple[int, float]]) -> list[list[int]]:
+    """`matrix[i][j]` counts outputs a candidate scored i+1 whose reference was 1 + j/2 (half points allowed)."""
+    matrix = [[0] * (2 * LEVELS - 1) for _ in range(LEVELS)]
+    for score, reference in pairs:
+        matrix[score - 1][round((reference - 1) * 2)] += 1
+    return matrix

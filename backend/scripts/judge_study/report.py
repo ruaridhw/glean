@@ -14,13 +14,14 @@ from judge_study.metrics import (
     Agreement,
     agreement,
     agreement_with_panel,
-    confusion_matrix,
+    candidate_reference_pairs,
     cost_summary,
     drift,
     item_score,
     judge_pairs,
     latency_summary,
     panel_reference,
+    reference_matrix,
     reliability_bins,
 )
 
@@ -122,9 +123,9 @@ def _verdict(results: Results, narrative: Narrative) -> str:
 <li><b>Reference.</b> The maintainer chose not to score, so two strong judges scored every output blind on the same
 rubric. The reference is their mean when they are within one point. Outputs they split by two or more are
 <i>contested</i>: reported on their own and left out of every agreement figure.</li>
-<li><b>Exact</b> means a judge equals one of the two panel scores. <b>Within one</b> means it is within a point of one.
-<b>Kappa</b> is quadratically weighted, against the reference with a half point rounded up; it is shown as — when
-there is no spread to agree about.</li>
+<li><b>Exact</b> means a judge equals the panel mean, so it can never be exact on a half-point reference such as 4.5.
+<b>Within one</b> means it is no more than a point from the mean. <b>Kappa</b> uses squared-distance weights against the
+mean, half points included; it is shown as — when there is no spread to agree about.</li>
 <li>Each candidate judge ran three times per output; its score for an output is the median.</li>
 <li>Models used: <ul>{model_rows}</ul></li>
 {notes}
@@ -136,19 +137,15 @@ def _feature_filter(items: list[OutputItem], feature: str) -> list[OutputItem]:
 
 
 def _matrix(items: list[OutputItem], candidate: str) -> str:
-    pairs = []
-    for item in items:
-        reference, score = panel_reference(item).score, item_score(item, candidate)  # type: ignore[arg-type]
-        if reference is not None and score is not None:
-            pairs.append((score, math.floor(reference + 0.5)))
-    matrix = confusion_matrix(pairs)
+    matrix = reference_matrix(candidate_reference_pairs(items, candidate))
     peak = max((count for row in matrix for count in row), default=0) or 1
-    head = "".join(f"<th>{level}</th>" for level in range(1, LEVELS + 1))
+    labels = [1 + step / 2 for step in range(2 * LEVELS - 1)]
+    head = "".join(f"<th>{label:g}</th>" for label in labels)
     rows = "".join(
         f"<tr><th>{level}</th>"
         + "".join(
-            f'<td style="--heat:{count / peak:.2f}"{" class=diag" if level == col else ""}>{count or ""}</td>'
-            for col, count in enumerate(row, start=1)
+            f'<td style="--heat:{count / peak:.2f}"{" class=diag" if labels[col] == level else ""}>{count or ""}</td>'
+            for col, count in enumerate(row)
         )
         + "</tr>"
         for level, row in enumerate(matrix, start=1)
@@ -195,7 +192,7 @@ def _agreement(results: Results) -> str:
 <h3>Judges against each other</h3>
 <div class="scroll"><table class="grid"><thead><tr><td></td><th>n</th><th>Exact</th><th>Within one</th><th>Kappa</th></tr></thead>
 <tbody>{inter_rows}</tbody></table></div>
-<details><summary>Confusion matrices per feature (rows: the candidate's score, columns: the panel reference)</summary>
+<details><summary>Confusion matrices per feature (rows: the candidate's score, columns: the panel mean, in half points)</summary>
 {matrices}</details></section>"""
 
 
@@ -284,7 +281,7 @@ the panel more often. Points on the dashed line mean confidence equals accuracy;
 Bubble size and label are the number of outputs.</p>
 <div class="chart">{_chart(bins)}
 <table class="grid"><thead><tr><th>Confidence</th><th>Outputs</th><th>Mean confidence</th><th>Matches panel</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="small">Each output's confidence is the mean over its three repeats; "matches" means equalling either panel score.
+<p class="small">Each output's confidence is the mean over its three repeats; "matches" means equalling the panel mean.
 Contested outputs are left out. The maintainer's own scores were not collected, so this is the panel's view of correctness.</p></section>"""
 
 
