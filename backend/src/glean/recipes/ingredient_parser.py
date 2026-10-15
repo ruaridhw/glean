@@ -55,6 +55,47 @@ _CONTAINERS = {"can", "cans", "tin", "tins", "jar", "jars", "pouch", "pouches", 
 _FLUID_OUNCE_PATTERN = re.compile(r"\b(?:fl\.?\s*oz\.?|fluid\s+ounces?)(?![A-Za-z])", re.IGNORECASE)
 _BUTTER_NAMES = {"butter", "unsalted butter", "salted butter"}
 _GRAMS_PER_BUTTER_STICK = 113.0
+# Named units until #75 settles how each displays. A thumb is about 2.5 cm.
+_VAGUE_MEASURES = {
+    "pinch": (1.0, "pinch"),
+    "pinches": (1.0, "pinch"),
+    "dash": (1.0, "dash"),
+    "dashes": (1.0, "dash"),
+    "knob": (1.0, "knob"),
+    "knobs": (1.0, "knob"),
+    "handful": (1.0, "handful"),
+    "handfuls": (1.0, "handful"),
+    "sprig": (1.0, "sprig"),
+    "sprigs": (1.0, "sprig"),
+    "clove": (1.0, "clove"),
+    "cloves": (1.0, "clove"),
+    "bunch": (1.0, "bunch"),
+    "bunches": (1.0, "bunch"),
+    "thumb": (2.5, "cm"),
+    "thumbs": (2.5, "cm"),
+}
+_PIECE_WORDS = {
+    "breast",
+    "breasts",
+    "bulb",
+    "bulbs",
+    "head",
+    "heads",
+    "leaf",
+    "leaves",
+    "rasher",
+    "rashers",
+    "roll",
+    "rolls",
+    "sheet",
+    "sheets",
+    "slice",
+    "slices",
+    "stalk",
+    "stalks",
+    "thigh",
+    "thighs",
+}
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
     *_MEASURE_UNITS,
@@ -203,6 +244,12 @@ def _parse_count_or_package_prefix(text: str) -> tuple[str, float, str, str | No
 
 
 def _parse_unit_word(raw_unit: str, quantity: float, name: str) -> tuple[str, float, str, str | None] | None:
+    name = re.sub(r"^of\s+", "", name, flags=re.IGNORECASE)
+    if raw_unit in _VAGUE_MEASURES:
+        factor, unit = _VAGUE_MEASURES[raw_unit]
+        return name, quantity * factor, unit, None
+    if raw_unit in _PIECE_WORDS:
+        return name, quantity, "pcs", None
     if raw_unit in {"stick", "sticks"}:
         if _ingredient_key(name) in _BUTTER_NAMES:
             return name, quantity * _GRAMS_PER_BUTTER_STICK, "g", None
