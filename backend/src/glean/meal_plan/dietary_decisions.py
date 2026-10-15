@@ -7,12 +7,24 @@ them. A decision can only add an exclusion to the regex rules, never lift one.
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 - pydantic resolves the annotation at runtime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, ValidationError
 
-from glean.decisions import JEV_MODEL
+from glean.decisions import JEV_MODEL, DecisionError, NoulCriteria, NoulQuestion
+from glean.observability import logger
 from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
+
+if TYPE_CHECKING:
+    from glean.decisions import DecisionClient
+    from glean.recipes.corpus import RecipeCorpusStore
+    from glean.recipes.search_index import RecipeSummary
+
+_EVERYTHING = 1_000_000
+_CHECKPOINT_EVERY = 25
 
 # Not `.json`-suffixed, so `BlobStore.list_keys` never mistakes it for a recipe.
 DIETARY_DECISIONS_KEY = "_decisions/dietary.jsonl"
@@ -83,3 +95,143 @@ class DietaryDecisions:
 def _is_current(decision: DietaryDecision) -> bool:
     # Thresholds are calibrated to one model version; `model` is Jev's dated snapshot of it.
     return decision.model == JEV_MODEL or decision.model.startswith(f"{JEV_MODEL}-")
+
+
+# What each question asks, and the household's ingredient policy, given to Jev as criteria.
+_QUESTIONS: dict[str, NoulQuestion] = {
+    "vegetarian": NoulQuestion(
+        instructions="Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product?",
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains meat, fish, shellfish, gelatine or anchovy.",
+            false="No ingredient is or contains meat, fish or shellfish.",
+        ),
+    ),
+    "vegan": NoulQuestion(
+        instructions="Does this recipe contain any animal product?",
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains meat, fish, dairy, eggs or honey.",
+            false="No ingredient is or contains an animal product.",
+        ),
+    ),
+    "dairy-free": NoulQuestion(
+        instructions="Does this recipe contain dairy?",
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains milk, cheese, butter, cream, yoghurt, whey or buttermilk.",
+            false="No ingredient is or contains dairy.",
+        ),
+    ),
+    "gluten-free": NoulQuestion(
+        instructions="Does this recipe contain gluten?",
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains wheat, barley, rye, malt or oats.",
+            false="No ingredient is or contains gluten.",
+        ),
+    ),
+    NUT_FREE: NoulQuestion(
+        instructions="Does this recipe contain nuts?",
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains nuts or peanuts.",
+            false="No ingredient is or contains nuts or peanuts.",
+        ),
+    ),
+}
+
+
+def dietary_questions(flags: tuple[str, ...] = DIETARY_FLAGS) -> dict[str, NoulQuestion]:
+    return {flag: _QUESTIONS[flag] for flag in flags}
+
+
+@dataclass
+class CoverageReport:
+    """What a producer run found and did. Coverage counts (recipe, flag) pairs with a current decision."""
+
+    recipes: int
+    flags: int
+    covered: int = 0
+    computed: int = 0
+    failures: int = 0
+    uncovered: list[str] = field(default_factory=list)  # recipe ids still missing a decision
+
+    @property
+    def expected(self) -> int:
+        return self.recipes * self.flags
+
+    @property
+    def coverage(self) -> float:
+        return self.covered / self.expected if self.expected else 1.0
+
+    def render(self) -> str:
+        lines = [
+            f"Recipes: {self.recipes}",
+            f"Decisions computed this run: {self.computed}",
+            f"Coverage: {self.covered}/{self.expected} ({self.coverage:.1%})",
+        ]
+        if self.uncovered:
+            lines.append(f"Recipes without full coverage ({len(self.uncovered)}): {', '.join(self.uncovered)}")
+        return "\n".join(lines)
+
+
+def produce_missing_decisions(
+    corpus: RecipeCorpusStore,
+    client: DecisionClient,
+    *,
+    flags: tuple[str, ...] = DIETARY_FLAGS,
+    max_workers: int = 8,
+) -> CoverageReport:
+    """Ask Jev about every (recipe, flag) that has no decision from the pinned model, and store the answers.
+
+    One request per recipe carries all its missing flags. A recipe Jev can't answer is
+    left uncovered (and so excluded under nut-free) and retried on the next run.
+    """
+    store = DietaryDecisionStore(corpus.store)
+    summaries, _ = corpus.search(per_page=_EVERYTHING)
+    decisions = {(d.recipe_id, d.flag): d for d in store.load() if _is_current(d)}
+    report = CoverageReport(recipes=len(summaries), flags=len(flags))
+
+    work = [
+        (summary, missing)
+        for summary in summaries
+        if (missing := tuple(flag for flag in flags if (summary.external_id, flag) not in decisions))
+    ]
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_ask, client, summary, missing): summary for summary, missing in work}
+        for future in as_completed(futures):
+            summary = futures[future]
+            try:
+                answered = future.result()
+            except DecisionError as exc:
+                report.failures += 1
+                logger.warning("dietary decision failed", extra={"recipe_id": summary.external_id, "error": str(exc)})
+                continue
+            for decision in answered:
+                decisions[(decision.recipe_id, decision.flag)] = decision
+            report.computed += len(answered)
+            done += 1
+            if done % _CHECKPOINT_EVERY == 0:
+                store.save(list(decisions.values()))
+    store.save(list(decisions.values()))
+
+    report.covered = sum(1 for summary in summaries for flag in flags if (summary.external_id, flag) in decisions)
+    report.uncovered = sorted(
+        summary.external_id
+        for summary in summaries
+        if any((summary.external_id, flag) not in decisions for flag in flags)
+    )
+    return report
+
+
+def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...]) -> list[DietaryDecision]:
+    state = {"recipe_title": summary.title, "ingredients": summary.ingredient_names}
+    answer = client.decide(state, dietary_questions(flags))
+    computed_at = datetime.now(UTC)
+    return [
+        DietaryDecision(
+            recipe_id=summary.external_id,
+            flag=flag,
+            probability=answer.noul(flag).noul,
+            model=answer.model,
+            computed_at=computed_at,
+        )
+        for flag in flags
+    ]
