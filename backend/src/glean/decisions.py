@@ -191,8 +191,9 @@ class DecisionClient:
         timeout_s: float = 15.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        self._secret = api_key.get_secret_value()
         self._http = httpx.Client(
-            headers={"Authorization": f"Bearer {api_key.get_secret_value()}"},
+            headers={"Authorization": f"Bearer {self._secret}"},
             timeout=timeout_s,
             transport=transport,
         )
@@ -206,6 +207,18 @@ class DecisionClient:
     def decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         if not questions:
             raise ValueError("Ask Jev at least one question")
+        try:
+            return self._request(state, questions)
+        except DecisionError as exc:
+            # Upstream text (HTTP bodies, validation inputs) can echo the key back, and the
+            # traced wrapper records the exception, so scrub it and drop the chained causes.
+            if self._secret:
+                exc.args = tuple(str(arg).replace(self._secret, "[redacted]") for arg in exc.args)
+            exc.__cause__ = None
+            exc.__context__ = None
+            raise
+
+    def _request(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         payload = {
             "model": JEV_MODEL,
             "state": dict(state),

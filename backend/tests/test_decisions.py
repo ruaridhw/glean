@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import httpx
 import pytest
+from langsmith import Client, tracing_context
 from pydantic import Field, SecretStr, TypeAdapter, ValidationError
 
 from glean.decisions import (
@@ -182,3 +183,54 @@ class TestTransportFailures:
         state, questions = _probe()
         with pytest.raises(DecisionError, match="connection refused"):
             _client(handler).decide(state, questions)
+
+
+def _exception_chain_text(exc: BaseException | None) -> str:
+    parts: list[str] = []
+    while exc is not None:
+        parts.append(f"{type(exc).__name__}: {exc}")
+        exc = exc.__cause__ or exc.__context__
+    return "\n".join(parts)
+
+
+class TestCredentialsNeverLeak:
+    def test_a_key_reflected_in_an_error_body_is_scrubbed_from_the_exception_chain(self) -> None:
+        reflected = {"error": {"message": f"Invalid credential: {API_KEY}"}}
+        state, questions = _probe()
+
+        with pytest.raises(DecisionHTTPError) as caught:
+            _client(_respond_with(reflected, status=401)).decide(state, questions)
+
+        assert caught.value.status_code == 401
+        assert "Invalid credential" in str(caught.value)
+        assert API_KEY not in _exception_chain_text(caught.value)
+
+    def test_a_key_reflected_in_a_malformed_answer_is_scrubbed_from_the_exception_chain(self) -> None:
+        body = _recorded_response()
+        body["answers"]["contains_nuts"] = {"noul": API_KEY}
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError) as caught:
+            _client(_respond_with(body)).decide(state, questions)
+
+        assert API_KEY not in _exception_chain_text(caught.value)
+
+    def test_a_key_reflected_in_the_traced_run_error_is_scrubbed(self) -> None:
+        runs: list[Any] = []
+
+        class RecordingClient(Client):
+            def create_run(self, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+            def update_run(self, run_id: Any, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+        reflected = {"error": {"message": f"Invalid credential: {API_KEY}"}}
+        state, questions = _probe()
+        client = RecordingClient(api_key="ls-test", api_url="http://localhost:1", auto_batch_tracing=False)
+
+        with tracing_context(enabled=True, client=client), pytest.raises(DecisionHTTPError):
+            _client(_respond_with(reflected, status=401)).decide(state, questions)
+
+        assert any(run.get("error") for run in runs)
+        assert API_KEY not in json.dumps(runs, default=str)
