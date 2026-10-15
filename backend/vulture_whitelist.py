@@ -55,6 +55,11 @@ fat_g  # NutritionFields
 fibre_g  # NutritionFields
 sugar_g  # NutritionFields
 sodium_mg  # NutritionFields
+# unit_backfill.py — used by scripts/backfill_recipe_units.py, outside vulture's src/ scan
+backfill_unit_words  # one-off corpus backfill entry point
+recipes_scanned  # UnitBackfillResult field
+recipes_changed  # UnitBackfillResult field
+ingredients_changed  # UnitBackfillResult field
 # shopping/schemas.py ShoppingUnit members (mirror the app's shoppingUnits) and validator
 G  # ShoppingUnit member
 KG  # ShoppingUnit member
