@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -25,6 +25,18 @@ DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
 class DecisionError(Exception):
     """A Jev decision couldn't be obtained."""
+
+
+class DecisionTimeoutError(DecisionError):
+    """Jev didn't answer within the client's timeout."""
+
+
+class DecisionHTTPError(DecisionError):
+    """The decisions endpoint answered with a non-2xx status."""
+
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f"Jev decisions endpoint returned HTTP {status_code}: {body[:300]}")
+        self.status_code = status_code
 
 
 class DecisionResponseError(DecisionError):
@@ -118,21 +130,46 @@ class Decision(BaseModel):
         return answer
 
 
-def _parse(body: dict[str, Any], questions: Mapping[str, Question]) -> Decision:
+# "jev-1.13": the dated snapshot Jev reports must belong to the pinned version.
+_PINNED_VERSION = JEV_MODEL.split("/", 1)[1]
+
+
+def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
+    try:
+        if isinstance(question, ChoiceQuestion):
+            choice = ChoiceAnswer.model_validate(raw)
+            if choice.choice not in question.criteria:
+                raise DecisionResponseError(f"Jev chose {choice.choice!r} for {name!r}, which wasn't offered")
+            return choice
+        if isinstance(question, NoulQuestion):
+            return NoulAnswer.model_validate(raw)
+        return ScoreAnswer.model_validate(raw)
+    except ValidationError as exc:
+        raise DecisionResponseError(f"Unexpected answer shape for {name!r}: {exc}") from exc
+
+
+def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
+    if not isinstance(body, dict) or not isinstance(body.get("answers"), dict):
+        raise DecisionResponseError("Jev response has no answers object")
     raw_answers = body["answers"]
     answers: dict[str, Answer] = {}
     for name, question in questions.items():
-        answer: Answer
-        if isinstance(question, ChoiceQuestion):
-            answer = ChoiceAnswer.model_validate(raw_answers[name])
-        elif isinstance(question, NoulQuestion):
-            answer = NoulAnswer.model_validate(raw_answers[name])
-        else:
-            answer = ScoreAnswer.model_validate(raw_answers[name])
-        answers[name] = answer
-    return Decision(
-        id=body["id"], model=body["model"], provider=body["provider"], answers=answers, usage=body["usage"]
-    )
+        if name not in raw_answers:
+            raise DecisionResponseError(f"Jev returned no answer for question {name!r}")
+        answers[name] = _parse_answer(name, question, raw_answers[name])
+    try:
+        decision = Decision(
+            id=body.get("id"),
+            model=body.get("model"),
+            provider=body.get("provider"),
+            answers=answers,
+            usage=body.get("usage"),
+        )
+    except ValidationError as exc:
+        raise DecisionResponseError(f"Unexpected Jev response envelope: {exc}") from exc
+    if _PINNED_VERSION not in decision.model:
+        raise DecisionResponseError(f"Jev answered with {decision.model!r}, not the pinned {JEV_MODEL!r}")
+    return decision
 
 
 class DecisionClient:
@@ -162,5 +199,16 @@ class DecisionClient:
             "state": dict(state),
             "questions": {name: question.model_dump() for name, question in questions.items()},
         }
-        response = self._http.post(DECISIONS_URL, json=payload)
-        return _parse(response.json(), questions)
+        try:
+            response = self._http.post(DECISIONS_URL, json=payload)
+        except httpx.TimeoutException as exc:
+            raise DecisionTimeoutError(f"Jev didn't answer within the timeout: {exc}") from exc
+        except httpx.TransportError as exc:
+            raise DecisionError(f"Jev decisions request failed: {exc}") from exc
+        if not response.is_success:
+            raise DecisionHTTPError(response.status_code, response.text)
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise DecisionResponseError("Jev returned a body that isn't JSON") from exc
+        return _parse(body, questions)

@@ -12,7 +12,10 @@ from glean.decisions import (
     DECISIONS_URL,
     ChoiceQuestion,
     DecisionClient,
+    DecisionError,
+    DecisionHTTPError,
     DecisionResponseError,
+    DecisionTimeoutError,
     NoulQuestion,
     ScoreQuestion,
 )
@@ -108,3 +111,74 @@ class TestQuestions:
     def test_a_score_needs_at_least_two_levels(self) -> None:
         with pytest.raises(ValidationError):
             ScoreQuestion(instructions="Rate it", criteria=["Fine"])
+
+
+class TestMalformedAnswers:
+    def test_a_missing_answer_names_the_question(self) -> None:
+        body = _recorded_response()
+        del body["answers"]["quality"]
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match="quality"):
+            _client(_respond_with(body)).decide(state, questions)
+
+    def test_a_choice_that_was_not_offered_is_rejected(self) -> None:
+        body = _recorded_response()
+        body["answers"]["ingredient_group"]["choice"] = "frozen"
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match="frozen"):
+            _client(_respond_with(body)).decide(state, questions)
+
+    def test_an_answer_of_the_wrong_shape_is_rejected(self) -> None:
+        body = _recorded_response()
+        body["answers"]["contains_nuts"] = {"unexpected": True}
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match="contains_nuts"):
+            _client(_respond_with(body)).decide(state, questions)
+
+    def test_an_answer_from_another_model_version_is_rejected(self) -> None:
+        body = _recorded_response()
+        body["model"] = "typesafe/jev-1.14"
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match="pinned"):
+            _client(_respond_with(body)).decide(state, questions)
+
+    def test_a_non_json_body_is_rejected(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, text="<html>Bad gateway</html>")
+
+        state, questions = _probe()
+        with pytest.raises(DecisionResponseError, match="JSON"):
+            _client(handler).decide(state, questions)
+
+
+class TestTransportFailures:
+    def test_an_http_error_carries_its_status_and_never_the_api_key(self) -> None:
+        state, questions = _probe()
+        rate_limited = _respond_with({"error": {"message": "Rate limited", "code": 429}}, status=429)
+
+        with pytest.raises(DecisionHTTPError) as caught:
+            _client(rate_limited).decide(state, questions)
+
+        assert caught.value.status_code == 429
+        assert "Rate limited" in str(caught.value)
+        assert API_KEY not in str(caught.value)
+
+    def test_a_timeout_is_a_decision_timeout_error(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        state, questions = _probe()
+        with pytest.raises(DecisionTimeoutError):
+            _client(handler).decide(state, questions)
+
+    def test_a_connection_failure_is_a_decision_error(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused", request=request)
+
+        state, questions = _probe()
+        with pytest.raises(DecisionError, match="connection refused"):
+            _client(handler).decide(state, questions)
