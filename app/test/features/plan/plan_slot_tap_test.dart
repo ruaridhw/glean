@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
@@ -150,6 +151,61 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(find.text('Dinners'), findsOneWidget);
+    },
+  );
+
+  group('when the snapshot does not resolve', () {
+    setUp(() async {
+      await h.dispose();
+      h = build(previewStatus: 404);
+    });
+
+    gleanWidgetTest(
+      'a deleted recipe whose snapshot will not load says Recipe removed and stays on Plan',
+      (tester) async {
+        final recipeId = await plannedMeal('Old Import', externalId: 'ext-1');
+        await h.container
+            .read(recipesRepositoryProvider)
+            .deleteRecipe(id: recipeId, userId: h.userId);
+        await openPlan(tester);
+
+        await tester.tap(find.text('Old Import'));
+        await tester.pumpAndSettle();
+
+        expect(requestedPaths, contains('/recipes/ext-1'));
+        expect(find.text('Recipe removed'), findsOneWidget);
+        expect(find.byTooltip('Save recipe'), findsNothing);
+        expect(location(), AppRoutes.plan.path);
+        expect(find.text('Dinners'), findsOneWidget);
+      },
+    );
+  });
+
+  gleanWidgetTest(
+    'a planned meal with no recipe and no snapshot is not tappable',
+    (tester) async {
+      final recipeId = await plannedMeal('Orphan Dinner');
+      await h.container
+          .read(recipesRepositoryProvider)
+          .deleteRecipe(id: recipeId, userId: h.userId);
+      final semantics = tester.ensureSemantics();
+      await openPlan(tester);
+
+      expect(
+        tester
+            .getSemantics(find.text('Orphan Dinner'))
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isFalse,
+      );
+      semantics.dispose();
+      await tester.tap(find.text('Orphan Dinner'));
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, isEmpty);
+      expect(location(), AppRoutes.plan.path);
+      expect(find.text('Dinners'), findsOneWidget);
+      expect(find.byTooltip('Save recipe'), findsNothing);
     },
   );
 }
