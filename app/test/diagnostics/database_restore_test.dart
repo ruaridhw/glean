@@ -229,4 +229,47 @@ void main() {
       expect(await _mealsPerWeek(previous, 'mine'), 6);
     },
   );
+
+  File unrelatedDatabase(int version) {
+    final File file = File('${dir.path}/unrelated-v$version.sqlite');
+    final sqlite.Database raw = sqlite.sqlite3.open(file.path);
+    raw.execute('CREATE TABLE unrelated (id INTEGER PRIMARY KEY)');
+    raw.execute('PRAGMA user_version = $version');
+    raw.close();
+    return file;
+  }
+
+  test(
+    'a valid SQLite database that is not a Glean database is refused at the current and an older version, leaving live untouched',
+    () async {
+      final GleanDatabase probe = open(File('${dir.path}/probe.sqlite'));
+      addTearDown(probe.close);
+      for (final int version in <int>[probe.schemaVersion, 1]) {
+        await expectLiveUntouchedAfterRefusal(unrelatedDatabase(version));
+        File(liveFile.path).deleteSync();
+      }
+    },
+  );
+
+  test(
+    'an unversioned database is refused rather than being created as a fresh install',
+    () async {
+      await expectLiveUntouchedAfterRefusal(unrelatedDatabase(0));
+    },
+  );
+
+  test(
+    'a prepared backup missing a required column is refused and live stays untouched',
+    () async {
+      final GleanDatabase source = open(File('${dir.path}/source.sqlite'));
+      await source.customStatement('SELECT 1');
+      final File snapshot = await snapshotDatabase(source, dir);
+      await source.close();
+      final sqlite.Database raw = sqlite.sqlite3.open(snapshot.path);
+      raw.execute('ALTER TABLE user_config DROP COLUMN meals_per_week');
+      raw.close();
+
+      await expectLiveUntouchedAfterRefusal(snapshot);
+    },
+  );
 }
