@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 
+_TRAILING_SIZE = re.compile(r"\(\s*\d+(?:\.\d+)?\s*[A-Za-z]+\s*\)\s*$")
+
+
 @dataclass(frozen=True)
 class UnitBackfillResult:
     recipes_scanned: int
@@ -52,6 +55,9 @@ def backfill_unit_words(
 
 def _reparsed(ingredient: StoredIngredient) -> StoredIngredient:
     if ingredient.unit != "pcs" or _is_clove_ingredient(ingredient.canonical_name):
+        return ingredient
+    # "2 cheddar (8 oz)" and "Cheddar (8 oz) x2" were stored alike but total different weights: don't guess.
+    if ingredient.quantity != 1 and _TRAILING_SIZE.search(ingredient.canonical_name):
         return ingredient
     parsed = parse_ingredient_text(f"{float(ingredient.quantity)!r} {ingredient.canonical_name}")
     # Never trade a leaked unit word for a dirty name: leave the row alone instead.

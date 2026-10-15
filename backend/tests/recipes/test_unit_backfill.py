@@ -150,23 +150,29 @@ def test_backfill_reads_a_non_filesystem_store_only_with_explicit_opt_in() -> No
     assert store.calls == ["list"]
 
 
-@pytest.mark.parametrize(
-    ("stored_quantity", "expected_grams", "expected_preparation"),
-    [(1, 226.8, None), (2, 453.6, "2 x 8 oz"), (3, 680.4, "3 x 8 oz")],
-)
-def test_backfill_multiplies_a_stored_count_by_the_parenthetical_size(
-    tmp_path: Path, stored_quantity: int, expected_grams: float, expected_preparation: str | None
-) -> None:
-    # The old parser stored "2 cheddar (8 oz)" and "Cheddar (8 oz) x2" alike as 2 pcs "Cheddar (8 oz)".
+def test_backfill_converts_a_stored_count_of_one_with_a_trailing_size(tmp_path: Path) -> None:
     corpus = _corpus(tmp_path)
-    corpus.save(_recipe("import:suffix", _leaked("Cheddar (8 oz)", stored_quantity)))
+    corpus.save(_recipe("import:suffix", _leaked("Cheddar (8 oz)", 1)))
 
     backfill_unit_words(corpus, dry_run=False)
 
     ingredient = corpus.get("import:suffix").ingredients[0]
-    assert ingredient.canonical_name == "Cheddar"
-    assert ingredient.quantity == pytest.approx(expected_grams)
-    assert (ingredient.unit, ingredient.preparation) == ("g", expected_preparation)
+    assert (ingredient.canonical_name, ingredient.quantity, ingredient.unit) == ("Cheddar", pytest.approx(226.8), "g")
+
+
+@pytest.mark.parametrize("stored_quantity", [2, 3])
+def test_backfill_leaves_a_stored_count_above_one_with_a_trailing_size_untouched(
+    tmp_path: Path, stored_quantity: int
+) -> None:
+    # "2 cheddar (8 oz)" and "Cheddar (8 oz) x2" are stored alike and mean different totals: ambiguous.
+    corpus = _corpus(tmp_path)
+    original = _recipe("import:suffix", _leaked("Cheddar (8 oz)", stored_quantity))
+    corpus.save(original)
+
+    result = backfill_unit_words(corpus, dry_run=False)
+
+    assert corpus.get("import:suffix") == original
+    assert result.ingredients_changed == 0
 
 
 @pytest.mark.parametrize("stored_quantity", [1, 2])
