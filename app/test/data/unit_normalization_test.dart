@@ -9,6 +9,24 @@ import 'package:glean/data/util/unit_normalization.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('acceptedShoppingUnit', () {
+    test('keeps every unit in the shopping vocabulary', () {
+      for (final unit in shoppingUnits) {
+        expect(acceptedShoppingUnit(unit), unit);
+      }
+    });
+
+    test('tolerates case and surrounding space', () {
+      expect(acceptedShoppingUnit(' Bottle '), 'bottle');
+    });
+
+    test('falls back to a plain count for anything else', () {
+      expect(acceptedShoppingUnit('bunch'), 'units');
+      expect(acceptedShoppingUnit('tbsp'), 'units');
+      expect(acceptedShoppingUnit(''), 'units');
+    });
+  });
+
   group('normalizeUnit', () {
     test('returns identity when unit matches canonicalUnit', () {
       final result = normalizeUnit(

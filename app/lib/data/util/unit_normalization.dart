@@ -2,6 +2,27 @@
 // (backend/src/glean/recipes/ingredient_parser.py): imports and meal-plan pantry math must agree on canonical
 // units.
 
+/// The practical units an AI-proposed shopping item may carry. The backend's `ShoppingUnit` enum
+/// (backend/src/glean/shopping/schemas.py) mirrors this list by hand until a shared schema package exists;
+/// `backend/tests/shopping/test_unit_vocabulary.py` fails when the two differ, so change both together.
+const List<String> shoppingUnits = <String>[
+  'g',
+  'kg',
+  'ml',
+  'l',
+  'units',
+  'pack',
+  'bottle',
+  'bag',
+  'box',
+];
+
+/// [unit] if it is in [shoppingUnits] (ignoring case and surrounding space), otherwise `'units'`.
+String acceptedShoppingUnit(String unit) {
+  final normalized = unit.toLowerCase().trim();
+  return shoppingUnits.contains(normalized) ? normalized : 'units';
+}
+
 /// Deterministic lookup: source unit -> conversion factor and target unit.
 const Map<String, ({double factor, String to})> _unitConversions = {
   // Volume -> ml (base units also participate in density conversion).
