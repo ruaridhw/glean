@@ -39,21 +39,39 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
     };
 
 MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
-    MealPlanRecipe(
-      recipeId: (json['recipe_id'] as num?)?.toInt(),
-      externalId: json['external_id'] as String?,
-      title: json['title'] as String,
-      reason: json['reason'] as String,
-      missingIngredients:
-          (json['missing_ingredients'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          [],
+    $checkedCreate(
+      'MealPlanRecipe',
+      json,
+      ($checkedConvert) {
+        final val = MealPlanRecipe(
+          recipeId: $checkedConvert('recipe_id', (v) => (v as num?)?.toInt()),
+          externalId: $checkedConvert('external_id', (v) => v as String?),
+          title: $checkedConvert('title', (v) => v as String),
+          reason: $checkedConvert('reason', (v) => v as String),
+          missingIngredients: $checkedConvert(
+            'missing_ingredients',
+            (v) =>
+                (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+          ),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'recipeId': 'recipe_id',
+        'externalId': 'external_id',
+        'missingIngredients': 'missing_ingredients',
+      },
     );
 
 MealPlanResponse _$MealPlanResponseFromJson(Map<String, dynamic> json) =>
-    MealPlanResponse(
-      suggestions: (json['suggestions'] as List<dynamic>)
-          .map((e) => MealPlanRecipe.fromJson(e as Map<String, dynamic>))
-          .toList(),
-    );
+    $checkedCreate('MealPlanResponse', json, ($checkedConvert) {
+      final val = MealPlanResponse(
+        suggestions: $checkedConvert(
+          'suggestions',
+          (v) => (v as List<dynamic>)
+              .map((e) => MealPlanRecipe.fromJson(e as Map<String, dynamic>))
+              .toList(),
+        ),
+      );
+      return val;
+    });

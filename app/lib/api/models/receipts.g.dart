@@ -9,8 +9,15 @@ part of 'receipts.dart';
 Map<String, dynamic> _$DescribeRequestToJson(DescribeRequest instance) =>
     <String, dynamic>{'text': instance.text};
 
-ScanResponse _$ScanResponseFromJson(Map<String, dynamic> json) => ScanResponse(
-  items: (json['items'] as List<dynamic>)
-      .map((e) => ParsedIngredient.fromJson(e as Map<String, dynamic>))
-      .toList(),
-);
+ScanResponse _$ScanResponseFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('ScanResponse', json, ($checkedConvert) {
+      final val = ScanResponse(
+        items: $checkedConvert(
+          'items',
+          (v) => (v as List<dynamic>)
+              .map((e) => ParsedIngredient.fromJson(e as Map<String, dynamic>))
+              .toList(),
+        ),
+      );
+      return val;
+    });
