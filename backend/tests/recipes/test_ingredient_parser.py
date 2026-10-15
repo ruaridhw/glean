@@ -182,7 +182,11 @@ def test_parse_ingredient_text_reads_spaced_and_us_style_sized_packages(
         ("1 cup cream cheese", "Cream cheese", 1, "cup"),
         ("1 cup grated cheddar", "Grated cheddar", 1, "cup"),
         ("1 cup rolled oats", "Rolled oats", 97, "g"),
-        ("1 cup honey", "Honey", 336, "g"),
+        ("1 cup honey", "Honey", 236.59, "ml"),
+        ("1/2 cup maple syrup", "Maple syrup", 118.3, "ml"),
+        ("1 cup golden syrup", "Golden syrup", 236.59, "ml"),
+        ("1 cup black treacle", "Black treacle", 236.59, "ml"),
+        ("1 cup caster sugar", "Caster sugar", 200, "g"),
     ],
 )
 def test_parse_ingredient_text_treats_a_cup_of_a_liquid_as_ml_and_only_unknown_solids_stay_cups(
