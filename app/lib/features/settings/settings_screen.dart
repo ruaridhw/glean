@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api.dart';
 import 'package:glean/auth/auth.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -22,6 +23,7 @@ import 'widgets/developer_section.dart';
 import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
+import 'widgets/restore_backup_sheet.dart';
 import 'widgets/settings_stats_row.dart';
 import 'widgets/version_label.dart';
 
@@ -89,6 +91,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
   String? _maxTimeError;
   Timer? _maxTimeDebounce;
   bool _exporting = false;
+  bool _restoring = false;
 
   @override
   void initState() {
@@ -187,6 +190,55 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
     }
   }
 
+  Future<void> _handleRestoreBackup() async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final BackupSummary? chosen = await showModalBottomSheet<BackupSummary>(
+      context: context,
+      builder: (BuildContext _) => const RestoreBackupSheet(),
+    );
+    if (chosen == null || !mounted) return;
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Replace everything on this phone?'),
+            content: const Text(
+              'Your pantry, plan, shopping list, recipes and history will be '
+              'replaced by this backup.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                key: const Key('restore.confirm'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Restore'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _restoring = true);
+    final GleanLogger? logger = ref.read(gleanLoggerProvider);
+    try {
+      await ref.read(backupRestoreProvider)(chosen);
+      GleanSnackBar.showOn(messenger, 'Backup restored');
+    } on BackupTooNewException catch (error) {
+      GleanSnackBar.showOn(messenger, error.toString());
+    } catch (error) {
+      await logger?.error('restore backup failed: ${describeError(error)}');
+      GleanSnackBar.showOn(
+        messenger,
+        'Could not restore the backup. Your current data has not been changed.',
+      );
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
@@ -277,6 +329,8 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
           DeveloperSection(
             exporting: _exporting,
             onExportDiagnostics: () => unawaited(_handleExportDiagnostics()),
+            restoring: _restoring,
+            onRestoreBackup: () => unawaited(_handleRestoreBackup()),
           ),
         ],
         VersionLabel(
