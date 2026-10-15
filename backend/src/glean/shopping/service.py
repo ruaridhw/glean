@@ -122,7 +122,7 @@ def _behaviour_version(llm_router: LLMRouter) -> str:
 
 
 def _cache_path(version: str, unit: str) -> str:
-    return f"shopping_parse/{version}/{hashlib.sha256(_unit_key(unit).encode()).hexdigest()}.json"
+    return f"{version}/{hashlib.sha256(_unit_key(unit).encode()).hexdigest()}.json"
 
 
 def _parse_unit_cached(

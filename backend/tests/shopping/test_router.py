@@ -116,3 +116,40 @@ def test_parse_shopping_description_rejects_empty_text(client: TestClient, auth_
     )
 
     assert response.status_code == 422
+
+
+def test_a_multi_item_description_returns_the_merged_proposals_in_the_existing_response_shape(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    replies = {
+        "milk": ShoppingParseResponse(
+            items=[{"name": "milk", "quantity": 1, "unit": "bottle", "category": "dairy", "confidence": 0.9}]
+        ),
+        "snacks": ShoppingParseResponse(
+            items=[{"name": "snacks", "quantity": 1, "unit": "units", "confidence": 0.5}],
+            clarifying_questions=["Which snacks?"],
+        ),
+    }
+    llm_router = MagicMock()
+    llm_router.model_id_for.return_value = "test/model"
+    llm_router.invoke.side_effect = lambda _feature, _schema, messages: replies[
+        messages[1].content.removeprefix("Parse this shopping list description: ")
+    ]
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+
+    response = client.post("/shopping/parse-description", headers=auth_headers, json={"text": "milk and snacks"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["name"] for item in body["items"]] == ["milk", "snacks"]
+    assert set(body["items"][0]) == {
+        "name",
+        "quantity",
+        "unit",
+        "unit_price",
+        "confidence",
+        "api_ingredient_id",
+        "category",
+        "food_group",
+    }
+    assert body["clarifying_questions"] == ["Which snacks?"]
