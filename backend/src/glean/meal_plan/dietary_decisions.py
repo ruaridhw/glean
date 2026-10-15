@@ -40,17 +40,18 @@ NUT_FREE = "nut-free"
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the 56-row labelled sample (tests/fixtures/decisions/dietary_sample.json) answered by
-# typesafe/jev-1.14-20261014 on 2026-10-15, after the pesto-for-vegetarian policy change:
-#   recipes that break a flag:  nut-free >= 0.94, vegetarian >= 0.85, vegan >= 0.83,
-#                               dairy-free >= 0.87, gluten-free >= 0.89
-#   recipes that don't:         nut-free <= 0.20 (tahini 0.20, hummus wrap 0.15; the rest <= 0.07),
-#                               preference flags <= 0.27 (the rest <= 0.23)
-# Nut-free is an allergy, so its threshold sits 1.7x above the model's noise floor (0.07) and trades two
-# tahini-like false exclusions for a margin of 0.82 to the nearest violator. Preferences sit between
-# the clusters: 0.23 above the highest clean recipe, 0.33 below the lowest violator.
+# Set from the 56-row labelled sample (tests/fixtures/decisions/dietary_sample.json) plus one recipe per term
+# of the former regex rules (dietary_regex_coverage.json, 181 recipes), 237 in all, answered by
+# typesafe/jev-1.14-20261014 on 2026-10-15 under the criteria below:
+#   recipes that break a flag:  nut-free >= 0.92, vegetarian >= 0.85, vegan >= 0.83,
+#                               dairy-free >= 0.87, gluten-free >= 0.75
+#   recipes that don't:         nut-free <= 0.18 (tahini 0.18, a tahini-like wrap 0.15; the rest <= 0.09),
+#                               vegetarian <= 0.14, dairy-free <= 0.11, gluten-free <= 0.30, vegan <= 0.38
+# Nut-free is an allergy, so its threshold sits 1.3x above the model's noise floor (0.09) and trades two
+# tahini-like false exclusions for a margin of 0.80 to the nearest violator. Preferences sit between
+# the clusters: 0.17 above the highest clean recipe (vegan), 0.20 below the lowest violator (gluten-free).
 NUT_FREE_THRESHOLD = 0.12
-PREFERENCE_THRESHOLD = 0.5
+PREFERENCE_THRESHOLD = 0.55
 
 
 class CorpusUnavailableError(Exception):
@@ -133,7 +134,8 @@ _QUESTIONS: dict[str, NoulQuestion] = {
         instructions=(
             "Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product? "
             "Caesar dressing (anchovies), Thai curry paste (shrimp paste), fish and oyster sauce and meat stock "
-            "all count. Parmesan and pesto do not count."
+            "all count, as do Worcestershire sauce (anchovies), lard, suet and gelatine. "
+            "Parmesan and pesto do not count. Meat-free, vegan and plant-based substitutes are not meat."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains meat, fish, shellfish, gelatine, anchovy or shrimp paste.",
@@ -143,7 +145,9 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "vegan": NoulQuestion(
         instructions=(
             "Does this recipe contain any animal product? "
-            "Naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count."
+            "Naan bread (usually made with yoghurt or milk), pesto (made with cheese), mayonnaise (eggs), honey "
+            "and Worcestershire sauce (anchovies) count. Meat-free, vegan and plant-based substitutes, cocoa butter, "
+            "peanut and nut butters are not animal products."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains meat, fish, dairy, eggs or honey.",
@@ -153,7 +157,9 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "dairy-free": NoulQuestion(
         instructions=(
             "Does this recipe contain dairy? "
-            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count."
+            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count. "
+            "Dairy-free and plant-based substitutes, oat and coconut cream, cocoa butter, peanut and nut butters "
+            "are not dairy."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains milk, cheese, butter, cream, yoghurt, whey or buttermilk.",
@@ -163,7 +169,9 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "gluten-free": NoulQuestion(
         instructions=(
             "Does this recipe contain gluten? Oats count as gluten unless the recipe says gluten-free oats. "
-            "Malt vinegar, soy sauce, couscous, barley and rye count."
+            "Malt vinegar, soy sauce, couscous, barley and rye count, as do gnocchi, wraps, flour tortillas, noodles and "
+            "pasta unless labelled gluten-free, and hoisin, teriyaki and kecap manis (made with soy sauce). "
+            "Rice, corn (corn tortillas), gram, chickpea, buckwheat, tapioca, potato, coconut and almond flours are not gluten."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains wheat, barley, rye, malt or oats that aren't gluten-free.",
@@ -174,7 +182,8 @@ _QUESTIONS: dict[str, NoulQuestion] = {
         instructions=(
             "Does this recipe contain nuts, peanuts or anything made from them? "
             "Pine nuts count as nuts, so pesto counts. Marzipan, frangipane, Nutella and other hazelnut "
-            "spreads, dukkah, romesco and almond milk count. Coconut, coconut milk, nutmeg and seeds are not nuts."
+            "spreads, dukkah, romesco, praline, satay and almond milk count. Coconut, coconut milk, nutmeg and seeds "
+            "are not nuts, and an ingredient labelled nut-free is not a nut."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains a tree nut, peanut or pine nut, or a product made from them.",
