@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import (
+    AfterValidator,
     BaseModel,
     Field,
     SecretStr,
@@ -21,7 +22,15 @@ from glean.llm import LLMRouter  # noqa: TC001 - FastAPI resolves this via Depen
 
 router = APIRouter(prefix="/catalogue", tags=["catalogue"], dependencies=[Depends(verify_cognito_token)])
 
-type RawName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+def _not_blank(name: str) -> str:
+    # The raw text is kept as written; only a name with nothing in it is refused.
+    if not name.strip():
+        raise ValueError("A name can't be blank")
+    return name
+
+
+type RawName = Annotated[str, StringConstraints(max_length=200), AfterValidator(_not_blank)]
 
 
 class NormaliseRequest(BaseModel):

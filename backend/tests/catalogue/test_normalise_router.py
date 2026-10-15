@@ -101,3 +101,12 @@ def test_an_unconfigured_catalogue_is_a_clear_503(client: TestClient, auth_heade
 
     assert response.status_code == 503
     assert "catalogue" in response.json()["detail"].lower()
+
+
+def test_unmatched_text_comes_back_exactly_as_written(wired: TestClient, auth_headers: dict[str, str]) -> None:
+    wired.app.dependency_overrides[get_llm_router] = lambda: FakeRouter(script=naming(**{"  asdkjh  ": None}))
+
+    response = wired.post("/catalogue/normalise", headers=auth_headers, json={"names": ["  asdkjh  "]})
+
+    [result] = response.json()["results"]
+    assert (result["status"], result["input"], result["canonical_name"]) == ("unmatched", "  asdkjh  ", "  asdkjh  ")
