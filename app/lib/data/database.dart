@@ -44,6 +44,15 @@ class GleanDatabase extends _$GleanDatabase {
         await _seed();
       },
       onUpgrade: (m, from, to) async {
+        // A database written by a newer build: opening it here would skip
+        // that build's migrations and break the next upgrade, so refuse and
+        // leave the file as it is (the user's only copy of their data).
+        if (from > to) {
+          throw StateError(
+            'Database schema v$from is newer than this build (v$to); '
+            'install the latest build instead.',
+          );
+        }
         if (from < 2) {
           await m.addColumn(
             mealPlanEntries,
