@@ -7,6 +7,7 @@ DecisionClient, so a change to the alpha API touches one place.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -196,9 +197,11 @@ def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
     return decision
 
 
-def _trace_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Trace what was asked, never the client: its HTTP headers hold the API key."""
-    return {key: value for key, value in inputs.items() if key != "self"}
+def _redact(value: Any, secret: str) -> Any:
+    """Return `value` with `secret` replaced by a placeholder in every string it holds."""
+    if not secret:
+        return value
+    return json.loads(json.dumps(value, default=str).replace(json.dumps(secret)[1:-1], "[redacted]"))
 
 
 class DecisionClient:
@@ -220,14 +223,20 @@ class DecisionClient:
             timeout=timeout_s,
             transport=transport,
         )
+        # Built per client so traced inputs and outputs can be scrubbed of this client's key:
+        # a response that echoes it back would otherwise reach LangSmith.
+        self._traced_decide = traceable(
+            name="jev_decide",
+            run_type="chain",
+            metadata={"ls_provider": "openrouter", "ls_model_name": JEV_MODEL},
+            process_inputs=lambda inputs: _redact(inputs, self._secret),
+            process_outputs=lambda outputs: _redact(outputs, self._secret),
+        )(self._decide)
 
-    @traceable(
-        name="jev_decide",
-        run_type="chain",
-        metadata={"ls_provider": "openrouter", "ls_model_name": JEV_MODEL},
-        process_inputs=_trace_inputs,
-    )
     def decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
+        return self._traced_decide(state, questions)
+
+    def _decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         if not questions:
             raise ValueError("Ask Jev at least one question")
         try:

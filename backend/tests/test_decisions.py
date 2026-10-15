@@ -309,3 +309,27 @@ class TestCredentialsNeverLeak:
 
         assert any(run.get("error") for run in runs)
         assert API_KEY not in json.dumps(runs, default=str)
+
+
+class TestSuccessfulTraceNeverLeaksTheKey:
+    def test_a_key_echoed_in_a_valid_response_is_scrubbed_from_the_traced_outputs(self) -> None:
+        runs: list[Any] = []
+
+        class RecordingClient(Client):
+            def create_run(self, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+            def update_run(self, run_id: Any, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+        body = _recorded_response()
+        body["id"] = f"gen-{API_KEY}"
+        state, questions = _probe()
+        client = RecordingClient(api_key="ls-test", api_url="http://localhost:1", auto_batch_tracing=False)
+
+        with tracing_context(enabled=True, client=client):
+            decision = _client(_respond_with(body)).decide(state, questions)
+
+        assert decision.model == "typesafe/jev-1.13-20260917"
+        assert any(run.get("outputs") for run in runs)
+        assert API_KEY not in json.dumps(runs, default=str)
