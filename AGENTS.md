@@ -9,6 +9,9 @@ for deeper context. `CLAUDE.md` files are compatibility symlinks to these files.
   known-good for Codex on macOS.
 - Other agents or platforms should adapt paths to their environment while
   preserving the same intent.
+- On the owner's Mac, develop in worktrees under
+  `/Users/ruaridhw/Documents/dev/glean/.worktrees`, not in ad-hoc copies
+  elsewhere.
 
 ## Preferred tools
 
