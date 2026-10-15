@@ -23,9 +23,9 @@ from glean.recipes.ingredient_parser import parse_ingredient_text
         ("2 pouches Microwave Rice", "Microwave Rice", 2, "units", "2 pouches"),
         ("1x 250g Pouch Cooked Lentils", "Cooked Lentils", 250, "g", "1 pouch"),
         ("8Clove Garlic", "Clove Garlic", 8, "pcs", None),
-        ("3Stick Celery", "Stick Celery", 3, "pcs", None),
+        ("3Stick Celery", "Celery", 3, "pcs", None),
         ("3cm Ginger", "Ginger", 3, "cm", None),
-        ("0.5Stick Cinnamon", "Stick Cinnamon", 0.5, "pcs", None),
+        ("0.5Stick Cinnamon", "Cinnamon", 0.5, "pcs", None),
         ("2Pouch Microwaveable Basmati Rice", "Microwaveable Basmati Rice", 2, "units", "2 pouches"),
         ("1tabtbsp Sesame Seeds", "Sesame Seeds", 1, "tbsp", None),
         ("Tenderstem® Broccoli", "Tenderstem Broccoli", 1, "pcs", None),
@@ -70,3 +70,25 @@ def test_parse_ingredient_text_converts_imperial_measures_to_metric(
     assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-3)
     assert parsed.unit == expected_unit
     assert parsed.preparation is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("1 stick butter", "Butter", 113, "g"),
+        ("2 sticks unsalted butter", "Unsalted butter", 226, "g"),
+        ("1 stick peanut butter", "Peanut butter", 1, "pcs"),
+        ("2 sticks lemongrass", "Lemongrass", 2, "pcs"),
+        ("1 cinnamon stick", "Cinnamon stick", 1, "pcs"),
+        ("2 sticks celery, chopped", "Celery, chopped", 2, "pcs"),
+    ],
+)
+def test_parse_ingredient_text_resolves_a_stick_of_butter_to_grams_and_other_sticks_to_pieces(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit
