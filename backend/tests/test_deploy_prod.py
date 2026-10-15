@@ -1,3 +1,4 @@
+# ruff: noqa: S603, S607 - the tests drive git and make by name against a throwaway repo
 """`make deploy-prod`, run end to end against a throwaway git repo.
 
 Only the system boundaries are faked: `sam` and `aws` are stubs on PATH that record their calls.
@@ -11,7 +12,6 @@ import os
 import shutil
 import subprocess
 import sys
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -212,7 +212,6 @@ def test_clean_deploy_is_not_logged_as_dirty(sandbox: Sandbox) -> None:
     sandbox.run()
 
     assert not sandbox.log_file.exists() or "dirty" not in sandbox.log_file.read_text()
-
 
 
 def test_deploy_reports_a_live_mismatch_against_samconfig(sandbox: Sandbox) -> None:

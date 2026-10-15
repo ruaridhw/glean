@@ -71,7 +71,6 @@ def test_template_stamps_the_deployed_commit_onto_the_lambda() -> None:
     assert template["Globals"]["Function"]["Environment"]["Variables"]["GIT_SHA"] == "GitSha"
 
 
-
 def test_ci_deploys_through_the_shared_script_without_its_own_parameters() -> None:
     workflow = (WORKFLOWS / "backend-deploy.yml").read_text()
     assert "deploy_prod.py" in workflow
