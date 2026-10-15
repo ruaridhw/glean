@@ -79,6 +79,12 @@ make worktree-prune                      # prune stale git metadata
   never becomes the base. For a stacked PR pass `BASE=<parent branch>`.
 - **One PR per issue; a lane ships as a stack.** Related issues form a stack of
   PRs, each based on the PR below it (the bottom PR is based on `main`).
+- **Keep branch history linear.** To pick up changes from `main` or a parent
+  PR, rebase onto it (`git rebase origin/main`, or
+  `git rebase --onto <parent> <old parent head>` for a stacked PR) and push
+  with `git push --force-with-lease`. Never merge `main` or a parent branch
+  into a PR branch. Make new commits rather than amending or squashing. When a
+  parent PR changes, rebase every PR above it, bottom first.
 - **Merging a stack.** `delete_branch_on_merge` is on, so GitHub deletes each
   head branch on merge and retargets the PR above it to `main` itself. Use
   GitHub's native stacked-PR merge, bottom PR first, with a merge commit:
