@@ -47,7 +47,10 @@ def parse_shopping_description(
     decision_client: DecisionClient,
     cache: BlobStore,
 ) -> ShoppingParseResponse:
-    units = split_into_units(request.text)
+    first_spelling: dict[str, str] = {}
+    for unit in split_into_units(request.text):
+        first_spelling.setdefault(_unit_key(unit), unit)
+    units = list(first_spelling.values())
     logger.info("parsing shopping description", extra={"text_length": len(request.text), "units": len(units)})
     parsed = [_parse_unit_cached(unit, llm_router=llm_router, cache=cache) for unit in units]
     merged = ShoppingParseResponse(items=[item for response in parsed for item in response.items])
