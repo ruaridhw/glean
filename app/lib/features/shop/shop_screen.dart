@@ -10,6 +10,7 @@ import 'package:glean/auth/auth_controller.dart'
     show aiFeaturesAvailableProvider;
 import 'package:glean/data/models/shopping_list_item_view.dart';
 import 'package:glean/data/providers/shopping_providers.dart';
+import 'package:glean/data/providers/user_config_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/router/intake_params.dart';
@@ -71,6 +72,8 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
     // Both "Describe list" and "Scan receipt" call the AI backend, so both are disabled while a session is
     // expired; the [SignedOutBanner] above every tab explains why.
     final bool aiAvailable = ref.watch(aiFeaturesAvailableProvider);
+    final bool grouped =
+        ref.watch(groupShoppingBySectionProvider).value ?? false;
 
     return Scaffold(
       // So the keyboard never covers the pinned add field.
@@ -78,6 +81,13 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
       appBar: AppBar(
         title: const Text('Shopping'),
         actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.view_list_outlined),
+            selectedIcon: const Icon(Icons.view_list_rounded),
+            isSelected: grouped,
+            tooltip: 'Group by section',
+            onPressed: () => setGroupShoppingBySection(ref, !grouped),
+          ),
           IconButton(
             icon: const Icon(Icons.auto_awesome_rounded),
             tooltip: 'Describe list',
@@ -117,7 +127,12 @@ class _ShopScreenState extends ConsumerState<ShopScreen> {
                     ],
                     const ShopAddField(),
                     SizedBox(height: tokens.spacing.md),
-                    Expanded(child: ShopListSection(itemsAsync: itemsAsync)),
+                    Expanded(
+                      child: ShopListSection(
+                        itemsAsync: itemsAsync,
+                        grouped: grouped,
+                      ),
+                    ),
                   ],
                 ),
               ),
