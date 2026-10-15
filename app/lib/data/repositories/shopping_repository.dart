@@ -150,6 +150,9 @@ class ShoppingRepository {
     section: resolveStoreSection(
       name: ingredient.canonicalName,
       category: ingredient.category,
+      override: ingredient.storeSection == null
+          ? null
+          : StoreSection.fromDb(ingredient.storeSection!),
     ),
     memberIds: memberIds,
     recipeTitles: recipeTitles,
@@ -362,6 +365,14 @@ class ShoppingRepository {
       await _db.into(_db.shoppingListItems).insert(row.toCompanion(false));
     }
   });
+
+  /// Moves every row of [ingredientId] (now and later) to [section]. The choice belongs to the ingredient, so
+  /// it also applies to rows added afterwards.
+  Future<void> moveToSection({
+    required int ingredientId,
+    required StoreSection section,
+  }) => (_db.update(_db.ingredients)..where((t) => t.id.equals(ingredientId)))
+      .write(IngredientsCompanion(storeSection: Value(section.dbValue)));
 
   Future<void> toggleRows({
     required List<int> ids,

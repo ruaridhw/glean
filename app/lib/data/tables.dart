@@ -39,6 +39,9 @@ class Ingredients extends Table {
       text().nullable().references(IngredientCategories, #category)();
   TextColumn get canonicalUnit => text().nullable()();
   BoolColumn get isStaple => boolean().withDefault(const Constant(false))();
+  // The household's own choice of store section for this ingredient (a `StoreSection.dbValue`), or null to
+  // use the section derived from its name and category.
+  TextColumn get storeSection => text().nullable()();
 }
 
 class PantryItems extends Table {

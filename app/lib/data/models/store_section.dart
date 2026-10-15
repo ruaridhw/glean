@@ -27,6 +27,13 @@ enum StoreSection {
   /// Stored as TEXT in `ingredients.store_section`.
   final String dbValue;
   final String label;
+
+  /// Deliberately fail-fast, like `ShoppingSource.fromDb`: an unknown stored value is corrupt or newer-schema
+  /// data and must surface rather than be coerced to a section.
+  static StoreSection fromDb(String value) => values.firstWhere(
+    (s) => s.dbValue == value,
+    orElse: () => throw StateError('Unknown store section "$value"'),
+  );
 }
 
 const Map<String, StoreSection> _sectionByCategory = <String, StoreSection>{
@@ -72,10 +79,15 @@ const Set<String> _foodCupboardWords = <String>{
 };
 
 /// The section for an ingredient called [name] with the optional [category] (a key of the 23-category
-/// taxonomy). The name outranks the category where it says more: "plain flour" is a grain by category but
+/// taxonomy). A household's own choice, [override], always wins. Otherwise the name outranks the category where it says more: "plain flour" is a grain by category but
 /// shelved with Baking, and frozen peas are legumes by category but live in Frozen. Where nothing places it,
 /// [StoreSection.other].
-StoreSection resolveStoreSection({required String name, String? category}) {
+StoreSection resolveStoreSection({
+  required String name,
+  String? category,
+  StoreSection? override,
+}) {
+  if (override != null) return override;
   final String lower = name.toLowerCase();
   final List<String> words = lower
       .split(RegExp(r'[^a-z]+'))
