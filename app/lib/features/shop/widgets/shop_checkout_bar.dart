@@ -70,7 +70,7 @@ class ShopCheckoutBar extends StatelessWidget {
               ),
             ),
             Text(
-              'Scan a receipt or finish without one',
+              'Add them to your pantry, or scan a receipt',
               style: textTheme.bodySmall?.copyWith(
                 color: onPrimary.withValues(alpha: 0.7),
               ),

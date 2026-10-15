@@ -271,7 +271,7 @@ void main() {
 
       // Only the row with no category asks for one.
       expect(
-        find.text("We couldn't identify a category for this item."),
+        find.text("Optional: we couldn't identify a category for this item."),
         findsOneWidget,
       );
       await tester.tap(find.text('Add 2 items'));
@@ -284,6 +284,28 @@ void main() {
         {for (final i in stocked) i.canonicalName: i.category},
         {'milk': 'dairy', 'plan plums': null},
       );
+    });
+
+    testWidgets('the checkout bar says checked items go to the pantry, not '
+        'that finishing does nothing', (WidgetTester tester) async {
+      final int milkId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+      );
+      await shopping().toggleRows(
+        ids: [milkId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Add them to your pantry, or scan a receipt'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('finish without'), findsNothing);
     });
   });
 }

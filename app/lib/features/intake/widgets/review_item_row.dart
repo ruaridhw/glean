@@ -34,9 +34,8 @@ class ReviewItemRow extends StatelessWidget {
   final String? selectedCategory;
   final ValueChanged<String?>? onCategoryChanged;
 
-  /// True only for a pantry-destined row whose parsed category came back null: expiry inference has no basis
-  /// without one, so this is where `PantryRepository.addItem`'s required category is supplied. Shop rows never
-  /// need it.
+  /// True for a pantry-destined row whose category came back null: the category is optional, so the row can be
+  /// confirmed as is (stored uncategorised) or given one here. Shop rows never show it.
   final bool requiresCategory;
 
   @override
@@ -117,7 +116,8 @@ class ReviewItemRow extends StatelessWidget {
                 decoration: const InputDecoration(
                   isDense: true,
                   labelText: 'Category',
-                  helperText: "We couldn't identify a category for this item.",
+                  helperText:
+                      "Optional: we couldn't identify a category for this item.",
                   helperMaxLines: 2,
                 ),
                 items: <DropdownMenuItem<String>>[
