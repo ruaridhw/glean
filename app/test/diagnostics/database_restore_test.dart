@@ -224,9 +224,7 @@ void main() {
           .customSelect('SELECT id FROM user_config')
           .get();
       expect(rows.map((r) => r.read<String>('id')), <String>['theirs']);
-      final GleanDatabase previous = open(
-        File('${liveFile.path}.pre-restore'),
-      );
+      final GleanDatabase previous = open(File('${liveFile.path}.pre-restore'));
       addTearDown(previous.close);
       expect(await _mealsPerWeek(previous, 'mine'), 6);
     },
