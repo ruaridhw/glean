@@ -1,5 +1,4 @@
-## One splash composition, brand green, both platforms (FLUTTER_MIGRATION.md §7,
-## AC-BUILD-08). The RN app handed off from a native splash to a *different*
+## One splash composition, brand green, both platforms. The RN app handed off from a native splash to a *different*
 ## JS-drawn splash composition in the same green with an unanimated pop; that
 ## second composition doesn't exist here — `lib/bootstrap.dart` holds this same
 ## flat green (`Color(0xFF2E9D63)`) behind `_SplashHolding` while the database
@@ -16,7 +15,7 @@ flutter_native_splash:
   # visible seam between the native splash and Flutter's first frame.
   color: "#2E9D63"
 
-  # Vendored brand mark (FLUTTER_MIGRATION.md §7/§8). flutter_native_splash
+  # Vendored brand mark. flutter_native_splash
   # requires a raster PNG, not the SVG directly, so `glean-b1-splash-logo.png`
   # is a straight rasterization of `glean-b1-splash-logo.svg` at 2048x2048
   # (a vector source, so this is lossless up to that resolution — see the

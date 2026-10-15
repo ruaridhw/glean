@@ -1,8 +1,8 @@
 # Android test distribution
 
 **Status: implemented in `codemagic.yaml`, and the [one-time setup](#one-time-setup)
-is done. The first build is still to run.** This replaced the Android half of `FLUTTER_MIGRATION.md` §8
-(a Fastlane lane run from the Mac). It copies the
+is done. The first build is still to run.** This replaced the originally planned
+Fastlane lane run from the Mac. It copies the
 model in [`ruaridhw/routingapp`'s `docs/ANDROID_TEST_DISTRIBUTION.md`](https://github.com/ruaridhw/routingapp/blob/main/docs/ANDROID_TEST_DISTRIBUTION.md).
 iOS is out of scope for now.
 
@@ -15,7 +15,7 @@ repository never start a build, so they cost no Codemagic minutes.
 
 ## Why not the Fastlane lane
 
-| | Fastlane from the Mac (previous §8) | Codemagic → Firebase (this doc) |
+| | Fastlane from the Mac (previous plan) | Codemagic → Firebase (this doc) |
 |---|---|---|
 | Who can release | Only someone at the Mac holding the keystore | Anyone with Codemagic access, from a browser |
 | Needs a Play Console app | Yes (internal track, service-account key) | No |
@@ -69,7 +69,7 @@ uses (`3.44.8` at the time of writing).
   testing, so the Flutter app gets its own key rather than reusing the
   EAS-managed one. Its signature won't match the Expo app's, so each tester
   uninstalls the Expo app once before the first Flutter install. That loses
-  on-device data, which `FLUTTER_MIGRATION.md` §1 already accepts. Version codes
+  on-device data, which is accepted. Version codes
   restart from Codemagic's `BUILD_NUMBER`.
 - **Cognito redirect is already registered.** `glean://auth/callback` and
   `glean://auth/logout` are in the user-pool client's callback lists

@@ -84,7 +84,7 @@ flutter:
   # Plus Jakarta Sans, vendored from Google Fonts (SIL OFL 1.1).
   # One family with weight descriptors: unlike React Native, Flutter resolves
   # `fontWeight` against these descriptors, so no per-weight family names and
-  # no text primitive are needed to enforce the family (see FLUTTER_MIGRATION.md §4).
+  # no text primitive are needed to enforce the family.
   fonts:
     - family: PlusJakartaSans
       fonts:

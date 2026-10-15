@@ -44,7 +44,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Release signing (FLUTTER_MIGRATION.md §8) — generated locally on the
+# Release signing — generated locally on the
 # release Mac, never committed. `android/key.properties` points at the
 # upload keystore; the keystore file itself may live anywhere outside the
 # repo, but is excluded here too in case it's ever placed alongside it.

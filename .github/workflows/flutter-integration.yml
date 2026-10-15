@@ -1,6 +1,6 @@
 name: Flutter Integration Tests
 
-# Manual only (AC-CI-02) — neither job below runs on push or pull_request.
+# Manual only — neither job below runs on push or pull_request.
 # flutter-ci.yml already covers lint/format/unit/widget on every push.
 #
 # Two separate jobs, not one combined macOS job — do not "simplify" this to
@@ -14,18 +14,17 @@ name: Flutter Integration Tests
 # (actions/runner-images#13505). The de facto standard community Action for
 # this (ReactiveCircus/android-emulator-runner) now tells users outright to
 # prefer Ubuntu over macOS for Android emulation — it's faster *and*
-# cheaper. See .scratch/flutter-port/research/build-release-macos-ci.md for
-# the full research trail. So: iOS Simulator on macOS, Android emulator on
+# cheaper. So: iOS Simulator on macOS, Android emulator on
 # Linux/KVM, as two independent jobs here.
 #
 # Both are also runnable locally from a single Mac — real Apple Silicon
 # hardware isn't subject to the nested-virtualization limitation above, so
 # one machine can drive both an iOS Simulator and an Android emulator
-# directly (AC-CI-03). See app/README.md for the exact commands.
+# directly. See app/README.md for the exact commands.
 #
 # Both jobs run the single integration_test suite
 # (app/integration_test/app_test.dart) against lib/main_e2e.dart — the auth
-# bypass lives only there (FLUTTER_MIGRATION.md §5) — and never build a
+# bypass lives only there — and never build a
 # release artifact; that's the job of the iOS Fastlane lane
 # (app/ios/fastlane/Fastfile, run from the Mac) and the Codemagic Android
 # workflow (codemagic.yaml, docs/ANDROID_TEST_DISTRIBUTION.md).

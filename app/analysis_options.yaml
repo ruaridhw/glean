@@ -1,6 +1,5 @@
 # Static analysis for the Glean Flutter app.
-# `flutter analyze` must exit clean with zero errors, warnings or infos
-# (FLUTTER_MIGRATION.md acceptance criterion AC-BUILD-04).
+# `flutter analyze` must exit clean with zero errors, warnings or infos.
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
@@ -16,7 +15,7 @@ analyzer:
 linter:
   rules:
     # Const constructors give extracted sub-widgets independent rebuild
-    # scopes — a performance property here, not just tidiness (§4).
+    # scopes — a performance property here, not just tidiness.
     - prefer_const_constructors
     - prefer_const_constructors_in_immutables
     - prefer_const_declarations

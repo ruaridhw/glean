@@ -39,7 +39,7 @@ android {
     defaultConfig {
         // Matches the iOS bundle identifier set in `ios/fastlane/Appfile` and
         // `Runner.xcodeproj` — the RN app had no iOS identifier at all, so
-        // this Flutter port is what first makes the two match (AC-BUILD-10).
+        // this Flutter port is what first makes the two match.
         applicationId = "com.ruaridhw.glean"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

@@ -3,7 +3,7 @@
 The Glean mobile app: Flutter, targeting iOS and Android only (no web/desktop
 scaffolding is committed — see [Web target](#web-target-deferred) below).
 Replaces the Expo/React Native app that used to live in this repository
-(see git history). Full spec: the root `../FLUTTER_MIGRATION.md`.
+(see git history).
 
 ## Setup
 
@@ -115,9 +115,7 @@ Android emulator on `ubuntu-latest` with KVM. **Deliberately not one
 combined macOS job** — GitHub-hosted macOS runners cannot run the Android
 emulator with hardware acceleration (nested virtualization is unsupported on
 the current arm64 image, and a request to lift this was closed "not
-planned"; see the workflow file's header comment and
-`.scratch/flutter-port/research/build-release-macos-ci.md` for the full
-trail). Trigger it from the Actions tab or `gh workflow run flutter-integration.yml`.
+planned"; see the workflow file's header comment). Trigger it from the Actions tab or `gh workflow run flutter-integration.yml`.
 
 ## CI
 
