@@ -339,7 +339,9 @@ section{background:var(--paper);border:1px solid var(--line);border-radius:12px;
 table{border-collapse:collapse;width:100%;font:14px/1.4 system-ui,sans-serif}
 th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
 th:first-child,td:first-child{text-align:left}thead th{font-weight:600;color:var(--mute)}
-.scroll{overflow-x:auto}
+.scroll{overflow-x:auto;max-width:100%}
+section>*,.io>div,.chart>*{min-width:0}
+body{overflow-wrap:break-word}
 .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:14px 0}
 .card header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font:14px system-ui,sans-serif}
 .tag{background:var(--hot);color:var(--paper);border-radius:99px;padding:1px 9px;font-size:12px}
