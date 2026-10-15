@@ -1,9 +1,9 @@
 """The labelled sample replayed through real candidate selection (#125).
 
-`tests/fixtures/jev/dietary_sample.json` labels which flags each recipe violates: every
+`tests/fixtures/decisions/dietary_sample.json` labels which flags each recipe violates: every
 row of the issue's table, the allowed cases (coconut milk, nutmeg, parmesan under
 vegetarian, gluten-free oats), held-out items the criteria don't name, and ordinary
-recipes. `dietary_sample_measured.json` holds the probabilities live Jev gave on
+recipes. `dietary_sample_measured.json` holds the probabilities the live model gave on
 2026-10-15 (re-check with `tests/integration/test_dietary_sample_live.py`). Here those
 answers are stored as decisions beside a corpus of the sample's recipes, and
 `sample_corpus_candidates` decides what each flag offers.
@@ -30,14 +30,14 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
-FIXTURES = Path(__file__).parents[1] / "fixtures" / "jev"
+FIXTURES = Path(__file__).parents[1] / "fixtures" / "decisions"
 ROWS = json.loads((FIXTURES / "dietary_sample.json").read_text())["rows"]
 _MEASURED = json.loads((FIXTURES / "dietary_sample_measured.json").read_text())
 PROBABILITIES = _MEASURED["probabilities"]
 MODEL = _MEASURED["model"]
 
 # Nut-free is an allergy, so its strict threshold also drops these nut-butter lookalikes
-# (tahini 0.24, hummus wrap 0.19). Anything else it drops is a regression.
+# (tahini 0.23, hummus wrap 0.16). Anything else it drops is a regression.
 ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
 
 

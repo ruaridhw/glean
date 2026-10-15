@@ -1,7 +1,7 @@
-"""Re-check the dietary thresholds against live Jev. Needs a real OPENROUTER_API_KEY in backend/.env.
+"""Re-check the dietary thresholds against the live decision model. Needs a real OPENROUTER_API_KEY in backend/.env.
 
 Run with: uv run pytest tests/integration/test_dietary_sample_live.py -v --no-cov
-Costs about $0.002. If it fails, Jev's answers moved: re-measure before changing the thresholds.
+Costs about $0.002. If it fails, the model's answers moved: re-measure before changing the thresholds.
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.integration
 
-_ROWS = json.loads((Path(__file__).parents[1] / "fixtures" / "jev" / "dietary_sample.json").read_text())["rows"]
+_ROWS = json.loads((Path(__file__).parents[1] / "fixtures" / "decisions" / "dietary_sample.json").read_text())["rows"]
 
 
-def test_live_jev_separates_the_labelled_sample_at_the_chosen_thresholds(openrouter_api_key: SecretStr) -> None:
+def test_live_model_separates_the_labelled_sample_at_the_chosen_thresholds(openrouter_api_key: SecretStr) -> None:
     client = DecisionClient(api_key=openrouter_api_key, timeout_s=60.0)
     missed: list[str] = []
     wrongly_excluded: list[str] = []
