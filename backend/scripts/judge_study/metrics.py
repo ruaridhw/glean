@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from judge_study.results import OutputItem
 
 LEVELS = 5
 
@@ -51,3 +55,124 @@ def confusion_matrix(pairs: list[tuple[int, int]]) -> list[list[int]]:
     for a, b in pairs:
         matrix[a - 1][b - 1] += 1
     return matrix
+
+
+type Rater = Literal["llm", "decision", "human"]
+
+
+def item_score(item: OutputItem, rater: Rater) -> int | None:
+    """One score per output: the human's, or the median of a judge's repeats."""
+    if rater == "human":
+        return item.human_score
+    scores = sorted(j.score for j in item.judgements if j.judge == rater)
+    return scores[(len(scores) - 1) // 2] if scores else None
+
+
+def judge_pairs(items: list[OutputItem], first: Rater, second: Rater) -> list[tuple[int, int]]:
+    pairs = [(item_score(item, first), item_score(item, second)) for item in items]
+    return [(a, b) for a, b in pairs if a is not None and b is not None]
+
+
+def disagreements(items: list[OutputItem]) -> list[OutputItem]:
+    """Outputs the two judges score differently, the widest gap first."""
+    gaps = []
+    for item in items:
+        llm, decision = item_score(item, "llm"), item_score(item, "decision")
+        if llm is not None and decision is not None and llm != decision:
+            gaps.append((abs(llm - decision), item))
+    return [item for _, item in sorted(gaps, key=lambda gap: -gap[0])]
+
+
+@dataclass(frozen=True)
+class ReliabilityBin:
+    """`accuracy` is the share of outputs whose decision-judge score equals the human's."""
+
+    lower: float
+    upper: float
+    n: int
+    mean_confidence: float
+    accuracy: float
+
+
+def reliability_bins(items: list[OutputItem], bins: int = 5) -> list[ReliabilityBin]:
+    """Does the decision judge's confidence track whether it matches the human? Empty bins are omitted."""
+    points: list[tuple[float, bool]] = []
+    for item in items:
+        confidences = [j.confidence for j in item.judgements if j.judge == "decision" and j.confidence is not None]
+        score, human = item_score(item, "decision"), item.human_score
+        if confidences and score is not None and human is not None:
+            points.append((sum(confidences) / len(confidences), score == human))
+    result = []
+    for index in range(bins):
+        lower, upper = index / bins, (index + 1) / bins
+        inside = [(c, ok) for c, ok in points if lower <= c < upper or (index == bins - 1 and c == 1.0)]
+        if inside:
+            result.append(
+                ReliabilityBin(
+                    lower,
+                    upper,
+                    len(inside),
+                    sum(c for c, _ in inside) / len(inside),
+                    sum(ok for _, ok in inside) / len(inside),
+                )
+            )
+    return result
+
+
+@dataclass(frozen=True)
+class Drift:
+    items: int
+    identical_share: float | None
+    mean_range: float | None
+    max_range: int | None
+
+
+def drift(items: list[OutputItem], judge: Literal["llm", "decision"]) -> Drift:
+    """How much one judge's repeated scores of the same output differ. Outputs scored once can't drift."""
+    ranges = []
+    for item in items:
+        scores = [j.score for j in item.judgements if j.judge == judge]
+        if len(scores) >= 2:
+            ranges.append(max(scores) - min(scores))
+    if not ranges:
+        return Drift(0, None, None, None)
+    return Drift(len(ranges), sum(r == 0 for r in ranges) / len(ranges), sum(ranges) / len(ranges), max(ranges))
+
+
+@dataclass(frozen=True)
+class CostSummary:
+    judgements: int
+    total: float
+    mean: float | None
+    unreported: int
+
+
+def cost_summary(items: list[OutputItem], judge: Literal["llm", "decision"]) -> CostSummary:
+    judgements = [j for item in items for j in item.judgements if j.judge == judge]
+    costs = [j.cost_usd for j in judgements if j.cost_usd is not None]
+    return CostSummary(
+        judgements=len(judgements),
+        total=sum(costs),
+        mean=sum(costs) / len(costs) if costs else None,
+        unreported=len(judgements) - len(costs),
+    )
+
+
+@dataclass(frozen=True)
+class Latency:
+    p50: float | None
+    p95: float | None
+
+
+def latency_summary(items: list[OutputItem], judge: Literal["llm", "decision"]) -> Latency:
+    seconds = sorted(j.latency_s for item in items for j in item.judgements if j.judge == judge)
+    return Latency(_percentile(seconds, 50), _percentile(seconds, 95))
+
+
+def _percentile(sorted_values: list[float], percent: float) -> float | None:
+    if not sorted_values:
+        return None
+    position = (len(sorted_values) - 1) * percent / 100
+    below = int(position)
+    above = min(below + 1, len(sorted_values) - 1)
+    return sorted_values[below] + (sorted_values[above] - sorted_values[below]) * (position - below)
