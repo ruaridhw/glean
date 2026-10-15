@@ -275,8 +275,7 @@ def produce_missing_decisions(
 
 def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...]) -> list[DietaryDecision]:
     state = {"recipe_title": summary.title, "ingredients": summary.ingredient_names}
-    # ty reads langsmith's @traceable wrapper on `decide` as unbound, so it wants `self` as the first argument.
-    answer = client.decide(state, dietary_questions(flags))  # ty: ignore[invalid-argument-type]
+    answer = client.decide(state, dietary_questions(flags))
     computed_at = datetime.now(UTC)
     return [
         DietaryDecision(
