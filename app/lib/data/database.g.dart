@@ -5956,6 +5956,17 @@ class $CatalogueItemsTable extends CatalogueItems
         type: DriftSqlType.int,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _sectionMeta = const VerificationMeta(
+    'section',
+  );
+  @override
+  late final GeneratedColumn<String> section = GeneratedColumn<String>(
+    'section',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5968,6 +5979,7 @@ class $CatalogueItemsTable extends CatalogueItems
     overrideStockUnit,
     overrideUnopenedShelfLifeDays,
     overrideOnceOpenedShelfLifeDays,
+    section,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6063,6 +6075,12 @@ class $CatalogueItemsTable extends CatalogueItems
         ),
       );
     }
+    if (data.containsKey('section')) {
+      context.handle(
+        _sectionMeta,
+        section.isAcceptableOrUnknown(data['section']!, _sectionMeta),
+      );
+    }
     return context;
   }
 
@@ -6112,6 +6130,10 @@ class $CatalogueItemsTable extends CatalogueItems
         DriftSqlType.int,
         data['${effectivePrefix}override_once_opened_shelf_life_days'],
       ),
+      section: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section'],
+      ),
     );
   }
 
@@ -6132,6 +6154,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
   final String? overrideStockUnit;
   final int? overrideUnopenedShelfLifeDays;
   final int? overrideOnceOpenedShelfLifeDays;
+  final String? section;
   const CatalogueItem({
     required this.id,
     required this.name,
@@ -6143,6 +6166,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
     this.overrideStockUnit,
     this.overrideUnopenedShelfLifeDays,
     this.overrideOnceOpenedShelfLifeDays,
+    this.section,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6171,6 +6195,9 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
         overrideOnceOpenedShelfLifeDays,
       );
     }
+    if (!nullToAbsent || section != null) {
+      map['section'] = Variable<String>(section);
+    }
     return map;
   }
 
@@ -6198,6 +6225,9 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
           overrideOnceOpenedShelfLifeDays == null && nullToAbsent
           ? const Value.absent()
           : Value(overrideOnceOpenedShelfLifeDays),
+      section: section == null && nullToAbsent
+          ? const Value.absent()
+          : Value(section),
     );
   }
 
@@ -6225,6 +6255,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
       overrideOnceOpenedShelfLifeDays: serializer.fromJson<int?>(
         json['overrideOnceOpenedShelfLifeDays'],
       ),
+      section: serializer.fromJson<String?>(json['section']),
     );
   }
   @override
@@ -6245,6 +6276,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
       'overrideOnceOpenedShelfLifeDays': serializer.toJson<int?>(
         overrideOnceOpenedShelfLifeDays,
       ),
+      'section': serializer.toJson<String?>(section),
     };
   }
 
@@ -6259,6 +6291,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
     Value<String?> overrideStockUnit = const Value.absent(),
     Value<int?> overrideUnopenedShelfLifeDays = const Value.absent(),
     Value<int?> overrideOnceOpenedShelfLifeDays = const Value.absent(),
+    Value<String?> section = const Value.absent(),
   }) => CatalogueItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -6280,6 +6313,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
     overrideOnceOpenedShelfLifeDays: overrideOnceOpenedShelfLifeDays.present
         ? overrideOnceOpenedShelfLifeDays.value
         : this.overrideOnceOpenedShelfLifeDays,
+    section: section.present ? section.value : this.section,
   );
   CatalogueItem copyWithCompanion(CatalogueItemsCompanion data) {
     return CatalogueItem(
@@ -6304,6 +6338,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
           data.overrideOnceOpenedShelfLifeDays.present
           ? data.overrideOnceOpenedShelfLifeDays.value
           : this.overrideOnceOpenedShelfLifeDays,
+      section: data.section.present ? data.section.value : this.section,
     );
   }
 
@@ -6322,8 +6357,9 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
             'overrideUnopenedShelfLifeDays: $overrideUnopenedShelfLifeDays, ',
           )
           ..write(
-            'overrideOnceOpenedShelfLifeDays: $overrideOnceOpenedShelfLifeDays',
+            'overrideOnceOpenedShelfLifeDays: $overrideOnceOpenedShelfLifeDays, ',
           )
+          ..write('section: $section')
           ..write(')'))
         .toString();
   }
@@ -6340,6 +6376,7 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
     overrideStockUnit,
     overrideUnopenedShelfLifeDays,
     overrideOnceOpenedShelfLifeDays,
+    section,
   );
   @override
   bool operator ==(Object other) =>
@@ -6356,7 +6393,8 @@ class CatalogueItem extends DataClass implements Insertable<CatalogueItem> {
           other.overrideUnopenedShelfLifeDays ==
               this.overrideUnopenedShelfLifeDays &&
           other.overrideOnceOpenedShelfLifeDays ==
-              this.overrideOnceOpenedShelfLifeDays);
+              this.overrideOnceOpenedShelfLifeDays &&
+          other.section == this.section);
 }
 
 class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
@@ -6370,6 +6408,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
   final Value<String?> overrideStockUnit;
   final Value<int?> overrideUnopenedShelfLifeDays;
   final Value<int?> overrideOnceOpenedShelfLifeDays;
+  final Value<String?> section;
   final Value<int> rowid;
   const CatalogueItemsCompanion({
     this.id = const Value.absent(),
@@ -6382,6 +6421,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
     this.overrideStockUnit = const Value.absent(),
     this.overrideUnopenedShelfLifeDays = const Value.absent(),
     this.overrideOnceOpenedShelfLifeDays = const Value.absent(),
+    this.section = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CatalogueItemsCompanion.insert({
@@ -6395,6 +6435,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
     this.overrideStockUnit = const Value.absent(),
     this.overrideUnopenedShelfLifeDays = const Value.absent(),
     this.overrideOnceOpenedShelfLifeDays = const Value.absent(),
+    this.section = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -6412,6 +6453,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
     Expression<String>? overrideStockUnit,
     Expression<int>? overrideUnopenedShelfLifeDays,
     Expression<int>? overrideOnceOpenedShelfLifeDays,
+    Expression<String>? section,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -6428,6 +6470,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
         'override_unopened_shelf_life_days': overrideUnopenedShelfLifeDays,
       if (overrideOnceOpenedShelfLifeDays != null)
         'override_once_opened_shelf_life_days': overrideOnceOpenedShelfLifeDays,
+      if (section != null) 'section': section,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -6443,6 +6486,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
     Value<String?>? overrideStockUnit,
     Value<int?>? overrideUnopenedShelfLifeDays,
     Value<int?>? overrideOnceOpenedShelfLifeDays,
+    Value<String?>? section,
     Value<int>? rowid,
   }) {
     return CatalogueItemsCompanion(
@@ -6459,6 +6503,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
       overrideOnceOpenedShelfLifeDays:
           overrideOnceOpenedShelfLifeDays ??
           this.overrideOnceOpenedShelfLifeDays,
+      section: section ?? this.section,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6502,6 +6547,9 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
         overrideOnceOpenedShelfLifeDays.value,
       );
     }
+    if (section.present) {
+      map['section'] = Variable<String>(section.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6525,6 +6573,7 @@ class CatalogueItemsCompanion extends UpdateCompanion<CatalogueItem> {
           ..write(
             'overrideOnceOpenedShelfLifeDays: $overrideOnceOpenedShelfLifeDays, ',
           )
+          ..write('section: $section, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7094,6 +7143,685 @@ class CatalogueSyncStateCompanion
   }
 }
 
+class $IngredientOverridesTable extends IngredientOverrides
+    with TableInfo<$IngredientOverridesTable, IngredientOverride> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $IngredientOverridesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
+  @override
+  late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
+    'item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _trackingModeMeta = const VerificationMeta(
+    'trackingMode',
+  );
+  @override
+  late final GeneratedColumn<String> trackingMode = GeneratedColumn<String>(
+    'tracking_mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stockUnitMeta = const VerificationMeta(
+    'stockUnit',
+  );
+  @override
+  late final GeneratedColumn<String> stockUnit = GeneratedColumn<String>(
+    'stock_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _unopenedShelfLifeDaysMeta =
+      const VerificationMeta('unopenedShelfLifeDays');
+  @override
+  late final GeneratedColumn<int> unopenedShelfLifeDays = GeneratedColumn<int>(
+    'unopened_shelf_life_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _onceOpenedShelfLifeDaysMeta =
+      const VerificationMeta('onceOpenedShelfLifeDays');
+  @override
+  late final GeneratedColumn<int> onceOpenedShelfLifeDays =
+      GeneratedColumn<int>(
+        'once_opened_shelf_life_days',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sectionMeta = const VerificationMeta(
+    'section',
+  );
+  @override
+  late final GeneratedColumn<String> section = GeneratedColumn<String>(
+    'section',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    itemId,
+    trackingMode,
+    stockUnit,
+    unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays,
+    section,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ingredient_overrides';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<IngredientOverride> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('item_id')) {
+      context.handle(
+        _itemIdMeta,
+        itemId.isAcceptableOrUnknown(data['item_id']!, _itemIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemIdMeta);
+    }
+    if (data.containsKey('tracking_mode')) {
+      context.handle(
+        _trackingModeMeta,
+        trackingMode.isAcceptableOrUnknown(
+          data['tracking_mode']!,
+          _trackingModeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stock_unit')) {
+      context.handle(
+        _stockUnitMeta,
+        stockUnit.isAcceptableOrUnknown(data['stock_unit']!, _stockUnitMeta),
+      );
+    }
+    if (data.containsKey('unopened_shelf_life_days')) {
+      context.handle(
+        _unopenedShelfLifeDaysMeta,
+        unopenedShelfLifeDays.isAcceptableOrUnknown(
+          data['unopened_shelf_life_days']!,
+          _unopenedShelfLifeDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('once_opened_shelf_life_days')) {
+      context.handle(
+        _onceOpenedShelfLifeDaysMeta,
+        onceOpenedShelfLifeDays.isAcceptableOrUnknown(
+          data['once_opened_shelf_life_days']!,
+          _onceOpenedShelfLifeDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('section')) {
+      context.handle(
+        _sectionMeta,
+        section.isAcceptableOrUnknown(data['section']!, _sectionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {itemId};
+  @override
+  IngredientOverride map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return IngredientOverride(
+      itemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_id'],
+      )!,
+      trackingMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tracking_mode'],
+      ),
+      stockUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stock_unit'],
+      ),
+      unopenedShelfLifeDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}unopened_shelf_life_days'],
+      ),
+      onceOpenedShelfLifeDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}once_opened_shelf_life_days'],
+      ),
+      section: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section'],
+      ),
+    );
+  }
+
+  @override
+  $IngredientOverridesTable createAlias(String alias) {
+    return $IngredientOverridesTable(attachedDatabase, alias);
+  }
+}
+
+class IngredientOverride extends DataClass
+    implements Insertable<IngredientOverride> {
+  final String itemId;
+  final String? trackingMode;
+  final String? stockUnit;
+  final int? unopenedShelfLifeDays;
+  final int? onceOpenedShelfLifeDays;
+  final String? section;
+  const IngredientOverride({
+    required this.itemId,
+    this.trackingMode,
+    this.stockUnit,
+    this.unopenedShelfLifeDays,
+    this.onceOpenedShelfLifeDays,
+    this.section,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['item_id'] = Variable<String>(itemId);
+    if (!nullToAbsent || trackingMode != null) {
+      map['tracking_mode'] = Variable<String>(trackingMode);
+    }
+    if (!nullToAbsent || stockUnit != null) {
+      map['stock_unit'] = Variable<String>(stockUnit);
+    }
+    if (!nullToAbsent || unopenedShelfLifeDays != null) {
+      map['unopened_shelf_life_days'] = Variable<int>(unopenedShelfLifeDays);
+    }
+    if (!nullToAbsent || onceOpenedShelfLifeDays != null) {
+      map['once_opened_shelf_life_days'] = Variable<int>(
+        onceOpenedShelfLifeDays,
+      );
+    }
+    if (!nullToAbsent || section != null) {
+      map['section'] = Variable<String>(section);
+    }
+    return map;
+  }
+
+  IngredientOverridesCompanion toCompanion(bool nullToAbsent) {
+    return IngredientOverridesCompanion(
+      itemId: Value(itemId),
+      trackingMode: trackingMode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(trackingMode),
+      stockUnit: stockUnit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stockUnit),
+      unopenedShelfLifeDays: unopenedShelfLifeDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(unopenedShelfLifeDays),
+      onceOpenedShelfLifeDays: onceOpenedShelfLifeDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(onceOpenedShelfLifeDays),
+      section: section == null && nullToAbsent
+          ? const Value.absent()
+          : Value(section),
+    );
+  }
+
+  factory IngredientOverride.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return IngredientOverride(
+      itemId: serializer.fromJson<String>(json['itemId']),
+      trackingMode: serializer.fromJson<String?>(json['trackingMode']),
+      stockUnit: serializer.fromJson<String?>(json['stockUnit']),
+      unopenedShelfLifeDays: serializer.fromJson<int?>(
+        json['unopenedShelfLifeDays'],
+      ),
+      onceOpenedShelfLifeDays: serializer.fromJson<int?>(
+        json['onceOpenedShelfLifeDays'],
+      ),
+      section: serializer.fromJson<String?>(json['section']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'itemId': serializer.toJson<String>(itemId),
+      'trackingMode': serializer.toJson<String?>(trackingMode),
+      'stockUnit': serializer.toJson<String?>(stockUnit),
+      'unopenedShelfLifeDays': serializer.toJson<int?>(unopenedShelfLifeDays),
+      'onceOpenedShelfLifeDays': serializer.toJson<int?>(
+        onceOpenedShelfLifeDays,
+      ),
+      'section': serializer.toJson<String?>(section),
+    };
+  }
+
+  IngredientOverride copyWith({
+    String? itemId,
+    Value<String?> trackingMode = const Value.absent(),
+    Value<String?> stockUnit = const Value.absent(),
+    Value<int?> unopenedShelfLifeDays = const Value.absent(),
+    Value<int?> onceOpenedShelfLifeDays = const Value.absent(),
+    Value<String?> section = const Value.absent(),
+  }) => IngredientOverride(
+    itemId: itemId ?? this.itemId,
+    trackingMode: trackingMode.present ? trackingMode.value : this.trackingMode,
+    stockUnit: stockUnit.present ? stockUnit.value : this.stockUnit,
+    unopenedShelfLifeDays: unopenedShelfLifeDays.present
+        ? unopenedShelfLifeDays.value
+        : this.unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays: onceOpenedShelfLifeDays.present
+        ? onceOpenedShelfLifeDays.value
+        : this.onceOpenedShelfLifeDays,
+    section: section.present ? section.value : this.section,
+  );
+  IngredientOverride copyWithCompanion(IngredientOverridesCompanion data) {
+    return IngredientOverride(
+      itemId: data.itemId.present ? data.itemId.value : this.itemId,
+      trackingMode: data.trackingMode.present
+          ? data.trackingMode.value
+          : this.trackingMode,
+      stockUnit: data.stockUnit.present ? data.stockUnit.value : this.stockUnit,
+      unopenedShelfLifeDays: data.unopenedShelfLifeDays.present
+          ? data.unopenedShelfLifeDays.value
+          : this.unopenedShelfLifeDays,
+      onceOpenedShelfLifeDays: data.onceOpenedShelfLifeDays.present
+          ? data.onceOpenedShelfLifeDays.value
+          : this.onceOpenedShelfLifeDays,
+      section: data.section.present ? data.section.value : this.section,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IngredientOverride(')
+          ..write('itemId: $itemId, ')
+          ..write('trackingMode: $trackingMode, ')
+          ..write('stockUnit: $stockUnit, ')
+          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
+          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays, ')
+          ..write('section: $section')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    itemId,
+    trackingMode,
+    stockUnit,
+    unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays,
+    section,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is IngredientOverride &&
+          other.itemId == this.itemId &&
+          other.trackingMode == this.trackingMode &&
+          other.stockUnit == this.stockUnit &&
+          other.unopenedShelfLifeDays == this.unopenedShelfLifeDays &&
+          other.onceOpenedShelfLifeDays == this.onceOpenedShelfLifeDays &&
+          other.section == this.section);
+}
+
+class IngredientOverridesCompanion extends UpdateCompanion<IngredientOverride> {
+  final Value<String> itemId;
+  final Value<String?> trackingMode;
+  final Value<String?> stockUnit;
+  final Value<int?> unopenedShelfLifeDays;
+  final Value<int?> onceOpenedShelfLifeDays;
+  final Value<String?> section;
+  final Value<int> rowid;
+  const IngredientOverridesCompanion({
+    this.itemId = const Value.absent(),
+    this.trackingMode = const Value.absent(),
+    this.stockUnit = const Value.absent(),
+    this.unopenedShelfLifeDays = const Value.absent(),
+    this.onceOpenedShelfLifeDays = const Value.absent(),
+    this.section = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  IngredientOverridesCompanion.insert({
+    required String itemId,
+    this.trackingMode = const Value.absent(),
+    this.stockUnit = const Value.absent(),
+    this.unopenedShelfLifeDays = const Value.absent(),
+    this.onceOpenedShelfLifeDays = const Value.absent(),
+    this.section = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : itemId = Value(itemId);
+  static Insertable<IngredientOverride> custom({
+    Expression<String>? itemId,
+    Expression<String>? trackingMode,
+    Expression<String>? stockUnit,
+    Expression<int>? unopenedShelfLifeDays,
+    Expression<int>? onceOpenedShelfLifeDays,
+    Expression<String>? section,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (itemId != null) 'item_id': itemId,
+      if (trackingMode != null) 'tracking_mode': trackingMode,
+      if (stockUnit != null) 'stock_unit': stockUnit,
+      if (unopenedShelfLifeDays != null)
+        'unopened_shelf_life_days': unopenedShelfLifeDays,
+      if (onceOpenedShelfLifeDays != null)
+        'once_opened_shelf_life_days': onceOpenedShelfLifeDays,
+      if (section != null) 'section': section,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  IngredientOverridesCompanion copyWith({
+    Value<String>? itemId,
+    Value<String?>? trackingMode,
+    Value<String?>? stockUnit,
+    Value<int?>? unopenedShelfLifeDays,
+    Value<int?>? onceOpenedShelfLifeDays,
+    Value<String?>? section,
+    Value<int>? rowid,
+  }) {
+    return IngredientOverridesCompanion(
+      itemId: itemId ?? this.itemId,
+      trackingMode: trackingMode ?? this.trackingMode,
+      stockUnit: stockUnit ?? this.stockUnit,
+      unopenedShelfLifeDays:
+          unopenedShelfLifeDays ?? this.unopenedShelfLifeDays,
+      onceOpenedShelfLifeDays:
+          onceOpenedShelfLifeDays ?? this.onceOpenedShelfLifeDays,
+      section: section ?? this.section,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (itemId.present) {
+      map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (trackingMode.present) {
+      map['tracking_mode'] = Variable<String>(trackingMode.value);
+    }
+    if (stockUnit.present) {
+      map['stock_unit'] = Variable<String>(stockUnit.value);
+    }
+    if (unopenedShelfLifeDays.present) {
+      map['unopened_shelf_life_days'] = Variable<int>(
+        unopenedShelfLifeDays.value,
+      );
+    }
+    if (onceOpenedShelfLifeDays.present) {
+      map['once_opened_shelf_life_days'] = Variable<int>(
+        onceOpenedShelfLifeDays.value,
+      );
+    }
+    if (section.present) {
+      map['section'] = Variable<String>(section.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IngredientOverridesCompanion(')
+          ..write('itemId: $itemId, ')
+          ..write('trackingMode: $trackingMode, ')
+          ..write('stockUnit: $stockUnit, ')
+          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
+          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays, ')
+          ..write('section: $section, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CatalogueItemRedirectsTable extends CatalogueItemRedirects
+    with TableInfo<$CatalogueItemRedirectsTable, CatalogueItemRedirect> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CatalogueItemRedirectsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _formerIdMeta = const VerificationMeta(
+    'formerId',
+  );
+  @override
+  late final GeneratedColumn<String> formerId = GeneratedColumn<String>(
+    'former_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
+  @override
+  late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
+    'item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [formerId, itemId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'catalogue_item_redirects';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CatalogueItemRedirect> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('former_id')) {
+      context.handle(
+        _formerIdMeta,
+        formerId.isAcceptableOrUnknown(data['former_id']!, _formerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_formerIdMeta);
+    }
+    if (data.containsKey('item_id')) {
+      context.handle(
+        _itemIdMeta,
+        itemId.isAcceptableOrUnknown(data['item_id']!, _itemIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {formerId};
+  @override
+  CatalogueItemRedirect map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CatalogueItemRedirect(
+      formerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}former_id'],
+      )!,
+      itemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_id'],
+      )!,
+    );
+  }
+
+  @override
+  $CatalogueItemRedirectsTable createAlias(String alias) {
+    return $CatalogueItemRedirectsTable(attachedDatabase, alias);
+  }
+}
+
+class CatalogueItemRedirect extends DataClass
+    implements Insertable<CatalogueItemRedirect> {
+  final String formerId;
+  final String itemId;
+  const CatalogueItemRedirect({required this.formerId, required this.itemId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['former_id'] = Variable<String>(formerId);
+    map['item_id'] = Variable<String>(itemId);
+    return map;
+  }
+
+  CatalogueItemRedirectsCompanion toCompanion(bool nullToAbsent) {
+    return CatalogueItemRedirectsCompanion(
+      formerId: Value(formerId),
+      itemId: Value(itemId),
+    );
+  }
+
+  factory CatalogueItemRedirect.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CatalogueItemRedirect(
+      formerId: serializer.fromJson<String>(json['formerId']),
+      itemId: serializer.fromJson<String>(json['itemId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'formerId': serializer.toJson<String>(formerId),
+      'itemId': serializer.toJson<String>(itemId),
+    };
+  }
+
+  CatalogueItemRedirect copyWith({String? formerId, String? itemId}) =>
+      CatalogueItemRedirect(
+        formerId: formerId ?? this.formerId,
+        itemId: itemId ?? this.itemId,
+      );
+  CatalogueItemRedirect copyWithCompanion(
+    CatalogueItemRedirectsCompanion data,
+  ) {
+    return CatalogueItemRedirect(
+      formerId: data.formerId.present ? data.formerId.value : this.formerId,
+      itemId: data.itemId.present ? data.itemId.value : this.itemId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogueItemRedirect(')
+          ..write('formerId: $formerId, ')
+          ..write('itemId: $itemId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(formerId, itemId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CatalogueItemRedirect &&
+          other.formerId == this.formerId &&
+          other.itemId == this.itemId);
+}
+
+class CatalogueItemRedirectsCompanion
+    extends UpdateCompanion<CatalogueItemRedirect> {
+  final Value<String> formerId;
+  final Value<String> itemId;
+  final Value<int> rowid;
+  const CatalogueItemRedirectsCompanion({
+    this.formerId = const Value.absent(),
+    this.itemId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CatalogueItemRedirectsCompanion.insert({
+    required String formerId,
+    required String itemId,
+    this.rowid = const Value.absent(),
+  }) : formerId = Value(formerId),
+       itemId = Value(itemId);
+  static Insertable<CatalogueItemRedirect> custom({
+    Expression<String>? formerId,
+    Expression<String>? itemId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (formerId != null) 'former_id': formerId,
+      if (itemId != null) 'item_id': itemId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CatalogueItemRedirectsCompanion copyWith({
+    Value<String>? formerId,
+    Value<String>? itemId,
+    Value<int>? rowid,
+  }) {
+    return CatalogueItemRedirectsCompanion(
+      formerId: formerId ?? this.formerId,
+      itemId: itemId ?? this.itemId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (formerId.present) {
+      map['former_id'] = Variable<String>(formerId.value);
+    }
+    if (itemId.present) {
+      map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogueItemRedirectsCompanion(')
+          ..write('formerId: $formerId, ')
+          ..write('itemId: $itemId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$GleanDatabase extends GeneratedDatabase {
   _$GleanDatabase(QueryExecutor e) : super(e);
   $GleanDatabaseManager get managers => $GleanDatabaseManager(this);
@@ -7123,6 +7851,10 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
   );
   late final $CatalogueSyncStateTable catalogueSyncState =
       $CatalogueSyncStateTable(this);
+  late final $IngredientOverridesTable ingredientOverrides =
+      $IngredientOverridesTable(this);
+  late final $CatalogueItemRedirectsTable catalogueItemRedirects =
+      $CatalogueItemRedirectsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7142,6 +7874,8 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
     catalogueItems,
     catalogueAliases,
     catalogueSyncState,
+    ingredientOverrides,
+    catalogueItemRedirects,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -12271,6 +13005,7 @@ typedef $$CatalogueItemsTableCreateCompanionBuilder =
       Value<String?> overrideStockUnit,
       Value<int?> overrideUnopenedShelfLifeDays,
       Value<int?> overrideOnceOpenedShelfLifeDays,
+      Value<String?> section,
       Value<int> rowid,
     });
 typedef $$CatalogueItemsTableUpdateCompanionBuilder =
@@ -12285,6 +13020,7 @@ typedef $$CatalogueItemsTableUpdateCompanionBuilder =
       Value<String?> overrideStockUnit,
       Value<int?> overrideUnopenedShelfLifeDays,
       Value<int?> overrideOnceOpenedShelfLifeDays,
+      Value<String?> section,
       Value<int> rowid,
     });
 
@@ -12344,6 +13080,11 @@ class $$CatalogueItemsTableFilterComposer
 
   ColumnFilters<int> get overrideOnceOpenedShelfLifeDays => $composableBuilder(
     column: $table.overrideOnceOpenedShelfLifeDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get section => $composableBuilder(
+    column: $table.section,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -12407,6 +13148,11 @@ class $$CatalogueItemsTableOrderingComposer
         column: $table.overrideOnceOpenedShelfLifeDays,
         builder: (column) => ColumnOrderings(column),
       );
+
+  ColumnOrderings<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CatalogueItemsTableAnnotationComposer
@@ -12458,6 +13204,9 @@ class $$CatalogueItemsTableAnnotationComposer
         column: $table.overrideOnceOpenedShelfLifeDays,
         builder: (column) => column,
       );
+
+  GeneratedColumn<String> get section =>
+      $composableBuilder(column: $table.section, builder: (column) => column);
 }
 
 class $$CatalogueItemsTableTableManager
@@ -12509,6 +13258,7 @@ class $$CatalogueItemsTableTableManager
                     const Value.absent(),
                 Value<int?> overrideOnceOpenedShelfLifeDays =
                     const Value.absent(),
+                Value<String?> section = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogueItemsCompanion(
                 id: id,
@@ -12522,6 +13272,7 @@ class $$CatalogueItemsTableTableManager
                 overrideUnopenedShelfLifeDays: overrideUnopenedShelfLifeDays,
                 overrideOnceOpenedShelfLifeDays:
                     overrideOnceOpenedShelfLifeDays,
+                section: section,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12538,6 +13289,7 @@ class $$CatalogueItemsTableTableManager
                     const Value.absent(),
                 Value<int?> overrideOnceOpenedShelfLifeDays =
                     const Value.absent(),
+                Value<String?> section = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogueItemsCompanion.insert(
                 id: id,
@@ -12551,6 +13303,7 @@ class $$CatalogueItemsTableTableManager
                 overrideUnopenedShelfLifeDays: overrideUnopenedShelfLifeDays,
                 overrideOnceOpenedShelfLifeDays:
                     overrideOnceOpenedShelfLifeDays,
+                section: section,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -12940,6 +13693,409 @@ typedef $$CatalogueSyncStateTableProcessedTableManager =
       CatalogueSyncStateData,
       PrefetchHooks Function()
     >;
+typedef $$IngredientOverridesTableCreateCompanionBuilder =
+    IngredientOverridesCompanion Function({
+      required String itemId,
+      Value<String?> trackingMode,
+      Value<String?> stockUnit,
+      Value<int?> unopenedShelfLifeDays,
+      Value<int?> onceOpenedShelfLifeDays,
+      Value<String?> section,
+      Value<int> rowid,
+    });
+typedef $$IngredientOverridesTableUpdateCompanionBuilder =
+    IngredientOverridesCompanion Function({
+      Value<String> itemId,
+      Value<String?> trackingMode,
+      Value<String?> stockUnit,
+      Value<int?> unopenedShelfLifeDays,
+      Value<int?> onceOpenedShelfLifeDays,
+      Value<String?> section,
+      Value<int> rowid,
+    });
+
+class $$IngredientOverridesTableFilterComposer
+    extends Composer<_$GleanDatabase, $IngredientOverridesTable> {
+  $$IngredientOverridesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stockUnit => $composableBuilder(
+    column: $table.stockUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$IngredientOverridesTableOrderingComposer
+    extends Composer<_$GleanDatabase, $IngredientOverridesTable> {
+  $$IngredientOverridesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stockUnit => $composableBuilder(
+    column: $table.stockUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$IngredientOverridesTableAnnotationComposer
+    extends Composer<_$GleanDatabase, $IngredientOverridesTable> {
+  $$IngredientOverridesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get itemId =>
+      $composableBuilder(column: $table.itemId, builder: (column) => column);
+
+  GeneratedColumn<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stockUnit =>
+      $composableBuilder(column: $table.stockUnit, builder: (column) => column);
+
+  GeneratedColumn<int> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get section =>
+      $composableBuilder(column: $table.section, builder: (column) => column);
+}
+
+class $$IngredientOverridesTableTableManager
+    extends
+        RootTableManager<
+          _$GleanDatabase,
+          $IngredientOverridesTable,
+          IngredientOverride,
+          $$IngredientOverridesTableFilterComposer,
+          $$IngredientOverridesTableOrderingComposer,
+          $$IngredientOverridesTableAnnotationComposer,
+          $$IngredientOverridesTableCreateCompanionBuilder,
+          $$IngredientOverridesTableUpdateCompanionBuilder,
+          (
+            IngredientOverride,
+            BaseReferences<
+              _$GleanDatabase,
+              $IngredientOverridesTable,
+              IngredientOverride
+            >,
+          ),
+          IngredientOverride,
+          PrefetchHooks Function()
+        > {
+  $$IngredientOverridesTableTableManager(
+    _$GleanDatabase db,
+    $IngredientOverridesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$IngredientOverridesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$IngredientOverridesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$IngredientOverridesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> itemId = const Value.absent(),
+                Value<String?> trackingMode = const Value.absent(),
+                Value<String?> stockUnit = const Value.absent(),
+                Value<int?> unopenedShelfLifeDays = const Value.absent(),
+                Value<int?> onceOpenedShelfLifeDays = const Value.absent(),
+                Value<String?> section = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IngredientOverridesCompanion(
+                itemId: itemId,
+                trackingMode: trackingMode,
+                stockUnit: stockUnit,
+                unopenedShelfLifeDays: unopenedShelfLifeDays,
+                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
+                section: section,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String itemId,
+                Value<String?> trackingMode = const Value.absent(),
+                Value<String?> stockUnit = const Value.absent(),
+                Value<int?> unopenedShelfLifeDays = const Value.absent(),
+                Value<int?> onceOpenedShelfLifeDays = const Value.absent(),
+                Value<String?> section = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IngredientOverridesCompanion.insert(
+                itemId: itemId,
+                trackingMode: trackingMode,
+                stockUnit: stockUnit,
+                unopenedShelfLifeDays: unopenedShelfLifeDays,
+                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
+                section: section,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$IngredientOverridesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GleanDatabase,
+      $IngredientOverridesTable,
+      IngredientOverride,
+      $$IngredientOverridesTableFilterComposer,
+      $$IngredientOverridesTableOrderingComposer,
+      $$IngredientOverridesTableAnnotationComposer,
+      $$IngredientOverridesTableCreateCompanionBuilder,
+      $$IngredientOverridesTableUpdateCompanionBuilder,
+      (
+        IngredientOverride,
+        BaseReferences<
+          _$GleanDatabase,
+          $IngredientOverridesTable,
+          IngredientOverride
+        >,
+      ),
+      IngredientOverride,
+      PrefetchHooks Function()
+    >;
+typedef $$CatalogueItemRedirectsTableCreateCompanionBuilder =
+    CatalogueItemRedirectsCompanion Function({
+      required String formerId,
+      required String itemId,
+      Value<int> rowid,
+    });
+typedef $$CatalogueItemRedirectsTableUpdateCompanionBuilder =
+    CatalogueItemRedirectsCompanion Function({
+      Value<String> formerId,
+      Value<String> itemId,
+      Value<int> rowid,
+    });
+
+class $$CatalogueItemRedirectsTableFilterComposer
+    extends Composer<_$GleanDatabase, $CatalogueItemRedirectsTable> {
+  $$CatalogueItemRedirectsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get formerId => $composableBuilder(
+    column: $table.formerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CatalogueItemRedirectsTableOrderingComposer
+    extends Composer<_$GleanDatabase, $CatalogueItemRedirectsTable> {
+  $$CatalogueItemRedirectsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get formerId => $composableBuilder(
+    column: $table.formerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CatalogueItemRedirectsTableAnnotationComposer
+    extends Composer<_$GleanDatabase, $CatalogueItemRedirectsTable> {
+  $$CatalogueItemRedirectsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get formerId =>
+      $composableBuilder(column: $table.formerId, builder: (column) => column);
+
+  GeneratedColumn<String> get itemId =>
+      $composableBuilder(column: $table.itemId, builder: (column) => column);
+}
+
+class $$CatalogueItemRedirectsTableTableManager
+    extends
+        RootTableManager<
+          _$GleanDatabase,
+          $CatalogueItemRedirectsTable,
+          CatalogueItemRedirect,
+          $$CatalogueItemRedirectsTableFilterComposer,
+          $$CatalogueItemRedirectsTableOrderingComposer,
+          $$CatalogueItemRedirectsTableAnnotationComposer,
+          $$CatalogueItemRedirectsTableCreateCompanionBuilder,
+          $$CatalogueItemRedirectsTableUpdateCompanionBuilder,
+          (
+            CatalogueItemRedirect,
+            BaseReferences<
+              _$GleanDatabase,
+              $CatalogueItemRedirectsTable,
+              CatalogueItemRedirect
+            >,
+          ),
+          CatalogueItemRedirect,
+          PrefetchHooks Function()
+        > {
+  $$CatalogueItemRedirectsTableTableManager(
+    _$GleanDatabase db,
+    $CatalogueItemRedirectsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CatalogueItemRedirectsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CatalogueItemRedirectsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CatalogueItemRedirectsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> formerId = const Value.absent(),
+                Value<String> itemId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CatalogueItemRedirectsCompanion(
+                formerId: formerId,
+                itemId: itemId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String formerId,
+                required String itemId,
+                Value<int> rowid = const Value.absent(),
+              }) => CatalogueItemRedirectsCompanion.insert(
+                formerId: formerId,
+                itemId: itemId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CatalogueItemRedirectsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GleanDatabase,
+      $CatalogueItemRedirectsTable,
+      CatalogueItemRedirect,
+      $$CatalogueItemRedirectsTableFilterComposer,
+      $$CatalogueItemRedirectsTableOrderingComposer,
+      $$CatalogueItemRedirectsTableAnnotationComposer,
+      $$CatalogueItemRedirectsTableCreateCompanionBuilder,
+      $$CatalogueItemRedirectsTableUpdateCompanionBuilder,
+      (
+        CatalogueItemRedirect,
+        BaseReferences<
+          _$GleanDatabase,
+          $CatalogueItemRedirectsTable,
+          CatalogueItemRedirect
+        >,
+      ),
+      CatalogueItemRedirect,
+      PrefetchHooks Function()
+    >;
 
 class $GleanDatabaseManager {
   final _$GleanDatabase _db;
@@ -12972,4 +14128,11 @@ class $GleanDatabaseManager {
       $$CatalogueAliasesTableTableManager(_db, _db.catalogueAliases);
   $$CatalogueSyncStateTableTableManager get catalogueSyncState =>
       $$CatalogueSyncStateTableTableManager(_db, _db.catalogueSyncState);
+  $$IngredientOverridesTableTableManager get ingredientOverrides =>
+      $$IngredientOverridesTableTableManager(_db, _db.ingredientOverrides);
+  $$CatalogueItemRedirectsTableTableManager get catalogueItemRedirects =>
+      $$CatalogueItemRedirectsTableTableManager(
+        _db,
+        _db.catalogueItemRedirects,
+      );
 }
