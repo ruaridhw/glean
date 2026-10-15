@@ -8,7 +8,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-from glean.catalogue.models import CatalogueItem, Source, name_key, slugify
+from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key, slugify
 from glean.catalogue.store import (
     AliasConflictError,
     DuplicateIdError,
@@ -97,13 +97,26 @@ class DynamoCatalogueStore:
 
         return self._commit(plan)
 
-    def create_provisional(self, name: str, group: GroupId, form: Form, aliases: tuple[str, ...] = ()) -> CatalogueItem:
+    def create_provisional(
+        self,
+        name: str,
+        group: GroupId,
+        form: Form,
+        aliases: tuple[str, ...] = (),
+        overrides: ItemOverrides | None = None,
+    ) -> CatalogueItem:
         def plan(version: int) -> tuple[CatalogueItem, list[_Op], int | None]:
             existing = self.get_by_name(name)
             if existing is not None:
                 return existing, [], None
             item = CatalogueItem(
-                id=self._free_id(name), name=name.strip(), aliases=aliases, group=group, form=form, source=Source.LLM
+                id=self._free_id(name),
+                name=name.strip(),
+                aliases=aliases,
+                group=group,
+                form=form,
+                overrides=overrides or ItemOverrides(),
+                source=Source.LLM,
             )
             keys = _name_keys(item)
             for key in keys:
