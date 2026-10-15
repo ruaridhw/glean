@@ -41,6 +41,10 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The deploy script checks HEAD is an ancestor of origin; a shallow clone can't answer that
+          # when main moved on after this run was queued.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           python-version: "3.13"
