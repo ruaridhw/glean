@@ -20,7 +20,7 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 
 - **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal-plan generation — all LLM calls go through OpenRouter via LangChain and the feature-specific `LLMRouter` policy from `get_llm_router`.
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
-- **Rate limiting:** Per-user token bucket via slowapi (20 AI requests/hour)
+- **Rate limiting:** every paid-model route enforces `settings.rate_limit_per_hour` (default 20) requests per hour per Cognito sub, and answers 429 past it. Counters live in memory, so the limit is **per Lambda container**, not global: a user spread across several warm containers can exceed it. Shared storage (e.g. DynamoDB) is the follow-up if that matters.
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
 - **Recipe data:** External recipe-api.com integration plus a durable recipe corpus. Both the HTTP response cache (24h search TTL; detail cached indefinitely) and the corpus are stored via `recipe_api.blob_store`: an S3 bucket (`s3_recipe_cache_bucket`) in deployed environments, or the `.cache/glean_recipe_cache` filesystem tree locally and in tests.
 
@@ -28,7 +28,8 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 
 ```
 src/glean/
-├── main.py           # FastAPI app + Mangum handler + rate limiter setup
+├── main.py           # FastAPI app + Mangum handler
+├── rate_limit.py     # enforce_ai_rate_limit: the per-user limit dependency for paid-model routes
 ├── config.py         # Pydantic BaseSettings (reads from .env / Secrets Manager in Lambda)
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
 ├── llm.py            # OpenRouter LangChain client; Feature enum; LLMRouter policy
@@ -50,7 +51,7 @@ src/glean/
 - Fetches JWKS from Cognito, cached with `lru_cache`
 - On unknown `kid`: cache-bust and retry once
 - Validates RS256 sig, audience, issuer, expiry
-- Sets `request.state.user_sub` for rate limiting key
+- Returns the Cognito `sub`, which keys the per-user rate limit
 
 ### Receipt OCR modes
 
@@ -65,4 +66,16 @@ Tests override the auth dependency:
 app.dependency_overrides[verify_cognito_token] = lambda: "test-user-sub"
 ```
 
-Conftest provides `client` (with override) and `auth_headers` fixtures.
+Conftest provides `client` (with override) and `auth_headers` fixtures, and resets the rate-limit window before every test.
+
+### Rate limiting a new paid-model route
+
+Add one line to the route decorator; never hand-roll a limit:
+
+```python
+from glean.rate_limit import enforce_ai_rate_limit
+
+@router.post("/normalise", dependencies=[Depends(enforce_ai_rate_limit)])
+```
+
+Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass auth count against the limit even if the model call then fails; unauthenticated requests get 401 and count for nothing. Free routes (health, recipe search and get) stay unlimited.
