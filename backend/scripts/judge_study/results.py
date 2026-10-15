@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 type FeatureName = Literal[
     "receipt_scan", "meal_plan", "recipe_import", "pantry_description", "shopping_list_description"
@@ -30,10 +32,6 @@ class Judgement(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1, description="Decision judge only: its own confidence.")
     probabilities: list[float] | None = Field(
         default=None, description="Decision judge only: probability of each level, 1 first."
-    )
-    error: str | None = Field(
-        default=None,
-        description="Why the call failed. A failed judgement carries no usable score, so none is stored in the file.",
     )
 
 
