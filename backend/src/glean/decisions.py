@@ -8,8 +8,9 @@ DecisionClient, so a change to the alpha API touches one place.
 from __future__ import annotations
 
 import json
+import math
 import re
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import httpx
 from langsmith import traceable
@@ -149,7 +150,7 @@ _PINNED_MODEL_REPLY = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")
 def _check_distribution(name: str, probabilities: Mapping[Any, float], allowed: Collection[Any]) -> None:
     if not set(probabilities) <= set(allowed):
         raise DecisionResponseError(f"Jev gave probabilities for unknown entries in {name!r}: {sorted(probabilities)}")
-    if abs(sum(probabilities.values()) - 1.0) > _SUM_TOLERANCE:
+    if not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0.0, abs_tol=_SUM_TOLERANCE + 1e-9):
         raise DecisionResponseError(f"Jev's probabilities for {name!r} don't sum to 1")
 
 
@@ -225,13 +226,14 @@ class DecisionClient:
         )
         # Built per client so traced inputs and outputs can be scrubbed of this client's key:
         # a response that echoes it back would otherwise reach LangSmith.
-        self._traced_decide = traceable(
+        traced = traceable(
             name="jev_decide",
             run_type="chain",
             metadata={"ls_provider": "openrouter", "ls_model_name": JEV_MODEL},
             process_inputs=lambda inputs: _redact(inputs, self._secret),
             process_outputs=lambda outputs: _redact(outputs, self._secret),
         )(self._decide)
+        self._traced_decide = cast("Any", traced)  # langsmith's wrapper type confuses the checker
 
     def decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         return self._traced_decide(state, questions)

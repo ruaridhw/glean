@@ -221,14 +221,24 @@ class TestSemanticallyInvalidAnswers:
         with pytest.raises(DecisionResponseError, match="contains_nuts"):
             _client(handler).decide(state, questions)
 
-    def test_probabilities_that_sum_to_one_within_tolerance_are_accepted(self) -> None:
+    @pytest.mark.parametrize("top", [0.68, 0.69, 0.71, 0.72])  # totals 0.98, 0.99, 1.01 and 1.02
+    def test_probabilities_that_sum_to_one_within_tolerance_are_accepted(self, top: float) -> None:
         body = _recorded_response()
-        body["answers"]["quality"]["probabilities"]["4"] = 0.69  # sums to 0.99
+        body["answers"]["quality"]["probabilities"]["4"] = top
         state, questions = _probe()
 
         decision = _client(_respond_with(body)).decide(state, questions)
 
-        assert decision.score("quality").probabilities[4] == 0.69
+        assert decision.score("quality").probabilities[4] == top
+
+    @pytest.mark.parametrize("top", [0.67, 0.73])  # totals 0.97 and 1.03
+    def test_probabilities_that_sum_outside_tolerance_are_rejected(self, top: float) -> None:
+        body = _recorded_response()
+        body["answers"]["quality"]["probabilities"]["4"] = top
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match="quality"):
+            _client(_respond_with(body)).decide(state, questions)
 
 
 class TestTransportFailures:
