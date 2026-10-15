@@ -25,6 +25,7 @@ SHELL         := /bin/bash
 # Strip path prefix so `make worktree BRANCH=feature/foo` → .worktrees/foo
 WORKTREE_DIR  := .worktrees
 BRANCH        ?=
+BASE          ?= origin/main
 _LEAF         = $(notdir $(BRANCH))
 API_HOST      ?=
 API_PORT      ?= 8000
@@ -130,7 +131,8 @@ start-android:  ## Start Flutter on a running Android emulator (needs COGNITO_DO
 .PHONY: worktree
 worktree:  ## Create worktree + install deps: make worktree BRANCH=feature/foo
 	@[ -n "$(BRANCH)" ] || { echo "Usage: make worktree BRANCH=feature/foo"; exit 1; }
-	git worktree add $(WORKTREE_DIR)/$(_LEAF) -b $(BRANCH)
+	git fetch origin
+	git worktree add -b $(BRANCH) $(WORKTREE_DIR)/$(_LEAF) $(BASE)
 	cd $(WORKTREE_DIR)/$(_LEAF)/backend && uv sync --dev
 	cd $(WORKTREE_DIR)/$(_LEAF)/app && flutter pub get
 	@echo ""
