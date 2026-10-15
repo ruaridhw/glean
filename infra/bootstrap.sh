@@ -4,6 +4,14 @@ set -euo pipefail
 REGION="eu-west-2"
 STACK_NAME="glean-bootstrap"
 
+# Where DynamoDB budget alerts go. Never hard-code it: this repo is public.
+# Usage: ALERT_EMAIL=<your address> infra/bootstrap.sh   (or: infra/bootstrap.sh <your address>)
+ALERT_EMAIL="${1:-${ALERT_EMAIL:-}}"
+if [ -z "$ALERT_EMAIL" ]; then
+  echo "error: set ALERT_EMAIL (or pass the address as the first argument); the DynamoDB budget alert needs it" >&2
+  exit 1
+fi
+
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 echo "==> Creating SAM artefact S3 buckets..."
@@ -19,6 +27,7 @@ sam deploy \
   --stack-name "$STACK_NAME" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "$REGION" \
+  --parameter-overrides "AlertEmail=$ALERT_EMAIL" \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset
 
