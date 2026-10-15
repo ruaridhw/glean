@@ -239,4 +239,33 @@ void main() {
       expect(find.text('Dinners'), findsOneWidget);
     },
   );
+
+  gleanWidgetTest(
+    'tapping another planned meal while a preview lookup is pending opens only the first',
+    (tester) async {
+      await h.dispose();
+      final lookup = Completer<void>();
+      h = build(gate: lookup.future);
+      final deleted = await plannedMeal('Miso Soup', externalId: 'ext-1');
+      await h.container
+          .read(recipesRepositoryProvider)
+          .deleteRecipe(id: deleted, userId: h.userId);
+      await plannedMeal('Lentil Dal');
+      await openPlan(tester);
+
+      await tester.tap(find.text('Miso Soup'));
+      await tester.pump();
+      await tester.tap(find.text('Lentil Dal'));
+      await tester.pumpAndSettle();
+      lookup.complete();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Save recipe'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Save recipe'), findsNothing);
+      expect(find.text('Dinners'), findsOneWidget);
+    },
+  );
 }
