@@ -21,7 +21,9 @@ class PantryItemInput {
   final String name;
   final double quantity;
   final String unit;
-  final String category;
+
+  /// Null stores the Pantry item uncategorised (food group "other") with no inferred expiry.
+  final String? category;
   final double? unitPrice;
 }
 
@@ -179,7 +181,7 @@ class PantryRepository {
     required String name,
     required double quantity,
     required String unit,
-    required String category,
+    required String? category,
     double? unitPrice,
     DateTime? now,
   }) async {
@@ -200,8 +202,13 @@ class PantryRepository {
       canonicalUnit: ingredient.canonicalUnit,
       canonicalName: ingredient.canonicalName,
     );
-    final shelfLifeDays = await _shelfLifeDaysFor(ingredient.category!);
-    final expiry = effectiveNow.add(Duration(days: shelfLifeDays));
+    // An ingredient still without a category has no shelf life to infer an expiry from.
+    final String? resolvedCategory = ingredient.category;
+    final DateTime? expiry = resolvedCategory == null
+        ? null
+        : effectiveNow.add(
+            Duration(days: await _shelfLifeDaysFor(resolvedCategory)),
+          );
 
     await _upsert(
       userId: userId,

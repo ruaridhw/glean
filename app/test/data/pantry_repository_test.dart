@@ -591,5 +591,29 @@ void main() {
         });
       },
     );
+
+    test(
+      'a Pantry item added without a category is stored uncategorised, in the '
+      '"other" food group, with no inferred expiry',
+      () async {
+        await repository.addItems(
+          userId: userId,
+          items: const <PantryItemInput>[
+            PantryItemInput(
+              name: 'mystery sauce',
+              quantity: 1,
+              unit: 'jar',
+              category: null,
+            ),
+          ],
+          now: DateTime(2026, 1, 1),
+        );
+
+        final item = (await repository.watchAll(userId).first).single;
+        expect(item.category, isNull);
+        expect(item.foodGroup, 'other');
+        expect(item.expiryDate, isNull);
+      },
+    );
   });
 }
