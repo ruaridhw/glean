@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import threading
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
+from glean.shopping import service
 from glean.shopping.service import (
     DISH_PARSE_SYSTEM_PROMPT,
     ITEM_PARSE_SYSTEM_PROMPT,
@@ -170,3 +173,34 @@ def test_when_the_decision_model_is_unavailable_the_combined_prompt_is_used_and_
     retry = _FakeLLMRouter()
     _parse("tacos", router=retry, tmp_path=tmp_path, decisions=_decision_client(lambda p: 0.95))
     assert _system_prompts(retry) == {"tacos": DISH_PARSE_SYSTEM_PROMPT}
+
+
+class _ChangedModelRouter(_FakeLLMRouter):
+    def model_id_for(self, feature: Feature) -> str:
+        return "test/another-model"
+
+
+def test_cached_parses_are_invalidated_when_prompt_schema_unit_vocabulary_or_models_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def misses_after(change: Callable[[], None], router: _FakeLLMRouter | None = None) -> bool:
+        store = tmp_path / str(len(list(tmp_path.iterdir())))
+        _parse("milk", router=_FakeLLMRouter(), tmp_path=store)
+        change()
+        router = router or _FakeLLMRouter()
+        _parse("milk", router=router, tmp_path=store)
+        monkeypatch.undo()
+        return bool(router.calls)
+
+    assert not misses_after(lambda: None)
+    assert misses_after(lambda: monkeypatch.setattr(service, "ITEM_PARSE_SYSTEM_PROMPT", "changed"))
+    assert misses_after(lambda: monkeypatch.setattr(service, "DISH_PARSE_SYSTEM_PROMPT", "changed"))
+    assert misses_after(lambda: monkeypatch.setattr(service, "SHOPPING_PARSE_SYSTEM_PROMPT", "changed"))
+    assert misses_after(lambda: monkeypatch.setattr(service, "ShoppingUnit", StrEnum("ShoppingUnit", {"G": "g"})))
+    assert misses_after(lambda: monkeypatch.setattr(service, "DECISION_MODEL", "typesafe/jev-9"))
+    assert misses_after(lambda: None, router=_ChangedModelRouter())
+    assert misses_after(
+        lambda: monkeypatch.setattr(
+            service.ShoppingParseResponse, "model_json_schema", classmethod(lambda cls, **_: {"changed": True})
+        )
+    )
