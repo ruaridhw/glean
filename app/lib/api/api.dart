@@ -4,6 +4,7 @@ library;
 export 'api_client.dart';
 export 'api_exception.dart';
 export 'models/catalogue.dart';
+export 'models/diagnostics.dart';
 export 'models/meal_plan.dart';
 export 'models/parsed_ingredient.dart';
 export 'models/receipts.dart';

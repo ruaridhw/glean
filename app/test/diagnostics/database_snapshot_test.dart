@@ -32,7 +32,7 @@ void main() {
       final File snapshot = await snapshotDatabase(live, dir);
 
       final sqlite.Database copy = sqlite.sqlite3.open(snapshot.path);
-      addTearDown(copy.dispose);
+      addTearDown(copy.close);
       expect(copy.select('PRAGMA integrity_check').single.values, <Object?>[
         'ok',
       ]);
@@ -79,7 +79,7 @@ void main() {
     final File second = await snapshotDatabase(live, dir);
 
     final sqlite.Database copy = sqlite.sqlite3.open(second.path);
-    addTearDown(copy.dispose);
+    addTearDown(copy.close);
     expect(_count(copy, 'user_config'), 2);
   });
 }
