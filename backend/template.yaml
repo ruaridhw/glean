@@ -12,6 +12,15 @@ Globals:
         POWERTOOLS_SERVICE_NAME: glean
         LOG_LEVEL: INFO
         GIT_SHA: !Ref GitSha
+  HttpApi:
+    AccessLogSettings:
+      DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+      # Request metadata only: no headers or bodies, so no tokens.
+      Format: >-
+        {"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime",
+        "httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","path":"$context.path",
+        "status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength",
+        "responseLatency":"$context.responseLatency","integrationError":"$context.integrationErrorMessage"}
 
 Parameters:
   Environment:
@@ -106,6 +115,11 @@ Resources:
         - glean://auth/callback
       LogoutURLs:
         - glean://auth/logout
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
 
   GleanReceiptsBucket:
     Type: AWS::S3::Bucket
