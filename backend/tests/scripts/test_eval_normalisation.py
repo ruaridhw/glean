@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 import pytest
-from scripts.eval_normalisation import Label, Outcome, Prediction, classify, metrics_at, pick_threshold
+from scripts.eval_normalisation import (
+    Grade,
+    Label,
+    Outcome,
+    Prediction,
+    classify,
+    grade_result,
+    metrics_at,
+    pick_threshold,
+)
 
 
 def label(expected: str | None, *also: str, groups: tuple[str, ...] = ()) -> Label:
@@ -54,3 +63,37 @@ def test_a_kind_mismatch_is_never_a_match() -> None:
     predictions = [Prediction(match="coriander", probability=0.99, kind_agrees=False)]
 
     assert metrics_at(rows, predictions, 0.5).false_matches == 0
+
+
+@pytest.mark.parametrize(
+    ("row", "got", "grade"),
+    [
+        (label("coriander"), ("matched", "coriander", "fresh_herbs", "ingredient"), Grade.CORRECT),
+        (label("coriander"), ("created", "cilantro", "fresh_herbs", "ingredient"), Grade.DUPLICATE),
+        (label("coriander"), ("matched", "basil", "fresh_herbs", "ingredient"), Grade.FALSE_MATCH),
+        (label("coriander"), ("unresolved", "x", None, None), Grade.UNRESOLVED),
+        (label(None, groups=("drinks",)), ("created", "berry juice", "drinks", "ingredient"), Grade.CORRECT),
+        (
+            label(None, groups=("household",)),
+            ("created", "rim blocks", "snacks_and_treats", "ingredient"),
+            Grade.KIND_ERROR,
+        ),
+        (label(None, groups=("dairy",)), ("created", "skyr", "snacks_and_treats", "ingredient"), Grade.WRONG_GROUP),
+        (label(None, groups=("dairy",)), ("matched", "natural yogurt", "dairy", "ingredient"), Grade.FALSE_MATCH),
+        (
+            label(None, "surface cleaner", groups=("household",)),
+            ("matched", "surface cleaner", "household", "household_item"),
+            Grade.CORRECT,
+        ),
+        (label(None, groups=("dairy",)), ("unmatched", "x", None, None), Grade.WRONG_UNMATCHED),
+        (label("NONSENSE"), ("unmatched", "asdkjh", None, None), Grade.CORRECT),
+        (label("NONSENSE"), ("created", "asdkjh", "other", "ingredient"), Grade.NONSENSE_NAMED),
+        (label("NONSENSE"), ("matched", "salt", "spices", "ingredient"), Grade.FALSE_MATCH),
+    ],
+)
+def test_grade_scores_a_whole_pipeline_result_against_its_label(
+    row: Label, got: tuple[str, str, str | None, str | None], grade: Grade
+) -> None:
+    status, canonical, group, kind = got
+
+    assert grade_result(row, status=status, canonical=canonical, group=group, kind=kind) is grade
