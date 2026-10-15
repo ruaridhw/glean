@@ -64,6 +64,39 @@ class TestScoreScan:
 
         assert (score.recall, score.precision) == (0.5, 1.0)
 
+    def test_names_match_across_inflection_of_a_modifier(self) -> None:
+        parsley = ExpectedItem(name="curly parsley", quantity=30, unit="g", unit_price=0.5 / 30)
+
+        score = score_scan(_expected(parsley), _scan(_parsed("curled leaf parsley", 30, "g", 0.5 / 30)))
+
+        assert (score.recall, score.precision) == (1.0, 1.0)
+
+    def test_a_modifier_cannot_stand_in_for_a_different_head_noun(self) -> None:
+        eggs = ExpectedItem(name="eggs", quantity=6, unit="units", unit_price=2.5 / 6)
+
+        score = score_scan(_expected(eggs), _scan(_parsed("egg noodles", 6, "units", 2.5 / 6)))
+
+        assert (score.recall, score.precision) == (0.0, 0.0)
+
+    @pytest.mark.parametrize(
+        ("expected_name", "scanned_name"),
+        [
+            ("olive oil", "sesame oil"),
+            ("sesame seeds", "sesame oil"),
+            ("chopped tomatoes", "baby plum tomatoes"),
+            ("lemons", "lemon juice"),
+        ],
+    )
+    def test_different_products_sharing_a_word_do_not_match(self, expected_name: str, scanned_name: str) -> None:
+        item = ExpectedItem(name=expected_name, quantity=1, unit="units", unit_price=1.0)
+
+        assert score_scan(_expected(item), _scan(_parsed(scanned_name, 1, "units", 1.0))).recall == 0.0
+
+    def test_a_reviewed_alias_matches_when_the_head_noun_differs(self) -> None:
+        paneer = ExpectedItem(name="paneer cheese", quantity=200, unit="g", unit_price=0.009, aliases=("paneer",))
+
+        assert score_scan(_expected(paneer), _scan(_parsed("paneer", 200, "g", 0.009))).recall == 1.0
+
     def test_price_is_judged_on_the_line_total_so_unit_normalisation_does_not_matter(self) -> None:
         herbs = ExpectedItem(name="curled leaf parsley", quantity=30, unit="g", unit_price=0.50 / 30)
         as_one_unit = _parsed("curled leaf parsley", 1, "units", 0.51)
