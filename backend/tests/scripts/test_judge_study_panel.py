@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
 
-from judge_study.metrics import agreement_with_panel, panel_reference
+from judge_study.metrics import agreement_with_panel, panel_reference, reliability_bins
 from judge_study.results import Failure, Judgement, OutputItem, Results
 
 
@@ -85,3 +85,24 @@ def test_failures_are_kept_in_the_results_file(tmp_path: Path) -> None:
     results.save(tmp_path / "r.json")
 
     assert Results.load(tmp_path / "r.json").failures == [failure]
+
+
+class TestReliabilityAgainstPanel:
+    def test_confidence_is_checked_against_the_panel_and_contested_outputs_are_left_out(self) -> None:
+        def decided(item_id: str, panel: tuple[int, int], score: int, confidence: float) -> OutputItem:
+            item = _item(item_id, panel)
+            item.judgements.append(
+                Judgement(judge="decision", repeat=1, score=score, model="m", latency_s=1, confidence=confidence)
+            )
+            return item
+
+        items = [
+            decided("hit", (4, 4), 4, 0.9),
+            decided("near", (4, 5), 5, 0.9),  # equals one panel score: a hit
+            decided("miss", (2, 2), 4, 0.9),
+            decided("contested", (1, 4), 4, 0.9),
+        ]
+
+        (only,) = reliability_bins(items, bins=1, reference="panel")
+
+        assert (only.n, only.accuracy) == (3, pytest.approx(2 / 3))
