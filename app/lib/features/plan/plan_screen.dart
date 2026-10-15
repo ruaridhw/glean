@@ -7,6 +7,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/data/models/user_config_view.dart';
@@ -158,7 +159,12 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
           );
         },
         error: (Object error, StackTrace stackTrace) {
-          GleanSnackBar.show(context, 'Could not generate meal plan.');
+          GleanSnackBar.show(
+            context,
+            error is ApiRateLimitException
+                ? error.userMessage
+                : 'Could not generate meal plan.',
+          );
         },
         loading: () {},
       );
