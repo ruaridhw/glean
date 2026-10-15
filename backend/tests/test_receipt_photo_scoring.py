@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 
 import pytest
 
 from glean.receipts.schemas import ParsedIngredient, ScanResponse
-from tests.integration.evals.receipt_photos import UNIT_VOCABULARY, ExpectedItem, ExpectedReceipt, score_scan
+from tests.integration.evals.receipt_photos import (
+    UNIT_VOCABULARY,
+    ExpectedItem,
+    ExpectedReceipt,
+    load_photo_cases,
+    score_scan,
+)
 
 
 def _expected(*items: ExpectedItem) -> ExpectedReceipt:
@@ -122,3 +130,34 @@ class TestScoreScan:
 
     def test_non_food_is_not_applicable_on_a_receipt_with_none(self) -> None:
         assert score_scan(_expected(MILK), _scan()).non_food_dropped is None
+
+
+class TestLoadPhotoCases:
+    def test_photos_of_one_receipt_share_its_expected_result(self, tmp_path: Path) -> None:
+        receipt = tmp_path / "long-shop"
+        receipt.mkdir()
+        (receipt / "glare.jpg").write_bytes(b"jpeg")
+        (receipt / "shadow.jpg").write_bytes(b"jpeg")
+        (receipt / "expected.json").write_text(
+            json.dumps(
+                {
+                    "subtotal": 5.0,
+                    "savings": 1.0,
+                    "total": 4.0,
+                    "items": [
+                        {"name": "milk", "quantity": 1136, "unit": "ml", "unit_price": 0.001, "category": "dairy"},
+                        {"name": "shampoo", "quantity": 1, "unit": "bottle", "unit_price": 3.0, "non_food": True},
+                    ],
+                }
+            )
+        )
+
+        cases = load_photo_cases(tmp_path)
+
+        assert [c.case_id for c in cases] == ["long-shop/glare", "long-shop/shadow"]
+        assert cases[0].expected is cases[1].expected
+        assert [(i.name, i.non_food, i.category) for i in cases[0].expected.items] == [
+            ("milk", False, "dairy"),
+            ("shampoo", True, None),
+        ]
+        assert cases[0].image_path == receipt / "glare.jpg"
