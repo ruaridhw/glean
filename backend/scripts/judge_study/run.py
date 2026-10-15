@@ -36,6 +36,7 @@ from judge_study.freeze import freeze_feature
 from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
 from judge_study.results import Results
 from judge_study.scoring_page import make_server, select_for_scoring
+from judge_study.stress import stress_variant
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -102,6 +103,14 @@ def freeze(out: Path) -> None:
         print(f"froze {name}: {model_id}")
     Results(models=models, items=items).save(out / "results.json")
     print(f"{len(items)} outputs frozen")
+
+
+def add_stress(out: Path) -> None:
+    results = Results.load(out / "results.json")
+    have = {item.item_id for item in results.items}
+    added = [stress_variant(i) for i in results.items if i.origin == "production" and f"{i.item_id}+stress" not in have]
+    results.model_copy(update={"items": [*results.items, *added]}).save(out / "results.json")
+    print(f"{len(added)} stress variants added")
 
 
 def judge(out: Path, repeats: int) -> None:
@@ -183,7 +192,7 @@ def serve(out: Path, host: str, port: int, count: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("step", choices=["freeze", "judge", "serve", "report"])
+    parser.add_argument("step", choices=["freeze", "stress", "judge", "serve", "report"])
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--host", default="100.98.190.46")
@@ -193,6 +202,8 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     if args.step == "freeze":
         freeze(args.out)
+    elif args.step == "stress":
+        add_stress(args.out)
     elif args.step == "judge":
         judge(args.out, args.repeats)
     elif args.step == "serve":
