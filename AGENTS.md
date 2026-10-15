@@ -79,12 +79,18 @@ make worktree-prune                      # prune stale git metadata
   never becomes the base. For a stacked PR pass `BASE=<parent branch>`.
 - **One PR per issue; a lane ships as a stack.** Related issues form a stack of
   PRs, each based on the PR below it (the bottom PR is based on `main`).
-- **Merging a stack** (`delete_branch_on_merge` is off here):
-  1. Merge the bottom PR with a merge commit.
-  2. Retarget the next PR to `main` (`gh pr edit <n> --base main`, or the REST
-     API `PATCH /pulls/<n>` if `gh` errors) and let its checks re-run.
-  3. Delete the merged branch — only after nothing is based on it (see below).
-  4. Repeat up the stack.
+- **Merging a stack.** `delete_branch_on_merge` is on, so GitHub deletes each
+  head branch on merge and retargets the PR above it to `main` itself. Use
+  GitHub's native stacked-PR merge, bottom PR first, with a merge commit:
+  1. `gh pr merge` refuses stacked PRs; call the async endpoint and poll the
+     uuid it returns (`pending` -> `merged`):
+     `gh api -X PUT repos/ruaridhw/glean/pulls/<n>/merge-async -f merge_method=merge`
+     then `gh api repos/ruaridhw/glean/pulls/<n>/merge-async/<uuid> --jq .status`.
+  2. Wait for the retargeted PR's checks to re-run against `main`, then merge
+     it the same way. Repeat up the stack.
+  3. If the PRs are not a native stack, merge the bottom PR normally and
+     retarget the next one (`gh pr edit <n> --base main`, or the REST API
+     `PATCH /pulls/<n>` if `gh` errors) before any branch is deleted.
 
 ## Git branch hygiene
 
