@@ -28,6 +28,9 @@ class PlanSlotRow extends ConsumerWidget {
       child: _FilledSlotRow(
         entry: entry,
         onCooked: () => markCookedWithUndo(context, ref, entry),
+        onOpen: entry.recipeId == null
+            ? null
+            : () => openPlannedRecipe(context, ref, entry.recipeId!),
       ),
     );
   }
@@ -77,10 +80,17 @@ class _EmptySlotRow extends StatelessWidget {
 }
 
 class _FilledSlotRow extends StatelessWidget {
-  const _FilledSlotRow({required this.entry, required this.onCooked});
+  const _FilledSlotRow({
+    required this.entry,
+    required this.onCooked,
+    required this.onOpen,
+  });
 
   final MealPlanEntryView entry;
   final VoidCallback onCooked;
+
+  /// Null when the entry has no recipe to open, which leaves the row inert.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -90,73 +100,79 @@ class _FilledSlotRow extends StatelessWidget {
     final bool cooked = entry.isCooked;
 
     return Card(
-      child: Padding(
-        padding: EdgeInsets.all(tokens.spacing.md),
-        child: Row(
-          children: <Widget>[
-            // The leading status circle -> checkmark swap is animated.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (Widget child, Animation<double> animation) =>
-                  ScaleTransition(scale: animation, child: child),
-              child: cooked
-                  ? CircleAvatar(
-                      key: const ValueKey<String>('cooked'),
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.check_rounded,
-                        color: colorScheme.onPrimaryContainer,
-                        size: 18,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: EdgeInsets.all(tokens.spacing.md),
+          child: Row(
+            children: <Widget>[
+              // The leading status circle -> checkmark swap is animated.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder:
+                    (Widget child, Animation<double> animation) =>
+                        ScaleTransition(scale: animation, child: child),
+                child: cooked
+                    ? CircleAvatar(
+                        key: const ValueKey<String>('cooked'),
+                        backgroundColor: colorScheme.primaryContainer,
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: colorScheme.onPrimaryContainer,
+                          size: 18,
+                        ),
+                      )
+                    : CircleAvatar(
+                        key: const ValueKey<String>('uncooked'),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.restaurant_rounded,
+                          color: colorScheme.onSurfaceVariant,
+                          size: 16,
+                        ),
                       ),
-                    )
-                  : CircleAvatar(
-                      key: const ValueKey<String>('uncooked'),
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      child: Icon(
-                        Icons.restaurant_rounded,
-                        color: colorScheme.onSurfaceVariant,
-                        size: 16,
-                      ),
-                    ),
-            ),
-            SizedBox(width: tokens.spacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    entry.recipeTitle,
-                    overflow: TextOverflow.ellipsis,
-                    style: cooked
-                        ? textTheme.titleMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          )
-                        : textTheme.titleMedium,
-                  ),
-                  Text(
-                    '${entry.servings} ${entry.servings == 1 ? 'serving' : 'servings'}'
-                    '${cooked ? ' · Cooked' : ''}',
-                    style: textTheme.bodySmall,
-                  ),
-                ],
               ),
-            ),
-            SizedBox(width: tokens.spacing.md),
-            // The trailing "Cooked?" pill (a themed `OutlinedButton`) fades out once cooked rather than vanishing outright.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (Widget child, Animation<double> animation) =>
-                  FadeTransition(opacity: animation, child: child),
-              child: cooked
-                  ? const SizedBox.shrink(key: ValueKey<String>('cooked-gap'))
-                  : OutlinedButton(
-                      key: const ValueKey<String>('cooked-button'),
-                      onPressed: onCooked,
-                      child: const Text('Cooked?'),
+              SizedBox(width: tokens.spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      entry.recipeTitle,
+                      overflow: TextOverflow.ellipsis,
+                      style: cooked
+                          ? textTheme.titleMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            )
+                          : textTheme.titleMedium,
                     ),
-            ),
-          ],
+                    Text(
+                      '${entry.servings} ${entry.servings == 1 ? 'serving' : 'servings'}'
+                      '${cooked ? ' · Cooked' : ''}',
+                      style: textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: tokens.spacing.md),
+              // The trailing "Cooked?" pill (a themed `OutlinedButton`) fades out once cooked rather than vanishing outright.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder:
+                    (Widget child, Animation<double> animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                child: cooked
+                    ? const SizedBox.shrink(key: ValueKey<String>('cooked-gap'))
+                    : OutlinedButton(
+                        key: const ValueKey<String>('cooked-button'),
+                        onPressed: onCooked,
+                        child: const Text('Cooked?'),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

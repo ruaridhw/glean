@@ -201,6 +201,22 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                 name: AppRoutes.plan.name,
                 builder: (BuildContext context, GoRouterState state) =>
                     const PlanScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'recipe/:id',
+                    name: AppRoutes.planRecipe.name,
+                    // Same malformed-id guard as `AppRoutes.mealsDetail`.
+                    redirect: (BuildContext context, GoRouterState state) {
+                      final String? id = state.pathParameters['id'];
+                      if (id == null || int.tryParse(id) == null) {
+                        return AppRoutes.error.path;
+                      }
+                      return null;
+                    },
+                    builder: (BuildContext context, GoRouterState state) =>
+                        MealDetailScreen(recipeId: state.pathParameters['id']!),
+                  ),
+                ],
               ),
             ],
           ),
