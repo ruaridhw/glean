@@ -1,28 +1,136 @@
-"""Per-user limit on the paid-model routes, observed through the HTTP API."""
+"""Per-user limit on the paid-model routes, observed through the HTTP API.
+
+The real routes and domain code run. Only the external boundaries are stubbed: the LLM router,
+AWS (S3, Textract), outbound HTTP and DNS, and the recipe store (a local filesystem tree).
+"""
 
 from __future__ import annotations
 
+import json
+import socket
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import Request  # noqa: TC002 - FastAPI resolves this annotation at runtime.
 from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings
-from glean.dependencies import verify_cognito_token
+from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.main import app
+from glean.meal_plan.schemas import MealPlanResponse
+from glean.receipts.schemas import ScanResponse
+from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.stored import RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
+from glean.shopping.schemas import ShoppingParseResponse
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+    from contextlib import AbstractContextManager
+
+RECEIPT_FIXTURES = Path(__file__).parent / "receipts" / "fixtures"
+RECIPE_FIXTURES = Path(__file__).parent / "recipes" / "fixtures"
+
+HOURLY_LIMIT = 2
+
+
+class FakeLLMRouter:
+    """Answers every structured request with an empty, valid response of the requested schema."""
+
+    _EMPTY_RESPONSES: dict[type, Any] = {  # noqa: RUF012
+        ScanResponse: ScanResponse(items=[]),
+        ShoppingParseResponse: ShoppingParseResponse(items=[], clarifying_questions=[]),
+        MealPlanResponse: MealPlanResponse(suggestions=[]),
+    }
+
+    def invoke(self, feature: object, schema: type, *_: object, **__: object) -> Any:
+        return self._EMPTY_RESPONSES[schema]
+
+
+class _StaticPage:
+    """Stands in for the outbound HTTP client: every GET returns the same recipe page."""
+
+    def __init__(self, html: str) -> None:
+        self._html = html
+
+    def __enter__(self) -> _StaticPage:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def get(self, url: str) -> httpx.Response:
+        return httpx.Response(200, content=self._html.encode(), request=httpx.Request("GET", url))
+
+
+def _public_dns(hostname: str, *_: object, **__: object) -> list[tuple[Any, ...]]:
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+
+
+def _stored_recipe(external_id: str) -> StoredRecipe:
+    return StoredRecipe(
+        external_id=external_id,
+        title="Spaghetti Carbonara",
+        difficulty="Easy",
+        total_time_mins=30,
+        ingredients=[
+            StoredIngredient(
+                api_ingredient_id=f"{external_id}:ingredient:1", canonical_name="spaghetti", quantity=200, unit="g"
+            )
+        ],
+        instructions=[StoredInstruction(step_number=1, phase="main", text="Boil the spaghetti.")],
+        provenance=RecipeProvenance(source_url="", parser="test"),
+    )
+
+
+@contextmanager
+def _recipe_store(tmp_path: Path, *recipes: StoredRecipe) -> Iterator[None]:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for recipe in recipes:
+        store.save(recipe)
+    with patch("glean.recipes.service.RecipeCorpusStore", return_value=store):
+        yield
+
+
+@contextmanager
+def _no_external_boundaries(tmp_path: Path) -> Iterator[None]:
+    yield
+
+
+@contextmanager
+def _aws_receipt_boundaries(tmp_path: Path) -> Iterator[None]:
+    textract = MagicMock()
+    textract.analyze_expense.return_value = json.loads((RECEIPT_FIXTURES / "receipt_textract.json").read_text())
+
+    def aws_client(service_name: str, **_: object) -> MagicMock:
+        return MagicMock() if service_name == "s3" else textract
+
+    with patch("boto3.client", side_effect=aws_client):
+        yield
+
+
+@contextmanager
+def _recipe_page_boundaries(tmp_path: Path) -> Iterator[None]:
+    page = json.loads((RECIPE_FIXTURES / "recipe_detail.json").read_text())
+    html = f'<html><head><script type="application/ld+json">{json.dumps(page)}</script></head></html>'
+    with (
+        _recipe_store(tmp_path),
+        patch("glean.recipes.providers.socket.getaddrinfo", _public_dns),
+        patch("glean.recipes.providers.httpx.Client", lambda **_: _StaticPage(html)),
+    ):
+        yield
 
 
 @dataclass(frozen=True)
 class AiRoute:
     name: str
     path: str
-    service_function: str
+    boundaries: Callable[[Path], AbstractContextManager[None]] = _no_external_boundaries
     request_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -30,7 +138,6 @@ AI_ROUTES = [
     AiRoute(
         name="meal plan",
         path="/meal-plan",
-        service_function="glean.meal_plan.router.service.generate_meal_plan",
         request_kwargs={
             "json": {
                 "pantry": [],
@@ -46,25 +153,23 @@ AI_ROUTES = [
     AiRoute(
         name="receipt scan",
         path="/receipts/scan",
-        service_function="glean.receipts.router.service.scan_receipt",
+        boundaries=_aws_receipt_boundaries,
         request_kwargs={"files": {"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")}},
     ),
     AiRoute(
         name="receipt describe",
         path="/receipts/describe",
-        service_function="glean.receipts.router.service.describe_purchase",
         request_kwargs={"json": {"text": "a kilo of chicken and 2 litres of milk"}},
     ),
     AiRoute(
         name="shopping parse description",
         path="/shopping/parse-description",
-        service_function="glean.shopping.router.service.parse_shopping_description",
         request_kwargs={"json": {"text": "stuff for tacos"}},
     ),
     AiRoute(
         name="recipe import url",
         path="/recipes/import-url",
-        service_function="glean.recipes.router.service.import_recipe_from_url",
+        boundaries=_recipe_page_boundaries,
         request_kwargs={"json": {"url": "https://example.com/carbonara"}},
     ),
 ]
@@ -74,81 +179,82 @@ def _sign_in_as_header_user(request: Request) -> str:
     return request.headers.get("x-test-user", "user-a")
 
 
+def _client(settings: Settings, *, signed_in: bool = True) -> TestClient:
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_llm_router] = FakeLLMRouter
+    if signed_in:
+        app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
+    return TestClient(app)
+
+
 @pytest.fixture
 def limited_client(test_settings: Settings) -> Iterator[TestClient]:
-    """A client whose Cognito sub comes from `x-test-user` and whose limit is 2 an hour."""
-    settings = test_settings.model_copy(update={"rate_limit_per_hour": 2})
-    app.dependency_overrides[get_settings] = lambda: settings
-    app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
-    yield TestClient(app, raise_server_exceptions=False)
+    """A client whose Cognito sub comes from `x-test-user` and whose limit is HOURLY_LIMIT an hour."""
+    yield _client(test_settings.model_copy(update={"rate_limit_per_hour": HOURLY_LIMIT}))
     app.dependency_overrides.clear()
 
 
+def _post(client: TestClient, route: AiRoute, user: str = "user-a") -> httpx.Response:
+    return client.post(route.path, headers={"x-test-user": user}, **route.request_kwargs)
+
+
 @pytest.mark.parametrize("route", AI_ROUTES, ids=lambda route: route.name)
-def test_request_over_the_hourly_limit_is_rejected_before_any_model_call(
-    limited_client: TestClient, route: AiRoute
+def test_request_over_the_hourly_limit_is_rejected(limited_client: TestClient, route: AiRoute, tmp_path: Path) -> None:
+    with route.boundaries(tmp_path):
+        statuses = [_post(limited_client, route).status_code for _ in range(HOURLY_LIMIT + 1)]
+        over_limit = _post(limited_client, route)
+
+    assert statuses[:HOURLY_LIMIT] == [200] * HOURLY_LIMIT
+    assert statuses[HOURLY_LIMIT] == 429
+    assert "limit" in over_limit.json()["detail"].lower()
+
+
+@pytest.mark.parametrize("route", AI_ROUTES, ids=lambda route: route.name)
+def test_one_user_hitting_the_limit_does_not_block_another_user(
+    limited_client: TestClient, route: AiRoute, tmp_path: Path
 ) -> None:
-    with patch(route.service_function, MagicMock(side_effect=RuntimeError("model unavailable"))) as paid_call:
-        responses = [limited_client.post(route.path, **route.request_kwargs) for _ in range(3)]
-
-    assert [response.status_code for response in responses[:2]] != [429, 429]
-    assert responses[2].status_code == 429
-    assert "limit" in responses[2].json()["detail"].lower()
-    assert paid_call.call_count == 2
-
-
-@pytest.mark.parametrize("route", AI_ROUTES, ids=lambda route: route.name)
-def test_one_user_hitting_the_limit_does_not_block_another_user(limited_client: TestClient, route: AiRoute) -> None:
-    with patch(route.service_function, MagicMock(side_effect=RuntimeError("model unavailable"))):
-        for _ in range(3):
-            limited_client.post(route.path, headers={"x-test-user": "user-a"}, **route.request_kwargs)
-        user_a = limited_client.post(route.path, headers={"x-test-user": "user-a"}, **route.request_kwargs)
-        user_b = limited_client.post(route.path, headers={"x-test-user": "user-b"}, **route.request_kwargs)
+    with route.boundaries(tmp_path):
+        for _ in range(HOURLY_LIMIT):
+            assert _post(limited_client, route, "user-a").status_code == 200
+        user_a = _post(limited_client, route, "user-a")
+        user_b = _post(limited_client, route, "user-b")
 
     assert user_a.status_code == 429
-    assert user_b.status_code != 429
+    assert user_b.status_code == 200
 
 
 def test_the_hourly_limit_is_the_configured_setting(test_settings: Settings) -> None:
     route = AI_ROUTES[0]
-    settings = test_settings.model_copy(update={"rate_limit_per_hour": 4})
-    app.dependency_overrides[get_settings] = lambda: settings
-    app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
-    client = TestClient(app, raise_server_exceptions=False)
+    client = _client(test_settings.model_copy(update={"rate_limit_per_hour": 4}))
 
-    with patch(route.service_function, MagicMock(side_effect=RuntimeError("model unavailable"))) as paid_call:
-        statuses = [client.post(route.path, **route.request_kwargs).status_code for _ in range(5)]
+    statuses = [_post(client, route).status_code for _ in range(5)]
     app.dependency_overrides.clear()
 
-    assert statuses[:4] == [500] * 4
-    assert statuses[4] == 429
-    assert paid_call.call_count == 4
+    assert statuses == [200, 200, 200, 200, 429]
 
 
 def test_requests_without_a_token_get_401_and_do_not_use_up_the_limit(test_settings: Settings) -> None:
     route = AI_ROUTES[0]
-    app.dependency_overrides[get_settings] = lambda: test_settings.model_copy(update={"rate_limit_per_hour": 1})
-    client = TestClient(app, raise_server_exceptions=False)
+    client = _client(test_settings.model_copy(update={"rate_limit_per_hour": 1}), signed_in=False)
 
-    with patch(route.service_function, MagicMock(side_effect=RuntimeError("model unavailable"))):
-        anonymous = [client.post(route.path, **route.request_kwargs).status_code for _ in range(3)]
-        app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
-        first_signed_in = client.post(route.path, **route.request_kwargs)
+    anonymous = [client.post(route.path, **route.request_kwargs).status_code for _ in range(3)]
+    app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
+    signed_in = [_post(client, route).status_code for _ in range(2)]
     app.dependency_overrides.clear()
 
     assert anonymous == [401, 401, 401]
-    assert first_signed_in.status_code != 429
+    assert signed_in == [200, 429]
 
 
-def test_routes_that_call_no_paid_model_are_not_limited(test_settings: Settings) -> None:
-    app.dependency_overrides[get_settings] = lambda: test_settings.model_copy(update={"rate_limit_per_hour": 1})
-    app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
-    client = TestClient(app, raise_server_exceptions=False)
+def test_routes_that_call_no_paid_model_are_not_limited(test_settings: Settings, tmp_path: Path) -> None:
+    client = _client(test_settings.model_copy(update={"rate_limit_per_hour": 1}))
 
-    health = [client.get("/health").status_code for _ in range(3)]
-    with patch("glean.recipes.router.service.search_recipes", MagicMock(side_effect=RuntimeError("down"))):
-        search = [client.get("/recipes/search", params={"q": "soup"}).status_code for _ in range(3)]
+    with _recipe_store(tmp_path, _stored_recipe("rec_carbonara")):
+        health = [client.get("/health").status_code for _ in range(3)]
+        search = [client.get("/recipes/search", params={"q": "carbonara"}).status_code for _ in range(3)]
+        detail = [client.get("/recipes/rec_carbonara").status_code for _ in range(3)]
     app.dependency_overrides.clear()
 
-    assert 429 not in health
-    assert 429 not in search
+    assert health == [200] * 3
+    assert search == [200] * 3
+    assert detail == [200] * 3
