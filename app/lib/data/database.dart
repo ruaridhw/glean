@@ -29,13 +29,15 @@ part 'database.g.dart';
     CatalogueItems,
     CatalogueAliases,
     CatalogueSyncState,
+    IngredientOverrides,
+    CatalogueItemRedirects,
   ],
 )
 class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -76,6 +78,9 @@ class GleanDatabase extends _$GleanDatabase {
         if (from < 4) {
           await _addCatalogueTables(m);
         }
+        if (from < 5) {
+          await _addOverrideTables(m);
+        }
       },
       beforeOpen: (details) async {
         // SQLite disables foreign-key enforcement by default; the schema relies on it for
@@ -93,6 +98,20 @@ class GleanDatabase extends _$GleanDatabase {
     await m.createTable(catalogueAliases);
     await m.createTable(catalogueSyncState);
     await _seedIngredientGroups();
+  }
+
+  // Household overrides, merged-id redirects and each item's synced section, additive only. Self-contained so it can
+  // be renumbered by changing only the `from <` guard that calls it. Items keep a null section until the next sync.
+  // A file older than v4 has just had `catalogue_items` created in its current shape, which already has `section`.
+  Future<void> _addOverrideTables(Migrator m) async {
+    final columns = await customSelect(
+      'PRAGMA table_info(catalogue_items)',
+    ).get();
+    if (!columns.any((c) => c.read<String>('name') == 'section')) {
+      await m.addColumn(catalogueItems, catalogueItems.section);
+    }
+    await m.createTable(ingredientOverrides);
+    await m.createTable(catalogueItemRedirects);
   }
 
   // The groups the app works from before its first sync. A sync later overwrites them by id.

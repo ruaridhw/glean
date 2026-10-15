@@ -217,7 +217,8 @@ class IngredientGroups extends Table {
 
 /// A synced copy of one backend catalogue item, keyed by its stable id. `groupId` is deliberately not a foreign key:
 /// a newer backend may send a group this build has not seen, and the item must still be stored. The `override*`
-/// columns are the item's own changes to its group's rules, null where the group's apply.
+/// columns are the item's own changes to its group's rules, null where the group's apply. `section` is the store
+/// section the backend computed for the item, null until a sync delivers it.
 class CatalogueItems extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
@@ -229,9 +230,35 @@ class CatalogueItems extends Table {
   TextColumn get overrideStockUnit => text().nullable()();
   IntColumn get overrideUnopenedShelfLifeDays => integer().nullable()();
   IntColumn get overrideOnceOpenedShelfLifeDays => integer().nullable()();
+  TextColumn get section => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
+}
+
+/// The household's own changes to a catalogue item's rules, kept apart from the catalogue so a sync never erases
+/// them: catalogue sync never writes this table. One row per item id, which may be a former id of a merged item;
+/// every rule column is null where the household has not changed it.
+class IngredientOverrides extends Table {
+  TextColumn get itemId => text()();
+  TextColumn get trackingMode => text().nullable()();
+  TextColumn get stockUnit => text().nullable()();
+  IntColumn get unopenedShelfLifeDays => integer().nullable()();
+  IntColumn get onceOpenedShelfLifeDays => integer().nullable()();
+  TextColumn get section => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {itemId};
+}
+
+/// Maps the id of a catalogue item merged into another to the item that survives, so anything keyed by the old id
+/// still resolves. Catalogue sync fills it.
+class CatalogueItemRedirects extends Table {
+  TextColumn get formerId => text()();
+  TextColumn get itemId => text()();
+
+  @override
+  Set<Column> get primaryKey => {formerId};
 }
 
 /// Every name that resolves to a catalogue item, its canonical name included. `key` is the case-folded,

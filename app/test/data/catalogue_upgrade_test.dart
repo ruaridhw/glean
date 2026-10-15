@@ -1,5 +1,7 @@
 // Every frozen older database file must reopen on the current schema with all of the owner's rows identical, now
-// with the catalogue tables beside them, empty except for the seeded ingredient groups.
+// with the catalogue tables beside them: empty except for the seeded ingredient groups, or, from a version that
+// already synced a catalogue, still holding those rows with no section until the next sync. The household's override
+// and redirect tables start empty.
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -7,11 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-const List<String> _catalogueTables = <String>[
-  'ingredient_groups',
-  'catalogue_items',
-  'catalogue_aliases',
-  'catalogue_sync_state',
+const List<String> _householdCatalogueTables = <String>[
+  'ingredient_overrides',
+  'catalogue_item_redirects',
 ];
 
 List<List<Object?>> _rowsOf(
@@ -26,9 +26,9 @@ List<List<Object?>> _rowsOf(
 ];
 
 void main() {
-  for (final int fixtureVersion in <int>[1, 2, 3]) {
+  for (final int fixtureVersion in <int>[1, 2, 3, 4]) {
     test('a version $fixtureVersion file upgrades with every row of every old '
-        'table identical, the groups seeded and no catalogue items', () async {
+        'table identical and the new catalogue tables in place', () async {
       final directory = await Directory.systemTemp.createTemp('glean-cat-up-');
       addTearDown(() => directory.delete(recursive: true));
       final file = File('${directory.path}/glean.sqlite');
@@ -84,7 +84,7 @@ void main() {
             for (final String table in columns.keys)
               table: _rowsOf(old, table, columns[table]!),
           };
-      if (fixtureVersion == 3) {
+      if (fixtureVersion >= 3) {
         // Independent literals for #155's data, so the equality check below cannot pass on two empty reads.
         expect(
           old
@@ -119,7 +119,7 @@ void main() {
 
       final upgraded = sqlite3.open(file.path);
       addTearDown(upgraded.close);
-      expect(upgraded.select('PRAGMA user_version').single.values.single, 4);
+      expect(upgraded.select('PRAGMA user_version').single.values.single, 5);
       for (final String table in columns.keys) {
         expect(
           _rowsOf(upgraded, table, columns[table]!),
@@ -135,7 +135,7 @@ void main() {
             .single,
         29,
       );
-      if (fixtureVersion == 3) {
+      if (fixtureVersion >= 3) {
         expect(
           upgraded
               .select('SELECT store_section FROM ingredients WHERE id = 3')
@@ -156,7 +156,33 @@ void main() {
           reason: 'grouping by section stays on',
         );
       }
-      for (final String table in _catalogueTables.skip(1)) {
+      final int syncedItems = fixtureVersion < 4 ? 0 : 3;
+      expect(
+        upgraded
+            .select('SELECT count(*) FROM catalogue_items')
+            .single
+            .values
+            .single,
+        syncedItems,
+      );
+      expect(
+        upgraded
+            .select(
+              'SELECT count(*) FROM catalogue_items WHERE section IS NULL',
+            )
+            .single
+            .values
+            .single,
+        syncedItems,
+        reason: 'no item has a section until the next sync delivers it',
+      );
+      for (final String table in <String>[
+        ..._householdCatalogueTables,
+        if (fixtureVersion < 4) ...<String>[
+          'catalogue_aliases',
+          'catalogue_sync_state',
+        ],
+      ]) {
         expect(
           upgraded.select('SELECT count(*) FROM $table').single.values.single,
           0,
