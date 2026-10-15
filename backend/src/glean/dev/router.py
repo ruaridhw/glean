@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from glean.config import Settings, get_settings
@@ -32,11 +33,25 @@ def _schema_version(header: bytes) -> int | None:
     return int.from_bytes(header[_USER_VERSION_OFFSET : _USER_VERSION_OFFSET + 4], "big")
 
 
+def _read_header(s3: Any, bucket: str, key: str, size: int) -> bytes:
+    """The first bytes of a backup, or nothing for an object that is empty or cannot be read.
+
+    One bad object must not fail the whole listing: it is listed with an unknown schema version, and the app
+    refuses it at restore time.
+    """
+    if size == 0:
+        return b""
+    try:
+        return s3.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{_SQLITE_HEADER_BYTES - 1}")["Body"].read()
+    except ClientError:
+        return b""
+
+
 def _prepared_note(s3: Any, bucket: str, key: str) -> str | None:
     """The agent's free-text note from a PREPARED marker; a marker that is empty or not JSON just has no note."""
     try:
         note = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read()).get("note")
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, ClientError):
         return None
     return note if isinstance(note, str) and note else None
 
@@ -54,14 +69,19 @@ async def list_backups(
     s3 = boto3.client("s3", region_name=settings.aws_region)
     bucket = settings.s3_receipts_bucket
     user_prefix = f"{EXPORT_PREFIX}/{user_id}/"
-    listing = s3.list_objects_v2(Bucket=bucket, Prefix=user_prefix).get("Contents", [])
+    # One call returns at most 1000 keys, in key order; without paging, later (newer, prepared) backups vanish.
+    listing = [
+        item
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=user_prefix)
+        for item in page.get("Contents", [])
+    ]
     keys = {item["Key"] for item in listing}
     backups = []
     for item in listing:
         key = item["Key"]
         if not key.endswith("/glean.db"):
             continue
-        header = s3.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{_SQLITE_HEADER_BYTES - 1}")["Body"].read()
+        header = _read_header(s3, bucket, key, item["Size"])
         backup_id = key.removesuffix("glean.db")
         prepared = f"{backup_id}{PREPARED_MARKER}" in keys
         backups.append(

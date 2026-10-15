@@ -145,3 +145,37 @@ def test_an_export_prefix_without_a_database_is_not_a_backup(
     bucket.put_object(Bucket=BUCKET, Key="db-exports/test-user-sub/20260101T000000000000Z/app.log", Body=b"log")  # type: ignore[attr-defined]
 
     assert client.get("/dev/backups", headers=auth_headers).json() == {"backups": []}
+
+
+def test_backups_beyond_the_first_page_of_s3_results_are_still_listed(
+    client: TestClient, auth_headers: dict, bucket: object, tmp_path: Path
+) -> None:
+    # S3 lists at most 1000 keys per call, in key order: pad the user's prefix so the newest backup and a
+    # prepared one fall on the second page.
+    for n in range(1001):
+        bucket.put_object(  # type: ignore[attr-defined]
+            Bucket=BUCKET, Key=f"db-exports/test-user-sub/2025{n:04d}T000000000000Z/app.log", Body=b"x"
+        )
+    prepared = _store_for_someone_else(bucket, "test-user-sub", _database(tmp_path)).removesuffix("glean.db")
+    _prepare(bucket, prepared)
+    newest = _export(client, auth_headers, _database(tmp_path))
+
+    backups = client.get("/dev/backups", headers=auth_headers).json()["backups"]
+
+    assert [b["id"] for b in backups] == [prepared, newest]
+
+
+def test_an_empty_backup_object_does_not_break_the_listing(
+    client: TestClient, auth_headers: dict, bucket: object, tmp_path: Path
+) -> None:
+    good = _export(client, auth_headers, _database(tmp_path))
+    empty = "db-exports/test-user-sub/20990101T000000000000Z/"
+    bucket.put_object(Bucket=BUCKET, Key=f"{empty}glean.db", Body=b"")  # type: ignore[attr-defined]
+
+    response = client.get("/dev/backups", headers=auth_headers)
+
+    assert response.status_code == 200
+    by_id = {b["id"]: b for b in response.json()["backups"]}
+    assert by_id[good]["schema_version"] == 2
+    assert by_id[empty]["schema_version"] is None
+    assert by_id[empty]["size"] == 0
