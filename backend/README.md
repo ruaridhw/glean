@@ -37,10 +37,29 @@ LANGSMITH_PROJECT=glean
 LANGCHAIN_CALLBACKS_BACKGROUND=false
 ```
 
-Deployed Lambda tracing is off by default. Enable it by deploying with
-`LangSmithTracing="true"` and storing the API key in Secrets Manager at
+Deployed Lambda tracing is off by default; prod turns it on via
+`LangSmithTracing="true"` in `samconfig.toml`. Store the API key in Secrets Manager at
 `glean/{env}/langsmith-api-key`. The backend reads that secret at runtime and
 sets `LANGSMITH_API_KEY` in-process before LangChain calls are created.
+
+### Deploying to prod
+
+Prod is deployed from CI on every push to `main` that touches `backend/`. For a manual deploy:
+
+```bash
+make deploy-prod                  # stops unless the tree is clean and HEAD is pushed
+ALLOW_DIRTY=1 make deploy-prod    # hotfix: deploys anyway, stamped <sha>-dirty and logged
+```
+
+Both paths run `backend/scripts/deploy_prod.py`, which deploys `samconfig.toml`'s `[prod]` parameters (the single
+source of deploy parameters), stamps the commit on the stack (tag `commit`) and the Lambda (`GIT_SHA`), then checks
+the live stack parameters and Lambda environment against `samconfig.toml` and reports any mismatch. `GET /health`
+returns that stamp as `commit`. Manual deploys are logged to `~/.glean/deploy.log` when dirty (`GLEAN_DEPLOY_LOG`
+overrides the path).
+
+The Google OAuth client id and secret are never passed as parameters: the template resolves them from Secrets
+Manager (`glean/{env}/google-oauth-client-id` and `glean/{env}/google-oauth-client-secret`), so the deploying
+identity needs `secretsmanager:GetSecretValue` on them.
 
 ### Running with Docker
 
