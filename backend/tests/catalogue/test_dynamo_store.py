@@ -169,3 +169,47 @@ def test_a_shortlist_built_from_a_lagging_index_is_not_kept_once_the_index_recov
 
     view.lagging = False
     assert [item.id for item in store.shortlist("dragon fruit")] == ["dragon-fruit"]
+
+
+def test_reseeding_keeps_aliases_learned_since_the_seed(dynamo_store: DynamoCatalogueStore) -> None:
+    dynamo_store.upsert_alias("coriander", "green herb bunch")
+
+    assert dynamo_store.seed(seed_items()) == 0
+
+    found = dynamo_store.get_by_name("green herb bunch")
+    assert found is not None
+    assert "green herb bunch" in found.aliases
+    assert [item.id for item in dynamo_store.shortlist("green herb bunch")] == ["coriander"]
+
+
+def test_reseeding_a_changed_item_keeps_its_learned_aliases_and_applies_the_change(
+    dynamo_store: DynamoCatalogueStore,
+) -> None:
+    dynamo_store.upsert_alias("coriander", "green herb bunch")
+    changed = [
+        item.model_copy(update={"density_g_per_ml": 0.4}) if item.id == "coriander" else item for item in seed_items()
+    ]
+
+    assert dynamo_store.seed(changed) == 1
+
+    found = dynamo_store.get_by_name("cilantro")
+    assert found is not None
+    assert found.density_g_per_ml == 0.4
+    assert {"green herb bunch", "cilantro", "fresh coriander"} <= set(found.aliases)
+    assert dynamo_store.get_by_name("green herb bunch") == found
+
+
+def test_reseeding_with_a_new_seed_alias_makes_it_resolve_and_keeps_item_and_lookup_in_agreement(
+    dynamo_store: DynamoCatalogueStore,
+) -> None:
+    grown = [
+        item.model_copy(update={"aliases": (*item.aliases, "coriander leaf")}) if item.id == "coriander" else item
+        for item in seed_items()
+    ]
+
+    assert dynamo_store.seed(grown) == 1
+
+    found = dynamo_store.get_by_name("coriander leaf")
+    assert found is not None
+    assert "coriander leaf" in found.aliases
+    assert [item.id for item in dynamo_store.shortlist("coriander leaf")][:1] == ["coriander"]
