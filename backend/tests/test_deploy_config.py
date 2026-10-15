@@ -13,15 +13,17 @@ WORKFLOWS = BACKEND.parent / ".github" / "workflows"
 
 
 class _CfnLoader(yaml.SafeLoader):
-    """Reads CloudFormation short-form tags (!Ref, !Sub, ...) as plain values."""
+    """Reads CloudFormation short-form tags as their long-form intrinsic: `!Ref X` -> {"Ref": "X"}."""
 
 
 def _cfn_tag(loader: _CfnLoader, suffix: str, node: yaml.Node) -> object:
     if isinstance(node, yaml.ScalarNode):
-        return loader.construct_scalar(node)
-    if isinstance(node, yaml.SequenceNode):
-        return loader.construct_sequence(node, deep=True)
-    return loader.construct_mapping(node, deep=True)
+        value: object = loader.construct_scalar(node)
+    elif isinstance(node, yaml.SequenceNode):
+        value = loader.construct_sequence(node, deep=True)
+    else:
+        value = loader.construct_mapping(node, deep=True)
+    return {"Ref" if suffix == "Ref" else f"Fn::{suffix}": value}
 
 
 _CfnLoader.add_multi_constructor("!", _cfn_tag)
@@ -47,11 +49,12 @@ def test_samconfig_carries_no_google_oauth_values() -> None:
 def test_template_resolves_google_oauth_from_secrets_manager() -> None:
     template = _template()
     details = template["Resources"]["GoogleIdentityProvider"]["Properties"]["ProviderDetails"]
-    assert "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-id:SecretString}}" in details["client_id"]
-    assert (
-        "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-secret:SecretString}}"
-        in details["client_secret"]
-    )
+    assert details["client_id"] == {
+        "Fn::Sub": "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-id:SecretString}}"
+    }
+    assert details["client_secret"] == {
+        "Fn::Sub": "{{resolve:secretsmanager:glean/${Environment}/google-oauth-client-secret:SecretString}}"
+    }
     assert not [name for name in template["Parameters"] if name.startswith("Google")]
 
 
@@ -65,14 +68,30 @@ def test_prod_samconfig_keeps_llm_tracing_on() -> None:
     assert _config_env("prod")["LangSmithTracing"] == "true"
 
 
-def test_template_stamps_the_deployed_commit_onto_the_lambda() -> None:
+def test_template_wires_the_git_sha_parameter_into_every_lambda_environment() -> None:
     template = _template()
-    assert template["Parameters"]["GitSha"]["Default"] == "unknown"
-    assert template["Globals"]["Function"]["Environment"]["Variables"]["GIT_SHA"] == "GitSha"
+    assert template["Parameters"]["GitSha"] == {"Type": "String", "Default": "unknown"}
+    # Globals apply to every function, so a Ref here reaches the API Lambda and the trigger Lambda alike.
+    assert template["Globals"]["Function"]["Environment"]["Variables"]["GIT_SHA"] == {"Ref": "GitSha"}
+    for name, resource in template["Resources"].items():
+        if resource["Type"] == "AWS::Serverless::Function":
+            overrides = resource["Properties"].get("Environment", {}).get("Variables", {})
+            assert "GIT_SHA" not in overrides, f"{name} would shadow the stamped GIT_SHA"
 
 
-def test_ci_deploys_through_the_shared_script_without_its_own_parameters() -> None:
-    workflow = (WORKFLOWS / "backend-deploy.yml").read_text()
-    assert "deploy_prod.py" in workflow
-    assert "parameter-overrides" not in workflow
-    assert "google" not in workflow.lower()
+
+def test_ci_deploy_job_runs_the_shared_script_and_nothing_else_deploys() -> None:
+    workflow = yaml.safe_load((WORKFLOWS / "backend-deploy.yml").read_text())
+    job = workflow["jobs"]["deploy-prod"]
+    runs = [step["run"] for step in job["steps"] if "run" in step]
+
+    assert job["defaults"]["run"]["working-directory"] == "backend"
+    assert [run.strip() for run in runs if "deploy_prod.py" in run] == ["python3 scripts/deploy_prod.py"]
+    assert not [run for run in runs if "sam deploy" in run or "parameter-overrides" in run]
+    assert not [run for run in runs if "google" in run.lower()]
+
+
+def test_ci_deploy_checks_out_full_history_so_the_pushed_check_can_compare_ancestry() -> None:
+    workflow = yaml.safe_load((WORKFLOWS / "backend-deploy.yml").read_text())
+    checkout = next(s for s in workflow["jobs"]["deploy-prod"]["steps"] if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout.get("with", {}).get("fetch-depth") == 0
