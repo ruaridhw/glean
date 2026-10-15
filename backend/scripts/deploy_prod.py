@@ -26,12 +26,38 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=REPO, check=True, capture_output=True, text=True).stdout.strip()
 
 
+def _git_ok(*args: str) -> bool:
+    return subprocess.run(["git", *args], cwd=REPO, capture_output=True).returncode == 0
+
+
+def _head_is_on_origin() -> bool:
+    """True when HEAD is contained in a freshly fetched origin/main or in this branch's upstream on origin.
+
+    Cached remote-tracking refs and other remotes are not trusted: a branch deleted or rewound on origin
+    would otherwise still look pushed."""
+    if not _git_ok("fetch", "--quiet", "--prune", "origin"):
+        return False
+    refs = ["origin/main"]
+    upstream = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if upstream.startswith("origin/"):
+        refs.append(upstream)
+    return any(
+        _git_ok("rev-parse", "--verify", "--quiet", f"refs/remotes/{ref}") and _git_ok("merge-base", "--is-ancestor", "HEAD", f"refs/remotes/{ref}")
+        for ref in refs
+    )
+
+
 def _tree_problems() -> list[str]:
     problems = []
     if _git("status", "--porcelain"):
         problems.append("the working tree has uncommitted changes")
-    if not _git("branch", "--remotes", "--contains", "HEAD"):
-        problems.append("HEAD has not been pushed to the remote")
+    if not _head_is_on_origin():
+        problems.append("HEAD has not been pushed to origin (origin/main or this branch's upstream, freshly fetched)")
     return problems
 
 
