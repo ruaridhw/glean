@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -141,3 +144,12 @@ def test_an_unconfigured_catalogue_is_a_clear_503(client: TestClient, auth_heade
 
     assert response.status_code == 503
     assert "catalogue" in response.json()["detail"].lower()
+
+
+def test_the_groups_sent_are_the_ones_the_app_seeds_offline(wired: TestClient, auth_headers: dict[str, str]) -> None:
+    app_seed = json.loads(Path("../app/test/data/fixtures/catalogue_groups.json").read_text(encoding="utf-8"))
+
+    assert wired.get("/catalogue", headers=auth_headers).json()["groups"] == app_seed, (
+        "The app's seeded groups drifted from the backend's. Regenerate app/test/data/fixtures/catalogue_groups.json "
+        "from GET /catalogue and update app/lib/data/seed/ingredient_groups.dart to match."
+    )
