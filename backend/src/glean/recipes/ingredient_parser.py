@@ -69,6 +69,8 @@ _VAGUE_MEASURES = {
     "sprigs": (1.0, "sprig"),
     "clove": (1.0, "clove"),
     "cloves": (1.0, "clove"),
+    "splash": (1.0, "splash"),
+    "splashes": (1.0, "splash"),
     "bunch": (1.0, "bunch"),
     "bunches": (1.0, "bunch"),
     "thumb": (2.5, "cm"),
@@ -182,7 +184,22 @@ def _parse_label(text: str) -> tuple[str, float, str, str | None]:
         return parsed
     if parsed := _parse_count_or_package_prefix(text):
         return parsed
+    if parsed := _parse_bare_vague_measure(text):
+        return parsed
     return text, 1.0, "pcs", None
+
+
+def _parse_bare_vague_measure(text: str) -> tuple[str, float, str, str | None] | None:
+    """A vague measure with no number ("pinch of salt", "a thumb of ginger") means one of it."""
+    match = re.match(r"^(?:an?\s+)?(?P<unit>[A-Za-z]+)\s+(?P<name>.+)$", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    raw_unit = match.group("unit").lower()
+    name = match.group("name")
+    # "clove" alone is too often part of a name ("clove oil"), so it needs an "of".
+    if raw_unit not in _VAGUE_MEASURES or (raw_unit in {"clove", "cloves"} and not name.lower().startswith("of ")):
+        return None
+    return _parse_unit_word(raw_unit, 1.0, name)
 
 
 def _parse_package_measure(text: str) -> tuple[str, float, str, str | None] | None:

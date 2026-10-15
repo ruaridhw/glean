@@ -194,3 +194,35 @@ def test_parse_ingredient_text_treats_a_cup_of_a_liquid_as_ml_and_only_unknown_s
     assert parsed.canonical_name == expected_name
     assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-2)
     assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("Pinch of salt", "Salt", 1, "pinch"),
+        ("pinch of salt", "Salt", 1, "pinch"),
+        ("a pinch of salt", "Salt", 1, "pinch"),
+        ("Thumb of ginger", "Ginger", 2.5, "cm"),
+        ("a thumb of ginger", "Ginger", 2.5, "cm"),
+        ("Knob butter", "Butter", 1, "knob"),
+        ("Knob of butter", "Butter", 1, "knob"),
+        ("Dash soy sauce", "Soy sauce", 1, "dash"),
+        ("Handful coriander", "Coriander", 1, "handful"),
+        ("a handful of basil leaves", "Basil leaves", 1, "handful"),
+        ("Splash of milk", "Milk", 1, "splash"),
+        ("2 splashes Worcestershire sauce", "Worcestershire sauce", 2, "splash"),
+        ("Bunch of spring onions", "Spring onions", 1, "bunch"),
+        ("Sprig of thyme", "Thyme", 1, "sprig"),
+        ("Clove of garlic", "Garlic", 1, "clove"),
+        ("Clove oil", "Clove oil", 1, "pcs"),
+    ],
+)
+def test_parse_ingredient_text_reads_vague_measures_written_without_a_number(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit
