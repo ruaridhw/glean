@@ -210,3 +210,15 @@ class TestSettingsValidationErrorsHideSecrets:
         assert "recipe_api_key" in message
         for fragment in SECRET_FRAGMENTS:
             assert fragment not in message
+
+    def test_error_names_missing_field_but_not_secrets_manager_supplied_secret(self) -> None:
+        lambda_env = {"AWS_LAMBDA_FUNCTION_NAME": "glean-api-prod", "ENVIRONMENT": "prod"}
+        with patch.dict(os.environ, lambda_env, clear=True), patch("glean.config.parameters.get_secret") as mock_get:
+            mock_get.return_value = SYNTHETIC_SECRET
+            with pytest.raises(ValidationError) as excinfo:
+                Settings(_env_file=None)  # ty: ignore[missing-argument]
+
+        message = str(excinfo.value)
+        assert "cognito_user_pool_id" in message
+        for fragment in SECRET_FRAGMENTS:
+            assert fragment not in message
