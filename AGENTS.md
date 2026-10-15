@@ -62,11 +62,29 @@ including a plain Linux box.
 ### Worktrees
 
 ```bash
-make worktree BRANCH=feature/foo        # create isolated worktree + install deps
+make worktree BRANCH=feature/foo        # create isolated worktree from origin/main + install deps
+make worktree BRANCH=feature/bar BASE=feature/foo  # stacked PR: branch from the parent branch
 make worktree-list                       # list active worktrees
 make worktree-remove BRANCH=feature/foo # remove worktree + clean node_modules + .venv
 make worktree-prune                      # prune stale git metadata
 ```
+
+## Planning and PR workflow
+
+- **Plans are ephemeral.** Plans, scratch notes and review ledgers live under
+  `/tmp` and are never committed. (`docs/*` being gitignored hides plan files;
+  it does not make committing them acceptable.)
+- **Worktrees start from `origin/main`.** `make worktree` fetches `origin` and
+  branches from `BASE`, which defaults to `origin/main`, so a stale checkout
+  never becomes the base. For a stacked PR pass `BASE=<parent branch>`.
+- **One PR per issue; a lane ships as a stack.** Related issues form a stack of
+  PRs, each based on the PR below it (the bottom PR is based on `main`).
+- **Merging a stack** (`delete_branch_on_merge` is off here):
+  1. Merge the bottom PR with a merge commit.
+  2. Retarget the next PR to `main` (`gh pr edit <n> --base main`, or the REST
+     API `PATCH /pulls/<n>` if `gh` errors) and let its checks re-run.
+  3. Delete the merged branch — only after nothing is based on it (see below).
+  4. Repeat up the stack.
 
 ## Git branch hygiene
 

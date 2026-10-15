@@ -11,7 +11,8 @@
 #   make start-backend-docker — Dockerized FastAPI server on :8000
 #   make start-ios         — Flutter on iOS Simulator (macOS only)
 #   make start-android     — Flutter on a running Android emulator
-#   make worktree BRANCH=feature/foo — isolated worktree for a new branch
+#   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
+#                                      (BASE=<parent branch> for a stacked PR)
 #
 # `start-ios`/`start-android` need COGNITO_DOMAIN and COGNITO_CLIENT_ID (the
 # same values the old Expo app read as EXPO_PUBLIC_COGNITO_*) — see
@@ -127,9 +128,11 @@ start-android:  ## Start Flutter on a running Android emulator (needs COGNITO_DO
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
 # Worktrees live in .worktrees/ which is already in .gitignore.
 # Each worktree gets its own branch so feature work stays fully isolated.
+# The branch starts from a freshly fetched origin/main, never from whatever is
+# checked out; pass BASE=<parent branch> to stack a PR on the one below it.
 
 .PHONY: worktree
-worktree:  ## Create worktree + install deps: make worktree BRANCH=feature/foo
+worktree:  ## Create worktree from origin/main (or BASE=<parent>) + install deps: make worktree BRANCH=feature/foo
 	@[ -n "$(BRANCH)" ] || { echo "Usage: make worktree BRANCH=feature/foo"; exit 1; }
 	git fetch origin
 	git worktree add -b $(BRANCH) $(WORKTREE_DIR)/$(_LEAF) $(BASE)
