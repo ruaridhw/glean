@@ -1,3 +1,9 @@
+"""Schema-contract tests: recorded model payloads must validate into the typed response as expected.
+
+These replay canned outputs, so they say nothing about parser quality (the prompt is not exercised).
+Parser quality is measured by the live eval in tests/integration/evals/test_shopping_list_description.py.
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +15,7 @@ from pydantic import ValidationError
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
 from glean.shopping.service import parse_shopping_description
 
-_CASES = json.loads((Path(__file__).parents[1] / "fixtures" / "shopping_parse_cases.json").read_text())
+_CASES = json.loads((Path(__file__).parents[1] / "fixtures" / "shopping_schema_contract_cases.json").read_text())
 
 
 class _ReplayRouter:
@@ -23,7 +29,7 @@ class _ReplayRouter:
 
 
 @pytest.mark.parametrize("case", _CASES, ids=lambda case: case["id"])
-def test_parser_output_for_representative_grocery_text(case: dict[str, object]) -> None:
+def test_recorded_model_payload_validates_into_the_typed_response(case: dict[str, object]) -> None:
     response = parse_shopping_description(
         ShoppingParseRequest(text=case["text"]), llm_router=_ReplayRouter(case["model_output"])
     )
