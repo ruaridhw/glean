@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from glean.catalogue.groups import GROUPS, Form, GroupId, Kind, StockUnit, TrackingMode
 from glean.catalogue.sections import Section, section_for
@@ -49,6 +50,11 @@ class CatalogueItem(BaseModel):
     group: GroupId = Field(description="The ingredient group the item takes its default rules from.")
     form: Form = Field(description="The form the ingredient is sold and kept in. Required: never defaulted.")
     overrides: ItemOverrides = Field(default=ItemOverrides(), description="Per-item changes to the group's rules.")
+    former_ids: tuple[Annotated[str, StringConstraints(min_length=1)], ...] = Field(
+        default=(),
+        description="Ids of items merged into this one. A device resolves a former id, and any household override "
+        "keyed on it, to this item.",
+    )
     density_g_per_ml: float | None = Field(default=None, gt=0, description="Density in g/ml, where known.")
     source: Source = Field(description="Whether the item came from the seed or was added provisionally by an LLM.")
 
