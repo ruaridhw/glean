@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
@@ -46,15 +46,20 @@ class NamingResponse(BaseModel):
 
 
 def name_items(
-    requests: Sequence[NameRequest], *, llm_router: LLMRouter, context: str | None = None, **kwargs: object
+    requests: Sequence[NameRequest],
+    *,
+    llm_router: LLMRouter,
+    context: str | None = None,
+    timeout_ms: int | None = None,
 ) -> Mapping[str, str | None]:
     """Name every request in one call. Returns canonical names by input; names the model skipped are absent."""
     lines = "\n".join(f"- {request.input} (group: {request.group})" for request in requests)
     where = f"These came from: {context}.\n" if context else ""
+    options: dict[str, Any] = {} if timeout_ms is None else {"request_timeout": timeout_ms}
     response = llm_router.invoke(
         Feature.INGREDIENT_NORMALISATION,
         NamingResponse,
         [SystemMessage(content=NAMING_SYSTEM_PROMPT), HumanMessage(content=f"{where}Name these items:\n{lines}")],
-        **kwargs,
+        **options,
     )
     return {entry.input: entry.canonical_name for entry in response.names}

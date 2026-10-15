@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 from fastapi import FastAPI
 from mangum import Mangum
 
+from glean.catalogue.router import router as catalogue_router
 from glean.dependencies import verify_cognito_token
 from glean.dev.router import router as dev_router
 from glean.health.router import router as health_router
@@ -29,6 +30,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
 app = FastAPI(title="Glean API", version="0.1.0", lifespan=lifespan)
 
 app.include_router(health_router)
+app.include_router(catalogue_router)
 app.include_router(dev_router)
 app.include_router(receipts_router)
 app.include_router(recipes_router)
