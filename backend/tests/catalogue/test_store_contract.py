@@ -6,7 +6,13 @@ import pytest
 
 from glean.catalogue.groups import Form, GroupId, Kind
 from glean.catalogue.models import CatalogueItem, ItemOverrides, Source
-from glean.catalogue.store import AliasConflictError, CatalogueStore, InMemoryCatalogueStore, UnknownItemError
+from glean.catalogue.store import (
+    AliasConflictError,
+    CatalogueStore,
+    DuplicateIdError,
+    InMemoryCatalogueStore,
+    UnknownItemError,
+)
 
 
 def seed_items() -> list[CatalogueItem]:
@@ -106,14 +112,48 @@ class CatalogueStoreContract:
         assert created.source is Source.SEED
 
     def test_recording_unmatched_marks_the_name_without_creating_an_item(self, store: CatalogueStore) -> None:
-        assert not store.is_unmatched("corriandr")
-        store.record_unmatched("  Corriandr ")
-        assert store.is_unmatched("corriandr")
-        assert store.get_by_name("corriandr") is None
+        assert not store.is_unmatched("Corriandr")
+        store.record_unmatched("Corriandr")
+        assert store.is_unmatched("Corriandr")
+        assert store.get_by_name("Corriandr") is None
         assert not store.is_unmatched("coriander")
+
+    def test_names_whose_slugs_collide_get_distinct_ids(self, store: CatalogueStore) -> None:
+        first = store.create_provisional("a-b", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE, aliases=("ab thing",))
+        second = store.create_provisional("a b", GroupId.SPICES, Form.NOT_APPLICABLE)
+        assert first.id != second.id
+
+    def test_a_slug_collision_does_not_disturb_the_existing_item(self, store: CatalogueStore) -> None:
+        first = store.create_provisional("a-b", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE, aliases=("ab thing",))
+        second = store.create_provisional("a b", GroupId.SPICES, Form.NOT_APPLICABLE)
+        by_name = store.get_by_name("a-b")
+        assert by_name is not None
+        assert (by_name.id, by_name.kind) == (first.id, Kind.HOUSEHOLD)
+        by_alias = store.get_by_name("ab thing")
+        assert by_alias is not None
+        assert by_alias.id == first.id
+        other = store.get_by_name("a b")
+        assert other is not None
+        assert other.id == second.id
+
+    def test_a_failed_creation_leaves_no_trace(self, store: CatalogueStore) -> None:
+        with pytest.raises(AliasConflictError):
+            store.create_provisional("fresh thing", GroupId.SPICES, Form.NOT_APPLICABLE, aliases=("cilantro",))
+        assert store.get_by_name("fresh thing") is None
+        cilantro = store.get_by_name("cilantro")
+        assert cilantro is not None
+        assert cilantro.id == "coriander"
+        retry = store.create_provisional("fresh thing", GroupId.SPICES, Form.NOT_APPLICABLE)
+        assert retry.id == "fresh-thing"
 
 
 class TestInMemoryCatalogueStore(CatalogueStoreContract):
     @pytest.fixture
     def store(self) -> CatalogueStore:
         return InMemoryCatalogueStore(seed_items())
+
+    def test_duplicate_ids_at_construction_are_refused(self) -> None:
+        items = seed_items()
+        twin = items[0].model_copy(update={"name": "different name", "aliases": ()})
+        with pytest.raises(DuplicateIdError):
+            InMemoryCatalogueStore([*items, twin])

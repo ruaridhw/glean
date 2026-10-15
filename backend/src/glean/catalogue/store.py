@@ -14,6 +14,10 @@ class AliasConflictError(ValueError):
     """The alias already names a different catalogue item."""
 
 
+class DuplicateIdError(ValueError):
+    """A different catalogue item already has this id."""
+
+
 class UnknownItemError(KeyError):
     """No catalogue item has this id."""
 
@@ -37,6 +41,15 @@ class CatalogueStore(Protocol):
         """Add a provisional item (source llm). Its kind follows its group. Reuses an item that already has the name."""
         ...
 
+    def _free_id(self, name: str) -> str:
+        # Slugs are lossy ("a-b" and "a b" collide), so number the id until it is unclaimed.
+        base = slugify(name)
+        candidate, number = base, 1
+        while candidate in self._items:
+            number += 1
+            candidate = f"{base}-{number}"
+        return candidate
+
     def record_unmatched(self, name: str) -> None:
         """Remember that *name* was confirmed to match no catalogue item."""
         ...
@@ -58,6 +71,9 @@ class InMemoryCatalogueStore:
             self._add(item)
 
     def _add(self, item: CatalogueItem) -> None:
+        # Validate everything before touching either index, so a refusal leaves the store as it was.
+        if item.id in self._items:
+            raise DuplicateIdError(item.id)
         for key in {name_key(item.name), *(name_key(alias) for alias in item.aliases)}:
             owner = self._by_key.get(key)
             if owner is not None and owner != item.id:
@@ -108,7 +124,7 @@ class InMemoryCatalogueStore:
         if existing is not None:
             return existing
         item = CatalogueItem(
-            id=slugify(name), name=name.strip(), aliases=aliases, group=group, form=form, source=Source.LLM
+            id=self._free_id(name), name=name.strip(), aliases=aliases, group=group, form=form, source=Source.LLM
         )
         self._add(item)
         return item
