@@ -34,6 +34,7 @@ src/glean/
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
 ├── llm.py            # OpenRouter LangChain client; Feature enum; LLMRouter policy
 ├── decisions.py      # Glean Decisions client (DecisionClient): the only caller of /api/alpha/decisions
+├── shopping/         # POST /shopping/parse-description — split into units, per-unit parse cache, dish-or-item gate
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3

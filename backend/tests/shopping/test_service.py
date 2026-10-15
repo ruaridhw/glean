@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import pytest
+
 from glean.llm import Feature
 from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse, ShoppingUnit
-from glean.shopping.service import parse_shopping_description
+from glean.shopping.service import (
+    DISH_PARSE_SYSTEM_PROMPT,
+    ITEM_PARSE_SYSTEM_PROMPT,
+    SHOPPING_PARSE_SYSTEM_PROMPT,
+    parse_shopping_description,
+)
+
+if TYPE_CHECKING:
+    from glean.decisions import DecisionClient
+    from glean.recipe_api.blob_store import BlobStore
 
 
 class _FakeLLMRouter:
@@ -13,6 +26,9 @@ class _FakeLLMRouter:
         self.schema: type[object] | None = None
         self.messages: list[object] = []
 
+    def model_id_for(self, feature: Feature) -> str:
+        return "test/model"
+
     def invoke(self, feature: Feature, schema: type[object], messages: list[object]) -> ShoppingParseResponse:
         self.feature = feature
         self.schema = schema
@@ -20,7 +36,9 @@ class _FakeLLMRouter:
         return self.response
 
 
-def test_parse_shopping_description_returns_proposed_items() -> None:
+def test_parse_shopping_description_returns_proposed_items(
+    decision_client: DecisionClient, parse_cache: BlobStore
+) -> None:
     llm_router = _FakeLLMRouter(
         ShoppingParseResponse(
             items=[
@@ -46,8 +64,10 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     )
 
     response = parse_shopping_description(
-        ShoppingParseRequest(text="stuff for tacos, milk, and lunchbox snacks"),
+        ShoppingParseRequest(text="stuff for tacos"),
         llm_router=llm_router,
+        decision_client=decision_client,
+        cache=parse_cache,
     )
 
     assert len(response.items) == 2
@@ -67,7 +87,7 @@ def test_parse_shopping_description_returns_proposed_items() -> None:
     assert llm_router.schema is ShoppingParseResponse
 
 
-def test_parse_shopping_description_allows_vague_items() -> None:
+def test_parse_shopping_description_allows_vague_items(decision_client: DecisionClient, parse_cache: BlobStore) -> None:
     llm_router = _FakeLLMRouter(
         ShoppingParseResponse(
             items=[
@@ -87,6 +107,8 @@ def test_parse_shopping_description_allows_vague_items() -> None:
     response = parse_shopping_description(
         ShoppingParseRequest(text="some lunchbox snacks"),
         llm_router=llm_router,
+        decision_client=decision_client,
+        cache=parse_cache,
     )
 
     assert response.items[0].name == "lunchbox snacks"
@@ -98,7 +120,9 @@ def test_parse_shopping_description_allows_vague_items() -> None:
     assert response.items[0].confidence == 0.55
 
 
-def test_parse_shopping_description_rejects_out_of_taxonomy_category() -> None:
+def test_parse_shopping_description_rejects_out_of_taxonomy_category(
+    decision_client: DecisionClient, parse_cache: BlobStore
+) -> None:
     """A category the LLM invents outside the fixed taxonomy is coerced to null, not passed
     through, and food_group still resolves to "other" rather than null."""
     llm_router = _FakeLLMRouter(
@@ -119,19 +143,24 @@ def test_parse_shopping_description_rejects_out_of_taxonomy_category() -> None:
     response = parse_shopping_description(
         ShoppingParseRequest(text="some lunchbox snacks"),
         llm_router=llm_router,
+        decision_client=decision_client,
+        cache=parse_cache,
     )
 
     assert response.items[0].category is None
     assert response.items[0].food_group == "other"
 
 
-def test_prompt_states_intent_and_ambiguity_policy_not_schema_rules() -> None:
-    llm_router = _FakeLLMRouter(ShoppingParseResponse(items=[]))
-    parse_shopping_description(ShoppingParseRequest(text="tacos"), llm_router=llm_router)
-    system_prompt = llm_router.messages[0].content
-
+@pytest.mark.parametrize(
+    "system_prompt", [SHOPPING_PARSE_SYSTEM_PROMPT, ITEM_PARSE_SYSTEM_PROMPT, DISH_PARSE_SYSTEM_PROMPT], ids=str
+)
+def test_prompts_state_intent_and_ambiguity_policy_not_schema_rules(system_prompt: str) -> None:
     assert not [unit for unit in ShoppingUnit if f'"{unit}"' in system_prompt]
     assert not [category for category in INGREDIENT_CATEGORY_FOOD_GROUPS if category in system_prompt]
     assert "unit_price" not in system_prompt
     assert "api_ingredient_id" not in system_prompt
+
+
+@pytest.mark.parametrize("system_prompt", [SHOPPING_PARSE_SYSTEM_PROMPT, DISH_PARSE_SYSTEM_PROMPT], ids=str)
+def test_prompts_that_expand_dishes_cap_the_confidence_of_the_guessed_ingredients(system_prompt: str) -> None:
     assert "confidence of 0.6 or lower" in system_prompt
