@@ -64,6 +64,9 @@ workflows:
             --dart-define="API_BASE_URL=$API_BASE_URL" \
             --dart-define="COGNITO_DOMAIN=$COGNITO_DOMAIN" \
             --dart-define="COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
+      # Tester builds are never debuggable (only the gordon owner build is); this reads the packaged manifest.
+      - name: Verify tester build is not debuggable
+        script: python3 scripts/check_apk.py build/app/outputs/flutter-apk/app-release.apk --expect release --version-code "$VERSION_CODE"
       - name: Verify release signature
         script: |
           #!/usr/bin/env bash
