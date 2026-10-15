@@ -5,7 +5,13 @@ from datetime import UTC, datetime
 
 from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
-from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore, content_fingerprint
+from glean.meal_plan.dietary_decisions import (
+    DietaryDecision,
+    DietaryDecisionStore,
+    content_fingerprint,
+    dietary_questions,
+    question_hash,
+)
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -221,6 +227,7 @@ def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, s
                 probability=probability,
                 model=f"{DECISION_MODEL}-20261014",
                 content_hash=_hash(corpus, recipe_id),
+                criteria_hash=question_hash(dietary_questions()[flag]),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )
             for (recipe_id, flag), probability in probabilities.items()

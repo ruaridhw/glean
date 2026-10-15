@@ -66,6 +66,7 @@ class DietaryDecision(BaseModel):
     probability: float = Field(ge=0.0, le=1.0, description="Probability that the recipe breaks the flag.")
     model: str = Field(description="Dated snapshot of the decision model that answered.")
     content_hash: str = Field(description="`content_fingerprint` of the recipe state (title, ingredients) assessed.")
+    criteria_hash: str = Field(description="`question_hash` of the flag's question (instructions, criteria) it answered.")
     computed_at: datetime = Field(description="When the decision was computed.")
 
 
@@ -74,6 +75,11 @@ def content_fingerprint(title: str, ingredient_names: Iterable[str]) -> str:
     normalised = [" ".join(name.casefold().split()) for name in ingredient_names]
     payload = json.dumps([" ".join(title.casefold().split()), sorted(normalised)])
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def question_hash(question: NoulQuestion) -> str:
+    """Identifies the question a decision answered, so rewording a flag's criteria voids its old decisions."""
+    return hashlib.sha256(question.model_dump_json().encode()).hexdigest()
 
 
 class DietaryDecisionStore:
@@ -121,10 +127,12 @@ class DietaryDecisions:
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
-    # Thresholds are calibrated to one model version (`model` is the model's dated snapshot of it), and a
-    # decision only speaks for the title and ingredients it was asked about.
-    return _CURRENT_MODEL.fullmatch(decision.model) is not None and decision.content_hash == content_fingerprint(
-        summary.title, summary.ingredient_names
+    # Thresholds are calibrated to one model version (`model` is the model's dated snapshot of it) and to the
+    # criteria text; a decision only speaks for the title and ingredients it was asked about.
+    return (
+        _CURRENT_MODEL.fullmatch(decision.model) is not None
+        and decision.content_hash == content_fingerprint(summary.title, summary.ingredient_names)
+        and decision.criteria_hash == question_hash(_QUESTIONS[decision.flag])
     )
 
 
@@ -294,6 +302,7 @@ def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...])
             probability=answer.noul(flag).noul,
             model=answer.model,
             content_hash=content_fingerprint(summary.title, summary.ingredient_names),
+            criteria_hash=question_hash(_QUESTIONS[flag]),
             computed_at=computed_at,
         )
         for flag in flags

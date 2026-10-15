@@ -25,6 +25,8 @@ from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
+    dietary_questions,
+    question_hash,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -63,6 +65,7 @@ def _replay(tmp_path: Path, flag: str) -> tuple[set[str], set[str]]:
                 probability=PROBABILITIES[row["id"]][decided_flag],
                 model=MODEL,
                 content_hash=content_fingerprint(row["title"], row["ingredients"]),
+                criteria_hash=question_hash(dietary_questions()[decided_flag]),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )
             for row in labelled

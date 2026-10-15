@@ -22,6 +22,8 @@ from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
+    dietary_questions,
+    question_hash,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -80,6 +82,28 @@ def test_nut_free_excludes_a_recipe_judged_under_an_older_model(tmp_path) -> Non
     _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, model="typesafe/jev-1.13-20260917")
 
     assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_a_decision_computed_under_other_criteria_text_is_treated_as_missing(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
+    question = dietary_questions()["nut-free"]
+    reworded = question.model_copy(update={"instructions": question.instructions + " Tahini counts."})
+    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, criteria_hash=question_hash(reworded))
+
+    assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_the_criteria_hash_changes_with_either_criterion_or_the_instructions() -> None:
+    question = dietary_questions()["vegetarian"]
+    criteria = question.criteria
+
+    variants = [
+        question.model_copy(update={"instructions": question.instructions + " "}),
+        question.model_copy(update={"criteria": criteria.model_copy(update={"true": criteria.true + " "})}),
+        question.model_copy(update={"criteria": criteria.model_copy(update={"false": criteria.false + " "})}),
+    ]
+
+    assert len({question_hash(question), *(question_hash(variant) for variant in variants)}) == 4
 
 
 def test_nut_free_excludes_a_recipe_whose_stored_decision_is_unreadable(tmp_path) -> None:
@@ -155,7 +179,11 @@ def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
 
 
 def _store_decisions(
-    corpus: RecipeCorpusStore, probabilities: dict[tuple[str, str], float], *, model: str = CURRENT_MODEL
+    corpus: RecipeCorpusStore,
+    probabilities: dict[tuple[str, str], float],
+    *,
+    model: str = CURRENT_MODEL,
+    criteria_hash: str | None = None,
 ) -> None:
     DietaryDecisionStore(corpus.store).save(
         [
@@ -165,6 +193,7 @@ def _store_decisions(
                 probability=probability,
                 model=model,
                 content_hash=_hash(corpus, recipe_id),
+                criteria_hash=criteria_hash or question_hash(dietary_questions()[flag]),
                 computed_at=datetime(2026, 10, 15, tzinfo=UTC),
             )
             for (recipe_id, flag), probability in probabilities.items()
