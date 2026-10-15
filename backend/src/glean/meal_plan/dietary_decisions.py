@@ -7,6 +7,8 @@ them. A decision can only add an exclusion to the regex rules, never lift one.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -20,6 +22,8 @@ from glean.observability import logger
 from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from glean.decisions import DecisionClient
     from glean.recipes.corpus import RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
@@ -55,7 +59,15 @@ class DietaryDecision(BaseModel):
     flag: str
     probability: float = Field(ge=0.0, le=1.0)
     model: str  # the dated snapshot that answered
+    content_hash: str  # `content_fingerprint` of the recipe state Jev assessed
     computed_at: datetime
+
+
+def content_fingerprint(title: str, ingredient_names: Iterable[str]) -> str:
+    """Identifies the recipe state a decision assessed, so editing a recipe under its id voids the decision."""
+    normalised = [" ".join(name.casefold().split()) for name in ingredient_names]
+    payload = json.dumps([" ".join(title.casefold().split()), sorted(normalised)])
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 class DietaryDecisionStore:
@@ -87,24 +99,27 @@ class DietaryDecisions:
     def __init__(self, decisions: list[DietaryDecision]) -> None:
         self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
 
-    def excludes(self, recipe_id: str, flag: str) -> bool:
+    def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
 
-        Nut-free is an allergy, so a recipe with no current decision is excluded.
+        Nut-free is an allergy, so a recipe with no decision for its current content is excluded.
         Preference flags without one are left to the regex rules.
         """
         if flag not in DIETARY_FLAGS:
             return False
-        decision = self._by_key.get((recipe_id, flag))
-        if decision is None or not _is_current(decision):
+        decision = self._by_key.get((summary.external_id, flag))
+        if decision is None or not _is_current(decision, summary):
             return flag == NUT_FREE
         threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
         return decision.probability >= threshold
 
 
-def _is_current(decision: DietaryDecision) -> bool:
-    # Thresholds are calibrated to one model version; `model` is Jev's dated snapshot of it.
-    return _CURRENT_MODEL.fullmatch(decision.model) is not None
+def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
+    # Thresholds are calibrated to one model version (`model` is Jev's dated snapshot of it), and a
+    # decision only speaks for the title and ingredients it was asked about.
+    return _CURRENT_MODEL.fullmatch(decision.model) is not None and decision.content_hash == content_fingerprint(
+        summary.title, summary.ingredient_names
+    )
 
 
 # What each question asks, and the household's ingredient policy, given to Jev as criteria.
@@ -212,7 +227,10 @@ def produce_missing_decisions(
     """
     store = DietaryDecisionStore(corpus.store)
     summaries, _ = corpus.search(per_page=_EVERYTHING)
-    decisions = {(d.recipe_id, d.flag): d for d in store.load() if _is_current(d)}
+    by_id = {summary.external_id: summary for summary in summaries}
+    decisions = {
+        (d.recipe_id, d.flag): d for d in store.load() if d.recipe_id in by_id and _is_current(d, by_id[d.recipe_id])
+    }
     report = CoverageReport(recipes=len(summaries), flags=len(flags))
 
     work = [
@@ -259,6 +277,7 @@ def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...])
             flag=flag,
             probability=answer.noul(flag).noul,
             model=answer.model,
+            content_hash=content_fingerprint(summary.title, summary.ingredient_names),
             computed_at=computed_at,
         )
         for flag in flags
