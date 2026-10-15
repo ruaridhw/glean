@@ -5,7 +5,7 @@ date: 2026-10-15
 
 # Classify catalogue items by ingredient group plus form, with form part of the item's identity
 
-Each catalogue item has **one ingredient group**: today's 23 food categories plus Baking, Drinks, Snacks & treats, Household, Health & beauty, Baby, Pet and Other, all with plain-English names. Where it applies, an ingredient also has **a form**: fresh, frozen, tinned/jarred, dried, or not applicable. Form is part of what an ingredient is, so tinned chickpeas and dried chickpeas are different ingredients: they differ in shelf life once opened, in how they're tracked, and in prep. A recipe line names the form it means.
+Each catalogue item has **one ingredient group**: today's 23 food categories plus Baking, Nuts & seeds, Drinks, Snacks & treats, Household, Health & beauty, Baby, Pet and Other (32 in all), all with plain-English names. Where it applies, an ingredient also has **a form**: fresh, frozen, tinned/jarred, dried, or not applicable. Form is part of what an ingredient is, so tinned chickpeas and dried chickpeas are different ingredients: they differ in shelf life once opened, in how they're tracked, and in prep. A recipe line names the form it means.
 
 ## Considered options
 
@@ -15,7 +15,7 @@ Each catalogue item has **one ingredient group**: today's 23 food categories plu
 
 ## Consequences
 
-- **Food group comes from the ingredient group alone.** Each ingredient group maps to exactly one food group, which the meal plan uses to balance the week. "Food group" keeps its name.
-- **Store section and shelf-life defaults come from group and form together.** An ingredient never has a default from form alone: flour isn't "dried" for shelf-life purposes.
+- **Food group comes from the ingredient group alone.** Each ingredient group maps to exactly one food group, which the meal plan uses to balance the week. "Food group" keeps its name. Drinks, Snacks & treats and the non-food groups map to the food group **other**, which doesn't count towards the week's balance. Nuts & seeds count as protein and are shelved in Food Cupboard.
+- **Store section and shelf-life defaults come from group and form together** (unopened and once opened alike). An ingredient never has a default from form alone: flour isn't "dried" for shelf-life purposes.
 - **"Stock & gravy" isn't a separate group** (it's part of sauces and condiments), and **dairy isn't split**. Cream and soft cheese are perishable through per-ingredient overrides.
 - **Renames from the old categories:** nightshades → Tomatoes, peppers & aubergines; alliums → Onions & garlic; brassicas → Cabbage & broccoli; oils_fats → Oils & fats.
