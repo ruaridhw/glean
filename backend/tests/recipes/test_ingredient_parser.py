@@ -143,3 +143,28 @@ def test_parse_ingredient_text_converts_cups_by_density_then_to_ml_else_keeps_th
     assert parsed.canonical_name == expected_name
     assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-2)
     assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit", "expected_preparation"),
+    [
+        ("1 x 400g tin chopped tomatoes", "Chopped tomatoes", 400, "g", "1 tin"),
+        ("2 x 400g tins chickpeas", "Chickpeas", 800, "g", "2 tins"),
+        ("1 (4 ounce) can chopped green chiles", "Chopped green chiles", 113.4, "g", "1 can"),
+        ("2 (14 ounce) cans coconut milk", "Coconut milk", 793.8, "g", "2 cans"),
+    ],
+)
+def test_parse_ingredient_text_reads_spaced_and_us_style_sized_packages(
+    raw: str,
+    expected_name: str,
+    expected_quantity: float,
+    expected_unit: str,
+    expected_preparation: str | None,
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit
+    assert parsed.preparation == expected_preparation

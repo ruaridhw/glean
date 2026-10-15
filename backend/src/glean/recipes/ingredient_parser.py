@@ -187,7 +187,25 @@ def _parse_label(text: str) -> tuple[str, float, str, str | None]:
 
 def _parse_package_measure(text: str) -> tuple[str, float, str, str | None] | None:
     if match := re.match(
-        rf"^(?P<count>{_NUMBER_PATTERN})x\s+(?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\s+"
+        rf"^(?P<count>{_NUMBER_PATTERN})\s+\((?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s+"
+        rf"(?P<container>{'|'.join(sorted(_CONTAINERS))})\s+(?P<name>.+)$",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        count = _parse_quantity(match.group("count"))
+        converted = _convert_measure(_parse_quantity(match.group("amount")) * count, match.group("unit"))
+        if converted is not None:
+            quantity, unit = converted
+            container = _singular_container(match.group("container"))
+            return (
+                match.group("name").strip(),
+                quantity,
+                unit,
+                f"{_format_quantity(count)} {_pluralise(container, count)}",
+            )
+
+    if match := re.match(
+        rf"^(?P<count>{_NUMBER_PATTERN})\s*x\s+(?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\s+"
         rf"(?P<container>{'|'.join(sorted(_CONTAINERS))})\s+(?P<name>.+)$",
         text,
         flags=re.IGNORECASE,
@@ -202,7 +220,7 @@ def _parse_package_measure(text: str) -> tuple[str, float, str, str | None] | No
         return match.group("name").strip(), quantity, unit, f"{_format_quantity(count)} {_pluralise(container, count)}"
 
     if match := re.match(
-        rf"^(?P<count>{_NUMBER_PATTERN})x\s+(?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\s+(?P<name>.+)$",
+        rf"^(?P<count>{_NUMBER_PATTERN})\s*x\s+(?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\s+(?P<name>.+)$",
         text,
         flags=re.IGNORECASE,
     ):
