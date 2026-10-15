@@ -9,10 +9,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/data/database.dart';
+import 'package:glean/data/models/user_config_view.dart';
+import 'package:glean/data/providers/pantry_providers.dart';
+import 'package:glean/data/providers/plan_providers.dart';
+import 'package:glean/data/providers/recipes_providers.dart';
+import 'package:glean/data/providers/shopping_providers.dart';
+import 'package:glean/data/providers/user_config_providers.dart';
+import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/repositories/pantry_repository.dart';
+import 'package:glean/data/repositories/plan_repository.dart';
+import 'package:glean/data/repositories/recipes_repository.dart';
+import 'package:glean/data/repositories/shopping_repository.dart';
+import 'package:glean/data/repositories/user_config_repository.dart';
+import 'package:glean/data/util/week.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/diagnostics/diagnostics.dart';
 import 'package:glean/features/settings/settings_screen.dart';
+import 'package:glean/features/settings/widgets/settings_stats_row.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -76,7 +90,7 @@ class _Harness {
       overrides: [
         gleanDatabaseProvider.overrideWith((ref) {
           final GleanDatabase db = GleanDatabase(NativeDatabase(liveFile));
-          ref.onDispose(db.close);
+          ref.onDispose(() => closeDatabase(db));
           return db;
         }),
         databaseFileProvider.overrideWithValue(() async => liveFile),
@@ -144,17 +158,151 @@ void _settingsWidgetTest(
   });
 }
 
-/// A real database file as the app writes it, holding one `user-1` row with [mealsPerWeek].
-Future<List<int>> _backupBytes(
-  Directory dir,
-  String name, {
-  required int mealsPerWeek,
-}) async {
+final DateTime _week = startOfWeek(DateTime(2026, 1, 5));
+
+/// Everything the app shows for the user, read through the real providers: what a restore must bring back.
+Future<Map<String, Object?>> _domainState(
+  WidgetTester tester,
+  ProviderContainer container,
+) async {
+  // Riverpod pauses a stream provider nobody listens to, and these sit on a database opened inside the test's
+  // fake-async zone, so they only advance while listened to and pumped.
+  final List<ProviderSubscription<Object?>> listeners =
+      <ProviderSubscription<Object?>>[
+        container.listen(pantryItemsProvider, (_, _) {}),
+        container.listen(shoppingListProvider, (_, _) {}),
+        container.listen(savedRecipesProvider, (_, _) {}),
+        container.listen(planWeekProvider(_week), (_, _) {}),
+        container.listen(userConfigProvider, (_, _) {}),
+      ];
+  for (var i = 0; i < 60; i++) {
+    final List<AsyncValue<Object?>> reads = <AsyncValue<Object?>>[
+      container.read(pantryItemsProvider),
+      container.read(shoppingListProvider),
+      container.read(savedRecipesProvider),
+      container.read(planWeekProvider(_week)),
+      container.read(userConfigProvider),
+    ];
+    if (reads.every((AsyncValue<Object?> r) => r.hasValue && !r.isLoading)) {
+      break;
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  final pantry = container.read(pantryItemsProvider).requireValue;
+  final shopping = container.read(shoppingListProvider).requireValue;
+  final recipes = container.read(savedRecipesProvider).requireValue;
+  final plan = container.read(planWeekProvider(_week)).requireValue;
+  final config = container.read(userConfigProvider).requireValue;
+  for (final ProviderSubscription<Object?> l in listeners) {
+    l.close();
+  }
+  return <String, Object?>{
+    'pantry': <String>[
+      for (final i in pantry) '${i.canonicalName} ${i.quantity}${i.unit}',
+    ],
+    'shopping': <String>[for (final i in shopping) i.name],
+    'recipes': <String>[for (final r in recipes) r.title],
+    'plan': <String>[
+      for (final e in plan) '${e.recipeTitle}${e.isCooked ? ' (cooked)' : ''}',
+    ],
+    'mealsPerWeek': config.mealsPerWeek,
+  };
+}
+
+const Map<String, Object?> _liveState = <String, Object?>{
+  'pantry': <String>['rice 300.0g'],
+  'shopping': <String>[],
+  'recipes': <String>[],
+  'plan': <String>[],
+  'mealsPerWeek': 4,
+};
+
+const Map<String, Object?> _backedUpState = <String, Object?>{
+  'pantry': <String>['chicken breast 300.0g'],
+  'shopping': <String>['oat milk'],
+  'recipes': <String>['Chicken dinner'],
+  'plan': <String>['Chicken dinner (cooked)', 'Chicken dinner'],
+  'mealsPerWeek': 7,
+};
+
+Future<void> _setMealsPerWeek(GleanDatabase db, int n) =>
+    UserConfigRepository(db).save(
+      UserConfigView(
+        id: 'user-1',
+        purchaseTolerance: UserConfigView.defaultPurchaseTolerance,
+        preferredServings: UserConfigView.defaultPreferredServings,
+        mealsPerWeek: n,
+        dietaryFlags: const <String>[],
+        maxActiveTimeMins: null,
+      ),
+    );
+
+/// The phone's own data before a restore: one pantry item and the default-ish settings.
+Future<void> _seedLive(GleanDatabase db) async {
+  await PantryRepository(db, IngredientsRepository(db)).addItem(
+    userId: 'user-1',
+    name: 'rice',
+    quantity: 300,
+    unit: 'g',
+    category: 'poultry',
+  );
+  await _setMealsPerWeek(db, 4);
+}
+
+/// A backup holding every part of the user's state: pantry, shopping list, saved recipe, a cooked and an
+/// uncooked plan entry (history) and settings. Written through the repositories, closed, returned as bytes.
+Future<List<int>> _fullBackupBytes(Directory dir, String name) async {
   final File file = File('${dir.path}/$name.sqlite');
   final GleanDatabase db = GleanDatabase(NativeDatabase(file));
-  await db.customStatement(
-    "INSERT INTO user_config (id, meals_per_week) VALUES ('user-1', $mealsPerWeek)",
+  final IngredientsRepository ingredients = IngredientsRepository(db);
+  final PantryRepository pantry = PantryRepository(db, ingredients);
+  final PlanRepository plan = PlanRepository(db, pantry);
+  await pantry.addItem(
+    userId: 'user-1',
+    name: 'chicken breast',
+    quantity: 500,
+    unit: 'g',
+    category: 'poultry',
+    now: DateTime(2026, 1, 1),
   );
+  await ShoppingRepository(
+    db,
+    ingredients,
+  ).addManualItem(userId: 'user-1', name: 'oat milk');
+  final int recipeId = await RecipesRepository(db, ingredients).save(
+    userId: 'user-1',
+    title: 'Chicken dinner',
+    ingredients: const <SaveRecipeIngredient>[
+      SaveRecipeIngredient(
+        canonicalName: 'chicken breast',
+        quantity: 100,
+        unit: 'g',
+      ),
+    ],
+  );
+  final int cooked = await plan.addEntry(
+    userId: 'user-1',
+    recipeId: recipeId,
+    recipeTitle: 'Chicken dinner',
+    servings: 2,
+    plannedDate: _week,
+  );
+  await plan.addEntry(
+    userId: 'user-1',
+    recipeId: recipeId,
+    recipeTitle: 'Chicken dinner',
+    servings: 2,
+    plannedDate: _week.add(const Duration(days: 1)),
+  );
+  await plan.markCooked(
+    entryId: cooked,
+    userId: 'user-1',
+    now: DateTime(2026, 1, 6),
+  );
+  await _setMealsPerWeek(db, 7);
   await db.close();
   return file.readAsBytesSync();
 }
@@ -232,59 +380,61 @@ void main() {
     },
   );
 
-  Future<int> mealsPerWeekOnDisk(
-    WidgetTester tester,
-    _Harness h,
-  ) async => (await tester.runAsync(() async {
-    final GleanDatabase db = GleanDatabase(NativeDatabase(h.liveFile));
-    final int n =
-        (await db
-                .customSelect(
-                  "SELECT meals_per_week AS n FROM user_config WHERE id = 'user-1'",
-                )
-                .getSingle())
-            .read<int>('n');
-    await db.close();
-    return n;
-  }))!;
-
   Future<_Harness> openedWithLiveData(WidgetTester tester) async {
     final _Harness h = _Harness(dir);
     await tester.runAsync(() async {
       final GleanDatabase live = GleanDatabase(NativeDatabase(h.liveFile));
-      await live.customStatement(
-        "INSERT INTO user_config (id, meals_per_week) VALUES ('user-1', 4)",
-      );
+      await _seedLive(live);
       await live.close();
     });
     return h;
   }
 
+  ProviderContainer containerOf(WidgetTester tester) =>
+      ProviderScope.containerOf(tester.element(find.byType(SettingsScreen)));
+
+  Future<void> chooseAndConfirm(
+    WidgetTester tester,
+    String id,
+    String sheetText,
+  ) async {
+    await tester.tap(find.byKey(_restoreButton));
+    await _until(tester, sheetText);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('restore.backup.$id')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('restore.confirm')));
+  }
+
   _settingsWidgetTest(
-    'choosing a backup and confirming replaces the phone\'s data with it, using the signed link without the Cognito token',
+    'restoring a backup brings back the pantry, shopping list, recipes, plan, cooking history and settings through the app\'s own providers and screen',
     (tester) async {
       final _Harness h = await openedWithLiveData(tester);
       h.backups = <Map<String, Object?>>[
         _entry(id: 'db-exports/user-1/a/', url: _exportedUrl),
       ];
       h.downloads[_exportedUrl] = (await tester.runAsync(
-        () => _backupBytes(dir, 'exported', mealsPerWeek: 7),
+        () => _fullBackupBytes(dir, 'exported'),
       ))!;
       await tester.pumpWidget(h.app());
       await _waitForContent(tester);
+      expect(await _domainState(tester, containerOf(tester)), _liveState);
       await _unlockDeveloperMode(tester);
-      await tester.tap(find.byKey(_restoreButton));
-      await _until(tester, 'database v2');
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const Key('restore.backup.db-exports/user-1/a/')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('restore.confirm')));
-      await _until(tester, 'Backup restored');
 
+      await chooseAndConfirm(tester, 'db-exports/user-1/a/', 'database v2');
+      await _until(tester, 'Backup restored');
       expect(find.text('Backup restored'), findsOneWidget);
-      expect(await mealsPerWeekOnDisk(tester, h), 7);
+      await _waitForContent(tester);
+
+      expect(await _domainState(tester, containerOf(tester)), _backedUpState);
+      expect(
+        find.descendant(
+          of: find.byType(SettingsStatsRow),
+          matching: find.text('7'),
+        ),
+        findsOneWidget,
+        reason: 'the Settings summary shows the restored dinners per week',
+      );
       final http.Request download = h.requests.last;
       expect(download.url.toString(), _exportedUrl);
       expect(download.headers.containsKey('Authorization'), isFalse);
@@ -293,7 +443,7 @@ void main() {
   );
 
   _settingsWidgetTest(
-    'a backup from a newer schema is refused with a clear message and the phone\'s data is untouched',
+    'a backup from a newer schema is refused with a clear message and every part of the phone\'s data is still shown',
     (tester) async {
       final _Harness h = await openedWithLiveData(tester);
       h.backups = <Map<String, Object?>>[
@@ -303,19 +453,42 @@ void main() {
       await tester.pumpWidget(h.app());
       await _waitForContent(tester);
       await _unlockDeveloperMode(tester);
-      await tester.tap(find.byKey(_restoreButton));
-      await _until(tester, 'database v99');
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const Key('restore.backup.db-exports/user-1/n/')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('restore.confirm')));
+
+      await chooseAndConfirm(tester, 'db-exports/user-1/n/', 'database v99');
       await _until(tester, 'newer version');
 
       expect(find.textContaining('newer version of Glean'), findsOneWidget);
-      expect(await mealsPerWeekOnDisk(tester, h), 4);
+      expect(await _domainState(tester, containerOf(tester)), _liveState);
       expect(h.tempRoot.listSync(), isEmpty);
+    },
+  );
+
+  _settingsWidgetTest(
+    'a restore that fails after the old connection closed reopens the previous database so the app keeps working',
+    (tester) async {
+      final _Harness h = await openedWithLiveData(tester);
+      h.backups = <Map<String, Object?>>[
+        _entry(id: 'db-exports/user-1/a/', url: _exportedUrl),
+      ];
+      h.downloads[_exportedUrl] = (await tester.runAsync(
+        () => _fullBackupBytes(dir, 'exported'),
+      ))!;
+      // The kept copy of the previous database cannot be written, which only fails once the live connection
+      // is already closed.
+      Directory('${h.liveFile.path}.pre-restore').createSync();
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+      await _unlockDeveloperMode(tester);
+
+      await chooseAndConfirm(tester, 'db-exports/user-1/a/', 'database v2');
+      await _until(tester, 'Could not restore the backup');
+      await _waitForContent(tester);
+
+      expect(
+        find.textContaining('Could not restore the backup'),
+        findsOneWidget,
+      );
+      expect(await _domainState(tester, containerOf(tester)), _liveState);
     },
   );
 
@@ -331,7 +504,7 @@ void main() {
       await _until(tester, 'Could not load backups');
 
       expect(find.text('Could not load backups. Try again.'), findsOneWidget);
-      expect(await mealsPerWeekOnDisk(tester, h), 4);
+      expect(await _domainState(tester, containerOf(tester)), _liveState);
     },
   );
 }

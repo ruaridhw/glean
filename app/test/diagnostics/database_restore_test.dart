@@ -272,4 +272,30 @@ void main() {
       await expectLiveUntouchedAfterRefusal(snapshot);
     },
   );
+
+  test(
+    'a failure after the live database is closed is reported as interrupted and the previous database file is intact',
+    () async {
+      final GleanDatabase source = open(File('${dir.path}/source.sqlite'));
+      await source.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('theirs', 3)",
+      );
+      final File backup = await snapshotDatabase(source, dir);
+      await source.close();
+      final GleanDatabase live = await liveWithUserConfig();
+      // The kept copy of the previous database cannot be written: a real filesystem failure that only shows
+      // up once the live connection is already closed.
+      Directory('${liveFile.path}.pre-restore').createSync();
+
+      await expectLater(
+        restoreDatabase(backup: backup, live: live, liveFile: liveFile),
+        throwsA(isA<RestoreInterruptedException>()),
+      );
+
+      final GleanDatabase reopened = open(liveFile);
+      addTearDown(reopened.close);
+      expect(await _mealsPerWeek(reopened, 'mine'), 6);
+      expect(File('${liveFile.path}.restore-staging').existsSync(), isFalse);
+    },
+  );
 }

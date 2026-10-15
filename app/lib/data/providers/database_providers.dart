@@ -11,7 +11,7 @@ final Provider<GleanDatabase> gleanDatabaseProvider = Provider<GleanDatabase>((
   ref,
 ) {
   final db = GleanDatabase(driftDatabase(name: 'glean'));
-  ref.onDispose(db.close);
+  ref.onDispose(() => closeDatabase(db));
   return db;
 });
 

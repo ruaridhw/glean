@@ -54,6 +54,10 @@ final Provider<BackupRestore> backupRestoreProvider = Provider<BackupRestore>((
       );
       // The old connection is closed; providers rebuild against the restored file.
       ref.invalidate(gleanDatabaseProvider);
+    } on RestoreInterruptedException {
+      // The previous file is still in place but the connection to it is closed: reopen it.
+      ref.invalidate(gleanDatabaseProvider);
+      rethrow;
     } finally {
       await workDir.delete(recursive: true);
     }
