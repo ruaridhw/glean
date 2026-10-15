@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,7 @@ import boto3
 import pytest
 from boto3.dynamodb.conditions import Key
 from moto import mock_aws
+from moto.dynamodb.models import DynamoDBBackend
 
 from glean.catalogue.dynamo_store import DynamoCatalogueStore
 from glean.catalogue.groups import Form, GroupId
@@ -28,7 +30,21 @@ _CFN_ONLY = {"TableName", "TableClass", "PointInTimeRecoverySpecification"}
 
 
 @pytest.fixture
-def table() -> Iterator[Any]:
+def atomic_transactions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """moto runs transactions without a lock (and rolls back from a snapshot), so racing threads corrupt it.
+    Real DynamoDB transactions are atomic; give the fake the same property."""
+    lock = threading.Lock()
+    original = DynamoDBBackend.transact_write_items
+
+    def locked(self: DynamoDBBackend, *args: Any, **kwargs: Any) -> Any:
+        with lock:
+            return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(DynamoDBBackend, "transact_write_items", locked)
+
+
+@pytest.fixture
+def table(atomic_transactions: None) -> Iterator[Any]:
     with mock_aws():
         dynamodb = boto3.resource("dynamodb", region_name=REGION)
         props = {k: v for k, v in catalogue_table_properties().items() if k not in _CFN_ONLY}
