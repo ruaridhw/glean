@@ -113,3 +113,7 @@ failures  # CoverageReport field, asserted in tests and read by operators in the
 catalogue_item_id  # NormalisedName field
 ingredient_group  # NormalisedName field
 normalise_names  # POST /catalogue/normalise route
+
+# catalogue/router.py: sync response fields and the route handler are read by FastAPI / the app
+groups  # CatalogueSyncResponse field
+sync_catalogue  # GET /catalogue route
