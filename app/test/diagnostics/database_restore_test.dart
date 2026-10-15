@@ -86,4 +86,65 @@ void main() {
       );
     },
   );
+
+  File backupWithSchemaVersion(int version) {
+    final File file = File('${dir.path}/v$version-backup.sqlite');
+    final sqlite.Database raw = sqlite.sqlite3.open(file.path);
+    raw.execute('CREATE TABLE from_the_future (id INTEGER PRIMARY KEY)');
+    raw.execute('PRAGMA user_version = $version');
+    raw.close();
+    return file;
+  }
+
+  Future<GleanDatabase> liveWithUserConfig() async {
+    final GleanDatabase live = open(liveFile);
+    await live.customStatement(
+      "INSERT INTO user_config (id, meals_per_week) VALUES ('mine', 6)",
+    );
+    return live;
+  }
+
+  test(
+    'a backup from a newer schema version is refused and the live database is left untouched',
+    () async {
+      final GleanDatabase live = await liveWithUserConfig();
+      final GleanDatabase peek = open(File('${dir.path}/peek.sqlite'));
+      addTearDown(peek.close);
+      final int appVersion = peek.schemaVersion;
+
+      await expectLater(
+        restoreDatabase(
+          backup: backupWithSchemaVersion(appVersion + 1),
+          live: live,
+          liveFile: liveFile,
+        ),
+        throwsA(
+          isA<BackupTooNewException>().having(
+            (e) => e.toString(),
+            'message',
+            allOf(contains('newer'), contains('Update')),
+          ),
+        ),
+      );
+
+      expect(
+        await _mealsPerWeek(live, 'mine'),
+        6,
+        reason: 'the live database must still be open and usable',
+      );
+      await live.close();
+      final GleanDatabase reopened = open(liveFile);
+      addTearDown(reopened.close);
+      expect(await _mealsPerWeek(reopened, 'mine'), 6);
+      expect(
+        dir.listSync().map((e) => e.path.split('/').last).toSet(),
+        containsAll(<String>['glean.sqlite']),
+      );
+      expect(
+        File('${liveFile.path}.restore-staging').existsSync(),
+        isFalse,
+        reason: 'a refused backup leaves no staging file behind',
+      );
+    },
+  );
 }
