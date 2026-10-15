@@ -5,6 +5,7 @@ handler  # Mangum Lambda entry point, referenced by SAM template.yaml
 application  # ASGI app consumed by Mangum handler
 tracer  # AWS X-Ray PowerTools, used via @tracer.capture_lambda_handler
 export_db  # FastAPI route handler, registered by @router.post()
+list_backups  # FastAPI route handler, registered by @router.get()
 health  # FastAPI route handler, registered by @router.get()
 anthropic_api_key  # Pydantic Settings field
 langchain_project  # Pydantic Settings field, read by LangSmith SDK via env var

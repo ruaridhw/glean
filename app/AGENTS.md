@@ -9,7 +9,8 @@ See `../AGENTS.md` for repo-wide Makefile targets and preferred tools.
 The owner uses the Android app for real, and the phone's SQLite file is the
 only copy of their pantry, plan and shopping list (nothing syncs to the
 server). On their phone, never uninstall the app, clear its data, install a
-build signed with any key other than the release key, or try backup restores.
+build signed with any key other than the release key, or restore a backup that
+has not been verified (see below).
 Updates go through Codemagic builds, which install over the top, or through
 the release-key owner build (`scripts/owner_build.sh`, made on gordon) installed
 with `adb install -r`, and only when all of these hold:
@@ -25,9 +26,21 @@ with `adb install -r`, and only when all of these hold:
 Once it is installed, `adb` on the phone is read-only (copy the database and log
 off, stream `adb logcat -s glean`), and only when the owner asks.
 
+- Developer-mode Settings has **Restore from backup**: it replaces the phone's
+  database with one of the signed-in user's exports (or an agent-prepared
+  backup, listed first and labelled). A restore on the owner's phone is allowed
+  only with the owner present, and only after an Export diagnostics of that
+  phone was verified (downloads, opens with `sqlite3`, row counts match). The
+  restore refuses a backup from a newer schema and, on any failure, leaves the
+  current database untouched; the previous database is also kept as
+  `glean.sqlite.pre-restore`. Prove a restore on an emulator first.
 - Any table change needs a `schemaVersion` bump, an `onUpgrade` step, a new
   schema snapshot and a frozen fixture of the old version
-  (`test/data/schema_safety_test.dart` enforces this).
+  (`test/data/schema_safety_test.dart` enforces this). The default is to
+  migrate in place. Where a migration is impractical, a schema change may
+  instead rely on export plus restore (an agent transforms a verified export
+  and uploads it as a prepared backup), provided an export of the phone was
+  checked first; the snapshot and fixture requirement still holds.
 - Keep Android Auto Backup on (`test/android_backup_test.dart`), even though
   flutter_secure_storage's README suggests turning it off.
 
