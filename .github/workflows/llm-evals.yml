@@ -30,6 +30,9 @@ jobs:
       # Receipt photo evals: textract mode uploads to this scratch bucket (never the production
       # receipts bucket) and is skipped when it is unset. vision mode needs neither.
       GLEAN_EVAL_S3_BUCKET: ${{ vars.GLEAN_EVAL_S3_BUCKET }}
+      GLEAN_EVAL_AWS_ROLE_ARN: ${{ vars.GLEAN_EVAL_AWS_ROLE_ARN }}
+      # The hard- and soft-gate steps share one set of paid photo scans through this directory.
+      GLEAN_EVAL_SCAN_CACHE: results/scan-cache
       AWS_REGION: eu-west-2
 
     steps:
@@ -71,6 +74,9 @@ jobs:
         run: |
           if [ -f results/receipt-photo-eval.md ]; then
             cat results/receipt-photo-eval.md >> "$GITHUB_STEP_SUMMARY"
+            if grep -q "textract: not configured" results/receipt-photo-eval.md; then
+              echo "::warning title=Textract evals not run::textract: not configured (set GLEAN_EVAL_S3_BUCKET and GLEAN_EVAL_AWS_ROLE_ARN)"
+            fi
           fi
 
       - name: Generate PR comment
