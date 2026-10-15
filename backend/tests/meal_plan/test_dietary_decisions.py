@@ -12,7 +12,14 @@ from datetime import UTC, datetime
 
 from glean.decisions import JEV_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
-from glean.meal_plan.dietary_decisions import DIETARY_DECISIONS_KEY, DietaryDecision, DietaryDecisionStore
+from glean.meal_plan.dietary_decisions import (
+    DIETARY_DECISIONS_KEY,
+    DIETARY_FLAGS,
+    NUT_FREE_THRESHOLD,
+    PREFERENCE_THRESHOLD,
+    DietaryDecision,
+    DietaryDecisionStore,
+)
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -97,6 +104,26 @@ def test_nut_free_decisions_do_not_leak_into_other_flags(tmp_path) -> None:
     _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9})
 
     assert _ids(corpus, ["vegetarian"]) == {"rec_pesto"}
+
+
+def test_nut_free_is_stricter_than_the_preference_flags(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_maybe", "Mystery Stew", ["tomato", "sauce"])])
+    # A probability high enough to worry about for an allergy, yet below "probably" for a preference.
+    _store_decisions(corpus, {("rec_maybe", flag): 0.3 for flag in DIETARY_FLAGS})
+
+    assert _ids(corpus, ["nut-free"]) == set()
+    for flag in ("vegetarian", "vegan", "dairy-free", "gluten-free"):
+        assert _ids(corpus, [flag]) == {"rec_maybe"}
+
+
+def test_a_probability_at_the_threshold_excludes(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_edge", "Edge Stew", ["tomato", "sauce"])])
+    _store_decisions(
+        corpus, {("rec_edge", "nut-free"): NUT_FREE_THRESHOLD, ("rec_edge", "vegan"): PREFERENCE_THRESHOLD}
+    )
+
+    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, ["vegan"]) == set()
 
 
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
