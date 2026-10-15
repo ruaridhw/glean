@@ -263,6 +263,7 @@ def test_parse_ingredient_text_keeps_a_parenthetical_size_out_of_the_name(
         ("2 cheddar (8 oz)", "Cheddar", 226.8, "g", "2 cheddar"),
         ("2.0 Cheddar (8 oz)", "Cheddar", 226.8, "g", "2 Cheddar"),
         ("Cheddar (8 oz) x2", "Cheddar", 453.6, "g", None),
+        ("Cheddar (1 1/2 lb)", "Cheddar", 680.4, "g", None),
         # An explicit package size before a container noun does multiply.
         ("2 x 400g tins chopped tomatoes", "Chopped tomatoes", 800, "g", "2 tins"),
         ("2 (14 oz) cans chopped tomatoes", "Chopped tomatoes", 793.8, "g", "2 cans"),

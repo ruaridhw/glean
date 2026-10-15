@@ -208,3 +208,42 @@ def test_backfill_leaves_a_row_untouched_rather_than_produce_a_name_that_starts_
 
     assert corpus.get("import:odd") == original
     assert result.ingredients_changed == 0
+
+
+_SIZED_ROWS = [
+    ("Cheddar (1/2 lb)", "Cheddar", 226.8, "g"),
+    ("Cream (8 fl oz)", "Cream", 236.56, "ml"),
+    ("Cheddar (1 1/2 lb)", "Cheddar", 680.4, "g"),
+    ("Milk (250 ml)", "Milk", 250, "ml"),
+    ("Cheddar (8 oz)", "Cheddar", 226.8, "g"),
+    ("Milk (0.5 pint)", "Milk", 284, "ml"),
+]
+
+
+@pytest.mark.parametrize(("stored_name", "_name", "_quantity", "_unit"), _SIZED_ROWS)
+def test_backfill_leaves_every_size_form_untouched_at_a_stored_count_above_one(
+    tmp_path: Path, stored_name: str, _name: str, _quantity: float, _unit: str
+) -> None:
+    corpus = _corpus(tmp_path)
+    original = _recipe("import:sized", _leaked(stored_name, 2))
+    corpus.save(original)
+
+    result = backfill_unit_words(corpus, dry_run=False)
+
+    assert corpus.get("import:sized") == original
+    assert result.ingredients_changed == 0
+
+
+@pytest.mark.parametrize(("stored_name", "expected_name", "expected_quantity", "expected_unit"), _SIZED_ROWS)
+def test_backfill_converts_every_size_form_at_a_stored_count_of_one(
+    tmp_path: Path, stored_name: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    corpus = _corpus(tmp_path)
+    corpus.save(_recipe("import:sized", _leaked(stored_name, 1)))
+
+    backfill_unit_words(corpus, dry_run=False)
+
+    ingredient = corpus.get("import:sized").ingredients[0]
+    assert ingredient.canonical_name == expected_name
+    assert ingredient.quantity == pytest.approx(expected_quantity, rel=1e-3)
+    assert ingredient.unit == expected_unit
