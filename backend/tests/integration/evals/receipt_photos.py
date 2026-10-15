@@ -49,6 +49,7 @@ class ScanScore:
     unit_accuracy: float
     price_accuracy: float
     category_accuracy: float | None
+    non_food_dropped: float | None
 
 
 MATCH_THRESHOLD = 0.6
@@ -115,7 +116,11 @@ def _category_accuracy(
 
 def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
     food = [item for item in expected.items if not item.non_food]
+    non_food = [item for item in expected.items if item.non_food]
     pairs = _match_one_to_one(food, response.items)
+    matched_scan_lines = {id(got) for _, got in pairs}
+    leftover = [g for g in response.items if id(g) not in matched_scan_lines]
+    kept_non_food = len(_match_one_to_one(non_food, leftover))
 
     def share(hits: int) -> float:
         return hits / len(food) if food else 0.0
@@ -129,4 +134,5 @@ def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
         unit_accuracy=share(sum(1 for w, g in pairs if g.unit == w.unit)),
         price_accuracy=share(sum(1 for w, g in pairs if _line_total_close(w, g))),
         category_accuracy=_category_accuracy(food, pairs, response),
+        non_food_dropped=1 - kept_non_food / len(non_food) if non_food else None,
     )

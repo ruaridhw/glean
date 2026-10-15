@@ -102,3 +102,23 @@ class TestScoreScan:
         documented = ParsedIngredient.model_fields["unit"].description or ""
 
         assert set(re.findall(r'"(\w+)"', documented)) == UNIT_VOCABULARY
+
+    def test_non_food_lines_the_scan_dropped_score_as_dropped(self) -> None:
+        shampoo = ExpectedItem(name="shampoo", quantity=1, unit="bottle", unit_price=6.0, non_food=True)
+        lint = ExpectedItem(name="lint roller", quantity=1, unit="units", unit_price=2.5, non_food=True)
+
+        dropped_one = _scan(_parsed("semi skimmed milk", 1136, "ml", 1.20 / 1136), _parsed("shampoo", 1, "bottle", 6.0))
+        score = score_scan(_expected(MILK, shampoo, lint), dropped_one)
+
+        assert score.non_food_dropped == 0.5
+
+    def test_kept_non_food_lowers_precision_but_not_recall(self) -> None:
+        shampoo = ExpectedItem(name="shampoo", quantity=1, unit="bottle", unit_price=6.0, non_food=True)
+        scan = _scan(_parsed("semi skimmed milk", 1136, "ml", 1.20 / 1136), _parsed("shampoo", 1, "bottle", 6.0))
+
+        score = score_scan(_expected(MILK, shampoo), scan)
+
+        assert (score.recall, score.precision) == (1.0, 0.5)
+
+    def test_non_food_is_not_applicable_on_a_receipt_with_none(self) -> None:
+        assert score_scan(_expected(MILK), _scan()).non_food_dropped is None
