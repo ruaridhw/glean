@@ -231,4 +231,107 @@ void main() {
       expect(preparedY, lessThan(exportedY));
     },
   );
+
+  Future<int> mealsPerWeekOnDisk(
+    WidgetTester tester,
+    _Harness h,
+  ) async => (await tester.runAsync(() async {
+    final GleanDatabase db = GleanDatabase(NativeDatabase(h.liveFile));
+    final int n =
+        (await db
+                .customSelect(
+                  "SELECT meals_per_week AS n FROM user_config WHERE id = 'user-1'",
+                )
+                .getSingle())
+            .read<int>('n');
+    await db.close();
+    return n;
+  }))!;
+
+  Future<_Harness> openedWithLiveData(WidgetTester tester) async {
+    final _Harness h = _Harness(dir);
+    await tester.runAsync(() async {
+      final GleanDatabase live = GleanDatabase(NativeDatabase(h.liveFile));
+      await live.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('user-1', 4)",
+      );
+      await live.close();
+    });
+    return h;
+  }
+
+  _settingsWidgetTest(
+    'choosing a backup and confirming replaces the phone\'s data with it, using the signed link without the Cognito token',
+    (tester) async {
+      final _Harness h = await openedWithLiveData(tester);
+      h.backups = <Map<String, Object?>>[
+        _entry(id: 'db-exports/user-1/a/', url: _exportedUrl),
+      ];
+      h.downloads[_exportedUrl] = (await tester.runAsync(
+        () => _backupBytes(dir, 'exported', mealsPerWeek: 7),
+      ))!;
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+      await _unlockDeveloperMode(tester);
+      await tester.tap(find.byKey(_restoreButton));
+      await _until(tester, 'database v2');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('restore.backup.db-exports/user-1/a/')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('restore.confirm')));
+      await _until(tester, 'Backup restored');
+
+      expect(find.text('Backup restored'), findsOneWidget);
+      expect(await mealsPerWeekOnDisk(tester, h), 7);
+      final http.Request download = h.requests.last;
+      expect(download.url.toString(), _exportedUrl);
+      expect(download.headers.containsKey('Authorization'), isFalse);
+      expect(h.tempRoot.listSync(), isEmpty);
+    },
+  );
+
+  _settingsWidgetTest(
+    'a backup from a newer schema is refused with a clear message and the phone\'s data is untouched',
+    (tester) async {
+      final _Harness h = await openedWithLiveData(tester);
+      h.backups = <Map<String, Object?>>[
+        _entry(id: 'db-exports/user-1/n/', url: _newerUrl, schemaVersion: 99),
+      ];
+      h.downloads[_newerUrl] = _newerBackupBytes(dir);
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+      await _unlockDeveloperMode(tester);
+      await tester.tap(find.byKey(_restoreButton));
+      await _until(tester, 'database v99');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('restore.backup.db-exports/user-1/n/')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('restore.confirm')));
+      await _until(tester, 'newer version');
+
+      expect(find.textContaining('newer version of Glean'), findsOneWidget);
+      expect(await mealsPerWeekOnDisk(tester, h), 4);
+      expect(h.tempRoot.listSync(), isEmpty);
+    },
+  );
+
+  _settingsWidgetTest(
+    'when the backups cannot be listed the user is told and nothing changes',
+    (tester) async {
+      final _Harness h = await openedWithLiveData(tester);
+      h.listStatus = 500;
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+      await _unlockDeveloperMode(tester);
+      await tester.tap(find.byKey(_restoreButton));
+      await _until(tester, 'Could not load backups');
+
+      expect(find.text('Could not load backups. Try again.'), findsOneWidget);
+      expect(await mealsPerWeekOnDisk(tester, h), 4);
+    },
+  );
 }
