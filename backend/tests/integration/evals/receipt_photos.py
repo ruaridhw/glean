@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -39,6 +41,45 @@ class ExpectedReceipt:
     subtotal: float
     savings: float
     total: float
+
+
+@dataclass(frozen=True)
+class PhotoCase:
+    case_id: str
+    image_path: Path
+    expected: ExpectedReceipt
+
+
+PHOTO_FIXTURES = Path(__file__).parent / "fixtures" / "receipt_photos"
+
+
+def load_photo_cases(root: Path = PHOTO_FIXTURES) -> list[PhotoCase]:
+    """One case per photo; photos in the same receipt directory share its expected.json."""
+    cases = []
+    for expected_path in sorted(root.glob("*/expected.json")):
+        raw = json.loads(expected_path.read_text())
+        expected = ExpectedReceipt(
+            items=[
+                ExpectedItem(
+                    name=item["name"],
+                    quantity=item["quantity"],
+                    unit=item["unit"],
+                    unit_price=item["unit_price"],
+                    category=item.get("category"),
+                    non_food=item.get("non_food", False),
+                )
+                for item in raw["items"]
+            ],
+            subtotal=raw["subtotal"],
+            savings=raw["savings"],
+            total=raw["total"],
+        )
+        receipt_dir = expected_path.parent
+        cases.extend(
+            PhotoCase(f"{receipt_dir.name}/{image.stem}", image, expected)
+            for image in sorted(receipt_dir.glob("*.jpg"))
+        )
+    return cases
 
 
 @dataclass(frozen=True)
