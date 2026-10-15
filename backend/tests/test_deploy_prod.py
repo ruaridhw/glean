@@ -37,6 +37,7 @@ if answer is not None:
 @dataclass
 class Sandbox:
     root: Path
+    remote: Path
     stub_dir: Path
     log_file: Path
     env: dict[str, str]
@@ -45,6 +46,9 @@ class Sandbox:
         return subprocess.run(
             ["git", *args], cwd=self.root, check=True, capture_output=True, text=True, env=self.env
         ).stdout.strip()
+
+    def remote_git(self, *args: str) -> None:
+        subprocess.run(["git", "--git-dir", str(self.remote), *args], check=True, capture_output=True, env=self.env)
 
     def run(self, **extra_env: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -116,7 +120,7 @@ def sandbox(tmp_path: Path) -> Sandbox:
         "GIT_COMMITTER_EMAIL": "t@example.com",
     }
     env.pop("ALLOW_DIRTY", None)
-    box = Sandbox(root=root, stub_dir=stub_dir, log_file=log_file, env=env)
+    box = Sandbox(root=root, remote=tmp_path / "remote.git", stub_dir=stub_dir, log_file=log_file, env=env)
 
     remote = tmp_path / "remote.git"
     subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
@@ -251,3 +255,62 @@ def test_deploy_reports_when_the_lambda_does_not_carry_the_stamp(sandbox: Sandbo
 
     assert result.returncode != 0
     assert "GIT_SHA" in result.stderr
+
+
+def test_deploy_refuses_when_the_pushed_branch_was_deleted_on_origin(sandbox: Sandbox) -> None:
+    sandbox.git("checkout", "-q", "-b", "hotfix")
+    (sandbox.root / "backend" / "notes.txt").write_text("hotfix")
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "hotfix")
+    sandbox.git("push", "-q", "-u", "origin", "hotfix")
+    sandbox.remote_git("branch", "-D", "hotfix")  # deleted remotely; the local origin/hotfix ref is now stale
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "not been pushed" in result.stderr
+    assert sandbox.calls_to("sam") == []
+
+
+def test_deploy_refuses_when_origin_main_was_rewound_past_head(sandbox: Sandbox) -> None:
+    (sandbox.root / "backend" / "notes.txt").write_text("pushed, then rewound")
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "later")
+    sandbox.git("push", "-q", "origin", "main")
+    sandbox.remote_git("update-ref", "refs/heads/main", sandbox.git("rev-parse", "HEAD~1"))
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "not been pushed" in result.stderr
+    assert sandbox.calls_to("sam") == []
+
+
+def test_deploy_accepts_a_head_that_is_only_on_its_pushed_upstream_branch(sandbox: Sandbox) -> None:
+    sandbox.git("checkout", "-q", "-b", "hotfix")
+    (sandbox.root / "backend" / "notes.txt").write_text("hotfix")
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "hotfix")
+    sandbox.git("push", "-q", "-u", "origin", "hotfix")
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live_matching_a_deploy_of(sha)
+
+    result = sandbox.run()
+
+    assert result.returncode == 0, result.stderr
+    assert sandbox.calls_to("sam", "deploy")
+
+
+def test_deploy_ignores_pushes_to_other_remotes(sandbox: Sandbox, tmp_path: Path) -> None:
+    other = tmp_path / "fork.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(other)], check=True)
+    sandbox.git("remote", "add", "fork", str(other))
+    (sandbox.root / "backend" / "notes.txt").write_text("only on a fork")
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "fork only")
+    sandbox.git("push", "-q", "fork", "main")
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "not been pushed" in result.stderr
