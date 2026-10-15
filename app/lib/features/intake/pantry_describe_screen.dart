@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/receipts.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -24,22 +25,22 @@ class PantryDescribeScreen extends ConsumerStatefulWidget {
 
 class _PantryDescribeScreenState extends ConsumerState<PantryDescribeScreen> {
   bool _pending = false;
-  bool _failed = false;
+  Object? _error;
 
   Future<void> _submit(String text) async {
     if (_pending) return;
     setState(() {
       _pending = true;
-      _failed = false;
+      _error = null;
     });
     final ScanResponse response;
     try {
       response = await ref.read(apiClientProvider).describeReceipt(text);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _pending = false;
-        _failed = true;
+        _error = error;
       });
       return;
     }
@@ -82,10 +83,13 @@ class _PantryDescribeScreenState extends ConsumerState<PantryDescribeScreen> {
             placeholder: 'What did you buy?',
             buttonLabel: 'Parse',
             isLoading: _pending,
-            errorMessage: _failed
-                ? 'Could not understand that. Try being more specific, e.g. '
-                      '"500g chicken breast, 2 tins tomatoes".'
-                : null,
+            errorMessage: switch (_error) {
+              null => null,
+              final ApiRateLimitException e => e.userMessage,
+              _ =>
+                'Could not understand that. Try being more specific, e.g. '
+                    '"500g chicken breast, 2 tins tomatoes".',
+            },
             onSubmit: _submit,
           ),
         ),
