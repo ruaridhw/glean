@@ -59,6 +59,14 @@ test/                          # Unit + widget tests mirroring lib/, plus test/s
 integration_test/              # The one integration_test suite (app_test.dart), against main_e2e.dart
 ```
 
+## Catalogue sync
+
+`ingredient_groups`, `catalogue_items`, `catalogue_aliases` and `catalogue_sync_state` hold a synced copy of the
+backend catalogue (`GET /catalogue?since=<version>`). The 29 groups are seeded in the app
+(`lib/data/seed/ingredient_groups.dart`) so it works before any sync; `test/data/fixtures/catalogue_groups.json`
+pins that seed to the backend's output. `CatalogueSyncLifecycle` syncs in the background on launch, resume and
+sign-in; a failed sync changes nothing. Pantry, Plan and Shop must keep working with zero catalogue items.
+
 ## Standards
 
 `test/standards/house_rules_test.dart` enforces the import half of rule 1,
