@@ -43,8 +43,13 @@ Parameters:
     NoEcho: true
 
 Resources:
+  # Every user's on-device data is keyed by their Cognito `sub`. A new pool
+  # means new subs, which would orphan that data, so never let a stack
+  # delete or replacement take this pool with it.
   GleanUserPool:
     Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolName: glean-user-pool
       UsernameAttributes: [email]
