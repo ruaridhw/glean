@@ -22,8 +22,12 @@ class FoodGroup(StrEnum):
     CARBOHYDRATES = "carbohydrates"
     FATS = "fats"
     CONDIMENTS = "condiments"
-    # Drinks, snacks, household and the like count towards no meal-plan bucket.
     OTHER = "other"
+
+    @property
+    def counts_towards_balance(self) -> bool:
+        """Whether the meal plan counts this food group when it balances a week. Only "other" does not."""
+        return self is not FoodGroup.OTHER
 
 
 class TrackingMode(StrEnum):
