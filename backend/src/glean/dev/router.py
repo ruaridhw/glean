@@ -1,4 +1,6 @@
+import json
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -15,6 +17,9 @@ EXPORT_PREFIX = "db-exports"
 
 # Backup downloads are fetched straight after listing, so the links need not outlive a few minutes.
 DOWNLOAD_URL_TTL_SECONDS = 300
+# An agent that transformed a backup uploads it beside a copy of this object, as `<id>PREPARED`, whose optional
+# JSON body `{"note": "..."}` labels it in the app.
+PREPARED_MARKER = "PREPARED"
 _SQLITE_HEADER_BYTES = 100
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _USER_VERSION_OFFSET = 60
@@ -25,6 +30,15 @@ def _schema_version(header: bytes) -> int | None:
     if len(header) < _SQLITE_HEADER_BYTES or not header.startswith(_SQLITE_MAGIC):
         return None
     return int.from_bytes(header[_USER_VERSION_OFFSET : _USER_VERSION_OFFSET + 4], "big")
+
+
+def _prepared_note(s3: Any, bucket: str, key: str) -> str | None:
+    """The agent's free-text note from a PREPARED marker; a marker that is empty or not JSON just has no note."""
+    try:
+        note = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read()).get("note")
+    except (ValueError, AttributeError):
+        return None
+    return note if isinstance(note, str) and note else None
 
 
 @router.get("/backups")
@@ -41,17 +55,21 @@ async def list_backups(
     bucket = settings.s3_receipts_bucket
     user_prefix = f"{EXPORT_PREFIX}/{user_id}/"
     listing = s3.list_objects_v2(Bucket=bucket, Prefix=user_prefix).get("Contents", [])
+    keys = {item["Key"] for item in listing}
     backups = []
     for item in listing:
         key = item["Key"]
         if not key.endswith("/glean.db"):
             continue
         header = s3.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{_SQLITE_HEADER_BYTES - 1}")["Body"].read()
+        backup_id = key.removesuffix("glean.db")
+        prepared = f"{backup_id}{PREPARED_MARKER}" in keys
         backups.append(
             {
-                "id": key.removesuffix("glean.db"),
+                "id": backup_id,
                 "created_at": item["LastModified"].isoformat(),
-                "prepared": False,
+                "prepared": prepared,
+                "label": _prepared_note(s3, bucket, f"{backup_id}{PREPARED_MARKER}") if prepared else None,
                 "schema_version": _schema_version(header),
                 "size": item["Size"],
                 "download_url": s3.generate_presigned_url(
@@ -60,6 +78,7 @@ async def list_backups(
             }
         )
     backups.sort(key=lambda b: b["id"], reverse=True)
+    backups.sort(key=lambda b: not b["prepared"])  # stable: prepared first, each group newest first
     return {"backups": backups}
 
 
