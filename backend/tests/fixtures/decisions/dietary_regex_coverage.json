@@ -1,0 +1,3003 @@
+{
+ "rows": [
+  {
+   "id": "regex-forbidden-meat-and-fish-chicken",
+   "title": "Chicken rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chicken"
+   ],
+   "kind": "forbidden",
+   "term": "chicken",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-beef",
+   "title": "Beef rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "beef"
+   ],
+   "kind": "forbidden",
+   "term": "beef",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-pork",
+   "title": "Pork rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pork"
+   ],
+   "kind": "forbidden",
+   "term": "pork",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-lamb",
+   "title": "Lamb rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "lamb"
+   ],
+   "kind": "forbidden",
+   "term": "lamb",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-mince",
+   "title": "Mince rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mince"
+   ],
+   "kind": "forbidden",
+   "term": "mince",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-meat",
+   "title": "Meat rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meat"
+   ],
+   "kind": "forbidden",
+   "term": "meat",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-meatball",
+   "title": "Meatball rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meatball"
+   ],
+   "kind": "forbidden",
+   "term": "meatball",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-steak",
+   "title": "Steak rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "steak"
+   ],
+   "kind": "forbidden",
+   "term": "steak",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-bacon",
+   "title": "Bacon rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "bacon"
+   ],
+   "kind": "forbidden",
+   "term": "bacon",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-lardon",
+   "title": "Lardon rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "lardon"
+   ],
+   "kind": "forbidden",
+   "term": "lardon",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-chorizo",
+   "title": "Chorizo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chorizo"
+   ],
+   "kind": "forbidden",
+   "term": "chorizo",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-nduja",
+   "title": "Nduja rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nduja"
+   ],
+   "kind": "forbidden",
+   "term": "nduja",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-ham",
+   "title": "Ham rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ham"
+   ],
+   "kind": "forbidden",
+   "term": "ham",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-salami",
+   "title": "Salami rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "salami"
+   ],
+   "kind": "forbidden",
+   "term": "salami",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-pancetta",
+   "title": "Pancetta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pancetta"
+   ],
+   "kind": "forbidden",
+   "term": "pancetta",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-prosciutto",
+   "title": "Prosciutto rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "prosciutto"
+   ],
+   "kind": "forbidden",
+   "term": "prosciutto",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-sausage",
+   "title": "Sausage rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "sausage"
+   ],
+   "kind": "forbidden",
+   "term": "sausage",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-turkey",
+   "title": "Turkey rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "turkey"
+   ],
+   "kind": "forbidden",
+   "term": "turkey",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-duck",
+   "title": "Duck rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "duck"
+   ],
+   "kind": "forbidden",
+   "term": "duck",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-venison",
+   "title": "Venison rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "venison"
+   ],
+   "kind": "forbidden",
+   "term": "venison",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-gelatine",
+   "title": "Gelatine rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gelatine"
+   ],
+   "kind": "forbidden",
+   "term": "gelatine",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-lard",
+   "title": "Lard rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "lard"
+   ],
+   "kind": "forbidden",
+   "term": "lard",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-suet",
+   "title": "Suet rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "suet"
+   ],
+   "kind": "forbidden",
+   "term": "suet",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-fish",
+   "title": "Fish rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "fish"
+   ],
+   "kind": "forbidden",
+   "term": "fish",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-salmon",
+   "title": "Salmon rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "salmon"
+   ],
+   "kind": "forbidden",
+   "term": "salmon",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-cod",
+   "title": "Cod rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cod"
+   ],
+   "kind": "forbidden",
+   "term": "cod",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-haddock",
+   "title": "Haddock rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "haddock"
+   ],
+   "kind": "forbidden",
+   "term": "haddock",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-basa",
+   "title": "Basa rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "basa"
+   ],
+   "kind": "forbidden",
+   "term": "basa",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-tuna",
+   "title": "Tuna rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tuna"
+   ],
+   "kind": "forbidden",
+   "term": "tuna",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-mackerel",
+   "title": "Mackerel rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mackerel"
+   ],
+   "kind": "forbidden",
+   "term": "mackerel",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-anchovy",
+   "title": "Anchovy rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "anchovy"
+   ],
+   "kind": "forbidden",
+   "term": "anchovy",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-anchovies",
+   "title": "Anchovies rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "anchovies"
+   ],
+   "kind": "forbidden",
+   "term": "anchovies",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-prawn",
+   "title": "Prawn rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "prawn"
+   ],
+   "kind": "forbidden",
+   "term": "prawn",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-shrimp",
+   "title": "Shrimp rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "shrimp"
+   ],
+   "kind": "forbidden",
+   "term": "shrimp",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-crab",
+   "title": "Crab rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "crab"
+   ],
+   "kind": "forbidden",
+   "term": "crab",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-mussel",
+   "title": "Mussel rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mussel"
+   ],
+   "kind": "forbidden",
+   "term": "mussel",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-squid",
+   "title": "Squid rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "squid"
+   ],
+   "kind": "forbidden",
+   "term": "squid",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-pollock",
+   "title": "Pollock rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pollock"
+   ],
+   "kind": "forbidden",
+   "term": "pollock",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-hake",
+   "title": "Hake rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "hake"
+   ],
+   "kind": "forbidden",
+   "term": "hake",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-sea-bass",
+   "title": "Sea Bass rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "sea bass"
+   ],
+   "kind": "forbidden",
+   "term": "sea bass",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-seabass",
+   "title": "Seabass rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "seabass"
+   ],
+   "kind": "forbidden",
+   "term": "seabass",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-bream",
+   "title": "Bream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "bream"
+   ],
+   "kind": "forbidden",
+   "term": "bream",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-trout",
+   "title": "Trout rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "trout"
+   ],
+   "kind": "forbidden",
+   "term": "trout",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-sardine",
+   "title": "Sardine rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "sardine"
+   ],
+   "kind": "forbidden",
+   "term": "sardine",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-plaice",
+   "title": "Plaice rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "plaice"
+   ],
+   "kind": "forbidden",
+   "term": "plaice",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-monkfish",
+   "title": "Monkfish rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "monkfish"
+   ],
+   "kind": "forbidden",
+   "term": "monkfish",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-tilapia",
+   "title": "Tilapia rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tilapia"
+   ],
+   "kind": "forbidden",
+   "term": "tilapia",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-kipper",
+   "title": "Kipper rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "kipper"
+   ],
+   "kind": "forbidden",
+   "term": "kipper",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-lobster",
+   "title": "Lobster rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "lobster"
+   ],
+   "kind": "forbidden",
+   "term": "lobster",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-scallop",
+   "title": "Scallop rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "scallop"
+   ],
+   "kind": "forbidden",
+   "term": "scallop",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-clam",
+   "title": "Clam rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "clam"
+   ],
+   "kind": "forbidden",
+   "term": "clam",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-calamari",
+   "title": "Calamari rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "calamari"
+   ],
+   "kind": "forbidden",
+   "term": "calamari",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-oyster",
+   "title": "Oyster rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "oyster"
+   ],
+   "kind": "forbidden",
+   "term": "oyster",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-meat-and-fish-worcestershire",
+   "title": "Worcestershire rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "worcestershire"
+   ],
+   "kind": "forbidden",
+   "term": "worcestershire",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": true,
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-cheese",
+   "title": "Cheese rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cheese"
+   ],
+   "kind": "forbidden",
+   "term": "cheese",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-cheddar",
+   "title": "Cheddar rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cheddar"
+   ],
+   "kind": "forbidden",
+   "term": "cheddar",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-mozzarella",
+   "title": "Mozzarella rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mozzarella"
+   ],
+   "kind": "forbidden",
+   "term": "mozzarella",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-parmesan",
+   "title": "Parmesan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "parmesan"
+   ],
+   "kind": "forbidden",
+   "term": "parmesan",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-feta",
+   "title": "Feta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "feta"
+   ],
+   "kind": "forbidden",
+   "term": "feta",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-halloumi",
+   "title": "Halloumi rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "halloumi"
+   ],
+   "kind": "forbidden",
+   "term": "halloumi",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-paneer",
+   "title": "Paneer rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "paneer"
+   ],
+   "kind": "forbidden",
+   "term": "paneer",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-ricotta",
+   "title": "Ricotta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ricotta"
+   ],
+   "kind": "forbidden",
+   "term": "ricotta",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-mascarpone",
+   "title": "Mascarpone rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mascarpone"
+   ],
+   "kind": "forbidden",
+   "term": "mascarpone",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-butter",
+   "title": "Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "butter"
+   ],
+   "kind": "forbidden",
+   "term": "butter",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-ghee",
+   "title": "Ghee rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ghee"
+   ],
+   "kind": "forbidden",
+   "term": "ghee",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-milk",
+   "title": "Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "milk"
+   ],
+   "kind": "forbidden",
+   "term": "milk",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-cream",
+   "title": "Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cream"
+   ],
+   "kind": "forbidden",
+   "term": "cream",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-creme-fraiche",
+   "title": "Creme Fraiche rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "creme fraiche"
+   ],
+   "kind": "forbidden",
+   "term": "creme fraiche",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-cr\u00e8me-fra\u00eeche",
+   "title": "Cr\u00e8me Fra\u00eeche rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cr\u00e8me fra\u00eeche"
+   ],
+   "kind": "forbidden",
+   "term": "cr\u00e8me fra\u00eeche",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-yoghurt",
+   "title": "Yoghurt rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "yoghurt"
+   ],
+   "kind": "forbidden",
+   "term": "yoghurt",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-dairy-yogurt",
+   "title": "Yogurt rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "yogurt"
+   ],
+   "kind": "forbidden",
+   "term": "yogurt",
+   "group": "dairy",
+   "violates": {
+    "vegan": true,
+    "dairy-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-eggs-and-honey-egg",
+   "title": "Egg rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "egg"
+   ],
+   "kind": "forbidden",
+   "term": "egg",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-eggs-and-honey-honey",
+   "title": "Honey rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "honey"
+   ],
+   "kind": "forbidden",
+   "term": "honey",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-eggs-and-honey-mayonnaise",
+   "title": "Mayonnaise rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mayonnaise"
+   ],
+   "kind": "forbidden",
+   "term": "mayonnaise",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-eggs-and-honey-mayo",
+   "title": "Mayo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "mayo"
+   ],
+   "kind": "forbidden",
+   "term": "mayo",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-wheat",
+   "title": "Wheat rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "wheat"
+   ],
+   "kind": "forbidden",
+   "term": "wheat",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-flour",
+   "title": "Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "flour"
+   ],
+   "kind": "forbidden",
+   "term": "flour",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-bread",
+   "title": "Bread rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "bread"
+   ],
+   "kind": "forbidden",
+   "term": "bread",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-breadcrumb",
+   "title": "Breadcrumb rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "breadcrumb"
+   ],
+   "kind": "forbidden",
+   "term": "breadcrumb",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-panko",
+   "title": "Panko rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "panko"
+   ],
+   "kind": "forbidden",
+   "term": "panko",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-pasta",
+   "title": "Pasta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pasta"
+   ],
+   "kind": "forbidden",
+   "term": "pasta",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-spaghetti",
+   "title": "Spaghetti rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "spaghetti"
+   ],
+   "kind": "forbidden",
+   "term": "spaghetti",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-linguine",
+   "title": "Linguine rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "linguine"
+   ],
+   "kind": "forbidden",
+   "term": "linguine",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-tagliatelle",
+   "title": "Tagliatelle rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tagliatelle"
+   ],
+   "kind": "forbidden",
+   "term": "tagliatelle",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-penne",
+   "title": "Penne rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "penne"
+   ],
+   "kind": "forbidden",
+   "term": "penne",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-rigatoni",
+   "title": "Rigatoni rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "rigatoni"
+   ],
+   "kind": "forbidden",
+   "term": "rigatoni",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-tortiglioni",
+   "title": "Tortiglioni rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tortiglioni"
+   ],
+   "kind": "forbidden",
+   "term": "tortiglioni",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-ditali",
+   "title": "Ditali rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ditali"
+   ],
+   "kind": "forbidden",
+   "term": "ditali",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-orzo",
+   "title": "Orzo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "orzo"
+   ],
+   "kind": "forbidden",
+   "term": "orzo",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-gnocchi",
+   "title": "Gnocchi rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gnocchi"
+   ],
+   "kind": "forbidden",
+   "term": "gnocchi",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-couscous",
+   "title": "Couscous rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "couscous"
+   ],
+   "kind": "forbidden",
+   "term": "couscous",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-bulgur",
+   "title": "Bulgur rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "bulgur"
+   ],
+   "kind": "forbidden",
+   "term": "bulgur",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-noodle",
+   "title": "Noodle rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "noodle"
+   ],
+   "kind": "forbidden",
+   "term": "noodle",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-naan",
+   "title": "Naan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "naan"
+   ],
+   "kind": "forbidden",
+   "term": "naan",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-ciabatta",
+   "title": "Ciabatta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ciabatta"
+   ],
+   "kind": "forbidden",
+   "term": "ciabatta",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-brioche",
+   "title": "Brioche rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "brioche"
+   ],
+   "kind": "forbidden",
+   "term": "brioche",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-sourdough",
+   "title": "Sourdough rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "sourdough"
+   ],
+   "kind": "forbidden",
+   "term": "sourdough",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-flatbread",
+   "title": "Flatbread rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "flatbread"
+   ],
+   "kind": "forbidden",
+   "term": "flatbread",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-pitta",
+   "title": "Pitta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pitta"
+   ],
+   "kind": "forbidden",
+   "term": "pitta",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-pita",
+   "title": "Pita rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pita"
+   ],
+   "kind": "forbidden",
+   "term": "pita",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-tortilla",
+   "title": "Tortilla rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tortilla"
+   ],
+   "kind": "forbidden",
+   "term": "tortilla",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-wrap",
+   "title": "Wrap rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "wrap"
+   ],
+   "kind": "forbidden",
+   "term": "wrap",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-bun",
+   "title": "Bun rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "bun"
+   ],
+   "kind": "forbidden",
+   "term": "bun",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-pastry",
+   "title": "Pastry rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pastry"
+   ],
+   "kind": "forbidden",
+   "term": "pastry",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-crouton",
+   "title": "Crouton rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "crouton"
+   ],
+   "kind": "forbidden",
+   "term": "crouton",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-barley",
+   "title": "Barley rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "barley"
+   ],
+   "kind": "forbidden",
+   "term": "barley",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-rye",
+   "title": "Rye rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "rye"
+   ],
+   "kind": "forbidden",
+   "term": "rye",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-beer",
+   "title": "Beer rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "beer"
+   ],
+   "kind": "forbidden",
+   "term": "beer",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-soy-sauce",
+   "title": "Soy Sauce rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "soy sauce"
+   ],
+   "kind": "forbidden",
+   "term": "soy sauce",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-teriyaki",
+   "title": "Teriyaki rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "teriyaki"
+   ],
+   "kind": "forbidden",
+   "term": "teriyaki",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-hoisin",
+   "title": "Hoisin rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "hoisin"
+   ],
+   "kind": "forbidden",
+   "term": "hoisin",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-seitan",
+   "title": "Seitan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "seitan"
+   ],
+   "kind": "forbidden",
+   "term": "seitan",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-kecap-manis",
+   "title": "Kecap Manis rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "kecap manis"
+   ],
+   "kind": "forbidden",
+   "term": "kecap manis",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-gluten-ketjap-manis",
+   "title": "Ketjap Manis rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "ketjap manis"
+   ],
+   "kind": "forbidden",
+   "term": "ketjap manis",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-peanut",
+   "title": "Peanut rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "peanut"
+   ],
+   "kind": "forbidden",
+   "term": "peanut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-almond",
+   "title": "Almond rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "almond"
+   ],
+   "kind": "forbidden",
+   "term": "almond",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-cashew",
+   "title": "Cashew rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cashew"
+   ],
+   "kind": "forbidden",
+   "term": "cashew",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-walnut",
+   "title": "Walnut rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "walnut"
+   ],
+   "kind": "forbidden",
+   "term": "walnut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-hazelnut",
+   "title": "Hazelnut rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "hazelnut"
+   ],
+   "kind": "forbidden",
+   "term": "hazelnut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-pecan",
+   "title": "Pecan rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pecan"
+   ],
+   "kind": "forbidden",
+   "term": "pecan",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-pistachio",
+   "title": "Pistachio rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pistachio"
+   ],
+   "kind": "forbidden",
+   "term": "pistachio",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-macadamia",
+   "title": "Macadamia rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "macadamia"
+   ],
+   "kind": "forbidden",
+   "term": "macadamia",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-pine-nut",
+   "title": "Pine Nut rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pine nut"
+   ],
+   "kind": "forbidden",
+   "term": "pine nut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-satay",
+   "title": "Satay rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "satay"
+   ],
+   "kind": "forbidden",
+   "term": "satay",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-praline",
+   "title": "Praline rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "praline"
+   ],
+   "kind": "forbidden",
+   "term": "praline",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-forbidden-nuts-nut",
+   "title": "Nut rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nut"
+   ],
+   "kind": "forbidden",
+   "term": "nut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-vegan-mince",
+   "title": "Vegan Mince rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegan mince"
+   ],
+   "kind": "safe",
+   "term": "vegan",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-vegetarian-sausage",
+   "title": "Vegetarian Sausage rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegetarian sausage"
+   ],
+   "kind": "safe",
+   "term": "vegetarian",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-veggie-meatballs",
+   "title": "Veggie Meatballs rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "veggie meatballs"
+   ],
+   "kind": "safe",
+   "term": "veggie",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-plant-based-mince",
+   "title": "Plant-Based Mince rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "plant-based mince"
+   ],
+   "kind": "safe",
+   "term": "plant",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-meat-free-sausage",
+   "title": "Meat Free Sausage rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meat free sausage"
+   ],
+   "kind": "safe",
+   "term": "meat free",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-meat-free-bacon",
+   "title": "Meat-Free Bacon rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meat-free bacon"
+   ],
+   "kind": "safe",
+   "term": "meat-free",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-meat-and-fish-meatless-chicken-pieces",
+   "title": "Meatless Chicken Pieces rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meatless chicken pieces"
+   ],
+   "kind": "safe",
+   "term": "meatless",
+   "group": "meat-and-fish",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-vegan-cheese",
+   "title": "Vegan Cheese rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegan cheese"
+   ],
+   "kind": "safe",
+   "term": "vegan",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-vegan-butter",
+   "title": "Vegan Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegan butter"
+   ],
+   "kind": "safe",
+   "term": "vegan",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-plant-based-yoghurt",
+   "title": "Plant-Based Yoghurt rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "plant-based yoghurt"
+   ],
+   "kind": "safe",
+   "term": "plant",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-plant-based-milk",
+   "title": "Plant-Based Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "plant-based milk"
+   ],
+   "kind": "safe",
+   "term": "plant",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-dairy-free-cream",
+   "title": "Dairy Free Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "dairy free cream"
+   ],
+   "kind": "safe",
+   "term": "dairy free",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-dairy-free-cheese",
+   "title": "Dairy-Free Cheese rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "dairy-free cheese"
+   ],
+   "kind": "safe",
+   "term": "dairy-free",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-coconut-milk",
+   "title": "Coconut Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut milk"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-coconut-cream",
+   "title": "Coconut Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut cream"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-coconut-yoghurt",
+   "title": "Coconut Yoghurt rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut yoghurt"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-oat-milk",
+   "title": "Oat Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "oat milk"
+   ],
+   "kind": "safe",
+   "term": "oat",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-oat-cream",
+   "title": "Oat Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "oat cream"
+   ],
+   "kind": "safe",
+   "term": "oat",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-almond-milk",
+   "title": "Almond Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "almond milk"
+   ],
+   "kind": "safe",
+   "term": "almond",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-dairy-almond-butter",
+   "title": "Almond Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "almond butter"
+   ],
+   "kind": "safe",
+   "term": "almond",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-dairy-soy-milk",
+   "title": "Soy Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "soy milk"
+   ],
+   "kind": "safe",
+   "term": "soy",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-soya-yoghurt",
+   "title": "Soya Yoghurt rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "soya yoghurt"
+   ],
+   "kind": "safe",
+   "term": "soya",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-dairy-peanut-butter",
+   "title": "Peanut Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "peanut butter"
+   ],
+   "kind": "safe",
+   "term": "peanut",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-dairy-cashew-cream",
+   "title": "Cashew Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cashew cream"
+   ],
+   "kind": "safe",
+   "term": "cashew",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-dairy-nut-butter",
+   "title": "Nut Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nut butter"
+   ],
+   "kind": "safe",
+   "term": "nut",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-dairy-cocoa-butter",
+   "title": "Cocoa Butter rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cocoa butter"
+   ],
+   "kind": "safe",
+   "term": "cocoa",
+   "group": "dairy",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-vegan-mayonnaise",
+   "title": "Vegan Mayonnaise rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegan mayonnaise"
+   ],
+   "kind": "safe",
+   "term": "vegan",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-vegetarian-mayonnaise",
+   "title": "Vegetarian Mayonnaise rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "vegetarian mayonnaise"
+   ],
+   "kind": "safe",
+   "term": "vegetarian",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-veggie-mayo",
+   "title": "Veggie Mayo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "veggie mayo"
+   ],
+   "kind": "safe",
+   "term": "veggie",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-plant-based-mayonnaise",
+   "title": "Plant-Based Mayonnaise rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "plant-based mayonnaise"
+   ],
+   "kind": "safe",
+   "term": "plant",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-meat-free-mayo",
+   "title": "Meat Free Mayo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meat free mayo"
+   ],
+   "kind": "safe",
+   "term": "meat free",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegetarian": false,
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-meatless-mayo",
+   "title": "Meatless Mayo rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meatless mayo"
+   ],
+   "kind": "safe",
+   "term": "meatless",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-gluten-free-pasta",
+   "title": "Gluten Free Pasta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gluten free pasta"
+   ],
+   "kind": "safe",
+   "term": "gluten free",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-gluten-free-flour",
+   "title": "Gluten Free Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gluten free flour"
+   ],
+   "kind": "safe",
+   "term": "gluten free",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-gluten-free-bread",
+   "title": "Gluten-Free Bread rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gluten-free bread"
+   ],
+   "kind": "safe",
+   "term": "gluten-free",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-gluten-free-soy-sauce",
+   "title": "Gluten-Free Soy Sauce rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gluten-free soy sauce"
+   ],
+   "kind": "safe",
+   "term": "gluten-free",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-rice-noodles",
+   "title": "Rice Noodles rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "rice noodles"
+   ],
+   "kind": "safe",
+   "term": "rice",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-rice-flour",
+   "title": "Rice Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "rice flour"
+   ],
+   "kind": "safe",
+   "term": "rice",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-corn-tortilla",
+   "title": "Corn Tortilla rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "corn tortilla"
+   ],
+   "kind": "safe",
+   "term": "corn",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-cornflour",
+   "title": "Cornflour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "cornflour"
+   ],
+   "kind": "safe",
+   "term": "cornflour",
+   "group": "gluten",
+   "violates": {}
+  },
+  {
+   "id": "regex-safe-gluten-gram-flour",
+   "title": "Gram Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "gram flour"
+   ],
+   "kind": "safe",
+   "term": "gram",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-buckwheat-noodles",
+   "title": "Buckwheat Noodles rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "buckwheat noodles"
+   ],
+   "kind": "safe",
+   "term": "buckwheat",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-buckwheat-flour",
+   "title": "Buckwheat Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "buckwheat flour"
+   ],
+   "kind": "safe",
+   "term": "buckwheat",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-tapioca-flour",
+   "title": "Tapioca Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "tapioca flour"
+   ],
+   "kind": "safe",
+   "term": "tapioca",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-potato-gnocchi",
+   "title": "Potato Gnocchi rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "potato gnocchi"
+   ],
+   "kind": "safe",
+   "term": "potato",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": true
+   },
+   "note": "The old regex kept this (potato safe word); gnocchi normally contains wheat flour, so it is labelled as breaking gluten-free."
+  },
+  {
+   "id": "regex-safe-gluten-potato-flour",
+   "title": "Potato Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "potato flour"
+   ],
+   "kind": "safe",
+   "term": "potato",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-chickpea-pasta",
+   "title": "Chickpea Pasta rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chickpea pasta"
+   ],
+   "kind": "safe",
+   "term": "chickpea",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-chickpea-flour",
+   "title": "Chickpea Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chickpea flour"
+   ],
+   "kind": "safe",
+   "term": "chickpea",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-coconut-flour",
+   "title": "Coconut Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut flour"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false
+   }
+  },
+  {
+   "id": "regex-safe-gluten-almond-flour",
+   "title": "Almond Flour rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "almond flour"
+   ],
+   "kind": "safe",
+   "term": "almond",
+   "group": "gluten",
+   "violates": {
+    "gluten-free": false,
+    "nut-free": true
+   }
+  },
+  {
+   "id": "regex-safe-nuts-nut-free-chocolate-spread",
+   "title": "Nut Free Chocolate Spread rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nut free chocolate spread"
+   ],
+   "kind": "safe",
+   "term": "nut free",
+   "group": "nuts",
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-nut-free-pesto",
+   "title": "Nut-Free Pesto rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nut-free pesto"
+   ],
+   "kind": "safe",
+   "term": "nut-free",
+   "group": "nuts",
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-coconut-milk",
+   "title": "Coconut Milk rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut milk"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "nuts",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-coconut-cream",
+   "title": "Coconut Cream rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut cream"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "nuts",
+   "violates": {
+    "vegan": false,
+    "dairy-free": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-nutmeg",
+   "title": "Nutmeg rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "nutmeg"
+   ],
+   "kind": "safe",
+   "term": "nutmeg",
+   "group": "nuts",
+   "violates": {}
+  }
+ ]
+}
