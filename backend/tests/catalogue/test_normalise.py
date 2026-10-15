@@ -330,3 +330,125 @@ def test_repeated_names_in_one_call_cost_one_decision_and_keep_each_spelling(sto
     assert [r.input for r in results] == ["Dragon Fruit Each", "dragon  fruit each", "coriander"]
     assert results[0].catalogue_item_id == results[1].catalogue_item_id
     assert len(decisions.calls) == 1
+
+
+def decide_group(group: GroupId, *, form: Form = Form.NOT_APPLICABLE, perishable: float = 0.1, **match: float):
+    return FakeDecisions(
+        script=lambda name, questions: decision(questions, match=match, group=group, form=form, perishable=perishable)
+    )
+
+
+def test_a_household_name_is_never_attached_to_a_food_even_when_naming_returns_the_foods_name(
+    store: InMemoryCatalogueStore,
+) -> None:
+    router = FakeRouter(script=naming(**{"Coriander Scented Candle": "coriander"}))
+
+    [result] = normalise(
+        ["Coriander Scented Candle"], store=store, decisions=decide_group(GroupId.HOUSEHOLD), llm_router=router
+    )
+
+    assert result.status is Status.UNRESOLVED
+    assert store.get_by_name("Coriander Scented Candle") is None
+    assert "Coriander Scented Candle" not in store.get_by_name("coriander").aliases  # ty: ignore[unresolved-attribute]
+
+
+def test_a_food_name_is_never_attached_to_a_household_item_even_when_naming_returns_its_name(
+    store: InMemoryCatalogueStore,
+) -> None:
+    router = FakeRouter(script=naming(**{"Scented loo freshener": "toilet roll"}))
+
+    [result] = normalise(
+        ["Scented loo freshener"], store=store, decisions=decide_group(GroupId.SPICES), llm_router=router
+    )
+
+    assert result.status is Status.UNRESOLVED
+    assert store.get_by_name("Scented loo freshener") is None
+
+
+def test_a_perishable_decision_is_stored_with_a_new_item_so_a_repeat_agrees(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Fresh buffalo cream pot": "buffalo cream"}))
+
+    [first] = normalise(
+        ["Fresh buffalo cream pot"],
+        store=store,
+        decisions=decide_group(GroupId.DAIRY, perishable=0.99),
+        llm_router=router,
+    )
+    [again] = normalise(["Fresh buffalo cream pot"], store=store, decisions=no_decisions(), llm_router=FakeRouter())
+
+    assert first.perishable is True
+    assert again.perishable is True
+    assert store.get_by_name("buffalo cream").tracking_mode.value == "perishable"  # ty: ignore[unresolved-attribute]
+
+
+def test_a_non_perishable_decision_leaves_the_groups_default_rules_alone(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Tinned custard": "custard"}))
+
+    [first] = normalise(
+        ["Tinned custard"], store=store, decisions=decide_group(GroupId.DAIRY, perishable=0.05), llm_router=router
+    )
+    [again] = normalise(["Tinned custard"], store=store, decisions=no_decisions(), llm_router=FakeRouter())
+
+    assert first.perishable is False
+    assert again.perishable is False
+    assert store.get_by_name("custard").overrides.tracking_mode is None  # ty: ignore[unresolved-attribute]
+
+
+def test_a_confident_match_does_not_rewrite_a_curated_items_tracking(store: InMemoryCatalogueStore) -> None:
+    [result] = normalise(
+        ["Fresh Cut Coriander Pot"],
+        store=store,
+        decisions=decide_group(GroupId.FRESH_HERBS, perishable=0.01, coriander=0.95),
+        llm_router=FakeRouter(),
+    )
+
+    assert result.perishable is True  # coriander is perishable by its group, whatever one answer said
+    assert store.get_by_name("coriander").overrides.tracking_mode is None  # ty: ignore[unresolved-attribute]
+
+
+def test_concurrent_calls_that_pick_different_matches_for_one_name_agree_on_the_stored_owner(
+    store: InMemoryCatalogueStore,
+) -> None:
+    both_deciding = threading.Barrier(2, timeout=5)
+    picks = iter(["coriander", "basil"])
+    lock = threading.Lock()
+
+    def call() -> NormalisedName:
+        with lock:
+            pick = next(picks)
+
+        def script(name: str, questions: object) -> object:
+            both_deciding.wait()
+            return decision(questions, match={pick: 0.95}, group=GroupId.FRESH_HERBS)  # ty: ignore[invalid-argument-type]
+
+        [result] = normalise(
+            ["Fresh basil coriander mix"],
+            store=store,
+            decisions=FakeDecisions(script=script),
+            llm_router=FakeRouter(),
+        )
+        return result
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(lambda _: call(), range(2))
+
+    owner = store.get_by_name("Fresh basil coriander mix")
+    assert owner is not None
+    assert first.catalogue_item_id == second.catalogue_item_id == owner.id
+    assert first.status is second.status is Status.MATCHED
+
+
+def test_a_naming_that_loses_an_alias_race_reuses_the_winner(store: InMemoryCatalogueStore) -> None:
+    class RacingRouter(FakeRouter):
+        def invoke(self, feature: object, schema: type, messages: object, **kwargs: object) -> object:
+            # Another request attaches the raw name to basil while this one is still naming it "coriander".
+            store.upsert_alias("basil", "Fresh basil coriander mix")
+            return super().invoke(feature, schema, messages, **kwargs)
+
+    router = RacingRouter(script=naming(**{"Fresh basil coriander mix": "coriander"}))
+
+    [result] = normalise(
+        ["Fresh basil coriander mix"], store=store, decisions=unseen(GroupId.FRESH_HERBS), llm_router=router
+    )
+
+    assert (result.status, result.catalogue_item_id) == (Status.MATCHED, "basil")
