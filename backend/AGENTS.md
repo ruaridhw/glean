@@ -45,6 +45,14 @@ src/glean/
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation
 ```
 
+### Structured output only
+
+Every LLM response is read through `LLMRouter.invoke` -> `invoke_structured`, which uses
+`with_structured_output(schema, method="json_schema")`. Never call `.invoke` on a raw chat model and read its text;
+`tests/test_llm_router_structured_output.py` pins this for every `Feature`. Put schema rules (units, categories,
+ranges) in typed fields and enums, not prompt prose. Shopping units are the `ShoppingUnit` enum, which mirrors the
+app's `shoppingUnits` list by hand (a test catches drift).
+
 ### Auth
 
 `verify_cognito_token(request, credentials)` is a FastAPI dependency:
