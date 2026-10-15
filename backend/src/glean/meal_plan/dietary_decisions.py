@@ -11,10 +11,15 @@ from datetime import datetime  # noqa: TC003 - pydantic resolves the annotation 
 
 from pydantic import BaseModel, Field, ValidationError
 
+from glean.decisions import JEV_MODEL
 from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
 
 # Not `.json`-suffixed, so `BlobStore.list_keys` never mistakes it for a recipe.
 DIETARY_DECISIONS_KEY = "_decisions/dietary.jsonl"
+
+NUT_FREE = "nut-free"
+# Flags Jev is asked about. Others (Keto, Paleo) are left to the meal-plan model.
+DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
 NUT_FREE_THRESHOLD = 0.2
@@ -60,6 +65,21 @@ class DietaryDecisions:
     def __init__(self, decisions: list[DietaryDecision]) -> None:
         self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
 
-    def flags(self, recipe_id: str, flag: str) -> bool:
+    def excludes(self, recipe_id: str, flag: str) -> bool:
+        """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
+
+        Nut-free is an allergy, so a recipe with no current decision is excluded.
+        Preference flags without one are left to the regex rules.
+        """
+        if flag not in DIETARY_FLAGS:
+            return False
         decision = self._by_key.get((recipe_id, flag))
-        return decision is not None and decision.probability >= NUT_FREE_THRESHOLD
+        if decision is None or not _is_current(decision):
+            return flag == NUT_FREE
+        threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
+        return decision.probability >= threshold
+
+
+def _is_current(decision: DietaryDecision) -> bool:
+    # Thresholds are calibrated to one model version; `model` is Jev's dated snapshot of it.
+    return decision.model == JEV_MODEL or decision.model.startswith(f"{JEV_MODEL}-")

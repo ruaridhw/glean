@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import random
+from datetime import UTC, datetime
 
+from glean.decisions import JEV_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.dietary_decisions import DietaryDecision, DietaryDecisionStore
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -197,6 +200,8 @@ def test_dairy_free_and_nut_free_exclusions(tmp_path) -> None:
         ],
     )
 
+    _store_decisions(corpus, {(f"rec_{name}", "nut-free"): 0.0 for name in ("cheese", "satay", "oat")})
+
     assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free", "Nut-Free"])] == ["rec_oat"]
     assert {c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free"])} == {"rec_satay", "rec_oat"}
 
@@ -205,6 +210,21 @@ def test_flags_without_ingredient_rules_leave_candidates_to_the_model(tmp_path) 
     corpus = _corpus(tmp_path, [("rec_pasta", "Pasta Bake", ["penne", "cheese"], 30)])
 
     assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Keto", "Paleo"])] == ["rec_pasta"]
+
+
+def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, str], float]) -> None:
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id=recipe_id,
+                flag=flag,
+                probability=probability,
+                model=f"{JEV_MODEL}-20260917",
+                computed_at=datetime(2026, 10, 15, tzinfo=UTC),
+            )
+            for (recipe_id, flag), probability in probabilities.items()
+        ]
+    )
 
 
 def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list[str]) -> list:
