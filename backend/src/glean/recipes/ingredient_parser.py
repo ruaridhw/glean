@@ -110,8 +110,6 @@ _CUP_DENSITIES_G_PER_ML = {
     "brown sugar": 0.845,
     "icing sugar": 0.561,
     "cocoa powder": 0.469,
-    "honey": 1.42,
-    "maple syrup": 1.32,
 }
 # A cup of anything whose last word is one of these is a liquid, so it converts to ml. "milk powder" and
 # "cream cheese" end in other words and stay cups.
@@ -130,6 +128,10 @@ _CUP_LIQUID_HEADS = {
     "cider",
     "sauce",
     "passata",
+    "honey",
+    "syrup",
+    "treacle",
+    "molasses",
 }
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
@@ -331,10 +333,11 @@ def _parse_unit_word(raw_unit: str, quantity: float, name: str) -> tuple[str, fl
 def _convert_cups(name: str, quantity: float) -> tuple[str, float, str, str | None]:
     millilitres = quantity * _ML_PER_CUP
     key = _ingredient_key(name)
-    if (density := _CUP_DENSITIES_G_PER_ML.get(key)) is not None:
-        return name, millilitres * density, "g", None
+    # Liquids win over any density: they convert to ml, never g.
     if key.rsplit(" ", 1)[-1] in _CUP_LIQUID_HEADS:
         return name, millilitres, "ml", None
+    if (density := _CUP_DENSITIES_G_PER_ML.get(key)) is not None:
+        return name, millilitres * density, "g", None
     return name, quantity, "cup", None
 
 
