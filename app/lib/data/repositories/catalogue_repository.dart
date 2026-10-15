@@ -12,19 +12,23 @@ class CatalogueRepository {
 
   final GleanDatabase _db;
 
-  /// The catalogue version the device holds; zero before the first successful sync.
-  Future<int> syncedVersion() async {
-    final state = await _db.select(_db.catalogueSyncState).getSingleOrNull();
-    return state?.version ?? 0;
-  }
+  /// How far sync has got, or null before the first successful sync.
+  Future<CatalogueSyncStateData?> syncState() =>
+      _db.select(_db.catalogueSyncState).getSingleOrNull();
 
   /// Upserts everything in [changes] by stable id and records its version, all or nothing: a failure part-way
-  /// leaves the previous version in place so the same changes are fetched again.
+  /// leaves the previous version in place so the same changes are fetched again. [fullSync] marks [changes] as
+  /// the answer to a `since=0` request, which restarts the clock on the next full sync.
   Future<void> applyChanges(
     CatalogueSyncResponse changes, {
     required DateTime now,
+    required bool fullSync,
   }) {
     return _db.transaction(() async {
+      final String nowText = now.toUtc().toIso8601String();
+      final String fullSyncedAt = fullSync
+          ? nowText
+          : (await syncState())?.fullSyncedAt ?? nowText;
       await _db.batch((b) {
         b.insertAllOnConflictUpdate(_db.ingredientGroups, [
           for (final g in changes.groups)
@@ -72,7 +76,8 @@ class CatalogueRepository {
           CatalogueSyncStateCompanion.insert(
             id: const Value(1),
             version: changes.version,
-            syncedAt: now.toUtc().toIso8601String(),
+            syncedAt: nowText,
+            fullSyncedAt: fullSyncedAt,
           ),
           mode: InsertMode.insertOrReplace,
         );
