@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from io import BytesIO
 from typing import TYPE_CHECKING
@@ -94,3 +95,53 @@ def test_listing_requires_a_signed_in_user(test_settings: Settings) -> None:
         assert TestClient(app).get("/dev/backups").status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+def _prepare(bucket: object, backup_id: str, note: str | None = None) -> None:
+    body = json.dumps({"note": note} if note else {}).encode()
+    bucket.put_object(Bucket=BUCKET, Key=f"{backup_id}PREPARED", Body=body)  # type: ignore[attr-defined]
+
+
+def test_an_agent_prepared_backup_is_listed_first_and_labelled_even_when_older(
+    client: TestClient, auth_headers: dict, bucket: object, tmp_path: Path
+) -> None:
+    prepared = _store_for_someone_else(bucket, "test-user-sub", _database(tmp_path)).removesuffix("glean.db")
+    _prepare(bucket, prepared, note="ml to presence conversion")
+    newer = _export(client, auth_headers, _database(tmp_path))
+
+    backups = client.get("/dev/backups", headers=auth_headers).json()["backups"]
+
+    assert [b["id"] for b in backups] == [prepared, newer]
+    assert [b["prepared"] for b in backups] == [True, False]
+    assert backups[0]["label"] == "ml to presence conversion"
+    assert backups[1]["label"] is None
+
+
+def test_a_prepared_backup_without_a_note_is_still_marked_prepared(
+    client: TestClient, auth_headers: dict, bucket: object, tmp_path: Path
+) -> None:
+    prepared = _store_for_someone_else(bucket, "test-user-sub", _database(tmp_path)).removesuffix("glean.db")
+    _prepare(bucket, prepared)
+
+    backup = client.get("/dev/backups", headers=auth_headers).json()["backups"][0]
+
+    assert backup["prepared"] is True
+    assert backup["label"] is None
+
+
+def test_a_backup_that_is_not_a_sqlite_file_is_listed_with_an_unknown_schema_version(
+    client: TestClient, auth_headers: dict, bucket: object
+) -> None:
+    _export(client, auth_headers, b"not a database")
+
+    backup = client.get("/dev/backups", headers=auth_headers).json()["backups"][0]
+
+    assert backup["schema_version"] is None
+
+
+def test_an_export_prefix_without_a_database_is_not_a_backup(
+    client: TestClient, auth_headers: dict, bucket: object
+) -> None:
+    bucket.put_object(Bucket=BUCKET, Key="db-exports/test-user-sub/20260101T000000000000Z/app.log", Body=b"log")  # type: ignore[attr-defined]
+
+    assert client.get("/dev/backups", headers=auth_headers).json() == {"backups": []}
