@@ -285,7 +285,7 @@ void main() {
       );
 
       expect(
-        find.text("We couldn't identify a category for this item."),
+        find.text("Optional: we couldn't identify a category for this item."),
         findsOneWidget,
       );
       await tester.tap(find.byType(DropdownButtonFormField<String>));
