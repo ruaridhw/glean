@@ -42,6 +42,16 @@ workflows:
           APP_VERSION="$(awk '/^version:/ {print $2}' pubspec.yaml | cut -d+ -f1)"
           test -n "$APP_VERSION"
           printf 'APP_VERSION=%s\n' "$APP_VERSION" >> "$CM_ENV"
+      # versionCode is minutes since 2024-01-01 UTC (docs/adr/0004-timestamp-version-codes.md), the same
+      # arithmetic the gordon owner build uses, so either pipeline's build installs over the other's.
+      # Codemagic's own BUILD_NUMBER stays in the release notes for people.
+      - name: Export version code
+        script: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          VERSION_CODE="$(python3 scripts/version_code.py)"
+          test -n "$VERSION_CODE"
+          printf 'VERSION_CODE=%s\n' "$VERSION_CODE" >> "$CM_ENV"
       # -t lib/main.dart is explicit so the auth-bypass entrypoint can never
       # ship (a flutter-ci.yml grep step checks this file).
       - name: Build signed universal APK
@@ -50,7 +60,7 @@ workflows:
           set -euo pipefail
           flutter build apk --release -t lib/main.dart \
             --build-name="$APP_VERSION" \
-            --build-number="$BUILD_NUMBER" \
+            --build-number="$VERSION_CODE" \
             --dart-define="API_BASE_URL=$API_BASE_URL" \
             --dart-define="COGNITO_DOMAIN=$COGNITO_DOMAIN" \
             --dart-define="COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
@@ -77,6 +87,7 @@ workflows:
           API_HOST="$(python3 -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ["API_BASE_URL"]).hostname)')"
           {
             echo "Glean ${APP_VERSION} (${BUILD_NUMBER})"
+            echo "versionCode: ${VERSION_CODE}"
             printf 'Commit: %.12s\n' "$CM_COMMIT"
             echo "API: ${API_HOST}"
             git log -1 --pretty='format:Change: %s'
