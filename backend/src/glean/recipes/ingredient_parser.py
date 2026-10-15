@@ -32,6 +32,17 @@ _MEASURE_UNITS = {
     "tbsp": (1.0, "tbsp"),
     "tablespoon": (1.0, "tbsp"),
     "tablespoons": (1.0, "tbsp"),
+    "oz": (28.35, "g"),
+    "ounce": (28.35, "g"),
+    "ounces": (28.35, "g"),
+    "lb": (453.6, "g"),
+    "lbs": (453.6, "g"),
+    "pound": (453.6, "g"),
+    "pounds": (453.6, "g"),
+    "floz": (29.57, "ml"),
+    # Always the UK pint, whatever the recipe's source.
+    "pint": (568.0, "ml"),
+    "pints": (568.0, "ml"),
     "cm": (1.0, "cm"),
     "centimetre": (1.0, "cm"),
     "centimetres": (1.0, "cm"),
@@ -41,6 +52,7 @@ _MEASURE_UNITS = {
 _COUNT_UNITS = {"unit", "units", "unit(s)"}
 _PACKAGE_UNITS = {"pouch", "pouches", "sachet", "sachets", "sachet(s)", "pack", "packs", "packet", "packets"}
 _CONTAINERS = {"can", "cans", "tin", "tins", "jar", "jars", "pouch", "pouches", "bottle", "bottles"}
+_FLUID_OUNCE_PATTERN = re.compile(r"\b(?:fl\.?\s*oz\.?|fluid\s+ounces?)(?![A-Za-z])", re.IGNORECASE)
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
     *_MEASURE_UNITS,
@@ -74,6 +86,7 @@ def parse_ingredient_text(raw: object) -> StoredIngredient | None:
     if not text:
         return None
 
+    text = _FLUID_OUNCE_PATTERN.sub("floz", text)
     text = _normalise_compact_label(text)
     name, quantity, unit, preparation = _parse_label(text)
     return StoredIngredient(
