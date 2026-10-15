@@ -20,10 +20,12 @@ final Provider<Future<File> Function()> databaseFileProvider =
     );
 
 /// The signed-in user's backups, as the server lists them: prepared first, then newest first.
-final FutureProvider<List<BackupSummary>> backupListProvider =
-    FutureProvider.autoDispose<List<BackupSummary>>(
-      (ref) => ref.watch(apiClientProvider).listBackups(),
-    );
+final FutureProvider<List<BackupSummary>>
+backupListProvider = FutureProvider.autoDispose<List<BackupSummary>>(
+  (ref) => ref.watch(apiClientProvider).listBackups(),
+  // A failed listing is shown to the user, who retries by reopening the sheet; no silent backoff loop.
+  retry: (int _, Object _) => null,
+);
 
 /// Downloads [BackupSummary] and replaces the phone's database with it, then rebuilds everything that reads the
 /// database so the app shows the restored state. Throws [BackupTooNewException] or [BackupInvalidException]
