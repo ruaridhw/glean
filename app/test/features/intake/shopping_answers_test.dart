@@ -297,4 +297,43 @@ void main() {
       isNotNull,
     );
   });
+
+  gleanWidgetTest(
+    'a rate-limited reparse says the hourly limit was reached and keeps edits',
+    (tester) async {
+      when(
+        () => client.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{'detail': 'AI request limit reached'}),
+          429,
+        ),
+      );
+      await review(tester);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Answer').first,
+        'Beans',
+      );
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
+      await pumpUntil(
+        tester,
+        () => find.textContaining('hourly limit').evaluate().isNotEmpty,
+        description: 'reparse error',
+      );
+      expect(find.text('beans'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Update suggestions'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
 }

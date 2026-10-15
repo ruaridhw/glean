@@ -92,6 +92,27 @@ void main() {
     );
   }
   gleanWidgetTest(
+    'a rate-limited generation says the hourly limit was reached',
+    (tester) async {
+      final h = AppTestHarness(
+        httpClient: MockClient(
+          (request) async => http.Response(
+            jsonEncode({'detail': 'AI request limit reached'}),
+            429,
+          ),
+        ),
+      );
+      addTearDown(h.dispose);
+      await h.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('hourly limit'), findsOneWidget);
+      expect(find.text('Could not generate meal plan.'), findsNothing);
+    },
+  );
+  gleanWidgetTest(
     'detail persistence failure leaves no plan/gaps and retry safely reuses already saved details',
     (tester) async {
       final h = AppTestHarness(

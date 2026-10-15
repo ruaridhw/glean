@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/shopping.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/data/providers/database_providers.dart';
@@ -100,10 +101,15 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final ShoppingParseResponse result;
     try {
       result = await ref.read(apiClientProvider).parseShoppingDescription(text);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _reparsing = false);
-      GleanSnackBar.show(context, 'Could not update suggestions. Try again.');
+      GleanSnackBar.show(
+        context,
+        error is ApiRateLimitException
+            ? error.userMessage
+            : 'Could not update suggestions. Try again.',
+      );
       return;
     }
     if (!mounted) return;
