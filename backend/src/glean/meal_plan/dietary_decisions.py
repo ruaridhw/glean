@@ -52,6 +52,10 @@ NUT_FREE_THRESHOLD = 0.15
 PREFERENCE_THRESHOLD = 0.4
 
 
+class CorpusUnavailableError(Exception):
+    """Candidate selection can't see any corpus recipe, so there is nothing coverage could be measured against."""
+
+
 class DietaryDecision(BaseModel):
     """Jev's probability that a recipe breaks a dietary flag, with what produced it."""
 
@@ -226,7 +230,10 @@ def produce_missing_decisions(
     left uncovered (and so excluded under nut-free) and retried on the next run.
     """
     store = DietaryDecisionStore(corpus.store)
+    # The recipes Generate can select: sample_corpus_candidates searches the same index.
     summaries, _ = corpus.search(per_page=_EVERYTHING)
+    if not summaries:
+        raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
     by_id = {summary.external_id: summary for summary in summaries}
     decisions = {
         (d.recipe_id, d.flag): d for d in store.load() if d.recipe_id in by_id and _is_current(d, by_id[d.recipe_id])

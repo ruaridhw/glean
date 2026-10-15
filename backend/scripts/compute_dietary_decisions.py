@@ -19,7 +19,7 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
-from glean.meal_plan.dietary_decisions import produce_missing_decisions
+from glean.meal_plan.dietary_decisions import CorpusUnavailableError, produce_missing_decisions
 from glean.recipe_api.blob_store import BlobStore, FilesystemBlobStore, S3BlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 
@@ -32,7 +32,11 @@ def main(argv: list[str] | None = None, *, client: DecisionClient | None = None)
     else:
         store = FilesystemBlobStore(args.cache_dir / "corpus")
     client = client or _client(timeout_s=args.timeout)
-    report = produce_missing_decisions(RecipeCorpusStore(store), client, max_workers=args.workers)
+    try:
+        report = produce_missing_decisions(RecipeCorpusStore(store), client, max_workers=args.workers)
+    except CorpusUnavailableError as exc:
+        print(f"FAILED: {exc}. Run scripts/build_recipe_index.py if the recipes exist but the index doesn't.")
+        return 2
     print(report.render())
     return 0 if report.coverage == 1.0 else 1
 
