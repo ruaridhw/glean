@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import re
+
+import pytest
+
 from glean.receipts.schemas import ParsedIngredient, ScanResponse
-from tests.integration.evals.receipt_photos import ExpectedItem, ExpectedReceipt, score_scan
+from tests.integration.evals.receipt_photos import UNIT_VOCABULARY, ExpectedItem, ExpectedReceipt, score_scan
 
 
 def _expected(*items: ExpectedItem) -> ExpectedReceipt:
@@ -64,3 +68,37 @@ class TestScoreScan:
         far = score_scan(_expected(oil), _scan(_parsed("olive oil", 1, "bottle", 5.0)))
 
         assert (close.quantity_accuracy, far.quantity_accuracy) == (1.0, 0.0)
+
+    def test_a_correct_pack_is_not_a_unit_error(self) -> None:
+        potatoes = ExpectedItem(name="jacket potatoes", quantity=1, unit="pack", unit_price=1.70)
+
+        score = score_scan(_expected(potatoes), _scan(_parsed("jacket potatoes", 1, "pack", 1.70)))
+
+        assert score.unit_accuracy == 1.0
+
+    @pytest.mark.parametrize("unit", ["g", "ml", "units", "pack", "bottle"])
+    def test_every_unit_in_the_response_vocabulary_is_accepted_in_expected_results(self, unit: str) -> None:
+        assert ExpectedItem(name="x", quantity=1, unit=unit, unit_price=1.0).unit == unit
+
+    def test_an_expected_unit_outside_the_response_vocabulary_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="kg"):
+            ExpectedItem(name="x", quantity=1, unit="kg", unit_price=1.0)
+
+    def test_category_is_skipped_not_zero_when_the_scan_returned_no_categories(self) -> None:
+        score = score_scan(_expected(MILK), _scan(_parsed("semi skimmed milk", 1136, "ml", 1.20 / 1136, None)))
+
+        assert score.category_accuracy is None
+
+    def test_category_is_scored_on_matched_items_that_have_an_expected_category(self) -> None:
+        eggs = ExpectedItem(name="free range eggs", quantity=6, unit="units", unit_price=2.50 / 6, category="eggs")
+        scan = _scan(
+            _parsed("semi skimmed milk", 1136, "ml", 1.20 / 1136, "dairy"),
+            _parsed("free range eggs", 6, "units", 2.50 / 6, "dairy"),
+        )
+
+        assert score_scan(_expected(MILK, eggs), scan).category_accuracy == 0.5
+
+    def test_unit_vocabulary_matches_what_the_response_schema_documents(self) -> None:
+        documented = ParsedIngredient.model_fields["unit"].description or ""
+
+        assert set(re.findall(r'"(\w+)"', documented)) == UNIT_VOCABULARY

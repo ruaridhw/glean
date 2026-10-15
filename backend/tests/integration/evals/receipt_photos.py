@@ -11,6 +11,10 @@ if TYPE_CHECKING:
     from glean.receipts.schemas import ParsedIngredient, ScanResponse
 
 
+# The unit vocabulary the scan response schema documents (ParsedIngredient.unit in receipts/schemas.py).
+UNIT_VOCABULARY = frozenset({"g", "ml", "units", "pack", "bottle"})
+
+
 @dataclass(frozen=True)
 class ExpectedItem:
     name: str
@@ -19,6 +23,10 @@ class ExpectedItem:
     unit_price: float
     category: str | None = None
     non_food: bool = False
+
+    def __post_init__(self) -> None:
+        if self.unit not in UNIT_VOCABULARY:
+            raise ValueError(f"{self.name!r}: unit {self.unit!r} is not one of {sorted(UNIT_VOCABULARY)}")
 
     @property
     def line_total(self) -> float:
@@ -93,6 +101,18 @@ def _line_total_close(want: ExpectedItem, got: ParsedIngredient) -> bool:
     return got.unit_price is not None and _close(got.quantity * got.unit_price, want.line_total, PRICE_TOLERANCE_GBP)
 
 
+def _category_accuracy(
+    food: list[ExpectedItem], pairs: list[tuple[ExpectedItem, ParsedIngredient]], response: ScanResponse
+) -> float | None:
+    """None (skipped) when the backend returned no categories at all: absence is not a zero score."""
+    categorised = [item for item in food if item.category is not None]
+    if not categorised or all(item.category is None for item in response.items):
+        return None
+    return sum(1 for want, got in pairs if want.category is not None and got.category == want.category) / len(
+        categorised
+    )
+
+
 def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
     food = [item for item in expected.items if not item.non_food]
     pairs = _match_one_to_one(food, response.items)
@@ -108,5 +128,5 @@ def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
         ),
         unit_accuracy=share(sum(1 for w, g in pairs if g.unit == w.unit)),
         price_accuracy=share(sum(1 for w, g in pairs if _line_total_close(w, g))),
-        category_accuracy=share(sum(1 for w, g in pairs if g.category == w.category)),
+        category_accuracy=_category_accuracy(food, pairs, response),
     )
