@@ -10,6 +10,7 @@ import 'package:drift/drift.dart';
 
 import '../database.dart';
 import '../models/shopping_list_item_view.dart';
+import '../models/store_section.dart';
 import 'ingredients_repository.dart';
 import 'pantry_repository.dart' show PantryUnitMismatchException;
 import '../util/recipe_servings.dart';
@@ -25,6 +26,10 @@ class ShoppingRepository {
   // only to cart mutations. Physical rows retain per-meal cascade ownership.
   JoinedSelectStatement<HasResultSet, dynamic> _query(String userId) =>
       _db.select(_db.shoppingListItems).join([
+          innerJoin(
+            _db.ingredients,
+            _db.ingredients.id.equalsExp(_db.shoppingListItems.ingredientId),
+          ),
           leftOuterJoin(
             _db.pantryItems,
             _db.pantryItems.userId.equalsExp(_db.shoppingListItems.userId) &
@@ -52,12 +57,17 @@ class ShoppingRepository {
     final result = <ShoppingListItemView>[];
     for (final joined in rows) {
       final row = joined.readTable(_db.shoppingListItems);
+      final ingredient = joined.readTable(_db.ingredients);
       final meal = joined.readTableOrNull(_db.mealPlanEntries);
       if (!row.isRequirement) {
         // Plan-gap rows written before requirement rows existed keep their own quantity, but still name the
         // planned recipe from the entry's title snapshot.
         result.add(
-          _mapRow(row, recipeTitles: [if (meal != null) meal.recipeTitle]),
+          _mapRow(
+            row,
+            ingredient,
+            recipeTitles: [if (meal != null) meal.recipeTitle],
+          ),
         );
         continue;
       }
@@ -98,6 +108,7 @@ class ShoppingRepository {
       final prior = grouped[key];
       grouped[key] = _mapRow(
         row,
+        ingredient,
         quantity: missing + (prior?.quantity ?? 0),
         unit: unit,
         memberIds: [...?prior?.ids, row.id],
@@ -118,7 +129,8 @@ class ShoppingRepository {
   }
 
   ShoppingListItemView _mapRow(
-    ShoppingListItem row, {
+    ShoppingListItem row,
+    Ingredient ingredient, {
     double? quantity,
     String? unit,
     List<int> memberIds = const [],
@@ -135,6 +147,10 @@ class ShoppingRepository {
     sourceMealPlanEntryId: memberIds.length > 1
         ? null
         : row.sourceMealPlanEntryId,
+    section: resolveStoreSection(
+      name: ingredient.canonicalName,
+      category: ingredient.category,
+    ),
     memberIds: memberIds,
     recipeTitles: recipeTitles,
   );

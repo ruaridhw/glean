@@ -1,3 +1,5 @@
+import 'store_section.dart';
+
 // Read-side shape for a shopping list row. `ingredientId` is non-nullable: every row, including manual
 // entries, resolves an ingredient identity via `IngredientsRepository`.
 /// Where a shopping row came from. Stored as TEXT in
@@ -30,6 +32,7 @@ class ShoppingListItemView {
     required this.source,
     required this.isChecked,
     required this.sourceMealPlanEntryId,
+    required this.section,
     this.memberIds = const [],
     this.recipeTitles = const [],
   });
@@ -52,4 +55,7 @@ class ShoppingListItemView {
   /// the entry's creation-time snapshot (so it survives the recipe being deleted). Unlike
   /// [sourceMealPlanEntryId], it keeps every source when several rows merge. Empty for manual and AI items.
   final List<String> recipeTitles;
+
+  /// The store section the row is grouped under, resolved through its ingredient.
+  final StoreSection section;
 }

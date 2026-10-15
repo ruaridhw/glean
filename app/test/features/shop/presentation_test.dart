@@ -2,6 +2,7 @@
 // widget/database needed.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/shopping_list_item_view.dart';
+import 'package:glean/data/models/store_section.dart';
 import 'package:glean/features/shop/presentation.dart';
 
 ShoppingListItemView _item({
@@ -21,6 +22,7 @@ ShoppingListItemView _item({
     source: source,
     isChecked: isChecked,
     sourceMealPlanEntryId: null,
+    section: StoreSection.other,
   );
 }
 
