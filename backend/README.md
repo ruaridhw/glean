@@ -1,6 +1,6 @@
 # Glean Backend
 
-Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device, in the Flutter app's SQLite database (Drift). The backend handles AI processing (receipt OCR, recipe import, meal-plan generation), Cognito auth, and rate limiting.
+Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state lives on-device, in the Flutter app's SQLite database (Drift). The backend handles AI processing (receipt OCR, recipe import, meal-plan generation), Cognito auth, and a per-user rate limit on the AI routes (`RATE_LIMIT_PER_HOUR`, default 20; in-memory, so per Lambda container rather than global).
 
 ## Local Development
 

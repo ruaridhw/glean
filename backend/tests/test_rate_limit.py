@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import Request
+from fastapi import Request  # noqa: TC002 - FastAPI resolves this annotation at runtime.
 from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings

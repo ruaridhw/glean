@@ -17,6 +17,7 @@ dependencies = [
     "langsmith>=0.7.0,<1",
     "beautifulsoup4>=4.14.3,<5",
     "pydantic>=2.12.5",
+    "limits>=5.8,<6",
 ]
 
 [tool.pytest.ini_options]

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -566,6 +566,7 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain-openrouter" },
     { name = "langsmith" },
+    { name = "limits" },
     { name = "mangum" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -595,6 +596,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "langchain-openrouter", specifier = ">=0.2.0,<1" },
     { name = "langsmith", specifier = ">=0.7.0,<1" },
+    { name = "limits", specifier = ">=5.8,<6" },
     { name = "mangum", specifier = ">=0.21.0,<1" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1,<3" },
