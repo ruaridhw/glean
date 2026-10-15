@@ -85,6 +85,15 @@ class TestMakeWorktree(unittest.TestCase):
         self.assertEqual(git(worktree, "rev-parse", "HEAD"), origin_main)
         self.assertEqual(git(worktree, "branch", "--show-current"), "tmp/x")
 
+    def test_base_starts_a_stacked_branch_on_the_parent_branch(self) -> None:
+        parent = self.make_worktree(BRANCH="tmp/x")
+        commit(parent, "parent-work")
+
+        child = self.make_worktree(BRANCH="tmp/y", BASE="tmp/x")
+
+        self.assertEqual(git(child, "rev-parse", "HEAD"), git(parent, "rev-parse", "HEAD"))
+        self.assertEqual(git(child, "branch", "--show-current"), "tmp/y")
+
 
 if __name__ == "__main__":
     unittest.main()
