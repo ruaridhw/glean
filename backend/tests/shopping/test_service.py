@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from glean.llm import Feature
-from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
+from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS
+from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse, ShoppingUnit
 from glean.shopping.service import parse_shopping_description
 
 
@@ -122,3 +123,15 @@ def test_parse_shopping_description_rejects_out_of_taxonomy_category() -> None:
 
     assert response.items[0].category is None
     assert response.items[0].food_group == "other"
+
+
+def test_prompt_states_intent_and_ambiguity_policy_not_schema_rules() -> None:
+    llm_router = _FakeLLMRouter(ShoppingParseResponse(items=[]))
+    parse_shopping_description(ShoppingParseRequest(text="tacos"), llm_router=llm_router)
+    system_prompt = llm_router.messages[0].content
+
+    assert not [unit for unit in ShoppingUnit if f'"{unit}"' in system_prompt]
+    assert not [category for category in INGREDIENT_CATEGORY_FOOD_GROUPS if category in system_prompt]
+    assert "unit_price" not in system_prompt
+    assert "api_ingredient_id" not in system_prompt
+    assert "confidence of 0.6 or lower" in system_prompt
