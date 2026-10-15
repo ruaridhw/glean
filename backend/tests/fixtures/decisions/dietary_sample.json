@@ -806,19 +806,6 @@
    }
   },
   {
-   "id": "policy-nut-pasanda-paste",
-   "title": "Pasanda Curry Paste rice bowl",
-   "ingredients": [
-    "basmati rice",
-    "cherry tomatoes",
-    "spring onion",
-    "pasanda curry paste"
-   ],
-   "violates": {
-    "nut-free": true
-   }
-  },
-  {
    "id": "policy-nut-tikka-masala-paste",
    "title": "Tikka Masala Seasoning rice bowl",
    "ingredients": [

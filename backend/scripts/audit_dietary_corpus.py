@@ -266,17 +266,55 @@ def render_disagreements(
     return header + "\n".join(rows)
 
 
-_PASTE_POLICY = re.compile(
-    r"\b(?:korma|pasanda|tikka masala)\b.*\b(?:paste|seasoning|spice|mix|powder)s?\b", re.IGNORECASE
-)
+_PASTE_POLICY = re.compile(r"\b(?:korma|tikka masala)\b.*\b(?:paste|seasoning|spice|mix|powder)s?\b", re.IGNORECASE)
 
 
 def violates_paste_policy(ingredient_names: list[str]) -> bool:
-    """The maintainer's nut-free policy: korma, pasanda and tikka masala pastes and seasonings contain nuts
+    """The maintainer's nut-free policy: korma and tikka masala pastes and seasonings contain nuts
     unless labelled nut-free."""
     return any(
         _PASTE_POLICY.search(name) and not re.search(r"nut[- ]free", name, re.IGNORECASE) for name in ingredient_names
     )
+
+
+# The maintainer's labels of the nut-free recipes both judges were unsure about (2026-10-16). They override
+# every other signal. Tree nuts and peanuts are separate concerns: the chilli crisp recipe is fine for a tree-nut
+# allergy though #161's single flag stays on the safe side for peanuts.
+MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
+    **dict.fromkeys(
+        (
+            "rec_12d9df09a90bd7c7",  # chilli crisp
+            "rec_1d2fa608c4d40f90",
+            "rec_3ebf545c2941c2ab",  # pasanda style seasoning
+            "rec_41788b7d623c8ece",
+            "rec_454acb729d38932f",
+            "rec_4c284db6ff22b558",
+            "rec_507f058fc653d9b8",
+            "rec_5e190fccb7fccf8d",
+            "rec_5e25c57521669ed4",
+            "rec_69aecc221e53066c",  # pasanda style seasoning
+            "rec_6cfe25e9765b7e6b",
+            "rec_745851165b5e37aa",
+            "rec_7707ee2990019174",
+            "rec_889b1bdfc3ffcfb0",
+            "rec_8f0bf5137822944c",
+        ),
+        "fine",
+    ),
+    "rec_9549ace7527cd5ff": "exclude",  # tikka masala paste
+    "rec_96e4c5716655075c": "exclude",  # korma curry paste
+}
+
+
+def resolve_truth(flag: str, recipe_id: str, ingredient_names: list[str], found: Signals) -> str | None:
+    """ "breaks", "fine" or None (unresolved): a maintainer label, else the paste policy, else the three signals."""
+    if flag == NUT_FREE:
+        label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id)
+        if label is not None:
+            return "breaks" if label == "exclude" else "fine"
+        if violates_paste_policy(ingredient_names):
+            return "breaks"
+    return ground_truth(list(found.judges.values()), found.regex)
 
 
 def judge_flagged_but_kept(signals: dict[str, Signals], *, threshold: float) -> list[str]:
@@ -459,6 +497,37 @@ def _effective_probability(found: Signals, *, baseline: bool) -> float:
     return found.probability
 
 
+@dataclass
+class ThresholdRow:
+    threshold: float
+    false_negatives: int
+    false_positives: int
+    safe: int
+    unsafe: int
+    lowest_unsafe: float | None
+    highest_safe: float | None
+
+
+def threshold_table(labelled: list[tuple[str, str, float]], thresholds: list[float]) -> list[ThresholdRow]:
+    unsafe = [probability for _, truth, probability in labelled if truth == "breaks"]
+    safe = [probability for _, truth, probability in labelled if truth != "breaks"]
+    rows = []
+    for threshold in thresholds:
+        counted = confusion(labelled, threshold=threshold)
+        rows.append(
+            ThresholdRow(
+                threshold,
+                len(counted.false_negatives),
+                len(counted.false_positives),
+                len(safe),
+                len(unsafe),
+                min(unsafe, default=None),
+                max(safe, default=None),
+            )
+        )
+    return rows
+
+
 def _score(lines: list[str], title: str, labelled: list[tuple[str, str, float]], threshold: float) -> None:
     at_threshold = confusion(labelled, threshold=threshold)
     needed = zero_false_negative_threshold(labelled)
@@ -489,13 +558,14 @@ def run_report(
         }
         agreed, provisional = [], []
         for rid, found in signals[flag].items():
-            policy = flag == NUT_FREE and violates_paste_policy(recipes[rid].ingredient_names)
-            truth = "breaks" if policy else ground_truth(list(found.judges.values()), found.regex)
+            truth = resolve_truth(flag, rid, recipes[rid].ingredient_names, found)
             if truth is not None:
                 agreed.append((rid, found, truth))
             consensus = next(iter(found.judges.values())) if len(set(found.judges.values())) == 1 else None
-            if policy or (consensus is not None and consensus != "unsure"):
-                provisional.append((rid, found, "breaks" if policy else consensus))
+            if truth is not None:
+                provisional.append((rid, found, truth))
+            elif consensus is not None and consensus != "unsure":
+                provisional.append((rid, found, consensus))
         lines.append(
             f"## {flag}: {len(agreed)} agreed, {len(signals[flag]) - len(agreed)} disagreed or unsure; "
             f"{len(provisional)} with judge consensus"
@@ -508,6 +578,23 @@ def run_report(
                 _score(lines, f"{set_name}, {config}", labelled, thresholds[config])
         lines.append("")
     nut_signals = signals[NUT_FREE]
+    lines += ["## nut-free threshold table (ground truth: maintainer labels, paste policy, then agreed signals)"]
+    for config, is_baseline, thresholds in (
+        ("#161", False, [NUT_FREE_THRESHOLD, 0.2, 0.3, 0.4, 0.5]),
+        ("#145", True, [baseline_thresholds[0]]),
+    ):
+        labelled = [
+            (rid, truth, _effective_probability(found, baseline=is_baseline))
+            for rid, found in nut_signals.items()
+            if (truth := resolve_truth(NUT_FREE, rid, recipes[rid].ingredient_names, found)) is not None
+        ]
+        lines += [
+            f"- {config} at {row.threshold}: FN {row.false_negatives} of {row.unsafe} unsafe, "
+            f"FP {row.false_positives} of {row.safe} safe, lowest unsafe {row.lowest_unsafe}, "
+            f"highest safe {row.highest_safe}"
+            for row in threshold_table(labelled, thresholds)
+        ]
+    lines.append("")
     kept_161 = judge_flagged_but_kept(nut_signals, threshold=NUT_FREE_THRESHOLD)
     kept_145 = judge_flagged_but_kept(
         {

@@ -254,14 +254,14 @@ def test_decision_scoring_asks_again_when_a_recipe_changes(tmp_path: Path) -> No
     ("ingredients", "unsafe"),
     [
         (["Korma Curry Paste", "Onion"], True),
-        (["Pasanda Spice Mix"], True),
+        (["Pasanda Style Seasoning"], False),
         (["Tikka Masala Seasoning"], True),
         (["Nut-Free Korma Paste"], False),
         (["Chicken Breast", "Onion"], False),
         (["Tikka Masala Sauce"], False),
     ],
 )
-def test_the_maintainers_paste_policy_marks_korma_pasanda_and_tikka_masala_pastes_unsafe(ingredients, unsafe) -> None:
+def test_the_maintainers_paste_policy_marks_korma_and_tikka_masala_pastes_unsafe(ingredients, unsafe) -> None:
     assert audit.violates_paste_policy(ingredients) is unsafe
 
 
@@ -274,3 +274,44 @@ def test_disagreements_count_recipes_a_judge_says_contain_nuts_that_the_decision
     }
 
     assert audit.judge_flagged_but_kept(signals, threshold=0.12) == ["r1"]
+
+
+def test_a_maintainer_label_overrides_the_judges_the_regex_and_the_paste_policy() -> None:
+    both_judges_say_breaks = audit.Signals(judges={"a": "breaks", "b": "breaks"}, regex=True, probability=0.9)
+    fine_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "fine")
+    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+
+    assert audit.resolve_truth("nut-free", fine_label, ["Korma Paste"], both_judges_say_breaks) == "fine"
+    assert (
+        audit.resolve_truth("nut-free", exclude_label, ["Rice"], audit.Signals({"a": "fine"}, False, 0.0)) == "breaks"
+    )
+
+
+def test_the_maintainers_seventeen_labels_cover_two_excludes_and_fifteen_fines() -> None:
+    labels = list(audit.MAINTAINER_NUT_FREE_LABELS.values())
+
+    assert (len(labels), labels.count("exclude"), labels.count("fine")) == (17, 2, 15)
+
+
+def test_without_a_label_the_paste_policy_then_the_three_signals_decide_truth() -> None:
+    judges_fine = audit.Signals(judges={"a": "fine", "b": "fine"}, regex=False, probability=0.0)
+
+    assert audit.resolve_truth("nut-free", "rec_x", ["Patak's Korma Paste"], judges_fine) == "breaks"
+    assert audit.resolve_truth("nut-free", "rec_x", ["Rice"], judges_fine) == "fine"
+    assert audit.resolve_truth("vegan", "rec_x", ["Korma Paste"], judges_fine) == "fine"
+    assert (
+        audit.resolve_truth("nut-free", "rec_x", ["Rice"], audit.Signals({"a": "fine", "b": "unsure"}, False, 0))
+        is None
+    )
+
+
+def test_the_threshold_table_reports_errors_and_the_extreme_scores() -> None:
+    labelled = [("a", "breaks", 0.9), ("b", "breaks", 0.3), ("c", "fine", 0.7), ("d", "fine", 0.1)]
+
+    rows = audit.threshold_table(labelled, [0.2, 0.5])
+
+    assert [(r.threshold, r.false_negatives, r.false_positives, r.safe, r.unsafe) for r in rows] == [
+        (0.2, 0, 1, 2, 2),
+        (0.5, 1, 1, 2, 2),
+    ]
+    assert (rows[0].lowest_unsafe, rows[0].highest_safe) == (0.3, 0.7)
