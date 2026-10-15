@@ -122,21 +122,30 @@ class DynamoCatalogueStore:
         return [row["name"] for row in rows]
 
     def seed(self, items: Iterable[CatalogueItem]) -> int:
-        """Write the items that are missing or changed. Returns how many were written."""
+        """Write the items that are missing or changed. Returns how many were written.
+
+        The seed owns an item's fields, but aliases learned since (by `upsert_alias`) are kept: the stored item is
+        the seed's item plus every alias it already has.
+        """
         written = 0
         for item in items:
             row = self._get(_item_pk(item.id))
-            if row is not None and _to_item(row) == item:
+            if row is not None and _reconciled(item, _to_item(row)) == _to_item(row):
                 continue
 
             def plan(version: int, item: CatalogueItem = item) -> tuple[None, list[_Op], int]:
-                keys = _name_keys(item)
+                current = self._get(_item_pk(item.id))
+                stored = _to_item(current) if current else None
+                merged = _reconciled(item, stored)
+                if merged == stored:
+                    return None, [], 0
+                keys = _name_keys(merged)
                 for key in keys:
                     owner = self._alias_owner(key)
                     if owner is not None and owner != item.id:
                         raise AliasConflictError(f"{key!r} already names {owner}")
-                is_new = self._get(_item_pk(item.id)) is None
-                return None, [self._put_item(item, version), *(self._put_alias(k, item.id) for k in keys)], int(is_new)
+                ops = [self._put_item(merged, version), *(self._put_alias(k, item.id) for k in keys)]
+                return None, ops, int(stored is None)
 
             self._commit(plan)
             written += 1
@@ -241,6 +250,15 @@ class DynamoCatalogueStore:
             if "LastEvaluatedKey" not in page:
                 return rows
             kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+
+def _reconciled(seed: CatalogueItem, stored: CatalogueItem | None) -> CatalogueItem:
+    """The seed item, still carrying every alias the stored item has learned."""
+    if stored is None:
+        return seed
+    known = {name_key(alias) for alias in seed.aliases}
+    learned = tuple(alias for alias in stored.aliases if name_key(alias) not in known)
+    return seed.model_copy(update={"aliases": (*seed.aliases, *learned)})
 
 
 def _name_keys(item: CatalogueItem) -> list[str]:
