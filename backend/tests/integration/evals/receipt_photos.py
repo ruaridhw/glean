@@ -9,9 +9,10 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from glean.receipts.schemas import ParsedIngredient, ScanResponse
+from glean.receipts.schemas import ParsedIngredient, ScanResponse
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 # The unit vocabulary the scan response schema documents (ParsedIngredient.unit in receipts/schemas.py).
 UNIT_VOCABULARY = frozenset({"g", "ml", "units", "pack", "bottle"})
@@ -200,3 +201,99 @@ def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
         category_accuracy=_category_accuracy(food, pairs, response),
         non_food_dropped=1 - kept_non_food / len(non_food) if non_food else None,
     )
+
+
+@dataclass
+class PhotoRun:
+    case_id: str
+    mode: str
+    seconds: float
+    response: ScanResponse | None = None
+    error: str | None = None
+    score: ScanScore | None = None
+
+
+def scan_once(
+    cache_dir: Path | None, mode: str, model_id: str, scan: Callable[[], list[PhotoRun]]
+) -> tuple[list[PhotoRun], bool]:
+    """Run the paid scans for one OCR mode once per dispatch, however many pytest processes ask.
+
+    Returns the runs and whether they were freshly scanned (False: read back from the cache).
+    """
+    cache_file = cache_dir / f"receipt-photo-scans-{mode}.json" if cache_dir else None
+    if cache_file and cache_file.exists():
+        cached = json.loads(cache_file.read_text())
+        if cached["model"] == model_id:
+            return [_run_from_json(mode, raw) for raw in cached["runs"]], False
+    runs = scan()
+    if cache_file:
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps({"model": model_id, "runs": [_run_to_json(r) for r in runs]}))
+    return runs, True
+
+
+def _run_to_json(run: PhotoRun) -> dict[str, object]:
+    response = run.response.model_dump(exclude={"items": {"__all__": {"food_group"}}}) if run.response else None
+    return {"case_id": run.case_id, "seconds": run.seconds, "response": response, "error": run.error}
+
+
+def _run_from_json(mode: str, raw: dict[str, object]) -> PhotoRun:
+    response = ScanResponse.model_validate(raw["response"]) if raw["response"] else None
+    return PhotoRun(str(raw["case_id"]), mode, float(raw["seconds"]), response, raw["error"])  # ty: ignore[invalid-argument-type]
+
+
+_BUCKET_VAR = "GLEAN_EVAL_S3_BUCKET"
+_ROLE_VAR = "GLEAN_EVAL_AWS_ROLE_ARN"
+
+
+def textract_configuration(environ: Mapping[str, str]) -> str | None:
+    """The scratch bucket when Textract evals are configured, None when not at all, an error when half."""
+    bucket, role = environ.get(_BUCKET_VAR, ""), environ.get(_ROLE_VAR, "")
+    if bucket and role:
+        return bucket
+    if bucket or role:
+        missing = _ROLE_VAR if bucket else _BUCKET_VAR
+        raise ValueError(f"Textract evals are half configured: {missing} is not set")
+    return None
+
+
+OCR_MODES = ["vision", "textract"]
+
+
+def _percent(value: float | None) -> str:
+    return "skipped" if value is None else f"{value:.0%}"
+
+
+def render_report(model_id: str, runs: list[PhotoRun], *, textract_configured: bool) -> str:
+    lines = [f"## Receipt photo evals — `{model_id}`", ""]
+    if not textract_configured:
+        lines += [
+            f"**textract: not configured** — this run covered `vision` only. Set the repo variables `{_BUCKET_VAR}` "
+            f"(a scratch bucket, never the production one) and `{_ROLE_VAR}` to evaluate the Textract path.",
+            "",
+        ]
+    for mode in OCR_MODES:
+        mode_runs = [r for r in runs if r.mode == mode]
+        if not mode_runs:
+            lines += [f"### {mode}", "", "Not run.", ""]
+            continue
+        lines += [
+            f"### {mode}",
+            "",
+            "| Case | Items | Recall | Precision | Quantity | Unit | Price | Category | Non-food dropped | Latency |",
+            "|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        for r in mode_runs:
+            if r.response is None:
+                lines.append(f"| {r.case_id} | error: {r.error} | | | | | | | | {r.seconds:.1f}s |")
+            elif r.score is None:
+                lines.append(f"| {r.case_id} | {len(r.response.items)} | | | | | | | | {r.seconds:.1f}s |")
+            else:
+                s = r.score
+                lines.append(
+                    f"| {r.case_id} | {len(r.response.items)} | {_percent(s.recall)} | {_percent(s.precision)} "
+                    f"| {_percent(s.quantity_accuracy)} | {_percent(s.unit_accuracy)} | {_percent(s.price_accuracy)} "
+                    f"| {_percent(s.category_accuracy)} | {_percent(s.non_food_dropped)} | {r.seconds:.1f}s |"
+                )
+        lines.append("")
+    return "\n".join(lines)
