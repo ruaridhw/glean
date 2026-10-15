@@ -114,6 +114,38 @@ void main() {
       );
     });
 
+    gleanWidgetTest('a rate-limited request says the hourly limit was reached, '
+        'not that the text was unclear', (WidgetTester tester) async {
+      when(
+        () => httpClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{'detail': 'AI request limit reached'}),
+          429,
+        ),
+      );
+
+      await pumpDescribe(tester);
+
+      await tester.enterText(find.byType(TextField), 'milk');
+      await tester.pump();
+      await tester.tap(find.text('Review items'));
+      await pumpUntil(
+        tester,
+        () => find.textContaining('hourly limit').evaluate().isNotEmpty,
+        description: 'the rate-limit message',
+      );
+
+      expect(
+        find.textContaining('Could not turn that into a list'),
+        findsNothing,
+      );
+    });
+
     gleanWidgetTest('a validation error surfaces and is recoverable', (
       WidgetTester tester,
     ) async {

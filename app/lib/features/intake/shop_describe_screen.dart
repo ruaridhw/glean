@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/shopping.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/design_system/design_system.dart';
@@ -25,25 +26,25 @@ class ShopDescribeScreen extends ConsumerStatefulWidget {
 class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
   String _originalDescription = '';
   bool _pending = false;
-  bool _failed = false;
+  Object? _error;
 
   Future<void> _submit(String text) async {
     if (_pending) return;
     _originalDescription = text;
     setState(() {
       _pending = true;
-      _failed = false;
+      _error = null;
     });
     final ShoppingParseResponse response;
     try {
       response = await ref
           .read(apiClientProvider)
           .parseShoppingDescription(text);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _pending = false;
-        _failed = true;
+        _error = error;
       });
       return;
     }
@@ -94,10 +95,13 @@ class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
             placeholder: 'Stuff for tacos, milk, bananas, and lunchbox snacks',
             buttonLabel: 'Review items',
             isLoading: _pending,
-            errorMessage: _failed
-                ? 'Could not turn that into a list. Try being more specific, '
-                      'e.g. "milk, bananas, taco shells".'
-                : null,
+            errorMessage: switch (_error) {
+              null => null,
+              final ApiRateLimitException e => e.userMessage,
+              _ =>
+                'Could not turn that into a list. Try being more specific, '
+                    'e.g. "milk, bananas, taco shells".',
+            },
             onSubmit: _submit,
           ),
         ),

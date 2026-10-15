@@ -61,6 +61,34 @@ void main() {
       expect(button().onPressed, isNotNull);
     });
 
+    testWidgets('a rate-limited request says the hourly limit was reached, '
+        'not that the text was unclear', (WidgetTester tester) async {
+      when(
+        () => httpClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{'detail': 'AI request limit reached'}),
+          429,
+        ),
+      );
+
+      unawaited(harness.router.pushNamed(AppRoutes.intakeDescribePantry.name));
+      await tester.pumpWidget(harness.app());
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'a kilo of mince');
+      await tester.pump();
+      await tester.tap(find.text('Parse'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('hourly limit'), findsOneWidget);
+      expect(find.textContaining('Could not understand that'), findsNothing);
+    });
+
     testWidgets('a successful parse lands on the review screen with '
         'destination pantry', (WidgetTester tester) async {
       when(
