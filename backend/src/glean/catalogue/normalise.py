@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from glean.catalogue.groups import GROUPS, Form, GroupId, Kind
-from glean.catalogue.models import CatalogueItem, name_key
+from glean.catalogue.groups import GROUPS, Form, GroupId, Kind, TrackingMode
+from glean.catalogue.models import CatalogueItem, ItemOverrides, name_key
 from glean.catalogue.naming import NameRequest, name_items
 from glean.catalogue.store import AliasConflictError
 from glean.decisions import ChoiceQuestion, DecisionError, NoulCriteria, NoulQuestion
@@ -87,7 +87,6 @@ def _result(
     source: ResultSource,
     status: Status,
     confidence: float,
-    perishable: bool | None = None,
 ) -> NormalisedName:
     return NormalisedName(
         input=raw,
@@ -96,7 +95,7 @@ def _result(
         canonical_name=item.name,
         ingredient_group=item.group,
         form=item.form,
-        perishable=item.tracking_mode.value == "perishable" if perishable is None else perishable,
+        perishable=item.tracking_mode is TrackingMode.PERISHABLE,
         confidence=confidence,
         source=source,
         status=status,
@@ -183,28 +182,46 @@ def _confident_match(decision: Decision, group: GroupId, store: CatalogueStore) 
     return item
 
 
-def _create(miss: _Miss, canonical: str, store: CatalogueStore) -> NormalisedName:
-    existing = store.get_by_name(canonical)
-    if existing is None:
+def _attach(store: CatalogueStore, raw: str, item: CatalogueItem, group: GroupId) -> CatalogueItem | None:
+    """Make `raw` resolve to `item`, or to whoever already owns it, never across kinds.
+
+    Returns the item the raw name now resolves to, or None when it can't be linked safely: a household name
+    must not become an alias of a food, nor the reverse.
+    """
+    if _kind_of(item.group) is not _kind_of(group):
+        return None
+    owner = store.get_by_name(raw)
+    if owner is None:
         try:
-            item = store.create_provisional(canonical, miss.group, miss.form, aliases=(miss.raw,))
+            owner = store.upsert_alias(item.id, raw)
+        except AliasConflictError:
+            # Another request attached this name first: keep its answer.
+            owner = store.get_by_name(raw)
+    if owner is None or _kind_of(owner.group) is not _kind_of(group):
+        return None
+    return owner
+
+
+def _create(miss: _Miss, canonical: str, store: CatalogueStore) -> NormalisedName:
+    unresolved = _without_item(miss.raw, status=Status.UNRESOLVED, source=ResultSource.LLM)
+    existing = store.get_by_name(canonical)
+    item = existing
+    if item is None:
+        overrides = ItemOverrides(tracking_mode=TrackingMode.PERISHABLE) if miss.perishable else None
+        try:
+            item = store.create_provisional(canonical, miss.group, miss.form, aliases=(miss.raw,), overrides=overrides)
         except AliasConflictError:
             # Another request got there first with this name or alias: use its row.
-            found = store.get_by_name(canonical) or store.get_by_name(miss.raw)
-            if found is None:
-                raise
-            item = found
-    else:
-        item = existing
-    if store.get_by_name(miss.raw) is None:
-        item = store.upsert_alias(item.id, miss.raw)
+            item = store.get_by_name(canonical) or store.get_by_name(miss.raw)
+    owner = None if item is None else _attach(store, miss.raw, item, miss.group)
+    if owner is None:
+        return unresolved
     return _result(
         miss.raw,
-        item,
+        owner,
         source=ResultSource.LLM,
         status=Status.MATCHED if existing is not None else Status.CREATED,
         confidence=1.0,
-        perishable=miss.perishable,
     )
 
 
@@ -233,6 +250,23 @@ def _name_misses(
             store.record_unmatched(miss.raw)
             results[miss.raw] = _without_item(miss.raw, status=Status.UNMATCHED, source=ResultSource.LLM)
     return results
+
+
+def _settle(raw: str, decision: Decision | None, store: CatalogueStore) -> NormalisedName | _Miss:
+    """A confident, kind-safe match as a result; otherwise the miss that needs naming (or an unresolved result)."""
+    if decision is None:
+        return _without_item(raw, status=Status.UNRESOLVED, source=ResultSource.DECISION)
+    group = GroupId(decision.choice("ingredient_group").choice)
+    item = _confident_match(decision, group, store)
+    if item is None:
+        form = _form_for(group, decision.choice("form"))
+        perishable = decision.noul("perishable").noul >= 0.5
+        return _Miss(raw=raw, group=group, form=form, perishable=perishable)
+    owner = _attach(store, raw, item, group)
+    if owner is None:
+        return _without_item(raw, status=Status.UNRESOLVED, source=ResultSource.DECISION)
+    confidence = decision.choice("match").probabilities[item.name]
+    return _result(raw, owner, source=ResultSource.DECISION, status=Status.MATCHED, confidence=confidence)
 
 
 def normalise(
@@ -267,22 +301,11 @@ def normalise(
         futures = {key: pool.submit(_decide, raw, context, shortlists[key], decisions) for key, raw in pending.items()}
     misses: dict[str, _Miss] = {}
     for key, raw in pending.items():
-        decision = futures[key].result()
-        if decision is None:
-            results[key] = _without_item(raw, status=Status.UNRESOLVED, source=ResultSource.DECISION)
-            continue
-        group = GroupId(decision.choice("ingredient_group").choice)
-        perishable = decision.noul("perishable").noul >= 0.5
-        item = _confident_match(decision, group, store)
-        if item is None:
-            form = _form_for(group, decision.choice("form"))
-            misses[key] = _Miss(raw=raw, group=group, form=form, perishable=perishable)
-            continue
-        item = store.upsert_alias(item.id, raw)
-        confidence = decision.choice("match").probabilities[item.name]
-        results[key] = _result(
-            raw, item, source=ResultSource.DECISION, status=Status.MATCHED, confidence=confidence, perishable=perishable
-        )
+        outcome = _settle(raw, futures[key].result(), store)
+        if isinstance(outcome, _Miss):
+            misses[key] = outcome
+        else:
+            results[key] = outcome
 
     remaining_s = naming_budget_s - (time.monotonic() - started)
     named = _name_misses(list(misses.values()), store, llm_router, context, remaining_s)
