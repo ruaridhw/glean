@@ -65,6 +65,31 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('a rate-limited import says the hourly limit was reached', (
+      WidgetTester tester,
+    ) async {
+      when(
+        () => httpClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{'detail': 'AI request limit reached'}),
+          429,
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+
+      await harness.pumpAt(tester, AppRoutes.mealsImport.path);
+      await tester.pumpAndSettle();
+      await enterAndImport(tester, 'https://example.com/carbonara');
+
+      expect(find.textContaining('hourly limit'), findsOneWidget);
+      expect(find.textContaining('Could not import this recipe'), findsNothing);
+    });
+
     testWidgets('imports a fresh URL and saves exactly one recipe', (
       WidgetTester tester,
     ) async {
