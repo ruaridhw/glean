@@ -30,6 +30,12 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: prod
+    # A newer push replaces a deploy still waiting for approval, so only the
+    # latest main ever needs approving. A deploy already running finishes:
+    # cancelling sam deploy mid-update leaves the stack busy and fails the next.
+    concurrency:
+      group: backend-deploy-prod
+      cancel-in-progress: false
     defaults:
       run:
         working-directory: backend
