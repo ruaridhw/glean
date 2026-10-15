@@ -32,7 +32,11 @@ def test_seeding_twice_writes_nothing_the_second_time(table: Any) -> None:
     store = DynamoCatalogueStore("seed-test")
     items = load_seed().items
     assert seed_catalogue.seed_catalogue(store) == len(items)
-    assert store.get_by_name(items[0].name) == items[0]
+    for item in items:  # including per-form once-opened shelf life and overrides, as the model resolves them
+        found = store.get_by_name(item.name)
+        assert found == item
+        assert found.once_opened_shelf_life_days == item.once_opened_shelf_life_days
+        assert found.unopened_shelf_life_days == item.unopened_shelf_life_days
     rows_after_first = _rows(table)
     version_after_first = store.catalogue_version()
 
