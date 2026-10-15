@@ -108,9 +108,11 @@ Future<void> _migrateAndVerify(File staged) async {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   final GleanDatabase candidate = GleanDatabase(NativeDatabase(staged));
   try {
-    final Object? verdict = (await candidate
-        .customSelect('PRAGMA integrity_check')
-        .getSingle()).data.values.single;
+    final Object? verdict =
+        (await candidate.customSelect('PRAGMA integrity_check').getSingle())
+            .data
+            .values
+            .single;
     if (verdict != 'ok') throw BackupInvalidException('$verdict');
   } on BackupInvalidException {
     rethrow;
