@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from glean.decisions import ChoiceAnswer, Decision, DecisionClient, Question
     from glean.llm import LLMRouter
 
-# Lowest match probability that counts as a match. Set from the eval in docs/normalisation-eval.md.
+# Lowest match probability that counts as a match. Set from the eval in tests/fixtures/normalisation/README.md.
 MATCH_THRESHOLD = 0.7
 MAX_NAMES = 20
 NONE_OF_THESE = "none of these"
