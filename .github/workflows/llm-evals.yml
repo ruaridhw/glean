@@ -21,7 +21,7 @@ jobs:
       run:
         working-directory: backend
     env:
-      GLEAN_LLM_MODEL: ${{ inputs.model }}
+      GLEAN_EVAL_MODEL: ${{ inputs.model }}
       LANGCHAIN_TRACING_V2: "true"
       LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
       LANGCHAIN_PROJECT: glean
