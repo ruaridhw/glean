@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
-from glean.catalogue.models import CatalogueItem, Source, name_key, slugify
+from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key, slugify
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -37,8 +37,18 @@ class CatalogueStore(Protocol):
         """Make *alias* resolve to the item. Harmless if it already does."""
         ...
 
-    def create_provisional(self, name: str, group: GroupId, form: Form, aliases: tuple[str, ...] = ()) -> CatalogueItem:
-        """Add a provisional item (source llm). Its kind follows its group. Reuses an item that already has the name."""
+    def create_provisional(
+        self,
+        name: str,
+        group: GroupId,
+        form: Form,
+        aliases: tuple[str, ...] = (),
+        overrides: ItemOverrides | None = None,
+    ) -> CatalogueItem:
+        """Add a provisional item (source llm), with optional overrides. Its kind follows its group.
+
+        Reuses an item that already has the name.
+        """
         ...
 
     def record_unmatched(self, name: str) -> None:
@@ -116,12 +126,25 @@ class InMemoryCatalogueStore:
         self._by_key[key] = item_id
         return updated
 
-    def create_provisional(self, name: str, group: GroupId, form: Form, aliases: tuple[str, ...] = ()) -> CatalogueItem:
+    def create_provisional(
+        self,
+        name: str,
+        group: GroupId,
+        form: Form,
+        aliases: tuple[str, ...] = (),
+        overrides: ItemOverrides | None = None,
+    ) -> CatalogueItem:
         existing = self.get_by_name(name)
         if existing is not None:
             return existing
         item = CatalogueItem(
-            id=self._free_id(name), name=name.strip(), aliases=aliases, group=group, form=form, source=Source.LLM
+            id=self._free_id(name),
+            name=name.strip(),
+            aliases=aliases,
+            group=group,
+            form=form,
+            overrides=overrides or ItemOverrides(),
+            source=Source.LLM,
         )
         self._add(item)
         return item

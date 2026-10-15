@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from glean.catalogue.groups import Form, GroupId, Kind
+from glean.catalogue.groups import Form, GroupId, Kind, TrackingMode
 from glean.catalogue.models import CatalogueItem, ItemOverrides, Source
 from glean.catalogue.store import (
     AliasConflictError,
@@ -101,6 +101,15 @@ class CatalogueStoreContract:
         found = store.get_by_name("pitaya")
         assert found is not None
         assert found.id == created.id
+
+    def test_a_provisional_item_keeps_the_overrides_it_was_created_with(self, store: CatalogueStore) -> None:
+        overrides = ItemOverrides(tracking_mode=TrackingMode.PERISHABLE)
+        store.create_provisional("buffalo cream", GroupId.DAIRY, Form.NOT_APPLICABLE, overrides=overrides)
+
+        found = store.get_by_name("buffalo cream")
+
+        assert found is not None
+        assert found.tracking_mode is TrackingMode.PERISHABLE
 
     def test_a_provisional_item_in_a_household_group_is_a_household_item(self, store: CatalogueStore) -> None:
         created = store.create_provisional("birthday candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
