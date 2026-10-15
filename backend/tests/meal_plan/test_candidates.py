@@ -1,17 +1,8 @@
 from __future__ import annotations
 
 import random
-from datetime import UTC, datetime
 
-from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
-from glean.meal_plan.dietary_decisions import (
-    DietaryDecision,
-    DietaryDecisionStore,
-    content_fingerprint,
-    dietary_questions,
-    question_hash,
-)
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -149,90 +140,10 @@ def test_near_duplicate_recipes_are_offered_at_most_once(tmp_path) -> None:
     assert "rec_curry" in ids
 
 
-def test_vegetarian_excludes_meat_and_fish_but_keeps_vegan_alternatives(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_chicken", "Chicken Curry", ["chicken thigh", "tomato"], 30),
-            ("rec_fish_sauce", "Pad Thai", ["rice noodles", "fish sauce", "tomato"], 30),
-            ("rec_vegan_mince", "Veggie Chilli", ["vegan mince", "tomato"], 30),
-            ("rec_dal", "Tomato Dal", ["red lentils", "tomato"], 30),
-        ],
-    )
-
-    candidates = _sample(corpus, pantry=["tomatoes"], dietary_flags=["Vegetarian"])
-
-    assert {candidate.external_id for candidate in candidates} == {"rec_vegan_mince", "rec_dal"}
-
-
-def test_vegan_also_excludes_dairy_eggs_and_honey_but_keeps_plant_milks(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_halloumi", "Halloumi Bake", ["halloumi", "tomato"], 30),
-            ("rec_egg", "Shakshuka", ["eggs", "tomato"], 30),
-            ("rec_honey", "Honey Roast Veg", ["honey", "carrot"], 30),
-            ("rec_coconut", "Coconut Curry", ["coconut milk", "tomato"], 30),
-        ],
-    )
-
-    candidates = _sample(corpus, pantry=["tomatoes"], dietary_flags=["vegan"])
-
-    assert [candidate.external_id for candidate in candidates] == ["rec_coconut"]
-
-
-def test_gluten_free_excludes_wheat_but_keeps_rice_noodles_and_cornflour(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_spaghetti", "Spaghetti Pomodoro", ["spaghetti", "tomato"], 30),
-            ("rec_soy", "Stir Fry", ["soy sauce", "pepper"], 30),
-            ("rec_rice_noodles", "Noodle Bowl", ["rice noodles", "cornflour", "pepper"], 30),
-        ],
-    )
-
-    candidates = _sample(corpus, pantry=["pepper"], dietary_flags=["Gluten-Free"])
-
-    assert [candidate.external_id for candidate in candidates] == ["rec_rice_noodles"]
-
-
-def test_dairy_free_and_nut_free_exclusions(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_cheese", "Cheese Toastie", ["cheddar cheese", "bread"], 10),
-            ("rec_satay", "Satay Skewers", ["peanut butter", "tofu"], 20),
-            ("rec_oat", "Overnight Oats", ["oat milk", "banana"], 5),
-        ],
-    )
-
-    _store_decisions(corpus, {(f"rec_{name}", "nut-free"): 0.0 for name in ("cheese", "satay", "oat")})
-
-    assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free", "Nut-Free"])] == ["rec_oat"]
-    assert {c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Dairy-Free"])} == {"rec_satay", "rec_oat"}
-
-
-def test_flags_without_ingredient_rules_leave_candidates_to_the_model(tmp_path) -> None:
+def test_flags_without_a_decision_question_leave_candidates_to_the_model(tmp_path) -> None:
     corpus = _corpus(tmp_path, [("rec_pasta", "Pasta Bake", ["penne", "cheese"], 30)])
 
     assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Keto", "Paleo"])] == ["rec_pasta"]
-
-
-def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, str], float]) -> None:
-    DietaryDecisionStore(corpus.store).save(
-        [
-            DietaryDecision(
-                recipe_id=recipe_id,
-                flag=flag,
-                probability=probability,
-                model=f"{DECISION_MODEL}-20261014",
-                content_hash=_hash(corpus, recipe_id),
-                criteria_hash=question_hash(dietary_questions()[flag]),
-                computed_at=datetime(2026, 10, 15, tzinfo=UTC),
-            )
-            for (recipe_id, flag), probability in probabilities.items()
-        ]
-    )
 
 
 def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list[str]) -> list:
@@ -245,11 +156,6 @@ def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list
         rng=random.Random(0),
         sample_size=10,
     )
-
-
-def _hash(corpus: RecipeCorpusStore, recipe_id: str) -> str:
-    summary = next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
-    return content_fingerprint(summary.title, summary.ingredient_names)
 
 
 def _corpus(tmp_path, recipes: list[tuple[str, str, list[str], int | None]]) -> RecipeCorpusStore:

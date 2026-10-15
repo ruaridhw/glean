@@ -11,6 +11,7 @@ import random
 from datetime import UTC, datetime
 
 import httpx
+import pytest
 
 from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
@@ -32,7 +33,7 @@ from glean.recipes.stored import StoredIngredient, StoredRecipe
 CURRENT_MODEL = f"{DECISION_MODEL}-20261014"
 
 
-def test_a_recipe_a_stored_decision_flags_is_excluded_though_the_regex_keeps_it(tmp_path) -> None:
+def test_a_recipe_a_stored_decision_flags_is_excluded_though_its_ingredients_look_harmless(tmp_path) -> None:
     corpus = _corpus(
         tmp_path,
         [
@@ -45,20 +46,18 @@ def test_a_recipe_a_stored_decision_flags_is_excluded_though_the_regex_keeps_it(
     assert _ids(corpus, ["Nut-Free"]) == {"rec_tomato"}
 
 
-def test_a_stored_decision_never_clears_a_recipe_the_regex_excludes(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_satay", "Satay Skewers", ["peanut butter", "tofu"]),
-            ("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"]),
-        ],
-    )
-    _store_decisions(corpus, {("rec_satay", "nut-free"): 0.0, ("rec_tomato", "nut-free"): 0.0})
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_a_stored_decision_alone_decides_so_a_low_probability_keeps_a_recipe_naming_a_forbidden_food(
+    tmp_path, flag: str
+) -> None:
+    corpus = _corpus(tmp_path, [("rec_mixed", "Everything Bowl", ["chicken", "cheese", "peanut", "bread"])])
+    _store_decisions(corpus, {("rec_mixed", flag): 0.0})
 
-    assert _ids(corpus, ["nut-free"]) == {"rec_tomato"}
+    assert _ids(corpus, [flag]) == {"rec_mixed"}
 
 
-def test_nut_free_excludes_a_recipe_with_no_stored_decision(tmp_path) -> None:
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_every_flag_excludes_a_recipe_with_no_stored_decision(tmp_path, flag: str) -> None:
     corpus = _corpus(
         tmp_path,
         [
@@ -66,31 +65,34 @@ def test_nut_free_excludes_a_recipe_with_no_stored_decision(tmp_path) -> None:
             ("rec_new", "Courgette Pasta", ["spaghetti", "courgette"]),
         ],
     )
-    _store_decisions(corpus, {("rec_decided", "nut-free"): 0.01})
+    _store_decisions(corpus, {("rec_decided", flag): 0.01})
 
-    assert _ids(corpus, ["nut-free"]) == {"rec_decided"}
+    assert _ids(corpus, [flag]) == {"rec_decided"}
 
 
-def test_nut_free_excludes_everything_when_no_decisions_are_stored(tmp_path) -> None:
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_every_flag_excludes_everything_when_no_decisions_are_stored(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
 
-    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, [flag]) == set()
 
 
-def test_nut_free_excludes_a_recipe_judged_under_an_older_model(tmp_path) -> None:
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_every_flag_excludes_a_recipe_judged_under_an_older_model(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
-    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, model="typesafe/jev-1.13-20260917")
+    _store_decisions(corpus, {("rec_tomato", flag): 0.01}, model="typesafe/jev-1.13-20260917")
 
-    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, [flag]) == set()
 
 
-def test_a_decision_computed_under_other_criteria_text_is_treated_as_missing(tmp_path) -> None:
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_a_decision_computed_under_other_criteria_text_is_treated_as_missing(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
-    question = dietary_questions()["nut-free"]
+    question = dietary_questions()[flag]
     reworded = question.model_copy(update={"instructions": question.instructions + " Tahini counts."})
-    _store_decisions(corpus, {("rec_tomato", "nut-free"): 0.01}, criteria_hash=question_hash(reworded))
+    _store_decisions(corpus, {("rec_tomato", flag): 0.01}, criteria_hash=question_hash(reworded))
 
-    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, [flag]) == set()
 
 
 def test_the_criteria_hash_changes_with_either_criterion_or_the_instructions() -> None:
@@ -106,29 +108,23 @@ def test_the_criteria_hash_changes_with_either_criterion_or_the_instructions() -
     assert len({question_hash(question), *(question_hash(variant) for variant in variants)}) == 4
 
 
-def test_nut_free_excludes_a_recipe_whose_stored_decision_is_unreadable(tmp_path) -> None:
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_every_flag_excludes_a_recipe_whose_stored_decision_is_unreadable(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
     corpus.store.write(DIETARY_DECISIONS_KEY, '{"recipe_id": "rec_tomato", "flag": "nut-fr\n')
 
-    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, [flag]) == set()
 
 
-def test_preference_flags_without_a_stored_decision_are_judged_by_the_regex_alone(tmp_path) -> None:
-    corpus = _corpus(
-        tmp_path,
-        [
-            ("rec_chicken", "Chicken Curry", ["chicken thigh", "tomato"]),
-            ("rec_dal", "Tomato Dal", ["red lentils", "tomato"]),
-        ],
-    )
+def test_flags_the_decision_model_isnt_asked_about_leave_candidates_alone(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_pasta", "Pasta Bake", ["penne", "cheese"])])
 
-    assert _ids(corpus, ["vegetarian"]) == {"rec_dal"}
-    assert _ids(corpus, ["dairy-free", "gluten-free"]) == {"rec_chicken", "rec_dal"}
+    assert _ids(corpus, ["Keto", "Paleo"]) == {"rec_pasta"}
 
 
 def test_nut_free_decisions_do_not_leak_into_other_flags(tmp_path) -> None:
     corpus = _corpus(tmp_path, [("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"])])
-    _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9})
+    _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9, ("rec_pesto", "vegetarian"): 0.0})
 
     assert _ids(corpus, ["vegetarian"]) == {"rec_pesto"}
 
