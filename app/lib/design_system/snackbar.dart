@@ -25,6 +25,10 @@ class GleanSnackBar {
     VoidCallback? onSuccess,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Flutter >= 3.38 persists any SnackBar with an action and ignores its duration, so opt in explicitly:
+    // time out after 5s, except for screen-reader users (WCAG 2.2.1), who keep it until they act.
+    // Read before perform: the context may be gone (popped route) by the time it finishes.
+    final persist = MediaQuery.accessibleNavigationOf(context);
     final T snapshot;
     try {
       snapshot = await perform();
@@ -41,6 +45,8 @@ class GleanSnackBar {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
+          duration: const Duration(seconds: 5),
+          persist: persist,
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () => unawaited(() async {
