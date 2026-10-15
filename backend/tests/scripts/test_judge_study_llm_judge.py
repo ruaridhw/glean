@@ -66,6 +66,20 @@ class TestLlmJudge:
         assert (judgement.judge, judgement.repeat, judgement.score) == ("llm", 3, 4)
         assert judgement.model == "google/gemini-3.1-flash-lite"
 
+    def test_a_panel_judge_is_the_same_judge_under_its_own_name(self) -> None:
+        recorder = UsageRecorder()
+        panel = LlmJudge(
+            _ChatModel(recorder, 3),
+            model_id="anthropic/claude-sonnet-5.5",
+            recorder=recorder,
+            prices=PRICES,
+            judge_name="panel_claude",
+        )
+
+        judgement = panel.judge(_item(), repeat=1)
+
+        assert (judgement.judge, judgement.model, judgement.score) == ("panel_claude", "anthropic/claude-sonnet-5.5", 3)
+
     def test_latency_and_the_cost_of_the_tokens_used_are_recorded(self) -> None:
         judgement = _judge(5).judge(_item(), repeat=1)
 
