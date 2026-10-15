@@ -10,14 +10,34 @@ import 'package:glean/design_system/design_system.dart';
 import '../actions.dart';
 import '../presentation.dart';
 
-class PlanSlotRow extends ConsumerWidget {
+class PlanSlotRow extends ConsumerStatefulWidget {
   const PlanSlotRow({super.key, required this.slot, required this.onEmptyTap});
 
   final PlanSlot slot;
   final VoidCallback onEmptyTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlanSlotRow> createState() => _PlanSlotRowState();
+}
+
+class _PlanSlotRowState extends ConsumerState<PlanSlotRow> {
+  // True from the tap until the opened recipe is closed, so a slow snapshot lookup can't queue a second push.
+  bool _opening = false;
+
+  Future<void> _open(MealPlanEntryView entry) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await openPlannedRecipe(context, ref, entry);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final PlanSlot slot = widget.slot;
+    final VoidCallback onEmptyTap = widget.onEmptyTap;
     final MealPlanEntryView? entry = slot.entry;
     if (entry == null) {
       return _EmptySlotRow(onTap: onEmptyTap);
@@ -28,9 +48,7 @@ class PlanSlotRow extends ConsumerWidget {
       child: _FilledSlotRow(
         entry: entry,
         onCooked: () => markCookedWithUndo(context, ref, entry),
-        onOpen: canOpenPlannedRecipe(entry)
-            ? () => openPlannedRecipe(context, ref, entry)
-            : null,
+        onOpen: canOpenPlannedRecipe(entry) ? () => _open(entry) : null,
       ),
     );
   }

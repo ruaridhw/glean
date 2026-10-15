@@ -1,4 +1,5 @@
 // A filled Plan slot opens its recipe inside the Plan tab. Real router and SQLite; only the HTTP client is faked.
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -18,33 +19,35 @@ void main() {
   final week = startOfWeek(DateTime.now());
   final requestedPaths = <String>[];
 
-  AppTestHarness build({int previewStatus = 200}) => AppTestHarness(
-    httpClient: MockClient((http.Request request) async {
-      requestedPaths.add(request.url.path);
-      if (request.url.path == '/recipes/ext-1' && previewStatus == 200) {
-        return http.Response(
-          jsonEncode(<String, dynamic>{
-            'external_id': 'ext-1',
-            'title': 'Miso Soup',
-            'source_url': null,
-            'cuisine': null,
-            'difficulty': null,
-            'active_time_mins': null,
-            'total_time_mins': null,
-            'dietary_flags': <String>[],
-            'not_suitable_for': <String>[],
-            'yield_count': 2,
-            'nutrition': null,
-            'instructions': <Map<String, dynamic>>[],
-            'ingredients': <Map<String, dynamic>>[],
-          }),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      }
-      return http.Response('not found', 404);
-    }),
-  );
+  AppTestHarness build({int previewStatus = 200, Future<void>? gate}) =>
+      AppTestHarness(
+        httpClient: MockClient((http.Request request) async {
+          await gate;
+          requestedPaths.add(request.url.path);
+          if (request.url.path == '/recipes/ext-1' && previewStatus == 200) {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'external_id': 'ext-1',
+                'title': 'Miso Soup',
+                'source_url': null,
+                'cuisine': null,
+                'difficulty': null,
+                'active_time_mins': null,
+                'total_time_mins': null,
+                'dietary_flags': <String>[],
+                'not_suitable_for': <String>[],
+                'yield_count': 2,
+                'nutrition': null,
+                'instructions': <Map<String, dynamic>>[],
+                'ingredients': <Map<String, dynamic>>[],
+              }),
+              200,
+              headers: <String, String>{'content-type': 'application/json'},
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      );
 
   setUp(() {
     requestedPaths.clear();
@@ -206,6 +209,34 @@ void main() {
       expect(location(), AppRoutes.plan.path);
       expect(find.text('Dinners'), findsOneWidget);
       expect(find.byTooltip('Save recipe'), findsNothing);
+    },
+  );
+
+  gleanWidgetTest(
+    'tapping a planned meal again during a slow preview lookup opens one preview',
+    (tester) async {
+      await h.dispose();
+      final lookup = Completer<void>();
+      h = build(gate: lookup.future);
+      final recipeId = await plannedMeal('Miso Soup', externalId: 'ext-1');
+      await h.container
+          .read(recipesRepositoryProvider)
+          .deleteRecipe(id: recipeId, userId: h.userId);
+      await openPlan(tester);
+
+      await tester.tap(find.text('Miso Soup'));
+      await tester.pump();
+      await tester.tap(find.text('Miso Soup'));
+      await tester.pump();
+      lookup.complete();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Save recipe'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Save recipe'), findsNothing);
+      expect(find.text('Dinners'), findsOneWidget);
     },
   );
 }
