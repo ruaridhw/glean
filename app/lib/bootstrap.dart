@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'data/providers/catalogue_sync_lifecycle.dart';
 import 'data/providers/database_providers.dart';
 import 'design_system/design_system.dart';
 
@@ -67,7 +68,7 @@ class GleanRoot extends ConsumerWidget {
       child: KeyedSubtree(
         key: ValueKey<bool>(ready.isLoading),
         child: ready.when(
-          data: (_) => const GleanApp(),
+          data: (_) => const CatalogueSyncLifecycle(child: GleanApp()),
           loading: () => const _SplashHolding(),
           error: (Object error, StackTrace _) =>
               _DatabaseErrorApp(error: error),
