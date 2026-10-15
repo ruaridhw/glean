@@ -171,7 +171,6 @@ void main() {
       );
     });
 
-
     testWidgets('deleting the last item of a filtered category does not '
         'strand the list', (WidgetTester tester) async {
       await pantry.addItem(
