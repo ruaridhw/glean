@@ -594,7 +594,7 @@ audit = [
     { name = "playwright" },
 ]
 dev = [
-    { name = "moto", extra = ["dynamodb"] },
+    { name = "moto", extra = ["dynamodb", "s3"] },
     { name = "pillow" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -627,7 +627,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 audit = [{ name = "playwright", specifier = ">=1.50,<2" }]
 dev = [
-    { name = "moto", extras = ["dynamodb"], specifier = ">=5,<6" },
+    { name = "moto", extras = ["dynamodb", "s3"], specifier = ">=5.2.4,<6" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pre-commit", specifier = ">=4.2.0,<5" },
     { name = "pytest", specifier = ">=9.0.3,<10" },
@@ -996,6 +996,10 @@ wheels = [
 dynamodb = [
     { name = "docker" },
     { name = "py-partiql-parser" },
+]
+s3 = [
+    { name = "py-partiql-parser" },
+    { name = "pyyaml" },
 ]
 
 [[package]]
