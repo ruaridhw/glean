@@ -20,6 +20,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 BACKEND = REPO / "backend"
 CONFIG_ENV = "prod"
+# Template parameter -> Lambda environment variable it feeds (see template.yaml).
+PARAMETER_ENV_VARS = {
+    "Environment": "ENVIRONMENT",
+    "LangSmithTracing": "LANGSMITH_TRACING",
+    "LangSmithEndpoint": "LANGSMITH_ENDPOINT",
+    "GitSha": "GIT_SHA",
+}
 
 
 def _git(*args: str) -> str:
@@ -97,15 +104,17 @@ def _live_mismatches(overrides: dict[str, str], stamp: str) -> list[str]:
 
     live_params = {p["ParameterKey"]: p["ParameterValue"] for p in stack.get("Parameters", [])}
     live_tags = {t["Key"]: t["Value"] for t in stack.get("Tags", [])}
-    expected_env = {
-        "ENVIRONMENT": overrides["Environment"],
-        "LANGSMITH_TRACING": overrides.get("LangSmithTracing", "false"),
-        "GIT_SHA": stamp,
-    }
+    # Parameters samconfig leaves out resolve to template defaults, so the stack's resolved value is the
+    # expectation for the Lambda env; samconfig's own values are checked against the stack above.
+    expected_params = {**live_params, **overrides}
     checks = [
         *((f"stack parameter {key}", live_params.get(key), value) for key, value in overrides.items()),
         ("stack tag commit", live_tags.get("commit"), stamp),
-        *((f"Lambda env {key}", lambda_env.get(key), value) for key, value in expected_env.items()),
+        *(
+            (f"Lambda env {env_var}", lambda_env.get(env_var), expected_params.get(param))
+            for param, env_var in PARAMETER_ENV_VARS.items()
+            if param in expected_params
+        ),
     ]
     return [f"{what}: live {live!r}, expected {want!r}" for what, live, want in checks if live != want]
 
