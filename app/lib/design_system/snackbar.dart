@@ -47,6 +47,7 @@ class GleanSnackBar {
           content: Text(message),
           duration: const Duration(seconds: 5),
           persist: persist,
+          showCloseIcon: persist,
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () => unawaited(() async {
