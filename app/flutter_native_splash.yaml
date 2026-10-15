@@ -1,7 +1,7 @@
 ## One splash composition, brand green, both platforms. The RN app handed off from a native splash to a *different*
 ## JS-drawn splash composition in the same green with an unanimated pop; that
 ## second composition doesn't exist here — `lib/bootstrap.dart` holds this same
-## flat green (`Color(0xFF2E9D63)`) behind `_SplashHolding` while the database
+## flat green (`colorScheme.primary`) behind `_SplashHolding` while the database
 ## opens, so there is nothing else to design a hand-off to.
 ##
 ## Regenerate after editing this file or the source PNG:

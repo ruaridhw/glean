@@ -72,7 +72,7 @@ and add an item via manual entry (dead code in the RN app — reachable here
 from the `+` sheet).
 It runs against `lib/main_e2e.dart`, never `lib/main.dart` — that's where the
 e2e auth bypass lives, and it cannot compile into `lib/main.dart`'s import
-graph at all (`test/auth/auth_bypass_test.dart` enforces this; see
+graph at all (`test/standards/house_rules_test.dart` enforces this; see
 `AGENTS.md`). This file only *compiles* in CI's push-triggered job
 (`flutter analyze` covers `integration_test/` too) — actually running it
 needs a booted simulator/emulator, which is a `workflow_dispatch`-gated CI

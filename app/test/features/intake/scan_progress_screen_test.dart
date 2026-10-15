@@ -160,7 +160,7 @@ void main() {
       );
       expect(find.text('Try again'), findsOneWidget);
       expect(find.text('Back'), findsOneWidget);
-      // failure fires the ladder's data-commit weight — Flutter has
+      // Failure fires the ladder's data-commit weight — Flutter has
       // no notification-style haptic, so this plus the message above stand
       // in for one.
       expect(harness.hapticCalls, contains(HapticWeight.medium));
@@ -201,7 +201,7 @@ void main() {
       expect(widget.args.destination, ReviewDestination.pantry);
       expect(widget.args.items.single.name, 'Milk');
       expect(widget.args.items.single.category, 'dairy');
-      // success also fires the ladder's data-commit weight, routed
+      // Success also fires the ladder's data-commit weight, routed
       // through `hapticsProvider` rather than `HapticFeedback`
       // directly.
       expect(harness.hapticCalls, contains(HapticWeight.medium));

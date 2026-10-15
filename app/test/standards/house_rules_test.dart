@@ -67,7 +67,7 @@ void main() {
     );
   });
 
-  test('no process citations in comments (rule 3)', () {
+  test('no process citations in comments or test names (rule 3)', () {
     _expectNone(
       files: [
         ..._dartFiles('lib'),

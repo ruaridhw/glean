@@ -2,10 +2,9 @@
 //
 // Ported from the Expo app's `src/normalization/units.ts` test suite
 // (`git show 906c9bb^:mobile/src/__tests__/normalization/units.test.ts`) —
-// this file previously had **no test at all**, which is how a `canonicalUnit`
-// that was always null went unnoticed:
-// nothing exercised `normalizeUnit` in isolation, so a `canonicalUnit` that
-// was always null never tripped anything here.
+// this file previously had **no test at all**: nothing exercised
+// `normalizeUnit` in isolation, so a `canonicalUnit` that was always null
+// never tripped anything here.
 import 'package:glean/data/util/unit_normalization.dart';
 import 'package:flutter_test/flutter_test.dart';
 

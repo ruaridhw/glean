@@ -131,7 +131,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // No undo snackbar — the delete failed and was caught, not
-        // propagated uncaught with zero feedback (the bug).
+        // propagated uncaught with zero feedback.
         expect(find.text('Undo'), findsNothing);
         expect(find.textContaining('Could not remove'), findsOneWidget);
 

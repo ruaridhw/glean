@@ -153,8 +153,7 @@ void main() {
 
     test('a mixed-unit top-up converts and sums correctly instead of '
         'corrupting the quantity', () async {
-      // "2 kg flour" then "500 g
-      // flour" must total 2500g, never the RN/pre-fix bug's "502 kg".
+      // "2 kg flour" then "500 g flour" must total 2500g, never "502 kg".
       await repository.addItem(
         userId: userId,
         name: 'plain flour',

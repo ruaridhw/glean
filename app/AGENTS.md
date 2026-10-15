@@ -82,7 +82,8 @@ that review checks. `flutter analyze` and `dart format` cover style.
 3. **No process citations in code or tests.** Comments and test names
    explain the current constraint, not the ticket that introduced it: no
    `AC-…`, `R-nn`, `F-nn`, `FINDINGS.md`, `REMEDIATION.md`, `.scratch/`,
-   "Wave", "orchestrator", or React Native history.
+   "Wave" or "orchestrator" anywhere, and no React Native history in
+   `lib/` (a test may still say which old bug it guards).
 4. **Delete rather than wrap.** No abstract class with a single production
    implementation unless the real dependency cannot run under `flutter test`
    (today: `Haptics`, `ReceiptCameraController`). Use mocktail on the
@@ -104,9 +105,9 @@ that review checks. `flutter analyze` and `dart format` cover style.
   for a narrower trigger).
 - Tests assert behaviour through the widget or repository seam. The only
   tests that read source or config files are `test/standards/house_rules_test.dart`
-  and the Android manifest guards (`test/android_backup_test.dart`,
-  `test/auth/redirect_uri_contract_test.dart`), each of which pins a setting
-  that has lost user data or broken sign-in on a real device.
+  and the platform guards (`test/android_backup_test.dart`,
+  `test/auth/redirect_uri_contract_test.dart`), each of which pins a manifest
+  or Cognito setting that has lost user data or broken sign-in for real.
 - No golden images.
 - `RecordingHaptics` in the harness asserts the haptic ladder.
 
