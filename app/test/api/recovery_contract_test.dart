@@ -17,18 +17,17 @@ void main() {
             (_) async => http.Response('upstream failure', status),
           ),
         );
-        await expectLater(
-          api.searchRecipes(q: 'chicken'),
-          status == 403
-              ? throwsA(isA<ApiAuthException>())
-              : throwsA(
-                  isA<ApiServerException>().having(
-                    (e) => e.statusCode,
-                    'status',
-                    status,
-                  ),
-                ),
-        );
+        await expectLater(api.searchRecipes(q: 'chicken'), switch (status) {
+          403 => throwsA(isA<ApiAuthException>()),
+          429 => throwsA(isA<ApiRateLimitException>()),
+          _ => throwsA(
+            isA<ApiServerException>().having(
+              (e) => e.statusCode,
+              'status',
+              status,
+            ),
+          ),
+        });
       },
     );
   }
