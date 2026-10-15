@@ -141,3 +141,37 @@ def test_nuts_and_seeds_are_in_their_own_group_not_snacks() -> None:
         assert by_name(name).group is GroupId.NUTS_AND_SEEDS, name
     assert by_name("almonds").section.value == "Food Cupboard"
     assert by_name("walnuts").tracking_mode is TrackingMode.COUNTED
+
+
+def test_apples_pears_grapes_melon_and_kiwi_are_all_fruit() -> None:
+    for name in ("apple", "pear", "grapes", "melon", "kiwi", "banana", "lemon", "strawberries", "peach", "mango"):
+        assert by_name(name).group is GroupId.FRUIT, name
+        assert by_name(name).section.value == "Fruit & Veg"
+
+
+def test_every_fruit_item_keeps_its_own_shelf_life() -> None:
+    fresh_days = {
+        "strawberries": 4,
+        "raspberries": 4,
+        "blackberries": 4,
+        "blueberries": 7,
+        "lemon": 14,
+        "lime": 14,
+        "orange": 14,
+        "grapefruit": 14,
+        "peach": 5,
+        "plum": 5,
+        "cherry": 5,
+        "apple": 30,
+        "pear": 7,
+        "grapes": 7,
+        "mango": 7,
+    }
+    for name, days in fresh_days.items():
+        assert by_name(name).unopened_shelf_life_days == days, name
+
+
+def test_no_fruit_item_has_a_shorter_shelf_life_than_it_had_as_a_subgroup() -> None:
+    old_fresh_minimum = {"strawberries": 4, "peach": 5, "lemon": 14, "mango": 7, "banana": 7, "avocado": 7}
+    for name, days in old_fresh_minimum.items():
+        assert by_name(name).unopened_shelf_life_days >= days, name

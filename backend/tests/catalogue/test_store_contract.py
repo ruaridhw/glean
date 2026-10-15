@@ -95,7 +95,7 @@ class CatalogueStoreContract:
         assert store.shortlist("zzqx") == []
 
     def test_creating_a_provisional_ingredient(self, store: CatalogueStore) -> None:
-        created = store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH, aliases=("pitaya",))
+        created = store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH, aliases=("pitaya",))
         assert created.source is Source.LLM
         assert created.kind is Kind.INGREDIENT
         found = store.get_by_name("pitaya")

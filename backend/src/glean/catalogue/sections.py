@@ -32,10 +32,7 @@ _FRESH_PRODUCE = {
     GroupId.ROOT_VEG,
     GroupId.TOMATOES_PEPPERS_AND_AUBERGINES,
     GroupId.BEANS_AND_PULSES,
-    GroupId.CITRUS,
-    GroupId.TROPICAL_FRUIT,
-    GroupId.STONE_FRUIT,
-    GroupId.BERRIES,
+    GroupId.FRUIT,
 }
 
 # Groups without forms: one section each.

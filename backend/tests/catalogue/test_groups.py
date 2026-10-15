@@ -10,10 +10,7 @@ EXPECTED_GROUP_IDS = {
     "root_veg",
     "tomatoes_peppers_and_aubergines",
     "beans_and_pulses",
-    "citrus",
-    "tropical_fruit",
-    "stone_fruit",
-    "berries",
+    "fruit",
     "red_meat",
     "poultry",
     "fish_and_seafood",
@@ -46,19 +43,16 @@ FORM_GROUP_IDS = {
     "root_veg",
     "tomatoes_peppers_and_aubergines",
     "beans_and_pulses",
-    "citrus",
-    "tropical_fruit",
-    "stone_fruit",
-    "berries",
+    "fruit",
     "red_meat",
     "poultry",
     "fish_and_seafood",
 }
 
 
-def test_there_are_32_ingredient_groups() -> None:
+def test_there_are_29_ingredient_groups() -> None:
     assert {group_id.value for group_id in GROUPS} == EXPECTED_GROUP_IDS
-    assert len(GROUPS) == 32
+    assert len(GROUPS) == 29
 
 
 def test_only_household_groups_are_household_kind() -> None:
@@ -84,7 +78,7 @@ def test_each_group_maps_to_its_food_group() -> None:
     assert food_group["eggs"] is FoodGroup.PROTEIN
     assert food_group["beans_and_pulses"] is FoodGroup.PROTEIN
     assert food_group["root_veg"] is FoodGroup.VEGETABLES
-    assert food_group["berries"] is FoodGroup.FRUIT
+    assert food_group["fruit"] is FoodGroup.FRUIT
     assert food_group["dairy"] is FoodGroup.DAIRY
     assert food_group["pasta_and_rice"] is FoodGroup.CARBOHYDRATES
     assert food_group["oils_and_fats"] is FoodGroup.FATS
@@ -133,3 +127,11 @@ def test_nuts_and_seeds_are_a_protein_counted_in_grams_with_no_forms() -> None:
     assert not rules.has_forms
     assert rules.unopened_shelf_life_days[Form.NOT_APPLICABLE] == 180
     assert rules.once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 90
+
+
+def test_fruit_is_one_group_with_a_generic_fresh_default_of_a_week() -> None:
+    assert not {"citrus", "tropical_fruit", "stone_fruit", "berries"} & {g.value for g in GROUPS}
+    fruit = GROUPS[GroupId.FRUIT]
+    assert fruit.name == "Fruit"
+    assert fruit.unopened_shelf_life_days[Form.FRESH] == 7
+    assert fruit.has_forms
