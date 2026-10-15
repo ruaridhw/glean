@@ -44,6 +44,7 @@ docs/*
 !docs/pre-release-checklist.md
 !docs/flutter-test-audit.md
 !docs/ANDROID_TEST_DISTRIBUTION.md
+!docs/adr/
 plans/
 
 # macOS
