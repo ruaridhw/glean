@@ -279,6 +279,37 @@ def test_a_split_segment_is_cached_whole_so_a_repeat_asks_nothing(tmp_path: Path
     assert _names(response) == ["milk", "eggs"]
 
 
+def test_a_unit_cached_on_its_own_is_reused_when_it_reappears_inside_a_split_segment(tmp_path: Path) -> None:
+    _parse("milk", router=_FakeLLMRouter(), tmp_path=tmp_path, decisions=_Decisions(_recorded))
+    router = _FakeLLMRouter()
+
+    response = _parse("milk and eggs", router=router, tmp_path=tmp_path, decisions=_Decisions(_recorded))
+
+    assert router.phrases == ["eggs"]
+    assert _names(response) == ["milk", "eggs"]
+
+
+def test_a_unit_repeated_across_a_split_segment_and_a_plain_one_is_proposed_once(tmp_path: Path) -> None:
+    _parse("milk, eggs", router=_FakeLLMRouter(), tmp_path=tmp_path, decisions=_Decisions(_recorded))
+    router = _FakeLLMRouter()
+
+    response = _parse("milk and eggs, milk", router=router, tmp_path=tmp_path, decisions=_Decisions(_recorded))
+
+    assert router.batches == []
+    assert _names(response) == ["milk", "eggs"]
+
+
+def test_a_fully_cached_list_with_split_and_compound_segments_asks_no_model_anything(tmp_path: Path) -> None:
+    text = "milk and eggs, mac and cheese, sweet and sour sauce, tacos"
+    first = _parse(text, router=_FakeLLMRouter(), tmp_path=tmp_path, decisions=_Decisions(_recorded))
+    router, decisions = _FakeLLMRouter(), _Decisions(_recorded)
+
+    response = _parse(text, router=router, tmp_path=tmp_path, decisions=decisions)
+
+    assert (router.batches, router.singles, decisions.asked) == ([], [], [])
+    assert _names(response) == _names(first) == ["milk", "eggs", "mac and cheese", "sweet and sour sauce", "tacos"]
+
+
 def _expected_route(row: dict[str, Any]) -> Callable[[dict[str, str]], bool]:
     """What a person labelling the sample expects the parser to do with this phrase."""
     phrase = row["phrase"]
@@ -342,7 +373,7 @@ def test_a_phrase_the_batch_leaves_out_degrades_to_the_single_call_parse_and_the
     response = _parse("milk, eggs, bread", router=router, tmp_path=tmp_path, cache=store)
 
     assert router.singles == [(SHOPPING_PARSE_SYSTEM_PROMPT, "eggs")]
-    assert sorted(_names(response)) == ["bread", "eggs", "milk"]
+    assert _names(response) == ["milk", "eggs", "bread"]
     assert len(store.list_keys()) == 2
 
 

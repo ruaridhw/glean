@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import TypeAdapter
 
 from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
 from glean.llm import Feature
@@ -106,17 +107,11 @@ _LEADING_CONJUNCTION = re.compile(r"^(?:and|&)\s+", re.IGNORECASE)
 
 @dataclass
 class _Unit:
+    """A final unit: one phrase with one cache identity, and how the model should treat it."""
+
     phrase: str
     treatment: str = "unsure"
-
-
-@dataclass
-class _Plan:
-    """A segment of the description, the phrases it is parsed as, and whether every decision was available."""
-
-    segment: str
-    units: list[_Unit]
-    decided: bool
+    decided: bool = False
 
 
 def split_into_segments(text: str) -> list[str]:
@@ -209,30 +204,78 @@ def _lists_separate_items(scores: dict[str, float] | None) -> bool:
     return scores is not None and scores.get(_LIST, 0.0) >= _LIST_AT_LEAST and scores[_DISH] < _DISH_AT_LEAST
 
 
-def _plan_segments(
-    segments: Sequence[str], decision_client: DecisionClient, pool: ThreadPoolExecutor, until: float
-) -> list[_Plan]:
-    def first(segment: str) -> dict[str, float] | None:
-        names = (_DISH, _LIST) if _CONJUNCTION.search(segment) else (_DISH,)
-        return _decide(decision_client, segment, names)
+def _plan_path(version: str, segment: str) -> str:
+    return f"{version}/plan/{hashlib.sha256(_unit_key(segment).encode()).hexdigest()}.json"
 
-    plans: list[_Plan] = []
-    for segment, scores in zip(segments, _collect(pool, first, segments, until), strict=True):
-        parts = [part for part in _CONJUNCTION.split(segment) if part.strip()]
+
+def _read_plan(cache: BlobStore, path: str) -> list[str] | None:
+    try:
+        entry = cache.read(path)
+        return None if entry is None else TypeAdapter(list[str]).validate_json(entry)
+    except Exception:  # malformed or unreachable: just a miss
+        logger.warning("shopping plan cache read failed", extra={"path": path}, exc_info=True)
+        return None
+
+
+def _write_plan(cache: BlobStore, path: str, phrases: list[str]) -> None:
+    try:
+        cache.write(path, json.dumps(phrases))
+    except Exception:  # a cache outage must not fail the parse
+        logger.warning("shopping plan cache write failed", extra={"path": path}, exc_info=True)
+
+
+def _split_into_units(
+    segments: Sequence[str],
+    *,
+    version: str,
+    decision_client: DecisionClient,
+    cache: BlobStore,
+    pool: ThreadPoolExecutor,
+    until: float,
+) -> tuple[list[str], dict[str, float]]:
+    """Turn segments into final units, splitting at "and"/"&" only where the decision model says it lists items.
+
+    Returns the units in description order, and the dish scores already obtained for units kept whole.
+    """
+    with_conjunction = [segment for segment in segments if _CONJUNCTION.search(segment)]
+    remembered = _collect(pool, lambda s: _read_plan(cache, _plan_path(version, s)), with_conjunction, until)
+    plans = {s: plan for s, plan in zip(with_conjunction, remembered, strict=True) if plan is not None}
+    to_decide = [s for s in with_conjunction if s not in plans]
+    scored = _collect(pool, lambda s: _decide(decision_client, s, (_DISH, _LIST)), to_decide, until)
+
+    dish_scores: dict[str, float] = {}
+    new_plans: dict[str, list[str]] = {}
+    for segment, scores in zip(to_decide, scored, strict=True):
+        parts = [part.strip() for part in _CONJUNCTION.split(segment) if part.strip()]
         if _lists_separate_items(scores) and len(parts) > 1:
-            plans.append(_Plan(segment, [_Unit(part.strip()) for part in parts], decided=False))
-        else:
-            plans.append(_Plan(segment, [_Unit(segment, _treatment(scores))], decided=scores is not None))
+            plans[segment] = new_plans[segment] = parts
+            continue
+        plans[segment] = [segment]
+        if scores is not None:
+            new_plans[segment] = [segment]
+            dish_scores[_unit_key(segment)] = scores[_DISH]
+    for segment, phrases in new_plans.items():
+        pool.submit(_write_plan, cache, _plan_path(version, segment), phrases)
+    return [phrase for segment in segments for phrase in plans.get(segment, [segment])], dish_scores
 
-    split_units = [unit for plan in plans if len(plan.units) > 1 for unit in plan.units]
-    scored = _collect(pool, lambda unit: _decide(decision_client, unit.phrase, (_DISH,)), split_units, until)
-    for unit, scores in zip(split_units, scored, strict=True):
-        unit.treatment = _treatment(scores)
-    undecided = {id(unit) for unit, scores in zip(split_units, scored, strict=True) if scores is None}
-    for plan in plans:
-        if len(plan.units) > 1:
-            plan.decided = not any(id(unit) in undecided for unit in plan.units)
-    return plans
+
+def _treat(
+    units: Sequence[_Unit],
+    dish_scores: dict[str, float],
+    decision_client: DecisionClient,
+    pool: ThreadPoolExecutor,
+    until: float,
+) -> None:
+    """Set each unit's treatment from its dish score, asking the decision model for scores not yet known."""
+    unknown = [unit for unit in units if _unit_key(unit.phrase) not in dish_scores]
+    asked = _collect(pool, lambda unit: _decide(decision_client, unit.phrase, (_DISH,)), unknown, until)
+    for unit, scores in zip(unknown, asked, strict=True):
+        if scores is not None:
+            dish_scores[_unit_key(unit.phrase)] = scores[_DISH]
+    for unit in units:
+        score = dish_scores.get(_unit_key(unit.phrase))
+        unit.decided = score is not None
+        unit.treatment = _treatment(None if score is None else {_DISH: score})
 
 
 def _timeout_ms(until: float) -> int:
@@ -303,42 +346,76 @@ def parse_shopping_description(
 ) -> ShoppingParseResponse:
     start = time.monotonic()
     end, plan_until, batch_until = (start + time_budget_s * share for share in (1.0, _PLAN_SHARE, _BATCH_SHARE))
-    first_spelling: dict[str, str] = {}
-    for segment in split_into_segments(request.text):
-        first_spelling.setdefault(_unit_key(segment), segment)
-    segments = list(first_spelling.values())
+    segments = list(_first_spellings(split_into_segments(request.text)))
     logger.info("parsing shopping description", extra={"text_length": len(request.text), "segments": len(segments)})
     version = _behaviour_version(llm_router)
 
     pool = ThreadPoolExecutor(max_workers=_MAX_PARALLEL)
     try:
-        cached = _collect(
-            pool, lambda segment: _read_cached(cache, _cache_path(version, segment)), segments, plan_until
+        phrases, dish_scores = _split_into_units(
+            segments, version=version, decision_client=decision_client, cache=cache, pool=pool, until=plan_until
         )
-        parsed: dict[str, ShoppingParseResponse] = {s: hit for s, hit in zip(segments, cached, strict=True) if hit}
-        plans = _plan_segments([s for s in segments if s not in parsed], decision_client, pool, plan_until)
+        units = [_Unit(phrase) for phrase in _first_spellings(phrases)]
+        cached = _collect(pool, lambda unit: _read_cached(cache, _cache_path(version, unit.phrase)), units, plan_until)
+        parsed: dict[str, ShoppingParseResponse] = {
+            _unit_key(unit.phrase): hit for unit, hit in zip(units, cached, strict=True) if hit
+        }
+        misses = [unit for unit in units if _unit_key(unit.phrase) not in parsed]
+        _treat(misses, dish_scores, decision_client, pool, plan_until)
 
-        units = [unit for plan in plans for unit in plan.units]
-        answered = _parse_batch(units, llm_router, pool, batch_until) if units else {}
-        degraded: list[_Plan] = []
-        number = 1
-        for plan in plans:
-            numbers = range(number, number + len(plan.units))
-            number += len(plan.units)
-            if all(n in answered for n in numbers):
-                parsed[plan.segment] = _merge(
-                    [ShoppingParseResponse(items=answered[n][0], clarifying_questions=answered[n][1]) for n in numbers]
-                )
+        answered = _parse_batch(misses, llm_router, pool, batch_until) if misses else {}
+        degraded: set[str] = set()
+        for number, unit in enumerate(misses, start=1):
+            if number in answered:
+                items, questions = answered[number]
+                parsed[_unit_key(unit.phrase)] = ShoppingParseResponse(items=items, clarifying_questions=questions)
             else:
-                degraded.append(plan)
-
-        writes = [(plan.segment, parsed[plan.segment]) for plan in plans if plan.decided and plan.segment in parsed]
-        write_futures = [pool.submit(_write_cached, cache, _cache_path(version, s), response) for s, response in writes]
-        fallback = _parse_single(llm_router, ", ".join(plan.segment for plan in degraded), end) if degraded else None
+                degraded.add(_unit_key(unit.phrase))
+        write_futures = [
+            pool.submit(_write_cached, cache, _cache_path(version, unit.phrase), parsed[_unit_key(unit.phrase)])
+            for unit in misses
+            if unit.decided and _unit_key(unit.phrase) in parsed
+        ]
+        # Phrases the batch didn't answer are parsed together by the single-call parse, one call per run of
+        # neighbours, so each run's proposals stay at its place in the description.
+        runs = _runs(units, degraded)
+        run_futures = [
+            pool.submit(_parse_single, llm_router, ", ".join(unit.phrase for unit in run), end) for run in runs
+        ]
+        fallbacks = {_unit_key(run[0].phrase): future.result() for run, future in zip(runs, run_futures, strict=True)}
         wait(write_futures, timeout=max(0.0, end - time.monotonic()))
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
 
-    merged = _merge([parsed[s] for s in segments if s in parsed] + ([fallback] if fallback else []))
+    ordered: list[ShoppingParseResponse] = []
+    for unit in units:
+        key = _unit_key(unit.phrase)
+        if key in fallbacks:
+            ordered.append(fallbacks[key])
+        elif key in parsed:
+            ordered.append(parsed[key])
+    merged = _merge(ordered)
     logger.info("shopping description parsed", extra={"items": len(merged.items), "degraded": len(degraded)})
     return merged
+
+
+def _first_spellings(phrases: Sequence[str]) -> dict[str, str]:
+    """The phrases without repeats (case and spacing ignored), keeping each one's first spelling and place."""
+    first: dict[str, str] = {}
+    for phrase in phrases:
+        first.setdefault(_unit_key(phrase), phrase)
+    return first
+
+
+def _runs(units: Sequence[_Unit], degraded: set[str]) -> list[list[_Unit]]:
+    runs: list[list[_Unit]] = []
+    previous_degraded = False
+    for unit in units:
+        is_degraded = _unit_key(unit.phrase) in degraded
+        if is_degraded:
+            if previous_degraded:
+                runs[-1].append(unit)
+            else:
+                runs.append([unit])
+        previous_degraded = is_degraded
+    return runs
