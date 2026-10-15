@@ -1,0 +1,43 @@
+{
+  "model": "typesafe/jev-1.13",
+  "state": {
+    "recipe_title": "Basil pesto pasta",
+    "ingredients": [
+      "spaghetti",
+      "basil pesto",
+      "parmesan",
+      "olive oil"
+    ]
+  },
+  "questions": {
+    "contains_nuts": {
+      "type": "noul",
+      "instructions": "Does this recipe contain tree nuts or peanuts? Coconut and nutmeg are not nuts.",
+      "criteria": {
+        "true": "At least one ingredient contains nuts.",
+        "false": "No ingredient contains nuts."
+      }
+    },
+    "ingredient_group": {
+      "type": "choice",
+      "instructions": "Which ingredient group does 'basil pesto' belong to?",
+      "criteria": {
+        "condiments": "Sauces, condiments, pastes and stock",
+        "fresh_herbs": "Fresh herbs",
+        "dairy": "Milk, cheese, cream, yoghurt",
+        "none": "None of these"
+      }
+    },
+    "quality": {
+      "type": "score",
+      "instructions": "How well does the ingredient list match the recipe title?",
+      "criteria": [
+        "Unrelated",
+        "Weak match",
+        "Partial match",
+        "Good match",
+        "Exact match"
+      ]
+    }
+  }
+}
