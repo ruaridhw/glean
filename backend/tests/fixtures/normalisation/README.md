@@ -52,6 +52,6 @@ The decision model's per-name cost is comparable to the LLM alone, with fewer fa
   workaround. The decisions endpoint publishes no option limit; this is the largest choice question measured.
 - **Fresh herbs have no form.** The group has no forms (`not_applicable`), so coriander resolves with form `not_applicable`,
   not `fresh` as #123's acceptance criterion words it.
-- **Latency.** Eight parallel decision requests finished in about 0.5 s; twenty new names end to end (twenty decision
+- **Latency.** A decision request took 0.25 s median and 0.54 s at most, with eight in flight; twenty new names end to end (twenty decision
   requests, one batched naming call) took 2 to 3 s against the 30 s request limit.
 - The set is small and mostly UK supermarket names. Re-run the eval before moving the threshold.
