@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ backup and device transfer. Everything is kept (the drift
+     database in app_flutter/ is the user's only copy of their data) except
+     flutter_secure_storage's files, whose Keystore keys never leave the
+     device. See test/android_backup_test.dart. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureKeyStorage.xml"/>
+    </device-transfer>
+</data-extraction-rules>
