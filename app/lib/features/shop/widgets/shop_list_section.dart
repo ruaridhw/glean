@@ -134,6 +134,7 @@ class _Row extends ConsumerWidget {
             child: ShoppingRow(
               item: item,
               onToggle: () => toggleShoppingItem(ref, item),
+              onLongPress: () => showMoveToSectionSheet(context, ref, item),
             ),
           ),
         )

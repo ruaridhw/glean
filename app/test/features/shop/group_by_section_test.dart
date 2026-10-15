@@ -96,6 +96,7 @@ void main() {
         top(tester, 'Plain flour'),
       ];
       expect(order, orderedEquals(<double>[...order]..sort()));
+      await releaseDriftTree(tester);
     });
 
     testWidgets('off again: the flat To buy / In cart list is restored '
@@ -127,6 +128,7 @@ void main() {
         top(tester, 'IN CART'),
         top(tester, 'Pears'),
       ], flat);
+      await releaseDriftTree(tester);
     });
 
     testWidgets('the choice is remembered: a fresh screen opens grouped '
@@ -144,6 +146,48 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('FRUIT & VEG'), findsOneWidget);
+      await releaseDriftTree(tester);
+    });
+    testWidgets('long-pressing a row moves it to the chosen section, and a '
+        'later row for the same ingredient follows it there', (tester) async {
+      useTallScreen(tester);
+      await tester.runAsync(seedList);
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Group by section'));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.textContaining('Plain flour'));
+      await tester.pumpAndSettle();
+      expect(find.text('Move to section'), findsOneWidget);
+      await tester.tap(find.text('Drinks'));
+      // The write runs on the real event loop, outside the test's fake clock.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('BAKING'), findsNothing);
+      expect(
+        top(tester, 'DRINKS') < top(tester, 'Plain flour'),
+        isTrue,
+        reason: 'the moved row sits under its new section header',
+      );
+
+      await tester.runAsync(
+        () =>
+            shopping().addManualItem(userId: 'test-user', name: 'plain flour'),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('lain flour'), findsNWidgets(2));
+      expect(find.text('BAKING'), findsNothing);
+      expect(find.text('DRINKS'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await releaseDriftTree(tester);
     });
   });
 }

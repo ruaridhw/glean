@@ -7,10 +7,18 @@ import '../presentation.dart';
 /// One row in the shopping list. The caller wraps it in `SwipeToDeleteRow`; this widget only renders content and
 /// the tap-to-toggle, so the delete affordance is owned in one place.
 class ShoppingRow extends StatelessWidget {
-  const ShoppingRow({required this.item, required this.onToggle, super.key});
+  const ShoppingRow({
+    required this.item,
+    required this.onToggle,
+    this.onLongPress,
+    super.key,
+  });
 
   final ShoppingListItemView item;
   final VoidCallback onToggle;
+
+  /// Opens the move-to-section choice.
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +33,7 @@ class ShoppingRow extends StatelessWidget {
       color: checked ? colorScheme.surfaceContainerHighest : null,
       child: InkWell(
         onTap: onToggle,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(tokens.radius.lg),
         child: Padding(
           padding: EdgeInsets.symmetric(
