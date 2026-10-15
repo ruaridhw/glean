@@ -2,7 +2,8 @@
 
 Calls the real scan service in both OCR modes, so it costs money (and, for Textract, needs
 AWS credentials plus a scratch bucket). It runs only from the manually dispatched LLM-eval
-workflow, never in `make test-backend`.
+workflow, never in `make test-backend`. The hard- and soft-gate steps each run this module in
+their own process; with GLEAN_EVAL_SCAN_CACHE set they share one set of scans and one report.
 """
 
 from __future__ import annotations
@@ -10,7 +11,6 @@ from __future__ import annotations
 import os
 import statistics
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,73 +20,41 @@ from glean.llm import Feature, LLMModelPolicy, LLMRouter
 from glean.receipts import service
 
 from .conftest import _eval_model_id_for
-from .receipt_photos import PhotoCase, ScanScore, load_photo_cases, score_scan
+from .receipt_photos import (
+    OCR_MODES,
+    PhotoCase,
+    PhotoRun,
+    load_photo_cases,
+    render_report,
+    scan_once,
+    score_scan,
+    textract_configuration,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from pydantic import SecretStr
 
-    from glean.receipts.schemas import ScanResponse
-
 FEATURE = Feature.RECEIPT_SCAN
 
-OCR_MODES = ["vision", "textract"]
 REPORT_PATH = Path(os.environ.get("GLEAN_EVAL_REPORT_DIR", "results")) / "receipt-photo-eval.md"
+_CACHE_DIR = Path(os.environ["GLEAN_EVAL_SCAN_CACHE"]) if os.environ.get("GLEAN_EVAL_SCAN_CACHE") else None
 CASES = load_photo_cases()
-
-
-@dataclass
-class PhotoRun:
-    case_id: str
-    mode: str
-    seconds: float
-    response: ScanResponse | None = None
-    error: str | None = None
-    score: ScanScore | None = None
-
+_EXPECTED = {case.case_id: case.expected for case in CASES}
 
 _RUNS: list[PhotoRun] = []
 _MODEL_USED: list[str] = []
 
 
-def _percent(value: float | None) -> str:
-    return "skipped" if value is None else f"{value:.0%}"
-
-
-def _render_report(model_id: str, runs: list[PhotoRun]) -> str:
-    lines = [f"## Receipt photo evals — `{model_id}`", ""]
-    for mode in OCR_MODES:
-        mode_runs = [r for r in runs if r.mode == mode]
-        if not mode_runs:
-            lines += [f"### {mode}", "", "Not run (see skip reason in the pytest output).", ""]
-            continue
-        lines += [
-            f"### {mode}",
-            "",
-            "| Case | Items | Recall | Precision | Quantity | Unit | Price | Category | Non-food dropped | Latency |",
-            "|---|---|---|---|---|---|---|---|---|---|",
-        ]
-        for r in mode_runs:
-            if r.score is None or r.response is None:
-                lines.append(f"| {r.case_id} | error: {r.error} | | | | | | | | {r.seconds:.1f}s |")
-                continue
-            s = r.score
-            lines.append(
-                f"| {r.case_id} | {len(r.response.items)} | {_percent(s.recall)} | {_percent(s.precision)} "
-                f"| {_percent(s.quantity_accuracy)} | {_percent(s.unit_accuracy)} | {_percent(s.price_accuracy)} "
-                f"| {_percent(s.category_accuracy)} | {_percent(s.non_food_dropped)} | {r.seconds:.1f}s |"
-            )
-        lines.append("")
-    return "\n".join(lines)
-
-
 @pytest.fixture(scope="module", autouse=True)
 def _write_report() -> Iterator[None]:
     yield
+    # Only the process that actually scanned writes the report, so a later gate never overwrites it.
     if _RUNS:
         REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        report = _render_report(_MODEL_USED[0] if _MODEL_USED else "unknown", _RUNS)
+        configured = textract_configuration(os.environ) is not None
+        report = render_report(_MODEL_USED[0], _RUNS, textract_configured=configured)
         REPORT_PATH.write_text(report)
         print("\n" + report)  # noqa: T201 - the workflow log is where the run's scores are read
 
@@ -104,11 +72,21 @@ def photo_router(openrouter_api_key: SecretStr) -> LLMRouter:
 @pytest.fixture(scope="module", params=OCR_MODES)
 def runs(request: pytest.FixtureRequest, photo_router: LLMRouter) -> list[PhotoRun]:
     mode: str = request.param
-    bucket = os.environ.get("GLEAN_EVAL_S3_BUCKET", "")
-    if mode == "textract" and not bucket:
-        pytest.skip("textract mode needs GLEAN_EVAL_S3_BUCKET (a scratch bucket, never the production one)")
-    results = [_scan_case(case, mode, photo_router, bucket) for case in CASES]
-    _RUNS.extend(results)
+    try:
+        bucket = textract_configuration(os.environ)
+    except ValueError as exc:
+        pytest.fail(str(exc), pytrace=False)
+    if mode == "textract" and bucket is None:
+        pytest.skip("textract: not configured (set GLEAN_EVAL_S3_BUCKET and GLEAN_EVAL_AWS_ROLE_ARN)")
+    model_id = _MODEL_USED[0]
+    results, fresh = scan_once(
+        _CACHE_DIR, mode, model_id, lambda: [_scan_case(case, mode, photo_router, bucket or "") for case in CASES]
+    )
+    for run in results:
+        if run.response is not None:
+            run.score = score_scan(_EXPECTED[run.case_id], run.response)
+    if fresh:
+        _RUNS.extend(results)
     return results
 
 
@@ -124,8 +102,7 @@ def _scan_case(case: PhotoCase, mode: str, router: LLMRouter, bucket: str) -> Ph
         )
     except Exception as exc:
         return PhotoRun(case.case_id, mode, time.perf_counter() - started, error=f"{type(exc).__name__}: {exc}"[:120])
-    seconds = time.perf_counter() - started
-    return PhotoRun(case.case_id, mode, seconds, response, score=score_scan(case.expected, response))
+    return PhotoRun(case.case_id, mode, time.perf_counter() - started, response)
 
 
 class TestReceiptScanPhotosStructural:
