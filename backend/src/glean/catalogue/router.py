@@ -16,6 +16,7 @@ from glean.catalogue.dynamo_store import DynamoCatalogueStore
 from glean.catalogue.groups import GROUPS, Form, GroupId, GroupRules, Kind, StockUnit, TrackingMode
 from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key
 from glean.catalogue.normalise import MAX_NAMES, NormalisedName, normalise
+from glean.catalogue.sections import Section  # noqa: TC001 - pydantic resolves this annotation at runtime.
 from glean.catalogue.store import CatalogueStore  # noqa: TC001 - FastAPI resolves this via Depends at runtime.
 from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
@@ -75,6 +76,10 @@ class SyncItem(BaseModel):
     group: GroupId = Field(description="The ingredient group the item takes its default rules from.")
     form: Form = Field(description="The form the ingredient is sold and kept in.")
     overrides: ItemOverrides = Field(description="Per-item changes to the group's rules; null fields use the group's.")
+    section: Section = Field(description="The store section the item is found in, from its group and form.")
+    former_ids: list[str] = Field(
+        description="Ids of items merged into this one; a device resolves each to this item. Empty when none."
+    )
     density_g_per_ml: float | None = Field(description="Density in g/ml, where known.")
     source: Source = Field(description="Whether the item came from the seed or was added provisionally by an LLM.")
 
@@ -162,6 +167,8 @@ def sync_catalogue(
                 group=item.group,
                 form=item.form,
                 overrides=item.overrides,
+                section=item.section,
+                former_ids=list(item.former_ids),
                 density_g_per_ml=item.density_g_per_ml,
                 source=item.source,
             )
