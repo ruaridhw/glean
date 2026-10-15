@@ -208,9 +208,20 @@ This works headless (verified on this box) and writes native assets under
 `ios/Runner/Assets.xcassets/LaunchImage.imageset/**` /
 `ios/Runner/Base.lproj/LaunchScreen.storyboard` — commit whatever it changes.
 
-Launcher icons are committed assets rendered from `assets/brand/glean-b1-icon.svg`;
-their generator, `scripts/generate_launcher_icons.py`, was removed, so recover it
-from git history if they need regenerating.
+Launcher icons are committed assets. The legacy `mipmap-*/ic_launcher.png`
+(API < 26) is rendered from `assets/brand/glean-b1-icon.svg`; its generator,
+`scripts/generate_launcher_icons.py`, was removed, so recover it from git history
+if it needs regenerating.
+
+The Android adaptive icon (API 26+) is
+`res/mipmap-anydpi-v26/ic_launcher.xml`: a solid `#2E9D63` background
+(`values/ic_launcher_background.xml`, the same green as `AppColors.primary`) plus
+`mipmap-*/ic_launcher_foreground.png` and `ic_launcher_monochrome.png` (themed
+icons, Android 13+). The foreground PNGs are `assets/brand/glean-b1-adaptive-foreground.svg`
+rasterised on a 108dp canvas per density (108/162/216/324/432 px) with the mark
+scaled to 92% so every opaque pixel sits inside the 66dp safe-zone circle; the
+monochrome PNGs are the same shape in plain white. There is no
+`android:roundIcon`, so no separate round variant.
 
 ## Web target: deferred
 
