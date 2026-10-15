@@ -91,3 +91,13 @@ def test_each_group_maps_to_its_food_group() -> None:
 
 def test_nightshades_jargon_is_gone() -> None:
     assert not {"nightshades", "alliums", "brassicas", "oils_fats"} & {g.value for g in GROUPS}
+
+
+def test_only_the_other_food_group_does_not_count_towards_week_balance() -> None:
+    not_counted = {food_group for food_group in FoodGroup if not food_group.counts_towards_balance}
+    assert not_counted == {FoodGroup.OTHER}
+
+
+def test_drinks_snacks_and_non_food_groups_do_not_count_towards_balance() -> None:
+    uncounted = {group_id.value for group_id, rules in GROUPS.items() if not rules.food_group.counts_towards_balance}
+    assert uncounted == {"drinks", "snacks_and_treats", "household", "health_and_beauty", "baby", "pet", "other"}
