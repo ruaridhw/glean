@@ -121,9 +121,7 @@ void main() {
           .map((r) => r['name'] as String)
           .toSet();
       expect(
-        tables.where(
-          (t) => RegExp('token|session|auth|secret').hasMatch(t),
-        ),
+        tables.where((t) => RegExp('token|session|auth|secret').hasMatch(t)),
         isEmpty,
       );
     },

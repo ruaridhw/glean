@@ -186,6 +186,45 @@ class GleanApiClient {
     );
   }
 
+  /// The signed-in user's own backups: agent-prepared first, then newest first. The server scopes the listing
+  /// by the token alone, so there is nothing to pass.
+  Future<List<BackupSummary>> listBackups() {
+    final uri = _uri('/dev/backups');
+    return _send(
+      uri,
+      () async => httpClient.get(uri, headers: await _authHeaders()),
+      (dynamic json) =>
+          BackupListResponse.fromJson(json as Map<String, dynamic>).backups,
+    );
+  }
+
+  /// Fetches a backup from its short-lived signed [url]. The link is authorised by its own signature, so no
+  /// Cognito token is sent to the bucket.
+  Future<Uint8List> downloadBackup(String url) async {
+    final Uri uri = Uri.parse(url);
+    try {
+      final http.Response response;
+      try {
+        response = await httpClient.get(uri).timeout(timeout);
+      } on TimeoutException {
+        throw const ApiTimeoutException('backup download');
+      } catch (error) {
+        throw ApiNetworkException(error.toString());
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiServerException(
+          statusCode: response.statusCode,
+          message: 'Backup download failed (the link may have expired)',
+        );
+      }
+      return response.bodyBytes;
+    } on ApiException catch (error) {
+      // The URL's query is a bearer credential, so only the failure kind is logged.
+      await logger?.error('backup download failed: ${error.runtimeType}');
+      rethrow;
+    }
+  }
+
   // --- Internals ---
 
   Uri _uri(String path, [Map<String, String>? query]) {
