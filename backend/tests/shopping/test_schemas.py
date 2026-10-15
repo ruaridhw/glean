@@ -4,6 +4,7 @@ import pytest
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import ValidationError
 
+from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS
 from glean.shopping.schemas import ShoppingParseResponse, ShoppingProposalItem, ShoppingUnit
 
 
@@ -42,3 +43,12 @@ def test_a_price_the_model_supplies_is_dropped_not_trusted() -> None:
 
     assert item.unit_price is None
     assert item.model_dump()["unit_price"] is None
+
+
+def test_category_and_confidence_constraints_travel_in_the_schema_the_model_receives() -> None:
+    schema = convert_to_openai_tool(ShoppingParseResponse)["function"]["parameters"]
+    item_properties = schema["properties"]["items"]["items"]["properties"]
+
+    category_options = item_properties["category"]["anyOf"][0]["enum"]
+    assert category_options == list(INGREDIENT_CATEGORY_FOOD_GROUPS)
+    assert (item_properties["confidence"]["minimum"], item_properties["confidence"]["maximum"]) == (0.0, 1.0)
