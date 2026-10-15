@@ -12,6 +12,7 @@ below for targeted runs within this directory:
 ```bash
 uv run pytest tests/test_health.py -v  # single file
 uv run pytest -k "test_name"           # single test by name
+uv run python scripts/seed_catalogue.py --table glean-catalogue-<env>  # idempotent catalogue seed; prod runs are the owner's
 ```
 
 ## Architecture
@@ -38,7 +39,7 @@ src/glean/
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3
-├── catalogue/        # ingredient groups, section rule, catalogue item models, CatalogueStore + in-memory store, seed data
+├── catalogue/        # ingredient groups, section rule, catalogue item models, CatalogueStore + in-memory and DynamoDB stores, seed data
 ├── receipts/         # POST /receipts/scan (image upload → Textract or vision OCR)
 │                     # POST /receipts/describe (text → normalised ingredients)
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
