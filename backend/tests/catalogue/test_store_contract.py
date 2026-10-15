@@ -118,6 +118,12 @@ class CatalogueStoreContract:
         assert store.get_by_name("Corriandr") is None
         assert not store.is_unmatched("coriander")
 
+    def test_an_unmatched_name_is_kept_exactly_as_written(self, store: CatalogueStore) -> None:
+        store.record_unmatched("  Corriandr ")
+        assert "  Corriandr " in store.unmatched_names()
+        assert not store.is_unmatched("corriandr")
+        assert not store.is_unmatched("CORRIANDR")
+
     def test_names_whose_slugs_collide_get_distinct_ids(self, store: CatalogueStore) -> None:
         first = store.create_provisional("a-b", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE, aliases=("ab thing",))
         second = store.create_provisional("a b", GroupId.SPICES, Form.NOT_APPLICABLE)

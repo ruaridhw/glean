@@ -86,6 +86,7 @@ section  # CatalogueItem resolved rule
 SEED  # Source enum member
 load_seed  # seed loader, consumed by the DynamoDB store loader (#130)
 version  # SeedData Pydantic field
+unmatched_names
 
 # TODO: the first consuming PRs (#125's dietary check, #123's normalisation) must remove the
 # decisions.py entries below as they start using each name.

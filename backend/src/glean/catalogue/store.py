@@ -42,10 +42,16 @@ class CatalogueStore(Protocol):
         ...
 
     def record_unmatched(self, name: str) -> None:
-        """Remember that *name* was confirmed to match no catalogue item."""
+        """Remember that *name*, exactly as written, was confirmed to match no catalogue item."""
         ...
 
-    def is_unmatched(self, name: str) -> bool: ...
+    def is_unmatched(self, name: str) -> bool:
+        """Whether exactly this spelling was recorded as unmatched."""
+        ...
+
+    def unmatched_names(self) -> list[str]:
+        """Every recorded unmatched name, exactly as written."""
+        ...
 
 
 def _tokens(text: str) -> set[str]:
@@ -57,7 +63,7 @@ class InMemoryCatalogueStore:
     def __init__(self, items: Iterable[CatalogueItem] = ()) -> None:
         self._items: dict[str, CatalogueItem] = {}
         self._by_key: dict[str, str] = {}
-        self._unmatched: set[str] = set()
+        self._unmatched: dict[str, None] = {}
         for item in items:
             self._add(item)
 
@@ -130,7 +136,10 @@ class InMemoryCatalogueStore:
         return candidate
 
     def record_unmatched(self, name: str) -> None:
-        self._unmatched.add(name_key(name))
+        self._unmatched[name] = None
 
     def is_unmatched(self, name: str) -> bool:
-        return name_key(name) in self._unmatched
+        return name in self._unmatched
+
+    def unmatched_names(self) -> list[str]:
+        return list(self._unmatched)
