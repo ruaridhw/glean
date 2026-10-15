@@ -11,6 +11,7 @@ import 'app.dart';
 import 'data/providers/catalogue_sync_lifecycle.dart';
 import 'data/providers/database_providers.dart';
 import 'design_system/design_system.dart';
+import 'logging/logging.dart';
 
 /// Build-time configuration, supplied via `--dart-define`. Baked into the binary, so nothing secret
 /// belongs here (the PKCE flow has no client secret).
@@ -36,6 +37,15 @@ abstract final class GleanConfig {
       );
     }
   }
+}
+
+/// Starts logging for the whole app: builds the logger and routes uncaught framework and async errors into it.
+/// Entrypoints call this first, so even a failure during startup is recorded, and pass the result to
+/// [gleanLoggerProvider].
+Future<GleanLogger> bootstrapLogging() async {
+  final GleanLogger logger = await createGleanLogger();
+  installErrorHooks(logger);
+  return logger;
 }
 
 /// Shows the iOS status bar again once Flutter starts.

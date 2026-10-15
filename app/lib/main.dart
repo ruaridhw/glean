@@ -13,9 +13,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api/providers/api_providers.dart';
 import 'auth/auth.dart';
 import 'bootstrap.dart';
+import 'logging/logging.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final GleanLogger logger = await bootstrapLogging();
   await showStatusBarAfterSplash();
   GleanConfig.assertComplete();
 
@@ -34,6 +36,7 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
+        gleanLoggerProvider.overrideWithValue(logger),
         apiBaseUrlProvider.overrideWithValue(GleanConfig.apiBaseUrl),
         authControllerProvider.overrideWith(
           () => AuthController(snapshot, storage: storage, client: client),

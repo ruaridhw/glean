@@ -51,6 +51,10 @@ class GleanLogger {
   Future<void> _write(String level, String raw) async {
     final String message = redactSecrets(raw);
     file.append('${_clock().toUtc().toIso8601String()} $level $message');
-    await platform.write(level: level, tag: gleanLogTag, message: message);
+    try {
+      await platform.write(level: level, tag: gleanLogTag, message: message);
+    } catch (_) {
+      // The file already has the line; a platform-log failure must never become an error of its own.
+    }
   }
 }
