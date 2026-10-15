@@ -134,6 +134,12 @@ _CUP_LIQUID_HEADS = {
     "molasses",
 }
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
+_MIXED_NUMBER_PATTERN = rf"\d+\s+\d+/\d+|{_NUMBER_PATTERN}"
+_TRAILING_SIZE_PATTERN = re.compile(
+    rf"^(?:(?P<lead>{_NUMBER_PATTERN})\s+)?(?P<name>.+?)\s+\((?P<amount>{_MIXED_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s*"
+    rf"(?:x(?P<count>{_NUMBER_PATTERN}))?$",
+    flags=re.IGNORECASE,
+)
 _COMPACT_PREFIX_UNITS = {
     *_MEASURE_UNITS,
     *_COUNT_UNITS,
@@ -269,13 +275,8 @@ def _parse_measure_prefix(text: str) -> tuple[str, float, str, str | None] | Non
 
 
 def _parse_suffix_measure_or_count(text: str) -> tuple[str, float, str, str | None] | None:
-    if match := re.match(
-        # A trailing size after a count and noun is the total: "2 tomatoes (400g)" is 400 g, not 2 x 400 g.
-        rf"^(?:(?P<lead>{_NUMBER_PATTERN})\s+)?(?P<name>.+?)\s+\((?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s*"
-        rf"(?:x(?P<count>{_NUMBER_PATTERN}))?$",
-        text,
-        flags=re.IGNORECASE,
-    ):
+    # A trailing size after a count and noun is the total: "2 tomatoes (400g)" is 400 g, not 2 x 400 g.
+    if match := _TRAILING_SIZE_PATTERN.match(text):
         lead = _parse_quantity(match.group("lead")) if match.group("lead") else 1.0
         count = _parse_quantity(match.group("count")) if match.group("count") else 1.0
         amount = _parse_quantity(match.group("amount"))
@@ -369,7 +370,17 @@ def _convert_measure(quantity: float, raw_unit: str) -> tuple[float, str] | None
     return quantity * factor, unit
 
 
+def has_trailing_size(text: str) -> bool:
+    """Whether the text ends in a parenthetical size the parser converts, e.g. "Cheddar (8 oz)"."""
+    match = _TRAILING_SIZE_PATTERN.match(_FLUID_OUNCE_PATTERN.sub("floz", text.strip()))
+    return match is not None and match.group("unit").lower() in _MEASURE_UNITS
+
+
 def _parse_quantity(value: str) -> float:
+    value = value.strip()
+    if " " in value:
+        whole, fraction = value.split(maxsplit=1)
+        return float(whole) + _parse_quantity(fraction)
     if "/" not in value:
         return float(value)
     numerator, denominator = value.split("/", maxsplit=1)
