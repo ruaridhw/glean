@@ -75,3 +75,24 @@ class ShoppingParseResponse(BaseModel):
         default_factory=list,
         description="Questions to ask when the request is too ambiguous to propose confidently.",
     )
+
+
+class ShoppingUnitParse(BaseModel):
+    """The parse of one numbered phrase in a batch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    number: int = Field(description="The number of the phrase this answers, exactly as listed in the request.")
+    items: list[ShoppingProposalItem] = Field(description="Shopping item proposals for this phrase.")
+    clarifying_questions: list[str] = Field(
+        default_factory=list,
+        description="Questions to ask when this phrase is too ambiguous to propose confidently.",
+    )
+
+
+class ShoppingBatchParseResponse(BaseModel):
+    """Structured parse of several numbered phrases from one shopping list, answered in a single call."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    units: list[ShoppingUnitParse] = Field(description="One entry for every numbered phrase, in any order.")
