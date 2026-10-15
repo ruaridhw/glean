@@ -178,6 +178,23 @@ def test_a_shortlist_built_from_a_lagging_index_is_not_kept_once_the_index_recov
     assert [item.id for item in store.shortlist("dragon fruit")] == ["dragon-fruit"]
 
 
+def test_a_full_read_after_the_index_recovers_returns_an_item_a_lagging_delta_missed(table: Any) -> None:
+    view = _IndexView()
+    session = boto3.Session(region_name=REGION)
+    session.events.register("after-call.dynamodb.Query", view)
+    store = DynamoCatalogueStore(TABLE_NAME, region=REGION, session=session)
+    held = store.changes_since(0).version
+    store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
+
+    view.lagging, view.hidden = True, {"ITEM#dragon-fruit"}
+    lagged = store.changes_since(held)
+    assert lagged.items == []  # the delta cannot tell the index is behind, and reports the newest version anyway
+
+    view.lagging = False
+    assert store.changes_since(lagged.version).items == []  # a device holding that version never hears of the item
+    assert [item.id for item in store.changes_since(0).items] == ["dragon-fruit"]  # a full read does
+
+
 def test_reseeding_keeps_aliases_learned_since_the_seed(dynamo_store: DynamoCatalogueStore) -> None:
     dynamo_store.upsert_alias("coriander", "green herb bunch")
 

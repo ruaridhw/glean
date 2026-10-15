@@ -245,11 +245,14 @@ class CatalogueAliases extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-/// How far catalogue sync has got: one row (`id` 1), absent until the first successful sync.
+/// How far catalogue sync has got: one row (`id` 1), absent until the first successful sync. `fullSyncedAt` is when
+/// the last full (`since=0`) sync succeeded; ordinary delta syncs leave it alone, so they can never postpone the
+/// next full one.
 class CatalogueSyncState extends Table {
   IntColumn get id => integer()();
   IntColumn get version => integer()();
   TextColumn get syncedAt => text()();
+  TextColumn get fullSyncedAt => text()();
 
   @override
   Set<Column> get primaryKey => {id};
