@@ -44,6 +44,8 @@ class ScanScore:
 
 
 MATCH_THRESHOLD = 0.6
+PRICE_TOLERANCE_GBP = 0.02
+QUANTITY_TOLERANCE = 0.01
 
 
 def _tokens(name: str) -> frozenset[str]:
@@ -83,6 +85,14 @@ def _match_one_to_one[W: ExpectedItem](
     return pairs
 
 
+def _close(a: float, b: float, tolerance: float) -> bool:
+    return abs(a - b) <= tolerance
+
+
+def _line_total_close(want: ExpectedItem, got: ParsedIngredient) -> bool:
+    return got.unit_price is not None and _close(got.quantity * got.unit_price, want.line_total, PRICE_TOLERANCE_GBP)
+
+
 def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
     food = [item for item in expected.items if not item.non_food]
     pairs = _match_one_to_one(food, response.items)
@@ -93,8 +103,10 @@ def score_scan(expected: ExpectedReceipt, response: ScanResponse) -> ScanScore:
     return ScanScore(
         recall=share(len(pairs)),
         precision=len(pairs) / len(response.items) if response.items else 0.0,
-        quantity_accuracy=share(sum(1 for w, g in pairs if g.quantity == w.quantity)),
+        quantity_accuracy=share(
+            sum(1 for w, g in pairs if _close(g.quantity, w.quantity, QUANTITY_TOLERANCE * w.quantity))
+        ),
         unit_accuracy=share(sum(1 for w, g in pairs if g.unit == w.unit)),
-        price_accuracy=share(sum(1 for w, g in pairs if g.unit_price == w.unit_price)),
+        price_accuracy=share(sum(1 for w, g in pairs if _line_total_close(w, g))),
         category_accuracy=share(sum(1 for w, g in pairs if g.category == w.category)),
     )
