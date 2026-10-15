@@ -100,3 +100,22 @@ def test_all_cache_hits_are_answered_without_calling_the_llm_or_the_decision_mod
 
     assert router.calls == []
     assert [item.name for item in response.items] == ["milk", "bread"]
+
+
+def test_partial_hits_call_the_llm_only_for_the_misses_and_merge_in_description_order(tmp_path: Path) -> None:
+    _parse("bread", router=_FakeLLMRouter(), tmp_path=tmp_path)
+    router = _FakeLLMRouter()
+
+    response = _parse("milk, bread, eggs", router=router, tmp_path=tmp_path)
+
+    assert router.phrases == ["eggs", "milk"]
+    assert [item.name for item in response.items] == ["milk", "bread", "eggs"]
+
+
+def test_a_unit_repeated_in_the_description_is_parsed_once_and_proposed_once(tmp_path: Path) -> None:
+    router = _FakeLLMRouter()
+
+    response = _parse("milk, bread, Milk", router=router, tmp_path=tmp_path)
+
+    assert router.phrases == ["bread", "milk"]
+    assert [item.name for item in response.items] == ["milk", "bread"]
