@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -141,6 +142,58 @@ void main() {
 
       expect(written, hasLength(1));
     });
+
+    test(
+      'an unrelated error while a platform write is pending is still logged',
+      () async {
+        final Completer<void> release = Completer<void>();
+        final RotatingLogFile file = RotatingLogFile(
+          File('${dir.path}/glean.log'),
+        );
+        installErrorHooks(
+          GleanLogger(file: file, platform: _SlowPlatformLog(release.future)),
+        );
+
+        PlatformDispatcher.instance.onError!(
+          StateError('first failure'),
+          StackTrace.current,
+        );
+        PlatformDispatcher.instance.onError!(
+          StateError('unrelated failure'),
+          StackTrace.current,
+        );
+        release.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(file.readAll(), contains('first failure'));
+        expect(file.readAll(), contains('unrelated failure'));
+      },
+    );
+
+    test(
+      'Flutter errors during a pending platform write are logged too',
+      () async {
+        final Completer<void> release = Completer<void>();
+        final RotatingLogFile file = RotatingLogFile(
+          File('${dir.path}/glean.log'),
+        );
+        installErrorHooks(
+          GleanLogger(file: file, platform: _SlowPlatformLog(release.future)),
+        );
+
+        PlatformDispatcher.instance.onError!(
+          StateError('async failure'),
+          StackTrace.current,
+        );
+        FlutterError.onError!(
+          FlutterErrorDetails(exception: StateError('framework failure')),
+        );
+        release.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(file.readAll(), contains('framework failure'));
+      },
+    );
   });
 }
 
@@ -155,4 +208,17 @@ class _ReentrantPlatformLog implements PlatformLogSink {
     required String tag,
     required String message,
   }) async => onWrite(message);
+}
+
+class _SlowPlatformLog implements PlatformLogSink {
+  _SlowPlatformLog(this.until);
+
+  final Future<void> until;
+
+  @override
+  Future<void> write({
+    required String level,
+    required String tag,
+    required String message,
+  }) => until;
 }
