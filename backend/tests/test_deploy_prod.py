@@ -83,9 +83,15 @@ class Sandbox:
                 "Environment": "prod",
                 "CognitoDomainPrefix": "glean-auth-040396448697",
                 "LangSmithTracing": "true",
+                "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
                 "GitSha": stamp,
             },
-            lambda_env={"ENVIRONMENT": "prod", "LANGSMITH_TRACING": "true", "GIT_SHA": stamp},
+            lambda_env={
+                "ENVIRONMENT": "prod",
+                "LANGSMITH_TRACING": "true",
+                "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
+                "GIT_SHA": stamp,
+            },
             tags={"commit": stamp},
         )
 
@@ -314,3 +320,61 @@ def test_deploy_ignores_pushes_to_other_remotes(sandbox: Sandbox, tmp_path: Path
 
     assert result.returncode != 0
     assert "not been pushed" in result.stderr
+
+
+def test_deploy_reports_lambda_env_that_drifted_from_the_stack_parameter_default(sandbox: Sandbox) -> None:
+    """LangSmithEndpoint is not in samconfig, so the stack's resolved value is the expectation."""
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live(
+        parameters={
+            "Environment": "prod",
+            "CognitoDomainPrefix": "glean-auth-040396448697",
+            "LangSmithTracing": "true",
+            "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
+            "GitSha": sha,
+        },
+        lambda_env={
+            "ENVIRONMENT": "prod",
+            "LANGSMITH_TRACING": "true",
+            "LANGSMITH_ENDPOINT": "https://api.smith.langchain.com",
+            "GIT_SHA": sha,
+        },
+        tags={"commit": sha},
+    )
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "LANGSMITH_ENDPOINT" in result.stderr
+
+
+def test_deploy_reports_an_explicit_samconfig_endpoint_that_the_stack_does_not_have(sandbox: Sandbox) -> None:
+    config = sandbox.root / "backend" / "samconfig.toml"
+    config.write_text(
+        config.read_text().replace(
+            'LangSmithTracing=\\"true\\"', 'LangSmithTracing=\\"true\\" LangSmithEndpoint=\\"https://example.test\\"', 1
+        )
+    )
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "pin endpoint")
+    sandbox.git("push", "-q", "origin", "main")
+    sandbox.set_live_matching_a_deploy_of(sandbox.git("rev-parse", "HEAD"))  # live still has the default endpoint
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "LangSmithEndpoint" in result.stderr
+    assert "LANGSMITH_ENDPOINT" in result.stderr
+
+
+def test_deploy_reports_a_missing_lambda_env_var(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live_matching_a_deploy_of(sha)
+    canned = json.loads((sandbox.stub_dir / "canned.json").read_text())
+    del canned["lambda get-function-configuration"]["Environment"]["Variables"]["LANGSMITH_ENDPOINT"]
+    (sandbox.stub_dir / "canned.json").write_text(json.dumps(canned))
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "LANGSMITH_ENDPOINT" in result.stderr
