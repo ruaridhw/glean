@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/diagnostics/database_snapshot.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -82,4 +84,48 @@ void main() {
     addTearDown(copy.close);
     expect(_count(copy, 'user_config'), 2);
   });
+
+  test(
+    'a signed-in session leaves no token or session value anywhere in the backup file',
+    () async {
+      FlutterSecureStorage.setMockInitialValues(<String, String>{});
+      const String access = 'opaque-access-9f3a1c';
+      const String refresh = 'opaque-refresh-77be20';
+      const String idToken = 'opaque-id-c04d58';
+      await TokenStorage().saveTokens(
+        CognitoTokens(
+          accessToken: access,
+          refreshToken: refresh,
+          idToken: idToken,
+          userSub: 'user-1',
+          email: 'owner@example.com',
+          expiresAt: DateTime.utc(2026, 10, 15, 12),
+        ),
+      );
+
+      final File snapshot = await snapshotDatabase(live, dir);
+
+      final String raw = String.fromCharCodes(snapshot.readAsBytesSync());
+      for (final String secret in <String>[
+        access,
+        refresh,
+        idToken,
+        'owner@example.com',
+      ]) {
+        expect(raw, isNot(contains(secret)));
+      }
+      final sqlite.Database copy = sqlite.sqlite3.open(snapshot.path);
+      addTearDown(copy.close);
+      final Set<String> tables = copy
+          .select("SELECT name FROM sqlite_master WHERE type = 'table'")
+          .map((r) => r['name'] as String)
+          .toSet();
+      expect(
+        tables.where(
+          (t) => RegExp('token|session|auth|secret').hasMatch(t),
+        ),
+        isEmpty,
+      );
+    },
+  );
 }
