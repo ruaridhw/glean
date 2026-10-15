@@ -34,6 +34,16 @@ final class ApiAuthException extends ApiException {
   final int statusCode;
 }
 
+/// The server returned 429: this user has used up the hourly allowance for AI requests. Retrying straight away
+/// fails identically, so callers show [userMessage] rather than a generic "try again".
+final class ApiRateLimitException extends ApiException {
+  const ApiRateLimitException(super.message);
+
+  String get userMessage =>
+      'You have reached the hourly limit for AI features. '
+      'Try again in a little while.';
+}
+
 /// The server returned 422 (a FastAPI/Pydantic validation failure). [detail] is the raw `detail` payload: a
 /// string or a list of error objects.
 final class ApiValidationException extends ApiException {
