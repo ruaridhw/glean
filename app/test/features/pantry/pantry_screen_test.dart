@@ -115,6 +115,63 @@ void main() {
       expect(restored.unit, before.unit);
     });
 
+    testWidgets('the undo snackbar auto-hides after a swipe-delete', (
+      WidgetTester tester,
+    ) async {
+      await pantry.addItem(
+        userId: 'test-user',
+        name: 'butter',
+        quantity: 250,
+        unit: 'g',
+        category: 'dairy',
+        now: DateTime(2026, 1, 1),
+      );
+
+      await harness.pumpAt(tester, AppRoutes.pantry.path);
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('butter'), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('butter removed'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+
+      expect(find.text('butter removed'), findsNothing);
+      expect(find.text('Undo'), findsNothing);
+    });
+
+    testWidgets('undo within the 5 second window still restores the item', (
+      WidgetTester tester,
+    ) async {
+      await pantry.addItem(
+        userId: 'test-user',
+        name: 'butter',
+        quantity: 250,
+        unit: 'g',
+        category: 'dairy',
+        now: DateTime(2026, 1, 1),
+      );
+
+      await harness.pumpAt(tester, AppRoutes.pantry.path);
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('butter'), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+      expect(find.text('Undo'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('butter'), findsOneWidget);
+      expect(
+        await tester.runAsync(() => pantry.watchAll('test-user').first),
+        hasLength(1),
+      );
+    });
+
+
     testWidgets('deleting the last item of a filtered category does not '
         'strand the list', (WidgetTester tester) async {
       await pantry.addItem(
