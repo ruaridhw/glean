@@ -2,7 +2,7 @@
 
 Generate never calls the decision model. A producer computes one probability per (recipe, flag),
 stores them as one JSONL blob in the corpus store, and candidate selection reads
-them. A decision can only add an exclusion to the regex rules, never lift one.
+them. The decision is the only dietary rule: there are no ingredient word lists behind it.
 """
 
 from __future__ import annotations
@@ -66,7 +66,9 @@ class DietaryDecision(BaseModel):
     probability: float = Field(ge=0.0, le=1.0, description="Probability that the recipe breaks the flag.")
     model: str = Field(description="Dated snapshot of the decision model that answered.")
     content_hash: str = Field(description="`content_fingerprint` of the recipe state (title, ingredients) assessed.")
-    criteria_hash: str = Field(description="`question_hash` of the flag's question (instructions, criteria) it answered.")
+    criteria_hash: str = Field(
+        description="`question_hash` of the flag's question (instructions, criteria) it answered."
+    )
     computed_at: datetime = Field(description="When the decision was computed.")
 
 
@@ -114,14 +116,14 @@ class DietaryDecisions:
     def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
 
-        Nut-free is an allergy, so a recipe with no decision for its current content is excluded.
-        Preference flags without one are left to the regex rules.
+        A recipe with no current decision is excluded under every flag the model is asked about:
+        with no ingredient rules to fall back on, an unanswered question can't be assumed safe.
         """
         if flag not in DIETARY_FLAGS:
             return False
         decision = self._by_key.get((summary.external_id, flag))
         if decision is None or not _is_current(decision, summary):
-            return flag == NUT_FREE
+            return True
         threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
         return decision.probability >= threshold
 
@@ -165,7 +167,8 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "dairy-free": NoulQuestion(
         instructions=(
             "Does this recipe contain dairy? "
-            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) count. "
+            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) "
+            "count. "
             "Dairy-free and plant-based substitutes, oat and coconut cream, cocoa butter, peanut and nut butters "
             "are not dairy."
         ),
@@ -177,9 +180,10 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "gluten-free": NoulQuestion(
         instructions=(
             "Does this recipe contain gluten? Oats count as gluten unless the recipe says gluten-free oats. "
-            "Malt vinegar, soy sauce, couscous, barley and rye count, as do gnocchi, wraps, flour tortillas, noodles and "
-            "pasta unless labelled gluten-free, and hoisin, teriyaki and kecap manis (made with soy sauce). "
-            "Rice, corn (corn tortillas), gram, chickpea, buckwheat, tapioca, potato, coconut and almond flours are not gluten."
+            "Malt vinegar, soy sauce, couscous, barley and rye count, as do gnocchi, wraps, flour tortillas, "
+            "noodles and pasta unless labelled gluten-free, and hoisin, teriyaki and kecap manis (made with soy "
+            "sauce). Rice, corn (corn tortillas), gram, chickpea, buckwheat, tapioca, potato, coconut and almond "
+            "flours are not gluten."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains wheat, barley, rye, malt or oats that aren't gluten-free.",
@@ -245,7 +249,7 @@ def produce_missing_decisions(
     """Ask the decision model about each (recipe, flag) lacking a current decision, and store the answers.
 
     One request per recipe carries all its missing flags. A recipe the model can't answer is
-    left uncovered (and so excluded under nut-free) and retried on the next run.
+    left uncovered (and so excluded under every flag) and retried on the next run.
     """
     store = DietaryDecisionStore(corpus.store)
     # The recipes Generate can select: sample_corpus_candidates searches the same index.
