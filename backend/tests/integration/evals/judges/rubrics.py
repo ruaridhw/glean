@@ -75,6 +75,19 @@ class JudgeScoreResponse(BaseModel):
     score: int = Field(ge=1, le=5, description="Integer rubric score from 1 (bad) to 5 (perfect).")
 
 
+def receipt_scan_prompt(
+    raw_name: str,
+    normalised_name: str,
+    quantity: float,
+    unit: str,
+    unit_price: float | None,
+) -> str:
+    return (
+        f'Raw receipt item: "{raw_name}"\n'
+        f'Normalised to: "{normalised_name}", quantity={quantity}{unit}, unit_price={unit_price}/{unit}'
+    )
+
+
 def judge_receipt_scan(
     model: BaseChatModel,
     raw_name: str,
@@ -83,10 +96,7 @@ def judge_receipt_scan(
     unit: str,
     unit_price: float | None,
 ) -> int:
-    prompt = (
-        f'Raw receipt item: "{raw_name}"\n'
-        f'Normalised to: "{normalised_name}", quantity={quantity}{unit}, unit_price={unit_price}/{unit}'
-    )
+    prompt = receipt_scan_prompt(raw_name, normalised_name, quantity, unit, unit_price)
     response = invoke_structured(
         model,
         JudgeScoreResponse,
@@ -96,6 +106,15 @@ def judge_receipt_scan(
     return response.score
 
 
+def meal_plan_prompt(pantry_summary: str, dietary_flags: list[str], title: str, reason: str) -> str:
+    return (
+        f"Pantry state:\n{pantry_summary}\n\n"
+        f"Dietary flags: {dietary_flags}\n\n"
+        f'Meal-plan recipe: "{title}"\n'
+        f'Reason: "{reason}"'
+    )
+
+
 def judge_meal_plan_recipe(
     model: BaseChatModel,
     pantry_summary: str,
@@ -103,12 +122,7 @@ def judge_meal_plan_recipe(
     title: str,
     reason: str,
 ) -> int:
-    prompt = (
-        f"Pantry state:\n{pantry_summary}\n\n"
-        f"Dietary flags: {dietary_flags}\n\n"
-        f'Meal-plan recipe: "{title}"\n'
-        f'Reason: "{reason}"'
-    )
+    prompt = meal_plan_prompt(pantry_summary, dietary_flags, title, reason)
     response = invoke_structured(
         model,
         JudgeScoreResponse,
@@ -118,15 +132,19 @@ def judge_meal_plan_recipe(
     return response.score
 
 
+def recipe_import_prompt(html_snippet: str, extracted_json: dict) -> str:
+    return (
+        f"Source HTML (first 2000 chars):\n{html_snippet[:2000]}\n\n"
+        f"Extracted recipe:\n{json.dumps(extracted_json, indent=2)}"
+    )
+
+
 def judge_recipe_import(
     model: BaseChatModel,
     html_snippet: str,
     extracted_json: dict,
 ) -> int:
-    prompt = (
-        f"Source HTML (first 2000 chars):\n{html_snippet[:2000]}\n\n"
-        f"Extracted recipe:\n{json.dumps(extracted_json, indent=2)}"
-    )
+    prompt = recipe_import_prompt(html_snippet, extracted_json)
     response = invoke_structured(
         model,
         JudgeScoreResponse,
@@ -136,12 +154,16 @@ def judge_recipe_import(
     return response.score
 
 
+def purchase_description_prompt(purchase_text: str, parsed_items: list[dict]) -> str:
+    return f"Purchase description:\n{purchase_text}\n\nParsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
+
+
 def judge_purchase_description(
     model: BaseChatModel,
     purchase_text: str,
     parsed_items: list[dict],
 ) -> int:
-    prompt = f"Purchase description:\n{purchase_text}\n\nParsed pantry items:\n{json.dumps(parsed_items, indent=2)}"
+    prompt = purchase_description_prompt(purchase_text, parsed_items)
     response = invoke_structured(
         model,
         JudgeScoreResponse,
@@ -151,15 +173,19 @@ def judge_purchase_description(
     return response.score
 
 
+def shopping_list_description_prompt(shopping_text: str, parsed_response: dict) -> str:
+    return (
+        f"Shopping list description:\n{shopping_text}\n\n"
+        f"Parsed shopping proposal:\n{json.dumps(parsed_response, indent=2)}"
+    )
+
+
 def judge_shopping_list_description(
     model: BaseChatModel,
     shopping_text: str,
     parsed_response: dict,
 ) -> int:
-    prompt = (
-        f"Shopping list description:\n{shopping_text}\n\n"
-        f"Parsed shopping proposal:\n{json.dumps(parsed_response, indent=2)}"
-    )
+    prompt = shopping_list_description_prompt(shopping_text, parsed_response)
     response = invoke_structured(
         model,
         JudgeScoreResponse,
