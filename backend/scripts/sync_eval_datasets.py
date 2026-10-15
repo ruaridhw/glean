@@ -8,7 +8,7 @@ from pathlib import Path
 
 from langsmith import Client
 
-FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "evals" / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "integration" / "evals" / "fixtures"
 
 DATASETS = {
     "receipt_scan.json": "glean-receipt-scan",
