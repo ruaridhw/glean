@@ -22,7 +22,7 @@ repository never start a build, so they cost no Codemagic minutes.
 | Build machine | The Mac's local toolchain, Android SDK included | Codemagic's clean builder, Flutter version pinned |
 | Getting the APK onto phones | Play internal-testing opt-in | Firebase invite, then update notifications |
 | Version codes | Read from every Play track | Codemagic `BUILD_NUMBER` |
-| Cost | Free | Free tier (500 Linux minutes a month) |
+| Cost | Free | Free tier (500 macOS M2 minutes a month) |
 
 Today the Expo app ships an APK as a GitHub Release on every merge to main.
 Neither option keeps that. The difference is that Firebase sends testers the
@@ -56,7 +56,7 @@ update without anyone forwarding a download link.
    on failure only.
 
 The workflow has no `triggering` section and runs from the `app` working
-directory, on `linux_x2` with Flutter pinned to the version `flutter-ci.yml`
+directory, on `mac_mini_m2` (the only machine the free plan covers) with Flutter pinned to the version `flutter-ci.yml`
 uses (`3.44.8` at the time of writing).
 
 ## How Glean differs from routingapp

@@ -3,7 +3,8 @@
 workflows:
   android-test-distribution:
     name: Android test distribution
-    instance_type: linux_x2
+    # The free plan covers macOS M2 minutes only; Linux needs billing.
+    instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: app
     environment:
