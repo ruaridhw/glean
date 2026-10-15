@@ -88,3 +88,9 @@ from glean.rate_limit import enforce_ai_rate_limit
 ```
 
 Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass auth count against the limit even if the model call then fails; unauthenticated requests get 401 and count for nothing. Free routes (health, recipe search and get) stay unlimited.
+
+### Dietary ground truth
+
+Allergen and diet ground truth for processed ingredients (curry pastes, seasonings, sauces) comes from the
+ingredient lists on the Tesco, Sainsbury's and Ocado online shops. A maintainer label overrides any LLM judge.
+Tree nuts and peanuts are separate concerns; the single `nut-free` flag stays on the safe side for both.

@@ -52,7 +52,7 @@ ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
 _NEAR_DUPLICATE_OVERLAP = 0.7
 
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
-PREFERENCE_MARGIN = 0.09
+PREFERENCE_MARGIN = 0.15
 NUT_FREE_MARGIN_ABOVE_CLEAN = 0.02
 NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
 
