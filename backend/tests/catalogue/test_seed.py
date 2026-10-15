@@ -117,3 +117,20 @@ def test_frozen_items_keep_at_least_30_days_once_opened() -> None:
     assert frozen
     assert [item.name for item in frozen if (item.once_opened_shelf_life_days or 0) < 30] == []
     assert by_name("frozen broad beans").once_opened_shelf_life_days == 90
+
+
+def test_hard_cheese_keeps_much_longer_than_milk() -> None:
+    milk, cheddar = by_name("milk"), by_name("cheddar cheese")
+    assert 60 <= cheddar.unopened_shelf_life_days <= 90
+    assert 21 <= (cheddar.once_opened_shelf_life_days or 0) <= 28
+    assert cheddar.unopened_shelf_life_days > 4 * milk.unopened_shelf_life_days
+    assert (cheddar.once_opened_shelf_life_days or 0) > 4 * (milk.once_opened_shelf_life_days or 0)
+
+
+def test_hard_semi_soft_and_blue_cheeses_have_their_own_shelf_lives() -> None:
+    for name in ("emmental", "parmesan", "gruyere", "double gloucester", "red leicester"):
+        assert 21 <= (by_name(name).once_opened_shelf_life_days or 0) <= 28, name
+    for name in ("blue cheese", "brie", "camembert", "halloumi", "feta cheese"):
+        assert 14 <= (by_name(name).once_opened_shelf_life_days or 0) <= 21, name
+    for name in ("ricotta", "mozzarella", "cream cheese"):
+        assert (by_name(name).once_opened_shelf_life_days or 0) <= 5, name
