@@ -23,6 +23,19 @@ class BackupTooNewException implements Exception {
       'Your current data has not been changed.';
 }
 
+/// The restore failed after the live connection was closed. The previous database file is still in place (the
+/// swap is a single rename), but the closed connection is unusable: the caller must open the file again.
+class RestoreInterruptedException implements Exception {
+  const RestoreInterruptedException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() =>
+      'The restore was interrupted ($cause). '
+      'Your current data has not been changed.';
+}
+
 /// The backup is not a usable Glean database (not SQLite, cut short, or failing its integrity check).
 class BackupInvalidException implements Exception {
   const BackupInvalidException(this.reason);
@@ -92,14 +105,21 @@ Future<void> restoreDatabase({
     await _migrateAndVerify(staged);
 
     await live.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
-    await live.close();
-    // A leftover write-ahead log from the old file must never be replayed onto the restored one.
-    for (final String suffix in <String>['-wal', '-shm', '-journal']) {
-      final File sidecar = File('${liveFile.path}$suffix');
-      if (sidecar.existsSync()) sidecar.deleteSync();
+    // Only the connection is closed, not the database object: screens may hold stream subscriptions that
+    // Riverpod has paused, and drift's full close waits for those to finish, which would never happen. The
+    // caller rebuilds the database, which disposes the subscribers and closes it properly.
+    await live.executor.close();
+    try {
+      // A leftover write-ahead log from the old file must never be replayed onto the restored one.
+      for (final String suffix in <String>['-wal', '-shm', '-journal']) {
+        final File sidecar = File('${liveFile.path}$suffix');
+        if (sidecar.existsSync()) sidecar.deleteSync();
+      }
+      liveFile.copySync('${liveFile.path}.pre-restore');
+      staged.renameSync(liveFile.path);
+    } on Object catch (error) {
+      throw RestoreInterruptedException(error);
     }
-    liveFile.copySync('${liveFile.path}.pre-restore');
-    staged.renameSync(liveFile.path);
   } on Object {
     if (staged.existsSync()) staged.deleteSync();
     rethrow;
