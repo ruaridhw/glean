@@ -40,17 +40,17 @@ NUT_FREE = "nut-free"
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the 55-row labelled sample (tests/fixtures/decisions/dietary_sample.json) answered by
-# typesafe/jev-1.14-20261014 on 2026-10-15 (re-derived after the retarget from 1.13):
-#   recipes that break a flag:  nut-free >= 0.93, vegetarian >= 0.68, vegan >= 0.84,
-#                               dairy-free >= 0.87, gluten-free >= 0.88
-#   recipes that don't:         nut-free <= 0.23 (tahini 0.23, hummus wrap 0.16; the rest <= 0.08),
-#                               preference flags <= 0.25
-# Nut-free is an allergy, so its threshold sits 1.5x above the model's noise floor (0.08) and trades two
-# tahini-like false exclusions for a margin of 0.81 to the nearest violator. Preferences sit between
-# the clusters: 0.15 above the highest clean recipe, 0.28 below the lowest violator.
+# Set from the 56-row labelled sample (tests/fixtures/decisions/dietary_sample.json) answered by
+# typesafe/jev-1.14-20261014 on 2026-10-15, after the pesto-for-vegetarian policy change:
+#   recipes that break a flag:  nut-free >= 0.94, vegetarian >= 0.85, vegan >= 0.83,
+#                               dairy-free >= 0.87, gluten-free >= 0.89
+#   recipes that don't:         nut-free <= 0.20 (tahini 0.20, hummus wrap 0.15; the rest <= 0.07),
+#                               preference flags <= 0.27 (the rest <= 0.23)
+# Nut-free is an allergy, so its threshold sits 1.7x above the model's noise floor (0.07) and trades two
+# tahini-like false exclusions for a margin of 0.82 to the nearest violator. Preferences sit between
+# the clusters: 0.23 above the highest clean recipe, 0.33 below the lowest violator.
 NUT_FREE_THRESHOLD = 0.12
-PREFERENCE_THRESHOLD = 0.4
+PREFERENCE_THRESHOLD = 0.5
 
 
 class CorpusUnavailableError(Exception):
@@ -132,12 +132,12 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     "vegetarian": NoulQuestion(
         instructions=(
             "Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product? "
-            "Caesar dressing (anchovies), Thai curry paste (shrimp paste), fish and oyster sauce, meat stock "
-            "and pesto all count. Parmesan on its own does not count."
+            "Caesar dressing (anchovies), Thai curry paste (shrimp paste), fish and oyster sauce and meat stock "
+            "all count. Parmesan and pesto do not count."
         ),
         criteria=NoulCriteria(
             true="At least one ingredient is or contains meat, fish, shellfish, gelatine, anchovy or shrimp paste.",
-            false="No ingredient is or contains meat, fish or shellfish. Parmesan is allowed.",
+            false="No ingredient is or contains meat, fish or shellfish. Parmesan and pesto are allowed.",
         ),
     ),
     "vegan": NoulQuestion(

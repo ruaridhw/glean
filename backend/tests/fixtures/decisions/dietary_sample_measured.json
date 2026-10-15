@@ -3,78 +3,78 @@
  "recorded": "2026-10-15",
  "probabilities": {
   "table-nut-pesto": {
-   "vegetarian": 0.71,
-   "vegan": 0.88,
+   "vegetarian": 0.09,
+   "vegan": 0.87,
    "dairy-free": 0.9,
-   "gluten-free": 0.3,
+   "gluten-free": 0.32,
    "nut-free": 0.94
   },
   "table-nut-marzipan": {
-   "vegetarian": 0.11,
+   "vegetarian": 0.09,
    "vegan": 0.49,
-   "dairy-free": 0.19,
-   "gluten-free": 0.19,
+   "dairy-free": 0.18,
+   "gluten-free": 0.21,
    "nut-free": 0.98
   },
   "table-nut-frangipane": {
-   "vegetarian": 0.13,
-   "vegan": 0.89,
-   "dairy-free": 0.75,
-   "gluten-free": 0.62,
+   "vegetarian": 0.12,
+   "vegan": 0.88,
+   "dairy-free": 0.76,
+   "gluten-free": 0.64,
    "nut-free": 0.98
   },
   "table-nut-nutella": {
-   "vegetarian": 0.09,
-   "vegan": 0.62,
-   "dairy-free": 0.67,
-   "gluten-free": 0.22,
+   "vegetarian": 0.08,
+   "vegan": 0.65,
+   "dairy-free": 0.69,
+   "gluten-free": 0.2,
    "nut-free": 0.98
   },
   "table-nut-dukkah": {
-   "vegetarian": 0.11,
+   "vegetarian": 0.1,
    "vegan": 0.24,
    "dairy-free": 0.12,
-   "gluten-free": 0.27,
-   "nut-free": 0.93
+   "gluten-free": 0.28,
+   "nut-free": 0.95
   },
   "table-nut-romesco": {
-   "vegetarian": 0.42,
-   "vegan": 0.58,
-   "dairy-free": 0.23,
+   "vegetarian": 0.4,
+   "vegan": 0.59,
+   "dairy-free": 0.22,
    "gluten-free": 0.49,
    "nut-free": 0.97
   },
   "table-veg-caesar": {
-   "vegetarian": 0.89,
+   "vegetarian": 0.87,
    "vegan": 0.87,
-   "dairy-free": 0.8,
-   "gluten-free": 0.58,
+   "dairy-free": 0.78,
+   "gluten-free": 0.59,
    "nut-free": 0.22
   },
   "table-veg-thai-red-curry-paste": {
-   "vegetarian": 0.86,
-   "vegan": 0.52,
+   "vegetarian": 0.85,
+   "vegan": 0.54,
    "dairy-free": 0.11,
-   "gluten-free": 0.22,
+   "gluten-free": 0.2,
    "nut-free": 0.14
   },
-  "table-veg-pesto": {
-   "vegetarian": 0.68,
+  "allowed-veg-pesto": {
+   "vegetarian": 0.08,
    "vegan": 0.87,
-   "dairy-free": 0.9,
-   "gluten-free": 0.3,
-   "nut-free": 0.94
+   "dairy-free": 0.89,
+   "gluten-free": 0.28,
+   "nut-free": 0.95
   },
   "table-vegan-pesto": {
-   "vegetarian": 0.57,
-   "vegan": 0.88,
+   "vegetarian": 0.08,
+   "vegan": 0.89,
    "dairy-free": 0.9,
-   "gluten-free": 0.22,
-   "nut-free": 0.95
+   "gluten-free": 0.25,
+   "nut-free": 0.94
   },
   "table-vegan-naan": {
    "vegetarian": 0.08,
-   "vegan": 0.84,
+   "vegan": 0.83,
    "dairy-free": 0.88,
    "gluten-free": 0.97,
    "nut-free": 0.09
@@ -83,25 +83,25 @@
    "vegetarian": 0.09,
    "vegan": 0.96,
    "dairy-free": 0.98,
-   "gluten-free": 0.17,
-   "nut-free": 0.08
+   "gluten-free": 0.16,
+   "nut-free": 0.07
   },
   "table-dairy-buttermilk": {
-   "vegetarian": 0.08,
+   "vegetarian": 0.07,
    "vegan": 0.97,
    "dairy-free": 0.99,
-   "gluten-free": 0.12,
+   "gluten-free": 0.13,
    "nut-free": 0.07
   },
   "table-dairy-pesto": {
-   "vegetarian": 0.59,
+   "vegetarian": 0.08,
    "vegan": 0.88,
-   "dairy-free": 0.9,
-   "gluten-free": 0.22,
-   "nut-free": 0.94
+   "dairy-free": 0.91,
+   "gluten-free": 0.24,
+   "nut-free": 0.95
   },
   "table-dairy-naan": {
-   "vegetarian": 0.08,
+   "vegetarian": 0.07,
    "vegan": 0.83,
    "dairy-free": 0.87,
    "gluten-free": 0.97,
@@ -110,28 +110,28 @@
   "table-gluten-malt-vinegar": {
    "vegetarian": 0.07,
    "vegan": 0.11,
-   "dairy-free": 0.09,
-   "gluten-free": 0.93,
-   "nut-free": 0.06
+   "dairy-free": 0.08,
+   "gluten-free": 0.94,
+   "nut-free": 0.05
   },
   "table-gluten-oats": {
    "vegetarian": 0.06,
    "vegan": 0.11,
-   "dairy-free": 0.1,
+   "dairy-free": 0.09,
    "gluten-free": 0.94,
-   "nut-free": 0.07
+   "nut-free": 0.06
   },
   "allowed-coconut-milk": {
    "vegetarian": 0.07,
-   "vegan": 0.11,
-   "dairy-free": 0.08,
-   "gluten-free": 0.09,
+   "vegan": 0.1,
+   "dairy-free": 0.09,
+   "gluten-free": 0.1,
    "nut-free": 0.07
   },
   "allowed-nutmeg": {
-   "vegetarian": 0.06,
-   "vegan": 0.31,
-   "dairy-free": 0.18,
+   "vegetarian": 0.05,
+   "vegan": 0.3,
+   "dairy-free": 0.2,
    "gluten-free": 0.08,
    "nut-free": 0.07
   },
@@ -144,22 +144,22 @@
   },
   "allowed-gf-oats": {
    "vegetarian": 0.05,
-   "vegan": 0.18,
-   "dairy-free": 0.08,
-   "gluten-free": 0.05,
-   "nut-free": 0.07
+   "vegan": 0.19,
+   "dairy-free": 0.09,
+   "gluten-free": 0.06,
+   "nut-free": 0.06
   },
   "allowed-butternut": {
-   "vegetarian": 0.08,
-   "vegan": 0.16,
-   "dairy-free": 0.08,
-   "gluten-free": 0.19,
+   "vegetarian": 0.07,
+   "vegan": 0.18,
+   "dairy-free": 0.09,
+   "gluten-free": 0.2,
    "nut-free": 0.07
   },
   "ordinary-00": {
    "vegetarian": 0.99,
    "vegan": 0.99,
-   "dairy-free": 0.11,
+   "dairy-free": 0.09,
    "gluten-free": 0.97,
    "nut-free": 0.06
   },
@@ -168,13 +168,13 @@
    "vegan": 0.1,
    "dairy-free": 0.08,
    "gluten-free": 0.1,
-   "nut-free": 0.06
+   "nut-free": 0.07
   },
   "ordinary-02": {
-   "vegetarian": 0.15,
+   "vegetarian": 0.14,
    "vegan": 0.99,
    "dairy-free": 0.99,
-   "gluten-free": 0.11,
+   "gluten-free": 0.1,
    "nut-free": 0.06
   },
   "ordinary-03": {
@@ -182,12 +182,12 @@
    "vegan": 0.99,
    "dairy-free": 0.08,
    "gluten-free": 0.09,
-   "nut-free": 0.06
+   "nut-free": 0.05
   },
   "ordinary-04": {
    "vegetarian": 0.06,
    "vegan": 0.1,
-   "dairy-free": 0.08,
+   "dairy-free": 0.07,
    "gluten-free": 0.09,
    "nut-free": 0.07
   },
@@ -196,11 +196,11 @@
    "vegan": 0.99,
    "dairy-free": 0.06,
    "gluten-free": 0.97,
-   "nut-free": 0.04
+   "nut-free": 0.05
   },
   "ordinary-06": {
    "vegetarian": 0.99,
-   "vegan": 0.98,
+   "vegan": 0.99,
    "dairy-free": 0.1,
    "gluten-free": 0.14,
    "nut-free": 0.99
@@ -209,7 +209,7 @@
    "vegetarian": 0.07,
    "vegan": 0.99,
    "dairy-free": 0.98,
-   "gluten-free": 0.15,
+   "gluten-free": 0.16,
    "nut-free": 0.99
   },
   "ordinary-08": {
@@ -223,15 +223,15 @@
    "vegetarian": 0.07,
    "vegan": 0.98,
    "dairy-free": 0.98,
-   "gluten-free": 0.12,
+   "gluten-free": 0.13,
    "nut-free": 0.06
   },
   "ordinary-10": {
-   "vegetarian": 0.11,
-   "vegan": 0.98,
+   "vegetarian": 0.09,
+   "vegan": 0.99,
    "dairy-free": 0.99,
-   "gluten-free": 0.17,
-   "nut-free": 0.08
+   "gluten-free": 0.19,
+   "nut-free": 0.07
   },
   "ordinary-11": {
    "vegetarian": 0.98,
@@ -241,32 +241,32 @@
    "nut-free": 0.07
   },
   "ordinary-12": {
-   "vegetarian": 0.07,
-   "vegan": 0.1,
-   "dairy-free": 0.08,
+   "vegetarian": 0.06,
+   "vegan": 0.09,
+   "dairy-free": 0.09,
    "gluten-free": 0.08,
-   "nut-free": 0.99
+   "nut-free": 0.98
   },
   "ordinary-13": {
    "vegetarian": 0.06,
-   "vegan": 0.11,
+   "vegan": 0.1,
    "dairy-free": 0.08,
    "gluten-free": 0.09,
    "nut-free": 0.07
   },
   "ordinary-14": {
-   "vegetarian": 0.99,
+   "vegetarian": 0.98,
    "vegan": 0.98,
    "dairy-free": 0.08,
-   "gluten-free": 0.25,
+   "gluten-free": 0.23,
    "nut-free": 0.07
   },
   "ordinary-15": {
    "vegetarian": 0.07,
-   "vegan": 0.24,
-   "dairy-free": 0.12,
-   "gluten-free": 0.88,
-   "nut-free": 0.16
+   "vegan": 0.23,
+   "dairy-free": 0.13,
+   "gluten-free": 0.89,
+   "nut-free": 0.15
   },
   "ordinary-16": {
    "vegetarian": 0.05,
@@ -276,39 +276,39 @@
    "nut-free": 0.07
   },
   "ordinary-17": {
-   "vegetarian": 0.12,
-   "vegan": 0.97,
+   "vegetarian": 0.1,
+   "vegan": 0.98,
    "dairy-free": 0.98,
-   "gluten-free": 0.19,
+   "gluten-free": 0.18,
    "nut-free": 0.06
   },
   "ordinary-18": {
-   "vegetarian": 0.98,
+   "vegetarian": 0.99,
    "vegan": 0.98,
    "dairy-free": 0.08,
    "gluten-free": 0.14,
    "nut-free": 0.99
   },
   "ordinary-19": {
-   "vegetarian": 0.09,
+   "vegetarian": 0.07,
    "vegan": 0.98,
    "dairy-free": 0.99,
    "gluten-free": 0.19,
-   "nut-free": 0.06
+   "nut-free": 0.05
   },
   "heldout-nut-gianduja": {
    "vegetarian": 0.07,
-   "vegan": 0.8,
-   "dairy-free": 0.79,
-   "gluten-free": 0.19,
+   "vegan": 0.79,
+   "dairy-free": 0.8,
+   "gluten-free": 0.18,
    "nut-free": 0.97
   },
   "heldout-nut-amaretti": {
    "vegetarian": 0.07,
    "vegan": 0.98,
    "dairy-free": 0.98,
-   "gluten-free": 0.71,
-   "nut-free": 0.95
+   "gluten-free": 0.73,
+   "nut-free": 0.96
   },
   "heldout-nut-almond-milk": {
    "vegetarian": 0.05,
@@ -319,73 +319,80 @@
   },
   "heldout-nut-tahini": {
    "vegetarian": 0.07,
-   "vegan": 0.12,
+   "vegan": 0.11,
    "dairy-free": 0.09,
    "gluten-free": 0.1,
-   "nut-free": 0.23
+   "nut-free": 0.2
   },
   "heldout-veg-oyster-sauce": {
-   "vegetarian": 0.96,
+   "vegetarian": 0.97,
    "vegan": 0.93,
-   "dairy-free": 0.09,
-   "gluten-free": 0.59,
-   "nut-free": 0.08
+   "dairy-free": 0.1,
+   "gluten-free": 0.57,
+   "nut-free": 0.09
   },
   "heldout-veg-stock-cube": {
    "vegetarian": 0.95,
    "vegan": 0.95,
-   "dairy-free": 0.11,
-   "gluten-free": 0.41,
-   "nut-free": 0.09
+   "dairy-free": 0.12,
+   "gluten-free": 0.4,
+   "nut-free": 0.1
   },
   "heldout-vegan-honey": {
-   "vegetarian": 0.08,
+   "vegetarian": 0.07,
    "vegan": 0.96,
    "dairy-free": 0.07,
    "gluten-free": 0.07,
-   "nut-free": 0.05
+   "nut-free": 0.07
   },
   "heldout-dairy-ghee": {
-   "vegetarian": 0.09,
+   "vegetarian": 0.1,
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.08,
-   "nut-free": 0.07
+   "nut-free": 0.08
   },
   "heldout-dairy-milk-chocolate": {
    "vegetarian": 0.08,
    "vegan": 0.97,
    "dairy-free": 0.97,
-   "gluten-free": 0.14,
-   "nut-free": 0.1
+   "gluten-free": 0.13,
+   "nut-free": 0.12
   },
   "heldout-dairy-oat-milk": {
-   "vegetarian": 0.05,
-   "vegan": 0.09,
-   "dairy-free": 0.07,
-   "gluten-free": 0.07,
+   "vegetarian": 0.04,
+   "vegan": 0.1,
+   "dairy-free": 0.08,
+   "gluten-free": 0.06,
    "nut-free": 0.08
   },
   "heldout-gluten-soy-sauce": {
-   "vegetarian": 0.21,
-   "vegan": 0.21,
+   "vegetarian": 0.18,
+   "vegan": 0.18,
    "dairy-free": 0.08,
-   "gluten-free": 0.92,
+   "gluten-free": 0.91,
    "nut-free": 0.08
   },
   "heldout-gluten-couscous": {
-   "vegetarian": 0.06,
-   "vegan": 0.1,
+   "vegetarian": 0.05,
+   "vegan": 0.11,
    "dairy-free": 0.08,
    "gluten-free": 0.97,
    "nut-free": 0.07
   },
   "heldout-gluten-rice-noodles": {
    "vegetarian": 0.09,
-   "vegan": 0.12,
-   "dairy-free": 0.09,
+   "vegan": 0.13,
+   "dairy-free": 0.08,
    "gluten-free": 0.11,
    "nut-free": 0.08
+  },
+  "policy-pesto-all-flags": {
+   "vegetarian": 0.08,
+   "vegan": 0.87,
+   "dairy-free": 0.9,
+   "gluten-free": 0.27,
+   "nut-free": 0.95
   }
  }
 }

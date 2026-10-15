@@ -37,7 +37,7 @@ PROBABILITIES = _MEASURED["probabilities"]
 MODEL = _MEASURED["model"]
 
 # Nut-free is an allergy, so its strict threshold also drops these nut-butter lookalikes
-# (tahini 0.23, hummus wrap 0.16). Anything else it drops is a regression.
+# (tahini 0.20, hummus wrap 0.15). Anything else it drops is a regression.
 ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
 
 

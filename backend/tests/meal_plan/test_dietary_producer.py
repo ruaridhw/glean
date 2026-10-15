@@ -184,7 +184,8 @@ def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
     assert "pine nuts count as nuts" in wording("nut-free")
     assert "coconut" in wording("nut-free")
     assert "nutmeg" in wording("nut-free")
-    assert "parmesan" in wording("vegetarian")
+    assert "parmesan and pesto are allowed" in wording("vegetarian")
+    assert "pesto" in wording("vegan")
     assert "unless the recipe says gluten-free oats" in wording("gluten-free")
 
 
