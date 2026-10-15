@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from glean.catalogue.groups import Form, GroupId, Kind
 from glean.catalogue.models import Source
-from glean.catalogue.normalise import ItemKind, Status, normalise
+from glean.catalogue.normalise import ItemKind, NormalisedName, Status, normalise
 from glean.catalogue.seed import load_seed
 from glean.catalogue.store import InMemoryCatalogueStore
+from glean.decisions import DecisionTimeoutError
 from glean.llm import Feature
 from tests.catalogue.normalise_fakes import FakeDecisions, FakeRouter, decision
 
@@ -171,3 +175,158 @@ def test_a_name_that_cannot_be_identified_is_unmatched_once_naming_succeeds_and_
     )
     assert (second.status, second.source) == (Status.UNMATCHED, "cache")
     assert store.is_unmatched("asdkjh")
+
+
+def failing_naming(error: Exception):
+    def reply(schema: type, messages: object) -> object:
+        raise error
+
+    return reply
+
+
+@pytest.mark.parametrize("error", [RuntimeError("provider outage"), TimeoutError("naming timed out")])
+def test_a_naming_failure_leaves_the_names_unresolved_with_nothing_stored_and_the_next_call_recovers(
+    store: InMemoryCatalogueStore, error: Exception
+) -> None:
+    before = {item.id for item in store.shortlist("dragon fruit", 50)}
+    broken = FakeRouter(script=failing_naming(error))
+
+    [down] = normalise(
+        ["Dragon Fruit Each"], store=store, decisions=unseen(GroupId.FRUIT, Form.FRESH), llm_router=broken
+    )
+
+    assert (down.status, down.input, down.canonical_name, down.catalogue_item_id) == (
+        Status.UNRESOLVED,
+        "Dragon Fruit Each",
+        "Dragon Fruit Each",
+        None,
+    )
+    assert store.get_by_name("Dragon Fruit Each") is None
+    assert not store.is_unmatched("Dragon Fruit Each")
+    assert {item.id for item in store.shortlist("dragon fruit", 50)} == before
+
+    restored = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+    [up] = normalise(
+        ["Dragon Fruit Each"], store=store, decisions=unseen(GroupId.FRUIT, Form.FRESH), llm_router=restored
+    )
+    assert (up.status, up.canonical_name) == (Status.CREATED, "dragon fruit")
+
+
+def test_an_exhausted_naming_budget_skips_the_call_and_leaves_misses_unresolved(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+
+    [result] = normalise(
+        ["Dragon Fruit Each"],
+        store=store,
+        decisions=unseen(GroupId.FRUIT, Form.FRESH),
+        llm_router=router,
+        naming_budget_s=0,
+    )
+
+    assert result.status is Status.UNRESOLVED
+    assert router.calls == []
+    assert store.get_by_name("Dragon Fruit Each") is None
+
+
+def test_the_naming_call_is_bounded_by_the_time_left(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+
+    normalise(
+        ["Dragon Fruit Each"],
+        store=store,
+        decisions=unseen(GroupId.FRUIT, Form.FRESH),
+        llm_router=router,
+        naming_budget_s=2.0,
+    )
+
+    assert 0 < router.calls[0]["kwargs"]["request_timeout"] <= 2000
+
+
+def test_a_name_the_llm_skipped_is_unresolved_not_unmatched(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+
+    [named, skipped] = normalise(
+        ["Dragon Fruit Each", "Lychee Tin"], store=store, decisions=unseen(GroupId.FRUIT), llm_router=router
+    )
+
+    assert (named.status, skipped.status) == (Status.CREATED, Status.UNRESOLVED)
+    assert not store.is_unmatched("Lychee Tin")
+
+
+def test_a_failed_decision_request_leaves_only_that_name_unresolved(store: InMemoryCatalogueStore) -> None:
+    def script(name: str, questions: object) -> object:
+        if "Broken" in name:
+            raise DecisionTimeoutError("slow")
+        return decision(questions, group=GroupId.FRUIT, form=Form.FRESH)  # ty: ignore[invalid-argument-type]
+
+    router = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+
+    [good, bad] = normalise(
+        ["Dragon Fruit Each", "Broken Thing"], store=store, decisions=FakeDecisions(script=script), llm_router=router
+    )
+
+    assert (good.status, bad.status) == (Status.CREATED, Status.UNRESOLVED)
+    assert store.get_by_name("Broken Thing") is None
+
+
+def test_two_concurrent_calls_for_the_same_new_name_create_one_item(store: InMemoryCatalogueStore) -> None:
+    both_naming = threading.Barrier(2, timeout=5)
+
+    def slow_naming(schema: type, messages: object) -> object:
+        both_naming.wait()  # each call is naming "dragon fruit" before either has written
+        return naming(**{"Dragon Fruit Each": "dragon fruit"})(schema, messages)
+
+    def call() -> NormalisedName:
+        [result] = normalise(
+            ["Dragon Fruit Each"],
+            store=store,
+            decisions=unseen(GroupId.FRUIT, Form.FRESH),
+            llm_router=FakeRouter(script=slow_naming),
+        )
+        return result
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(lambda _: call(), range(2))
+
+    assert first.catalogue_item_id == second.catalogue_item_id
+    assert sum(1 for item in store.shortlist("dragon fruit", 50) if item.name == "dragon fruit") == 1
+
+
+def test_more_than_twenty_names_are_rejected_and_twenty_new_names_are_all_resolved(
+    store: InMemoryCatalogueStore,
+) -> None:
+    names = [f"Mystery Fruit {letter}" for letter in "abcdefghijklmnopqrst"]
+    router = FakeRouter(script=naming(**{raw: raw.lower() for raw in names}))
+
+    with pytest.raises(ValueError, match="At most 20"):
+        normalise([*names, "one more"], store=store, decisions=no_decisions(), llm_router=router)
+    results = normalise(names, store=store, decisions=unseen(GroupId.FRUIT, Form.FRESH), llm_router=router)
+
+    assert [r.status for r in results] == [Status.CREATED] * 20
+    assert len(router.calls) == 1
+
+
+def test_normalise_leaves_no_work_running_after_it_returns(store: InMemoryCatalogueStore) -> None:
+    threads_before = threading.active_count()
+
+    normalise(
+        ["Dragon Fruit Each", "Lychee Tin"],
+        store=store,
+        decisions=unseen(GroupId.FRUIT, Form.FRESH),
+        llm_router=FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit", "Lychee Tin": "lychee"})),
+    )
+
+    assert threading.active_count() == threads_before
+
+
+def test_repeated_names_in_one_call_cost_one_decision_and_keep_each_spelling(store: InMemoryCatalogueStore) -> None:
+    decisions = unseen(GroupId.FRUIT, Form.FRESH)
+    router = FakeRouter(script=naming(**{"Dragon Fruit Each": "dragon fruit"}))
+
+    results = normalise(
+        ["Dragon Fruit Each", "dragon  fruit each", "coriander"], store=store, decisions=decisions, llm_router=router
+    )
+
+    assert [r.input for r in results] == ["Dragon Fruit Each", "dragon  fruit each", "coriander"]
+    assert results[0].catalogue_item_id == results[1].catalogue_item_id
+    assert len(decisions.calls) == 1
