@@ -9,14 +9,14 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 from glean.llm import Feature, invoke_structured
-from glean.shopping.schemas import ShoppingParseResponse
+from glean.shopping.schemas import ShoppingParseResponse, ShoppingUnit
 from glean.shopping.service import SHOPPING_PARSE_SYSTEM_PROMPT
 
 from .judges.rubrics import judge_shopping_list_description
 
 FEATURE = Feature.SHOPPING_LIST_DESCRIPTION
 
-ALLOWED_UNITS = {"g", "ml", "units", "pack", "bottle", "bag", "box"}
+ALLOWED_UNITS = {unit.value for unit in ShoppingUnit}
 
 
 def _invoke_shopping_list_description(model: BaseChatModel, text: str, *, example_idx: int) -> ShoppingParseResponse:
@@ -97,6 +97,8 @@ class TestShoppingListDescriptionHeuristic:
         for i, example in enumerate(shopping_list_description_dataset):
             response = _invoke_shopping_list_description(eval_model, example["input"]["text"], example_idx=i)
             for item in response.items:
+                if item.unit_price is not None:
+                    failures.append(f"Example {i}: '{item.name}' has unit_price {item.unit_price}")
                 if item.unit not in ALLOWED_UNITS:
                     failures.append(f"Example {i}: '{item.name}' has invalid unit '{item.unit}'")
                 if item.quantity <= 0:

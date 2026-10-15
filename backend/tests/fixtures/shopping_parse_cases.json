@@ -1,0 +1,235 @@
+[
+  {
+    "id": "common-grocery-text",
+    "text": "milk, 6 eggs and a loaf of bread",
+    "model_output": {
+      "items": [
+        {
+          "name": "milk",
+          "quantity": 1,
+          "unit": "bottle",
+          "confidence": 0.9,
+          "category": "dairy"
+        },
+        {
+          "name": "eggs",
+          "quantity": 6,
+          "unit": "units",
+          "confidence": 0.95,
+          "category": "eggs"
+        },
+        {
+          "name": "bread",
+          "quantity": 1,
+          "unit": "units",
+          "confidence": 0.9,
+          "category": "bread"
+        }
+      ],
+      "clarifying_questions": []
+    },
+    "expect": {
+      "items": [
+        [
+          "milk",
+          1,
+          "bottle"
+        ],
+        [
+          "eggs",
+          6,
+          "units"
+        ],
+        [
+          "bread",
+          1,
+          "units"
+        ]
+      ],
+      "questions": 0
+    }
+  },
+  {
+    "id": "vague-item",
+    "text": "some snacks",
+    "model_output": {
+      "items": [
+        {
+          "name": "snacks",
+          "quantity": 1,
+          "unit": "units",
+          "confidence": 0.5,
+          "category": null
+        }
+      ],
+      "clarifying_questions": [
+        "Sweet or savoury snacks?"
+      ]
+    },
+    "expect": {
+      "items": [
+        [
+          "snacks",
+          1,
+          "units"
+        ]
+      ],
+      "questions": 1
+    }
+  },
+  {
+    "id": "explicit-quantities",
+    "text": "500g pasta and 2 litres of milk",
+    "model_output": {
+      "items": [
+        {
+          "name": "pasta",
+          "quantity": 500,
+          "unit": "g",
+          "confidence": 0.97,
+          "category": "pasta_rice"
+        },
+        {
+          "name": "milk",
+          "quantity": 2,
+          "unit": "l",
+          "confidence": 0.97,
+          "category": "dairy"
+        }
+      ],
+      "clarifying_questions": []
+    },
+    "expect": {
+      "items": [
+        [
+          "pasta",
+          500,
+          "g"
+        ],
+        [
+          "milk",
+          2,
+          "l"
+        ]
+      ],
+      "questions": 0
+    }
+  },
+  {
+    "id": "package-units",
+    "text": "a pack of bacon, a bag of spinach, a box of cereal",
+    "model_output": {
+      "items": [
+        {
+          "name": "bacon",
+          "quantity": 1,
+          "unit": "pack",
+          "confidence": 0.95,
+          "category": "red_meat"
+        },
+        {
+          "name": "spinach",
+          "quantity": 1,
+          "unit": "bag",
+          "confidence": 0.95,
+          "category": "leafy_greens"
+        },
+        {
+          "name": "cereal",
+          "quantity": 1,
+          "unit": "box",
+          "confidence": 0.9,
+          "category": "grains"
+        }
+      ],
+      "clarifying_questions": []
+    },
+    "expect": {
+      "items": [
+        [
+          "bacon",
+          1,
+          "pack"
+        ],
+        [
+          "spinach",
+          1,
+          "bag"
+        ],
+        [
+          "cereal",
+          1,
+          "box"
+        ]
+      ],
+      "questions": 0
+    }
+  },
+  {
+    "id": "dish-name-with-clarifying-question",
+    "text": "tacos",
+    "model_output": {
+      "items": [
+        {
+          "name": "taco shells",
+          "quantity": 1,
+          "unit": "pack",
+          "confidence": 0.6,
+          "category": "grains"
+        },
+        {
+          "name": "minced beef",
+          "quantity": 500,
+          "unit": "g",
+          "confidence": 0.55,
+          "category": "red_meat"
+        }
+      ],
+      "clarifying_questions": [
+        "Beef, chicken or vegetarian tacos?"
+      ]
+    },
+    "expect": {
+      "items": [
+        [
+          "taco shells",
+          1,
+          "pack"
+        ],
+        [
+          "minced beef",
+          500,
+          "g"
+        ]
+      ],
+      "questions": 1
+    }
+  },
+  {
+    "id": "model-hallucinates-a-price",
+    "text": "a bottle of olive oil",
+    "model_output": {
+      "items": [
+        {
+          "name": "olive oil",
+          "quantity": 1,
+          "unit": "bottle",
+          "confidence": 0.9,
+          "category": "oils_fats",
+          "unit_price": 4.5
+        }
+      ],
+      "clarifying_questions": []
+    },
+    "expect": {
+      "items": [
+        [
+          "olive oil",
+          1,
+          "bottle"
+        ]
+      ],
+      "questions": 0
+    }
+  }
+]
