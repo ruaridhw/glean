@@ -51,6 +51,7 @@ _PLAIN_SECTION = {
     GroupId.SPICES: Section.FOOD_CUPBOARD,
     GroupId.SAUCES_AND_CONDIMENTS: Section.FOOD_CUPBOARD,
     GroupId.BAKING: Section.BAKING,
+    GroupId.NUTS_AND_SEEDS: Section.FOOD_CUPBOARD,
     GroupId.DRINKS: Section.DRINKS,
     GroupId.SNACKS_AND_TREATS: Section.SNACKS_AND_TREATS,
     GroupId.HOUSEHOLD: Section.HOUSEHOLD,

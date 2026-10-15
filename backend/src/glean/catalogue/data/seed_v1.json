@@ -3604,7 +3604,7 @@
     "peanuts",
     "roasted nuts"
    ],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
@@ -4581,7 +4581,7 @@
     "flaked almonds",
     "whole almonds"
    ],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
@@ -4589,7 +4589,7 @@
    "aliases": [
     "walnut halves"
    ],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
@@ -4597,19 +4597,19 @@
    "aliases": [
     "cashews"
    ],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
    "name": "pine nuts",
    "aliases": [],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
    "name": "sunflower seeds",
    "aliases": [],
-   "group": "snacks_and_treats",
+   "group": "nuts_and_seeds",
    "form": "not_applicable"
   },
   {
@@ -4651,6 +4651,64 @@
     "unopened_shelf_life_days": 75,
     "once_opened_shelf_life_days": 28
    }
+  },
+  {
+   "name": "pecans",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "hazelnuts",
+   "aliases": [
+    "hazelnut kernels"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pistachios",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pumpkin seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chia seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sesame seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "linseed",
+   "aliases": [
+    "flaxseed"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "brazil nuts",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mixed nuts",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
   }
  ]
 }
