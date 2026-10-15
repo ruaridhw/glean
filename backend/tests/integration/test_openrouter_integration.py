@@ -22,8 +22,9 @@ from typing import TYPE_CHECKING
 import pytest
 from langchain_core.messages import HumanMessage
 from openrouter import OpenRouter
+from pydantic import BaseModel, Field
 
-from glean.llm import create_chat_model, validate_model
+from glean.llm import create_chat_model, invoke_structured, validate_model
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
@@ -46,10 +47,13 @@ class TestOpenRouterConnectivity:
         validate_model(openrouter_smoke_model, api_key=openrouter_api_key)
 
 
+class _Pong(BaseModel):
+    word: str = Field(description='The single word "pong".')
+
+
 class TestOpenRouterChat:
-    def test_simple_completion(self, openrouter_api_key: SecretStr, openrouter_smoke_model: str) -> None:
-        """End-to-end: chat completion returns a response containing 'pong'."""
+    def test_structured_completion(self, openrouter_api_key: SecretStr, openrouter_smoke_model: str) -> None:
+        """End-to-end: a structured-output completion returns a typed object carrying 'pong'."""
         model = create_chat_model(openrouter_smoke_model, api_key=openrouter_api_key)
-        response = model.invoke([HumanMessage(content="Reply with exactly one word: pong")])
-        assert isinstance(response.content, str)
-        assert "pong" in response.content.lower(), f"Expected 'pong' in response, got: {response.content!r}"
+        response = invoke_structured(model, _Pong, [HumanMessage(content="Reply with the single word: pong")])
+        assert "pong" in response.word.lower(), f"Expected 'pong' in word, got: {response.word!r}"
