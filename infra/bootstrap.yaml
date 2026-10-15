@@ -66,7 +66,6 @@ Resources:
             Action:
               - dynamodb:DescribeLimits
               - dynamodb:ListTables
-              - budgets:ViewBudget
             Resource: '*'
           - Effect: Allow
             Action: lambda:*
@@ -163,7 +162,6 @@ Resources:
             Action:
               - dynamodb:DescribeLimits
               - dynamodb:ListTables
-              - budgets:ViewBudget
             Resource: '*'
           - Effect: Allow
             Action: lambda:*

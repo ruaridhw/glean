@@ -50,7 +50,7 @@ def test_deploy_policies_can_manage_only_their_environments_catalogue_table(
         f"arn:aws:dynamodb:*:${{AWS::AccountId}}:table/glean-catalogue-{env}",
         f"arn:aws:dynamodb:*:${{AWS::AccountId}}:table/glean-catalogue-{env}/index/*",
     ]
-    assert any("budgets:ViewBudget" in _as_list(s["Action"]) for s in statements)
+    assert not any(a.startswith("budgets:") for s in statements for a in _as_list(s["Action"]))
 
 
 def _as_list(value: str | list[str]) -> list[str]:
