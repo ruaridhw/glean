@@ -33,7 +33,7 @@ from glean.decisions import DECISION_MODEL, DecisionClient
 from glean.llm import Feature, LLMRouter, ModelPurpose, create_chat_model
 from judge_study.decision_judge import DecisionJudge
 from judge_study.freeze import freeze_feature
-from judge_study.llm_judge import LlmJudge, UsageRecorder, generation_cost_lookup
+from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
 from judge_study.results import Results
 from judge_study.scoring_page import make_server, select_for_scoring
 
@@ -110,7 +110,11 @@ def judge(out: Path, repeats: int) -> None:
     results = Results.load(out / "results.json")
     client = DecisionClient(api_key=key, timeout_s=60.0)
     decision_judge = DecisionJudge(client)
-    cost_of = generation_cost_lookup(key.get_secret_value())
+    judge_ids = {
+        os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(feature, purpose=ModelPurpose.EVAL)
+        for _, feature, _ in SOURCES.values()
+    }
+    prices = fetch_prices(sorted(judge_ids))
     models = dict(results.models)
     todo = [
         (item, repeat, kind)
@@ -139,9 +143,9 @@ def judge(out: Path, repeats: int) -> None:
                     model = create_chat_model(
                         judge_model_id, api_key=key, callbacks=[recorder], request_timeout=120_000
                     )
-                    judgement = LlmJudge(model, model_id=judge_model_id, recorder=recorder, cost_of=cost_of).judge(
-                        item, repeat
-                    )
+                    judgement = LlmJudge(
+                        model, model_id=judge_model_id, recorder=recorder, prices=prices[judge_model_id]
+                    ).judge(item, repeat)
                 item.judgements.append(judgement)
                 models[f"{kind}:{item.feature}"] = judgement.model
                 return
