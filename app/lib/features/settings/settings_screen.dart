@@ -177,7 +177,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
       final String prefix = await ref.read(diagnosticsExportProvider)();
       GleanSnackBar.showOn(messenger, 'Diagnostics exported to $prefix');
     } catch (error) {
-      await logger?.error('export diagnostics failed: $error');
+      await logger?.error('export diagnostics failed: ${describeError(error)}');
       GleanSnackBar.showOn(
         messenger,
         'Could not export diagnostics. Try again.',
