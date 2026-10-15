@@ -18,6 +18,8 @@ import re
 from collections import Counter
 from typing import TYPE_CHECKING
 
+from glean.meal_plan.dietary_decisions import DietaryDecisions, DietaryDecisionStore
+
 if TYPE_CHECKING:
     import random
     from collections.abc import Collection, Sequence
@@ -232,13 +234,16 @@ def sample_corpus_candidates(
 ) -> list[RecipeSummary]:
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
-    rules = [rule for flag in dietary_flags for rule in _DIETARY_RULES.get(flag.strip().casefold(), ())]
+    flags = [flag.strip().casefold() for flag in dietary_flags]
+    rules = [rule for flag in flags for rule in _DIETARY_RULES.get(flag, ())]
+    decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load())
     eligible = {
         summary.external_id: summary
         for summary in all_recipes
         if summary.external_id not in excluded
         and _fits_time(summary, max_total_time_mins)
         and _fits_diet(summary, rules)
+        and not any(decisions.flags(summary.external_id, flag) for flag in flags)
     }
 
     pantry_matches: Counter[str] = Counter()
