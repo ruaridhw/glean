@@ -9,7 +9,12 @@ from pydantic import SecretStr
 from glean.decisions import DecisionClient
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.shopping.schemas import ShoppingParseRequest, ShoppingParseResponse
-from glean.shopping.service import parse_shopping_description
+from glean.shopping.service import (
+    DISH_PARSE_SYSTEM_PROMPT,
+    ITEM_PARSE_SYSTEM_PROMPT,
+    SHOPPING_PARSE_SYSTEM_PROMPT,
+    parse_shopping_description,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,7 +53,9 @@ class _FakeLLMRouter:
         return sorted(_phrase_of(messages[1]) for _, _, messages in self.calls)
 
 
-def _decision_client(dish_probability: Callable[[str], float] = lambda phrase: 0.5) -> DecisionClient:
+def _decision_client(
+    dish_probability: Callable[[str], float] = lambda phrase: 0.5, *, status: int = 200
+) -> DecisionClient:
     """A real DecisionClient whose HTTP endpoint says how dish-like each phrase is."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -56,7 +63,7 @@ def _decision_client(dish_probability: Callable[[str], float] = lambda phrase: 0
 
         phrase = json.loads(request.content)["state"]["phrase"]
         return httpx.Response(
-            200,
+            status,
             json={
                 "id": "gen-dec-1",
                 "model": "typesafe/jev-1.14-20261014",
@@ -119,3 +126,47 @@ def test_a_unit_repeated_in_the_description_is_parsed_once_and_proposed_once(tmp
 
     assert router.phrases == ["bread", "milk"]
     assert [item.name for item in response.items] == ["milk", "bread"]
+
+
+def _system_prompts(router: _FakeLLMRouter) -> dict[str, str]:
+    return {_phrase_of(messages[1]): messages[0].content for _, _, messages in router.calls}
+
+
+def test_a_phrase_that_names_a_dish_is_parsed_with_the_dish_decomposition_prompt(tmp_path: Path) -> None:
+    router = _FakeLLMRouter()
+
+    _parse("tacos, milk", router=router, tmp_path=tmp_path, decisions=_decision_client(lambda p: 0.95 if p == "tacos" else 0.02))
+
+    assert _system_prompts(router) == {"tacos": DISH_PARSE_SYSTEM_PROMPT, "milk": ITEM_PARSE_SYSTEM_PROMPT}
+
+
+def test_an_ambiguous_phrase_falls_back_to_the_combined_prompt_and_keeps_its_clarifying_questions(
+    tmp_path: Path,
+) -> None:
+    router = _FakeLLMRouter(
+        {
+            "snacks": ShoppingParseResponse(items=[_item("snacks", confidence=0.5)], clarifying_questions=["Which snacks?"]),
+            "treats": ShoppingParseResponse(items=[_item("treats", confidence=0.5)], clarifying_questions=["Which snacks?"]),
+        }
+    )
+
+    response = _parse("snacks, treats", router=router, tmp_path=tmp_path, decisions=_decision_client(lambda p: 0.5))
+
+    assert set(_system_prompts(router).values()) == {SHOPPING_PARSE_SYSTEM_PROMPT}
+    assert [item.name for item in response.items] == ["snacks", "treats"]
+    assert response.clarifying_questions == ["Which snacks?"]
+
+
+def test_when_the_decision_model_is_unavailable_the_combined_prompt_is_used_and_nothing_is_cached(
+    tmp_path: Path,
+) -> None:
+    router = _FakeLLMRouter()
+
+    response = _parse("tacos", router=router, tmp_path=tmp_path, decisions=_decision_client(status=503))
+
+    assert [item.name for item in response.items] == ["tacos"]
+    assert _system_prompts(router) == {"tacos": SHOPPING_PARSE_SYSTEM_PROMPT}
+
+    retry = _FakeLLMRouter()
+    _parse("tacos", router=retry, tmp_path=tmp_path, decisions=_decision_client(lambda p: 0.95))
+    assert _system_prompts(retry) == {"tacos": DISH_PARSE_SYSTEM_PROMPT}
