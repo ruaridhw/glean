@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
 from glean.main import app
+from glean.rate_limit import limiter
 
 _TEST_SETTINGS = Settings(
     _env_file=None,
@@ -33,3 +34,8 @@ def client() -> TestClient:
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     return {"Authorization": "Bearer test-token"}
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limit_window() -> None:
+    limiter.reset()
