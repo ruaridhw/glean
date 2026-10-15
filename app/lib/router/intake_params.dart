@@ -18,6 +18,7 @@ class ReviewItemDraft {
     required this.confidence,
     this.unitPrice,
     this.category,
+    this.sourceRowIds = const <int>[],
   });
 
   /// Stable list key assigned once when the draft list is built; never persisted.
@@ -32,6 +33,9 @@ class ReviewItemDraft {
 
   /// Backend-classified taxonomy category; null when the backend could not classify it.
   final String? category;
+
+  /// The Shopping rows this draft stands for ("Done shopping" only); confirming clears exactly these.
+  final List<int> sourceRowIds;
 
   ReviewItemDraft copyWith({
     String? name,
@@ -49,6 +53,7 @@ class ReviewItemDraft {
       confidence: confidence ?? this.confidence,
       unitPrice: unitPrice ?? this.unitPrice,
       category: category ?? this.category,
+      sourceRowIds: sourceRowIds,
     );
   }
 }

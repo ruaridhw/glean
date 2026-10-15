@@ -67,6 +67,7 @@ Future<ReviewArgs?> checkedItemsReviewArgs(WidgetRef ref) async {
           unit: item.unit ?? '',
           confidence: 1,
           category: categories[item.ingredientId],
+          sourceRowIds: item.ids,
         ),
     ],
   );

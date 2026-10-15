@@ -480,47 +480,5 @@ void main() {
         expect(await repository.watchAll(userId).first, isEmpty);
       },
     );
-
-    test(
-      'clearing a checkout removes only the checked Shopping items whose ingredient was added, and the '
-      'returned rows restore them',
-      () async {
-        final unchecked = await repository.addManualItem(
-          userId: userId,
-          name: 'keep me',
-        );
-        final bought = await repository.addManualItem(
-          userId: userId,
-          name: 'milk',
-        );
-        final skipped = await repository.addManualItem(
-          userId: userId,
-          name: 'skipped in review',
-        );
-        await repository.toggleRows(
-          ids: [bought, skipped],
-          userId: userId,
-          checked: true,
-        );
-        final milk = await ingredients.resolveOrCreate(canonicalName: 'milk');
-
-        final removed = await repository.resolveCheckoutWithSnapshot(
-          userId: userId,
-          resolvedIngredientIds: [milk.id],
-        );
-
-        expect(removed.map((r) => r.name), ['milk']);
-        expect(
-          (await repository.watchAll(userId).first).map((r) => r.id),
-          unorderedEquals([unchecked, skipped]),
-        );
-
-        await repository.restoreRows(rows: removed, userId: userId);
-
-        final restored = await repository.watchAll(userId).first;
-        expect(restored.map((r) => r.name), contains('milk'));
-        expect(restored.firstWhere((r) => r.name == 'milk').isChecked, isTrue);
-      },
-    );
   });
 }

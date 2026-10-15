@@ -307,5 +307,118 @@ void main() {
       );
       expect(find.textContaining('finish without'), findsNothing);
     });
+
+    testWidgets('removing one of two checked rows for the same item in the '
+        'review clears only the other, and Undo restores exactly it', (
+      WidgetTester tester,
+    ) async {
+      final int firstId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+        quantity: 500,
+        unit: 'ml',
+      );
+      final int secondId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+        quantity: 250,
+        unit: 'ml',
+      );
+      await shopping().toggleRows(
+        ids: [firstId, secondId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done shopping'));
+      await tester.pumpAndSettle();
+      // Rows list newest first: drop the 500 ml one.
+      final removeButtons = find.byTooltip('Remove');
+      expect(removeButtons, findsNWidgets(2));
+      final Finder fiveHundred = find.widgetWithText(TextField, '500');
+      final int rowIndex = tester
+          .widgetList<TextField>(find.byType(TextField))
+          .toList()
+          .indexWhere((f) => f.controller?.text == '500');
+      expect(rowIndex, greaterThanOrEqualTo(0));
+      expect(fiveHundred, findsOneWidget);
+      // Each row owns one name, qty and unit field plus a Remove button.
+      await tester.tap(removeButtons.at(rowIndex ~/ 3));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add 1 item'));
+      await tester.pumpAndSettle();
+
+      final ids = (await tester.runAsync(
+        () => shopping().watchAll('test-user').first,
+      ))!.map((r) => r.id);
+      expect(ids, [firstId]);
+      expect(
+        (await tester.runAsync(
+          () => pantry().getAll('test-user'),
+        ))!.single.quantity,
+        250.0,
+      );
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      final restored = (await tester.runAsync(
+        () => shopping().watchAll('test-user').first,
+      ))!;
+      expect(restored.map((r) => r.id), unorderedEquals([firstId, secondId]));
+      expect(restored.every((r) => r.isChecked), isTrue);
+      expect(
+        await tester.runAsync(() => pantry().getAll('test-user')),
+        isEmpty,
+      );
+    });
+
+    testWidgets('renaming a row in the review still clears the checked '
+        'Shopping item it came from', (WidgetTester tester) async {
+      final int oatId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Oat milk',
+      );
+      await shopping().toggleRows(
+        ids: [oatId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done shopping'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Oat milk'),
+        'Almond milk',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Add 1 item'));
+      await tester.pumpAndSettle();
+
+      expect(
+        await tester.runAsync(() => shopping().watchAll('test-user').first),
+        isEmpty,
+      );
+      expect(
+        (await tester.runAsync(
+          () => pantry().getAll('test-user'),
+        ))!.single.canonicalName,
+        'almond milk',
+      );
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      final restored = (await tester.runAsync(
+        () => shopping().watchAll('test-user').first,
+      ))!;
+      expect(restored.single.name, 'Oat milk');
+      expect(restored.single.isChecked, isTrue);
+    });
   });
 }

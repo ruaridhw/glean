@@ -361,27 +361,6 @@ class ShoppingRepository {
         ))
         .go();
   }
-
-  /// [resolveCheckout] that also returns the removed rows, so Undo can put them back with [restoreRows]. Used
-  /// by "Done shopping", where the pantry write and this clear commit in one transaction.
-  Future<List<ShoppingListItem>> resolveCheckoutWithSnapshot({
-    required String userId,
-    required List<int> resolvedIngredientIds,
-  }) => _db.transaction(() async {
-    if (resolvedIngredientIds.isEmpty) return <ShoppingListItem>[];
-    final rows =
-        await (_db.select(_db.shoppingListItems)..where(
-              (t) =>
-                  t.userId.equals(userId) &
-                  t.ingredientId.isIn(resolvedIngredientIds) &
-                  t.isChecked.equals(true),
-            ))
-            .get();
-    await (_db.delete(
-      _db.shoppingListItems,
-    )..where((t) => t.id.isIn([for (final row in rows) row.id]))).go();
-    return rows;
-  });
 }
 
 class AiShoppingItem {
