@@ -1,0 +1,108 @@
+{
+  "subtotal": 18.06,
+  "savings": 1.20,
+  "total": 16.86,
+  "items": [
+    {
+      "printed_line": "Tesco Harissa Paste 90g",
+      "name": "harissa paste",
+      "quantity": 90,
+      "unit": "g",
+      "unit_price": 0.02,
+      "net_line_total": 1.80,
+      "category": "condiments",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Curled Leaf Parsley 30g",
+      "name": "curly parsley",
+      "aliases": ["curled leaf parsley"],
+      "quantity": 30,
+      "unit": "g",
+      "unit_price": 0.016667,
+      "net_line_total": 0.50,
+      "category": "herbs_fresh",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Aubergine Each",
+      "name": "aubergine",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.79,
+      "net_line_total": 0.79,
+      "category": "nightshades",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Chicken Breast Fillets 320g",
+      "name": "chicken breast fillets",
+      "quantity": 640,
+      "unit": "g",
+      "unit_price": 0.007625,
+      "net_line_total": 4.88,
+      "category": "poultry",
+      "non_food": false
+    },
+    {
+      "printed_line": "Flash Bathroom Cleaning Spray 800ml",
+      "name": "bathroom cleaning spray",
+      "quantity": 800,
+      "unit": "ml",
+      "unit_price": 0.002813,
+      "net_line_total": 2.25,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Tesco Garlic 4 Pack",
+      "name": "garlic",
+      "quantity": 4,
+      "unit": "units",
+      "unit_price": 0.2175,
+      "net_line_total": 0.87,
+      "category": "alliums",
+      "non_food": false
+    },
+    {
+      "printed_line": "Bloo Power Active Lemon Rim Blocks 2 X 50g",
+      "name": "toilet rim blocks",
+      "quantity": 100,
+      "unit": "g",
+      "unit_price": 0.02,
+      "net_line_total": 2.00,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Arla Skyr Natural Icelandic Style Yogurt 450g",
+      "name": "skyr yogurt",
+      "quantity": 450,
+      "unit": "g",
+      "unit_price": 0.005556,
+      "net_line_total": 2.50,
+      "category": "dairy",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Bird Eye Chillies 25g",
+      "name": "bird's eye chillies",
+      "quantity": 25,
+      "unit": "g",
+      "unit_price": 0.036,
+      "net_line_total": 0.90,
+      "category": "nightshades",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Lemons Each",
+      "name": "lemons",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.37,
+      "net_line_total": 0.37,
+      "category": "citrus",
+      "non_food": false
+    }
+  ]
+}

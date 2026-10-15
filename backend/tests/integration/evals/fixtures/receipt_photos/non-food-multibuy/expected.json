@@ -1,0 +1,91 @@
+{
+  "subtotal": 33.14,
+  "savings": 6.5,
+  "total": 26.64,
+  "items": [
+    {
+      "printed_line": "Aussie Miracle Moist Shampoo 400ml",
+      "name": "shampoo",
+      "quantity": 400,
+      "unit": "ml",
+      "unit_price": 0.015,
+      "net_line_total": 6.0,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Kellogg's Nutri-grain Blueberry Snack Bars 6x37g",
+      "name": "blueberry snack bars",
+      "quantity": 222,
+      "unit": "g",
+      "unit_price": 0.008784,
+      "net_line_total": 1.95,
+      "category": null,
+      "non_food": false
+    },
+    {
+      "printed_line": "Colgate Max White One Whitening Toothpaste 75ml",
+      "name": "toothpaste",
+      "quantity": 75,
+      "unit": "ml",
+      "unit_price": 0.046667,
+      "net_line_total": 3.5,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Sure Men Active Dry 48h Antiperspirant Deodorant 200ml",
+      "name": "antiperspirant deodorant",
+      "quantity": 400,
+      "unit": "ml",
+      "unit_price": 0.01,
+      "net_line_total": 4.0,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Original Source Mint & Tea Tree Shower Gel 500ml",
+      "name": "shower gel",
+      "quantity": 500,
+      "unit": "ml",
+      "unit_price": 0.00338,
+      "net_line_total": 1.69,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Ogx Coconut Milk Conditioner For Dry And Damaged Hair 385ml",
+      "name": "conditioner",
+      "quantity": 385,
+      "unit": "ml",
+      "unit_price": 0.01039,
+      "net_line_total": 4.0,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Paterson's Shortbread Fingers 300g",
+      "name": "shortbread fingers",
+      "quantity": 600,
+      "unit": "g",
+      "unit_price": 0.004167,
+      "net_line_total": 2.5,
+      "category": null,
+      "non_food": false
+    },
+    {
+      "printed_line": "Mcvitie's Dark Chocolate Digestives Biscuits Twin Pack 2 X 266g",
+      "name": "dark chocolate digestive biscuits",
+      "quantity": 532,
+      "unit": "g",
+      "unit_price": 0.005639,
+      "net_line_total": 3.0,
+      "category": null,
+      "non_food": false,
+      "aliases": [
+        "chocolate digestives",
+        "dark chocolate digestives"
+      ]
+    }
+  ]
+}

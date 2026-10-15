@@ -1,0 +1,47 @@
+{
+  "subtotal": 8.80,
+  "savings": 2.45,
+  "total": 6.35,
+  "items": [
+    {
+      "printed_line": "7m Lint Roller",
+      "name": "lint roller",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 2.5,
+      "net_line_total": 2.50,
+      "category": null,
+      "non_food": true
+    },
+    {
+      "printed_line": "Tesco Bacon, Lettuce & Tomato Sandwich",
+      "name": "bacon lettuce and tomato sandwich",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 1.68,
+      "net_line_total": 1.68,
+      "category": null,
+      "non_food": false
+    },
+    {
+      "printed_line": "Mccoy's Salt & Vinegar Grab Bag Crisps 45g",
+      "name": "salt and vinegar crisps",
+      "quantity": 45,
+      "unit": "g",
+      "unit_price": 0.017111,
+      "net_line_total": 0.77,
+      "category": null,
+      "non_food": false
+    },
+    {
+      "printed_line": "Innocent Berry Set Go Juice 330ml",
+      "name": "berry juice",
+      "quantity": 330,
+      "unit": "ml",
+      "unit_price": 0.004242,
+      "net_line_total": 1.40,
+      "category": null,
+      "non_food": false
+    }
+  ]
+}
