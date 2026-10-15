@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'redaction.dart';
@@ -48,13 +49,21 @@ class GleanLogger {
 
   Future<void> error(String message) => _write('error', message);
 
+  /// Logging never throws into callers: each sink is guarded on its own, and a failing sink falls back to
+  /// [debugPrint] so a full disk or a missing native handler can't replace the error being logged.
   Future<void> _write(String level, String raw) async {
     final String message = redactSecrets(raw);
-    file.append('${_clock().toUtc().toIso8601String()} $level $message');
+    try {
+      file.append('${_clock().toUtc().toIso8601String()} $level $message');
+    } catch (error) {
+      debugPrint(
+        'glean: log file write failed (${error.runtimeType}): $message',
+      );
+    }
     try {
       await platform.write(level: level, tag: gleanLogTag, message: message);
-    } catch (_) {
-      // The file already has the line; a platform-log failure must never become an error of its own.
+    } catch (error) {
+      debugPrint('glean: platform log failed (${error.runtimeType}): $message');
     }
   }
 }
