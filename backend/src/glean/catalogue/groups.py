@@ -75,6 +75,7 @@ class GroupId(StrEnum):
     SPICES = "spices"
     SAUCES_AND_CONDIMENTS = "sauces_and_condiments"
     BAKING = "baking"
+    NUTS_AND_SEEDS = "nuts_and_seeds"
     DRINKS = "drinks"
     SNACKS_AND_TREATS = "snacks_and_treats"
     HOUSEHOLD = "household"
@@ -273,6 +274,11 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             "Sauces & condiments", FoodGroup.CONDIMENTS, _P, shelf_life=365, once_opened=90
         ),
         GroupId.BAKING: _plain("Baking", FoodGroup.CARBOHYDRATES, _P, shelf_life=240, once_opened=240),
+        # Protein per the UK Eatwell guide. Bought by the bag and used by weight, so counted in grams; raw nuts and
+        # seeds keep about six months unopened and about three once the bag is open.
+        GroupId.NUTS_AND_SEEDS: _plain(
+            "Nuts & seeds", FoodGroup.PROTEIN, _C, shelf_life=180, once_opened=90, stock_unit=StockUnit.GRAMS
+        ),
         GroupId.DRINKS: _plain(
             "Drinks", FoodGroup.OTHER, _C, shelf_life=365, once_opened=5, stock_unit=StockUnit.MILLILITRES
         ),

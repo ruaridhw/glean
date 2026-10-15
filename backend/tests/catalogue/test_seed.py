@@ -134,3 +134,10 @@ def test_hard_semi_soft_and_blue_cheeses_have_their_own_shelf_lives() -> None:
         assert 14 <= (by_name(name).once_opened_shelf_life_days or 0) <= 21, name
     for name in ("ricotta", "mozzarella", "cream cheese"):
         assert (by_name(name).once_opened_shelf_life_days or 0) <= 5, name
+
+
+def test_nuts_and_seeds_are_in_their_own_group_not_snacks() -> None:
+    for name in ("almonds", "walnuts", "cashew nuts", "pine nuts", "sunflower seeds", "salted peanuts"):
+        assert by_name(name).group is GroupId.NUTS_AND_SEEDS, name
+    assert by_name("almonds").section.value == "Food Cupboard"
+    assert by_name("walnuts").tracking_mode is TrackingMode.COUNTED

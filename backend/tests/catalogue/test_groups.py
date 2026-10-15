@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from glean.catalogue.groups import GROUPS, FoodGroup, Form, GroupId, Kind
+from glean.catalogue.groups import GROUPS, FoodGroup, Form, GroupId, Kind, StockUnit, TrackingMode
 
 EXPECTED_GROUP_IDS = {
     # the 23 current categories, with the four renames
@@ -27,8 +27,9 @@ EXPECTED_GROUP_IDS = {
     "dried_herbs",
     "spices",
     "sauces_and_condiments",
-    # the eight new groups
+    # the nine new groups
     "baking",
+    "nuts_and_seeds",
     "drinks",
     "snacks_and_treats",
     "household",
@@ -55,9 +56,9 @@ FORM_GROUP_IDS = {
 }
 
 
-def test_there_are_31_ingredient_groups() -> None:
+def test_there_are_32_ingredient_groups() -> None:
     assert {group_id.value for group_id in GROUPS} == EXPECTED_GROUP_IDS
-    assert len(GROUPS) == 31
+    assert len(GROUPS) == 32
 
 
 def test_only_household_groups_are_household_kind() -> None:
@@ -120,3 +121,15 @@ def test_once_opened_shelf_life_has_one_value_per_allowed_form() -> None:
 def test_grains_pasta_and_rice_keep_a_long_time_once_opened() -> None:
     assert GROUPS[GroupId.PASTA_AND_RICE].once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 365
     assert GROUPS[GroupId.GRAINS].once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 180
+
+
+def test_nuts_and_seeds_are_a_protein_counted_in_grams_with_no_forms() -> None:
+    rules = GROUPS[GroupId.NUTS_AND_SEEDS]
+    assert rules.name == "Nuts & seeds"
+    assert rules.kind is Kind.INGREDIENT
+    assert rules.food_group is FoodGroup.PROTEIN
+    assert rules.tracking_mode is TrackingMode.COUNTED
+    assert rules.stock_unit is StockUnit.GRAMS
+    assert not rules.has_forms
+    assert rules.unopened_shelf_life_days[Form.NOT_APPLICABLE] == 180
+    assert rules.once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 90

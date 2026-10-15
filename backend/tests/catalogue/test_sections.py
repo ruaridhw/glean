@@ -27,6 +27,7 @@ N_A = Form.NOT_APPLICABLE
         (GroupId.DRIED_HERBS, N_A, Section.FOOD_CUPBOARD),
         (GroupId.FRESH_HERBS, N_A, Section.FRUIT_AND_VEG),
         (GroupId.BAKING, N_A, Section.BAKING),
+        (GroupId.NUTS_AND_SEEDS, N_A, Section.FOOD_CUPBOARD),
         (GroupId.PASTA_AND_RICE, N_A, Section.PASTA_RICE_GRAINS),
         (GroupId.GRAINS, N_A, Section.PASTA_RICE_GRAINS),
         (GroupId.BREAD, N_A, Section.BAKERY),
