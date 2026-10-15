@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../api/models/catalogue.dart';
 import '../database.dart';
+import '../models/effective_ingredient.dart';
 
 /// The synced copy of the backend catalogue. Everything here is shared reference data, not household data, so
 /// nothing is user-scoped.
@@ -15,6 +16,49 @@ class CatalogueRepository {
   /// How far sync has got, or null before the first successful sync.
   Future<CatalogueSyncStateData?> syncState() =>
       _db.select(_db.catalogueSyncState).getSingleOrNull();
+
+  /// What the catalogue item [id] is for this household: field by field, the household's override, else the item's
+  /// own, else its ingredient group's default. Null when the item, or the group it names, is not held.
+  Future<EffectiveIngredient?> effectiveIngredient(String id) async {
+    final item = await (_db.select(
+      _db.catalogueItems,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (item == null) return null;
+    final group = await (_db.select(
+      _db.ingredientGroups,
+    )..where((t) => t.id.equals(item.groupId))).getSingleOrNull();
+    if (group == null) return null;
+    final override = await (_db.select(
+      _db.ingredientOverrides,
+    )..where((t) => t.itemId.equals(item.id))).getSingleOrNull();
+    final unopened =
+        jsonDecode(group.unopenedShelfLifeDays) as Map<String, dynamic>;
+    final onceOpened =
+        jsonDecode(group.onceOpenedShelfLifeDays) as Map<String, dynamic>;
+    final trackingMode =
+        override?.trackingMode ??
+        item.overrideTrackingMode ??
+        group.trackingMode;
+    return EffectiveIngredient(
+      id: item.id,
+      name: item.name,
+      groupId: item.groupId,
+      form: item.form,
+      trackingMode: trackingMode,
+      stockUnit: trackingMode == 'counted'
+          ? override?.stockUnit ?? item.overrideStockUnit ?? group.stockUnit
+          : null,
+      unopenedShelfLifeDays:
+          override?.unopenedShelfLifeDays ??
+          item.overrideUnopenedShelfLifeDays ??
+          unopened[item.form] as int,
+      onceOpenedShelfLifeDays:
+          override?.onceOpenedShelfLifeDays ??
+          item.overrideOnceOpenedShelfLifeDays ??
+          onceOpened[item.form] as int?,
+      section: 'Other',
+    );
+  }
 
   /// Upserts everything in [changes] by stable id and records its version, all or nothing: a failure part-way
   /// leaves the previous version in place so the same changes are fetched again. [fullSync] marks [changes] as
