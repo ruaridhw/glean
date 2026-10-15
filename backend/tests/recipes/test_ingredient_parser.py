@@ -252,3 +252,30 @@ def test_parse_ingredient_text_keeps_a_parenthetical_size_out_of_the_name(
     assert parsed.canonical_name == expected_name
     assert parsed.quantity == pytest.approx(expected_quantity)
     assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit", "expected_preparation"),
+    [
+        ("1 cheddar (8 oz)", "Cheddar", 226.8, "g", None),
+        ("2 cheddar (8 oz)", "Cheddar", 453.6, "g", "2 x 8 oz"),
+        ("2.0 Cheddar (8 oz)", "Cheddar", 453.6, "g", "2 x 8 oz"),
+        ("3 Cheddar (8 ounces)", "Cheddar", 680.4, "g", "3 x 8 ounces"),
+        ("Cheddar (8 oz) x2", "Cheddar", 453.6, "g", None),
+        ("2 Cheddar (8 oz) x2", "Cheddar", 907.2, "g", "2 x 8 oz"),
+    ],
+)
+def test_parse_ingredient_text_multiplies_a_count_by_a_per_item_parenthetical_size(
+    raw: str,
+    expected_name: str,
+    expected_quantity: float,
+    expected_unit: str,
+    expected_preparation: str | None,
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit
+    assert parsed.preparation == expected_preparation
