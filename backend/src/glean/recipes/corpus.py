@@ -14,7 +14,7 @@ from glean.recipes.search_index import INDEX_KEY, RecipeSearchIndex, RecipeSumma
 from glean.recipes.stored import StoredRecipe
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
     from glean.recipe_api.blob_store import BlobStore
 
@@ -64,6 +64,12 @@ class RecipeCorpusStore:
         if index is None:
             return [], 0
         return index.search(q=q, cuisine=cuisine, dietary=dietary, page=page, per_page=per_page)
+
+    def all_recipes(self) -> Iterator[StoredRecipe]:
+        """Yield every recipe blob in the corpus (the search index blob is skipped)."""
+        for key in self.store.list_keys():
+            if (recipe := self._load(key)) is not None:
+                yield recipe
 
     def rebuild_index(self) -> int:
         """Rebuild the search index by reading every recipe blob. Returns the recipe count."""
