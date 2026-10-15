@@ -147,4 +147,88 @@ void main() {
       );
     },
   );
+
+  Future<void> expectLiveUntouchedAfterRefusal(File backup) async {
+    final GleanDatabase live = await liveWithUserConfig();
+
+    await expectLater(
+      restoreDatabase(backup: backup, live: live, liveFile: liveFile),
+      throwsA(isA<BackupInvalidException>()),
+    );
+
+    expect(await _mealsPerWeek(live, 'mine'), 6);
+    await live.close();
+    final GleanDatabase reopened = open(liveFile);
+    addTearDown(reopened.close);
+    expect(await _mealsPerWeek(reopened, 'mine'), 6);
+    expect(
+      File('${liveFile.path}.restore-staging').existsSync(),
+      isFalse,
+      reason: 'a refused backup leaves no staging file behind',
+    );
+  }
+
+  test(
+    'a download cut off half-way is refused and the live database is left untouched',
+    () async {
+      final GleanDatabase source = open(File('${dir.path}/source.sqlite'));
+      await source.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('theirs', 3)",
+      );
+      final File whole = await snapshotDatabase(source, dir);
+      await source.close();
+      final List<int> bytes = whole.readAsBytesSync();
+      final File truncated = File('${dir.path}/truncated.sqlite')
+        ..writeAsBytesSync(bytes.sublist(0, bytes.length ~/ 2));
+
+      await expectLiveUntouchedAfterRefusal(truncated);
+    },
+  );
+
+  test(
+    'a file that is not a database is refused and the live database is left untouched',
+    () async {
+      final File junk = File('${dir.path}/junk.sqlite')
+        ..writeAsBytesSync(List<int>.filled(4096, 7));
+
+      await expectLiveUntouchedAfterRefusal(junk);
+    },
+  );
+
+  test(
+    'rows still in the live write-ahead log never leak into the restored database, and the previous database is kept',
+    () async {
+      final GleanDatabase source = open(File('${dir.path}/source.sqlite'));
+      await source.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('theirs', 3)",
+      );
+      final File backup = await snapshotDatabase(source, dir);
+      await source.close();
+      final GleanDatabase live = open(liveFile);
+      await live.customStatement('PRAGMA journal_mode = WAL');
+      await live.customStatement(
+        "INSERT INTO user_config (id, meals_per_week) VALUES ('mine', 6)",
+      );
+      expect(
+        File('${liveFile.path}-wal').lengthSync(),
+        greaterThan(0),
+        reason: 'precondition: the row is only in the write-ahead log',
+      );
+
+      await restoreDatabase(backup: backup, live: live, liveFile: liveFile);
+
+      final GleanDatabase restored = open(liveFile);
+      addTearDown(restored.close);
+      expect(await _mealsPerWeek(restored, 'theirs'), 3);
+      final rows = await restored
+          .customSelect('SELECT id FROM user_config')
+          .get();
+      expect(rows.map((r) => r.read<String>('id')), <String>['theirs']);
+      final GleanDatabase previous = open(
+        File('${liveFile.path}.pre-restore'),
+      );
+      addTearDown(previous.close);
+      expect(await _mealsPerWeek(previous, 'mine'), 6);
+    },
+  );
 }
