@@ -81,6 +81,7 @@ class _ScanProgressScreenState extends ConsumerState<ScanProgressScreen> {
   }
 
   String _errorMessage(Object error) {
+    if (error is ApiRateLimitException) return error.userMessage;
     if (error is ApiTimeoutException) {
       return 'This is taking longer than expected. Check your connection '
           'and try again.';
