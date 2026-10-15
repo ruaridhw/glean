@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-ADB="$HOME/Library/Android/sdk/platform-tools/adb"
-"$ADB" shell pm clear host.exp.exponent

@@ -1,5 +1,7 @@
 # Mobile Replit Reconciliation Implementation Plan
 
+> **Superseded (2026-07-25):** describes the pre-port React Native app (`mobile/`), deleted in the Flutter cutover. Kept as a historical record only — do not follow its instructions against the current app (`app/`); see the root `FLUTTER_MIGRATION.md` for what actually shipped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reconcile the Replit prototype with the real mobile app by documenting decisions, adding a small reusable UI foundation, and porting Pantry as the first Android-first proof screen.

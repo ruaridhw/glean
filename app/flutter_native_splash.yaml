@@ -1,0 +1,41 @@
+## One splash composition, brand green, both platforms (FLUTTER_MIGRATION.md §7,
+## AC-BUILD-08). The RN app handed off from a native splash to a *different*
+## JS-drawn splash composition in the same green with an unanimated pop; that
+## second composition doesn't exist here — `lib/bootstrap.dart` holds this same
+## flat green (`Color(0xFF2E9D63)`) behind `_SplashHolding` while the database
+## opens, so there is nothing else to design a hand-off to.
+##
+## Regenerate after editing this file or the source PNG:
+##   dart run flutter_native_splash:create
+## (works headless; verified on this box.) Commit everything it writes under
+## android/app/src/main/res/**, ios/Runner/Assets.xcassets/LaunchImage.imageset/**
+## and ios/Runner/Base.lproj/LaunchScreen.storyboard.
+flutter_native_splash:
+  # Brand green — matches `AppTokens`/`gleanLightTheme` primary and the flat
+  # ColoredBox in `lib/bootstrap.dart`'s `_SplashHolding`, so there is no
+  # visible seam between the native splash and Flutter's first frame.
+  color: "#2E9D63"
+
+  # Vendored brand mark (FLUTTER_MIGRATION.md §7/§8). flutter_native_splash
+  # requires a raster PNG, not the SVG directly, so `glean-b1-splash-logo.png`
+  # is a straight rasterization of `glean-b1-splash-logo.svg` at 2048x2048
+  # (a vector source, so this is lossless up to that resolution — see the
+  # BUILD agent report for the exact command used).
+  image: assets/brand/glean-b1-splash-logo.png
+
+  # Hide the status bar during splash on Android; iOS already hides it.
+  fullscreen: true
+
+  # Android 12+ uses the platform SplashScreen API instead of a drawable and
+  # is configured separately below — deliberately the *same* color and image
+  # as above rather than a different asset, so this remains one composition
+  # across every OS version, not a second one for newer Android.
+  android_12:
+    color: "#2E9D63"
+    image: assets/brand/glean-b1-splash-logo.png
+    # The image already bakes in its own rounded-square tile fill (see the
+    # SVG), so the surrounding icon backdrop should read as a continuation of
+    # the same green rather than a visible ring — Android 12's circular mask
+    # will crop the tile's corners, which is a property of that OS's splash
+    # API applied to a square source asset, not a second design.
+    icon_background_color: "#2E9D63"

@@ -1,5 +1,7 @@
 # Glean Polish & UX Roadmap — Design Spec
 
+> **Superseded (2026-07-25):** describes the pre-port React Native app (`mobile/`), deleted in the Flutter cutover. Kept as a historical record only — do not follow its instructions against the current app (`app/`); see the root `FLUTTER_MIGRATION.md` for what actually shipped.
+
 **Goal:** Polish the Glean app to a level where first-time users feel it's a real, complete product they'd keep using. Organised into Now/Next/Later for a GitHub Project board.
 
 **Primary lens:** User retention — the first impression must feel polished.

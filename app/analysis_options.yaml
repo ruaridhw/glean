@@ -1,0 +1,30 @@
+# Static analysis for the Glean Flutter app.
+# `flutter analyze` must exit clean with zero errors, warnings or infos
+# (FLUTTER_MIGRATION.md acceptance criterion AC-BUILD-04).
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # Treat every lint as fatal so CI cannot drift.
+    todo: ignore
+  exclude:
+    # Generated only. Never hand-edited, so linting it is noise.
+    - "**/*.g.dart"
+    - "**/*.drift.dart"
+    - "**/*.mocks.dart"
+
+linter:
+  rules:
+    # Const constructors give extracted sub-widgets independent rebuild
+    # scopes — a performance property here, not just tidiness (§4).
+    - prefer_const_constructors
+    - prefer_const_constructors_in_immutables
+    - prefer_const_declarations
+    - prefer_const_literals_to_create_immutables
+    - use_super_parameters
+    - prefer_single_quotes
+    - always_declare_return_types
+    - unawaited_futures
+    - avoid_print
+    - require_trailing_commas
+    - sort_child_properties_last

@@ -28,20 +28,20 @@ repos:
         pass_filenames: false
         files: ^backend/.*\.py$
 
-  # ─── TypeScript / Mobile ─────────────────────────────────────────────────────
+  # ─── Dart / Flutter ──────────────────────────────────────────────────────────
   - repo: local
     hooks:
-      - id: biome
-        name: biome (lint + format)
+      - id: dart-format
+        name: dart format (write)
         language: system
-        entry: bash -c 'cd mobile && npx biome check --write .'
+        entry: bash -c 'cd app && dart format lib test integration_test'
         pass_filenames: false
-        files: ^mobile/.*\.(ts|tsx|js|jsx|json)$
-        exclude: ^mobile/(node_modules|\.expo)/
-      - id: tsc
-        name: TypeScript check
+        files: ^app/.*\.dart$
+        exclude: ^app/.*\.(g|drift|mocks)\.dart$
+      - id: flutter-analyze
+        name: flutter analyze
         language: system
-        entry: bash -c 'cd mobile && npx tsc --noEmit'
+        entry: bash -c 'cd app && flutter analyze'
         pass_filenames: false
-        files: ^mobile/.*\.tsx?$
-        exclude: ^mobile/(node_modules|\.expo)/
+        files: ^app/.*\.dart$
+        exclude: ^app/.*\.(g|drift|mocks)\.dart$
