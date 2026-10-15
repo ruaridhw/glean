@@ -438,6 +438,48 @@ void main() {
       expect(await storedVersion(), 1);
     });
 
+    test('a due full sync stores the sections and redirects it delivers and '
+        'leaves the household overrides alone', () async {
+      respond(_body(version: 1, items: [_item('ginger', 'ginger')]));
+      await sync.sync();
+      await db
+          .into(db.ingredientOverrides)
+          .insert(
+            IngredientOverridesCompanion.insert(
+              itemId: 'cilantro',
+              unopenedShelfLifeDays: const Value(12),
+            ),
+          );
+      final before = await db.select(db.ingredientOverrides).get();
+
+      clock = clock.add(const Duration(hours: 25));
+      respond(
+        _body(
+          version: 1,
+          items: [
+            _item(
+              'coriander',
+              'coriander',
+              section: 'Fruit & Veg',
+              formerIds: <String>['cilantro'],
+            ),
+          ],
+        ),
+      );
+      await sync.sync();
+
+      expect(requests.last.queryParameters['since'], '0');
+      final coriander = await (db.select(
+        db.catalogueItems,
+      )..where((i) => i.id.equals('coriander'))).getSingle();
+      expect(coriander.section, 'Fruit & Veg');
+      expect(
+        (await db.select(db.catalogueItemRedirects).getSingle()).formerId,
+        'cilantro',
+      );
+      expect(await db.select(db.ingredientOverrides).get(), before);
+    });
+
     test('deltas, however recent, never postpone a due full sync', () async {
       respond(_body(version: 1));
       await sync.sync();
