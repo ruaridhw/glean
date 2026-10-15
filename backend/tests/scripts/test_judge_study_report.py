@@ -143,6 +143,8 @@ class TestReportContent:
         operations = page[_position(page, "operations") : _position(page, "recommendation")]
 
         assert "Parse failures" in operations
+        assert "Final failed jobs" in operations
+        assert "Attempted calls" in operations
         assert "p95" in operations
         assert "Drift" in operations
         assert "$" in operations
