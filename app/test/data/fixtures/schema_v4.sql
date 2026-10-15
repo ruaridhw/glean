@@ -9,7 +9,7 @@ INSERT INTO "catalogue_items" VALUES('onion','onion','onions_and_garlic','fresh'
 INSERT INTO "catalogue_items" VALUES('ginger','ginger','root_veg','fresh','seed',NULL,'perishable',NULL,21,14);
 INSERT INTO "catalogue_items" VALUES('dragon-fruit','dragon fruit','fruit','fresh','llm',0.9,NULL,NULL,NULL,NULL);
 CREATE TABLE "catalogue_sync_state" ("id" INTEGER NOT NULL, "version" INTEGER NOT NULL, "synced_at" TEXT NOT NULL, "full_synced_at" TEXT NOT NULL, PRIMARY KEY ("id"));
-INSERT INTO "catalogue_sync_state" VALUES(1,3,'2026-10-14T09:00:00+00:00','full_synced_at');
+INSERT INTO "catalogue_sync_state" VALUES(1,3,'2026-10-14T09:00:00+00:00','2026-10-13T09:00:00+00:00');
 CREATE TABLE "cooked_adjustments" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "user_id" TEXT NOT NULL, "meal_plan_entry_id" INTEGER NOT NULL REFERENCES meal_plan_entries (id) ON DELETE CASCADE, "ingredient_id" INTEGER NOT NULL REFERENCES ingredients (id), "amount_deducted" REAL NOT NULL, "unit" TEXT NOT NULL, "previous_last_used_at" TEXT NULL, "created_at" TEXT NOT NULL);
 CREATE TABLE "ingredient_categories" ("category" TEXT NOT NULL, "food_group" TEXT NOT NULL, "shelf_life_days" INTEGER NOT NULL, PRIMARY KEY ("category"));
 INSERT INTO "ingredient_categories" VALUES('leafy_greens','vegetables',5);
