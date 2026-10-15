@@ -38,6 +38,9 @@ src/glean/
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3 (db-exports/<user>/<UTC ts>/, 30-day retention)
+│                     # GET /dev/backups → the caller's own backups, prepared first, with 5-minute download URLs.
+│                     #   Scope is the Cognito sub only. An agent's prepared backup is a glean.db uploaded beside
+│                     #   a PREPARED object (optional JSON {"note": "..."}) in the same user prefix.
 ├── receipts/         # POST /receipts/scan (image upload → Textract or vision OCR)
 │                     # POST /receipts/describe (text → normalised ingredients)
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
