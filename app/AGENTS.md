@@ -4,6 +4,20 @@ This file provides guidance to agents when working in the Glean Flutter app.
 See `../AGENTS.md` for repo-wide Makefile targets and preferred tools.
 `CLAUDE.md` is a compatibility symlink to this file.
 
+## User data safety
+
+The owner uses the Android app for real, and the phone's SQLite file is the
+only copy of their pantry, plan and shopping list (nothing syncs to the
+server). On their phone, never uninstall the app, clear its data, install a
+build signed with any key other than the release key, or try backup restores.
+Updates go through Codemagic builds, which install over the top.
+
+- Any table change needs a `schemaVersion` bump, an `onUpgrade` step, a new
+  schema snapshot and a frozen fixture of the old version
+  (`test/data/schema_safety_test.dart` enforces this).
+- Keep Android Auto Backup on (`test/android_backup_test.dart`), even though
+  flutter_secure_storage's README suggests turning it off.
+
 ## Commands
 
 Prefer `make test-app` / `make lint-app` from the repo root. Use the commands
