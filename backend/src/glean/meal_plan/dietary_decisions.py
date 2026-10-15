@@ -41,7 +41,7 @@ DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
 # Set from the 56-row labelled sample (tests/fixtures/decisions/dietary_sample.json) plus one recipe per term
-# of the former regex rules (dietary_regex_coverage.json, 181 recipes), 237 in all, answered by
+# of the former regex rules (dietary_regex_coverage.json, 179 recipes), 235 in all, answered by
 # typesafe/jev-1.14-20261014 on 2026-10-15 under the criteria below:
 #   recipes that break a flag:  nut-free >= 0.92, vegetarian >= 0.85, vegan >= 0.83,
 #                               dairy-free >= 0.87, gluten-free >= 0.75

@@ -2952,40 +2952,6 @@
    }
   },
   {
-   "id": "regex-safe-nuts-coconut-milk",
-   "title": "Coconut Milk rice bowl",
-   "ingredients": [
-    "basmati rice",
-    "cherry tomatoes",
-    "spring onion",
-    "coconut milk"
-   ],
-   "kind": "safe",
-   "term": "coconut",
-   "group": "nuts",
-   "violates": {
-    "vegan": false,
-    "dairy-free": false
-   }
-  },
-  {
-   "id": "regex-safe-nuts-coconut-cream",
-   "title": "Coconut Cream rice bowl",
-   "ingredients": [
-    "basmati rice",
-    "cherry tomatoes",
-    "spring onion",
-    "coconut cream"
-   ],
-   "kind": "safe",
-   "term": "coconut",
-   "group": "nuts",
-   "violates": {
-    "vegan": false,
-    "dairy-free": false
-   }
-  },
-  {
    "id": "regex-safe-nuts-nutmeg",
    "title": "Nutmeg rice bowl",
    "ingredients": [
