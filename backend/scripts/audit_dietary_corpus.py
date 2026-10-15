@@ -27,7 +27,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import SecretStr, ValidationError
@@ -38,9 +38,14 @@ from glean.meal_plan.dietary_decisions import (
     NUT_FREE,
     NUT_FREE_THRESHOLD,
     PREFERENCE_THRESHOLD,
+    content_fingerprint,
     dietary_questions,
+    question_hash,
 )
 from glean.recipes.stored import StoredRecipe
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 FLAGS = DIETARY_FLAGS
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -225,6 +230,8 @@ def render_disagreements(
     *,
     flag: str,
     thresholds: tuple[float, float] | None = None,
+    select: Callable[[Signals], bool] | None = None,
+    title: str | None = None,
 ) -> str:
     """A Markdown row per recipe where the judges and the regex don't all agree, for a human to label.
 
@@ -233,7 +240,8 @@ def render_disagreements(
     rows = []
     for recipe_id in sorted(signals):
         found = signals[recipe_id]
-        if ground_truth(list(found.judges.values()), found.regex) is not None:
+        wanted = select(found) if select else ground_truth(list(found.judges.values()), found.regex) is None
+        if not wanted:
             continue
         recipe = recipes[recipe_id]
         verdicts = ", ".join(f"{name}: {verdict}" for name, verdict in sorted(found.judges.items()))
@@ -254,8 +262,32 @@ def render_disagreements(
                 lines.append(f"- Excluded by #145: {'yes' if excluded else 'NO'}")
         lines += ["- Human label (breaks / fine): ", ""]
         rows.append("\n".join(lines))
-    header = f"# {flag} disagreements ({len(rows)} of {len(signals)} recipes)\n\n"
+    header = f"# {title or f'{flag} disagreements'} ({len(rows)} of {len(signals)} recipes)\n\n"
     return header + "\n".join(rows)
+
+
+_PASTE_POLICY = re.compile(
+    r"\b(?:korma|pasanda|tikka masala)\b.*\b(?:paste|seasoning|spice|mix|powder)s?\b", re.IGNORECASE
+)
+
+
+def violates_paste_policy(ingredient_names: list[str]) -> bool:
+    """The maintainer's nut-free policy: korma, pasanda and tikka masala pastes and seasonings contain nuts
+    unless labelled nut-free."""
+    return any(
+        _PASTE_POLICY.search(name) and not re.search(r"nut[- ]free", name, re.IGNORECASE) for name in ingredient_names
+    )
+
+
+def judge_flagged_but_kept(signals: dict[str, Signals], *, threshold: float) -> list[str]:
+    """Disagreement recipes where at least one judge says "breaks" but the decision stays below the threshold."""
+    return sorted(
+        recipe_id
+        for recipe_id, found in signals.items()
+        if ground_truth(list(found.judges.values()), found.regex) is None
+        and "breaks" in found.judges.values()
+        and found.probability < threshold
+    )
 
 
 def _spend(path: Path) -> float:
@@ -281,6 +313,14 @@ def load_questions(source: Path) -> tuple[dict[str, NoulQuestion], float, float]
     return module.dietary_questions(), module.NUT_FREE_THRESHOLD, module.PREFERENCE_THRESHOLD
 
 
+def _is_current(entry: dict[str, Any] | None, recipe: AuditRecipe, criteria: dict[str, str]) -> bool:
+    return (
+        entry is not None
+        and entry.get("criteria") == criteria
+        and entry.get("content_hash") == content_fingerprint(recipe.title, recipe.ingredient_names)
+    )
+
+
 def run_decisions(
     data_dir: Path,
     client: DecisionClient,
@@ -290,9 +330,13 @@ def run_decisions(
     name: str = "decisions",
 ) -> None:
     questions = questions or dietary_questions()
+    criteria = {flag: question_hash(question) for flag, question in questions.items()}
     path = data_dir / f"{name}.json"
     store = _load(path)
-    recipes = [r for r in load_recipes(data_dir / "corpus") if r.recipe_id not in store["entries"]]
+    # A cached answer only stands for the recipe content and criteria text it was asked under.
+    recipes = [
+        r for r in load_recipes(data_dir / "corpus") if not _is_current(store["entries"].get(r.recipe_id), r, criteria)
+    ]
 
     def ask(recipe: AuditRecipe) -> tuple[str, dict[str, Any] | None]:
         try:
@@ -307,6 +351,8 @@ def run_decisions(
             "model": answer.model,
             "probabilities": {flag: answer.noul(flag).noul for flag in FLAGS},
             "cost": answer.usage.cost,
+            "criteria": criteria,
+            "content_hash": content_fingerprint(recipe.title, recipe.ingredient_names),
         }
 
     with ThreadPoolExecutor(workers) as pool:
@@ -368,11 +414,24 @@ def run_judge(
     print(f"{judge}: {len(store['entries'])} recipes judged, spend ${_spend(path):.4f}")
 
 
-def build_signals(data_dir: Path) -> tuple[dict[str, AuditRecipe], dict[str, dict[str, Signals]]]:
-    """Recipes with every signal present: {flag: {recipe_id: Signals}}."""
+def build_signals(
+    data_dir: Path, *, baseline_questions: dict[str, NoulQuestion]
+) -> tuple[dict[str, AuditRecipe], dict[str, dict[str, Signals]]]:
+    """Recipes with every signal present: {flag: {recipe_id: Signals}}.
+
+    Refuses decisions computed under other criteria text or recipe content than the current ones.
+    """
     recipes = {r.recipe_id: r for r in load_recipes(data_dir / "corpus")}
     decisions = _load(data_dir / "decisions.json")["entries"]
     baseline = _load(data_dir / "decisions-145.json")["entries"]
+    for file_name, entries, questions in (
+        ("decisions.json", decisions, dietary_questions()),
+        ("decisions-145.json", baseline, baseline_questions),
+    ):
+        criteria = {flag: question_hash(question) for flag, question in questions.items()}
+        stale = [rid for rid, recipe in recipes.items() if not _is_current(entries.get(rid), recipe, criteria)]
+        if stale:
+            raise SystemExit(f"{len(stale)} recipes in {file_name} are missing or stale; re-run `decisions` first.")
     judged = {name: _load(data_dir / f"judge-{name}.json")["entries"] for name in JUDGES}
     complete = [
         rid
@@ -412,14 +471,16 @@ def _score(lines: list[str], title: str, labelled: list[tuple[str, str, float]],
     ]
 
 
-def run_report(data_dir: Path, *, baseline_thresholds: tuple[float, float]) -> None:
+def run_report(
+    data_dir: Path, *, baseline_questions: dict[str, NoulQuestion], baseline_thresholds: tuple[float, float]
+) -> None:
     """Score #161 (decision only) and #145 (regex or decision) against the agreed ground truth.
 
     Ground truth needs both judges and the regex to agree, so #145 can't miss an agreed-unsafe recipe by
     construction. Its real exposure is the recipes the signals disagree on, so each flag is also scored
     against the judges' consensus alone ("provisional"), which includes recipes the regex missed.
     """
-    recipes, signals = build_signals(data_dir)
+    recipes, signals = build_signals(data_dir, baseline_questions=baseline_questions)
     lines = [f"Recipes with all signals: {len(signals[FLAGS[0]])} of {len(recipes)}", ""]
     for flag in FLAGS:
         thresholds = {
@@ -428,11 +489,13 @@ def run_report(data_dir: Path, *, baseline_thresholds: tuple[float, float]) -> N
         }
         agreed, provisional = [], []
         for rid, found in signals[flag].items():
-            truth = ground_truth(list(found.judges.values()), found.regex)
+            policy = flag == NUT_FREE and violates_paste_policy(recipes[rid].ingredient_names)
+            truth = "breaks" if policy else ground_truth(list(found.judges.values()), found.regex)
             if truth is not None:
                 agreed.append((rid, found, truth))
-            if len(set(found.judges.values())) == 1 and next(iter(found.judges.values())) != "unsure":
-                provisional.append((rid, found, next(iter(found.judges.values()))))
+            consensus = next(iter(found.judges.values())) if len(set(found.judges.values())) == 1 else None
+            if policy or (consensus is not None and consensus != "unsure"):
+                provisional.append((rid, found, "breaks" if policy else consensus))
         lines.append(
             f"## {flag}: {len(agreed)} agreed, {len(signals[flag]) - len(agreed)} disagreed or unsure; "
             f"{len(provisional)} with judge consensus"
@@ -444,7 +507,32 @@ def run_report(data_dir: Path, *, baseline_thresholds: tuple[float, float]) -> N
                 ]
                 _score(lines, f"{set_name}, {config}", labelled, thresholds[config])
         lines.append("")
+    nut_signals = signals[NUT_FREE]
+    kept_161 = judge_flagged_but_kept(nut_signals, threshold=NUT_FREE_THRESHOLD)
+    kept_145 = judge_flagged_but_kept(
+        {
+            rid: Signals(found.judges, found.regex, 1.0 if found.regex else found.baseline_probability or 0.0)
+            for rid, found in nut_signals.items()
+        },
+        threshold=baseline_thresholds[0],
+    )
+    lines += [
+        f'## nut-free disagreement recipes where a judge says "breaks" but the recipe is kept: '
+        f"#161 {len(kept_161)}, #145 {len(kept_145)}",
+        f"- #161: {kept_161}",
+        "",
+    ]
     (data_dir / "report.md").write_text("\n".join(lines))
+    (data_dir / f"{NUT_FREE}-both-unsure.md").write_text(
+        render_disagreements(
+            recipes,
+            nut_signals,
+            flag=NUT_FREE,
+            thresholds=(NUT_FREE_THRESHOLD, baseline_thresholds[0]),
+            select=lambda found: set(found.judges.values()) == {"unsure"},
+            title="nut-free: both judges unsure",
+        )
+    )
     (data_dir / f"{NUT_FREE}-disagreements.md").write_text(
         render_disagreements(
             recipes,
@@ -491,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if baseline is None:
             raise SystemExit("--baseline-source is required for the report")
-        run_report(args.data_dir, baseline_thresholds=(baseline[1], baseline[2]))
+        run_report(args.data_dir, baseline_questions=baseline[0], baseline_thresholds=(baseline[1], baseline[2]))
     return 0
 
 
