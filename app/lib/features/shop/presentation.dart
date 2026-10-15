@@ -26,6 +26,22 @@ String _formatQuantity(double quantity) {
 bool isPlanDerived(ShoppingListItemView item) =>
     item.source == ShoppingSource.mealPlan;
 
+/// Muted subtitle naming the planned recipes a row is for: "for A", "for A and B", or, past two, "for A, B +N
+/// more" so a many-recipe merge stays on one line. Null when the row names no recipe.
+String? forRecipeSubtitle(List<String> recipeTitles) {
+  switch (recipeTitles.length) {
+    case 0:
+      return null;
+    case 1:
+      return 'for ${recipeTitles[0]}';
+    case 2:
+      return 'for ${recipeTitles[0]} and ${recipeTitles[1]}';
+    default:
+      final int more = recipeTitles.length - 2;
+      return 'for ${recipeTitles[0]}, ${recipeTitles[1]} +$more more';
+  }
+}
+
 /// The one phrase for "N items are checked off, ready to buy", used by the count chip and the checkout bar.
 String cartCountLabel(int checkedCount) =>
     '$checkedCount ${checkedCount == 1 ? 'item' : 'items'} in cart';

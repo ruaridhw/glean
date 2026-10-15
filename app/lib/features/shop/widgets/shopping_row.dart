@@ -17,6 +17,9 @@ class ShoppingRow extends StatelessWidget {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     final AppTokens tokens = context.tokens;
     final bool checked = item.isChecked;
+    final String? subtitle = checked
+        ? null
+        : forRecipeSubtitle(item.recipeTitles);
 
     return Card(
       color: checked ? colorScheme.surfaceContainerHighest : null,
@@ -33,18 +36,32 @@ class ShoppingRow extends StatelessWidget {
               _CheckCircle(checked: checked),
               SizedBox(width: tokens.spacing.md),
               Expanded(
-                child: Text(
-                  formatShoppingItemLabel(item),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    decoration: checked
-                        ? TextDecoration.lineThrough
-                        : TextDecoration.none,
-                    color: checked
-                        ? colorScheme.onSurfaceVariant
-                        : colorScheme.onSurface,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      formatShoppingItemLabel(item),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        decoration: checked
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        color: checked
+                            ? colorScheme.onSurfaceVariant
+                            : colorScheme.onSurface,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               // A plan-derived row is tagged on every render, not just announced once at insertion (see
