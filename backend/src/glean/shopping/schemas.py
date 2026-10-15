@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from glean.receipts.schemas import ParsedIngredient
@@ -11,6 +13,27 @@ class ShoppingParseRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2_000)
 
 
+class ShoppingUnit(StrEnum):
+    """The practical units a shopping item may be proposed in.
+
+    This deliberately duplicates the mobile-owned vocabulary (`shoppingUnits` in
+    app/lib/data/util/unit_normalization.dart): the app decides which units it can add up and
+    display, and until the project has a shared schema package the backend mirrors that list by
+    hand. `tests/shopping/test_unit_vocabulary.py` fails when the two drift apart, so change
+    both together.
+    """
+
+    G = "g"
+    KG = "kg"
+    ML = "ml"
+    L = "l"
+    UNITS = "units"
+    PACK = "pack"
+    BOTTLE = "bottle"
+    BAG = "bag"
+    BOX = "box"
+
+
 class ShoppingProposalItem(ParsedIngredient):
     """A grocery item proposal extracted from a shopping-list description.
 
@@ -19,6 +42,10 @@ class ShoppingProposalItem(ParsedIngredient):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    unit: ShoppingUnit = Field(
+        description='Practical shopping unit; use "units" for a plain count or when no amount was given.'
+    )
 
     @computed_field(
         return_type=str | None,
