@@ -45,6 +45,10 @@ class OutputItem(BaseModel):
     input: dict[str, Any] = Field(description="What the feature was given, for display.")
     output: dict[str, Any] = Field(description="What the production prompt produced, for display.")
     judge_inputs: dict[str, Any] = Field(description="Arguments of the feature's judge prompt builder.")
+    origin: Literal["production", "stress"] = Field(
+        default="production",
+        description="`stress` marks a deliberately degraded copy of a production output, added to widen the spread.",
+    )
     judgements: list[Judgement] = Field(default_factory=list)
     human_score: int | None = Field(default=None, ge=1, le=5, description="The maintainer's score, if they gave one.")
 
