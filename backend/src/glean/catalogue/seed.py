@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from importlib import resources
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from glean.catalogue.models import CatalogueItem, Source, slugify
 
@@ -13,8 +13,8 @@ _SEED_FILE = "seed_v1.json"
 class SeedData(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    version: int
-    items: tuple[CatalogueItem, ...]
+    version: int = Field(description="The seed file format and content version.")
+    items: tuple[CatalogueItem, ...] = Field(description="Every seed item, validated.")
 
 
 def load_seed() -> SeedData:

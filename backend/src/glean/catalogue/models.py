@@ -28,10 +28,14 @@ class ItemOverrides(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    tracking_mode: TrackingMode | None = None
-    stock_unit: StockUnit | None = None
-    unopened_shelf_life_days: int | None = Field(default=None, gt=0)
-    once_opened_shelf_life_days: int | None = Field(default=None, gt=0)
+    tracking_mode: TrackingMode | None = Field(default=None, description="Overrides the group's tracking mode.")
+    stock_unit: StockUnit | None = Field(default=None, description="Overrides the group's stock unit.")
+    unopened_shelf_life_days: int | None = Field(
+        default=None, gt=0, description="Overrides the unopened shelf life the group gives for the item's form."
+    )
+    once_opened_shelf_life_days: int | None = Field(
+        default=None, gt=0, description="Overrides the once-opened shelf life the group gives for the item's form."
+    )
 
 
 class CatalogueItem(BaseModel):
@@ -39,15 +43,14 @@ class CatalogueItem(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    id: str = Field(min_length=1)
-    name: str = Field(min_length=1)
-    aliases: tuple[str, ...] = ()
-    group: GroupId
-    # Required on purpose: form is never defaulted.
-    form: Form
-    overrides: ItemOverrides = ItemOverrides()
-    density_g_per_ml: float | None = Field(default=None, gt=0)
-    source: Source
+    id: str = Field(min_length=1, description="Stable id, unique within the catalogue. Never reused or replaced.")
+    name: str = Field(min_length=1, description="The canonical name.")
+    aliases: tuple[str, ...] = Field(default=(), description="Other names that mean the same item.")
+    group: GroupId = Field(description="The ingredient group the item takes its default rules from.")
+    form: Form = Field(description="The form the ingredient is sold and kept in. Required: never defaulted.")
+    overrides: ItemOverrides = Field(default=ItemOverrides(), description="Per-item changes to the group's rules.")
+    density_g_per_ml: float | None = Field(default=None, gt=0, description="Density in g/ml, where known.")
+    source: Source = Field(description="Whether the item came from the seed or was added provisionally by an LLM.")
 
     @field_validator("aliases")
     @classmethod
