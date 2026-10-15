@@ -5,13 +5,13 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from glean.decisions import DecisionClient
 from judge_study.features import FEATURES
 from judge_study.results import Judgement
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from glean.decisions import DecisionClient
     from judge_study.results import OutputItem
 
 _QUESTION = "quality"
