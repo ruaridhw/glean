@@ -7,6 +7,7 @@ them. A decision can only add an exclusion to the regex rules, never lift one.
 
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from glean.recipes.corpus import RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
 
+_CURRENT_MODEL = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")  # as DecisionClient accepts it
 _EVERYTHING = 1_000_000
 _CHECKPOINT_EVERY = 25
 
@@ -102,7 +104,7 @@ class DietaryDecisions:
 
 def _is_current(decision: DietaryDecision) -> bool:
     # Thresholds are calibrated to one model version; `model` is Jev's dated snapshot of it.
-    return decision.model == JEV_MODEL or decision.model.startswith(f"{JEV_MODEL}-")
+    return _CURRENT_MODEL.fullmatch(decision.model) is not None
 
 
 # What each question asks, and the household's ingredient policy, given to Jev as criteria.
@@ -248,7 +250,8 @@ def produce_missing_decisions(
 
 def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...]) -> list[DietaryDecision]:
     state = {"recipe_title": summary.title, "ingredients": summary.ingredient_names}
-    answer = client.decide(state, dietary_questions(flags))
+    # ty reads langsmith's @traceable wrapper on `decide` as unbound, so it wants `self` as the first argument.
+    answer = client.decide(state, dietary_questions(flags))  # ty: ignore[invalid-argument-type]
     computed_at = datetime.now(UTC)
     return [
         DietaryDecision(
