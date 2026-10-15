@@ -38,7 +38,7 @@ src/glean/
 ├── shopping/         # POST /shopping/parse-description — decision-gated segmentation, one batched parse for cache misses, per-segment parse cache
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
-├── dev/router.py     # POST /dev/export-db → S3
+├── dev/router.py     # POST /dev/export-db → S3 (db-exports/<user>/<UTC ts>/, 30-day retention)
 ├── catalogue/        # ingredient groups, section rule, catalogue item models, CatalogueStore + in-memory and DynamoDB stores, seed data,
 │                     # normalise (raw names → catalogue items), POST /catalogue/normalise and GET /catalogue?since=<version> (the versioned sync the app reads; each item carries its computed `section` and its `former_ids`)
 ├── receipts/         # POST /receipts/scan (image upload → Textract or vision OCR)
