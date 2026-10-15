@@ -1248,20 +1248,6 @@
    "gluten-free": 0.28,
    "nut-free": 0.07
   },
-  "regex-safe-nuts-coconut-milk": {
-   "vegetarian": 0.07,
-   "vegan": 0.09,
-   "dairy-free": 0.07,
-   "gluten-free": 0.08,
-   "nut-free": 0.05
-  },
-  "regex-safe-nuts-coconut-cream": {
-   "vegetarian": 0.08,
-   "vegan": 0.1,
-   "dairy-free": 0.07,
-   "gluten-free": 0.09,
-   "nut-free": 0.08
-  },
   "regex-safe-nuts-nutmeg": {
    "vegetarian": 0.07,
    "vegan": 0.1,
