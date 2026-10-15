@@ -115,4 +115,41 @@ void main() {
       expect(find.byTooltip('Previous week'), findsOneWidget);
     },
   );
+
+  gleanWidgetTest('Cooked? marks the meal cooked without opening the recipe', (
+    tester,
+  ) async {
+    await plannedMeal('Lentil Dal');
+    await openPlan(tester);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cooked?'));
+    await tester.pumpAndSettle();
+
+    expect(location(), AppRoutes.plan.path);
+    expect(find.widgetWithText(OutlinedButton, 'Cooked?'), findsNothing);
+    expect(find.textContaining('Cooked'), findsWidgets);
+    expect(find.text('Dinners'), findsOneWidget);
+  });
+
+  gleanWidgetTest(
+    'a planned meal whose recipe was deleted opens the preview from its external id',
+    (tester) async {
+      final recipeId = await plannedMeal('Miso Soup', externalId: 'ext-1');
+      await h.container
+          .read(recipesRepositoryProvider)
+          .deleteRecipe(id: recipeId, userId: h.userId);
+      await openPlan(tester);
+
+      await tester.tap(find.text('Miso Soup'));
+      await tester.pumpAndSettle();
+
+      expect(requestedPaths, contains('/recipes/ext-1'));
+      expect(find.byTooltip('Save recipe'), findsOneWidget);
+      expect(find.text('Dinners'), findsNothing);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Dinners'), findsOneWidget);
+    },
+  );
 }
