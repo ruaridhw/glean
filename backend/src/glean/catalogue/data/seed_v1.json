@@ -1672,7 +1672,11 @@
     "yellow cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "greek yogurt",
@@ -1717,7 +1721,11 @@
     "grated parmesan"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "single cream",
@@ -1760,7 +1768,11 @@
     "salty cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 60,
+    "once_opened_shelf_life_days": 14
+   }
   },
   {
    "name": "cream cheese",
@@ -1805,7 +1817,11 @@
     "frying cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 90,
+    "once_opened_shelf_life_days": 14
+   }
   },
   {
    "name": "buttermilk",
@@ -1860,7 +1876,11 @@
     "gorgonzola"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 45,
+    "once_opened_shelf_life_days": 21
+   }
   },
   {
    "name": "ricotta",
@@ -1890,7 +1910,11 @@
     "red cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "emmental",
@@ -1898,7 +1922,11 @@
     "swiss cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 21
+   }
   },
   {
    "name": "brie",
@@ -1906,7 +1934,11 @@
     "french soft cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 14
+   }
   },
   {
    "name": "camembert",
@@ -1914,7 +1946,11 @@
     "baking cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 14
+   }
   },
   {
    "name": "ghee",
@@ -1944,7 +1980,11 @@
     "coloured cheddar"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "evaporated milk",
@@ -4601,6 +4641,16 @@
    ],
    "group": "bread",
    "form": "not_applicable"
+  },
+  {
+   "name": "gruyere",
+   "aliases": [],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
   }
  ]
 }
