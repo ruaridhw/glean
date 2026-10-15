@@ -64,12 +64,36 @@ class TestScoreScan:
 
         assert (score.recall, score.precision) == (0.5, 1.0)
 
-    def test_names_match_across_inflection_of_a_modifier(self) -> None:
-        parsley = ExpectedItem(name="curly parsley", quantity=30, unit="g", unit_price=0.5 / 30)
+    def test_a_different_word_for_the_same_thing_matches_only_through_a_reviewed_alias(self) -> None:
+        bare = ExpectedItem(name="curly parsley", quantity=30, unit="g", unit_price=0.5 / 30)
+        reviewed = ExpectedItem(
+            name="curly parsley", quantity=30, unit="g", unit_price=0.5 / 30, aliases=("curled leaf parsley",)
+        )
+        scanned = _scan(_parsed("curled leaf parsley", 30, "g", 0.5 / 30))
 
-        score = score_scan(_expected(parsley), _scan(_parsed("curled leaf parsley", 30, "g", 0.5 / 30)))
+        assert score_scan(_expected(bare), scanned).recall == 0.0
+        assert score_scan(_expected(reviewed), scanned).recall == 1.0
 
-        assert (score.recall, score.precision) == (1.0, 1.0)
+    @pytest.mark.parametrize(
+        ("expected_name", "scanned_name"),
+        [
+            ("chicken breast", "chicken breast fillets"),
+            ("limes", "lime"),
+            ("root ginger", "Tesco Root Ginger Loose"),
+            ("semi skimmed milk", "semi-skimmed milk"),
+        ],
+    )
+    def test_names_match_after_normalising_case_punctuation_plurals_and_packaging_words(
+        self, expected_name: str, scanned_name: str
+    ) -> None:
+        item = ExpectedItem(name=expected_name, quantity=1, unit="units", unit_price=1.0)
+
+        assert score_scan(_expected(item), _scan(_parsed(scanned_name, 1, "units", 1.0))).recall == 1.0
+
+    def test_leaves_singularises_to_leaf(self) -> None:
+        item = ExpectedItem(name="bay leaf", quantity=1, unit="units", unit_price=1.0)
+
+        assert score_scan(_expected(item), _scan(_parsed("bay leaves", 1, "units", 1.0))).recall == 1.0
 
     def test_a_modifier_cannot_stand_in_for_a_different_head_noun(self) -> None:
         eggs = ExpectedItem(name="eggs", quantity=6, unit="units", unit_price=2.5 / 6)
@@ -85,6 +109,9 @@ class TestScoreScan:
             ("sesame seeds", "sesame oil"),
             ("chopped tomatoes", "baby plum tomatoes"),
             ("lemons", "lemon juice"),
+            ("eggs", "eggplant"),
+            ("milk", "millet"),
+            ("olive oil", "extra virgin olive oil"),
         ],
     )
     def test_different_products_sharing_a_word_do_not_match(self, expected_name: str, scanned_name: str) -> None:

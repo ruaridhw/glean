@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -100,34 +99,37 @@ PRICE_TOLERANCE_GBP = 0.02
 QUANTITY_TOLERANCE = 0.01
 
 
-def _same_word(a: str, b: str) -> bool:
-    """Equal, or inflections of one word ("limes"/"lime", "curled"/"curly"): a shared stem of 3+ letters
-    that covers all but at most one letter of the shorter word."""
-    prefix = 0
-    for x, y in zip(a, b, strict=False):
-        if x != y:
-            break
-        prefix += 1
-    return a == b or (prefix >= 3 and prefix >= min(len(a), len(b)) - 1)
+# Packaging and marketing words that never change which product a line is. Only these may differ
+# between a scanned name and an expected name; anything else needs a reviewed alias.
+NOISE_WORDS = frozenset(
+    {"tesco", "finest", "british", "large", "ready", "to", "eat", "each", "loose", "pack", "fillet", "fresh", "cut"}
+)
 
 
-def _words(name: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", name.lower())
+def _singular(word: str) -> str:
+    """Tiny explicit plural rules: leaves -> leaf, berries -> berry, boxes/tomatoes -> box/tomato, limes -> lime."""
+    if len(word) <= 3 or word.endswith(("ss", "us", "is")):
+        return word
+    if word == "leaves":
+        return "leaf"
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith(("sses", "xes", "zes", "ches", "shes", "oes")):
+        return word[:-2]
+    if word.endswith("s"):
+        return word[:-1]
+    return word
+
+
+def normalised_name(name: str) -> frozenset[str]:
+    """Lowercase words, punctuation dropped, singularised, packaging words removed."""
+    words = [_singular(w) for w in re.findall(r"[a-z0-9]+", name.lower().replace("'", ""))]
+    core = frozenset(w for w in words if w not in NOISE_WORDS)
+    return core or frozenset(words)
 
 
 def _names_match(a: str, b: str) -> bool:
-    """Same product: the head noun (last word) agrees, and the modifiers don't contradict each other.
-
-    "egg noodles" is not "eggs" (different head) and "olive oil" is not "sesame oil" (same head,
-    disjoint modifiers), while "tesco limes each" ~ "lime" and "curled leaf parsley" ~ "curly parsley".
-    """
-    wa, wb = _words(a), _words(b)
-    if not wa or not wb or not _same_word(wa[-1], wb[-1]):
-        return False
-    mods_a, mods_b = wa[:-1], wb[:-1]
-    if not mods_a or not mods_b:
-        return True
-    return any(_same_word(x, y) for x in mods_a for y in mods_b)
+    return normalised_name(a) == normalised_name(b)
 
 
 def _names_of(item: ExpectedItem) -> tuple[str, ...]:
@@ -137,25 +139,15 @@ def _names_of(item: ExpectedItem) -> tuple[str, ...]:
 def _match_one_to_one[W: ExpectedItem](
     wanted: list[W], got: list[ParsedIngredient]
 ) -> list[tuple[W, ParsedIngredient]]:
-    """Best-first assignment so each expected line and each scanned line is used at most once."""
-    candidates = sorted(
-        (
-            (max(SequenceMatcher(None, n.lower(), g.name.lower()).ratio() for n in _names_of(w)), wi, gi)
-            for wi, w in enumerate(wanted)
-            for gi, g in enumerate(got)
-            if any(_names_match(n, g.name) for n in _names_of(w))
-        ),
-        reverse=True,
-    )
-    used_w: set[int] = set()
-    used_g: set[int] = set()
+    """Each expected line takes the first unused scanned line with a matching name."""
+    used: set[int] = set()
     pairs = []
-    for _, wi, gi in candidates:
-        if wi in used_w or gi in used_g:
-            continue
-        used_w.add(wi)
-        used_g.add(gi)
-        pairs.append((wanted[wi], got[gi]))
+    for want in wanted:
+        for gi, g in enumerate(got):
+            if gi not in used and any(_names_match(n, g.name) for n in _names_of(want)):
+                used.add(gi)
+                pairs.append((want, g))
+                break
     return pairs
 
 
