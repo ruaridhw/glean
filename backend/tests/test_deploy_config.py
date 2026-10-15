@@ -79,7 +79,6 @@ def test_template_wires_the_git_sha_parameter_into_every_lambda_environment() ->
             assert "GIT_SHA" not in overrides, f"{name} would shadow the stamped GIT_SHA"
 
 
-
 def test_ci_deploy_job_runs_the_shared_script_and_nothing_else_deploys() -> None:
     workflow = yaml.safe_load((WORKFLOWS / "backend-deploy.yml").read_text())
     job = workflow["jobs"]["deploy-prod"]
@@ -93,5 +92,7 @@ def test_ci_deploy_job_runs_the_shared_script_and_nothing_else_deploys() -> None
 
 def test_ci_deploy_checks_out_full_history_so_the_pushed_check_can_compare_ancestry() -> None:
     workflow = yaml.safe_load((WORKFLOWS / "backend-deploy.yml").read_text())
-    checkout = next(s for s in workflow["jobs"]["deploy-prod"]["steps"] if s.get("uses", "").startswith("actions/checkout"))
+    checkout = next(
+        s for s in workflow["jobs"]["deploy-prod"]["steps"] if s.get("uses", "").startswith("actions/checkout")
+    )
     assert checkout.get("with", {}).get("fetch-depth") == 0

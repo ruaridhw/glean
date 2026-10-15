@@ -1,3 +1,4 @@
+# ruff: noqa: S603, S607 - runs git, sam and aws by name; every argument is built here, none from user input
 """Deploy the backend to prod, stamped with the commit it was built from.
 
 Used by `make deploy-prod` and by the backend deploy workflow, so both paths deploy identically.
@@ -54,7 +55,8 @@ def _head_is_on_origin() -> bool:
     if upstream.startswith("origin/"):
         refs.append(upstream)
     return any(
-        _git_ok("rev-parse", "--verify", "--quiet", f"refs/remotes/{ref}") and _git_ok("merge-base", "--is-ancestor", "HEAD", f"refs/remotes/{ref}")
+        _git_ok("rev-parse", "--verify", "--quiet", f"refs/remotes/{ref}")
+        and _git_ok("merge-base", "--is-ancestor", "HEAD", f"refs/remotes/{ref}")
         for ref in refs
     )
 
@@ -132,7 +134,9 @@ def main() -> int:
     if problems and os.environ.get("ALLOW_DIRTY") != "1":
         for problem in problems:
             print(f"Refusing to deploy to prod: {problem}.", file=sys.stderr)
-        print("Commit and push first, or set ALLOW_DIRTY=1 to deploy anyway (the stamp will say -dirty).", file=sys.stderr)
+        print(
+            "Commit and push first, or set ALLOW_DIRTY=1 to deploy anyway (the stamp will say -dirty).", file=sys.stderr
+        )
         return 1
 
     sha = _git("rev-parse", "HEAD")
