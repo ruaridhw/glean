@@ -87,14 +87,16 @@ class TestAnswers:
 
         decision = _client(_respond_with(_recorded_response())).decide(state, questions)
 
-        assert 0.0 <= decision.noul("contains_nuts").noul <= 1.0
+        assert decision.noul("contains_nuts").noul == 0.63
         group = decision.choice("ingredient_group")
-        assert group.choice in questions["ingredient_group"].criteria
-        assert sum(group.probabilities.values()) == pytest.approx(1.0, abs=0.01)
+        assert (group.choice, group.confidence) == ("condiments", 1)
+        assert group.probabilities == {"condiments": 1, "fresh_herbs": 0, "dairy": 0, "none": 0}
         quality = decision.score("quality")
-        assert 0.0 <= quality.score <= len(questions["quality"].criteria) - 1
+        assert (quality.score, quality.confidence) == (3.69, 0.75)
+        assert quality.probabilities == {0: 0, 1: 0, 2: 0, 3: 0.3, 4: 0.7}
         assert decision.model == "typesafe/jev-1.13-20260917"
-        assert decision.usage.cost > 0
+        assert (decision.usage.input_tokens, decision.usage.output_tokens) == (513, 84)
+        assert decision.usage.cost == 2.1546e-05
 
     def test_asking_for_the_wrong_answer_type_names_the_question(self) -> None:
         state, questions = _probe()
@@ -172,6 +174,61 @@ class TestMalformedAnswers:
         state, questions = _probe()
         with pytest.raises(DecisionResponseError, match="JSON"):
             _client(handler).decide(state, questions)
+
+
+class TestSemanticallyInvalidAnswers:
+    @pytest.mark.parametrize(
+        ("question", "mutate"),
+        [
+            ("contains_nuts", lambda a: a.update(type="choice")),
+            ("ingredient_group", lambda a: a.update(type="score")),
+            ("quality", lambda a: a.update(type="noul")),
+            ("contains_nuts", lambda a: a.update(noul=1.5)),
+            ("contains_nuts", lambda a: a.update(noul=-0.1)),
+            ("ingredient_group", lambda a: a.update(confidence=8)),
+            ("ingredient_group", lambda a: a.update(confidence=-1)),
+            ("quality", lambda a: a.update(confidence=1.2)),
+            ("ingredient_group", lambda a: a["probabilities"].update(condiments=-2)),
+            ("quality", lambda a: a["probabilities"].update({"3": 1.5})),
+            ("ingredient_group", lambda a: a["probabilities"].update({"not-offered": 0})),
+            ("quality", lambda a: a["probabilities"].update({"7": 0})),
+            ("quality", lambda a: a.update(score=999)),
+            ("quality", lambda a: a.update(score=-0.5)),
+            ("ingredient_group", lambda a: a["probabilities"].update(condiments=0.5)),
+            ("quality", lambda a: a["probabilities"].update({"4": 0.1})),
+        ],
+    )
+    def test_an_answer_that_breaks_the_question_contract_is_rejected_naming_the_question(
+        self, question: str, mutate: Callable[[dict[str, Any]], object]
+    ) -> None:
+        body = _recorded_response()
+        mutate(body["answers"][question])
+        state, questions = _probe()
+
+        with pytest.raises(DecisionResponseError, match=question):
+            _client(_respond_with(body)).decide(state, questions)
+
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity"])
+    def test_non_finite_numbers_are_rejected(self, literal: str) -> None:
+        recorded = json.dumps(_recorded_response())
+        raw = recorded.replace('"noul": 0.63', f'"noul": {literal}')
+        assert literal in raw
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=raw, headers={"content-type": "application/json"})
+
+        state, questions = _probe()
+        with pytest.raises(DecisionResponseError, match="contains_nuts"):
+            _client(handler).decide(state, questions)
+
+    def test_probabilities_that_sum_to_one_within_tolerance_are_accepted(self) -> None:
+        body = _recorded_response()
+        body["answers"]["quality"]["probabilities"]["4"] = 0.69  # sums to 0.99
+        state, questions = _probe()
+
+        decision = _client(_respond_with(body)).decide(state, questions)
+
+        assert decision.score("quality").probabilities[4] == 0.69
 
 
 class TestTransportFailures:

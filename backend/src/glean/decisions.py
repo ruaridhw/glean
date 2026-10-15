@@ -8,14 +8,14 @@ DecisionClient, so a change to the alpha API touches one place.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import httpx
 from langsmith import traceable
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from pydantic import SecretStr
 
@@ -82,20 +82,29 @@ class ScoreQuestion(_Question):
 Question = ChoiceQuestion | NoulQuestion | ScoreQuestion
 
 
+type Probability = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+
+# A probability distribution from Jev must sum to 1, give or take rounding in the response.
+_SUM_TOLERANCE = 0.02
+
+
 class ChoiceAnswer(BaseModel):
+    type: Literal["choice"]
     choice: str
-    probabilities: dict[str, float]
-    confidence: float
+    probabilities: dict[str, Probability]
+    confidence: Probability
 
 
 class NoulAnswer(BaseModel):
-    noul: float = Field(ge=0.0, le=1.0)  # probability of `true`
+    type: Literal["noul"]
+    noul: Probability  # probability of `true`
 
 
 class ScoreAnswer(BaseModel):
-    score: float  # probability-weighted position on the scale; 0 is criteria[0]
-    probabilities: dict[int, float]
-    confidence: float
+    type: Literal["score"]
+    score: float = Field(allow_inf_nan=False)  # probability-weighted position on the scale; 0 is criteria[0]
+    probabilities: dict[int, Probability]
+    confidence: Probability
 
 
 Answer = ChoiceAnswer | NoulAnswer | ScoreAnswer
@@ -136,16 +145,29 @@ class Decision(BaseModel):
 _PINNED_MODEL_REPLY = re.compile(rf"{re.escape(JEV_MODEL)}(-\d{{8}})?")
 
 
+def _check_distribution(name: str, probabilities: Mapping[Any, float], allowed: Collection[Any]) -> None:
+    if not set(probabilities) <= set(allowed):
+        raise DecisionResponseError(f"Jev gave probabilities for unknown entries in {name!r}: {sorted(probabilities)}")
+    if abs(sum(probabilities.values()) - 1.0) > _SUM_TOLERANCE:
+        raise DecisionResponseError(f"Jev's probabilities for {name!r} don't sum to 1")
+
+
 def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
     try:
         if isinstance(question, ChoiceQuestion):
             choice = ChoiceAnswer.model_validate(raw)
             if choice.choice not in question.criteria:
                 raise DecisionResponseError(f"Jev chose {choice.choice!r} for {name!r}, which wasn't offered")
+            _check_distribution(name, choice.probabilities, question.criteria)
             return choice
         if isinstance(question, NoulQuestion):
             return NoulAnswer.model_validate(raw)
-        return ScoreAnswer.model_validate(raw)
+        score = ScoreAnswer.model_validate(raw)
+        levels = len(question.criteria)
+        if not 0 <= score.score <= levels - 1:
+            raise DecisionResponseError(f"Jev scored {name!r} {score.score}, outside its {levels} levels")
+        _check_distribution(name, score.probabilities, range(len(question.criteria)))
+        return score
     except ValidationError as exc:
         raise DecisionResponseError(f"Unexpected answer shape for {name!r}: {exc}") from exc
 
