@@ -287,33 +287,56 @@ Contested outputs are left out. The maintainer's own scores were not collected, 
 
 def _operations(results: Results) -> str:
     items = results.items
-    rows = ""
+    speed = reliability = ""
     for name, label in LABELS.items():
         cost, latency = cost_summary(items, name), latency_summary(items, name)  # type: ignore[arg-type]
         stability = drift(items, name) if name in CANDIDATES else None  # type: ignore[arg-type]
-        failed = sum(f.judge == name for f in results.failures)
         stable = (
             "—"
             if stability is None or stability.identical_share is None
             else f"{_pct(stability.identical_share)} identical, widest spread {stability.max_range}"
         )
-        rows += (
-            f"<tr><th scope='row'>{_e(label)}</th><td>{cost.judgements}</td><td>{_usd(cost.mean)}</td><td>{_usd(cost.total)}</td>"
-            f"<td>{_seconds(latency.p50)}</td><td>{_seconds(latency.p95)}</td><td>{_e(stable)}</td><td>{failed}</td></tr>"
+        speed += (
+            f"<tr><th scope='row'>{_e(label)}</th><td>{cost.judgements}</td><td>{_usd(cost.mean)}</td>"
+            f"<td>{_usd(cost.total)}</td><td>{_seconds(latency.p50)}</td><td>{_seconds(latency.p95)}</td>"
+            f"<td>{_e(stable)}</td></tr>"
         )
+        logged = [a for a in results.attempts if a.judge == name]
+        parse = sum(a.outcome == "parse_failure" for a in logged)
+        call = sum(a.outcome == "call_failure" for a in logged)
+        unpriced = sum(a.cost_usd is None for a in logged)
+        final = sum(f.judge == name for f in results.failures)
+        counts = (
+            f"<td>{len(logged)}</td><td>{parse}</td><td>{call}</td><td>{unpriced}</td>"
+            if logged
+            else "<td colspan='4'>not logged per attempt (earlier run)</td>"
+        )
+        reliability += f"<tr><th scope='row'>{_e(label)}</th>{counts}<td>{final}</td></tr>"
     failures = "".join(
         f"<li><code>{_e(f.item_id)}</code> ({_e(LABELS[f.judge])}, repeat {f.repeat}): {_e(f.error)}</li>"
         for f in results.failures
     )
-    total = sum(j.cost_usd or 0 for item in items for j in item.judgements)
+    obtained_keys = {(j.judge, item.item_id, j.repeat) for item in items for j in item.judgements}
+    abandoned = sum(a.cost_usd or 0.0 for a in results.attempts if (a.judge, a.item_id, a.repeat) not in obtained_keys)
+    total = sum(j.cost_usd or 0 for item in items for j in item.judgements) + abandoned
     return f"""<section id="operations"><h2>Drift, cost and latency</h2>
-<div class="scroll"><table class="grid"><thead><tr><th>Judge</th><th>Judgements</th><th>Cost each</th><th>Cost total</th><th>p50</th><th>p95</th>
-<th>Drift across repeats</th><th>Parse failures</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="small">Drift is how often a judge's three repeats on one output gave the same score; only the candidates were repeated.
-Decision-judge cost is the cost the endpoint reports. LLM-judge cost is the reported tokens at OpenRouter's list price, because its
-generation-stats endpoint does not list these calls. Calls ran three at a time, so latency includes some queueing for every judge alike.</p>
-{"<h3>Parse failures</h3><ul>" + failures + "</ul>" if failures else ""}
-<p class="small">Whole study spend across all judgements shown: {_usd(total)} (excluding the cost of freezing the outputs).</p></section>"""
+<h3>Cost, speed and stability</h3>
+<div class="scroll"><table class="grid"><thead><tr><th>Judge</th><th>Judgements obtained</th><th>Cost per obtained judgement</th>
+<th>Cost total</th><th>p50</th><th>p95</th><th>Drift across repeats</th></tr></thead><tbody>{speed}</tbody></table></div>
+<p class="small">Cost and time per obtained judgement include every attempt at it, failed retries too. Latency is end to end.
+Drift is how often a judge's three repeats on one output gave the same score; only the candidates were repeated.
+Decision-judge cost is the cost the endpoint reports. Chat-model cost is the reported tokens at OpenRouter's list price (an
+estimate), because its generation-stats endpoint does not list these calls. Calls ran three at a time, so latency includes some
+queueing for every judge alike.</p>
+<h3>Reliability</h3>
+<div class="scroll"><table class="grid"><thead><tr><th>Judge</th><th>Attempted calls</th><th>Parse failures</th>
+<th>Call failures</th><th>Unpriced attempts</th><th>Final failed jobs</th></tr></thead><tbody>{reliability}</tbody></table></div>
+<p class="small">Attempted calls count every call made. A parse failure is an answer that couldn't be used; a call failure is
+no answer at all. A final failed job is a judgement still missing after its retry. Attempts that reported no tokens or cost
+are listed as unpriced, never counted as free.</p>
+{"<h3>Judgements never obtained</h3><ul>" + failures + "</ul>" if failures else ""}
+<p class="small">Whole study spend across judgements shown, abandoned attempts included: {_usd(total)}
+(excluding the cost of freezing the outputs).</p></section>"""
 
 
 _CSS = """
