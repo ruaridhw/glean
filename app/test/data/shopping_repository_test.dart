@@ -5,6 +5,7 @@
 // shortfall-maths intent of the Expo app's `tests/db/shopping.test.ts`
 // (see git history) as outcome assertions rather than query-builder call
 // counts.
+import 'package:drift/drift.dart' show Value;
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -165,6 +166,53 @@ void main() {
           final item = (await repository.watchAll(userId).first).single;
 
           expect(item.recipeTitles, ['Spinach & feta pasta']);
+        },
+      );
+
+      test(
+        'a legacy plan-gap row (not a requirement) names its recipe and keeps '
+        'its quantity',
+        () async {
+          final recipeId = await recipes.save(
+            userId: userId,
+            title: 'Spinach & feta pasta',
+            ingredients: const [
+              SaveRecipeIngredient(
+                canonicalName: 'spinach',
+                quantity: 100,
+                unit: 'g',
+              ),
+            ],
+          );
+          final entryId = await plan.addEntry(
+            userId: userId,
+            recipeId: recipeId,
+            recipeTitle: 'Spinach & feta pasta',
+            servings: 1,
+          );
+          final spinach = await ingredients.resolveOrCreate(
+            canonicalName: 'spinach',
+          );
+          // The shape the installed app wrote before requirement rows existed.
+          await db
+              .into(db.shoppingListItems)
+              .insert(
+                ShoppingListItemsCompanion.insert(
+                  userId: userId,
+                  ingredientId: spinach.id,
+                  name: 'spinach',
+                  quantity: const Value(250),
+                  unit: const Value('g'),
+                  source: const Value('meal_plan'),
+                  isRequirement: const Value(false),
+                  sourceMealPlanEntryId: Value(entryId),
+                ),
+              );
+
+          final item = (await repository.watchAll(userId).first).single;
+
+          expect(item.recipeTitles, ['Spinach & feta pasta']);
+          expect(item.quantity, 250);
         },
       );
 

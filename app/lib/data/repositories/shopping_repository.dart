@@ -52,11 +52,15 @@ class ShoppingRepository {
     final result = <ShoppingListItemView>[];
     for (final joined in rows) {
       final row = joined.readTable(_db.shoppingListItems);
+      final meal = joined.readTableOrNull(_db.mealPlanEntries);
       if (!row.isRequirement) {
-        result.add(_mapRow(row));
+        // Plan-gap rows written before requirement rows existed keep their own quantity, but still name the
+        // planned recipe from the entry's title snapshot.
+        result.add(
+          _mapRow(row, recipeTitles: [if (meal != null) meal.recipeTitle]),
+        );
         continue;
       }
-      final meal = joined.readTableOrNull(_db.mealPlanEntries);
       if (meal == null || meal.cookedAt != null) continue;
       final stock = joined.readTableOrNull(_db.pantryItems);
       // Compatible demands share a single stock budget, even when a unit edit
