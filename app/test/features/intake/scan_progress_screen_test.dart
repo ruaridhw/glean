@@ -8,7 +8,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart' show TextField;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/intake/review_screen.dart';
 import 'package:glean/features/intake/scan_progress_screen.dart';
@@ -253,6 +255,63 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byType(ReviewScreen), findsNothing);
+    });
+
+    testWidgets('a failed scan from Shop offers one tap to the review '
+        'pre-filled with the checked Shopping items', (
+      WidgetTester tester,
+    ) async {
+      when(() => httpClient.send(any())).thenAnswer(
+        (_) async =>
+            http.StreamedResponse(const Stream<List<int>>.empty(), 500),
+      );
+      final shopping = harness.container.read(shoppingRepositoryProvider);
+      final int milkId = await shopping.addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+        quantity: 2,
+        unit: 'l',
+      );
+      await shopping.addManualItem(userId: 'test-user', name: 'Bananas');
+      await shopping.toggleRows(
+        ids: [milkId],
+        userId: 'test-user',
+        checked: true,
+      );
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      unawaited(
+        harness.router.pushNamed(
+          AppRoutes.intakeScanProgress.name,
+          extra: ScanProgressArgs(
+            photoBytes: Uint8List.fromList(<int>[1, 2, 3]),
+            returnToShop: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add checked items instead'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review items'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Milk'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '2'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Bananas'), findsNothing);
+    });
+
+    testWidgets('a failed scan with nothing checked offers no checked-items '
+        'action', (WidgetTester tester) async {
+      when(() => httpClient.send(any())).thenAnswer(
+        (_) async =>
+            http.StreamedResponse(const Stream<List<int>>.empty(), 500),
+      );
+
+      await pumpProgress(tester, returnToShop: true);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.text('Add checked items instead'), findsNothing);
     });
   });
 }
