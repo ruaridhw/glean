@@ -100,5 +100,117 @@ void main() {
       expect(find.text('Bananas'), findsOneWidget);
       expect(find.text('From plan'), findsNothing);
     });
+
+    group('"for <recipe>" subtitle', () {
+      Future<int> planRecipe(String title, {String needing = 'spinach'}) async {
+        final int recipeId = await recipes().save(
+          userId: 'test-user',
+          title: title,
+          ingredients: <SaveRecipeIngredient>[
+            SaveRecipeIngredient(
+              canonicalName: needing,
+              quantity: 100,
+              unit: 'g',
+            ),
+          ],
+        );
+        final int entryId = await plan().addEntry(
+          userId: 'test-user',
+          recipeId: recipeId,
+          recipeTitle: title,
+          servings: 1,
+        );
+        await shopping().addGapsForRecipe(
+          userId: 'test-user',
+          recipeId: recipeId,
+          servings: 1,
+          sourceMealPlanEntryId: entryId,
+        );
+        return recipeId;
+      }
+
+      testWidgets('a to-buy item from one planned recipe says who it is for', (
+        WidgetTester tester,
+      ) async {
+        await planRecipe('Spinach & feta pasta');
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(find.text('for Spinach & feta pasta'), findsOneWidget);
+      });
+
+      testWidgets('a manually-added item shows no subtitle', (
+        WidgetTester tester,
+      ) async {
+        await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('for '), findsNothing);
+      });
+
+      testWidgets('an item merged from two planned recipes names both', (
+        WidgetTester tester,
+      ) async {
+        await planRecipe('Spinach & feta pasta');
+        await planRecipe('Saag paneer');
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('for Spinach & feta pasta and Saag paneer'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('an item merged from many planned recipes truncates with a '
+          'count', (WidgetTester tester) async {
+        await planRecipe('Pasta');
+        await planRecipe('Saag paneer');
+        await planRecipe('Omelette');
+        await planRecipe('Dal');
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(find.text('for Pasta, Saag paneer +2 more'), findsOneWidget);
+      });
+
+      testWidgets('the subtitle still shows after the recipe is deleted from '
+          'the library', (WidgetTester tester) async {
+        final int recipeId = await planRecipe('Spinach & feta pasta');
+        await recipes().deleteRecipe(id: recipeId, userId: 'test-user');
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(find.text('for Spinach & feta pasta'), findsOneWidget);
+      });
+
+      testWidgets('an in-cart item shows no subtitle', (
+        WidgetTester tester,
+      ) async {
+        await planRecipe('Spinach & feta pasta');
+        final item = (await tester.runAsync(
+          () => shopping().watchAll('test-user').first,
+        ))!.single;
+        await tester.runAsync(
+          () => shopping().toggleRows(
+            ids: item.ids,
+            userId: 'test-user',
+            checked: true,
+          ),
+        );
+
+        await harness.pumpAt(tester, AppRoutes.shop.path);
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('spinach'), findsOneWidget);
+        expect(find.textContaining('for '), findsNothing);
+      });
+    });
   });
 }
