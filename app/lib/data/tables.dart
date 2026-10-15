@@ -188,6 +188,10 @@ class UserConfig extends Table {
   // Backs first-run onboarding completion. Defaults false so a user with no row yet reads as not onboarded.
   BoolColumn get onboardingCompleted =>
       boolean().withDefault(const Constant(false))();
+  // Whether the Shopping tab groups rows by store section. Lives on this device's database, so it is a
+  // per-device choice; defaults off.
+  BoolColumn get groupShoppingBySection =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};

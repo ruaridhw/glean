@@ -52,6 +52,26 @@ class UserConfigRepository {
         );
   }
 
+  /// Whether [userId] groups the Shopping tab by store section on this device. `false` until first turned on.
+  Stream<bool> watchGroupShoppingBySection(String userId) {
+    final query = _db.select(_db.userConfig)..where((t) => t.id.equals(userId));
+    return query.watchSingleOrNull().map(
+      (row) => row?.groupShoppingBySection ?? false,
+    );
+  }
+
+  /// Writes only this column, so it neither clobbers nor is clobbered by [save].
+  Future<void> setGroupShoppingBySection(String userId, bool grouped) {
+    return _db
+        .into(_db.userConfig)
+        .insertOnConflictUpdate(
+          UserConfigCompanion.insert(
+            id: userId,
+            groupShoppingBySection: Value(grouped),
+          ),
+        );
+  }
+
   Future<void> save(UserConfigView config) {
     return _db
         .into(_db.userConfig)
