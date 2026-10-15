@@ -3,7 +3,7 @@
     PYTHONPATH=. uv run python scripts/judge_study/run.py freeze  --out DIR
     PYTHONPATH=. uv run python scripts/judge_study/run.py judge   --out DIR [--repeats 3]
     PYTHONPATH=. uv run python scripts/judge_study/run.py serve   --out DIR --host IP --port N [--count 25]
-    PYTHONPATH=. uv run python scripts/judge_study/run.py report  --out DIR
+    PYTHONPATH=. uv run python scripts/judge_study/run.py report  --out DIR   # needs narrative.json beside results.json
 
 `DIR` holds results.json, human_items.json and human_scores.json, outside git.
 """
@@ -34,6 +34,7 @@ from glean.llm import Feature, LLMRouter, ModelPurpose, create_chat_model
 from judge_study.decision_judge import DecisionJudge
 from judge_study.freeze import freeze_feature
 from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
+from judge_study.report import Narrative, build_report
 from judge_study.results import Failure, Results
 from judge_study.scoring_page import make_server, select_for_scoring
 from judge_study.stress import stress_variant
@@ -215,6 +216,14 @@ def panel(out: Path, cap: float) -> None:
     print(f"panel spend ${spent:.4f} (cap ${cap}); {len(failures) - len(results.failures)} failures")
 
 
+def report(out: Path) -> None:
+    """Render report.html from results.json and the author's narrative.json (verdict, recommendation, notes)."""
+    narrative = json.loads((out / "narrative.json").read_text())
+    page = build_report(Results.load(out / "results.json"), Narrative(**narrative))
+    (out / "report.html").write_text(page)
+    print(f"wrote {out / 'report.html'} ({len(page) // 1024} KiB)")
+
+
 def serve(out: Path, host: str, port: int, count: int) -> None:
     results = Results.load(out / "results.json")
     selected_path = out / "human_items.json"
@@ -252,7 +261,7 @@ def main() -> None:
     elif args.step == "serve":
         serve(args.out, args.host, args.port, args.count)
     else:
-        raise SystemExit("report: built after the human scores are in")
+        report(args.out)
 
 
 if __name__ == "__main__":
