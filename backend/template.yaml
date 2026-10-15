@@ -113,8 +113,16 @@ Resources:
       BucketName: !Sub "glean-receipts-${Environment}-${AWS::AccountId}"
       LifecycleConfiguration:
         Rules:
-          - Status: Enabled
+          # Scanned receipt images are a one-day buffer. Scoped to their prefix so it can't reach exports.
+          - Id: expire-receipt-scans
+            Status: Enabled
+            Prefix: receipts/
             ExpirationInDays: 1
+          # Export diagnostics (POST /dev/export-db) are kept long enough to fetch and inspect.
+          - Id: keep-diagnostics-exports
+            Status: Enabled
+            Prefix: db-exports/
+            ExpirationInDays: 30
 
   # Durable store for the recipe corpus + recipe-api HTTP cache. No expiry — unlike the
   # receipts buffer, the corpus is durable data the app reads on every search/get.
