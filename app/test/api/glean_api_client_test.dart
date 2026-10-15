@@ -413,6 +413,35 @@ void main() {
       );
     });
 
+    test('a 429 response throws ApiRateLimitException with a user-facing '
+        'message', () async {
+      when(
+        () => httpClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => jsonResponse({
+          'detail': 'AI request limit reached (20 per hour). Try again later.',
+        }, statusCode: 429),
+      );
+
+      await expectLater(
+        client.describeReceipt('two tins of tomatoes'),
+        throwsA(
+          isA<ApiRateLimitException>()
+              .having((e) => e.message, 'message', contains('limit reached'))
+              .having(
+                (e) => e.userMessage,
+                'userMessage',
+                'You have reached the hourly limit for AI features. '
+                    'Try again in a little while.',
+              ),
+        ),
+      );
+    });
+
     test('a 422 response throws ApiValidationException', () async {
       when(
         () => httpClient.post(

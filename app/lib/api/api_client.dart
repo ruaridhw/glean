@@ -195,6 +195,11 @@ class GleanApiClient {
         message: _detailMessage(response) ?? 'Authentication failed',
       );
     }
+    if (status == 429) {
+      throw ApiRateLimitException(
+        _detailMessage(response) ?? 'Too many requests',
+      );
+    }
     if (status == 422) {
       throw ApiValidationException(
         message: _detailMessage(response) ?? 'Validation failed',
