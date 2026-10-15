@@ -3,6 +3,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/shopping_list_item_view.dart';
+import 'package:glean/data/models/store_section.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/shopping_providers.dart';
@@ -16,6 +17,47 @@ Future<void> setGroupShoppingBySection(WidgetRef ref, bool grouped) {
   return ref
       .read(userConfigRepositoryProvider)
       .setGroupShoppingBySection(ref.read(currentUserIdProvider), grouped);
+}
+
+/// Lets the household pick the store section for [item]'s ingredient. The choice sticks for that ingredient,
+/// so later rows for it land there too.
+Future<void> showMoveToSectionSheet(
+  BuildContext context,
+  WidgetRef ref,
+  ShoppingListItemView item,
+) async {
+  final StoreSection? chosen = await showModalBottomSheet<StoreSection>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: <Widget>[
+          ListTile(
+            title: Text(
+              'Move to section',
+              style: Theme.of(sheetContext).textTheme.titleMedium,
+            ),
+            subtitle: Text(item.name),
+          ),
+          for (final StoreSection section in StoreSection.values)
+            ListTile(
+              title: Text(section.label),
+              trailing: section == item.section
+                  ? const Icon(Icons.check_rounded)
+                  : null,
+              onTap: () => Navigator.of(sheetContext).pop(section),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (chosen == null || chosen == item.section) return;
+  ref.read(hapticsProvider).lightImpact();
+  await ref
+      .read(shoppingRepositoryProvider)
+      .moveToSection(ingredientId: item.ingredientId, section: chosen);
 }
 
 Future<void> toggleShoppingItem(WidgetRef ref, ShoppingListItemView item) {
