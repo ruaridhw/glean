@@ -97,6 +97,11 @@ class ShoppingRepository {
         quantity: missing + (prior?.quantity ?? 0),
         unit: unit,
         memberIds: [...?prior?.ids, row.id],
+        recipeTitles: [
+          ...?prior?.recipeTitles,
+          if (!(prior?.recipeTitles.contains(meal.recipeTitle) ?? false))
+            meal.recipeTitle,
+        ],
       );
     }
     result.addAll(grouped.values);
@@ -113,6 +118,7 @@ class ShoppingRepository {
     double? quantity,
     String? unit,
     List<int> memberIds = const [],
+    List<String> recipeTitles = const [],
   }) => ShoppingListItemView(
     id: row.id,
     userId: row.userId,
@@ -126,6 +132,7 @@ class ShoppingRepository {
         ? null
         : row.sourceMealPlanEntryId,
     memberIds: memberIds,
+    recipeTitles: recipeTitles,
   );
 
   /// Adds a manual entry, resolving [name] to a real ingredient identity so it can match a receipt at
