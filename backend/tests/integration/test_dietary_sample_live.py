@@ -33,7 +33,7 @@ _ROWS = [
 ]
 
 
-def test_live_model_separates_the_labelled_samples_and_former_regex_terms_at_the_chosen_thresholds(openrouter_api_key: SecretStr) -> None:
+def test_live_model_separates_the_labelled_samples_at_the_chosen_thresholds(openrouter_api_key: SecretStr) -> None:
     client = DecisionClient(api_key=openrouter_api_key, timeout_s=60.0)
     missed: list[str] = []
     wrongly_excluded: list[str] = []
