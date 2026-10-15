@@ -14,8 +14,9 @@ class IngredientsRepository {
   /// Resolves an existing ingredient by api id (preferred) or canonical name, or creates one. `category` must
   /// be null or a key in `ingredient_categories`; the foreign key makes an invalid category throw.
   ///
-  /// Pantry and shopping intake must pass a non-null `category` so `food_group` is non-nullable on read.
-  /// Recipe import passes null (recipe endpoints return no category).
+  /// Intake passes the category the backend classified, or null when it could not: such an ingredient reads
+  /// back with food group "other" until a later resolve supplies a category. Recipe import passes null
+  /// (recipe endpoints return no category).
   ///
   /// [unit], when supplied, seeds/upgrades `canonicalUnit`, the target `PantryRepository.addItem` normalises
   /// every future add into. It derives from the first unit the ingredient is resolved with. A recognised
