@@ -42,6 +42,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
   Timer? _weekTimer;
   DateTime? _lastRolloverWeek;
   bool _rolling = false;
+  // True from a slot tap until its recipe closes (or the lookup fails), so a slow snapshot lookup can't finish after
+  // another row has opened and push over it.
+  bool _openingRecipe = false;
   DateTime get _weekStart => ref.read(viewedPlanWeekProvider);
 
   @override
@@ -106,6 +109,16 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
       });
     } finally {
       _rolling = false;
+    }
+  }
+
+  Future<void> _openRecipe(MealPlanEntryView entry) async {
+    if (_openingRecipe) return;
+    _openingRecipe = true;
+    try {
+      await openPlannedRecipe(context, ref, entry);
+    } finally {
+      _openingRecipe = false;
     }
   }
 
@@ -227,6 +240,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
                             key: ValueKey<String>(slot.key),
                             slot: slot,
                             onEmptyTap: () => onAddDinnerTapped(context, ref),
+                            onOpen: _openRecipe,
                           ),
                         ),
                       if (nudge != null) ...<Widget>[
