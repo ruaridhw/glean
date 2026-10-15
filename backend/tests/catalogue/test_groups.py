@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from glean.catalogue.groups import GROUPS, FoodGroup, Form, Kind
+from glean.catalogue.groups import GROUPS, FoodGroup, Form, GroupId, Kind
 
 EXPECTED_GROUP_IDS = {
     # the 23 current categories, with the four renames
@@ -101,3 +101,22 @@ def test_only_the_other_food_group_does_not_count_towards_week_balance() -> None
 def test_drinks_snacks_and_non_food_groups_do_not_count_towards_balance() -> None:
     uncounted = {group_id.value for group_id, rules in GROUPS.items() if not rules.food_group.counts_towards_balance}
     assert uncounted == {"drinks", "snacks_and_treats", "household", "health_and_beauty", "baby", "pet", "other"}
+
+
+def test_once_opened_shelf_life_depends_on_form_where_a_group_has_forms() -> None:
+    pulses = GROUPS[GroupId.BEANS_AND_PULSES]
+    assert pulses.once_opened_shelf_life_days[Form.TINNED_JARRED] == 3
+    assert pulses.once_opened_shelf_life_days[Form.DRIED] == 365
+    assert pulses.once_opened_shelf_life_days[Form.FROZEN] == 90
+    assert pulses.once_opened_shelf_life_days[Form.FRESH] == 3
+
+
+def test_once_opened_shelf_life_has_one_value_per_allowed_form() -> None:
+    for group_id, rules in GROUPS.items():
+        assert set(rules.once_opened_shelf_life_days) == set(rules.allowed_forms), group_id
+        assert set(rules.unopened_shelf_life_days) == set(rules.allowed_forms), group_id
+
+
+def test_grains_pasta_and_rice_keep_a_long_time_once_opened() -> None:
+    assert GROUPS[GroupId.PASTA_AND_RICE].once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 365
+    assert GROUPS[GroupId.GRAINS].once_opened_shelf_life_days[Form.NOT_APPLICABLE] == 180

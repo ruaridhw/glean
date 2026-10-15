@@ -5,7 +5,7 @@ from functools import cache
 
 import pytest
 
-from glean.catalogue.groups import GROUPS, GroupId, Kind, StockUnit, TrackingMode
+from glean.catalogue.groups import GROUPS, Form, GroupId, Kind, StockUnit, TrackingMode
 from glean.catalogue.models import CatalogueItem, Source, name_key
 from glean.catalogue.seed import SeedData, load_seed
 
@@ -98,3 +98,22 @@ def test_chickpeas_come_in_separate_tinned_and_dried_items() -> None:
     tinned, dried = by_name("tinned chickpeas"), by_name("dried chickpeas")
     assert tinned.group is dried.group is GroupId.BEANS_AND_PULSES
     assert tinned.form != dried.form
+
+
+def test_dried_and_grain_items_keep_at_least_90_days_once_opened() -> None:
+    dry = [
+        item
+        for item in seed().items
+        if item.form is Form.DRIED or item.group in {GroupId.GRAINS, GroupId.PASTA_AND_RICE, GroupId.BAKING}
+    ]
+    assert dry
+    short = [item.name for item in dry if (item.once_opened_shelf_life_days or 0) < 90]
+    assert short == []
+    assert (by_name("dried urad dal").once_opened_shelf_life_days or 0) >= 180
+
+
+def test_frozen_items_keep_at_least_30_days_once_opened() -> None:
+    frozen = [item for item in seed().items if item.form is Form.FROZEN]
+    assert frozen
+    assert [item.name for item in frozen if (item.once_opened_shelf_life_days or 0) < 30] == []
+    assert by_name("frozen broad beans").once_opened_shelf_life_days == 90
