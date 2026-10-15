@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'describe_error.dart';
 import 'glean_logger.dart';
 
 const int _maxStackLines = 12;
@@ -30,5 +31,5 @@ String _describe(Object error, StackTrace? stack) {
       .split('\n')
       .take(_maxStackLines)
       .join('\n');
-  return '$error\n$top'.trimRight();
+  return '${describeError(error)}\n$top'.trimRight();
 }
