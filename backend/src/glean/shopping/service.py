@@ -129,14 +129,31 @@ def _parse_unit_cached(
     unit: str, *, version: str, llm_router: LLMRouter, decision_client: DecisionClient, cache: BlobStore
 ) -> ShoppingParseResponse:
     path = _cache_path(version, unit)
-    if (hit := cache.read(path)) is not None:
-        return ShoppingParseResponse.model_validate_json(hit)
+    if (cached := _read_cached(cache, path)) is not None:
+        return cached
     prompt = _choose_prompt(unit, decision_client)
     response = _parse_unit(unit, prompt, llm_router=llm_router)
     if prompt is not None:
-        # food_group and api_ingredient_id are computed on read, so only stored fields are cached.
-        cache.write(path, response.model_dump_json(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}}))
+        _write_cached(cache, path, response)
     return response
+
+
+def _read_cached(cache: BlobStore, path: str) -> ShoppingParseResponse | None:
+    try:
+        entry = cache.read(path)
+        return None if entry is None else ShoppingParseResponse.model_validate_json(entry)
+    except (OSError, ValueError):
+        logger.warning("shopping parse cache entry unreadable", extra={"path": path}, exc_info=True)
+        return None
+
+
+def _write_cached(cache: BlobStore, path: str, response: ShoppingParseResponse) -> None:
+    # food_group and api_ingredient_id are computed on read, so only stored fields are cached.
+    entry = response.model_dump_json(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}})
+    try:
+        cache.write(path, entry)
+    except Exception:  # a cache outage must not fail the parse; S3 raises its own client errors
+        logger.warning("shopping parse cache write failed", extra={"path": path}, exc_info=True)
 
 
 def _choose_prompt(unit: str, decision_client: DecisionClient) -> str | None:
