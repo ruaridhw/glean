@@ -82,3 +82,6 @@ provider  # Decision field
 usage  # Decision field
 __cause__  # exception chain cleared in DecisionClient.decide so upstream text can't leak via causes
 __context__  # as above
+produce_missing_decisions  # used by scripts/compute_dietary_decisions.py
+render  # CoverageReport.render, printed by the producer script
+failures  # CoverageReport field, asserted in tests and read by operators in the report
