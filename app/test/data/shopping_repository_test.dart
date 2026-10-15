@@ -119,6 +119,104 @@ void main() {
     // scoped statement. See the doc comments on `resolveCheckout` and at the
     // top of `lib/data/repositories/shopping_repository.dart` for why.
 
+    group('recipe titles for plan-sourced shopping items', () {
+      late RecipesRepository recipes;
+      late PantryRepository pantry;
+      late PlanRepository plan;
+
+      setUp(() {
+        recipes = RecipesRepository(db, ingredients);
+        pantry = PantryRepository(db, ingredients);
+        plan = PlanRepository(db, pantry);
+      });
+
+      Future<int> planRecipe(String title, {required String needing}) async {
+        final recipeId = await recipes.save(
+          userId: userId,
+          title: title,
+          ingredients: [
+            SaveRecipeIngredient(
+              canonicalName: needing,
+              quantity: 100,
+              unit: 'g',
+            ),
+          ],
+        );
+        final entryId = await plan.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: title,
+          servings: 1,
+        );
+        await repository.addGapsForRecipe(
+          userId: userId,
+          recipeId: recipeId,
+          servings: 1,
+          sourceMealPlanEntryId: entryId,
+        );
+        return recipeId;
+      }
+
+      test(
+        'a shopping item from one planned recipe names that recipe',
+        () async {
+          await planRecipe('Spinach & feta pasta', needing: 'spinach');
+
+          final item = (await repository.watchAll(userId).first).single;
+
+          expect(item.recipeTitles, ['Spinach & feta pasta']);
+        },
+      );
+
+      test('manual and AI-added shopping items name no recipe', () async {
+        await repository.addManualItem(userId: userId, name: 'Candles');
+        await repository.addAiItems(
+          userId: userId,
+          items: const <AiShoppingItem>[
+            AiShoppingItem(
+              name: 'chia seeds',
+              quantity: 1,
+              unit: 'bag',
+              category: 'grains',
+            ),
+          ],
+        );
+
+        final items = await repository.watchAll(userId).first;
+
+        expect(items, hasLength(2));
+        expect(items.every((i) => i.recipeTitles.isEmpty), isTrue);
+      });
+
+      test(
+        'a shopping item merged from two planned recipes names both',
+        () async {
+          await planRecipe('Spinach & feta pasta', needing: 'spinach');
+          await planRecipe('Saag paneer', needing: 'spinach');
+
+          final item = (await repository.watchAll(userId).first).single;
+
+          expect(item.ids, hasLength(2));
+          expect(item.recipeTitles, ['Spinach & feta pasta', 'Saag paneer']);
+        },
+      );
+
+      test(
+        'the planned title survives deleting the recipe from the library',
+        () async {
+          final recipeId = await planRecipe(
+            'Spinach & feta pasta',
+            needing: 'spinach',
+          );
+          await recipes.deleteRecipe(id: recipeId, userId: userId);
+
+          final item = (await repository.watchAll(userId).first).single;
+
+          expect(item.recipeTitles, ['Spinach & feta pasta']);
+        },
+      );
+    });
+
     group('addGapsForRecipe shortfall maths', () {
       late RecipesRepository recipes;
       late PantryRepository pantry;

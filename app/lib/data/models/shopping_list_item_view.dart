@@ -31,6 +31,7 @@ class ShoppingListItemView {
     required this.isChecked,
     required this.sourceMealPlanEntryId,
     this.memberIds = const [],
+    this.recipeTitles = const [],
   });
 
   final int id;
@@ -46,4 +47,9 @@ class ShoppingListItemView {
 
   /// Non-null when inserted as a meal-plan shopping gap; deleting that plan entry cascades this row away.
   final int? sourceMealPlanEntryId;
+
+  /// Titles of the planned recipes this row is needed for, one per distinct meal-plan entry title, taken from
+  /// the entry's creation-time snapshot (so it survives the recipe being deleted). Unlike
+  /// [sourceMealPlanEntryId], it keeps every source when several rows merge. Empty for manual and AI items.
+  final List<String> recipeTitles;
 }
