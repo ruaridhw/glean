@@ -61,7 +61,16 @@ class CatalogueRepository {
               overrideOnceOpenedShelfLifeDays: Value(
                 i.overrides.onceOpenedShelfLifeDays,
               ),
+              section: Value(i.section),
             ),
+        ]);
+        b.insertAllOnConflictUpdate(_db.catalogueItemRedirects, [
+          for (final i in changes.items)
+            for (final former in i.formerIds)
+              CatalogueItemRedirectsCompanion.insert(
+                formerId: former,
+                itemId: i.id,
+              ),
         ]);
         b.insertAllOnConflictUpdate(_db.catalogueAliases, [
           for (final a in changes.aliases)

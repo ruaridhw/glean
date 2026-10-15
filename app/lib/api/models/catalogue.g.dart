@@ -46,6 +46,12 @@ CatalogueItemDto _$CatalogueItemDtoFromJson(Map<String, dynamic> json) =>
       ),
       source: json['source'] as String,
       densityGPerMl: (json['density_g_per_ml'] as num?)?.toDouble(),
+      section: json['section'] as String?,
+      formerIds:
+          (json['former_ids'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
     );
 
 CatalogueAliasDto _$CatalogueAliasDtoFromJson(Map<String, dynamic> json) =>

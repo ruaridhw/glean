@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/api.dart';
 import 'package:glean/data/catalogue_sync.dart';
@@ -24,6 +25,8 @@ Map<String, Object?> _item(
   String form = 'not_applicable',
   String source = 'seed',
   Map<String, Object?> overrides = const <String, Object?>{},
+  String? section,
+  List<String>? formerIds,
 }) => <String, Object?>{
   'id': id,
   'name': name,
@@ -38,6 +41,8 @@ Map<String, Object?> _item(
   },
   'density_g_per_ml': null,
   'source': source,
+  'section': ?section,
+  'former_ids': ?formerIds,
 };
 
 Map<String, Object?> _alias(String key, String itemId, [String? name]) =>
@@ -136,6 +141,121 @@ void main() {
       ]),
     );
     expect(await storedVersion(), 3);
+  });
+
+  test(
+    'an item is stored with the section the backend computed for it',
+    () async {
+      respond(
+        _body(
+          version: 1,
+          items: [_item('onion', 'onion', section: 'Fruit & Veg')],
+        ),
+      );
+
+      await sync.sync();
+
+      expect(
+        (await db.select(db.catalogueItems).getSingle()).section,
+        'Fruit & Veg',
+      );
+    },
+  );
+
+  test('an item from a backend that sends no section is stored without one, '
+      'and a later sync fills it in', () async {
+    respond(_body(version: 1, items: [_item('onion', 'onion')]));
+    await sync.sync();
+    expect((await db.select(db.catalogueItems).getSingle()).section, isNull);
+
+    respond(
+      _body(
+        version: 2,
+        items: [_item('onion', 'onion', section: 'Fruit & Veg')],
+      ),
+    );
+    await sync.sync();
+
+    expect(
+      (await db.select(db.catalogueItems).getSingle()).section,
+      'Fruit & Veg',
+    );
+  });
+
+  test('the ids merged into an item are stored as redirects to it', () async {
+    respond(
+      _body(
+        version: 1,
+        items: [
+          _item(
+            'coriander',
+            'coriander',
+            formerIds: <String>['cilantro', 'fresh-coriander'],
+          ),
+          _item('parsley', 'parsley'),
+        ],
+      ),
+    );
+
+    await sync.sync();
+
+    final redirects = await db.select(db.catalogueItemRedirects).get();
+    expect(
+      redirects.map((r) => (r.formerId, r.itemId)),
+      unorderedEquals(<(String, String)>[
+        ('cilantro', 'coriander'),
+        ('fresh-coriander', 'coriander'),
+      ]),
+    );
+  });
+
+  test('a sync leaves the household overrides exactly as they were, even '
+      'when it changes the same field on the item', () async {
+    respond(
+      _body(
+        version: 1,
+        items: [
+          _item(
+            'ginger',
+            'ginger',
+            group: 'root_veg',
+            form: 'fresh',
+            overrides: <String, Object?>{'unopened_shelf_life_days': 14},
+          ),
+        ],
+      ),
+    );
+    await sync.sync();
+    await db
+        .into(db.ingredientOverrides)
+        .insert(
+          IngredientOverridesCompanion.insert(
+            itemId: 'ginger',
+            unopenedShelfLifeDays: const Value(30),
+            section: const Value('Baking'),
+          ),
+        );
+    final before = await db.select(db.ingredientOverrides).get();
+
+    respond(
+      _body(
+        version: 2,
+        items: [
+          _item(
+            'ginger',
+            'ginger',
+            group: 'root_veg',
+            form: 'fresh',
+            overrides: <String, Object?>{'unopened_shelf_life_days': 21},
+            section: 'Fruit & Veg',
+          ),
+        ],
+      ),
+    );
+    await sync.sync();
+
+    expect(await db.select(db.ingredientOverrides).get(), before);
+    expect(before.single.unopenedShelfLifeDays, 30);
   });
 
   test('a second sync asks only for what changed since the stored version '
