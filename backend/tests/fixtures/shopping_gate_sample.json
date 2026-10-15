@@ -1,0 +1,242 @@
+[
+ {
+  "phrase": "spaghetti bolognese",
+  "kind": "dish",
+  "dish": 0.96,
+  "list": 0.05
+ },
+ {
+  "phrase": "chicken curry",
+  "kind": "dish",
+  "dish": 0.92,
+  "list": 0.04
+ },
+ {
+  "phrase": "lasagne",
+  "kind": "dish",
+  "dish": 0.89,
+  "list": 0.03
+ },
+ {
+  "phrase": "sunday roast",
+  "kind": "dish",
+  "dish": 0.97,
+  "list": 0.04
+ },
+ {
+  "phrase": "beef stew",
+  "kind": "dish",
+  "dish": 0.91,
+  "list": 0.03
+ },
+ {
+  "phrase": "chilli con carne",
+  "kind": "dish",
+  "dish": 0.95,
+  "list": 0.05
+ },
+ {
+  "phrase": "shepherd's pie",
+  "kind": "dish",
+  "dish": 0.96,
+  "list": 0.03
+ },
+ {
+  "phrase": "pad thai",
+  "kind": "dish",
+  "dish": 0.96,
+  "list": 0.03
+ },
+ {
+  "phrase": "mac and cheese",
+  "kind": "dish",
+  "dish": 0.82,
+  "list": 0.04
+ },
+ {
+  "phrase": "fish & chips",
+  "kind": "dish",
+  "dish": 0.87,
+  "list": 0.15
+ },
+ {
+  "phrase": "bangers and mash",
+  "kind": "dish",
+  "dish": 0.97,
+  "list": 0.1
+ },
+ {
+  "phrase": "toad in the hole",
+  "kind": "dish",
+  "dish": 0.98,
+  "list": 0.03
+ },
+ {
+  "phrase": "milk",
+  "kind": "item",
+  "dish": 0.03,
+  "list": 0.02
+ },
+ {
+  "phrase": "2 bananas",
+  "kind": "item",
+  "dish": 0.02,
+  "list": 0.29
+ },
+ {
+  "phrase": "washing-up liquid",
+  "kind": "item",
+  "dish": 0.02,
+  "list": 0.04
+ },
+ {
+  "phrase": "toilet roll",
+  "kind": "item",
+  "dish": 0.02,
+  "list": 0.04
+ },
+ {
+  "phrase": "cheddar",
+  "kind": "item",
+  "dish": 0.04,
+  "list": 0.02
+ },
+ {
+  "phrase": "500g mince",
+  "kind": "item",
+  "dish": 0.04,
+  "list": 0.04
+ },
+ {
+  "phrase": "a loaf of bread",
+  "kind": "item",
+  "dish": 0.08,
+  "list": 0.02
+ },
+ {
+  "phrase": "tinned tomatoes",
+  "kind": "item",
+  "dish": 0.04,
+  "list": 0.1
+ },
+ {
+  "phrase": "olive oil",
+  "kind": "item",
+  "dish": 0.02,
+  "list": 0.04
+ },
+ {
+  "phrase": "cat food",
+  "kind": "item",
+  "dish": 0.05,
+  "list": 0.04
+ },
+ {
+  "phrase": "sweet and sour sauce",
+  "kind": "compound_item",
+  "dish": 0.16,
+  "list": 0.06
+ },
+ {
+  "phrase": "salt and pepper crisps",
+  "kind": "compound_item",
+  "dish": 0.07,
+  "list": 0.13
+ },
+ {
+  "phrase": "salt and vinegar crisps",
+  "kind": "compound_item",
+  "dish": 0.04,
+  "list": 0.09
+ },
+ {
+  "phrase": "cream and onion dip",
+  "kind": "compound_item",
+  "dish": 0.42,
+  "list": 0.09
+ },
+ {
+  "phrase": "milk and eggs",
+  "kind": "list",
+  "dish": 0.08,
+  "list": 0.95
+ },
+ {
+  "phrase": "bread & butter",
+  "kind": "list",
+  "dish": 0.14,
+  "list": 0.62
+ },
+ {
+  "phrase": "apples and pears",
+  "kind": "list",
+  "dish": 0.07,
+  "list": 0.95
+ },
+ {
+  "phrase": "rice and beans",
+  "kind": "list",
+  "dish": 0.74,
+  "list": 0.53
+ },
+ {
+  "phrase": "crisps and dip",
+  "kind": "list",
+  "dish": 0.41,
+  "list": 0.52
+ },
+ {
+  "phrase": "tacos",
+  "kind": "ambiguous",
+  "dish": 0.94,
+  "list": 0.08
+ },
+ {
+  "phrase": "roast dinner",
+  "kind": "ambiguous",
+  "dish": 0.97,
+  "list": 0.06
+ },
+ {
+  "phrase": "pizza",
+  "kind": "ambiguous",
+  "dish": 0.8,
+  "list": 0.02
+ },
+ {
+  "phrase": "curry",
+  "kind": "ambiguous",
+  "dish": 0.83,
+  "list": 0.03
+ },
+ {
+  "phrase": "snacks",
+  "kind": "ambiguous",
+  "dish": 0.14,
+  "list": 0.3
+ },
+ {
+  "phrase": "something for dinner",
+  "kind": "ambiguous",
+  "dish": 0.63,
+  "list": 0.04
+ },
+ {
+  "phrase": "lunchbox stuff",
+  "kind": "ambiguous",
+  "dish": 0.49,
+  "list": 0.24
+ },
+ {
+  "phrase": "salad",
+  "kind": "ambiguous",
+  "dish": 0.75,
+  "list": 0.04
+ },
+ {
+  "phrase": "salt and pepper",
+  "kind": "ambiguous",
+  "dish": 0.04,
+  "list": 0.9
+ }
+]

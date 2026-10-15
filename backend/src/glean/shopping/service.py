@@ -142,8 +142,8 @@ def _read_cached(cache: BlobStore, path: str) -> ShoppingParseResponse | None:
     try:
         entry = cache.read(path)
         return None if entry is None else ShoppingParseResponse.model_validate_json(entry)
-    except (OSError, ValueError):
-        logger.warning("shopping parse cache entry unreadable", extra={"path": path}, exc_info=True)
+    except Exception:  # unreadable, malformed or unreachable (S3 transport errors aren't OSError): all just a miss
+        logger.warning("shopping parse cache read failed", extra={"path": path}, exc_info=True)
         return None
 
 
