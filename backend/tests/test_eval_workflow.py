@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
 import yaml
 from pydantic import SecretStr
 
 from glean.llm import Feature, LLMRouter
 from tests.integration.evals.conftest import _eval_model_id_for
+
+if TYPE_CHECKING:
+    import pytest
 
 WORKFLOW = Path(__file__).parent.parent.parent / ".github" / "workflows" / "llm-evals.yml"
 CHOSEN_MODEL = "custom/model-chosen-at-dispatch"

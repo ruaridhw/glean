@@ -1,0 +1,224 @@
+{
+  "subtotal": 34.81,
+  "savings": 3.06,
+  "total": 31.75,
+  "items": [
+    {
+      "printed_line": "Tesco Root Ginger Loose",
+      "name": "root ginger",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.54,
+      "net_line_total": 0.54,
+      "category": "root_vegetables",
+      "non_food": false
+    },
+    {
+      "printed_line": "Duncan's Eggs 6 Large Free Range Scottish Eggs",
+      "name": "eggs",
+      "quantity": 6,
+      "unit": "units",
+      "unit_price": 0.416667,
+      "net_line_total": 2.5,
+      "category": "eggs",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco British Semi Skimmed Milk 1.13l, 2 Pints",
+      "name": "semi skimmed milk",
+      "quantity": 1130,
+      "unit": "ml",
+      "unit_price": 0.001062,
+      "net_line_total": 1.2,
+      "category": "dairy",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Paneer Cheese 200g",
+      "name": "paneer",
+      "quantity": 200,
+      "unit": "g",
+      "unit_price": 0.009,
+      "net_line_total": 1.8,
+      "category": "dairy",
+      "non_food": false,
+      "aliases": [
+        "paneer cheese"
+      ]
+    },
+    {
+      "printed_line": "Azura Sun Joy Baby Plum Tomatoes 250g",
+      "name": "baby plum tomatoes",
+      "quantity": 250,
+      "unit": "g",
+      "unit_price": 0.0054,
+      "net_line_total": 1.35,
+      "category": "nightshades",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Red Peppers Each",
+      "name": "red pepper",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.7,
+      "net_line_total": 0.7,
+      "category": "nightshades",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Parmigiano Reggiano Cheese 200 G",
+      "name": "parmigiano reggiano",
+      "quantity": 200,
+      "unit": "g",
+      "unit_price": 0.02,
+      "net_line_total": 4.0,
+      "category": "dairy",
+      "non_food": false,
+      "aliases": [
+        "parmigiano reggiano cheese"
+      ]
+    },
+    {
+      "printed_line": "Tesco Limes Each",
+      "name": "lime",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.23,
+      "net_line_total": 0.23,
+      "category": "citrus",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Ready To Eat Large Avocados Each",
+      "name": "avocado",
+      "quantity": 1,
+      "unit": "units",
+      "unit_price": 0.69,
+      "net_line_total": 0.69,
+      "category": "tropical_fruit",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Curled Leaf Parsley 30g",
+      "name": "curly parsley",
+      "aliases": ["curled leaf parsley"],
+      "quantity": 30,
+      "unit": "g",
+      "unit_price": 0.016667,
+      "net_line_total": 0.5,
+      "category": "herbs_fresh",
+      "non_food": false
+    },
+    {
+      "printed_line": "Filippo Berio Extra Virgin Olive Oil 500ml",
+      "name": "extra virgin olive oil",
+      "quantity": 500,
+      "unit": "ml",
+      "unit_price": 0.01,
+      "net_line_total": 5.0,
+      "category": "oils_fats",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco British Creme Fraiche 300ml",
+      "name": "creme fraiche",
+      "quantity": 300,
+      "unit": "ml",
+      "unit_price": 0.0025,
+      "net_line_total": 0.75,
+      "category": "dairy",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Bunched Spring Onions 100g",
+      "name": "spring onions",
+      "quantity": 100,
+      "unit": "g",
+      "unit_price": 0.0065,
+      "net_line_total": 0.65,
+      "category": "alliums",
+      "non_food": false
+    },
+    {
+      "printed_line": "Lee Kum Kee Sesame Wok Oil 207ml",
+      "name": "sesame oil",
+      "quantity": 207,
+      "unit": "ml",
+      "unit_price": 0.01256,
+      "net_line_total": 2.6,
+      "category": "oils_fats",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Finest Jacket Potatoes 4 Pack",
+      "name": "jacket potatoes",
+      "quantity": 4,
+      "unit": "units",
+      "unit_price": 0.425,
+      "net_line_total": 1.7,
+      "category": "root_vegetables",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Green Beans 220g",
+      "name": "green beans",
+      "quantity": 220,
+      "unit": "g",
+      "unit_price": 0.003864,
+      "net_line_total": 0.85,
+      "category": "legumes",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Fresh Cut Coriander 30g",
+      "name": "coriander",
+      "quantity": 30,
+      "unit": "g",
+      "unit_price": 0.016667,
+      "net_line_total": 0.5,
+      "category": "herbs_fresh",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Lean Pork Mince 5% Fat 500g",
+      "name": "pork mince",
+      "quantity": 500,
+      "unit": "g",
+      "unit_price": 0.00498,
+      "net_line_total": 2.49,
+      "category": "red_meat",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Pak Choi 250g",
+      "name": "pak choi",
+      "quantity": 250,
+      "unit": "g",
+      "unit_price": 0.0062,
+      "net_line_total": 1.55,
+      "category": "brassicas",
+      "non_food": false
+    },
+    {
+      "printed_line": "Napolina Chopped Tomatoes 400g",
+      "name": "chopped tomatoes",
+      "quantity": 400,
+      "unit": "g",
+      "unit_price": 0.002625,
+      "net_line_total": 1.05,
+      "category": "nightshades",
+      "non_food": false
+    },
+    {
+      "printed_line": "Tesco Sesame Seeds 100g",
+      "name": "sesame seeds",
+      "quantity": 100,
+      "unit": "g",
+      "unit_price": 0.011,
+      "net_line_total": 1.1,
+      "category": "spices",
+      "non_food": false
+    }
+  ]
+}
