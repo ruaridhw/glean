@@ -204,3 +204,27 @@ def test_cached_parses_are_invalidated_when_prompt_schema_unit_vocabulary_or_mod
             service.ShoppingParseResponse, "model_json_schema", classmethod(lambda cls, **_: {"changed": True})
         )
     )
+
+
+class _BrokenStore(FilesystemBlobStore):
+    """A cache whose entries are unreadable and whose writes fail, like a flaky bucket."""
+
+    def read(self, key: str) -> str | None:
+        return "not json"
+
+    def write(self, key: str, content: str) -> None:
+        raise OSError("bucket unavailable")
+
+
+def test_an_unreadable_or_unwritable_cache_never_fails_the_parse(tmp_path: Path) -> None:
+    router = _FakeLLMRouter()
+
+    response = parse_shopping_description(
+        ShoppingParseRequest(text="milk"),
+        llm_router=router,
+        decision_client=_decision_client(),
+        cache=_BrokenStore(tmp_path),
+    )
+
+    assert [item.name for item in response.items] == ["milk"]
+    assert router.phrases == ["milk"]
