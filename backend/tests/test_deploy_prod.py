@@ -149,3 +149,67 @@ def test_deploy_stops_when_head_is_not_pushed_and_says_why(sandbox: Sandbox) -> 
     assert result.returncode != 0
     assert "not been pushed" in result.stderr
     assert sandbox.calls_to("sam") == []
+
+
+def test_clean_pushed_deploy_stamps_the_commit_on_the_stack_and_lambda(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live_matching_a_deploy_of(sha)
+
+    result = sandbox.run()
+
+    assert result.returncode == 0, result.stderr
+    (deploy,) = sandbox.calls_to("sam", "deploy")
+    assert deploy[deploy.index("--tags") + 1] == f"commit={sha}"
+    overrides = deploy[deploy.index("--parameter-overrides") + 1]
+    assert f'GitSha="{sha}"' in overrides
+    assert deploy[deploy.index("--config-env") + 1] == "prod"
+
+
+def test_deploy_passes_every_prod_parameter_from_samconfig_and_no_google_values(sandbox: Sandbox) -> None:
+    sandbox.set_live_matching_a_deploy_of(sandbox.git("rev-parse", "HEAD"))
+
+    sandbox.run()
+
+    (deploy,) = sandbox.calls_to("sam", "deploy")
+    overrides = deploy[deploy.index("--parameter-overrides") + 1]
+    assert 'Environment="prod"' in overrides
+    assert 'CognitoDomainPrefix="glean-auth-040396448697"' in overrides
+    assert 'LangSmithTracing="true"' in overrides
+    assert "Google" not in overrides
+
+
+def test_allow_dirty_deploys_a_dirty_tree_stamped_dirty_and_logs_it(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    (sandbox.root / "backend" / "notes.txt").write_text("hotfix in progress")
+    sandbox.set_live_matching_a_deploy_of(f"{sha}-dirty")
+
+    result = sandbox.run(ALLOW_DIRTY="1")
+
+    assert result.returncode == 0, result.stderr
+    (deploy,) = sandbox.calls_to("sam", "deploy")
+    assert deploy[deploy.index("--tags") + 1] == f"commit={sha}-dirty"
+    assert f'GitSha="{sha}-dirty"' in deploy[deploy.index("--parameter-overrides") + 1]
+    assert f"{sha}-dirty" in sandbox.log_file.read_text()
+
+
+def test_allow_dirty_deploys_an_unpushed_commit_stamped_dirty(sandbox: Sandbox) -> None:
+    (sandbox.root / "backend" / "notes.txt").write_text("committed locally")
+    sandbox.git("add", "-A")
+    sandbox.git("commit", "-q", "-m", "local only")
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live_matching_a_deploy_of(f"{sha}-dirty")
+
+    result = sandbox.run(ALLOW_DIRTY="1")
+
+    assert result.returncode == 0, result.stderr
+    (deploy,) = sandbox.calls_to("sam", "deploy")
+    assert deploy[deploy.index("--tags") + 1] == f"commit={sha}-dirty"
+
+
+def test_clean_deploy_is_not_logged_as_dirty(sandbox: Sandbox) -> None:
+    sandbox.set_live_matching_a_deploy_of(sandbox.git("rev-parse", "HEAD"))
+
+    sandbox.run()
+
+    assert not sandbox.log_file.exists() or "dirty" not in sandbox.log_file.read_text()
+
