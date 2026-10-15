@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from glean.receipts.schemas import ParsedIngredient
 
@@ -46,6 +46,15 @@ class ShoppingProposalItem(ParsedIngredient):
     unit: ShoppingUnit = Field(
         description='Practical shopping unit; use "units" for a plain count or when no amount was given.'
     )
+
+    # Inactive for shopping parses: a model-supplied price can't be attributed to a store or date,
+    # so it is always null. Re-enable (drop the validator) only when pricing attribution exists.
+    unit_price: float | None = Field(default=None, description="Inactive: always null for shopping items.")
+
+    @field_validator("unit_price", mode="after")
+    @classmethod
+    def _drop_unit_price(cls, _: float | None) -> None:
+        return None
 
     @computed_field(
         return_type=str | None,

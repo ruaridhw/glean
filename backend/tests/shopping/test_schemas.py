@@ -31,3 +31,14 @@ def test_model_is_constrained_to_the_unit_vocabulary_by_the_schema_it_receives()
     item_properties = schema["properties"]["items"]["items"]["properties"]
 
     assert item_properties["unit"]["enum"] == [unit.value for unit in ShoppingUnit]
+
+
+def test_unit_price_defaults_to_null_for_shopping_items() -> None:
+    assert ShoppingProposalItem.model_validate(_item()).unit_price is None
+
+
+def test_a_price_the_model_supplies_is_dropped_not_trusted() -> None:
+    item = ShoppingProposalItem.model_validate(_item(unit_price=2.49))
+
+    assert item.unit_price is None
+    assert item.model_dump()["unit_price"] is None
