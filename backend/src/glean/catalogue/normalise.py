@@ -218,7 +218,7 @@ def _name_misses(
     requests = [NameRequest(input=m.raw, group=GROUPS[m.group].name) for m in misses]
     timeout_ms = int(min(remaining_s, NAMING_CALL_TIMEOUT_S) * 1000)
     try:
-        named = name_items(requests, llm_router=llm_router, context=context, request_timeout=timeout_ms)
+        named = name_items(requests, llm_router=llm_router, context=context, timeout_ms=timeout_ms)
     except Exception:
         logger.exception("naming call failed", extra={"names": len(misses)})
         return unresolved

@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     # Durable S3 store for the recipe corpus + HTTP cache. Empty locally / in tests → the
     # `.cache/...` filesystem store is used instead (see recipe_api.blob_store).
     s3_recipe_cache_bucket: str = ""
+    # DynamoDB catalogue table (ADR 0001). Empty locally / in tests: catalogue endpoints answer 503.
+    catalogue_table: str = ""
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
     llm_model_policy_overrides: dict[Feature, LLMModelPolicy] | None = None
