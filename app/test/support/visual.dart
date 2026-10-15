@@ -49,7 +49,16 @@ Widget visual(Widget child, {ThemeData? theme, double scale = 1}) =>
       ),
     );
 
-Future<void> golden(WidgetTester tester, String name) => expectLater(
-  find.byKey(visualKey),
-  matchesGoldenFile(File('test/design_system/goldens/$name.png').absolute.uri),
-);
+/// The goldens are rendered on Linux (GitHub CI checks them there). macOS
+/// rasterises the same fonts a few percent differently, so on any other host,
+/// such as Codemagic's free macOS builders, only the pixel comparison is
+/// skipped; the rest of each test still runs.
+Future<void> golden(WidgetTester tester, String name) async {
+  if (!Platform.isLinux) return;
+  await expectLater(
+    find.byKey(visualKey),
+    matchesGoldenFile(
+      File('test/design_system/goldens/$name.png').absolute.uri,
+    ),
+  );
+}
