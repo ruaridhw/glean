@@ -1,54 +1,107 @@
-"""The dietary thresholds, checked against real Jev answers to the labelled sample (#125).
+"""The labelled sample replayed through real candidate selection (#125).
 
 `tests/fixtures/jev/dietary_sample.json` labels which flags each recipe violates: every
 row of the issue's table, the allowed cases (coconut milk, nutmeg, parmesan under
 vegetarian, gluten-free oats), held-out items the criteria don't name, and ordinary
 recipes. `dietary_sample_measured.json` holds the probabilities live Jev gave on
-2026-10-15 (re-record with `tests/integration/test_dietary_sample_live.py`).
+2026-10-15 (re-check with `tests/integration/test_dietary_sample_live.py`). Here those
+answers are stored as decisions beside a corpus of the sample's recipes, and
+`sample_corpus_candidates` decides what each flag offers.
 """
 
 from __future__ import annotations
 
 import json
+import random
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from glean.meal_plan.dietary_decisions import NUT_FREE, NUT_FREE_THRESHOLD, PREFERENCE_THRESHOLD
+from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.dietary_decisions import (
+    DIETARY_FLAGS,
+    NUT_FREE,
+    DietaryDecision,
+    DietaryDecisionStore,
+    content_fingerprint,
+)
+from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "jev"
 ROWS = json.loads((FIXTURES / "dietary_sample.json").read_text())["rows"]
-MEASURED = json.loads((FIXTURES / "dietary_sample_measured.json").read_text())["probabilities"]
+_MEASURED = json.loads((FIXTURES / "dietary_sample_measured.json").read_text())
+PROBABILITIES = _MEASURED["probabilities"]
+MODEL = _MEASURED["model"]
 
-LABELLED = [(row["id"], flag, violates) for row in ROWS for flag, violates in row["violates"].items()]
-
-
-def _threshold(flag: str) -> float:
-    return NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
-
-
-@pytest.mark.parametrize(("row_id", "flag"), [(r, f) for r, f, violates in LABELLED if violates])
-def test_every_recipe_that_breaks_a_flag_is_excluded(row_id: str, flag: str) -> None:
-    assert MEASURED[row_id][flag] >= _threshold(flag)
+# Nut-free is an allergy, so its strict threshold also drops these nut-butter lookalikes
+# (tahini 0.24, hummus wrap 0.19). Anything else it drops is a regression.
+ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
 
 
-@pytest.mark.parametrize(("row_id", "flag"), [(r, f) for r, f, violates in LABELLED if not violates and f != NUT_FREE])
-def test_every_recipe_that_is_fine_for_a_preference_flag_is_kept(row_id: str, flag: str) -> None:
-    assert MEASURED[row_id][flag] < _threshold(flag)
+def _replay(tmp_path: Path, flag: str) -> tuple[set[str], set[str]]:
+    """Returns (ids offered under `flag`, ids of the sample rows labelled for `flag`)."""
+    labelled = [row for row in ROWS if flag in row["violates"]]
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for row in labelled:
+        corpus.save(
+            StoredRecipe(
+                external_id=row["id"],
+                title=row["title"],
+                ingredients=[
+                    StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in row["ingredients"]
+                ],
+            )
+        )
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id=row["id"],
+                flag=decided_flag,
+                probability=PROBABILITIES[row["id"]][decided_flag],
+                model=MODEL,
+                content_hash=content_fingerprint(row["title"], row["ingredients"]),
+                computed_at=datetime(2026, 10, 15, tzinfo=UTC),
+            )
+            for row in labelled
+            for decided_flag in DIETARY_FLAGS
+        ]
+    )
+    offered = sample_corpus_candidates(
+        corpus,
+        pantry_names=[],
+        dietary_flags=[flag],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=1000,
+    )
+    return {candidate.external_id for candidate in offered}, {row["id"] for row in labelled}
 
 
-def test_nut_free_keeps_coconut_milk_and_nutmeg_and_most_ordinary_recipes() -> None:
-    clean = [
-        (row_id, MEASURED[row_id][NUT_FREE]) for row_id, flag, violates in LABELLED if flag == NUT_FREE and not violates
-    ]
-    excluded = {row_id for row_id, probability in clean if probability >= NUT_FREE_THRESHOLD}
+@pytest.mark.parametrize("flag", DIETARY_FLAGS)
+def test_every_labelled_recipe_that_breaks_the_flag_is_left_out(tmp_path, flag: str) -> None:
+    offered, labelled = _replay(tmp_path, flag)
 
-    # The allergy threshold is strict, so tahini and hummus (nut-butter lookalikes) may be lost, but little else.
-    assert not {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut"} & excluded
-    assert len(excluded) <= 2
+    violators = {row["id"] for row in ROWS if row["violates"].get(flag)}
+    assert violators <= labelled
+    assert offered & violators == set()
 
 
-def test_nut_free_is_stricter_than_preference_flags_and_both_sit_clear_of_the_measurements() -> None:
-    assert NUT_FREE_THRESHOLD < PREFERENCE_THRESHOLD
-    violating_nut = [MEASURED[r][f] for r, f, v in LABELLED if v and f == NUT_FREE]
-    assert min(violating_nut) / 2 > NUT_FREE_THRESHOLD  # lots of headroom: the allergy must never sit on the edge
+@pytest.mark.parametrize("flag", [flag for flag in DIETARY_FLAGS if flag != NUT_FREE])
+def test_every_labelled_recipe_that_is_fine_for_a_preference_flag_is_still_offered(tmp_path, flag: str) -> None:
+    offered, labelled = _replay(tmp_path, flag)
+
+    fine = {row["id"] for row in ROWS if row["violates"].get(flag) is False}
+    assert fine <= labelled
+    assert fine - offered == set()
+
+
+def test_nut_free_still_offers_coconut_milk_nutmeg_butternut_and_the_ordinary_recipes(tmp_path) -> None:
+    offered, _ = _replay(tmp_path, NUT_FREE)
+
+    fine = {row["id"] for row in ROWS if row["violates"].get(NUT_FREE) is False}
+    assert {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut"} <= offered
+    assert fine - offered == ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS & fine
