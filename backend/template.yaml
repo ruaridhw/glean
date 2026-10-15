@@ -123,6 +123,43 @@ Resources:
     Properties:
       BucketName: !Sub "glean-recipe-cache-${Environment}-${AWS::AccountId}"
 
+  # Shared catalogue reference data (ADR 0001). Provisioned capacity is fixed so the whole
+  # account stays inside the DynamoDB free tier: 5/5 for the table plus 5/5 for the GSI is
+  # 10/10, against the 25/25 limit summed across every table and index in the region.
+  GleanCatalogueTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "glean-catalogue-${Environment}"
+      TableClass: STANDARD
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: gsi_pk
+          AttributeType: S
+        - AttributeName: version
+          AttributeType: N
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      GlobalSecondaryIndexes:
+        - IndexName: by_version
+          KeySchema:
+            - AttributeName: gsi_pk
+              KeyType: HASH
+            - AttributeName: version
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
   GleanFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -137,6 +174,7 @@ Resources:
           COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
           S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
           S3_RECIPE_CACHE_BUCKET: !Ref GleanRecipeCacheBucket
+          CATALOGUE_TABLE: !Ref GleanCatalogueTable
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -149,6 +187,8 @@ Resources:
             BucketName: !Ref GleanReceiptsBucket
         - S3CrudPolicy:
             BucketName: !Ref GleanRecipeCacheBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanCatalogueTable
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
         - Statement:
             - Effect: Allow
@@ -217,5 +257,7 @@ Outputs:
     Value: !Ref GleanUserPool
   UserPoolClientId:
     Value: !Ref GleanUserPoolClient
+  CatalogueTableName:
+    Value: !Ref GleanCatalogueTable
   CognitoDomain:
     Value: !Sub "${CognitoDomainPrefix}-${Environment}.auth.eu-west-2.amazoncognito.com"
