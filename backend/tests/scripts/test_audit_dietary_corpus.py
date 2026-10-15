@@ -6,9 +6,13 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import httpx
 import pytest
+from pydantic import SecretStr
 from scripts import audit_dietary_corpus as audit
 
+from glean.decisions import DECISION_MODEL, DecisionClient
+from glean.meal_plan.dietary_decisions import dietary_questions
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -168,3 +172,105 @@ def test_the_old_regex_alone_excludes_under_the_baseline_even_when_its_decision_
 
     assert audit.excluded_by_regex_or_baseline_decision(found, 0.5) is True
     assert audit.excluded_by_decision(found, 0.5) is False
+
+
+class _CountingDecisionApi:
+    def __init__(self) -> None:
+        self.requests = 0
+
+    def client(self) -> DecisionClient:
+        return DecisionClient(api_key=SecretStr("sk-or-test"), transport=httpx.MockTransport(self._handle))
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests += 1
+        questions = json.loads(request.content)["questions"]
+        return httpx.Response(
+            200,
+            json={
+                "id": "gen-dec-test",
+                "model": f"{DECISION_MODEL}-20261014",
+                "provider": "TypeSafe",
+                "answers": {name: {"type": "noul", "noul": 0.25} for name in questions},
+                "usage": {"input_tokens": 10, "output_tokens": 2, "cost": 0.00001},
+            },
+        )
+
+
+def _audit_dir(tmp_path: Path) -> Path:
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path / "corpus"))
+    for external_id in ("rec_a", "rec_b"):
+        corpus.save(
+            StoredRecipe(
+                external_id=external_id,
+                title=external_id,
+                ingredients=[StoredIngredient(canonical_name="Basil", quantity=1, unit="each")],
+            )
+        )
+    return tmp_path
+
+
+def test_decision_scoring_resumes_without_requests_when_the_criteria_are_unchanged(tmp_path: Path) -> None:
+    data_dir = _audit_dir(tmp_path)
+    api = _CountingDecisionApi()
+    audit.run_decisions(data_dir, api.client())
+    first = api.requests
+
+    audit.run_decisions(data_dir, api.client())
+
+    assert (first, api.requests) == (2, 2)
+
+
+def test_decision_scoring_asks_again_when_a_flags_criteria_text_changes(tmp_path: Path) -> None:
+    data_dir = _audit_dir(tmp_path)
+    api = _CountingDecisionApi()
+    audit.run_decisions(data_dir, api.client())
+    questions = dietary_questions()
+    nut_free = questions["nut-free"]
+    questions["nut-free"] = nut_free.model_copy(update={"instructions": nut_free.instructions + " Korma counts."})
+
+    audit.run_decisions(data_dir, api.client(), questions=questions)
+
+    assert api.requests == 4
+
+
+def test_decision_scoring_asks_again_when_a_recipe_changes(tmp_path: Path) -> None:
+    data_dir = _audit_dir(tmp_path)
+    api = _CountingDecisionApi()
+    audit.run_decisions(data_dir, api.client())
+    RecipeCorpusStore(FilesystemBlobStore(data_dir / "corpus")).save(
+        StoredRecipe(
+            external_id="rec_a",
+            title="rec_a",
+            ingredients=[StoredIngredient(canonical_name="Korma paste", quantity=1, unit="each")],
+        )
+    )
+
+    audit.run_decisions(data_dir, api.client())
+
+    assert api.requests == 3
+
+
+@pytest.mark.parametrize(
+    ("ingredients", "unsafe"),
+    [
+        (["Korma Curry Paste", "Onion"], True),
+        (["Pasanda Spice Mix"], True),
+        (["Tikka Masala Seasoning"], True),
+        (["Nut-Free Korma Paste"], False),
+        (["Chicken Breast", "Onion"], False),
+        (["Tikka Masala Sauce"], False),
+    ],
+)
+def test_the_maintainers_paste_policy_marks_korma_pasanda_and_tikka_masala_pastes_unsafe(ingredients, unsafe) -> None:
+    assert audit.violates_paste_policy(ingredients) is unsafe
+
+
+def test_disagreements_count_recipes_a_judge_says_contain_nuts_that_the_decision_keeps() -> None:
+    signals = {
+        "r1": audit.Signals(judges={"a": "breaks", "b": "fine"}, regex=False, probability=0.05),
+        "r2": audit.Signals(judges={"a": "breaks", "b": "unsure"}, regex=False, probability=0.9),
+        "r3": audit.Signals(judges={"a": "fine", "b": "unsure"}, regex=False, probability=0.05),
+        "r4": audit.Signals(judges={"a": "breaks", "b": "breaks"}, regex=True, probability=0.05),
+    }
+
+    assert audit.judge_flagged_but_kept(signals, threshold=0.12) == ["r1"]
