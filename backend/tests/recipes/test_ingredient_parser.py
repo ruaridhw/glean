@@ -168,3 +168,29 @@ def test_parse_ingredient_text_reads_spaced_and_us_style_sized_packages(
     assert parsed.quantity == pytest.approx(expected_quantity)
     assert parsed.unit == expected_unit
     assert parsed.preparation == expected_preparation
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("1 cup coconut milk", "Coconut milk", 236.59, "ml"),
+        ("2 cups chicken stock", "Chicken stock", 473.18, "ml"),
+        ("1 cup freshly squeezed orange juice", "Freshly squeezed orange juice", 236.59, "ml"),
+        ("1/2 cup extra virgin olive oil", "Extra virgin olive oil", 118.3, "ml"),
+        ("1 cup soy sauce", "Soy sauce", 236.59, "ml"),
+        ("1 cup milk powder", "Milk powder", 1, "cup"),
+        ("1 cup cream cheese", "Cream cheese", 1, "cup"),
+        ("1 cup grated cheddar", "Grated cheddar", 1, "cup"),
+        ("1 cup rolled oats", "Rolled oats", 97, "g"),
+        ("1 cup honey", "Honey", 336, "g"),
+    ],
+)
+def test_parse_ingredient_text_treats_a_cup_of_a_liquid_as_ml_and_only_unknown_solids_stay_cups(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity, rel=1e-2)
+    assert parsed.unit == expected_unit

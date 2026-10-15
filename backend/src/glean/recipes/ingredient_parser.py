@@ -104,30 +104,30 @@ _CUP_DENSITIES_G_PER_ML = {
     **dict.fromkeys(("flour", "plain flour", "all-purpose flour", "self-raising flour", "bread flour"), 0.593),
     **dict.fromkeys(("sugar", "caster sugar", "granulated sugar", "white sugar"), 0.845),
     **dict.fromkeys(("rice", "basmati rice", "long grain rice", "white rice"), 0.888),
+    **dict.fromkeys(("oats", "rolled oats"), 0.41),
+    "brown sugar": 0.845,
+    "icing sugar": 0.561,
+    "cocoa powder": 0.469,
+    "honey": 1.42,
+    "maple syrup": 1.32,
 }
-_CUP_LIQUIDS = {
+# A cup of anything whose last word is one of these is a liquid, so it converts to ml. "milk powder" and
+# "cream cheese" end in other words and stay cups.
+_CUP_LIQUID_HEADS = {
     "water",
     "milk",
-    "whole milk",
-    "skimmed milk",
     "buttermilk",
     "cream",
-    "double cream",
-    "single cream",
     "stock",
-    "chicken stock",
-    "vegetable stock",
-    "beef stock",
+    "broth",
     "juice",
-    "orange juice",
-    "lemon juice",
     "oil",
-    "olive oil",
-    "vegetable oil",
     "wine",
-    "white wine",
-    "red wine",
     "vinegar",
+    "beer",
+    "cider",
+    "sauce",
+    "passata",
 }
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
@@ -315,7 +315,7 @@ def _convert_cups(name: str, quantity: float) -> tuple[str, float, str, str | No
     key = _ingredient_key(name)
     if (density := _CUP_DENSITIES_G_PER_ML.get(key)) is not None:
         return name, millilitres * density, "g", None
-    if key in _CUP_LIQUIDS:
+    if key.rsplit(" ", 1)[-1] in _CUP_LIQUID_HEADS:
         return name, millilitres, "ml", None
     return name, quantity, "cup", None
 
