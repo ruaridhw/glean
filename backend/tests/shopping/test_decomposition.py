@@ -87,3 +87,16 @@ def test_a_multi_item_description_is_split_into_shopping_units_parsed_one_by_one
 
     assert router.phrases == ["2 bananas", "bread", "eggs", "milk"]
     assert [item.name for item in response.items] == ["milk", "2 bananas", "bread", "eggs"]
+
+
+def test_all_cache_hits_are_answered_without_calling_the_llm_or_the_decision_model(tmp_path: Path) -> None:
+    _parse("milk, bread", router=_FakeLLMRouter(), tmp_path=tmp_path)
+    router = _FakeLLMRouter()
+
+    def unreachable(phrase: str) -> float:
+        raise AssertionError(f"decision asked about a cached phrase: {phrase}")
+
+    response = _parse("Milk,  bread", router=router, tmp_path=tmp_path, decisions=_decision_client(unreachable))
+
+    assert router.calls == []
+    assert [item.name for item in response.items] == ["milk", "bread"]

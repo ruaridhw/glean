@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import TYPE_CHECKING
 
@@ -48,10 +49,28 @@ def parse_shopping_description(
 ) -> ShoppingParseResponse:
     units = split_into_units(request.text)
     logger.info("parsing shopping description", extra={"text_length": len(request.text), "units": len(units)})
-    parsed = [_parse_unit(unit, llm_router=llm_router) for unit in units]
+    parsed = [_parse_unit_cached(unit, llm_router=llm_router, cache=cache) for unit in units]
     merged = ShoppingParseResponse(items=[item for response in parsed for item in response.items])
     logger.info("shopping description parsed", extra={"items": len(merged.items)})
     return merged
+
+
+def _unit_key(unit: str) -> str:
+    return " ".join(unit.lower().split())
+
+
+def _cache_path(unit: str) -> str:
+    return f"shopping_parse/{hashlib.sha256(_unit_key(unit).encode()).hexdigest()}.json"
+
+
+def _parse_unit_cached(unit: str, *, llm_router: LLMRouter, cache: BlobStore) -> ShoppingParseResponse:
+    path = _cache_path(unit)
+    if (hit := cache.read(path)) is not None:
+        return ShoppingParseResponse.model_validate_json(hit)
+    response = _parse_unit(unit, llm_router=llm_router)
+    # food_group and api_ingredient_id are computed on read, so only stored fields are cached.
+    cache.write(path, response.model_dump_json(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}}))
+    return response
 
 
 def _parse_unit(unit: str, *, llm_router: LLMRouter) -> ShoppingParseResponse:
