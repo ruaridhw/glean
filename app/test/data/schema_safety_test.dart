@@ -19,7 +19,7 @@ import 'package:sqlite3/sqlite3.dart';
 Future<String> _schemaOf(GleanDatabase db) async {
   final rows = await db
       .customSelect(
-        "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL "
+        'SELECT sql FROM sqlite_master WHERE sql IS NOT NULL '
         "AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
       )
       .get();
