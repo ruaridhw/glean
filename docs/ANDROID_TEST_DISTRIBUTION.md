@@ -1,7 +1,7 @@
 # Android test distribution
 
-**Status: implemented in `codemagic.yaml`, and the [one-time setup](#one-time-setup)
-is done. The first build is still to run.** This replaced the originally planned
+**Status: in use.** The [one-time setup](#one-time-setup) is done, and builds
+run from `main` and install in place on the owner's Pixel. This replaced the originally planned
 Fastlane lane run from the Mac. It copies the
 model in [`ruaridhw/routingapp`'s `docs/ANDROID_TEST_DISTRIBUTION.md`](https://github.com/ruaridhw/routingapp/blob/main/docs/ANDROID_TEST_DISTRIBUTION.md).
 iOS is out of scope for now.
@@ -24,8 +24,8 @@ repository never start a build, so they cost no Codemagic minutes.
 | Version codes | Read from every Play track | Codemagic `BUILD_NUMBER` |
 | Cost | Free | Free tier (500 macOS M2 minutes a month) |
 
-Today the Expo app ships an APK as a GitHub Release on every merge to main.
-Neither option keeps that. The difference is that Firebase sends testers the
+The Expo app used to ship an APK as a GitHub Release on every merge to main.
+Neither option kept that. The difference is that Firebase sends testers the
 update without anyone forwarding a download link.
 
 ## Flow
@@ -160,8 +160,8 @@ groups:
   `CM_KEYSTORE_PATH` is set, else with a local `key.properties`, else with the
   debug key (which the signature check refuses to distribute).
 
-At cutover (merging the Flutter port), the Expo `deploy` job and its GitHub
-Release APKs go away with `mobile/`.
+The Expo `deploy` job and its GitHub Release APKs went away with `mobile/`
+when the Flutter app merged (#102).
 
 ## Tester installation
 
@@ -176,11 +176,12 @@ shopping list.
 
 ## First-build acceptance check
 
-- [ ] Validation, analysis and tests passed in Codemagic.
-- [ ] Signature verification passed.
-- [ ] Firebase lists the expected version and build number.
-- [ ] After uninstalling the Expo app, the APK installs on a phone.
-- [ ] Sign in with Google, then run one AI flow (shop describe) and one corpus
+- [x] Validation, analysis and tests passed in Codemagic.
+- [x] Signature verification passed.
+- [x] Firebase lists the expected version and build number.
+- [x] After uninstalling the Expo app, the APK installs on a phone.
+- [x] Sign in with Google, then run one AI flow (shop describe) and one corpus
       flow (Generate) against prod.
-- [ ] Start a second build from a harmless change and confirm it updates in
-      place.
+- [x] Start a second build from a harmless change and confirm it updates in
+      place. Builds 3 and 8 updated over earlier builds with the user's data
+      kept.
