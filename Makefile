@@ -90,6 +90,12 @@ lint-app:  ## dart format (writes fixes) + flutter analyze
 pre-commit:  ## Run all pre-commit hooks across the repo
 	pre-commit run --all-files
 
+# ── Deploy ────────────────────────────────────────────────────────────────────
+
+.PHONY: deploy-prod
+deploy-prod:  ## Deploy the backend to prod, stamped with the commit (ALLOW_DIRTY=1 to deploy a dirty/unpushed tree)
+	python3 backend/scripts/deploy_prod.py
+
 # ── Dev Servers ───────────────────────────────────────────────────────────────
 
 .PHONY: start-backend
