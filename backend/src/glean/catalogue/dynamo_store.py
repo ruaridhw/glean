@@ -51,15 +51,19 @@ class DynamoCatalogueStore:
     writers never share a version and a lost race never leaves a half-written change.
     """
 
-    def __init__(self, table_name: str, region: str = "eu-west-2") -> None:
+    def __init__(self, table_name: str, region: str = "eu-west-2", session: boto3.Session | None = None) -> None:
         self._table_name = table_name
-        self._client = boto3.resource("dynamodb", region_name=region).meta.client
+        self._client = (session or boto3.Session()).resource("dynamodb", region_name=region).meta.client
         self._snapshot: tuple[int, InMemoryCatalogueStore] | None = None
 
     def catalogue_version(self) -> int:
         """How many content writes the catalogue has had; the newest item row carries this version."""
+        return self._meta()[0]
+
+    def _meta(self) -> tuple[int, int]:
+        """The version counter and how many items the catalogue holds."""
         row = self._get(_META)
-        return int(row["version"]) if row else 0
+        return (int(row["version"]), int(row.get("item_count", 0))) if row else (0, 0)
 
     def get_by_name(self, name: str) -> CatalogueItem | None:
         alias = self._get(_alias_pk(name_key(name)))
@@ -72,26 +76,26 @@ class DynamoCatalogueStore:
         return self._catalogue().shortlist(name, limit)
 
     def upsert_alias(self, item_id: str, alias: str) -> CatalogueItem:
-        def plan(version: int) -> tuple[CatalogueItem, list[_Op]]:
+        def plan(version: int) -> tuple[CatalogueItem, list[_Op], int]:
             row = self._get(_item_pk(item_id))
             if row is None:
                 raise UnknownItemError(item_id)
             item = _to_item(row)
             owner = self._alias_owner(alias)
             if owner == item_id:
-                return item, []
+                return item, [], 0
             if owner is not None:
                 raise AliasConflictError(f"{alias!r} already names {owner}")
             updated = item.model_copy(update={"aliases": (*item.aliases, alias.strip())})
-            return updated, [self._put_item(updated, version), self._put_alias(name_key(alias), item_id)]
+            return updated, [self._put_item(updated, version), self._put_alias(name_key(alias), item_id)], 0
 
         return self._commit(plan)
 
     def create_provisional(self, name: str, group: GroupId, form: Form, aliases: tuple[str, ...] = ()) -> CatalogueItem:
-        def plan(version: int) -> tuple[CatalogueItem, list[_Op]]:
+        def plan(version: int) -> tuple[CatalogueItem, list[_Op], int]:
             existing = self.get_by_name(name)
             if existing is not None:
-                return existing, []
+                return existing, [], 0
             item = CatalogueItem(
                 id=self._free_id(name), name=name.strip(), aliases=aliases, group=group, form=form, source=Source.LLM
             )
@@ -100,7 +104,8 @@ class DynamoCatalogueStore:
                 owner = self._alias_owner(key)
                 if owner is not None:
                     raise AliasConflictError(f"{key!r} already names {owner}")
-            return item, [self._put_item(item, version, must_be_new=True), *(self._put_alias(k, item.id) for k in keys)]
+            ops = [self._put_item(item, version, must_be_new=True), *(self._put_alias(k, item.id) for k in keys)]
+            return item, ops, 1
 
         return self._commit(plan)
 
@@ -124,35 +129,39 @@ class DynamoCatalogueStore:
             if row is not None and _to_item(row) == item:
                 continue
 
-            def plan(version: int, item: CatalogueItem = item) -> tuple[None, list[_Op]]:
+            def plan(version: int, item: CatalogueItem = item) -> tuple[None, list[_Op], int]:
                 keys = _name_keys(item)
                 for key in keys:
                     owner = self._alias_owner(key)
                     if owner is not None and owner != item.id:
                         raise AliasConflictError(f"{key!r} already names {owner}")
-                return None, [self._put_item(item, version), *(self._put_alias(k, item.id) for k in keys)]
+                is_new = self._get(_item_pk(item.id)) is None
+                return None, [self._put_item(item, version), *(self._put_alias(k, item.id) for k in keys)], int(is_new)
 
             self._commit(plan)
             written += 1
         return written
 
     def _catalogue(self) -> InMemoryCatalogueStore:
-        """Every item, rebuilt only when the catalogue version has moved since the last call."""
-        version = self.catalogue_version()
-        if self._snapshot is None or self._snapshot[0] != version:
-            rows = self._query(_CATALOGUE_GSI_PK)
-            # The index is eventually consistent: key the copy by the newest version it actually contains, so a
-            # lagging read is simply reloaded on the next call.
-            newest = max((int(row["version"]) for row in rows), default=0)
-            self._snapshot = (newest, InMemoryCatalogueStore(_to_item(row) for row in rows))
-        return self._snapshot[1]
+        """Every item, reused only while it is provably complete and current.
 
-    def _commit[T](self, plan: Callable[[int], tuple[T, list[_Op]]]) -> T:
+        The index is eventually consistent, so a read can miss items that META already counts. Such a partial read is
+        used for this call but never kept: the next call reads the index again.
+        """
+        version, count = self._meta()
+        if self._snapshot is not None and self._snapshot[0] == version:
+            return self._snapshot[1]
+        rows = self._query(_CATALOGUE_GSI_PK)
+        catalogue = InMemoryCatalogueStore(_to_item(row) for row in rows)
+        self._snapshot = (version, catalogue) if len(rows) == count else None
+        return catalogue
+
+    def _commit[T](self, plan: Callable[[int], tuple[T, list[_Op], int]]) -> T:
         """Run *plan* against the current version; its writes land together with the version bump, or not at all."""
         for attempt in range(_MAX_ATTEMPTS):
             seen = self.catalogue_version()
             try:
-                result, ops = plan(seen + 1)
+                result, ops, new_items = plan(seen + 1)
             except (AliasConflictError, UnknownItemError):
                 if self.catalogue_version() == seen:
                     raise
@@ -160,7 +169,7 @@ class DynamoCatalogueStore:
             if not ops:
                 return result
             try:
-                self._client.transact_write_items(TransactItems=[self._bump_meta(seen), *ops])
+                self._client.transact_write_items(TransactItems=[self._bump_meta(seen, new_items), *ops])
             except ClientError as error:
                 if not _is_contention(error):
                     raise
@@ -171,14 +180,18 @@ class DynamoCatalogueStore:
             return result
         raise RuntimeError("catalogue write kept losing the version race")
 
-    def _bump_meta(self, seen: int) -> _Op:
+    def _bump_meta(self, seen: int, new_items: int) -> _Op:
         return {
             "Update": {
                 "TableName": self._table_name,
                 "Key": {"pk": _META},
-                "UpdateExpression": "SET version = :new",
+                "UpdateExpression": "SET version = :new ADD item_count :added",
                 "ConditionExpression": "version = :seen" if seen else "attribute_not_exists(version)",
-                "ExpressionAttributeValues": {":new": seen + 1, **({":seen": seen} if seen else {})},
+                "ExpressionAttributeValues": {
+                    ":new": seen + 1,
+                    ":added": new_items,
+                    **({":seen": seen} if seen else {}),
+                },
             }
         }
 

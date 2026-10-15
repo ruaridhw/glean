@@ -136,3 +136,36 @@ def test_a_refused_creation_writes_no_alias_rows(table: Any, dynamo_store: Dynam
     with pytest.raises(AliasConflictError):
         dynamo_store.create_provisional("fresh thing", GroupId.SPICES, Form.NOT_APPLICABLE, aliases=("cilantro",))
     assert table.scan()["Items"] == rows_before
+
+
+class _IndexView:
+    """Makes the by_version index lag: drops chosen item rows from Query responses while `lagging` is set."""
+
+    def __init__(self) -> None:
+        self.lagging = False
+        self.hidden: set[str] = set()
+
+    def __call__(self, parsed: dict[str, Any], **_: Any) -> None:
+        if not self.lagging or "Items" not in parsed:
+            return
+        parsed["Items"] = [row for row in parsed["Items"] if _plain(row["pk"]) not in self.hidden]
+
+
+def _plain(value: Any) -> str:
+    return value["S"] if isinstance(value, dict) else value
+
+
+def test_a_shortlist_built_from_a_lagging_index_is_not_kept_once_the_index_recovers(table: Any) -> None:
+    view = _IndexView()
+    session = boto3.Session(region_name=REGION)
+    session.events.register("after-call.dynamodb.Query", view)
+    store = DynamoCatalogueStore(TABLE_NAME, region=REGION, session=session)
+    store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    store.create_provisional("Birthday Candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
+
+    view.lagging, view.hidden = True, {"ITEM#dragon-fruit"}
+    assert store.shortlist("dragon fruit") == []  # the index really is behind; a direct lookup is not
+    assert store.get_by_name("dragon fruit") is not None
+
+    view.lagging = False
+    assert [item.id for item in store.shortlist("dragon fruit")] == ["dragon-fruit"]
