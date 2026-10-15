@@ -122,3 +122,9 @@ def get_recipe_cache_store() -> BlobStore:
 def get_recipe_corpus_store() -> BlobStore:
     """Blob store for the durable recipe corpus."""
     return _make_store("corpus")
+
+
+@lru_cache(maxsize=1)
+def get_shopping_parse_store() -> BlobStore:
+    """Blob store for cached shopping-unit parses."""
+    return _make_store("shopping_parse_cache")

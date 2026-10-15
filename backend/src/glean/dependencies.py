@@ -6,8 +6,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
+from glean.decisions import DecisionClient
 from glean.llm import LLMRouter
 
 security = HTTPBearer(auto_error=False)
@@ -15,6 +17,15 @@ security = HTTPBearer(auto_error=False)
 
 def get_llm_router(settings: Annotated[Settings, Depends(get_settings)]) -> LLMRouter:
     return LLMRouter.from_settings(settings)
+
+
+def get_decision_client(settings: Annotated[Settings, Depends(get_settings)]) -> DecisionClient:
+    return _decision_client_for(settings.openrouter_api_key)
+
+
+@lru_cache(maxsize=1)
+def _decision_client_for(api_key: SecretStr) -> DecisionClient:
+    return DecisionClient(api_key=api_key)
 
 
 @lru_cache(maxsize=1)

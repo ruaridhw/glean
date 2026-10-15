@@ -12,6 +12,7 @@ from glean.recipe_api.blob_store import (
     S3BlobStore,
     get_recipe_cache_store,
     get_recipe_corpus_store,
+    get_shopping_parse_store,
 )
 
 if TYPE_CHECKING:
@@ -116,6 +117,7 @@ class _Settings:
 def _clear_store_caches() -> None:
     get_recipe_cache_store.cache_clear()
     get_recipe_corpus_store.cache_clear()
+    get_shopping_parse_store.cache_clear()
 
 
 def test_factory_uses_filesystem_without_a_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -134,6 +136,16 @@ def test_factory_uses_s3_when_bucket_configured(monkeypatch: pytest.MonkeyPatch,
     # corpus is namespaced under a "corpus/" prefix; the HTTP cache sits at the root.
     corpus.write("x.json", "{}")
     assert "corpus/x.json" in fake_s3.objects
+
+
+def test_shopping_parse_store_is_namespaced_apart_from_the_recipe_data(
+    monkeypatch: pytest.MonkeyPatch, fake_s3: _FakeS3Client
+) -> None:
+    monkeypatch.setattr("glean.config.get_settings", lambda: _Settings("glean-recipe-cache-prod"))
+
+    get_shopping_parse_store().write("v1/x.json", "{}")
+
+    assert "shopping_parse_cache/v1/x.json" in fake_s3.objects
 
 
 def test_blob_store_module_exposes_default_cache_dir() -> None:
