@@ -16,6 +16,7 @@ log_level  # Pydantic Settings field
 rate_limit_per_hour  # Pydantic Settings field
 model_config  # Pydantic v2 model configuration
 _validate_iso_duration  # Pydantic field validator
+_fallback_out_of_taxonomy_category  # Pydantic field validator (ParsedIngredient.category)
 name  # Pydantic field (ParsedIngredient, CompressedPantryItem)
 quantity  # Pydantic field (ParsedIngredient, CompressedPantryItem)
 unit  # Pydantic field (ParsedIngredient, CompressedPantryItem)

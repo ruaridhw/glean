@@ -12,11 +12,13 @@ class ShoppingParseRequest(BaseModel):
 
 
 class ShoppingProposalItem(ParsedIngredient):
-    """A grocery item proposal extracted from a shopping-list description."""
+    """A grocery item proposal extracted from a shopping-list description.
+
+    `category` (and the `food_group` it derives) are inherited from `ParsedIngredient` —
+    see that class for the taxonomy and out-of-taxonomy fallback.
+    """
 
     model_config = ConfigDict(extra="forbid")
-
-    category: str | None = Field(default=None, description="Broad grocery category when obvious.")
 
     @computed_field(
         return_type=str | None,

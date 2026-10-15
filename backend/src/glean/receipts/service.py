@@ -12,25 +12,31 @@ from langchain_core.messages.content import create_image_block, create_text_bloc
 
 from glean.llm import Feature
 from glean.observability import logger, tracer
-from glean.receipts.schemas import DescribeRequest, ScanResponse
+from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, DescribeRequest, ScanResponse
 
 if TYPE_CHECKING:
     from glean.llm import LLMRouter
 
-NORMALISE_SYSTEM_PROMPT = """You are a grocery ingredient normaliser.
+# Built from the taxonomy dict, not hand-copied, so the prompt text can't drift from the
+# Literal enum the response schema actually enforces.
+_CATEGORY_LIST = ", ".join(INGREDIENT_CATEGORY_FOOD_GROUPS)
+
+NORMALISE_SYSTEM_PROMPT = f"""You are a grocery ingredient normaliser.
 Given a list of receipt line items (name, quantity, price), return structured items with:
 - name: canonical lowercase ingredient name (e.g. "chicken breast", "whole milk")
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
+- category: exactly one of: {_CATEGORY_LIST}. Choose the single best fit; use null only if genuinely none apply
 - confidence: 0.0-1.0 reflecting how certain you are about the normalisation"""
 
-VISION_SYSTEM_PROMPT = """You are a grocery receipt scanner and ingredient normaliser.
+VISION_SYSTEM_PROMPT = f"""You are a grocery receipt scanner and ingredient normaliser.
 Given an image of a grocery receipt, extract all line items and return structured items with:
 - name: canonical lowercase ingredient name (e.g. "chicken breast", "whole milk")
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
+- category: exactly one of: {_CATEGORY_LIST}. Choose the single best fit; use null only if genuinely none apply
 - confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation"""
 
 
