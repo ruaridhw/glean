@@ -226,3 +226,25 @@ def test_parse_ingredient_text_reads_vague_measures_written_without_a_number(
     assert parsed.canonical_name == expected_name
     assert parsed.quantity == pytest.approx(expected_quantity)
     assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("Cheddar (8 oz)", "Cheddar", 226.8, "g"),
+        ("1.0 Cheddar (8 oz)", "Cheddar", 226.8, "g"),
+        ("Cheddar (8 ounces)", "Cheddar", 226.8, "g"),
+        ("Cheddar (8 oz) x2", "Cheddar", 453.6, "g"),
+        ("Milk (1 pint)", "Milk", 568, "ml"),
+        ("Bacon lardons (100g)", "Bacon lardons", 100, "g"),
+    ],
+)
+def test_parse_ingredient_text_keeps_a_parenthetical_size_out_of_the_name(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit

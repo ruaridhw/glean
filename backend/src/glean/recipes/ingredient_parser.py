@@ -268,7 +268,8 @@ def _parse_measure_prefix(text: str) -> tuple[str, float, str, str | None] | Non
 
 def _parse_suffix_measure_or_count(text: str) -> tuple[str, float, str, str | None] | None:
     if match := re.match(
-        rf"^(?P<name>.+?)\s+\((?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s*"
+        # An optional leading "1" is the count the backfill prefixes to stored rows; the size is the amount.
+        rf"^(?:1(?:\.0)?\s+)?(?P<name>.+?)\s+\((?P<amount>{_NUMBER_PATTERN})\s*(?P<unit>[A-Za-z]+)\)\s*"
         rf"(?:x(?P<count>{_NUMBER_PATTERN}))?$",
         text,
         flags=re.IGNORECASE,
