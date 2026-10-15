@@ -22,7 +22,7 @@ from glean.recipes.ingredient_parser import parse_ingredient_text
         ("1/2 tsp dried chilli flakes", "Dried chilli flakes", 0.5, "tsp", None),
         ("2 pouches Microwave Rice", "Microwave Rice", 2, "units", "2 pouches"),
         ("1x 250g Pouch Cooked Lentils", "Cooked Lentils", 250, "g", "1 pouch"),
-        ("8Clove Garlic", "Clove Garlic", 8, "pcs", None),
+        ("8Clove Garlic", "Garlic", 8, "clove", None),
         ("3Stick Celery", "Celery", 3, "pcs", None),
         ("3cm Ginger", "Ginger", 3, "cm", None),
         ("0.5Stick Cinnamon", "Cinnamon", 0.5, "pcs", None),
@@ -84,6 +84,33 @@ def test_parse_ingredient_text_converts_imperial_measures_to_metric(
     ],
 )
 def test_parse_ingredient_text_resolves_a_stick_of_butter_to_grams_and_other_sticks_to_pieces(
+    raw: str, expected_name: str, expected_quantity: float, expected_unit: str
+) -> None:
+    parsed = parse_ingredient_text(raw)
+
+    assert parsed is not None
+    assert parsed.canonical_name == expected_name
+    assert parsed.quantity == pytest.approx(expected_quantity)
+    assert parsed.unit == expected_unit
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_name", "expected_quantity", "expected_unit"),
+    [
+        ("1 knob butter", "Butter", 1, "knob"),
+        ("1 pinch of salt", "Salt", 1, "pinch"),
+        ("2 Dashes Worcestershire sauce", "Worcestershire sauce", 2, "dash"),
+        ("1 handful coriander", "Coriander", 1, "handful"),
+        ("3 sprigs thyme", "Thyme", 3, "sprig"),
+        ("4 cloves garlic, crushed", "Garlic, crushed", 4, "clove"),
+        ("1 bunch of spring onions", "Spring onions", 1, "bunch"),
+        ("1 thumb of ginger", "Ginger", 2.5, "cm"),
+        ("2 thumbs ginger", "Ginger", 5, "cm"),
+        ("2 slices bread", "Bread", 2, "pcs"),
+        ("4 rashers streaky bacon", "Streaky bacon", 4, "pcs"),
+    ],
+)
+def test_parse_ingredient_text_gives_vague_measures_named_units_without_leaking_the_word(
     raw: str, expected_name: str, expected_quantity: float, expected_unit: str
 ) -> None:
     parsed = parse_ingredient_text(raw)
