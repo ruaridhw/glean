@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -58,7 +60,23 @@ class GleanLogger {
 
   /// Logging never throws into callers: each sink is guarded on its own, and a failing sink falls back to
   /// [debugPrint] so a full disk or a missing native handler can't replace the error being logged.
-  Future<void> _write(String level, String raw) async {
+  ///
+  /// The whole write runs in a zone marked by [isInsideLogSink], and anything uncaught from it stops there, so
+  /// an error raised by the logging path itself can't be reported back into the logger.
+  Future<void> _write(String level, String raw) {
+    final Completer<void> done = Completer<void>();
+    runZonedGuarded(
+      () => _writeToSinks(level, raw).whenComplete(done.complete),
+      (Object error, StackTrace _) {
+        debugPrint('glean: logging failed (${error.runtimeType})');
+        if (!done.isCompleted) done.complete();
+      },
+      zoneValues: <Object, Object?>{_sinkZoneKey: true},
+    );
+    return done.future;
+  }
+
+  Future<void> _writeToSinks(String level, String raw) async {
     final String message = redactSecrets(raw);
     try {
       file.append('${_clock().toUtc().toIso8601String()} $level $message');
@@ -74,3 +92,9 @@ class GleanLogger {
     }
   }
 }
+
+const Object _sinkZoneKey = #gleanLogSink;
+
+/// True only inside a logger write. An error reported from here came from the logging path itself, so the
+/// global hooks must not log it again; every other error is logged, even while a write is pending.
+bool get isInsideLogSink => Zone.current[_sinkZoneKey] == true;
