@@ -10,6 +10,7 @@ import 'package:json_annotation/json_annotation.dart'
 import '../logging/glean_logger.dart';
 import 'api_exception.dart';
 import 'models/catalogue.dart';
+import 'models/diagnostics.dart';
 import 'models/meal_plan.dart';
 import 'models/receipts.dart';
 import 'models/recipes.dart';
@@ -160,6 +161,42 @@ class GleanApiClient {
       () async => httpClient.get(uri, headers: await _authHeaders()),
       (dynamic json) =>
           CatalogueSyncResponse.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  // --- Diagnostics ---
+
+  /// Uploads a database snapshot and the app log to the signed-in user's own timestamped export prefix.
+  Future<DiagnosticsExportResponse> exportDiagnostics({
+    required Uint8List database,
+    required Uint8List log,
+  }) {
+    final uri = _uri('/dev/export-db');
+    return _send(
+      uri,
+      () async {
+        final request = http.MultipartRequest('POST', uri)
+          ..headers.addAll(await _authHeaders())
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'database',
+              database,
+              filename: 'glean.db',
+              contentType: MediaType('application', 'octet-stream'),
+            ),
+          )
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'log',
+              log,
+              filename: 'app.log',
+              contentType: MediaType('text', 'plain'),
+            ),
+          );
+        return http.Response.fromStream(await httpClient.send(request));
+      },
+      (dynamic json) =>
+          DiagnosticsExportResponse.fromJson(json as Map<String, dynamic>),
     );
   }
 
