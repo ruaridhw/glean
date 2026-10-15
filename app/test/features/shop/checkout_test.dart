@@ -148,5 +148,142 @@ void main() {
         expect(find.text('Eggs'), findsNothing);
       },
     );
+
+    testWidgets('cancelling the review leaves the checked Shopping items '
+        'checked and the pantry empty', (WidgetTester tester) async {
+      final int milkId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+      );
+      await shopping().toggleRows(
+        ids: [milkId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done shopping'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review items'), findsNothing);
+      expect(find.text('Milk'), findsOneWidget);
+      final rows = (await tester.runAsync(
+        () => shopping().watchAll('test-user').first,
+      ))!;
+      expect(rows.single.isChecked, isTrue);
+      expect(
+        await tester.runAsync(() => pantry().getAll('test-user')),
+        isEmpty,
+      );
+    });
+
+    testWidgets('one Undo after confirming restores the checked Shopping items '
+        'and reverses the pantry additions exactly', (
+      WidgetTester tester,
+    ) async {
+      await pantry().addItem(
+        userId: 'test-user',
+        name: 'eggs',
+        quantity: 4,
+        unit: 'units',
+        category: 'dairy',
+      );
+      final int milkId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+        quantity: 500,
+        unit: 'ml',
+      );
+      final int eggsId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Eggs',
+        quantity: 6,
+        unit: 'units',
+      );
+      await shopping().toggleRows(
+        ids: [milkId, eggsId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done shopping'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add 2 items'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Added 2 items to your pantry'), findsOneWidget);
+      final stocked = (await tester.runAsync(
+        () => pantry().getAll('test-user'),
+      ))!;
+      expect(
+        {for (final i in stocked) i.canonicalName: i.quantity},
+        {'eggs': 10.0, 'milk': 500.0},
+      );
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      final restored = (await tester.runAsync(
+        () => shopping().watchAll('test-user').first,
+      ))!;
+      expect(restored.map((r) => r.name), unorderedEquals(['Milk', 'Eggs']));
+      expect(restored.every((r) => r.isChecked), isTrue);
+      final afterUndo = (await tester.runAsync(
+        () => pantry().getAll('test-user'),
+      ))!;
+      expect(
+        {for (final i in afterUndo) i.canonicalName: i.quantity},
+        {'eggs': 4.0},
+      );
+    });
+
+    testWidgets('a checked Shopping item arrives with its ingredient\'s '
+        'category, and one without a category confirms uncategorised', (
+      WidgetTester tester,
+    ) async {
+      await ingredients().resolveOrCreate(
+        canonicalName: 'milk',
+        category: 'dairy',
+      );
+      final int milkId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Milk',
+      );
+      final int plumsId = await shopping().addManualItem(
+        userId: 'test-user',
+        name: 'Plan plums',
+      );
+      await shopping().toggleRows(
+        ids: [milkId, plumsId],
+        userId: 'test-user',
+        checked: true,
+      );
+
+      await harness.pumpAt(tester, AppRoutes.shop.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done shopping'));
+      await tester.pumpAndSettle();
+
+      // Only the row with no category asks for one.
+      expect(
+        find.text("We couldn't identify a category for this item."),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Add 2 items'));
+      await tester.pumpAndSettle();
+
+      final stocked = (await tester.runAsync(
+        () => pantry().getAll('test-user'),
+      ))!;
+      expect(
+        {for (final i in stocked) i.canonicalName: i.category},
+        {'milk': 'dairy', 'plan plums': null},
+      );
+    });
   });
 }
