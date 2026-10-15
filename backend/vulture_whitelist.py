@@ -55,6 +55,17 @@ fat_g  # NutritionFields
 fibre_g  # NutritionFields
 sugar_g  # NutritionFields
 sodium_mg  # NutritionFields
+# shopping/schemas.py ShoppingUnit members (mirror the app's shoppingUnits) and validator
+G  # ShoppingUnit member
+KG  # ShoppingUnit member
+ML  # ShoppingUnit member
+L  # ShoppingUnit member
+UNITS  # ShoppingUnit member
+PACK  # ShoppingUnit member
+BOTTLE  # ShoppingUnit member
+BAG  # ShoppingUnit member
+BOX  # ShoppingUnit member
+_drop_unit_price  # Pydantic field validator (ShoppingProposalItem.unit_price)
 
 # TODO: the first consuming PRs (#125's dietary check, #123's normalisation) must remove the
 # decisions.py entries below as they start using each name.

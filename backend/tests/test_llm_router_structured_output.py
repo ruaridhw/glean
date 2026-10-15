@@ -54,4 +54,3 @@ def test_every_feature_is_invoked_through_json_schema_structured_output(
     assert reply == _Reply(answer="ok")
     assert chat_model.structured_calls == [(_Reply, {"method": "json_schema"})]
     assert chat_model.free_text_calls == 0
-
