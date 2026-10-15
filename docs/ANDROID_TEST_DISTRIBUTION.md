@@ -21,7 +21,7 @@ repository never start a build, so they cost no Codemagic minutes.
 | Needs a Play Console app | Yes (internal track, service-account key) | No |
 | Build machine | The Mac's local toolchain, Android SDK included | Codemagic's clean builder, Flutter version pinned |
 | Getting the APK onto phones | Play internal-testing opt-in | Firebase invite, then update notifications |
-| Version codes | Read from every Play track | Codemagic `BUILD_NUMBER` |
+| Version codes | Read from every Play track | Minutes since 2024-01-01 UTC (ADR 0004) |
 | Cost | Free | Free tier (500 macOS M2 minutes a month) |
 
 The Expo app used to ship an APK as a GitHub Release on every merge to main.
@@ -41,12 +41,18 @@ update without anyone forwarding a download link.
    ```bash
    flutter build apk --release -t lib/main.dart \
      --build-name="$APP_VERSION" \
-     --build-number="$BUILD_NUMBER" \
+     --build-number="$VERSION_CODE" \
      --dart-define="API_BASE_URL=$API_BASE_URL" \
      --dart-define="COGNITO_DOMAIN=$COGNITO_DOMAIN" \
      --dart-define="COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
    ```
    `APP_VERSION` is the `pubspec.yaml` version without its `+build` suffix.
+   `VERSION_CODE` is `scripts/version_code.py`: minutes since 2024-01-01 00:00
+   UTC at build time ([ADR 0004](adr/0004-timestamp-version-codes.md)), so it
+   always sits above whatever the owner build installed. Codemagic's own
+   `BUILD_NUMBER` stays in the release notes.
+   After the build, `scripts/check_apk.py` fails the workflow if the APK is
+   debuggable or carries a different versionCode.
 6. **Verify the signature.** `apksigner verify --print-certs` must report
    `EXPECTED_SIGNING_CERT_SHA256`. If it doesn't, the build fails instead of
    sending testers an APK that won't install over the current one.
@@ -69,8 +75,7 @@ uses (`3.44.8` at the time of writing).
   testing, so the Flutter app gets its own key rather than reusing the
   EAS-managed one. Its signature won't match the Expo app's, so each tester
   uninstalls the Expo app once before the first Flutter install. That loses
-  on-device data, which is accepted. Version codes
-  restart from Codemagic's `BUILD_NUMBER`.
+  on-device data, which is accepted.
 - **Cognito redirect is already registered.** `glean://auth/callback` and
   `glean://auth/logout` are in the user-pool client's callback lists
   (`backend/template.yaml`), and the Flutter app uses the same scheme. No
@@ -162,6 +167,44 @@ groups:
 
 The Expo `deploy` job and its GitHub Release APKs went away with `mobile/`
 when the Flutter app merged (#102).
+
+## Owner build
+
+The owner's phone also gets a build made on gordon, not Codemagic: the same
+release build with Android's debuggable flag on, so `adb` can copy the app's
+database and log file and stream the `glean` log tag. It has the same
+application id and the same release key as tester builds, so it installs over
+the existing app and keeps all data. Tester builds stay non-debuggable.
+
+```bash
+API_BASE_URL=... COGNITO_DOMAIN=... COGNITO_CLIENT_ID=... \
+EXPECTED_SIGNING_CERT_SHA256=... \
+OP_KEYSTORE_REF=op://... OP_KEYSTORE_PASSWORD_REF=op://... OP_KEY_PASSWORD_REF=op://... \
+  app/scripts/owner_build.sh
+```
+
+- The key is read from 1Password into a temporary file only the owner can
+  read, and deleted when the script exits. It is never written into the repo.
+- The script sets `GLEAN_OWNER_BUILD=1`, which turns on `android:debuggable`
+  and makes Gradle refuse to fall back to debug signing.
+- It checks the certificate fingerprint and, with `scripts/check_apk.py`, that
+  the APK is debuggable with the timestamp versionCode.
+- **It never installs.** Install by hand, with the owner present, only after a
+  verified Export diagnostics of the phone exists (it downloads, opens with
+  `sqlite3`, row counts match): `adb install -r app-release.apk`. Never
+  uninstall first, never use another key, never a lower versionCode.
+- Prove the install-over behaviour on an emulator (tester build with data,
+  then the owner build over it) before the phone.
+
+## Export diagnostics
+
+Settings has a developer-only **Export diagnostics** action: tap the version
+label 7 times to show it (per session, on release builds too). It uploads a
+consistent snapshot of the database plus the rotating log file through
+`POST /dev/export-db`, which stores them under
+`db-exports/<user id>/<UTC timestamp>/` in the receipts bucket. That prefix is
+kept 30 days (the bucket's one-day rule covers only `receipts/`). Fetch with
+the `glean` AWS profile; no adb is needed.
 
 ## Tester installation
 

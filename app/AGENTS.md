@@ -10,7 +10,20 @@ The owner uses the Android app for real, and the phone's SQLite file is the
 only copy of their pantry, plan and shopping list (nothing syncs to the
 server). On their phone, never uninstall the app, clear its data, install a
 build signed with any key other than the release key, or try backup restores.
-Updates go through Codemagic builds, which install over the top.
+Updates go through Codemagic builds, which install over the top, or through
+the release-key owner build (`scripts/owner_build.sh`, made on gordon) installed
+with `adb install -r`, and only when all of these hold:
+
+- the owner is present, and a verified Export diagnostics of the phone exists
+  (it downloads, opens with `sqlite3`, and its row counts match);
+- the build is signed with the release key and its versionCode is higher than
+  the installed app's (versionCodes are minutes since 2024-01-01 UTC);
+- the install is `adb install -r`, never preceded by an uninstall;
+- the same install was proven first on an emulator, over a tester build holding
+  data.
+
+Once it is installed, `adb` on the phone is read-only (copy the database and log
+off, stream `adb logcat -s glean`), and only when the owner asks.
 
 - Any table change needs a `schemaVersion` bump, an `onUpgrade` step, a new
   schema snapshot and a frozen fixture of the old version
