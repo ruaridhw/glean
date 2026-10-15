@@ -2322,7 +2322,8 @@
    "group": "dairy",
    "violates": {
     "vegan": false,
-    "dairy-free": false
+    "dairy-free": false,
+    "nut-free": false
    }
   },
   {
@@ -2339,7 +2340,8 @@
    "group": "dairy",
    "violates": {
     "vegan": false,
-    "dairy-free": false
+    "dairy-free": false,
+    "nut-free": false
    }
   },
   {
@@ -2755,7 +2757,9 @@
    "kind": "safe",
    "term": "cornflour",
    "group": "gluten",
-   "violates": {}
+   "violates": {
+    "gluten-free": false
+   }
   },
   {
    "id": "regex-safe-gluten-gram-flour",
@@ -2963,7 +2967,57 @@
    "kind": "safe",
    "term": "nutmeg",
    "group": "nuts",
-   "violates": {}
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "regex-safe-eggs-and-honey-meat-free-mayo-hyphenated",
+   "title": "Meat-Free Mayonnaise rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "meat-free mayonnaise"
+   ],
+   "kind": "safe",
+   "term": "meat-free",
+   "group": "eggs-and-honey",
+   "violates": {
+    "vegan": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-coconut-flakes",
+   "title": "Coconut Flakes rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut flakes"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": false
+   }
+  },
+  {
+   "id": "regex-safe-nuts-coconut-oil",
+   "title": "Coconut Oil rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "coconut oil"
+   ],
+   "kind": "safe",
+   "term": "coconut",
+   "group": "nuts",
+   "violates": {
+    "nut-free": false
+   }
   }
  ]
 }

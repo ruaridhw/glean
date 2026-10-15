@@ -1254,6 +1254,27 @@
    "dairy-free": 0.09,
    "gluten-free": 0.08,
    "nut-free": 0.06
+  },
+  "regex-safe-eggs-and-honey-meat-free-mayo-hyphenated": {
+   "vegetarian": 0.08,
+   "vegan": 0.15,
+   "dairy-free": 0.18,
+   "gluten-free": 0.32,
+   "nut-free": 0.16
+  },
+  "regex-safe-nuts-coconut-flakes": {
+   "vegetarian": 0.08,
+   "vegan": 0.1,
+   "dairy-free": 0.09,
+   "gluten-free": 0.08,
+   "nut-free": 0.07
+  },
+  "regex-safe-nuts-coconut-oil": {
+   "vegetarian": 0.07,
+   "vegan": 0.1,
+   "dairy-free": 0.09,
+   "gluten-free": 0.08,
+   "nut-free": 0.07
   }
  }
 }

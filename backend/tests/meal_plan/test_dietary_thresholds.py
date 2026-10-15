@@ -181,3 +181,19 @@ def test_the_thresholds_keep_their_recorded_margins_on_the_measured_sample(flag:
     else:
         assert threshold - max(clean) >= PREFERENCE_MARGIN
         assert min(violators) - threshold >= PREFERENCE_MARGIN
+
+
+def test_every_term_of_the_deleted_regex_lists_has_a_labelled_coverage_recipe() -> None:
+    """`dietary_regex_terms.json` freezes the lists as they stood in candidates.py before #159 deleted them."""
+    inventory = json.loads((FIXTURES / "dietary_regex_terms.json").read_text())
+    labelled = {(row["group"], row["kind"], row["term"]): row["violates"] for row in COVERAGE_ROWS}
+
+    expected = {
+        (group, kind, term) for group, lists in inventory.items() for kind, terms in lists.items() for term in terms
+    }
+    assert len(expected) == 169
+    assert [context for context in sorted(expected) if not labelled.get(context)] == []
+
+
+def test_every_coverage_recipe_is_labelled_for_at_least_one_flag() -> None:
+    assert [row["id"] for row in COVERAGE_ROWS if not row["violates"]] == []
