@@ -53,6 +53,8 @@ _COUNT_UNITS = {"unit", "units", "unit(s)"}
 _PACKAGE_UNITS = {"pouch", "pouches", "sachet", "sachets", "sachet(s)", "pack", "packs", "packet", "packets"}
 _CONTAINERS = {"can", "cans", "tin", "tins", "jar", "jars", "pouch", "pouches", "bottle", "bottles"}
 _FLUID_OUNCE_PATTERN = re.compile(r"\b(?:fl\.?\s*oz\.?|fluid\s+ounces?)(?![A-Za-z])", re.IGNORECASE)
+_BUTTER_NAMES = {"butter", "unsalted butter", "salted butter"}
+_GRAMS_PER_BUTTER_STICK = 113.0
 _NUMBER_PATTERN = r"\d+(?:\.\d+)?|\d+/\d+"
 _COMPACT_PREFIX_UNITS = {
     *_MEASURE_UNITS,
@@ -195,7 +197,21 @@ def _parse_count_or_package_prefix(text: str) -> tuple[str, float, str, str | No
     if raw_unit in _PACKAGE_UNITS:
         package = _singular_container(raw_unit.replace("(s)", ""))
         return name, quantity, "units", f"{_format_quantity(quantity)} {_pluralise(package, quantity)}"
+    if parsed := _parse_unit_word(raw_unit, quantity, name):
+        return parsed
     return f"{match.group('unit')} {name}".strip(), quantity, "pcs", None
+
+
+def _parse_unit_word(raw_unit: str, quantity: float, name: str) -> tuple[str, float, str, str | None] | None:
+    if raw_unit in {"stick", "sticks"}:
+        if _ingredient_key(name) in _BUTTER_NAMES:
+            return name, quantity * _GRAMS_PER_BUTTER_STICK, "g", None
+        return name, quantity, "pcs", None
+    return None
+
+
+def _ingredient_key(name: str) -> str:
+    return name.partition(",")[0].strip().lower()
 
 
 def _normalise_compact_label(text: str) -> str:
