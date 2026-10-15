@@ -2,6 +2,7 @@
 // methods; no invalidation machinery is needed because every read is a drift stream that re-emits on its own.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../repositories/catalogue_repository.dart';
 import '../repositories/ingredients_repository.dart';
 import '../repositories/pantry_repository.dart';
 import '../repositories/plan_repository.dart';
@@ -50,4 +51,9 @@ final Provider<ShoppingRepository> shoppingRepositoryProvider =
 final Provider<UserConfigRepository> userConfigRepositoryProvider =
     Provider<UserConfigRepository>(
       (ref) => UserConfigRepository(ref.watch(gleanDatabaseProvider)),
+    );
+
+final Provider<CatalogueRepository> catalogueRepositoryProvider =
+    Provider<CatalogueRepository>(
+      (ref) => CatalogueRepository(ref.watch(gleanDatabaseProvider)),
     );

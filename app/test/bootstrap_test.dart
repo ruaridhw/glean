@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/app.dart';
 import 'package:glean/bootstrap.dart';
 import 'package:glean/data/providers/database_providers.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:riverpod/misc.dart';
 
 import 'support/harness.dart';
@@ -63,5 +65,30 @@ void main() {
         expect(find.byType(AnimatedSwitcher), findsAtLeastNWidgets(1));
       },
     );
+
+    gleanWidgetTest('syncs the catalogue once the database is open, with the '
+        'app already showing', (WidgetTester tester) async {
+      final List<Uri> requests = <Uri>[];
+      final AppTestHarness harness = AppTestHarness(
+        httpClient: MockClient((http.Request request) async {
+          requests.add(request.url);
+          return http.Response('offline', 503);
+        }),
+      );
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: harness.container,
+          child: const GleanRoot(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byType(GleanApp), findsOneWidget);
+      expect(requests.map((Uri u) => u.path), contains('/catalogue'));
+    });
   });
 }
