@@ -63,6 +63,31 @@ void main() {
       expect(find.text('Item deleted'), findsNothing);
       expect(find.text('Undo'), findsNothing);
     });
+
+    testWidgets(
+      'screen-reader users keep the undo snackbar until they dismiss it',
+      (WidgetTester tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(accessibleNavigation: true);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        await tester.pumpWidget(_undoHost());
+
+        await tester.tap(find.text('delete'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 10));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Item deleted'), findsOneWidget);
+        expect(find.text('Undo'), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.close));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Item deleted'), findsNothing);
+      },
+    );
   });
 }
 
