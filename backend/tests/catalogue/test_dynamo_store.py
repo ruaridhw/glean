@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 import boto3
 import pytest
+from boto3.dynamodb.conditions import Key
 from moto import mock_aws
 
 from glean.catalogue.dynamo_store import DynamoCatalogueStore
+from glean.catalogue.groups import Form, GroupId
+from glean.catalogue.store import AliasConflictError
 from tests.catalogue.test_store_contract import CatalogueStoreContract, seed_items
 from tests.infra.cfn import catalogue_table_properties
 
@@ -32,7 +36,7 @@ def table() -> Iterator[Any]:
 
 
 @pytest.fixture
-def dynamo_store(table: Any) -> DynamoCatalogueStore:  # noqa: ARG001 - the fixture creates the table
+def dynamo_store(table: Any) -> DynamoCatalogueStore:
     store = DynamoCatalogueStore(TABLE_NAME, region=REGION)
     store.seed(seed_items())
     return store
@@ -42,3 +46,77 @@ class TestDynamoCatalogueStore(CatalogueStoreContract):
     @pytest.fixture
     def store(self, dynamo_store: DynamoCatalogueStore) -> CatalogueStore:
         return dynamo_store
+
+
+def _item_rows(table: Any) -> list[dict[str, Any]]:
+    rows = table.scan()["Items"]
+    return [row for row in rows if row["pk"].startswith("ITEM#")]
+
+
+def test_concurrent_creates_of_one_name_make_one_row(table: Any, dynamo_store: DynamoCatalogueStore) -> None:
+    stores = [DynamoCatalogueStore(TABLE_NAME, region=REGION) for _ in range(6)]
+    before = len(_item_rows(table))
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        created = list(
+            pool.map(lambda s: s.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH), stores)
+        )
+    assert {item.id for item in created} == {"dragon-fruit"}
+    assert len(_item_rows(table)) == before + 1
+
+
+def test_concurrent_creates_of_different_names_all_land_with_distinct_versions(
+    table: Any, dynamo_store: DynamoCatalogueStore
+) -> None:
+    stores = [DynamoCatalogueStore(TABLE_NAME, region=REGION) for _ in range(5)]
+    start = dynamo_store.catalogue_version()
+    names = [f"novel thing {n}" for n in range(5)]
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        list(
+            pool.map(
+                lambda pair: pair[0].create_provisional(pair[1], GroupId.SPICES, Form.NOT_APPLICABLE),
+                zip(stores, names, strict=True),
+            )
+        )
+    assert dynamo_store.catalogue_version() == start + 5
+    versions = [int(row["version"]) for row in _item_rows(table) if row["pk"].startswith("ITEM#novel-thing")]
+    assert sorted(versions) == list(range(start + 1, start + 6))
+
+
+def test_every_write_bumps_the_catalogue_version_and_stamps_the_item(
+    table: Any, dynamo_store: DynamoCatalogueStore
+) -> None:
+    start = dynamo_store.catalogue_version()
+    dynamo_store.upsert_alias("coriander", "green coriander")
+    assert dynamo_store.catalogue_version() == start + 1
+    created = dynamo_store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    assert dynamo_store.catalogue_version() == start + 2
+    by_version = table.query(
+        IndexName="by_version", KeyConditionExpression=Key("gsi_pk").eq("CATALOGUE"), ScanIndexForward=False
+    )["Items"]
+    assert [(row["pk"], int(row["version"])) for row in by_version[:2]] == [
+        (f"ITEM#{created.id}", start + 2),
+        ("ITEM#coriander", start + 1),
+    ]
+
+
+def test_reads_and_unmatched_names_do_not_change_the_catalogue_version(dynamo_store: DynamoCatalogueStore) -> None:
+    start = dynamo_store.catalogue_version()
+    dynamo_store.get_by_name("coriander")
+    dynamo_store.upsert_alias("coriander", "cilantro")
+    dynamo_store.record_unmatched("zzqx")
+    assert dynamo_store.catalogue_version() == start
+
+
+def test_shortlist_reflects_a_write_made_through_another_store(dynamo_store: DynamoCatalogueStore) -> None:
+    assert dynamo_store.shortlist("dragon fruit") == []
+    DynamoCatalogueStore(TABLE_NAME, region=REGION).create_provisional(
+        "Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH
+    )
+    assert [item.id for item in dynamo_store.shortlist("dragon fruit")] == ["dragon-fruit"]
+
+
+def test_a_refused_creation_writes_no_alias_rows(table: Any, dynamo_store: DynamoCatalogueStore) -> None:
+    rows_before = table.scan()["Items"]
+    with pytest.raises(AliasConflictError):
+        dynamo_store.create_provisional("fresh thing", GroupId.SPICES, Form.NOT_APPLICABLE, aliases=("cilantro",))
+    assert table.scan()["Items"] == rows_before
