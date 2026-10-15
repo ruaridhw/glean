@@ -28,7 +28,7 @@ class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -60,6 +60,9 @@ class GleanDatabase extends _$GleanDatabase {
           await customStatement(
             'UPDATE meal_plan_entries SET external_id_snapshot = (SELECT external_id FROM recipes WHERE recipes.id = meal_plan_entries.recipe_id)',
           );
+        }
+        if (from < 3) {
+          await m.addColumn(ingredients, ingredients.storeSection);
         }
       },
       beforeOpen: (details) async {

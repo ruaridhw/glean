@@ -141,5 +141,35 @@ void main() {
 
       expect((await sectionsByName())['Birthday candles'], StoreSection.other);
     });
+    test(
+      'moving an item sticks for its ingredient: a later row for the same '
+      'ingredient lands in the chosen section, other ingredients do not move',
+      () async {
+        final milk = await shopping.addManualItem(userId: userId, name: 'Milk');
+        await shopping.addManualItem(userId: userId, name: 'Oat milk');
+        final milkIngredientId = (await shopping.watchAll(userId).first)
+            .firstWhere((i) => i.id == milk)
+            .ingredientId;
+
+        await shopping.moveToSection(
+          ingredientId: milkIngredientId,
+          section: StoreSection.drinks,
+        );
+        await shopping.addManualItem(userId: userId, name: 'milk');
+
+        final items = await shopping.watchAll(userId).first;
+        expect(
+          [
+            for (final i in items.where((i) => i.name.toLowerCase() == 'milk'))
+              i.section,
+          ],
+          [StoreSection.drinks, StoreSection.drinks],
+        );
+        expect(
+          items.singleWhere((i) => i.name == 'Oat milk').section,
+          StoreSection.other,
+        );
+      },
+    );
   });
 }

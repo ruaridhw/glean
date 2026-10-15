@@ -372,6 +372,17 @@ class $IngredientsTable extends Ingredients
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _storeSectionMeta = const VerificationMeta(
+    'storeSection',
+  );
+  @override
+  late final GeneratedColumn<String> storeSection = GeneratedColumn<String>(
+    'store_section',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -381,6 +392,7 @@ class $IngredientsTable extends Ingredients
     category,
     canonicalUnit,
     isStaple,
+    storeSection,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -444,6 +456,15 @@ class $IngredientsTable extends Ingredients
         isStaple.isAcceptableOrUnknown(data['is_staple']!, _isStapleMeta),
       );
     }
+    if (data.containsKey('store_section')) {
+      context.handle(
+        _storeSectionMeta,
+        storeSection.isAcceptableOrUnknown(
+          data['store_section']!,
+          _storeSectionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -481,6 +502,10 @@ class $IngredientsTable extends Ingredients
         DriftSqlType.bool,
         data['${effectivePrefix}is_staple'],
       )!,
+      storeSection: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}store_section'],
+      ),
     );
   }
 
@@ -498,6 +523,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
   final String? category;
   final String? canonicalUnit;
   final bool isStaple;
+  final String? storeSection;
   const Ingredient({
     required this.id,
     required this.canonicalName,
@@ -506,6 +532,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     this.category,
     this.canonicalUnit,
     required this.isStaple,
+    this.storeSection,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -525,6 +552,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       map['canonical_unit'] = Variable<String>(canonicalUnit);
     }
     map['is_staple'] = Variable<bool>(isStaple);
+    if (!nullToAbsent || storeSection != null) {
+      map['store_section'] = Variable<String>(storeSection);
+    }
     return map;
   }
 
@@ -545,6 +575,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           ? const Value.absent()
           : Value(canonicalUnit),
       isStaple: Value(isStaple),
+      storeSection: storeSection == null && nullToAbsent
+          ? const Value.absent()
+          : Value(storeSection),
     );
   }
 
@@ -561,6 +594,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       category: serializer.fromJson<String?>(json['category']),
       canonicalUnit: serializer.fromJson<String?>(json['canonicalUnit']),
       isStaple: serializer.fromJson<bool>(json['isStaple']),
+      storeSection: serializer.fromJson<String?>(json['storeSection']),
     );
   }
   @override
@@ -574,6 +608,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       'category': serializer.toJson<String?>(category),
       'canonicalUnit': serializer.toJson<String?>(canonicalUnit),
       'isStaple': serializer.toJson<bool>(isStaple),
+      'storeSection': serializer.toJson<String?>(storeSection),
     };
   }
 
@@ -585,6 +620,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     Value<String?> category = const Value.absent(),
     Value<String?> canonicalUnit = const Value.absent(),
     bool? isStaple,
+    Value<String?> storeSection = const Value.absent(),
   }) => Ingredient(
     id: id ?? this.id,
     canonicalName: canonicalName ?? this.canonicalName,
@@ -597,6 +633,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
         ? canonicalUnit.value
         : this.canonicalUnit,
     isStaple: isStaple ?? this.isStaple,
+    storeSection: storeSection.present ? storeSection.value : this.storeSection,
   );
   Ingredient copyWithCompanion(IngredientsCompanion data) {
     return Ingredient(
@@ -613,6 +650,9 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           ? data.canonicalUnit.value
           : this.canonicalUnit,
       isStaple: data.isStaple.present ? data.isStaple.value : this.isStaple,
+      storeSection: data.storeSection.present
+          ? data.storeSection.value
+          : this.storeSection,
     );
   }
 
@@ -625,7 +665,8 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           ..write('apiName: $apiName, ')
           ..write('category: $category, ')
           ..write('canonicalUnit: $canonicalUnit, ')
-          ..write('isStaple: $isStaple')
+          ..write('isStaple: $isStaple, ')
+          ..write('storeSection: $storeSection')
           ..write(')'))
         .toString();
   }
@@ -639,6 +680,7 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     category,
     canonicalUnit,
     isStaple,
+    storeSection,
   );
   @override
   bool operator ==(Object other) =>
@@ -650,7 +692,8 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
           other.apiName == this.apiName &&
           other.category == this.category &&
           other.canonicalUnit == this.canonicalUnit &&
-          other.isStaple == this.isStaple);
+          other.isStaple == this.isStaple &&
+          other.storeSection == this.storeSection);
 }
 
 class IngredientsCompanion extends UpdateCompanion<Ingredient> {
@@ -661,6 +704,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   final Value<String?> category;
   final Value<String?> canonicalUnit;
   final Value<bool> isStaple;
+  final Value<String?> storeSection;
   const IngredientsCompanion({
     this.id = const Value.absent(),
     this.canonicalName = const Value.absent(),
@@ -669,6 +713,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     this.category = const Value.absent(),
     this.canonicalUnit = const Value.absent(),
     this.isStaple = const Value.absent(),
+    this.storeSection = const Value.absent(),
   });
   IngredientsCompanion.insert({
     this.id = const Value.absent(),
@@ -678,6 +723,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     this.category = const Value.absent(),
     this.canonicalUnit = const Value.absent(),
     this.isStaple = const Value.absent(),
+    this.storeSection = const Value.absent(),
   }) : canonicalName = Value(canonicalName);
   static Insertable<Ingredient> custom({
     Expression<int>? id,
@@ -687,6 +733,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     Expression<String>? category,
     Expression<String>? canonicalUnit,
     Expression<bool>? isStaple,
+    Expression<String>? storeSection,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -696,6 +743,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
       if (category != null) 'category': category,
       if (canonicalUnit != null) 'canonical_unit': canonicalUnit,
       if (isStaple != null) 'is_staple': isStaple,
+      if (storeSection != null) 'store_section': storeSection,
     });
   }
 
@@ -707,6 +755,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     Value<String?>? category,
     Value<String?>? canonicalUnit,
     Value<bool>? isStaple,
+    Value<String?>? storeSection,
   }) {
     return IngredientsCompanion(
       id: id ?? this.id,
@@ -716,6 +765,7 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
       category: category ?? this.category,
       canonicalUnit: canonicalUnit ?? this.canonicalUnit,
       isStaple: isStaple ?? this.isStaple,
+      storeSection: storeSection ?? this.storeSection,
     );
   }
 
@@ -743,6 +793,9 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     if (isStaple.present) {
       map['is_staple'] = Variable<bool>(isStaple.value);
     }
+    if (storeSection.present) {
+      map['store_section'] = Variable<String>(storeSection.value);
+    }
     return map;
   }
 
@@ -755,7 +808,8 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
           ..write('apiName: $apiName, ')
           ..write('category: $category, ')
           ..write('canonicalUnit: $canonicalUnit, ')
-          ..write('isStaple: $isStaple')
+          ..write('isStaple: $isStaple, ')
+          ..write('storeSection: $storeSection')
           ..write(')'))
         .toString();
   }
@@ -5508,6 +5562,7 @@ typedef $$IngredientsTableCreateCompanionBuilder =
       Value<String?> category,
       Value<String?> canonicalUnit,
       Value<bool> isStaple,
+      Value<String?> storeSection,
     });
 typedef $$IngredientsTableUpdateCompanionBuilder =
     IngredientsCompanion Function({
@@ -5518,6 +5573,7 @@ typedef $$IngredientsTableUpdateCompanionBuilder =
       Value<String?> category,
       Value<String?> canonicalUnit,
       Value<bool> isStaple,
+      Value<String?> storeSection,
     });
 
 final class $$IngredientsTableReferences
@@ -5660,6 +5716,11 @@ class $$IngredientsTableFilterComposer
 
   ColumnFilters<bool> get isStaple => $composableBuilder(
     column: $table.isStaple,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get storeSection => $composableBuilder(
+    column: $table.storeSection,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5826,6 +5887,11 @@ class $$IngredientsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get storeSection => $composableBuilder(
+    column: $table.storeSection,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$IngredientCategoriesTableOrderingComposer get category {
     final $$IngredientCategoriesTableOrderingComposer composer =
         $composerBuilder(
@@ -5883,6 +5949,11 @@ class $$IngredientsTableAnnotationComposer
 
   GeneratedColumn<bool> get isStaple =>
       $composableBuilder(column: $table.isStaple, builder: (column) => column);
+
+  GeneratedColumn<String> get storeSection => $composableBuilder(
+    column: $table.storeSection,
+    builder: (column) => column,
+  );
 
   $$IngredientCategoriesTableAnnotationComposer get category {
     final $$IngredientCategoriesTableAnnotationComposer composer =
@@ -6053,6 +6124,7 @@ class $$IngredientsTableTableManager
                 Value<String?> category = const Value.absent(),
                 Value<String?> canonicalUnit = const Value.absent(),
                 Value<bool> isStaple = const Value.absent(),
+                Value<String?> storeSection = const Value.absent(),
               }) => IngredientsCompanion(
                 id: id,
                 canonicalName: canonicalName,
@@ -6061,6 +6133,7 @@ class $$IngredientsTableTableManager
                 category: category,
                 canonicalUnit: canonicalUnit,
                 isStaple: isStaple,
+                storeSection: storeSection,
               ),
           createCompanionCallback:
               ({
@@ -6071,6 +6144,7 @@ class $$IngredientsTableTableManager
                 Value<String?> category = const Value.absent(),
                 Value<String?> canonicalUnit = const Value.absent(),
                 Value<bool> isStaple = const Value.absent(),
+                Value<String?> storeSection = const Value.absent(),
               }) => IngredientsCompanion.insert(
                 id: id,
                 canonicalName: canonicalName,
@@ -6079,6 +6153,7 @@ class $$IngredientsTableTableManager
                 category: category,
                 canonicalUnit: canonicalUnit,
                 isStaple: isStaple,
+                storeSection: storeSection,
               ),
           withReferenceMapper: (p0) => p0
               .map(
