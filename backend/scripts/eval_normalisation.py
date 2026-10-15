@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -23,8 +24,8 @@ from dotenv import dotenv_values
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, SecretStr
 
-from glean.catalogue.groups import GROUPS, GroupId
-from glean.catalogue.normalise import NONE_OF_THESE, SHORTLIST_SIZE, questions_for
+from glean.catalogue.groups import GROUPS, GroupId, Kind
+from glean.catalogue.normalise import NONE_OF_THESE, SHORTLIST_SIZE, normalise, questions_for
 from glean.catalogue.seed import load_seed
 from glean.catalogue.store import InMemoryCatalogueStore
 from glean.llm import Feature, LLMRouter
@@ -36,6 +37,19 @@ _FIXTURE = Path(__file__).parents[1] / "tests" / "fixtures" / "normalisation" / 
 _GRID = [round(0.3 + 0.05 * step, 2) for step in range(14)]
 # Rough tokens per character for pricing the naming LLM, which doesn't report usage through LLMRouter.
 _FLASH_LITE_USD_PER_TOKEN = (0.10 / 1e6, 0.40 / 1e6)
+
+
+class Grade(StrEnum):
+    """How a whole pipeline result compares with its label."""
+
+    CORRECT = "correct"
+    DUPLICATE = "duplicate"  # an existing item fit, but a new item was created
+    FALSE_MATCH = "false_match"  # matched to a wrong item, or to any item for a name with no fitting item
+    KIND_ERROR = "kind_error"  # created in a group of the wrong kind: a household good as a food, or the reverse
+    WRONG_GROUP = "wrong_group"  # created in a group outside the acceptable ones, but of the right kind
+    WRONG_UNMATCHED = "wrong_unmatched"  # called unidentifiable, but it is a real item
+    NONSENSE_NAMED = "nonsense_named"  # nonsense that was given an item anyway
+    UNRESOLVED = "unresolved"  # nothing settled; a retry would be needed
 
 
 class Outcome(StrEnum):
@@ -118,14 +132,43 @@ def pick_threshold(
     return max(grid)
 
 
+def _kind_of_group(group: str) -> str:
+    return "household_item" if GROUPS[GroupId(group)].kind is Kind.HOUSEHOLD else "ingredient"
+
+
+def grade_result(row: Label, *, status: str, canonical: str, group: str | None, kind: str | None) -> Grade:
+    """Grade a pipeline result: status, the resolved item's (or created item's) name, its group and kind."""
+    if status == "unresolved":
+        return Grade.UNRESOLVED
+    nonsense = row.expected == "NONSENSE"
+    acceptable = {row.expected, *row.also_acceptable} - {None, "NONSENSE"}
+    if status == "unmatched":
+        return Grade.CORRECT if nonsense else Grade.WRONG_UNMATCHED
+    if status == "matched":
+        return Grade.CORRECT if canonical in acceptable else Grade.FALSE_MATCH
+    if nonsense:
+        return Grade.NONSENSE_NAMED
+    if acceptable and row.expected is not None:
+        return Grade.DUPLICATE
+    if not row.expected_groups or group in row.expected_groups:
+        return Grade.CORRECT
+    wanted_kinds = {_kind_of_group(g) for g in row.expected_groups}
+    return Grade.KIND_ERROR if kind not in wanted_kinds else Grade.WRONG_GROUP
+
+
 class LLMOnlyAnswer(BaseModel):
     match: str = Field(description="The catalogue item name that is the same product, or 'none of these'.")
+    canonical_name: str | None = Field(
+        description="When nothing matches: the plain canonical name for a new item, or null if the input is nonsense."
+    )
     ingredient_group: str = Field(description="The ingredient group id the item belongs to.")
 
 
 _LLM_ONLY_PROMPT = (
     "You match a raw shopping name to a household catalogue. Pick the candidate that is the same product, or "
-    "'none of these'. Also give the ingredient group id from this list: "
+    "'none of these'. If none matches, give the plain canonical name for a new item (strip brands and sizes; "
+    "household goods keep a name close to what was written), or null if the input is nonsense. Also give the "
+    "ingredient group id from this list: "
     + ", ".join(f"{group.value} ({rules.name})" for group, rules in GROUPS.items())
 )
 
@@ -161,6 +204,75 @@ def _decision_run(client: Any, label: Label, store: InMemoryCatalogueStore) -> d
     }
 
 
+def _flash_lite_cost(chars_in: int, chars_out: int) -> float:
+    return chars_in / 4 * _FLASH_LITE_USD_PER_TOKEN[0] + chars_out / 4 * _FLASH_LITE_USD_PER_TOKEN[1]
+
+
+class _Recorder:
+    """Wraps the real decision client and LLM router to total up calls, latency and cost."""
+
+    def __init__(self, client: Any, router: LLMRouter) -> None:
+        self._client, self._router = client, router
+        self._lock = threading.Lock()
+        self.decision_calls = 0
+        self.decision_cost = 0.0
+        self.naming_calls = 0
+        self.naming_cost = 0.0
+
+    def decide(self, state: Any, questions: Any) -> Any:
+        answer = self._client.decide(state, questions)
+        with self._lock:
+            self.decision_calls += 1
+            self.decision_cost += answer.usage.cost
+        return answer
+
+    def invoke(self, feature: Any, schema: Any, messages: Any, **kwargs: Any) -> Any:
+        reply = self._router.invoke(feature, schema, messages, **kwargs)
+        self.naming_calls += 1
+        self.naming_cost += _flash_lite_cost(sum(len(m.content) for m in messages), len(reply.model_dump_json()))
+        return reply
+
+
+def _pipeline_run(rows: Sequence[Label], client: Any, router: LLMRouter) -> dict[str, Any]:
+    """The whole service over the set in batches of 20, each against a fresh seeded catalogue, with real fallback."""
+    results: list[dict[str, Any]] = []
+    batches: list[dict[str, Any]] = []
+    for start in range(0, len(rows), 20):
+        batch = rows[start : start + 20]
+        recorder = _Recorder(client, router)
+        store = InMemoryCatalogueStore(load_seed().items)
+        began = time.monotonic()
+        out = normalise([row.input for row in batch], store=store, decisions=recorder, llm_router=recorder)  # ty: ignore[invalid-argument-type]
+        batches.append(
+            {
+                "names": len(batch),
+                "latency_s": time.monotonic() - began,
+                "cost_usd": recorder.decision_cost + recorder.naming_cost,
+                "decision_calls": recorder.decision_calls,
+                "naming_calls": recorder.naming_calls,
+            }
+        )
+        for row, result in zip(batch, out, strict=True):
+            grade = grade_result(
+                row,
+                status=result.status.value,
+                canonical=result.canonical_name,
+                group=result.ingredient_group.value if result.ingredient_group else None,
+                kind=result.kind.value if result.kind else None,
+            )
+            results.append(
+                {
+                    "input": row.input,
+                    "status": result.status.value,
+                    "canonical": result.canonical_name,
+                    "group": result.ingredient_group.value if result.ingredient_group else None,
+                    "source": result.source.value,
+                    "grade": grade.value,
+                }
+            )
+    return {"results": results, "batches": batches}
+
+
 def _llm_only_run(router: LLMRouter, label: Label, store: InMemoryCatalogueStore) -> dict[str, Any]:
     shortlist = store.shortlist(label.input, SHORTLIST_SIZE)
     options = [item.name for item in shortlist] + [NONE_OF_THESE]
@@ -174,8 +286,24 @@ def _llm_only_run(router: LLMRouter, label: Label, store: InMemoryCatalogueStore
     )
     latency = time.monotonic() - started
     chosen = answer.match if answer.match in {item.name for item in shortlist} else None
-    cost = (len(_LLM_ONLY_PROMPT) + len(prompt)) / 4 * _FLASH_LITE_USD_PER_TOKEN[0] + 30 * _FLASH_LITE_USD_PER_TOKEN[1]
-    return {"match": chosen, "group": answer.ingredient_group, "latency_s": latency, "cost_usd": cost}
+    group = answer.ingredient_group if answer.ingredient_group in {g.value for g in GroupId} else GroupId.OTHER.value
+    if chosen is not None:
+        status, canonical = "matched", chosen
+    elif answer.canonical_name:
+        status, canonical = "created", answer.canonical_name
+    else:
+        status, canonical = "unmatched", label.input
+    grade = grade_result(label, status=status, canonical=canonical, group=group, kind=_kind_of_group(group))
+    cost = _flash_lite_cost(len(_LLM_ONLY_PROMPT) + len(prompt), len(answer.model_dump_json()))
+    return {
+        "match": chosen,
+        "status": status,
+        "canonical": canonical,
+        "group": group,
+        "grade": grade.value,
+        "latency_s": latency,
+        "cost_usd": cost,
+    }
 
 
 def _evaluate(rows: list[Label], client: Any, router: LLMRouter) -> dict[str, Any]:
@@ -184,51 +312,75 @@ def _evaluate(rows: list[Label], client: Any, router: LLMRouter) -> dict[str, An
         first = list(pool.map(lambda row: _decision_run(client, row, store), rows))
         second = list(pool.map(lambda row: _decision_run(client, row, store), rows))
         llm_only = list(pool.map(lambda row: _llm_only_run(router, row, store), rows))
-    return {"labels": [asdict(r) for r in rows], "decision": first, "decision_repeat": second, "llm_only": llm_only}
+    return {
+        "labels": [asdict(r) for r in rows],
+        "decision": first,
+        "decision_repeat": second,
+        "llm_only": llm_only,
+        "pipeline": _pipeline_run(rows, client, router),
+    }
 
 
 def _predictions(runs: Sequence[dict[str, Any]]) -> list[Prediction]:
     return [Prediction(r["match"], r["probability"], r["kind_agrees"]) for r in runs]
 
 
-def report(results: dict[str, Any], *, max_false_match_rate: float) -> dict[str, Any]:
-    rows = [
-        Label(r["input"], r["expected"], tuple(r["also_acceptable"]), tuple(r["expected_groups"]))
-        for r in results["labels"]
-    ]
-    # Names the catalogue already holds never reach the decision model in production, so score the rest.
-    store = InMemoryCatalogueStore(load_seed().items)
-    live = [i for i, row in enumerate(rows) if store.get_by_name(row.input) is None]
-    rows = [rows[i] for i in live]
-    first = _predictions([results["decision"][i] for i in live])
-    repeat = _predictions([results["decision_repeat"][i] for i in live])
-    llm_only = [Prediction(results["llm_only"][i]["match"], 1.0, True) for i in live]
-    threshold = pick_threshold(rows, first, max_false_match_rate=max_false_match_rate)
-    return {
-        "names_scored": len(rows),
-        "sweep": [
-            asdict(metrics_at(rows, first, t)) | {"false_match_rate": metrics_at(rows, first, t).false_match_rate}
-            for t in _GRID
-        ],
-        "threshold": threshold,
-        "decision_at_threshold": asdict(metrics_at(rows, first, threshold)),
-        "llm_only": asdict(metrics_at(rows, llm_only, 0.0)),
-        "repeat_agreement": sum(
-            _predicted_at(a, threshold) == _predicted_at(b, threshold) for a, b in zip(first, repeat, strict=True)
-        )
-        / len(rows),
-        "decision_latency_median_s": sorted(r["latency_s"] for r in results["decision"])[len(results["decision"]) // 2],
-        "decision_latency_max_s": max(r["latency_s"] for r in results["decision"]),
-        "decision_cost_per_name_usd": sum(r["cost_usd"] for r in results["decision"]) / len(results["decision"]),
-        "llm_only_latency_median_s": sorted(r["latency_s"] for r in results["llm_only"])[len(results["llm_only"]) // 2],
-        "llm_only_cost_per_name_usd": sum(r["cost_usd"] for r in results["llm_only"]) / len(results["llm_only"]),
-        "group_accuracy_on_unmatched": _group_accuracy(rows, results, live),
-    }
+def _grade_counts(grades: Sequence[str]) -> dict[str, int]:
+    return {grade.value: grades.count(grade.value) for grade in Grade}
 
 
 def _group_accuracy(rows: Sequence[Label], results: dict[str, Any], live: Sequence[int]) -> float | None:
     graded = [(row, results["decision"][i]["group"]) for row, i in zip(rows, live, strict=True) if row.expected_groups]
     return sum(group in row.expected_groups for row, group in graded) / len(graded) if graded else None
+
+
+def report(results: dict[str, Any], *, max_false_match_rate: float) -> dict[str, Any]:
+    """Two parts: the decision-stage threshold sweep, and the whole pipeline against the LLM alone."""
+    all_rows = [
+        Label(r["input"], r["expected"], tuple(r["also_acceptable"]), tuple(r["expected_groups"]))
+        for r in results["labels"]
+    ]
+    # Names the catalogue already holds never reach the decision model in production, so score the rest.
+    store = InMemoryCatalogueStore(load_seed().items)
+    live = [i for i, row in enumerate(all_rows) if store.get_by_name(row.input) is None]
+    rows = [all_rows[i] for i in live]
+    first = _predictions([results["decision"][i] for i in live])
+    repeat = _predictions([results["decision_repeat"][i] for i in live])
+    threshold = pick_threshold(rows, first, max_false_match_rate=max_false_match_rate)
+    sweep = []
+    for t in _GRID:
+        m = metrics_at(rows, first, t)
+        sweep.append(asdict(m) | {"false_match_rate": m.false_match_rate})
+    batches = results["pipeline"]["batches"]
+    pipeline = [results["pipeline"]["results"][i]["grade"] for i in live]
+    llm_only = [results["llm_only"][i]["grade"] for i in live]
+    llm_latencies = sorted(r["latency_s"] for r in results["llm_only"])
+    return {
+        "decision_stage": {
+            "names_scored": len(rows),
+            "sweep": sweep,
+            "threshold": threshold,
+            "repeat_agreement": sum(
+                _predicted_at(a, threshold) == _predicted_at(b, threshold) for a, b in zip(first, repeat, strict=True)
+            )
+            / len(rows),
+            "latency_median_s": sorted(r["latency_s"] for r in results["decision"])[len(results["decision"]) // 2],
+            "group_accuracy_on_unmatched": _group_accuracy(rows, results, live),
+        },
+        "pipeline": {
+            "names_scored": len(live),
+            "grades": _grade_counts(pipeline),
+            "batch_latency_max_s": max(b["latency_s"] for b in batches),
+            "batch_names": [b["names"] for b in batches],
+            "cost_per_name_usd": sum(b["cost_usd"] for b in batches) / sum(b["names"] for b in batches),
+            "naming_calls_per_batch": [b["naming_calls"] for b in batches],
+        },
+        "llm_only": {
+            "grades": _grade_counts(llm_only),
+            "latency_median_s": llm_latencies[len(llm_latencies) // 2],
+            "cost_per_name_usd": sum(r["cost_usd"] for r in results["llm_only"]) / len(results["llm_only"]),
+        },
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
