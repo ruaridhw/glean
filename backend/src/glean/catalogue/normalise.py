@@ -118,7 +118,7 @@ def _without_item(raw: str, *, status: Status, source: ResultSource) -> Normalis
     )
 
 
-def _questions(raw: str, shortlist: Sequence[CatalogueItem]) -> dict[str, Question]:
+def questions_for(raw: str, shortlist: Sequence[CatalogueItem]) -> dict[str, Question]:
     questions: dict[str, Question] = {
         "ingredient_group": ChoiceQuestion(
             instructions=f"Which group does the item named {raw!r} belong to?",
@@ -147,7 +147,7 @@ def _decide(
 ) -> Decision | None:
     state = {"name": raw, "context": context, "shortlist": [item.name for item in shortlist]}
     try:
-        return decisions.decide(state, _questions(raw, shortlist))
+        return decisions.decide(state, questions_for(raw, shortlist))
     except DecisionError:
         logger.exception("decision request failed", extra={"name_length": len(raw)})
         return None
