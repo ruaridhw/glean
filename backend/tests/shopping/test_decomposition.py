@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from botocore.exceptions import ConnectTimeoutError, EndpointConnectionError
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
@@ -224,6 +225,30 @@ class _BrokenStore(FilesystemBlobStore):
 
     def write(self, key: str, content: str) -> None:
         raise OSError("bucket unavailable")
+
+
+class _UnreachableStore(FilesystemBlobStore):
+    """A cache whose bucket can't be reached at all, as botocore reports a transport failure."""
+
+    def read(self, key: str) -> str | None:
+        raise EndpointConnectionError(endpoint_url="https://s3.test.invalid")
+
+    def write(self, key: str, content: str) -> None:
+        raise ConnectTimeoutError(endpoint_url="https://s3.test.invalid")
+
+
+def test_a_cache_that_cannot_be_reached_never_fails_the_parse(tmp_path: Path) -> None:
+    router = _FakeLLMRouter()
+
+    response = parse_shopping_description(
+        ShoppingParseRequest(text="milk"),
+        llm_router=router,
+        decision_client=_decision_client(),
+        cache=_UnreachableStore(tmp_path),
+    )
+
+    assert [item.name for item in response.items] == ["milk"]
+    assert router.phrases == ["milk"]
 
 
 def test_an_unreadable_or_unwritable_cache_never_fails_the_parse(tmp_path: Path) -> None:
