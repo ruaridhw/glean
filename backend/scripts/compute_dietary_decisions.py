@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fill the stored dietary decisions for every corpus recipe and flag, then print coverage.
 
-Computes only the missing (recipe, flag, model) entries, so a second run does nothing.
-Needs OPENROUTER_API_KEY in the environment. Run it whenever the corpus or the pinned decision model
-changes. Exits 1 unless coverage is 100%: nut-free excludes any recipe without a decision,
-so full coverage is the deploy gate.
+Computes only the missing (recipe, flag, model, criteria) entries, so a second run does nothing.
+Needs OPENROUTER_API_KEY in the environment. Run it whenever the corpus, the pinned decision model or
+a flag's criteria text changes. Exits 1 unless coverage is 100%: every flag excludes any recipe
+without a current decision, so full coverage is the deploy gate.
 
     uv run python scripts/compute_dietary_decisions.py --cache-dir .cache/glean_recipe_cache
     uv run python scripts/compute_dietary_decisions.py --bucket <recipe-cache-bucket>
