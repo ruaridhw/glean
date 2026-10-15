@@ -74,9 +74,7 @@ def test_concurrent_creates_of_one_name_make_one_row(table: Any, dynamo_store: D
     stores = [DynamoCatalogueStore(TABLE_NAME, region=REGION) for _ in range(6)]
     before = len(_item_rows(table))
     with ThreadPoolExecutor(max_workers=6) as pool:
-        created = list(
-            pool.map(lambda s: s.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH), stores)
-        )
+        created = list(pool.map(lambda s: s.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH), stores))
     assert {item.id for item in created} == {"dragon-fruit"}
     assert len(_item_rows(table)) == before + 1
 
@@ -105,7 +103,7 @@ def test_every_write_bumps_the_catalogue_version_and_stamps_the_item(
     start = dynamo_store.catalogue_version()
     dynamo_store.upsert_alias("coriander", "green coriander")
     assert dynamo_store.catalogue_version() == start + 1
-    created = dynamo_store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    created = dynamo_store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
     assert dynamo_store.catalogue_version() == start + 2
     by_version = table.query(
         IndexName="by_version", KeyConditionExpression=Key("gsi_pk").eq("CATALOGUE"), ScanIndexForward=False
@@ -126,9 +124,7 @@ def test_reads_and_unmatched_names_do_not_change_the_catalogue_version(dynamo_st
 
 def test_shortlist_reflects_a_write_made_through_another_store(dynamo_store: DynamoCatalogueStore) -> None:
     assert dynamo_store.shortlist("dragon fruit") == []
-    DynamoCatalogueStore(TABLE_NAME, region=REGION).create_provisional(
-        "Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH
-    )
+    DynamoCatalogueStore(TABLE_NAME, region=REGION).create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
     assert [item.id for item in dynamo_store.shortlist("dragon fruit")] == ["dragon-fruit"]
 
 
@@ -170,7 +166,7 @@ def test_a_shortlist_built_from_a_lagging_index_is_not_kept_once_the_index_recov
     session = boto3.Session(region_name=REGION)
     session.events.register("after-call.dynamodb.Query", view)
     store = DynamoCatalogueStore(TABLE_NAME, region=REGION, session=session)
-    store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
     store.create_provisional("Birthday Candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
 
     view.lagging, view.hidden = True, {"ITEM#dragon-fruit"}
@@ -230,7 +226,7 @@ def test_a_snapshot_with_a_stale_revision_is_not_kept_even_when_the_count_and_ne
     session = boto3.Session(region_name=REGION)
     session.events.register("after-call.dynamodb.Query", view)
     store = DynamoCatalogueStore(TABLE_NAME, region=REGION, session=session)
-    store.create_provisional("Dragon Fruit", GroupId.TROPICAL_FRUIT, Form.FRESH)
+    store.create_provisional("Dragon Fruit", GroupId.FRUIT, Form.FRESH)
     store.shortlist("dragon fruit")  # the healthy index shows the first revision
     store.upsert_alias("dragon-fruit", "pitaya")
     store.create_provisional("Birthday Candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
