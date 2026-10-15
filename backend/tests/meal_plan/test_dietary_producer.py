@@ -24,7 +24,9 @@ from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
+    dietary_questions,
     produce_missing_decisions,
+    question_hash,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -106,7 +108,7 @@ def test_a_recipe_added_later_is_the_only_one_computed(tmp_path) -> None:
 
 def test_decisions_from_an_older_model_are_recomputed(tmp_path) -> None:
     corpus = _corpus(tmp_path)
-    _seed_old_model_decisions(corpus)
+    _seed_decisions(corpus, model="typesafe/jev-1.13-20260917")
     api = FakeDecisionApi()
 
     report = produce_missing_decisions(corpus, api.client())
@@ -114,6 +116,22 @@ def test_decisions_from_an_older_model_are_recomputed(tmp_path) -> None:
     assert len(api.requests) == 2
     assert (report.computed, report.coverage) == (10, 1.0)
     assert {d.model for d in DietaryDecisionStore(corpus.store).load()} == {SNAPSHOT}
+
+
+def test_decisions_computed_under_other_criteria_text_are_recomputed(tmp_path) -> None:
+    corpus = _corpus(tmp_path)
+    question = dietary_questions()["vegan"]
+    reworded = question.model_copy(update={"instructions": question.instructions + " Honey counts."})
+    _seed_decisions(corpus, model=SNAPSHOT, criteria_hash=lambda flag: question_hash(reworded))
+    api = FakeDecisionApi()
+
+    report = produce_missing_decisions(corpus, api.client())
+
+    assert len(api.requests) == 2
+    assert (report.computed, report.coverage) == (10, 1.0)
+    assert {(d.flag, d.criteria_hash) for d in DietaryDecisionStore(corpus.store).load()} == {
+        (flag, question_hash(dietary_questions()[flag])) for flag in DIETARY_FLAGS
+    }
 
 
 def test_one_request_per_recipe_carries_its_title_ingredients_and_every_missing_flag(tmp_path) -> None:
@@ -214,15 +232,18 @@ def _nut_free_ids(corpus: RecipeCorpusStore) -> set[str]:
     return {candidate.external_id for candidate in candidates}
 
 
-def _seed_old_model_decisions(corpus: RecipeCorpusStore) -> None:
+def _seed_decisions(
+    corpus: RecipeCorpusStore, *, model: str, criteria_hash: Callable[[str], str] | None = None
+) -> None:
     DietaryDecisionStore(corpus.store).save(
         [
             DietaryDecision(
                 recipe_id=rid,
                 flag=flag,
                 probability=0.0,
-                model="typesafe/jev-1.13-20260917",
+                model=model,
                 content_hash=content_fingerprint(title, ingredients),
+                criteria_hash=(criteria_hash or (lambda f: question_hash(dietary_questions()[f])))(flag),
                 computed_at=datetime(2026, 9, 17, tzinfo=UTC),
             )
             for rid, title, ingredients in (
