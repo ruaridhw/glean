@@ -48,3 +48,19 @@ class TestScoreScan:
         score = score_scan(_expected(chopped, baby_plum), _scan(_parsed("chopped tomatoes", 400, "g", 1.05 / 400)))
 
         assert (score.recall, score.precision) == (0.5, 1.0)
+
+    def test_price_is_judged_on_the_line_total_so_unit_normalisation_does_not_matter(self) -> None:
+        herbs = ExpectedItem(name="curled leaf parsley", quantity=30, unit="g", unit_price=0.50 / 30)
+        as_one_unit = _parsed("curled leaf parsley", 1, "units", 0.51)
+        as_wrong_price = _parsed("curled leaf parsley", 30, "g", 0.60 / 30)
+
+        assert score_scan(_expected(herbs), _scan(as_one_unit)).price_accuracy == 1.0  # £0.51 is within 2p of £0.50
+        assert score_scan(_expected(herbs), _scan(as_wrong_price)).price_accuracy == 0.0
+
+    def test_quantity_tolerates_one_percent_and_flags_real_differences(self) -> None:
+        oil = ExpectedItem(name="olive oil", quantity=500, unit="ml", unit_price=5.0 / 500)
+
+        close = score_scan(_expected(oil), _scan(_parsed("olive oil", 502, "ml", 5.0 / 502)))
+        far = score_scan(_expected(oil), _scan(_parsed("olive oil", 1, "bottle", 5.0)))
+
+        assert (close.quantity_accuracy, far.quantity_accuracy) == (1.0, 0.0)
