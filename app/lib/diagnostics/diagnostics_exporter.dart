@@ -12,13 +12,18 @@ import 'database_snapshot.dart';
 /// Uploads a database snapshot and the app log; resolves to the S3 prefix the export landed under.
 typedef DiagnosticsExport = Future<String> Function();
 
+/// Where the export's temporary snapshot is written: `path_provider`'s temp directory in the app.
+final Provider<Future<Directory> Function()> diagnosticsTempDirProvider =
+    Provider<Future<Directory> Function()>((ref) => getTemporaryDirectory);
+
 final Provider<DiagnosticsExport>
 diagnosticsExportProvider = Provider<DiagnosticsExport>((ref) {
   final db = ref.watch(gleanDatabaseProvider);
   final api = ref.watch(apiClientProvider);
   final logger = ref.watch(gleanLoggerProvider);
+  final tempDir = ref.watch(diagnosticsTempDirProvider);
   return () async {
-    final Directory workDir = await (await getTemporaryDirectory()).createTemp(
+    final Directory workDir = await (await tempDir()).createTemp(
       'glean_export_',
     );
     try {
