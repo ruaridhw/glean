@@ -8,6 +8,11 @@ Parameters:
   GitHubRepo:
     Type: String
     Default: glean
+  # Supplied when the stack is applied (--parameter-overrides AlertEmail=...); never committed, the repo is public.
+  AlertEmail:
+    Type: String
+    AllowedPattern: '[^@\s]+@[^@\s]+'
+    ConstraintDescription: must be an email address
 
 Resources:
   GitHubOidcProvider:
@@ -50,6 +55,19 @@ Resources:
               - !Sub 'arn:aws:s3:::glean-receipts-prod-${AWS::AccountId}/*'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}/*'
+          # The catalogue table (ADR 0001) is created and updated by CloudFormation with the deploy
+          # role's credentials; scope it to this environment's table and its indexes.
+          - Effect: Allow
+            Action: dynamodb:*
+            Resource:
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod'
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod/index/*'
+          - Effect: Allow
+            Action:
+              - dynamodb:DescribeLimits
+              - dynamodb:ListTables
+              - budgets:ViewBudget
+            Resource: '*'
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
@@ -134,6 +152,19 @@ Resources:
               - !Sub 'arn:aws:s3:::glean-receipts-dev-${AWS::AccountId}/*'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}/*'
+          # The catalogue table (ADR 0001) is created and updated by CloudFormation with the deploy
+          # role's credentials; scope it to this environment's table and its indexes.
+          - Effect: Allow
+            Action: dynamodb:*
+            Resource:
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-dev'
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-dev/index/*'
+          - Effect: Allow
+            Action:
+              - dynamodb:DescribeLimits
+              - dynamodb:ListTables
+              - budgets:ViewBudget
+            Resource: '*'
           - Effect: Allow
             Action: lambda:*
             Resource: '*'
@@ -189,6 +220,31 @@ Resources:
                   !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
       ManagedPolicyArns:
         - !Ref GleanDeployPolicyDev
+
+  # ADR 0001: the catalogue must stay inside the DynamoDB free tier, so any DynamoDB charge at all is an alert.
+  DynamoDbChargeBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: glean-dynamodb-any-charge
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 0.01
+          Unit: USD
+        CostFilters:
+          Service:
+            - Amazon DynamoDB
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            # Budgets rejects an absolute threshold under $0.10, so alert at 100% of the $0.01 limit instead.
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
 
 Outputs:
   GleanDeployRoleProdArn:
