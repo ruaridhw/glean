@@ -61,6 +61,17 @@ class IngredientsRepository {
     )..where((t) => t.id.equals(id))).getSingle();
   }
 
+  /// The category of each of [ids] that has one; ingredients without a category are left out.
+  Future<Map<int, String>> categoriesById(Iterable<int> ids) async {
+    final rows = await (_db.select(
+      _db.ingredients,
+    )..where((t) => t.id.isIn(ids.toList()))).get();
+    return {
+      for (final row in rows)
+        if (row.category != null) row.id: row.category!,
+    };
+  }
+
   Future<Ingredient?> _findByApiId(String apiId) {
     return (_db.select(
       _db.ingredients,

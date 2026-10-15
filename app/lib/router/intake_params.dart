@@ -62,6 +62,7 @@ class ReviewArgs {
     this.clarifyingQuestions = const <String>[],
     this.originalDescription,
     this.returnToShop = false,
+    this.fromCheckedItems = false,
   });
 
   final ReviewDestination destination;
@@ -73,6 +74,10 @@ class ReviewArgs {
 
   /// True when this pantry review came from the Shop checkout bar's "scan receipt".
   final bool returnToShop;
+
+  /// True when the items are the Shop tab's checked rows ("Done shopping"), not a parse response. Confirming
+  /// adds them to the pantry and clears them from the list in one step, with one Undo for both.
+  final bool fromCheckedItems;
 }
 
 /// `extra` for [AppRoutes.intakeScan]: whether the chain returns to the Shop tab.

@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:glean/router/app_routes.dart';
 
@@ -27,6 +28,8 @@ void main() {
     // work outside the test's fake-async zone.
     ShoppingRepository shopping() =>
         harness.container.read(shoppingRepositoryProvider);
+    PantryRepository pantry() =>
+        harness.container.read(pantryRepositoryProvider);
     IngredientsRepository ingredients() =>
         harness.container.read(ingredientsRepositoryProvider);
 
@@ -95,41 +98,54 @@ void main() {
     );
 
     testWidgets(
-      '"Done shopping" completes a receipt-less trip, leaving unchecked rows',
+      '"Done shopping" opens the review with the checked Shopping items; '
+      'confirming stocks the pantry with the list quantities and clears '
+      'only the checked rows',
       (WidgetTester tester) async {
         await shopping().addManualItem(userId: 'test-user', name: 'Bananas');
         final int milkId = await shopping().addManualItem(
           userId: 'test-user',
           name: 'Milk',
+          quantity: 500,
+          unit: 'ml',
+        );
+        final int eggsId = await shopping().addManualItem(
+          userId: 'test-user',
+          name: 'Eggs',
+          quantity: 6,
+          unit: 'units',
         );
         await shopping().toggleRows(
-          ids: [milkId],
+          ids: [milkId, eggsId],
           userId: 'test-user',
           checked: true,
         );
 
         await harness.pumpAt(tester, AppRoutes.shop.path);
         await tester.pumpAndSettle();
-
         await tester.tap(find.text('Done shopping'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Bananas'), findsOneWidget);
-        expect(find.text('Milk'), findsNothing);
-        expect(find.text('1 item checked off'), findsOneWidget);
-        expect(
-          await tester.runAsync(() => shopping().watchAll('test-user').first),
-          hasLength(1),
-        );
+        expect(find.text('Review items'), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Milk'), findsOneWidget);
+        expect(find.widgetWithText(TextField, 'Eggs'), findsOneWidget);
+        expect(find.widgetWithText(TextField, '500'), findsOneWidget);
+        expect(find.widgetWithText(TextField, '6'), findsOneWidget);
+        expect(find.text('Bananas'), findsNothing);
 
-        await tester.tap(find.text('Undo'));
+        await tester.tap(find.text('Add 2 items'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Milk'), findsOneWidget);
+        final pantryItems = (await tester.runAsync(
+          () => pantry().getAll('test-user'),
+        ))!;
         expect(
-          await tester.runAsync(() => shopping().watchAll('test-user').first),
-          hasLength(2),
+          {for (final item in pantryItems) item.canonicalName: item.quantity},
+          {'milk': 500.0, 'eggs': 6.0},
         );
+        expect(find.text('Bananas'), findsOneWidget);
+        expect(find.text('Milk'), findsNothing);
+        expect(find.text('Eggs'), findsNothing);
       },
     );
   });

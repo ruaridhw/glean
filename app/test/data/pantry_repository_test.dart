@@ -586,9 +586,10 @@ void main() {
         await repository.undoAdditions(userId: userId, receipt: receipt);
 
         final afterUndo = await repository.watchAll(userId).first;
-        expect({for (final i in afterUndo) i.canonicalName: i.quantity}, {
-          'milk': 1000.0,
-        });
+        expect(
+          {for (final i in afterUndo) i.canonicalName: i.quantity},
+          {'milk': 1000.0},
+        );
       },
     );
 

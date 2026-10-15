@@ -314,16 +314,6 @@ class ShoppingRepository {
     return rows;
   });
 
-  Future<List<ShoppingListItem>> deleteCheckedWithSnapshot({
-    required String userId,
-  }) => _db.transaction(() async {
-    final rows = await (_db.select(
-      _db.shoppingListItems,
-    )..where((t) => t.isChecked.equals(true) & t.userId.equals(userId))).get();
-    await completeCheckoutWithoutReceipt(userId: userId);
-    return rows;
-  });
-
   Future<void> restoreRows({
     required List<ShoppingListItem> rows,
     required String userId,
@@ -372,12 +362,26 @@ class ShoppingRepository {
         .go();
   }
 
-  /// Completes a receipt-less trip ("Done shopping"): every checked row is considered bought and removed.
-  Future<int> completeCheckoutWithoutReceipt({required String userId}) {
-    return (_db.delete(
+  /// [resolveCheckout] that also returns the removed rows, so Undo can put them back with [restoreRows]. Used
+  /// by "Done shopping", where the pantry write and this clear commit in one transaction.
+  Future<List<ShoppingListItem>> resolveCheckoutWithSnapshot({
+    required String userId,
+    required List<int> resolvedIngredientIds,
+  }) => _db.transaction(() async {
+    if (resolvedIngredientIds.isEmpty) return <ShoppingListItem>[];
+    final rows =
+        await (_db.select(_db.shoppingListItems)..where(
+              (t) =>
+                  t.userId.equals(userId) &
+                  t.ingredientId.isIn(resolvedIngredientIds) &
+                  t.isChecked.equals(true),
+            ))
+            .get();
+    await (_db.delete(
       _db.shoppingListItems,
-    )..where((t) => t.userId.equals(userId) & t.isChecked.equals(true))).go();
-  }
+    )..where((t) => t.id.isIn([for (final row in rows) row.id]))).go();
+    return rows;
+  });
 }
 
 class AiShoppingItem {
