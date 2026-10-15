@@ -59,9 +59,11 @@ void main() {
   late List<Uri> requests;
   late List<http.Response Function(http.Request)> script;
   late CatalogueSync sync;
+  late DateTime clock;
 
   setUp(() {
     db = createTestDatabase();
+    clock = DateTime.utc(2026, 10, 15, 9);
     requests = <Uri>[];
     script = <http.Response Function(http.Request)>[];
     final client = MockClient((http.Request request) async {
@@ -71,6 +73,7 @@ void main() {
     sync = CatalogueSync(
       api: GleanApiClient(baseUrl: 'http://api.test', httpClient: client),
       repository: CatalogueRepository(db),
+      now: () => clock,
     );
   });
   tearDown(() => db.close());
@@ -274,6 +277,91 @@ void main() {
       expect(await db.select(db.ingredientGroups).get(), hasLength(29));
     },
   );
+
+  group('recovering from a catalogue read that missed items', () {
+    String sinceOfLast() => requests.last.queryParameters['since']!;
+
+    test('an item the backend missed in one response arrives with the next '
+        'full sync, without the item being rewritten', () async {
+      // The backend's index lagged: version 1 is reported, its item is not sent.
+      respond(_body(version: 1));
+      await sync.sync();
+      clock = clock.add(const Duration(hours: 1));
+      respond(_body(version: 1));
+      await sync.sync();
+      expect(sinceOfLast(), '1', reason: 'an hour later it is a plain delta');
+      expect(await db.select(db.catalogueItems).get(), isEmpty);
+
+      clock = clock.add(const Duration(hours: 24));
+      respond(
+        _body(
+          version: 1,
+          items: [
+            _item(
+              'dragon-fruit',
+              'dragon fruit',
+              group: 'fruit',
+              form: 'fresh',
+              source: 'llm',
+            ),
+          ],
+          aliases: [_alias('dragon fruit', 'dragon-fruit')],
+        ),
+      );
+      await sync.sync();
+
+      expect(sinceOfLast(), '0');
+      expect(
+        (await db.select(db.catalogueItems).get()).single.id,
+        'dragon-fruit',
+      );
+      expect(await storedVersion(), 1);
+    });
+
+    test('deltas, however recent, never postpone a due full sync', () async {
+      respond(_body(version: 1));
+      await sync.sync();
+      final DateTime firstFull = clock;
+      for (final Duration after in const <Duration>[
+        Duration(hours: 6),
+        Duration(hours: 12),
+        Duration(hours: 18),
+        Duration(hours: 23, minutes: 59),
+      ]) {
+        clock = firstFull.add(after);
+        respond(_body(version: 1));
+        await sync.sync();
+        expect(sinceOfLast(), '1', reason: 'a delta at +$after');
+      }
+      final state = await db.select(db.catalogueSyncState).getSingle();
+      expect(state.fullSyncedAt, firstFull.toIso8601String());
+
+      clock = firstFull.add(const Duration(hours: 24, minutes: 1));
+      respond(_body(version: 1));
+      await sync.sync();
+
+      expect(sinceOfLast(), '0');
+    });
+
+    test('a full sync that fails stays due until one succeeds', () async {
+      respond(_body(version: 1));
+      await sync.sync();
+      clock = clock.add(const Duration(hours: 25));
+      script.add((_) => throw const SocketException('offline'));
+      await sync.sync();
+      expect(sinceOfLast(), '0');
+
+      clock = clock.add(const Duration(minutes: 5));
+      respond(_body(version: 2));
+      await sync.sync();
+      expect(sinceOfLast(), '0');
+
+      clock = clock.add(const Duration(minutes: 5));
+      respond(_body(version: 2));
+      await sync.sync();
+      expect(sinceOfLast(), '2');
+    });
+  });
 
   group('when the sync cannot complete', () {
     Future<void> seedOneItem() async {

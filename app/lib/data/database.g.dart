@@ -6828,8 +6828,19 @@ class $CatalogueSyncStateTable extends CatalogueSyncState
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _fullSyncedAtMeta = const VerificationMeta(
+    'fullSyncedAt',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, version, syncedAt];
+  late final GeneratedColumn<String> fullSyncedAt = GeneratedColumn<String>(
+    'full_synced_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, version, syncedAt, fullSyncedAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -6861,6 +6872,17 @@ class $CatalogueSyncStateTable extends CatalogueSyncState
     } else if (isInserting) {
       context.missing(_syncedAtMeta);
     }
+    if (data.containsKey('full_synced_at')) {
+      context.handle(
+        _fullSyncedAtMeta,
+        fullSyncedAt.isAcceptableOrUnknown(
+          data['full_synced_at']!,
+          _fullSyncedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_fullSyncedAtMeta);
+    }
     return context;
   }
 
@@ -6882,6 +6904,10 @@ class $CatalogueSyncStateTable extends CatalogueSyncState
         DriftSqlType.string,
         data['${effectivePrefix}synced_at'],
       )!,
+      fullSyncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}full_synced_at'],
+      )!,
     );
   }
 
@@ -6896,10 +6922,12 @@ class CatalogueSyncStateData extends DataClass
   final int id;
   final int version;
   final String syncedAt;
+  final String fullSyncedAt;
   const CatalogueSyncStateData({
     required this.id,
     required this.version,
     required this.syncedAt,
+    required this.fullSyncedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6907,6 +6935,7 @@ class CatalogueSyncStateData extends DataClass
     map['id'] = Variable<int>(id);
     map['version'] = Variable<int>(version);
     map['synced_at'] = Variable<String>(syncedAt);
+    map['full_synced_at'] = Variable<String>(fullSyncedAt);
     return map;
   }
 
@@ -6915,6 +6944,7 @@ class CatalogueSyncStateData extends DataClass
       id: Value(id),
       version: Value(version),
       syncedAt: Value(syncedAt),
+      fullSyncedAt: Value(fullSyncedAt),
     );
   }
 
@@ -6927,6 +6957,7 @@ class CatalogueSyncStateData extends DataClass
       id: serializer.fromJson<int>(json['id']),
       version: serializer.fromJson<int>(json['version']),
       syncedAt: serializer.fromJson<String>(json['syncedAt']),
+      fullSyncedAt: serializer.fromJson<String>(json['fullSyncedAt']),
     );
   }
   @override
@@ -6936,20 +6967,29 @@ class CatalogueSyncStateData extends DataClass
       'id': serializer.toJson<int>(id),
       'version': serializer.toJson<int>(version),
       'syncedAt': serializer.toJson<String>(syncedAt),
+      'fullSyncedAt': serializer.toJson<String>(fullSyncedAt),
     };
   }
 
-  CatalogueSyncStateData copyWith({int? id, int? version, String? syncedAt}) =>
-      CatalogueSyncStateData(
-        id: id ?? this.id,
-        version: version ?? this.version,
-        syncedAt: syncedAt ?? this.syncedAt,
-      );
+  CatalogueSyncStateData copyWith({
+    int? id,
+    int? version,
+    String? syncedAt,
+    String? fullSyncedAt,
+  }) => CatalogueSyncStateData(
+    id: id ?? this.id,
+    version: version ?? this.version,
+    syncedAt: syncedAt ?? this.syncedAt,
+    fullSyncedAt: fullSyncedAt ?? this.fullSyncedAt,
+  );
   CatalogueSyncStateData copyWithCompanion(CatalogueSyncStateCompanion data) {
     return CatalogueSyncStateData(
       id: data.id.present ? data.id.value : this.id,
       version: data.version.present ? data.version.value : this.version,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+      fullSyncedAt: data.fullSyncedAt.present
+          ? data.fullSyncedAt.value
+          : this.fullSyncedAt,
     );
   }
 
@@ -6958,20 +6998,22 @@ class CatalogueSyncStateData extends DataClass
     return (StringBuffer('CatalogueSyncStateData(')
           ..write('id: $id, ')
           ..write('version: $version, ')
-          ..write('syncedAt: $syncedAt')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('fullSyncedAt: $fullSyncedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, version, syncedAt);
+  int get hashCode => Object.hash(id, version, syncedAt, fullSyncedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is CatalogueSyncStateData &&
           other.id == this.id &&
           other.version == this.version &&
-          other.syncedAt == this.syncedAt);
+          other.syncedAt == this.syncedAt &&
+          other.fullSyncedAt == this.fullSyncedAt);
 }
 
 class CatalogueSyncStateCompanion
@@ -6979,26 +7021,32 @@ class CatalogueSyncStateCompanion
   final Value<int> id;
   final Value<int> version;
   final Value<String> syncedAt;
+  final Value<String> fullSyncedAt;
   const CatalogueSyncStateCompanion({
     this.id = const Value.absent(),
     this.version = const Value.absent(),
     this.syncedAt = const Value.absent(),
+    this.fullSyncedAt = const Value.absent(),
   });
   CatalogueSyncStateCompanion.insert({
     this.id = const Value.absent(),
     required int version,
     required String syncedAt,
+    required String fullSyncedAt,
   }) : version = Value(version),
-       syncedAt = Value(syncedAt);
+       syncedAt = Value(syncedAt),
+       fullSyncedAt = Value(fullSyncedAt);
   static Insertable<CatalogueSyncStateData> custom({
     Expression<int>? id,
     Expression<int>? version,
     Expression<String>? syncedAt,
+    Expression<String>? fullSyncedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (version != null) 'version': version,
       if (syncedAt != null) 'synced_at': syncedAt,
+      if (fullSyncedAt != null) 'full_synced_at': fullSyncedAt,
     });
   }
 
@@ -7006,11 +7054,13 @@ class CatalogueSyncStateCompanion
     Value<int>? id,
     Value<int>? version,
     Value<String>? syncedAt,
+    Value<String>? fullSyncedAt,
   }) {
     return CatalogueSyncStateCompanion(
       id: id ?? this.id,
       version: version ?? this.version,
       syncedAt: syncedAt ?? this.syncedAt,
+      fullSyncedAt: fullSyncedAt ?? this.fullSyncedAt,
     );
   }
 
@@ -7026,6 +7076,9 @@ class CatalogueSyncStateCompanion
     if (syncedAt.present) {
       map['synced_at'] = Variable<String>(syncedAt.value);
     }
+    if (fullSyncedAt.present) {
+      map['full_synced_at'] = Variable<String>(fullSyncedAt.value);
+    }
     return map;
   }
 
@@ -7034,7 +7087,8 @@ class CatalogueSyncStateCompanion
     return (StringBuffer('CatalogueSyncStateCompanion(')
           ..write('id: $id, ')
           ..write('version: $version, ')
-          ..write('syncedAt: $syncedAt')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('fullSyncedAt: $fullSyncedAt')
           ..write(')'))
         .toString();
   }
@@ -12701,12 +12755,14 @@ typedef $$CatalogueSyncStateTableCreateCompanionBuilder =
       Value<int> id,
       required int version,
       required String syncedAt,
+      required String fullSyncedAt,
     });
 typedef $$CatalogueSyncStateTableUpdateCompanionBuilder =
     CatalogueSyncStateCompanion Function({
       Value<int> id,
       Value<int> version,
       Value<String> syncedAt,
+      Value<String> fullSyncedAt,
     });
 
 class $$CatalogueSyncStateTableFilterComposer
@@ -12730,6 +12786,11 @@ class $$CatalogueSyncStateTableFilterComposer
 
   ColumnFilters<String> get syncedAt => $composableBuilder(
     column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fullSyncedAt => $composableBuilder(
+    column: $table.fullSyncedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -12757,6 +12818,11 @@ class $$CatalogueSyncStateTableOrderingComposer
     column: $table.syncedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get fullSyncedAt => $composableBuilder(
+    column: $table.fullSyncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CatalogueSyncStateTableAnnotationComposer
@@ -12776,6 +12842,11 @@ class $$CatalogueSyncStateTableAnnotationComposer
 
   GeneratedColumn<String> get syncedAt =>
       $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get fullSyncedAt => $composableBuilder(
+    column: $table.fullSyncedAt,
+    builder: (column) => column,
+  );
 }
 
 class $$CatalogueSyncStateTableTableManager
@@ -12821,20 +12892,24 @@ class $$CatalogueSyncStateTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int> version = const Value.absent(),
                 Value<String> syncedAt = const Value.absent(),
+                Value<String> fullSyncedAt = const Value.absent(),
               }) => CatalogueSyncStateCompanion(
                 id: id,
                 version: version,
                 syncedAt: syncedAt,
+                fullSyncedAt: fullSyncedAt,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required int version,
                 required String syncedAt,
+                required String fullSyncedAt,
               }) => CatalogueSyncStateCompanion.insert(
                 id: id,
                 version: version,
                 syncedAt: syncedAt,
+                fullSyncedAt: fullSyncedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
