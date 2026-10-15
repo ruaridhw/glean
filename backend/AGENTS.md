@@ -40,7 +40,7 @@ src/glean/
 ├── health/router.py  # GET /health
 ├── dev/router.py     # POST /dev/export-db → S3
 ├── catalogue/        # ingredient groups, section rule, catalogue item models, CatalogueStore + in-memory and DynamoDB stores, seed data,
-│                     # normalise (raw names → catalogue items) and POST /catalogue/normalise
+│                     # normalise (raw names → catalogue items), POST /catalogue/normalise and GET /catalogue?since=<version> (the versioned sync the app reads)
 ├── receipts/         # POST /receipts/scan (image upload → Textract or vision OCR)
 │                     # POST /receipts/describe (text → normalised ingredients)
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
