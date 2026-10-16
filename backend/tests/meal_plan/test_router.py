@@ -27,6 +27,7 @@ from glean.meal_plan.schemas import (
 )
 from glean.meal_plan.service import generate_meal_plan
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes import corpus as corpus_module
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
@@ -231,44 +232,64 @@ def test_meal_plan_endpoint_accepts_corpus_requests_without_recipe_history(
     assert response.json() == {"suggestions": []}
 
 
-def test_an_older_app_build_sending_nut_free_gets_both_nut_flags_applied(
-    client: TestClient, auth_headers: dict[str, str], tmp_path
+class _ModelThatSuggestsEveryCorpusRecipe:
+    """The meal-plan model, faked at its boundary: it ignores the filtering and recommends every recipe it was offered
+    plus every id in `also` (a model inventing or remembering recipes it wasn't offered)."""
+
+    def __init__(self, *also: str) -> None:
+        self._also = also
+
+    def invoke(self, _feature, _schema, messages, **_kwargs) -> CorpusMealPlanResponse:
+        offered = [candidate["external_id"] for candidate in json.loads(messages[-1].content)["candidates"]]
+        return CorpusMealPlanResponse(
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=external_id, title=external_id, reason="Looks good.")
+                for external_id in [*offered, *self._also]
+            ]
+        )
+
+
+def test_an_older_app_build_sending_nut_free_is_never_planned_a_tree_nut_or_a_peanut_recipe(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
 ) -> None:
-    corpus = _corpus(tmp_path)
-    summaries = {summary.external_id: summary for summary in corpus.search(per_page=100)[0]}
-    answers = {  # the salmon dish breaks only peanut-free; the bolognese neither
-        ("rec_bolognese", "tree-nut-free"): 0.02,
-        ("rec_bolognese", "peanut-free"): 0.02,
-        ("rec_salmon", "tree-nut-free"): 0.02,
-        ("rec_salmon", "peanut-free"): 0.99,
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    corpus = RecipeCorpusStore()
+    recipes = {
+        "rec_rice": ("Plain Rice", ["rice"], 0.02, 0.02),
+        "rec_pesto": ("Pesto Pasta", ["spaghetti", "pesto"], 0.97, 0.02),
+        "rec_satay": ("Satay Noodles", ["noodles", "satay sauce"], 0.02, 0.97),
     }
+    for external_id, (title, ingredients, _tree, _peanut) in recipes.items():
+        corpus.save(
+            StoredRecipe(
+                external_id=external_id,
+                title=title,
+                ingredients=[StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in ingredients],
+            )
+        )
     DietaryDecisionStore(corpus.store).save(
         [
             DietaryDecision(
-                recipe_id=recipe_id,
+                recipe_id=external_id,
                 flag=flag,
                 probability=probability,
                 model=f"{DECISION_MODEL}-20261014",
-                content_hash=content_fingerprint(summaries[recipe_id].title, summaries[recipe_id].ingredient_names),
+                content_hash=content_fingerprint(title, ingredients),
                 criteria_hash=question_hash(dietary_questions()[flag]),
                 computed_at=datetime(2026, 10, 16, tzinfo=UTC),
             )
-            for (recipe_id, flag), probability in answers.items()
+            for external_id, (title, ingredients, tree, peanut) in recipes.items()
+            for flag, probability in (("tree-nut-free", tree), ("peanut-free", peanut))
         ]
     )
-    llm_router = MagicMock()
-    llm_router.invoke.return_value = CorpusMealPlanResponse(suggestions=[])
-    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    app.dependency_overrides[get_llm_router] = lambda: _ModelThatSuggestsEveryCorpusRecipe("rec_pesto", "rec_satay")
     body = _corpus_request(dietary_flags=["Nut-Free"]).model_dump(mode="json")
     del body["recipe_history"]
 
-    with patch("glean.meal_plan.service.RecipeCorpusStore", return_value=corpus):
-        response = client.post("/meal-plan", headers=auth_headers, json=body)
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
 
     assert response.status_code == 200
-    args, _ = llm_router.invoke.call_args
-    offered = json.loads(args[2][-1].content)["candidates"]
-    assert {candidate["external_id"] for candidate in offered} == {"rec_bolognese"}
+    assert [suggestion["external_id"] for suggestion in response.json()["suggestions"]] == ["rec_rice"]
 
 
 def _corpus_request(**overrides: object) -> MealPlanRequest:
