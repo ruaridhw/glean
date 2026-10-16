@@ -76,10 +76,19 @@ def test_first_run_stores_a_decision_for_every_recipe_and_flag_and_reports_full_
 
     stored = {(d.recipe_id, d.flag): d for d in DietaryDecisionStore(corpus.store).load()}
     assert set(stored) == {(rid, flag) for rid in ("rec_pesto", "rec_tomato") for flag in DIETARY_FLAGS}
-    assert stored[("rec_pesto", "nut-free")].probability == 0.9
-    assert stored[("rec_tomato", "nut-free")].probability == 0.01
-    assert stored[("rec_pesto", "nut-free")].model == SNAPSHOT
-    assert (report.recipes, report.computed, report.coverage) == (2, 10, 1.0)
+    assert {flag for _, flag in stored} == {
+        "vegetarian",
+        "vegan",
+        "dairy-free",
+        "gluten-free",
+        "tree-nut-free",
+        "peanut-free",
+    }
+    assert stored[("rec_pesto", "tree-nut-free")].probability == 0.9
+    assert stored[("rec_pesto", "peanut-free")].probability == 0.9
+    assert stored[("rec_tomato", "tree-nut-free")].probability == 0.01
+    assert stored[("rec_pesto", "tree-nut-free")].model == SNAPSHOT
+    assert (report.recipes, report.computed, report.coverage) == (2, 12, 1.0)
     assert report.uncovered == []
 
 
@@ -103,7 +112,7 @@ def test_a_recipe_added_later_is_the_only_one_computed(tmp_path) -> None:
     report = produce_missing_decisions(corpus, api.client())
 
     assert [request["state"]["recipe_title"] for request in api.requests] == ["Courgette Soup"]
-    assert (report.computed, report.coverage) == (5, 1.0)
+    assert (report.computed, report.coverage) == (6, 1.0)
 
 
 def test_decisions_from_an_older_model_are_recomputed(tmp_path) -> None:
@@ -114,7 +123,7 @@ def test_decisions_from_an_older_model_are_recomputed(tmp_path) -> None:
     report = produce_missing_decisions(corpus, api.client())
 
     assert len(api.requests) == 2
-    assert (report.computed, report.coverage) == (10, 1.0)
+    assert (report.computed, report.coverage) == (12, 1.0)
     assert {d.model for d in DietaryDecisionStore(corpus.store).load()} == {SNAPSHOT}
 
 
@@ -128,7 +137,7 @@ def test_decisions_computed_under_other_criteria_text_are_recomputed(tmp_path) -
     report = produce_missing_decisions(corpus, api.client())
 
     assert len(api.requests) == 2
-    assert (report.computed, report.coverage) == (10, 1.0)
+    assert (report.computed, report.coverage) == (12, 1.0)
     assert {(d.flag, d.criteria_hash) for d in DietaryDecisionStore(corpus.store).load()} == {
         (flag, question_hash(dietary_questions()[flag])) for flag in DIETARY_FLAGS
     }
@@ -158,7 +167,7 @@ def test_a_recipe_whose_ingredients_change_is_excluded_until_its_decision_is_rec
     api = FakeDecisionApi()
     report = produce_missing_decisions(corpus, api.client())
     assert [request["state"]["recipe_title"] for request in api.requests] == ["Tomato Pasta"]
-    assert (report.computed, report.coverage) == (5, 1.0)
+    assert (report.computed, report.coverage) == (6, 1.0)
     assert "rec_tomato" not in _nut_free_ids(corpus)  # recomputed: the model now says pesto contains nuts
 
 
@@ -199,9 +208,16 @@ def test_the_questions_state_the_households_ingredient_policy(tmp_path) -> None:
         question = api.requests[0]["questions"][flag]
         return f"{question['instructions']} {question['criteria']['true']} {question['criteria']['false']}".casefold()
 
-    assert "pine nuts count as nuts" in wording("nut-free")
-    assert "coconut" in wording("nut-free")
-    assert "nutmeg" in wording("nut-free")
+    assert "pine nuts count" in wording("tree-nut-free")
+    assert "pesto counts" in wording("tree-nut-free")
+    assert "satay" in wording("tree-nut-free")  # named as not a tree nut
+    assert "coconut" in wording("tree-nut-free")
+    assert "nutmeg" in wording("tree-nut-free")
+    assert "satay" in wording("peanut-free")
+    assert "peanut butter" in wording("peanut-free")
+    assert "groundnut oil" in wording("peanut-free")
+    assert "coconut" in wording("peanut-free")
+    assert "nutmeg" in wording("peanut-free")
     assert "parmesan and pesto are allowed" in wording("vegetarian")
     assert "pesto" in wording("vegan")
     assert "unless the recipe says gluten-free oats" in wording("gluten-free")
@@ -223,7 +239,7 @@ def _nut_free_ids(corpus: RecipeCorpusStore) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
         pantry_names=[],
-        dietary_flags=["nut-free"],
+        dietary_flags=["tree-nut-free", "peanut-free"],
         max_total_time_mins=None,
         exclude_external_ids=[],
         rng=random.Random(0),

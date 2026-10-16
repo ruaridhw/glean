@@ -22,9 +22,10 @@ import pytest
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
-    NUT_FREE,
-    NUT_FREE_THRESHOLD,
+    PEANUT_FREE,
     PREFERENCE_THRESHOLD,
+    THRESHOLDS,
+    TREE_NUT_FREE,
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
@@ -47,14 +48,20 @@ MODELS = {measured["model"] for measured in _MEASURED}
 # candidate selection treats recipes sharing this fraction of their ingredients as variants of one dish
 _NEAR_DUPLICATE_OVERLAP = 0.7
 
-# Nut-free is an allergy, so its threshold also drops this lookalike: the model still scores a bare "korma curry
-# paste" 0.42 although only nuts in the ingredients count. Anything else it drops is a regression.
-ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"allowed-korma-paste"}
+NUT_FLAGS = (TREE_NUT_FREE, PEANUT_FREE)
+
+# The nut flags are allergies, so each threshold also drops these lookalikes: the model still scores a bare "korma
+# curry paste" 0.38 for tree nuts although only nuts in the ingredients count, and dukkah and praline (hazelnuts,
+# almonds) 0.44 and 0.35 for peanuts. Anything else a nut flag drops is a regression.
+ACCEPTED_FALSE_EXCLUSIONS = {
+    TREE_NUT_FREE: {"allowed-korma-paste"},
+    PEANUT_FREE: {"table-nut-dukkah", "regex-forbidden-nuts-praline"},
+}
 
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
 PREFERENCE_MARGIN = 0.10
-NUT_FREE_MARGIN_ABOVE_CLEAN = 0.10
-NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
+NUT_MARGIN_ABOVE_CLEAN = {TREE_NUT_FREE: 0.05, PEANUT_FREE: 0.005}
+NUT_MARGIN_BELOW_VIOLATORS = {TREE_NUT_FREE: 0.4, PEANUT_FREE: 0.25}
 
 
 @pytest.fixture(scope="module")
@@ -144,7 +151,7 @@ def test_every_labelled_recipe_that_breaks_the_flag_is_left_out(offered_by_flag,
     assert offered_by_flag[flag] & violators == set()
 
 
-@pytest.mark.parametrize("flag", [flag for flag in DIETARY_FLAGS if flag != NUT_FREE])
+@pytest.mark.parametrize("flag", [flag for flag in DIETARY_FLAGS if flag not in NUT_FLAGS])
 def test_every_labelled_recipe_that_is_fine_for_a_preference_flag_is_still_offered(offered_by_flag, flag: str) -> None:
     fine = {row["id"] for row in ROWS if row["violates"].get(flag) is False}
 
@@ -152,12 +159,44 @@ def test_every_labelled_recipe_that_is_fine_for_a_preference_flag_is_still_offer
     assert fine - offered_by_flag[flag] == set()
 
 
-def test_nut_free_offers_coconut_milk_nutmeg_butternut_tahini_and_the_ordinary_recipes(offered_by_flag) -> None:
-    offered = offered_by_flag[NUT_FREE]
+@pytest.mark.parametrize("flag", NUT_FLAGS)
+def test_each_nut_flag_offers_coconut_milk_nutmeg_butternut_tahini_and_the_ordinary_recipes(
+    offered_by_flag, flag: str
+) -> None:
+    offered = offered_by_flag[flag]
 
-    fine = {row["id"] for row in ROWS if row["violates"].get(NUT_FREE) is False}
+    fine = {row["id"] for row in ROWS if row["violates"].get(flag) is False}
     assert {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut", "heldout-nut-tahini"} <= offered
-    assert fine - offered == ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS & fine
+    assert fine - offered == ACCEPTED_FALSE_EXCLUSIONS[flag] & fine
+
+
+def test_satay_chilli_crisp_and_peanut_butter_pass_tree_nut_free_and_fail_peanut_free(offered_by_flag) -> None:
+    peanut_recipes = {
+        "regex-forbidden-nuts-satay",
+        "heldout-peanut-chilli-crisp",
+        "heldout-peanut-groundnut-oil",
+        "regex-safe-dairy-peanut-butter",
+        "ordinary-06",  # chicken satay with peanut butter
+    }
+
+    assert peanut_recipes <= offered_by_flag[TREE_NUT_FREE]
+    assert peanut_recipes & offered_by_flag[PEANUT_FREE] == set()
+
+
+def test_pine_nuts_pesto_and_almonds_fail_tree_nut_free_and_pass_peanut_free(offered_by_flag) -> None:
+    tree_nut_recipes = {"regex-forbidden-nuts-pine-nut", "table-nut-pesto", "regex-forbidden-nuts-almond"}
+
+    assert tree_nut_recipes & offered_by_flag[TREE_NUT_FREE] == set()
+    assert tree_nut_recipes <= offered_by_flag[PEANUT_FREE]
+
+
+def test_a_tikka_masala_or_pasanda_paste_is_not_excluded_for_either_nut_flag_for_being_that_paste(
+    offered_by_flag,
+) -> None:
+    pastes = {"allowed-tikka-masala-seasoning", "allowed-pasanda-paste"}
+
+    assert pastes <= offered_by_flag[TREE_NUT_FREE]
+    assert pastes <= offered_by_flag[PEANUT_FREE]
 
 
 @pytest.mark.parametrize(
@@ -166,8 +205,9 @@ def test_nut_free_offers_coconut_milk_nutmeg_butternut_tahini_and_the_ordinary_r
 )
 def test_every_former_regex_term_is_excluded_or_kept_as_the_regex_decided(offered_by_flag, row, flag: str) -> None:
     offered = row["id"] in offered_by_flag[flag]
+    accepted_exclusion = row["id"] in ACCEPTED_FALSE_EXCLUSIONS.get(flag, set())
 
-    assert offered == (not row["violates"][flag])
+    assert offered == (not row["violates"][flag] and not accepted_exclusion)
 
 
 def test_the_regex_coverage_labels_every_forbidden_word_and_safe_qualifier() -> None:
@@ -190,17 +230,17 @@ def test_the_regex_coverage_labels_every_forbidden_word_and_safe_qualifier() -> 
 
 @pytest.mark.parametrize("flag", DIETARY_FLAGS)
 def test_the_thresholds_keep_their_recorded_margins_on_the_measured_sample(flag: str) -> None:
-    threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
+    threshold = THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
     violators = [PROBABILITIES[row["id"]][flag] for row in ROWS if row["violates"].get(flag)]
     clean = [
         PROBABILITIES[row["id"]][flag]
         for row in ROWS
-        if row["violates"].get(flag) is False and row["id"] not in ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS
+        if row["violates"].get(flag) is False and row["id"] not in ACCEPTED_FALSE_EXCLUSIONS.get(flag, set())
     ]
 
-    if flag == NUT_FREE:
-        assert threshold - max(clean) >= NUT_FREE_MARGIN_ABOVE_CLEAN
-        assert min(violators) - threshold >= NUT_FREE_MARGIN_BELOW_VIOLATORS
+    if flag in NUT_FLAGS:
+        assert threshold - max(clean) >= NUT_MARGIN_ABOVE_CLEAN[flag]
+        assert min(violators) - threshold >= NUT_MARGIN_BELOW_VIOLATORS[flag]
     else:
         assert threshold - max(clean) >= PREFERENCE_MARGIN
         assert min(violators) - threshold >= PREFERENCE_MARGIN
