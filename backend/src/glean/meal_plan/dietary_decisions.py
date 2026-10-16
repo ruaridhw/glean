@@ -48,12 +48,14 @@ DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
 #                               dairy-free >= 0.87, gluten-free >= 0.74
 #   recipes that don't:         nut-free <= 0.20 (tahini 0.20, a tahini-like wrap 0.16; the rest <= 0.09),
 #                               vegetarian <= 0.17, dairy-free <= 0.11, gluten-free <= 0.33, vegan <= 0.33
-# Nut-free is an allergy, so its threshold sits 1.3x above the model's noise floor (0.09) and trades two
-# tahini-like false exclusions for a margin of 0.77 to the nearest violator. Preferences sit between
-# the clusters: 0.17 above the highest clean recipe (vegan, gluten-free), 0.24 below the lowest violator
-# (gluten-free). 0.50 rather than higher because the gluten-free recipe `rec_d1cddd00fba23e5a` of the prod
-# corpus scores 0.52 and must be excluded.
-NUT_FREE_THRESHOLD = 0.12
+# Nut-free is an allergy, so its threshold is the one that must never miss: 0.30 sits 0.10 above the highest
+# clean recipe (tahini 0.20) and 0.59 below the lowest violator, and over the 632 prod-corpus recipes it misses
+# none (13 of 442 safe recipes excluded; at 0.12 it was 127, mostly curry-powder recipes scoring 0.12-0.2).
+# Only ingredients count: a "may contain nuts" warning is ignored. Korma and tikka masala pastes are named
+# exceptions by maintainer decision. Preferences sit between the clusters: 0.17 above the highest clean recipe
+# (vegan, gluten-free), 0.24 below the lowest violator (gluten-free). 0.50 rather than higher because the
+# gluten-free recipe `rec_d1cddd00fba23e5a` of the prod corpus scores 0.52 and must be excluded.
+NUT_FREE_THRESHOLD = 0.3
 PREFERENCE_THRESHOLD = 0.5
 
 

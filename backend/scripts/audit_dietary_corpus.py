@@ -57,11 +57,14 @@ JUDGES: dict[str, tuple[str, dict[str, Any]]] = {
 _TERMS_PATH = Path(__file__).parents[1] / "tests" / "fixtures" / "decisions" / "dietary_regex_terms.json"
 _VERDICTS = ("breaks", "fine", "unsure")
 
+# "May contain" and factory-trace warnings are ignored for every flag: only ingredients count (maintainer, 2026-10-16).
 _JUDGE_INSTRUCTIONS = """\
 You are a food-safety assistant labelling a recipe from its title and ingredient list.
 For each dietary flag answer "breaks" (at least one ingredient is or very likely contains something the flag \
 forbids), "fine" (clearly nothing the flag forbids) or "unsure" (it depends on the exact product). \
 Name the ingredient responsible in `culprit` when the verdict is "breaks" or "unsure", otherwise null.
+
+Only the listed ingredients count: ignore "may contain" and "made in a factory that handles" warnings.
 
 - vegetarian: no meat, poultry, fish, shellfish or other slaughter products (gelatine, lard, suet, anchovy, \
 shrimp paste, Worcestershire sauce). Parmesan and pesto are acceptable. Meat-free substitutes are fine.
@@ -580,7 +583,7 @@ def run_report(
     nut_signals = signals[NUT_FREE]
     lines += ["## nut-free threshold table (ground truth: maintainer labels, paste policy, then agreed signals)"]
     for config, is_baseline, thresholds in (
-        ("#161", False, [NUT_FREE_THRESHOLD, 0.2, 0.3, 0.4, 0.5]),
+        ("#161", False, sorted({0.12, 0.2, NUT_FREE_THRESHOLD, 0.4, 0.5})),
         ("#145", True, [baseline_thresholds[0]]),
     ):
         labelled = [
