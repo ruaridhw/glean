@@ -44,9 +44,10 @@ class Evidence(BaseModel):
 
 class IngredientVerdict(BaseModel):
     ingredient: str = Field(description="The processed ingredient that was looked up, e.g. 'korma curry paste'.")
-    status: Literal["resolved", "blocked", "not_found"] = Field(
-        description="'resolved' when products were read; 'blocked' when a shop refused and nothing was read; "
-        "'not_found' when no product with an ingredients list matched. Only 'resolved' carries frequencies."
+    status: Literal["resolved", "blocked", "not_found", "insufficient"] = Field(
+        description="'resolved' when enough products were read; 'blocked' when a shop refused and nothing was read; "
+        "'not_found' when no matching product had an ingredients list; 'insufficient' when too few pages could "
+        "be read to say. Only 'resolved' carries frequencies."
     )
     retailer: str | None = Field(default=None, description="The retailer the products were read from.")
     products_read: int = Field(default=0, description="How many products with an ingredients list were read.")

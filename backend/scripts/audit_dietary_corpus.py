@@ -39,8 +39,10 @@ from scripts.grocery_ground_truth import (
     Frequency,
     IngredientVerdict,
     OcadoReader,
+    Product,
     ProductCache,
     SainsburysReader,
+    classify,
     is_unsafe,
 )
 from scripts.grocery_ground_truth import ground_truth as read_retailer_shelf
@@ -330,15 +332,33 @@ def processed_ingredients(ingredient_names: list[str]) -> list[str]:
     return [name for name in cleaned if _PROCESSED.search(name) and not _NOT_A_PRODUCT.search(name)]
 
 
+_NUT_DERIVED = re.compile(r"\b(?:marzipan|praline|frangipane|nutella|gianduja|nougat|baklava|satay)\b", re.IGNORECASE)
+_FREE_FROM = re.compile(r"\b(?:nut|peanut)[- ]free\b|\bfree from (?:nuts|peanuts)\b", re.IGNORECASE)
+
+
+def names_an_allergen(ingredient_name: str) -> bool:
+    """The name itself says tree nut or peanut ("almonds", "peanut oil", "marzipan"), whatever a shelf says about
+    other ingredients. "Nut-free pesto" does not."""
+    name = _FREE_FROM.sub("", ingredient_name)
+    facts = classify(Product(retailer="recipe", name=name, url="", ingredients_text=name))
+    return bool(facts.tree_nut_ingredients or facts.peanut_ingredients or _NUT_DERIVED.search(name))
+
+
 def retailer_truth(
     ingredient_names: list[str], lookup: Callable[[str], IngredientVerdict], policy: ContainsPolicy | None
 ) -> str | None:
-    """ "breaks" when any processed ingredient contains a nut or peanut on the shelf, "fine" when every one is read
-    and doesn't, else None: an ingredient that couldn't be read is never assumed safe."""
-    unsafe = [is_unsafe(lookup(name), policy) for name in processed_ingredients(ingredient_names)]
-    if any(unsafe):
+    """The whole recipe, not just its pastes: "breaks" when any ingredient is itself a nut or peanut or any
+    processed ingredient contains one on the shelf; "fine" only when every processed ingredient is read and safe
+    and nothing else names an allergen; otherwise None, because an unsettled ingredient is never assumed safe."""
+    processed = processed_ingredients(ingredient_names)
+    if not processed:
+        return None
+    if any(names_an_allergen(name) for name in ingredient_names):
         return "breaks"
-    return "fine" if unsafe and all(found is False for found in unsafe) else None
+    settled = [is_unsafe(lookup(name), policy) for name in processed]
+    if any(settled):
+        return "breaks"
+    return "fine" if all(found is False for found in settled) else None
 
 
 def _judges_unsettled(found: Signals) -> bool:

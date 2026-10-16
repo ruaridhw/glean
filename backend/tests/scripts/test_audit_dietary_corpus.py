@@ -418,3 +418,37 @@ def test_the_retailer_section_lists_each_both_unsure_recipe_with_its_shelf_and_t
     assert "Korma (`" + labelled + "`): retailer fine; maintainer label fine" in report
     assert "Pesto pasta (`rec_y`): retailer breaks; maintainer label none" in report
     assert "Plain" not in report
+
+
+def _all_safe(name: str) -> IngredientVerdict:
+    return _shelf()
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["nut-free pesto", "almonds"],
+        ["Pesto", "Almonds"],
+        ["Teriyaki Sauce", "Peanut Oil"],
+        ["Green Pesto", "Marzipan"],
+        ["Satay Sauce", "Rice"],
+    ],
+)
+def test_a_safe_processed_ingredient_never_whitewashes_another_ingredient_that_is_itself_an_allergen(names) -> None:
+    assert audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=_all_safe) == "breaks"
+
+
+def test_a_nut_free_label_in_a_name_is_not_a_nut() -> None:
+    assert (
+        audit.resolve_truth("nut-free", "rec_x", ["Nut-Free Pesto", "Coconut Milk"], _UNSURE, lookup=_all_safe)
+        == "fine"
+    )
+
+
+def test_a_recipe_is_fine_only_when_every_processed_ingredient_is_settled_safe() -> None:
+    def shelf(name: str) -> IngredientVerdict:
+        return _shelf() if "pesto" in name.casefold() else IngredientVerdict(ingredient=name, status="insufficient")
+
+    names = ["Green Pesto", "Korma Paste", "Rice"]
+
+    assert audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=shelf) is None
