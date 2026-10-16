@@ -696,8 +696,8 @@
    }
   },
   {
-   "id": "heldout-peanut-chilli-crisp",
-   "title": "Chilli crisp rice bowl",
+   "id": "allowed-chilli-crisp",
+   "title": "Chilli crisp rice bowl (follows the shelf, no named exception)",
    "ingredients": [
     "basmati rice",
     "cherry tomatoes",
@@ -706,7 +706,7 @@
    ],
    "violates": {
     "tree-nut-free": false,
-    "peanut-free": true
+    "peanut-free": false
    }
   },
   {

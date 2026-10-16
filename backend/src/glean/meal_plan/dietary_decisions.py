@@ -47,11 +47,11 @@ DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", TREE_NUT_FR
 # 182 recipes) answered by typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all
 # 632 prod-corpus recipes. Ground truth there is the retailer's ingredient lists, then the maintainer's labels, then
 # two judges and the old regex in agreement:
-#   tree-nut-free: 41 recipes break it, every one scored >= 0.94; 1 of 570 clean recipes scores >= 0.3 (0.79)
-#   peanut-free:   37 recipes break it, every one scored >= 0.59; 1 of 581 clean recipes scores >= 0.3 (0.43)
-# Both thresholds start from the 0.3 the single nut flag used and miss nothing on the corpus; 0.3 sits 0.64 (tree)
-# and 0.29 (peanut) below the lowest violator. On the samples tree-nut-free is clean to 0.11 (a bare korma paste);
-# peanut-free scores dukkah 0.44 and praline 0.35 clean-labelled, which it excludes.
+#   tree-nut-free: 41 recipes break it, every one scored >= 0.95; 1 of 570 clean recipes scores >= 0.3 (0.84)
+#   peanut-free:   36 recipes break it, every one scored >= 0.86; 1 of 576 clean recipes scores >= 0.3 (0.44)
+# Both thresholds start from the 0.3 the single nut flag used and miss nothing on the corpus; 0.3 sits 0.65 (tree)
+# and 0.56 (peanut) below the lowest violator. On the samples tree-nut-free is clean to 0.11 (a bare korma paste);
+# peanut-free scores dukkah 0.45, praline 0.35 and a bare chilli crisp 0.33 clean-labelled, which it excludes.
 # Only nuts in the ingredients count: a "may contain nuts" warning is ignored, and korma, tikka masala and pasanda
 # pastes are not special (a tree nut is listed in 0 of 9 korma and 1 of 7 tikka masala pastes sold).
 # Preferences sit between the clusters: 0.12 above the highest clean recipe (gluten-free), 0.27 below the
@@ -221,7 +221,7 @@ _QUESTIONS: dict[str, NoulQuestion] = {
     PEANUT_FREE: NoulQuestion(
         instructions=(
             "Does this recipe contain peanuts or anything made from them? "
-            "Peanut butter, groundnut oil, satay, satay sauce and chilli crisp count, as does an unspecified nut "
+            "Peanut butter, groundnut oil, satay and satay sauce count, as does an unspecified nut "
             "or nut butter, which may be peanut. Tree nuts such as almonds, cashews, walnuts and pine nuts "
             "are not peanuts. Coconut, coconut milk, nutmeg and seeds are not peanuts, and an ingredient "
             "labelled nut-free or peanut-free is not a peanut."
