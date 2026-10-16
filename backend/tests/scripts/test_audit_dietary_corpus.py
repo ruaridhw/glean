@@ -474,3 +474,20 @@ def test_the_audits_retailer_lookup_carries_the_selected_policy_so_incomplete_sa
 
     assert truth(None) == "fine"
     assert truth(ContainsPolicy(minimum=Frequency.SOMETIMES)) is None
+
+
+def test_a_one_product_shelf_for_a_food_possessive_leaves_the_recipe_unknown_not_fine() -> None:
+    shop = FakePageSource(
+        {
+            "https://www.ocado.com/search?q=shepherd%27s%20seasoning": ocado_search(
+                ("Shepherd's Seasoning", "/products/s/1")
+            ),
+            "https://www.ocado.com/products/s/1": ocado_product("Shepherd's Seasoning", "Salt, Herbs"),
+        }
+    )
+    lookup = retailer_lookup([OcadoReader(shop)])
+
+    truth = audit.resolve_truth("nut-free", "rec_x", ["shepherd's seasoning", "Rice"], _UNSURE, lookup=lookup)
+
+    assert lookup("shepherd's seasoning").status == "insufficient"
+    assert truth is None
