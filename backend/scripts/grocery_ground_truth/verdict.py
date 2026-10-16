@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
@@ -144,6 +145,8 @@ def _verdict(
 
 # What the ingredient is: a product must be this kind of thing, so "curry paste" never reads almond butter.
 _KINDS = frozenset({"paste", "sauce", "seasoning", "mix", "powder", "marinade"})
+# Other names shops give the same kind of product: UK tomato paste is sold as purée, stock paste as a stock pot.
+_SAME_KIND = {"paste": frozenset({"paste", "puree", "marinade", "pot", "concentrate"})}
 # Words that name the cuisine more than the product; they only matter when nothing else distinguishes the query.
 _GENERIC_WORDS = frozenset({"curry", "spice", "pot"})
 _NOT_THE_INGREDIENT = frozenset({"meal", "pie", "soup", "kit", "bake", "snack", "crisps"})
@@ -151,7 +154,8 @@ _NOT_THE_INGREDIENT = frozenset({"meal", "pie", "soup", "kit", "bake", "snack", 
 
 def _tokens(text: str) -> set[str]:
     """Whole lower-case words with apostrophes dropped and a plural 's' folded away."""
-    words = re.findall(r"[a-z0-9]+", text.casefold().replace("'", "").replace("\u2019", ""))
+    plain = unicodedata.normalize("NFKD", text.casefold()).encode("ascii", "ignore").decode()
+    words = re.findall(r"[a-z0-9]+", plain.replace("'", ""))
     return {word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word for word in words}
 
 
@@ -162,7 +166,8 @@ def _is_relevant(query: str, product_name: str) -> bool:
     When a query has nothing distinctive ('curry paste') the cuisine word has to match too."""
     wanted, name = _tokens(query), _tokens(product_name)
     distinctive = wanted - _KINDS - _GENERIC_WORDS or wanted & _GENERIC_WORDS
-    return (wanted & _KINDS) <= name and distinctive <= name and not name & _NOT_THE_INGREDIENT
+    kind_matches = all(name & _SAME_KIND.get(kind, {kind}) for kind in wanted & _KINDS)
+    return kind_matches and distinctive <= name and not name & _NOT_THE_INGREDIENT
 
 
 def _read_products(reader: RetailerReader, query: str, n: int) -> tuple[list[Product], list[ProductRef]]:
