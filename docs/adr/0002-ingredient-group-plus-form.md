@@ -5,7 +5,7 @@ date: 2026-10-15
 
 # Classify catalogue items by ingredient group plus form, with form part of the item's identity
 
-Each catalogue item has **one ingredient group**: today's food categories, with the four fruit categories (citrus, tropical fruit, stone fruit, berries) merged into one **Fruit** group, plus Baking, Nuts & seeds, Drinks, Snacks & treats, Household, Health & beauty, Baby, Pet and Other (29 in all), all with plain-English names. Where it applies, an ingredient also has **a form**: fresh, frozen, tinned/jarred, dried, or not applicable. Form is part of what an ingredient is, so tinned chickpeas and dried chickpeas are different ingredients: they differ in shelf life once opened, in how they're tracked, and in prep. A recipe line names the form it means.
+Each catalogue item has **one ingredient group**: 29 groups today, all with plain-English names. The food groups derive from the original 23-category taxonomy (with fruit merged into one **Fruit** group and **Nuts & seeds** pulled out on its own), plus Baking, Drinks, Snacks & treats, Household, Health & beauty, Baby, Pet and Other. The principles behind which distinctions earned a group are in ADR 0013. Where it applies, an ingredient also has **a form**: fresh, frozen, tinned/jarred, dried, or not applicable. Form is part of what an ingredient is, so tinned chickpeas and dried chickpeas are different ingredients: they differ in shelf life once opened, in how they're tracked, and in prep. A recipe line names the form it means.
 
 ## Considered options
 
@@ -15,8 +15,7 @@ Each catalogue item has **one ingredient group**: today's food categories, with 
 
 ## Consequences
 
-- **Food group comes from the ingredient group alone.** Each ingredient group maps to exactly one food group, which the meal plan uses to balance the week. "Food group" keeps its name. Drinks, Snacks & treats and the non-food groups map to the food group **other**, which doesn't count towards the week's balance. Nuts & seeds count as protein and are shelved in Food Cupboard.
-- **Store section and shelf-life defaults come from group and form together** (unopened and once opened alike). An ingredient never has a default from form alone: flour isn't "dried" for shelf-life purposes.
+- **Food group comes from the ingredient group alone.** Each ingredient group maps to exactly one of eight food groups — vegetables, fruit, protein, dairy, carbohydrates, fats, condiments and **other** — which the meal plan uses to balance the week. "Other" (drinks, snacks and the non-food groups) doesn't count towards that balance; it names what the backend already fell back to. "Food group" keeps its name. Nuts & seeds count as protein and are shelved in Food Cupboard.
+- **Store section and shelf-life defaults come from group and form together** (unopened and once opened alike). An ingredient never has a default from form alone: flour isn't "dried" for shelf-life purposes. Once-opened shelf life depends on form too: an opened bag of dried pulses keeps for months, not an opened tin's three days.
 - **"Stock & gravy" isn't a separate group** (it's part of sauces and condiments), and **dairy isn't split**. Dairy is perishable by default (ADR 0003), with tinned and whole-pack items counted through per-ingredient overrides.
 - **Renames from the old categories:** nightshades → Tomatoes, peppers & aubergines; alliums → Onions & garlic; brassicas → Cabbage & broccoli; oils_fats → Oils & fats.
-- **One Fruit group, not subgroups.** Fruit subgroups would be botanical labels (is an apple a stone fruit?), and what really differs between fruits is shelf life, which lives on the items: berries keep about 4 days, citrus 14, apples 30. The group's own default is a generic week for fruit the catalogue doesn't know yet. Vegetable groups stay as they are.
