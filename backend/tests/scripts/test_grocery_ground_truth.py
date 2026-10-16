@@ -360,3 +360,18 @@ def test_a_cached_fallback_result_makes_no_browser_requests_not_even_to_the_firs
     assert second == first
     assert ocado_again.requested == []
     assert sainsburys_again.requested == []
+
+
+@pytest.mark.parametrize(
+    ("query", "hit"),
+    [
+        ("tomato paste", "Acme Double Concentrate Tomato Pur\u00e9e"),
+        ("tomato paste", "Acme Italian Tomato Puree"),
+        ("vegetable stock paste", "Acme Vegetable Stock Pot"),
+        ("tandoori paste", "Acme Tandoori Spice Marinade"),
+    ],
+)
+def test_a_product_that_is_the_same_kind_of_thing_under_another_name_is_read(query: str, hit: str) -> None:
+    shop = _ocado_shop((hit, "Water, Spices", None), query=query)
+
+    assert ground_truth(query, 3, readers=[OcadoReader(shop)]).products_read == 1
