@@ -23,11 +23,16 @@ class Frequency(StrEnum):
     RARELY = "rarely"
 
 
-class MayContainPolicy(StrEnum):
-    """How a 'may contain' warning maps to unsafe. A policy setting, not a fact about the products."""
+class ContainsPolicy(BaseModel):
+    """When an ingredient type 'contains' an allergen. A policy setting, not a fact about the products."""
 
-    INGREDIENTS_ONLY = "ingredients-only"
-    COUNTS_AS_UNSAFE = "counts"
+    minimum: Frequency = Field(
+        default=Frequency.USUALLY,
+        description="The least frequent verdict that counts: 'usually' means most products list the allergen.",
+    )
+    may_contain_counts: bool = Field(
+        default=False, description="Whether 'may contain' warnings count as well as listed ingredients."
+    )
 
 
 class Evidence(BaseModel):
@@ -63,14 +68,14 @@ def frequency(count: int, total: int) -> Frequency:
     return Frequency.USUALLY if count * 2 > total else Frequency.SOMETIMES
 
 
-def is_unsafe(verdict: IngredientVerdict, policy: MayContainPolicy = MayContainPolicy.INGREDIENTS_ONLY) -> bool | None:
-    """Whether a nut-free recipe is broken by this ingredient; None when the shelf couldn't be read."""
+def is_unsafe(verdict: IngredientVerdict, policy: ContainsPolicy | None = None) -> bool | None:
+    """Whether the ingredient contains a tree nut or peanut under `policy`; None when the shelf couldn't be read."""
+    policy = policy or ContainsPolicy()
     if verdict.status != "resolved":
         return None
-    listed = (verdict.tree_nut, verdict.peanut)
-    if policy is MayContainPolicy.COUNTS_AS_UNSAFE:
-        listed = (*listed, verdict.may_contain)
-    return any(found in (Frequency.USUALLY, Frequency.SOMETIMES) for found in listed)
+    found = (verdict.tree_nut, verdict.peanut, verdict.may_contain if policy.may_contain_counts else None)
+    reached = {Frequency.USUALLY} if policy.minimum is Frequency.USUALLY else {Frequency.USUALLY, Frequency.SOMETIMES}
+    return any(frequency in reached for frequency in found)
 
 
 def _verdict(ingredient: str, retailer: str, products: list[Product]) -> IngredientVerdict:
