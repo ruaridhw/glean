@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from grocery_fixtures import FakePageSource, ocado_product, ocado_search
-from scripts.grocery_ground_truth import Frequency, OcadoReader, ground_truth
+from grocery_fixtures import (
+    ACCESS_DENIED,
+    FakePageSource,
+    ocado_product,
+    ocado_search,
+    sainsburys_product,
+    sainsburys_search,
+)
+from scripts.grocery_ground_truth import Frequency, OcadoReader, SainsburysReader, ground_truth
 
 SEARCH = "https://www.ocado.com/search?q=korma%20paste"
+SB_SEARCH = "https://www.sainsburys.co.uk/gol-ui/SearchResults/korma%20paste"
 
 
 def _ocado_shop(*products: tuple[str, str | None, str | None]) -> FakePageSource:
@@ -42,3 +50,47 @@ def test_the_verdict_counts_products_and_says_usually_sometimes_or_rarely_with_t
         ("may_contain", "https://www.ocado.com/products/item-0/0"),
     }
     assert "Cashew Nuts" in next(e.quote for e in verdict.evidence if e.url.endswith("/0") and e.kind == "ingredient")
+
+
+def _sainsburys_shop() -> FakePageSource:
+    url = "https://www.sainsburys.co.uk/gol-ui/product/sb-korma"
+    return FakePageSource(
+        {
+            SB_SEARCH: sainsburys_search(("Sainsbury's Korma Paste", "sb-korma")),
+            url: sainsburys_product("Sainsbury's Korma Paste", "Water, Spices, Cashew Nuts"),
+        }
+    )
+
+
+def test_a_blocked_retailer_falls_back_to_the_next_one() -> None:
+    ocado = FakePageSource({SEARCH: ACCESS_DENIED})
+
+    verdict = ground_truth("korma paste", 3, readers=[OcadoReader(ocado), SainsburysReader(_sainsburys_shop())])
+
+    assert (verdict.status, verdict.retailer) == ("resolved", "sainsburys")
+    assert verdict.tree_nut == Frequency.USUALLY
+
+
+def test_when_every_retailer_blocks_the_verdict_is_blocked_and_says_nothing_about_nuts() -> None:
+    verdict = ground_truth(
+        "korma paste",
+        3,
+        readers=[
+            OcadoReader(FakePageSource({SEARCH: ACCESS_DENIED})),
+            SainsburysReader(FakePageSource({SB_SEARCH: ACCESS_DENIED})),
+        ],
+    )
+
+    assert verdict.status == "blocked"
+    assert (verdict.tree_nut, verdict.peanut, verdict.may_contain) == (None, None, None)
+
+
+def test_an_ingredient_no_retailer_stocks_is_not_found_rather_than_nut_free() -> None:
+    verdict = ground_truth(
+        "korma paste",
+        3,
+        readers=[OcadoReader(_ocado_shop()), SainsburysReader(FakePageSource({SB_SEARCH: sainsburys_search()}))],
+    )
+
+    assert verdict.status == "not_found"
+    assert verdict.tree_nut is None
