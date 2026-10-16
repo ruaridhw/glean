@@ -77,6 +77,12 @@ def frequency(count: int, total: int) -> Frequency:
     return Frequency.USUALLY if count * 2 > total else Frequency.SOMETIMES
 
 
+def _unsafe(tree: int, peanut: int, warned: int, total: int, policy: ContainsPolicy) -> bool:
+    reached = {Frequency.USUALLY} if policy.minimum is Frequency.USUALLY else {Frequency.USUALLY, Frequency.SOMETIMES}
+    counts = [tree, peanut, *([warned] if policy.may_contain_counts else [])]
+    return any(frequency(count, total) in reached for count in counts)
+
+
 def is_unsafe(verdict: IngredientVerdict, policy: ContainsPolicy | None = None) -> bool | None:
     """Whether the ingredient contains a tree nut or peanut under `policy`; None when the shelf couldn't be read."""
     policy = policy or ContainsPolicy()
@@ -90,13 +96,23 @@ def is_unsafe(verdict: IngredientVerdict, policy: ContainsPolicy | None = None) 
 _MINIMUM_READ = 3
 
 
-def _usually_could_flip(count: int, read: int, unread: int) -> bool:
-    """Whether the unread products could move 'most products list it' either way."""
-    return (count * 2 > read + unread) != ((count + unread) * 2 > read + unread)
+def _could_flip(tree: int, peanut: int, warned: int, read: int, unread: int, policy: ContainsPolicy) -> bool:
+    """Whether the unread products could change the answer under `policy`: safe if none of them list or warn about
+    a nut, unsafe if all of them do."""
+    total = read + unread
+    return _unsafe(tree, peanut, warned, total, policy) != _unsafe(
+        tree + unread, peanut + unread, warned + unread, total, policy
+    )
 
 
 def _verdict(
-    ingredient: str, retailer: str, products: list[Product], unread: list[ProductRef], minimum_read: int
+    ingredient: str,
+    retailer: str,
+    products: list[Product],
+    unread: list[ProductRef],
+    *,
+    minimum_read: int,
+    policy: ContainsPolicy,
 ) -> IngredientVerdict:
     evidence: list[Evidence] = []
     tree = peanut = warned = 0
@@ -131,8 +147,7 @@ def _verdict(
         "may_contain_products": warned,
         "evidence": evidence,
     }
-    too_thin = read < min(minimum_read, read + missed)
-    if too_thin or _usually_could_flip(tree, read, missed) or _usually_could_flip(peanut, read, missed):
+    if read < minimum_read or _could_flip(tree, peanut, warned, read, missed, policy):
         return IngredientVerdict(status="insufficient", **common)
     return IngredientVerdict(
         status="resolved",
@@ -149,7 +164,13 @@ _KINDS = frozenset({"paste", "sauce", "seasoning", "mix", "powder", "marinade"})
 _SAME_KIND = {"paste": frozenset({"paste", "puree", "marinade", "pot", "concentrate"})}
 # Words that name the cuisine more than the product; they only matter when nothing else distinguishes the query.
 _GENERIC_WORDS = frozenset({"curry", "spice", "pot"})
-_NOT_THE_INGREDIENT = frozenset({"meal", "pie", "soup", "kit", "bake", "snack", "crisps"})
+# Curry styles: "curry paste" asks for any of them, as in "Korma Spice Paste".
+_CURRY_STYLES = frozenset(
+    {"korma", "tikka", "masala", "madras", "jalfrezi", "balti", "rogan", "vindaloo", "bhuna", "pasanda", "tandoori"}
+    | {"massaman", "rendang", "katsu", "biryani", "dhansak", "saag", "thai"}
+)
+# A kit that contains the paste is still the paste; a ready meal or snack is something else.
+_NOT_THE_INGREDIENT = frozenset({"meal", "ready", "pie", "soup", "bake", "snack", "crisps"})
 
 
 def _tokens(text: str) -> set[str]:
@@ -166,18 +187,51 @@ def _is_relevant(query: str, product_name: str) -> bool:
     When a query has nothing distinctive ('curry paste') the cuisine word has to match too."""
     wanted, name = _tokens(query), _tokens(product_name)
     distinctive = wanted - _KINDS - _GENERIC_WORDS or wanted & _GENERIC_WORDS
+    if distinctive == {"curry"} and not name & ({"curry"} | _CURRY_STYLES):
+        return False
+    if distinctive == {"curry"}:
+        distinctive = set()
     kind_matches = all(name & _SAME_KIND.get(kind, {kind}) for kind in wanted & _KINDS)
     return kind_matches and distinctive <= name and not name & _NOT_THE_INGREDIENT
 
 
+_SIZE = re.compile(r"x?\d+(?:x\d+)?(?:g|kg|ml|cl|l|pack)?")
+
+
+def _names_exactly(query: str, product_name: str) -> bool:
+    """The query names this very product: every significant word of the product's name is in the query
+    (sizes and cuisine words aside), so "Patak's korma paste" names Patak's Korma Spice Paste 290g."""
+    significant = {word for word in _tokens(product_name) - _GENERIC_WORDS if not _SIZE.fullmatch(word)}
+    return significant <= _tokens(query)
+
+
 def _read_products(reader: RetailerReader, query: str, n: int) -> tuple[list[Product], list[ProductRef]]:
     products, unread = [], []
+    seen: set[str] = set()
     for ref in [ref for ref in reader.search(query) if _is_relevant(query, ref.name)][:n]:
+        if ref.url in seen:
+            continue
+        seen.add(ref.url)
         try:
             products.append(reader.read(ref))
         except ProductUnreadable:
             unread.append(ref)
     return products, unread
+
+
+def _judge(
+    query: str,
+    retailer: str,
+    products: list[Product],
+    unread: list[ProductRef],
+    minimum_read: int,
+    policy: ContainsPolicy,
+) -> IngredientVerdict:
+    """A named product is judged by its own ingredients alone, and one product is enough for it."""
+    exact = [product for product in products if _names_exactly(query, product.name)]
+    if exact:
+        return _verdict(query, retailer, exact, [], minimum_read=1, policy=policy)
+    return _verdict(query, retailer, products, unread, minimum_read=minimum_read, policy=policy)
 
 
 def ground_truth(
@@ -187,18 +241,22 @@ def ground_truth(
     readers: list[RetailerReader],
     cache: ProductCache | None = None,
     minimum_read: int = _MINIMUM_READ,
+    policy: ContainsPolicy | None = None,
 ) -> IngredientVerdict:
     """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts.
 
     A result any retailer has cached answers first, with no browser request at all. Otherwise readers are tried in
-    order; a blocked or empty one hands over to the next. Fewer than `minimum_read` readable pages, or unread pages
-    that could change the answer, give 'insufficient'. Blocked, empty and partial reads are never cached.
+    order; a blocked, empty or thin one hands over to the next. Fewer than `minimum_read` distinct readable products
+    give 'insufficient', unless the query names one exact product and that product was read (then its own
+    ingredients settle it). Unread pages that could change the answer under `policy` also give 'insufficient'.
+    Blocked, empty and partial reads are never cached.
     """
+    policy = policy or ContainsPolicy()
     if cache:
         for reader in readers:
             cached = cache.get(reader.name, ingredient_name, n)
             if cached:
-                return _verdict(ingredient_name, reader.name, cached, [], minimum_read)
+                return _judge(ingredient_name, reader.name, cached, [], minimum_read, policy)
     blocked = False
     insufficient: IngredientVerdict | None = None
     for reader in readers:
@@ -209,7 +267,7 @@ def ground_truth(
             continue
         if not products and not unread:
             continue
-        found = _verdict(ingredient_name, reader.name, products, unread, minimum_read)
+        found = _judge(ingredient_name, reader.name, products, unread, minimum_read, policy)
         if found.status == "resolved":
             if cache and not unread:
                 cache.put(reader.name, ingredient_name, n, products)
