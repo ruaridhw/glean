@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-CACHE_FORMAT = 2
+CACHE_FORMAT = 3
 
 
 class CacheEntry(BaseModel):
