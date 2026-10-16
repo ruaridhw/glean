@@ -36,24 +36,31 @@ def run_jobs(
     workers: int = 3,
     max_attempts: int = 2,
     spend_cap: float | None = None,
+    unpriced_call_cost: float = 0.01,
 ) -> Results:
     """Obtain each job's judgement, retrying a failed call once, and return the updated results.
 
     Every call is logged in `attempts` whatever its outcome, so cost and latency include the failed ones. A job that
     fails every attempt becomes a `Failure`; running it again later replaces that failure. Judgements that already
-    exist are never bought twice. Once the logged cost reaches `spend_cap`, no further job starts.
+    exist are never bought twice.
+
+    A job's cost, time and attempt numbers cover its earlier runs' attempts as well as this run's. The spend cap is
+    per run: it counts only the calls made in this invocation, and no further attempt starts once they reach it.
+    A call whose cost is unknown counts as `unpriced_call_cost`, a deliberately high guess, so a run of calls that
+    report nothing still stops.
     """
     items = {item.item_id: item for item in results.items}
     pending = [
         job for job in jobs if not any(j.judge == job[1] and j.repeat == job[2] for j in items[job[0]].judgements)
     ]
-    ledger: list[Attempt] = []
+    ledger: list[Attempt] = list(results.attempts)
+    earlier = len(ledger)
     obtained: list[tuple[str, Judgement]] = []
     failures: list[Failure] = []
     lock = threading.Lock()
 
     def spent() -> float:
-        return sum(a.cost_usd or 0.0 for a in list(ledger))
+        return sum(unpriced_call_cost if a.cost_usd is None else a.cost_usd for a in list(ledger)[earlier:])
 
     def run_one(job: Job) -> None:
         item_id, name, repeat = job
@@ -73,6 +80,7 @@ def run_jobs(
                 update={
                     "attempts": len(mine),
                     "cost_usd": sum(priced) if priced else None,
+                    "unpriced_attempts": len(mine) - len(priced),
                     "latency_s": sum(a.latency_s for a in mine),
                 }
             )
@@ -106,6 +114,4 @@ def run_jobs(
         )
         for item in results.items
     ]
-    return results.model_copy(
-        update={"items": updated, "failures": [*kept, *failures], "attempts": [*results.attempts, *ledger]}
-    )
+    return results.model_copy(update={"items": updated, "failures": [*kept, *failures], "attempts": ledger})

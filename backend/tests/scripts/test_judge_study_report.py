@@ -148,3 +148,28 @@ class TestReportContent:
         assert "p95" in operations
         assert "Drift" in operations
         assert "$" in operations
+
+
+class TestGalleryAgainstTheMean:
+    def test_both_candidates_missing_a_half_point_mean_still_get_a_card(self) -> None:
+        # Panel (4,5) means 4.5. Both candidates say 5: equal to one panel judge, but not to the agreed reference.
+        results = Results(models={}, items=[_judged("meal_plan/9/0", panel=(4, 5), llm=5, decision=5)])
+
+        page = build_report(results, NARRATIVE)
+        gallery = page[_position(page, "disagreements") : _position(page, "confidence")]
+
+        assert "meal_plan/9/0" in gallery[: gallery.index("Contested")]
+
+    def test_a_candidate_equal_to_the_mean_does_not_get_a_card(self) -> None:
+        results = Results(models={}, items=[_judged("meal_plan/9/0", panel=(4, 4), llm=4, decision=4)])
+
+        gallery = _page(results)
+        gallery = gallery[_position(gallery, "disagreements") : _position(gallery, "confidence")]
+
+        assert "meal_plan/9/0" not in gallery
+
+    def test_the_copy_describes_the_mean_rule(self) -> None:
+        page = _page()
+        gallery = page[_position(page, "disagreements") : _position(page, "confidence")]
+
+        assert "panel mean" in gallery

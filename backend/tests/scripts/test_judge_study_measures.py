@@ -15,8 +15,9 @@ from judge_study.metrics import (
     judge_pairs,
     latency_summary,
     reliability_bins,
+    study_spend,
 )
-from judge_study.results import Judgement, OutputItem
+from judge_study.results import Attempt, Judgement, OutputItem, Results
 
 
 def _item(
@@ -125,6 +126,35 @@ class TestDrift:
         assert result.max_range == 3
 
 
+class TestStudySpend:
+    def test_a_priced_ledger_is_counted_once_and_a_judgement_with_ledger_entries_is_not_added_again(self) -> None:
+        item = _item("a", llm=[4], cost=0.002)
+        attempts = [
+            Attempt(
+                judge="llm", item_id="a", repeat=1, attempt=1, outcome="parse_failure", latency_s=1, cost_usd=0.002
+            ),
+            Attempt(judge="llm", item_id="a", repeat=1, attempt=2, outcome="ok", latency_s=1, cost_usd=0.002),
+        ]
+
+        spend = study_spend(Results(models={}, items=[item], attempts=attempts))
+
+        assert (spend.known, spend.unpriced_calls) == (pytest.approx(0.004), 0)
+
+    def test_legacy_judgements_without_ledger_entries_are_added_once_and_unknown_ones_are_counted(self) -> None:
+        priced, unpriced = _item("a", llm=[4], cost=0.002), _item("b", llm=[4], cost=None)
+
+        spend = study_spend(Results(models={}, items=[priced, unpriced]))
+
+        assert (spend.known, spend.unpriced_calls) == (pytest.approx(0.002), 1)
+
+    def test_unpriced_ledger_calls_are_counted_not_summed_as_zero(self) -> None:
+        attempts = [Attempt(judge="llm", item_id="a", repeat=1, attempt=1, outcome="call_failure", latency_s=1)]
+
+        spend = study_spend(Results(models={}, items=[_item("a")], attempts=attempts))
+
+        assert (spend.known, spend.unpriced_calls) == (0.0, 1)
+
+
 class TestCostAndLatency:
     def test_cost_is_per_judgement_and_counts_the_ones_that_reported_none(self) -> None:
         items = [_item("a", llm=[4, 4], cost=0.002), _item("b", llm=[4], cost=None)]
@@ -134,6 +164,17 @@ class TestCostAndLatency:
         assert summary.judgements == 3
         assert summary.total == pytest.approx(0.004)
         assert summary.mean == pytest.approx(0.002)
+        assert summary.unreported == 1
+
+    def test_a_judgement_with_an_unpriced_attempt_is_left_out_of_the_full_cost_mean(self) -> None:
+        complete = _item("a", llm=[4], cost=0.002)
+        partial = _item("b", llm=[4], cost=0.001)
+        partial.judgements[0] = partial.judgements[0].model_copy(update={"unpriced_attempts": 1})
+
+        summary = cost_summary([complete, partial], "llm")
+
+        assert summary.mean == pytest.approx(0.002)
+        assert summary.total == pytest.approx(0.003)  # a known subtotal
         assert summary.unreported == 1
 
     def test_latency_percentiles_interpolate_between_calls(self) -> None:

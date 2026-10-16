@@ -23,9 +23,11 @@ from judge_study.metrics import (
     panel_reference,
     reference_matrix,
     reliability_bins,
+    study_spend,
 )
 
 if TYPE_CHECKING:
+    from judge_study.metrics import Spend
     from judge_study.results import OutputItem, Results
 
 CANDIDATES = {"decision": "Decision judge", "llm": "Existing LLM judge"}
@@ -60,8 +62,16 @@ def _kappa(value: float | None) -> str:
 
 def _usd(value: float | None) -> str:
     if value is None:
-        return "—"
-    return f"${value:.2f}" if value >= 1 else f"${value:.5f}".rstrip("0").rstrip(".") if value else "$0"
+        return "unknown"
+    return f"${value:.2f}" if value >= 1 else f"${value:.5f}".rstrip("0").rstrip(".")
+
+
+def _spend(spend: Spend) -> str:
+    """A total that never looks complete when some calls could not be priced."""
+    if spend.unpriced_calls == 0:
+        return _usd(spend.known)
+    calls = f"{spend.unpriced_calls} unpriced call{'s' if spend.unpriced_calls != 1 else ''}"
+    return f"unknown ({calls})" if spend.known == 0 else f"{_usd(spend.known)} known + {calls}"
 
 
 def _seconds(value: float | None) -> str:
@@ -209,20 +219,19 @@ def _card(item: OutputItem) -> str:
 
 
 def _gallery(results: Results) -> str:
-    flagged: list[tuple[int, OutputItem]] = []
+    flagged: list[tuple[float, OutputItem]] = []
     contested: list[OutputItem] = []
     for item in results.items:
         reference = panel_reference(item)
         if reference.contested:
             contested.append(item)
             continue
-        llm, decision = item_score(item, "llm"), item_score(item, "decision")
-        panel = (item_score(item, "panel_claude"), item_score(item, "panel_gpt"))
-        misses = [s for s in (llm, decision) if s is not None and s not in panel]
-        split = llm is not None and decision is not None and llm != decision
-        if split or misses:
-            gap = abs(llm - decision) if split and llm and decision else 1
-            flagged.append((gap, item))
+        scores = [s for s in (item_score(item, "llm"), item_score(item, "decision")) if s is not None]
+        gaps = [abs(s - reference.score) for s in scores if reference.score is not None]
+        if len(scores) == 2:
+            gaps.append(abs(scores[0] - scores[1]))
+        if any(gap > 0 for gap in gaps):
+            flagged.append((max(gaps), item))
     flagged.sort(key=lambda pair: -pair[0])
     body = "".join(_card(item) for _, item in flagged) or "<p>The judges and the panel never disagreed.</p>"
     contested_html = (
@@ -231,7 +240,8 @@ def _gallery(results: Results) -> str:
         else "<p>The two panel judges never differed by two or more points.</p>"
     )
     return f"""<section id="disagreements"><h2>Disagreement gallery</h2>
-<p class="lede">Every output where the two candidate judges differ, or where one differs from both panel judges.
+<p class="lede">Every output where a candidate judge is not equal to the panel mean, or where the two candidates differ.
+A half-point mean (4.5, say) is missed by every whole-number score, so those outputs appear here.
 {len(flagged)} of {len(results.items)} outputs, widest gap first.</p>
 {body}
 <h3>Contested by the panel</h3>
@@ -296,9 +306,13 @@ def _operations(results: Results) -> str:
             if stability is None or stability.identical_share is None
             else f"{_pct(stability.identical_share)} identical, widest spread {stability.max_range}"
         )
+        mean_cell = _usd(cost.mean) if cost.judgements else "—"
+        if cost.judgements and cost.unreported:
+            mean_cell += f" ({cost.unreported} incomplete)"
+        total_cell = "—" if not cost.judgements else _usd(cost.total) + (" known" if cost.unreported else "")
         speed += (
-            f"<tr><th scope='row'>{_e(label)}</th><td>{cost.judgements}</td><td>{_usd(cost.mean)}</td>"
-            f"<td>{_usd(cost.total)}</td><td>{_seconds(latency.p50)}</td><td>{_seconds(latency.p95)}</td>"
+            f"<tr><th scope='row'>{_e(label)}</th><td>{cost.judgements}</td><td>{mean_cell}</td>"
+            f"<td>{total_cell}</td><td>{_seconds(latency.p50)}</td><td>{_seconds(latency.p95)}</td>"
             f"<td>{_e(stable)}</td></tr>"
         )
         logged = [a for a in results.attempts if a.judge == name]
@@ -316,14 +330,14 @@ def _operations(results: Results) -> str:
         f"<li><code>{_e(f.item_id)}</code> ({_e(LABELS[f.judge])}, repeat {f.repeat}): {_e(f.error)}</li>"
         for f in results.failures
     )
-    obtained_keys = {(j.judge, item.item_id, j.repeat) for item in items for j in item.judgements}
-    abandoned = sum(a.cost_usd or 0.0 for a in results.attempts if (a.judge, a.item_id, a.repeat) not in obtained_keys)
-    total = sum(j.cost_usd or 0 for item in items for j in item.judgements) + abandoned
+    total = _spend(study_spend(results))
     return f"""<section id="operations"><h2>Drift, cost and latency</h2>
 <h3>Cost, speed and stability</h3>
 <div class="scroll"><table class="grid"><thead><tr><th>Judge</th><th>Judgements obtained</th><th>Cost per obtained judgement</th>
 <th>Cost total</th><th>p50</th><th>p95</th><th>Drift across repeats</th></tr></thead><tbody>{speed}</tbody></table></div>
-<p class="small">Cost and time per obtained judgement include every attempt at it, failed retries too. Latency is end to end.
+<p class="small">Cost and time per obtained judgement include every attempt at it, failed retries and earlier runs' attempts too.
+The cost mean covers only judgements whose every attempt could be priced; "incomplete" counts the rest, and the total
+is then a known subtotal. Latency is end to end.
 Drift is how often a judge's three repeats on one output gave the same score; only the candidates were repeated.
 Decision-judge cost is the cost the endpoint reports. Chat-model cost is the reported tokens at OpenRouter's list price (an
 estimate), because its generation-stats endpoint does not list these calls. Calls ran three at a time, so latency includes some
@@ -335,7 +349,7 @@ queueing for every judge alike.</p>
 no answer at all. A final failed job is a judgement still missing after its retry. Attempts that reported no tokens or cost
 are listed as unpriced, never counted as free.</p>
 {"<h3>Judgements never obtained</h3><ul>" + failures + "</ul>" if failures else ""}
-<p class="small">Whole study spend across judgements shown, abandoned attempts included: {_usd(total)}
+<p class="small">Whole study spend, every logged call and abandoned attempts included: {total}
 (excluding the cost of freezing the outputs).</p></section>"""
 
 

@@ -159,6 +159,28 @@ class TestFailedJobs:
         assert resumed.failures == []
         assert len(resumed.attempts) == 3
 
+    def test_a_recovered_job_keeps_the_cost_time_and_numbering_of_its_earlier_attempts(self, tmp_path: Path) -> None:
+        failed = self._failing(tmp_path)  # two failed calls: 1 s each, one call's cost each
+        make = _llm_factory(iter([5]), _clock(20.0, 21.0))
+
+        resumed = run_jobs(failed, [("recipe_import/0/0", "llm", 1)], make, workers=1)
+
+        (judgement,) = resumed.items[0].judgements
+        assert judgement.attempts == 3
+        assert judgement.cost_usd == pytest.approx(3 * ONE_CALL_COST)
+        assert judgement.latency_s == pytest.approx(3.0)
+        assert [a.attempt for a in resumed.attempts] == [1, 2, 3]
+        page = build_report(resumed, Narrative(verdict="v", recommendation="r", notes=[]))
+        assert f"${3 * ONE_CALL_COST:.3f}" in page[page.index('id="operations"') :]
+
+    def test_the_spend_cap_counts_only_the_calls_of_the_current_run(self, tmp_path: Path) -> None:
+        failed = self._failing(tmp_path)  # already spent 2 * ONE_CALL_COST in an earlier run
+        make = _llm_factory(iter([5]), _clock(20.0, 21.0))
+
+        resumed = run_jobs(failed, [("recipe_import/0/0", "llm", 1)], make, workers=1, spend_cap=ONE_CALL_COST / 2)
+
+        assert len(resumed.items[0].judgements) == 1
+
     def test_a_judgement_already_obtained_is_not_paid_for_again(self) -> None:
         make = _llm_factory(iter([4]), _clock(0.0, 1.0))
         first = run_jobs(_results(), [("recipe_import/0/0", "llm", 1)], make, workers=1)
@@ -222,6 +244,68 @@ class TestDecisionEndpointFailures:
         assert attempt.cost_usd == pytest.approx(1.7e-5)
         assert attempt.cost_basis == "reported"
         assert results.items[0].judgements[0].cost_basis == "reported"
+
+
+class TestUnknownCosts:
+    def _flaky(self, statuses: list[int]) -> Callable[..., DecisionJudge]:
+        replies = iter(statuses)
+        ok = {
+            "model": "typesafe/jev-1.14-20261014",
+            "id": "gen-dec-1",
+            "provider": "TypeSafe",
+            "answers": {
+                "quality": {
+                    "type": "score",
+                    "score": 3.0,
+                    "probabilities": {"0": 0, "1": 0, "2": 0, "3": 0, "4": 1},
+                    "confidence": 0.9,
+                }
+            },
+            "usage": {"input_tokens": 400, "output_tokens": 50, "cost": 0.001},
+        }
+
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=ok) if next(replies) == 200 else httpx.Response(500, text="boom")
+
+        client = DecisionClient(api_key=SecretStr("sk-or-test"), transport=httpx.MockTransport(handler))
+        return lambda name, item, ledger: DecisionJudge(client, ledger=ledger)
+
+    def test_a_judgement_whose_earlier_call_was_unpriced_is_marked_as_a_lower_bound(self) -> None:
+        results = run_jobs(_results(), [("recipe_import/0/0", "decision", 1)], self._flaky([500, 200]), workers=1)
+
+        (judgement,) = results.items[0].judgements
+        assert (judgement.cost_usd, judgement.unpriced_attempts, judgement.attempts) == (0.001, 1, 2)
+
+    def test_the_report_gives_a_known_subtotal_and_the_unpriced_count_not_a_complete_looking_total(self) -> None:
+        results = run_jobs(_results(), [("recipe_import/0/0", "decision", 1)], self._flaky([500, 200]), workers=1)
+
+        operations = _operations_of(results)
+
+        assert "$0.001 known + 1 unpriced call" in operations
+        assert "unknown (1 incomplete)" in operations  # no full-cost mean can be claimed
+
+    def test_when_nothing_could_be_priced_the_report_says_unknown_not_zero(self) -> None:
+        results = run_jobs(_results(), [("recipe_import/0/0", "decision", 1)], self._flaky([500, 500]), workers=1)
+
+        operations = _operations_of(results)
+
+        assert "unknown" in operations
+        assert "$0 " not in operations
+        assert "$0<" not in operations
+
+    def test_unpriced_calls_count_against_the_spend_cap_at_a_conservative_assumed_cost(self) -> None:
+        results = _results(_item("recipe_import/0/0"), _item("recipe_import/1/0"))
+        jobs = [(item.item_id, "decision", 1) for item in results.items]
+
+        done = run_jobs(results, jobs, self._flaky([500] * 8), workers=1, spend_cap=0.015, unpriced_call_cost=0.01)
+
+        # Two unpriced calls assume $0.02, which reaches the cap, so the second job never starts.
+        assert len(done.attempts) == 2
+
+
+def _operations_of(results: Results) -> str:
+    page = build_report(results, Narrative(verdict="v", recommendation="r", notes=[]))
+    return page[page.index('id="operations"') : page.index('id="recommendation"')]
 
 
 class TestSpendCap:
