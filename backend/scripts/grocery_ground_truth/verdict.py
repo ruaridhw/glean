@@ -85,12 +85,22 @@ def _unsafe(tree: int, peanut: int, warned: int, total: int, policy: ContainsPol
     return any(frequency(count, total) in reached for count in counts)
 
 
-def is_unsafe(verdict: IngredientVerdict, policy: ContainsPolicy | None = None) -> bool | None:
-    """Whether the ingredient contains a tree nut or peanut under `policy`; None when the shelf couldn't be read."""
+def is_unsafe(
+    verdict: IngredientVerdict,
+    policy: ContainsPolicy | None = None,
+    *,
+    allergen: Literal["tree_nut", "peanut"] | None = None,
+) -> bool | None:
+    """Whether the ingredient contains a tree nut or peanut (or just the one `allergen` named) under `policy`;
+    None when the shelf couldn't be read."""
     policy = policy or ContainsPolicy()
     if verdict.status != "resolved":
         return None
-    found = (verdict.tree_nut, verdict.peanut, verdict.may_contain if policy.may_contain_counts else None)
+    found = (
+        verdict.tree_nut if allergen in (None, "tree_nut") else None,
+        verdict.peanut if allergen in (None, "peanut") else None,
+        verdict.may_contain if policy.may_contain_counts else None,
+    )
     reached = {Frequency.USUALLY} if policy.minimum is Frequency.USUALLY else {Frequency.USUALLY, Frequency.SOMETIMES}
     return any(frequency in reached for frequency in found)
 

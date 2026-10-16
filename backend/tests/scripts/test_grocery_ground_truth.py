@@ -208,6 +208,24 @@ def test_by_default_an_ingredient_contains_a_nut_only_when_most_products_list_it
     assert is_unsafe(_shelf()) is False
 
 
+def test_an_ingredient_can_be_judged_for_one_allergen_alone() -> None:
+    satay = _shelf(peanut=Frequency.USUALLY)
+    pesto = _shelf(tree_nut=Frequency.USUALLY)
+
+    assert is_unsafe(satay, allergen="peanut") is True
+    assert is_unsafe(satay, allergen="tree_nut") is False
+    assert is_unsafe(pesto, allergen="tree_nut") is True
+    assert is_unsafe(pesto, allergen="peanut") is False
+    assert is_unsafe(pesto) is True
+
+
+def test_a_may_contain_warning_counts_for_either_allergen_when_the_policy_says_so() -> None:
+    warned = ContainsPolicy(may_contain_counts=True)
+
+    assert is_unsafe(_shelf(may_contain=Frequency.USUALLY), warned, allergen="peanut") is True
+    assert is_unsafe(_shelf(may_contain=Frequency.USUALLY), warned, allergen="tree_nut") is True
+
+
 def test_by_default_a_may_contain_warning_never_counts() -> None:
     assert is_unsafe(_shelf(may_contain=Frequency.USUALLY)) is False
 
