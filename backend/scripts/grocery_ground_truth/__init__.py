@@ -1,5 +1,6 @@
 """Dev-only retailer ground truth for the dietary audits. Never imported by `src/glean`."""
 
+from .cache import ProductCache
 from .classify import classify
 from .models import AllergenFacts, Product, ProductRef
 from .retailers import (
@@ -22,6 +23,7 @@ __all__ = [
     "Page",
     "PageSource",
     "Product",
+    "ProductCache",
     "ProductRef",
     "ProductUnreadable",
     "RetailerBlocked",
