@@ -13,13 +13,17 @@ import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
 import 'package:glean/design_system/design_system.dart';
+import 'package:glean/diagnostics/diagnostics.dart';
+import 'package:glean/logging/logging.dart';
 
 import 'settings_presentation.dart';
 import 'widgets/account_section.dart';
+import 'widgets/developer_section.dart';
 import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
 import 'widgets/settings_stats_row.dart';
+import 'widgets/version_label.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -84,6 +88,7 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
   late final TextEditingController _maxTimeController;
   String? _maxTimeError;
   Timer? _maxTimeDebounce;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -164,9 +169,28 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
     }
   }
 
+  Future<void> _handleExportDiagnostics() async {
+    setState(() => _exporting = true);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final GleanLogger? logger = ref.read(gleanLoggerProvider);
+    try {
+      final String prefix = await ref.read(diagnosticsExportProvider)();
+      GleanSnackBar.showOn(messenger, 'Diagnostics exported to $prefix');
+    } catch (error) {
+      await logger?.error('export diagnostics failed: ${describeError(error)}');
+      GleanSnackBar.showOn(
+        messenger,
+        'Could not export diagnostics. Try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
+    final bool developerMode = ref.watch(developerModeProvider);
     return ListView(
       padding: EdgeInsets.all(tokens.spacing.lg),
       children: <Widget>[
@@ -246,6 +270,19 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
         const _SectionLabel('Account'),
         SizedBox(height: tokens.spacing.sm),
         AccountSection(onSignOut: () => unawaited(_handleSignOut())),
+        if (developerMode) ...<Widget>[
+          SizedBox(height: tokens.spacing.lg),
+          const _SectionLabel('Developer'),
+          SizedBox(height: tokens.spacing.sm),
+          DeveloperSection(
+            exporting: _exporting,
+            onExportDiagnostics: () => unawaited(_handleExportDiagnostics()),
+          ),
+        ],
+        VersionLabel(
+          onTap: () =>
+              ref.read(developerModeProvider.notifier).registerVersionTap(),
+        ),
       ],
     );
   }

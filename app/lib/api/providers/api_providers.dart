@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../auth/auth_controller.dart';
+import '../../logging/logger_providers.dart';
 import '../api_client.dart';
 
 /// Every request through [apiClientProvider] is bounded by this.
@@ -47,5 +48,6 @@ final Provider<GleanApiClient> apiClientProvider = Provider<GleanApiClient>((
     httpClient: ref.watch(httpClientProvider),
     accessTokenProvider: ref.watch(apiAccessTokenProvider),
     timeout: apiRequestTimeout,
+    logger: ref.watch(gleanLoggerProvider),
   );
 });

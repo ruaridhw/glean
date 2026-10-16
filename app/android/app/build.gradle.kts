@@ -26,6 +26,19 @@ fun requiredEnv(name: String): String =
 val ciKeystorePath: String? = System.getenv("CM_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
 val hasReleaseKeystore = ciKeystorePath != null || keystorePropertiesFile.exists()
 
+// The owner build (app/scripts/owner_build.sh, on gordon): the release build with android:debuggable on, so adb
+// can read the app's database and logs. Same application id, same release key, so it installs over the tester
+// build and keeps its data. Tester builds never set this.
+//
+// The flag goes in through a manifest placeholder, not `isDebuggable = true`: Flutter's Gradle plugin reads a
+// debuggable build type as a *debug* build and would compile the Dart code in slow JIT mode.
+val ownerBuild = System.getenv("GLEAN_OWNER_BUILD") == "1"
+if (ownerBuild && !hasReleaseKeystore) {
+    // Never fall back to debug signing here: a differently signed build can't install over the real app
+    // without uninstalling it, which would destroy the only copy of the owner's data.
+    error("GLEAN_OWNER_BUILD=1 needs the release keystore (CM_KEYSTORE_PATH or key.properties)")
+}
+
 android {
     namespace = "com.ruaridhw.glean"
     compileSdk = flutter.compileSdkVersion
@@ -45,6 +58,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["gleanDebuggable"] = ownerBuild.toString()
     }
 
     signingConfigs {

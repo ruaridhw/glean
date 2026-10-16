@@ -4,8 +4,12 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
+import 'package:json_annotation/json_annotation.dart'
+    show CheckedFromJsonException;
 
+import '../logging/glean_logger.dart';
 import 'api_exception.dart';
+import 'models/diagnostics.dart';
 import 'models/meal_plan.dart';
 import 'models/receipts.dart';
 import 'models/recipes.dart';
@@ -25,6 +29,7 @@ class GleanApiClient {
     required this.httpClient,
     AccessTokenProvider? accessTokenProvider,
     this.timeout = const Duration(seconds: 30),
+    this.logger,
   }) : _accessTokenProvider = accessTokenProvider ?? _noAccessToken;
 
   /// e.g. `http://localhost:8000` locally, or the deployed API Gateway URL.
@@ -34,6 +39,9 @@ class GleanApiClient {
   final Duration timeout;
 
   final http.Client httpClient;
+
+  /// Where API failures are recorded (endpoint and status or field only, never tokens or bodies).
+  final GleanLogger? logger;
   final AccessTokenProvider _accessTokenProvider;
 
   static Future<String?> _noAccessToken() async => null;
@@ -142,6 +150,42 @@ class GleanApiClient {
     );
   }
 
+  // --- Diagnostics ---
+
+  /// Uploads a database snapshot and the app log to the signed-in user's own timestamped export prefix.
+  Future<DiagnosticsExportResponse> exportDiagnostics({
+    required Uint8List database,
+    required Uint8List log,
+  }) {
+    final uri = _uri('/dev/export-db');
+    return _send(
+      uri,
+      () async {
+        final request = http.MultipartRequest('POST', uri)
+          ..headers.addAll(await _authHeaders())
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'database',
+              database,
+              filename: 'glean.db',
+              contentType: MediaType('application', 'octet-stream'),
+            ),
+          )
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'log',
+              log,
+              filename: 'app.log',
+              contentType: MediaType('text', 'plain'),
+            ),
+          );
+        return http.Response.fromStream(await httpClient.send(request));
+      },
+      (dynamic json) =>
+          DiagnosticsExportResponse.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
   // --- Internals ---
 
   Uri _uri(String path, [Map<String, String>? query]) {
@@ -172,22 +216,51 @@ class GleanApiClient {
     Future<http.Response> Function() send,
     T Function(dynamic json) decode,
   ) async {
-    http.Response response;
     try {
-      response = await send().timeout(timeout);
-    } on TimeoutException {
-      throw ApiTimeoutException(uri.path);
-    } on ApiException {
+      http.Response response;
+      try {
+        response = await send().timeout(timeout);
+      } on TimeoutException {
+        throw ApiTimeoutException(uri.path);
+      } on ApiException {
+        rethrow;
+      } catch (error) {
+        // Anything else — SocketException, http.ClientException, a DNS
+        // failure — is "couldn't reach the server", not a bug in this client.
+        throw ApiNetworkException(error.toString());
+      }
+      return _decode(uri, response, decode);
+    } on ApiException catch (error) {
+      await logger?.error(_describe(uri, error));
       rethrow;
-    } catch (error) {
-      // Anything else — SocketException, http.ClientException, a DNS
-      // failure — is "couldn't reach the server", not a bug in this client.
-      throw ApiNetworkException(error.toString());
     }
-    return _decode(response, decode);
   }
 
-  T _decode<T>(http.Response response, T Function(dynamic json) decode) {
+  /// A log line naming the endpoint and what went wrong, built from the exception's type, status and field only:
+  /// never request headers, tokens or response bodies.
+  String _describe(Uri uri, ApiException error) {
+    return switch (error) {
+      ApiParseException(:final field?) =>
+        '${uri.path} response could not be decoded: field "$field" is missing or invalid',
+      ApiParseException(:final reason) =>
+        '${uri.path} response could not be decoded: $reason',
+      ApiAuthException(:final statusCode) ||
+      ApiServerException(
+        :final statusCode,
+      ) => '${uri.path} failed with HTTP $statusCode',
+      ApiRateLimitException() =>
+        '${uri.path} hit the hourly AI request limit (HTTP 429)',
+      ApiValidationException() => '${uri.path} rejected the request (HTTP 422)',
+      ApiTimeoutException() => '${uri.path} timed out',
+      ApiNetworkException() => '${uri.path} could not reach the server',
+    };
+  }
+
+  T _decode<T>(
+    Uri uri,
+    http.Response response,
+    T Function(dynamic json) decode,
+  ) {
     final status = response.statusCode;
     if (status == 401 || status == 403) {
       throw ApiAuthException(
@@ -220,8 +293,22 @@ class GleanApiClient {
       return decode(json);
     } on ApiException {
       rethrow;
+    } on CheckedFromJsonException catch (error) {
+      throw ApiParseException(
+        'Could not parse response body: $error',
+        field: error.key,
+        reason: 'a field is missing or invalid',
+      );
+    } on FormatException catch (error) {
+      throw ApiParseException(
+        'Could not parse response body: $error',
+        reason: 'the body is not valid JSON',
+      );
     } catch (error) {
-      throw ApiParseException('Could not parse response body: $error');
+      throw ApiParseException(
+        'Could not parse response body: $error',
+        reason: 'the body has an unexpected shape (${error.runtimeType})',
+      );
     }
   }
 
