@@ -9,8 +9,10 @@ from grocery_fixtures import (
     FakePageSource,
     ocado_product,
     ocado_search,
+    sainsburys_product,
+    sainsburys_search,
 )
-from scripts.grocery_ground_truth import OcadoReader, ProductRef, ProductUnreadable, RetailerBlocked
+from scripts.grocery_ground_truth import OcadoReader, ProductRef, ProductUnreadable, RetailerBlocked, SainsburysReader
 
 SEARCH = "https://www.ocado.com/search?q=korma%20paste"
 
@@ -82,3 +84,29 @@ def test_a_product_page_without_an_ingredients_list_is_unreadable_not_an_empty_p
 
     with pytest.raises(ProductUnreadable):
         OcadoReader(source).read(ref)
+
+
+def test_sainsburys_search_lists_product_links_and_read_returns_ingredients_and_allergy_advice() -> None:
+    url = "https://www.sainsburys.co.uk/gol-ui/product/acme-korma-paste"
+    source = FakePageSource(
+        {
+            "https://www.sainsburys.co.uk/gol-ui/SearchResults/korma%20paste": sainsburys_search(
+                ("Acme Korma Paste 290g", "acme-korma-paste")
+            ),
+            url: sainsburys_product("Acme Korma Paste 290g", "Water, Spices, Cashew Nuts", "May contain Peanuts"),
+        }
+    )
+    reader = SainsburysReader(source)
+
+    [ref] = reader.search("korma paste")
+    product = reader.read(ref)
+
+    assert ref == ProductRef(retailer="sainsburys", name="Acme Korma Paste 290g", url=url)
+    assert (product.ingredients_text, product.allergy_text) == ("Water, Spices, Cashew Nuts", "May contain Peanuts")
+
+
+def test_sainsburys_access_denied_is_reported_as_blocked() -> None:
+    source = FakePageSource({"https://www.sainsburys.co.uk/gol-ui/SearchResults/korma%20paste": ACCESS_DENIED})
+
+    with pytest.raises(RetailerBlocked):
+        SainsburysReader(source).search("korma paste")
