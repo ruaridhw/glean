@@ -1,14 +1,23 @@
 import json
 import random
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings
+from glean.decisions import DECISION_MODEL
 from glean.dependencies import get_llm_router
 from glean.llm import Feature
 from glean.main import app
+from glean.meal_plan.dietary_decisions import (
+    DietaryDecision,
+    DietaryDecisionStore,
+    content_fingerprint,
+    dietary_questions,
+    question_hash,
+)
 from glean.meal_plan.schemas import (
     CorpusMealPlanRecipe,
     CorpusMealPlanResponse,
@@ -220,6 +229,46 @@ def test_meal_plan_endpoint_accepts_corpus_requests_without_recipe_history(
 
     assert response.status_code == 200
     assert response.json() == {"suggestions": []}
+
+
+def test_an_older_app_build_sending_nut_free_gets_both_nut_flags_applied(
+    client: TestClient, auth_headers: dict[str, str], tmp_path
+) -> None:
+    corpus = _corpus(tmp_path)
+    summaries = {summary.external_id: summary for summary in corpus.search(per_page=100)[0]}
+    answers = {  # the salmon dish breaks only peanut-free; the bolognese neither
+        ("rec_bolognese", "tree-nut-free"): 0.02,
+        ("rec_bolognese", "peanut-free"): 0.02,
+        ("rec_salmon", "tree-nut-free"): 0.02,
+        ("rec_salmon", "peanut-free"): 0.99,
+    }
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id=recipe_id,
+                flag=flag,
+                probability=probability,
+                model=f"{DECISION_MODEL}-20261014",
+                content_hash=content_fingerprint(summaries[recipe_id].title, summaries[recipe_id].ingredient_names),
+                criteria_hash=question_hash(dietary_questions()[flag]),
+                computed_at=datetime(2026, 10, 16, tzinfo=UTC),
+            )
+            for (recipe_id, flag), probability in answers.items()
+        ]
+    )
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(suggestions=[])
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+    body = _corpus_request(dietary_flags=["Nut-Free"]).model_dump(mode="json")
+    del body["recipe_history"]
+
+    with patch("glean.meal_plan.service.RecipeCorpusStore", return_value=corpus):
+        response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    args, _ = llm_router.invoke.call_args
+    offered = json.loads(args[2][-1].content)["candidates"]
+    assert {candidate["external_id"] for candidate in offered} == {"rec_bolognese"}
 
 
 def _corpus_request(**overrides: object) -> MealPlanRequest:

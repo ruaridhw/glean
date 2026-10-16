@@ -18,8 +18,8 @@ from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_DECISIONS_KEY,
     DIETARY_FLAGS,
-    NUT_FREE_THRESHOLD,
     PREFERENCE_THRESHOLD,
+    THRESHOLDS,
     DietaryDecision,
     DietaryDecisionStore,
     content_fingerprint,
@@ -41,9 +41,63 @@ def test_a_recipe_a_stored_decision_flags_is_excluded_though_its_ingredients_loo
             ("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"]),
         ],
     )
-    _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9, ("rec_tomato", "nut-free"): 0.02})
+    _store_decisions(corpus, {("rec_pesto", "tree-nut-free"): 0.9, ("rec_tomato", "tree-nut-free"): 0.02})
 
-    assert _ids(corpus, ["Nut-Free"]) == {"rec_tomato"}
+    assert _ids(corpus, ["Tree-Nut-Free"]) == {"rec_tomato"}
+
+
+def test_tree_nut_and_peanut_decisions_are_independent(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_satay", "Satay Noodles", ["noodles", "satay sauce"])])
+    _store_decisions(corpus, {("rec_satay", "tree-nut-free"): 0.02, ("rec_satay", "peanut-free"): 0.99})
+
+    assert _ids(corpus, ["tree-nut-free"]) == {"rec_satay"}
+    assert _ids(corpus, ["peanut-free"]) == set()
+
+
+@pytest.mark.parametrize("legacy", ["nut-free", "Nut-Free", " nut-free "])
+@pytest.mark.parametrize(("tree_nut", "peanut"), [(0.99, 0.02), (0.02, 0.99), (0.99, 0.99)])
+def test_a_legacy_nut_free_flag_from_an_older_app_excludes_a_recipe_that_breaks_either_new_flag(
+    tmp_path, legacy: str, tree_nut: float, peanut: float
+) -> None:
+    corpus = _corpus(tmp_path, [("rec_nutty", "Nutty Bowl", ["rice", "nuts"])])
+    _store_decisions(corpus, {("rec_nutty", "tree-nut-free"): tree_nut, ("rec_nutty", "peanut-free"): peanut})
+
+    assert _ids(corpus, [legacy]) == set()
+
+
+def test_a_legacy_nut_free_flag_offers_a_recipe_that_is_clear_of_both(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_rice", "Plain Rice", ["rice"])])
+    _store_decisions(corpus, {("rec_rice", "tree-nut-free"): 0.02, ("rec_rice", "peanut-free"): 0.02})
+
+    assert _ids(corpus, ["nut-free"]) == {"rec_rice"}
+
+
+@pytest.mark.parametrize("answered", ["tree-nut-free", "peanut-free"])
+def test_a_legacy_nut_free_flag_excludes_a_recipe_missing_either_decision(tmp_path, answered: str) -> None:
+    corpus = _corpus(tmp_path, [("rec_rice", "Plain Rice", ["rice"])])
+    _store_decisions(corpus, {("rec_rice", answered): 0.02})
+
+    assert _ids(corpus, ["nut-free"]) == set()
+
+
+def test_a_decision_stored_under_the_old_nut_free_flag_speaks_for_neither_new_flag(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_rice", "Plain Rice", ["rice"])])
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id="rec_rice",
+                flag="nut-free",
+                probability=0.01,
+                model=CURRENT_MODEL,
+                content_hash=_hash(corpus, "rec_rice"),
+                criteria_hash="0" * 64,
+                computed_at=datetime(2026, 10, 15, tzinfo=UTC),
+            )
+        ]
+    )
+
+    assert _ids(corpus, ["tree-nut-free"]) == set()
+    assert _ids(corpus, ["peanut-free"]) == set()
 
 
 @pytest.mark.parametrize("flag", DIETARY_FLAGS)
@@ -122,31 +176,30 @@ def test_flags_the_decision_model_isnt_asked_about_leave_candidates_alone(tmp_pa
     assert _ids(corpus, ["Keto", "Paleo"]) == {"rec_pasta"}
 
 
-def test_nut_free_decisions_do_not_leak_into_other_flags(tmp_path) -> None:
+def test_tree_nut_decisions_do_not_leak_into_other_flags(tmp_path) -> None:
     corpus = _corpus(tmp_path, [("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"])])
-    _store_decisions(corpus, {("rec_pesto", "nut-free"): 0.9, ("rec_pesto", "vegetarian"): 0.0})
+    _store_decisions(corpus, {("rec_pesto", "tree-nut-free"): 0.9, ("rec_pesto", "vegetarian"): 0.0})
 
     assert _ids(corpus, ["vegetarian"]) == {"rec_pesto"}
 
 
-def test_nut_free_is_stricter_than_the_preference_flags(tmp_path) -> None:
+@pytest.mark.parametrize("allergy", ["tree-nut-free", "peanut-free"])
+def test_the_nut_allergy_flags_are_stricter_than_the_preference_flags(tmp_path, allergy: str) -> None:
     corpus = _corpus(tmp_path, [("rec_maybe", "Mystery Stew", ["tomato", "sauce"])])
     # A probability high enough to worry about for an allergy, yet below "probably" for a preference.
     _store_decisions(corpus, {("rec_maybe", flag): 0.3 for flag in DIETARY_FLAGS})
 
-    assert _ids(corpus, ["nut-free"]) == set()
+    assert _ids(corpus, [allergy]) == set()
     for flag in ("vegetarian", "vegan", "dairy-free", "gluten-free"):
         assert _ids(corpus, [flag]) == {"rec_maybe"}
 
 
-def test_a_probability_at_the_threshold_excludes(tmp_path) -> None:
+@pytest.mark.parametrize("flag", [*THRESHOLDS, "vegan"])
+def test_a_probability_at_the_threshold_excludes(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_edge", "Edge Stew", ["tomato", "sauce"])])
-    _store_decisions(
-        corpus, {("rec_edge", "nut-free"): NUT_FREE_THRESHOLD, ("rec_edge", "vegan"): PREFERENCE_THRESHOLD}
-    )
+    _store_decisions(corpus, {("rec_edge", flag): THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)})
 
-    assert _ids(corpus, ["nut-free"]) == set()
-    assert _ids(corpus, ["vegan"]) == set()
+    assert _ids(corpus, [flag]) == set()
 
 
 def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> None:
@@ -158,7 +211,7 @@ def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> Non
 
     monkeypatch.setattr(httpx.Client, "send", refuse)
 
-    assert _ids(corpus, ["nut-free", "vegetarian"]) == {"rec_tomato"}
+    assert _ids(corpus, ["tree-nut-free", "peanut-free", "vegetarian"]) == {"rec_tomato"}
 
 
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:

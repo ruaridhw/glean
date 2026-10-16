@@ -10,7 +10,8 @@
     "basil pesto"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -23,7 +24,8 @@
     "marzipan"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -36,7 +38,8 @@
     "frangipane"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -49,7 +52,8 @@
     "Nutella"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -62,7 +66,8 @@
     "dukkah"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -75,7 +80,8 @@
     "romesco sauce"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -223,7 +229,8 @@
     "coconut milk"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -235,7 +242,8 @@
     "sugar"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -272,7 +280,8 @@
     "vegetable stock"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -289,7 +298,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": true,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -306,7 +316,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -322,7 +333,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -338,7 +350,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -355,7 +368,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -372,7 +386,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": true,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -388,7 +403,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": true
+    "tree-nut-free": false,
+    "peanut-free": true
    }
   },
   {
@@ -405,7 +421,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -422,7 +439,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": true,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -439,7 +457,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -457,7 +476,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -474,7 +494,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": true,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -491,7 +512,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -509,7 +531,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -526,7 +549,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -542,7 +566,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": true,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -559,7 +584,8 @@
     "vegan": false,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -576,7 +602,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -593,7 +620,8 @@
     "vegan": true,
     "dairy-free": false,
     "gluten-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -609,7 +637,8 @@
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -621,7 +650,8 @@
     "strawberries"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -633,7 +663,8 @@
     "mascarpone"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -645,7 +676,8 @@
     "spinach"
    ],
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -659,7 +691,64 @@
     "pumpkin seeds"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
+   }
+  },
+  {
+   "id": "heldout-peanut-chilli-crisp",
+   "title": "Chilli crisp rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "chilli crisp"
+   ],
+   "violates": {
+    "tree-nut-free": false,
+    "peanut-free": true
+   }
+  },
+  {
+   "id": "heldout-peanut-groundnut-oil",
+   "title": "Groundnut oil rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "groundnut oil"
+   ],
+   "violates": {
+    "tree-nut-free": false,
+    "peanut-free": true
+   }
+  },
+  {
+   "id": "heldout-tree-brazil-nuts",
+   "title": "Brazil nuts rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "brazil nuts"
+   ],
+   "violates": {
+    "tree-nut-free": true,
+    "peanut-free": false
+   }
+  },
+  {
+   "id": "allowed-pasanda-paste",
+   "title": "Pasanda Curry Paste rice bowl",
+   "ingredients": [
+    "basmati rice",
+    "cherry tomatoes",
+    "spring onion",
+    "pasanda curry paste"
+   ],
+   "violates": {
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -786,7 +875,8 @@
    ],
    "violates": {
     "vegetarian": false,
-    "nut-free": true,
+    "tree-nut-free": true,
+    "peanut-free": false,
     "vegan": true,
     "dairy-free": true,
     "gluten-free": false
@@ -802,7 +892,8 @@
     "korma curry paste"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -815,7 +906,8 @@
     "tikka masala seasoning"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -828,7 +920,8 @@
     "nut-free korma curry paste"
    ],
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   }
  ]

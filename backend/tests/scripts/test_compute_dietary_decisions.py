@@ -57,7 +57,7 @@ def test_a_complete_run_prints_the_coverage_report_and_exits_zero(
     code = compute_dietary_decisions.main(["--cache-dir", str(tmp_path)], client=_decision_api())
 
     assert code == 0
-    assert "Coverage: 5/5 (100.0%)" in capsys.readouterr().out
+    assert "Coverage: 6/6 (100.0%)" in capsys.readouterr().out
 
 
 def test_an_incomplete_run_exits_nonzero_so_the_gate_can_fail(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:

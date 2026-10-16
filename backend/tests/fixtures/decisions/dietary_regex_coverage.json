@@ -1157,16 +1157,16 @@
    }
   },
   {
-   "id": "regex-forbidden-dairy-cr\u00e8me-fra\u00eeche",
-   "title": "Cr\u00e8me Fra\u00eeche rice bowl",
+   "id": "regex-forbidden-dairy-crème-fraîche",
+   "title": "Crème Fraîche rice bowl",
    "ingredients": [
     "basmati rice",
     "cherry tomatoes",
     "spring onion",
-    "cr\u00e8me fra\u00eeche"
+    "crème fraîche"
    ],
    "kind": "forbidden",
-   "term": "cr\u00e8me fra\u00eeche",
+   "term": "crème fraîche",
    "group": "dairy",
    "violates": {
     "vegan": true,
@@ -1908,7 +1908,8 @@
    "term": "peanut",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": false,
+    "peanut-free": true
    }
   },
   {
@@ -1924,7 +1925,8 @@
    "term": "almond",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -1940,7 +1942,8 @@
    "term": "cashew",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -1956,7 +1959,8 @@
    "term": "walnut",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -1972,7 +1976,8 @@
    "term": "hazelnut",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -1988,7 +1993,8 @@
    "term": "pecan",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2004,7 +2010,8 @@
    "term": "pistachio",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2020,7 +2027,8 @@
    "term": "macadamia",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2036,7 +2044,8 @@
    "term": "pine nut",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2052,7 +2061,8 @@
    "term": "satay",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": false,
+    "peanut-free": true
    }
   },
   {
@@ -2068,7 +2078,8 @@
    "term": "praline",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2084,7 +2095,8 @@
    "term": "nut",
    "group": "nuts",
    "violates": {
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": true
    }
   },
   {
@@ -2323,7 +2335,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -2341,7 +2354,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -2410,7 +2424,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2428,7 +2443,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2480,7 +2496,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": true
+    "tree-nut-free": false,
+    "peanut-free": true
    }
   },
   {
@@ -2498,7 +2515,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2516,7 +2534,8 @@
    "violates": {
     "vegan": false,
     "dairy-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": true
    }
   },
   {
@@ -2920,7 +2939,8 @@
    "group": "gluten",
    "violates": {
     "gluten-free": false,
-    "nut-free": true
+    "tree-nut-free": true,
+    "peanut-free": false
    }
   },
   {
@@ -2936,7 +2956,8 @@
    "term": "nut free",
    "group": "nuts",
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -2952,7 +2973,8 @@
    "term": "nut-free",
    "group": "nuts",
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -2968,7 +2990,8 @@
    "term": "nutmeg",
    "group": "nuts",
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -3000,7 +3023,8 @@
    "term": "coconut",
    "group": "nuts",
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   },
   {
@@ -3016,7 +3040,8 @@
    "term": "coconut",
    "group": "nuts",
    "violates": {
-    "nut-free": false
+    "tree-nut-free": false,
+    "peanut-free": false
    }
   }
  ]

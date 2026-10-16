@@ -35,29 +35,32 @@ _CHECKPOINT_EVERY = 25
 # Not `.json`-suffixed, so `BlobStore.list_keys` never mistakes it for a recipe.
 DIETARY_DECISIONS_KEY = "_decisions/dietary.jsonl"
 
-NUT_FREE = "nut-free"
+TREE_NUT_FREE = "tree-nut-free"
+PEANUT_FREE = "peanut-free"
+# Spelled by older app builds, which had one nut flag. It stands for both allergies.
+LEGACY_NUT_FREE = "nut-free"
 # Flags the decision model is asked about. Others (Keto, Paleo) are left to the meal-plan model.
-DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", NUT_FREE)
+DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", TREE_NUT_FREE, PEANUT_FREE)
 
 # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the 59-row labelled sample (tests/fixtures/decisions/dietary_sample.json) plus one recipe per term
-# of the former regex rules (dietary_regex_coverage.json, 182 recipes), 241 in all, answered by
-# typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all 632 prod-corpus
-# recipes (no nut-free false negative):
-#   recipes that break a flag:  nut-free >= 0.93, vegetarian >= 0.85, vegan >= 0.82,
-#                               dairy-free >= 0.87, gluten-free >= 0.77
-#   recipes that don't:         nut-free <= 0.17 (tahini 0.17; the rest <= 0.16) except a bare korma paste
-#                               at 0.42, vegetarian <= 0.15, dairy-free <= 0.12, gluten-free <= 0.38,
-#                               vegan <= 0.33
-# Nut-free is an allergy, so its threshold is the one that must never miss: 0.30 sits 0.13 above the highest
-# clean recipe and 0.63 below the lowest violator, and over the 632 prod-corpus recipes it misses none.
-# Only nuts in the ingredients count: a "may contain nuts" warning is ignored, and korma and tikka masala
+# Set from the labelled samples (tests/fixtures/decisions/dietary_sample.json, 63 rows, and dietary_regex_coverage.json,
+# 182 recipes) answered by typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all
+# 632 prod-corpus recipes. Ground truth there is the retailer's ingredient lists, then the maintainer's labels, then
+# two judges and the old regex in agreement:
+#   tree-nut-free: 41 recipes break it, every one scored >= 0.95; 1 of 570 clean recipes scores >= 0.3 (0.79)
+#   peanut-free:   36 recipes break it, every one scored >= 0.87; 3 of 582 clean recipes score >= 0.3 (highest 0.58)
+# Both thresholds start from the 0.3 the single nut flag used and miss nothing on the corpus; 0.3 sits 0.65 (tree)
+# and 0.57 (peanut) below the lowest violator. Tree-nut-free is clean to 0.23 on the samples bar a bare korma paste at
+# 0.38; peanut-free scores dukkah 0.44 and praline 0.35 clean-labelled, which it excludes.
+# Only nuts in the ingredients count: a "may contain nuts" warning is ignored, and korma, tikka masala and pasanda
 # pastes are not special (a tree nut is listed in 0 of 9 korma and 1 of 7 tikka masala pastes sold).
 # Preferences sit between the clusters: 0.12 above the highest clean recipe (gluten-free), 0.27 below the
 # lowest violator (gluten-free). 0.50 rather than higher because the gluten-free recipe `rec_d1cddd00fba23e5a`
 # of the prod corpus scores 0.52 and must be excluded.
-NUT_FREE_THRESHOLD = 0.3
+TREE_NUT_FREE_THRESHOLD = 0.3
+PEANUT_FREE_THRESHOLD = 0.3
 PREFERENCE_THRESHOLD = 0.5
+THRESHOLDS = {TREE_NUT_FREE: TREE_NUT_FREE_THRESHOLD, PEANUT_FREE: PEANUT_FREE_THRESHOLD}
 
 
 class CorpusUnavailableError(Exception):
@@ -124,14 +127,16 @@ class DietaryDecisions:
 
         A recipe with no current decision is excluded under every flag the model is asked about:
         with no ingredient rules to fall back on, an unanswered question can't be assumed safe.
+        The legacy `nut-free` an older app build sends stands for tree-nut-free and peanut-free together.
         """
+        if flag == LEGACY_NUT_FREE:
+            return self.excludes(summary, TREE_NUT_FREE) or self.excludes(summary, PEANUT_FREE)
         if flag not in DIETARY_FLAGS:
             return False
         decision = self._by_key.get((summary.external_id, flag))
         if decision is None or not _is_current(decision, summary):
             return True
-        threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
-        return decision.probability >= threshold
+        return decision.probability >= THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
@@ -196,16 +201,31 @@ _QUESTIONS: dict[str, NoulQuestion] = {
             false="No ingredient is or contains gluten. Gluten-free oats, rice and cornflour are fine.",
         ),
     ),
-    NUT_FREE: NoulQuestion(
+    TREE_NUT_FREE: NoulQuestion(
         instructions=(
-            "Does this recipe contain nuts, peanuts or anything made from them? "
-            "Pine nuts count as nuts, so pesto counts. Marzipan, frangipane, Nutella and other hazelnut "
-            "spreads, dukkah, romesco, praline, satay and almond milk count. Coconut, coconut milk, nutmeg "
-            "and seeds are not nuts, and an ingredient labelled nut-free is not a nut."
+            "Does this recipe contain tree nuts or anything made from them? "
+            "Almonds, cashews, hazelnuts, walnuts, pecans, pistachios, macadamias, Brazil nuts and pine nuts count, "
+            "so pesto counts. Marzipan, frangipane, Nutella and other hazelnut spreads, dukkah, romesco, praline "
+            "and almond milk count, as does an unspecified nut or nut butter, which may be a tree nut. Peanuts, "
+            "peanut butter and satay are not tree nuts. Coconut, coconut milk, nutmeg and seeds are not nuts, "
+            "and an ingredient labelled nut-free is not a nut."
         ),
         criteria=NoulCriteria(
-            true="At least one ingredient is or contains a tree nut, peanut or pine nut, or a product made from them.",
-            false="No ingredient is or contains a nut or peanut. Coconut, coconut milk and nutmeg are not nuts.",
+            true="At least one ingredient is or contains a tree nut or pine nut, or a product made from them.",
+            false="No ingredient is or contains a tree nut. Peanuts, coconut and nutmeg are not tree nuts.",
+        ),
+    ),
+    PEANUT_FREE: NoulQuestion(
+        instructions=(
+            "Does this recipe contain peanuts or anything made from them? "
+            "Peanut butter, groundnut oil, satay, satay sauce and chilli crisp count, as does an unspecified nut "
+            "or nut butter, which may be peanut. Tree nuts such as almonds, cashews, walnuts and pine nuts "
+            "are not peanuts. Coconut, coconut milk, nutmeg and seeds are not peanuts, and an ingredient "
+            "labelled nut-free or peanut-free is not a peanut."
+        ),
+        criteria=NoulCriteria(
+            true="At least one ingredient is or contains peanut or groundnut, or a product made from them.",
+            false="No ingredient is or contains peanut. Tree nuts, coconut, coconut milk and nutmeg are not peanuts.",
         ),
     ),
 }

@@ -30,7 +30,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 from pydantic import SecretStr, ValidationError
@@ -50,9 +50,11 @@ from scripts.grocery_ground_truth import (
 from glean.decisions import DecisionClient, DecisionError, NoulQuestion
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
-    NUT_FREE,
-    NUT_FREE_THRESHOLD,
+    LEGACY_NUT_FREE,
+    PEANUT_FREE,
     PREFERENCE_THRESHOLD,
+    THRESHOLDS,
+    TREE_NUT_FREE,
     content_fingerprint,
     dietary_questions,
     question_hash,
@@ -63,6 +65,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 FLAGS = DIETARY_FLAGS
+NUT_FLAGS = (TREE_NUT_FREE, PEANUT_FREE)
+_ALLERGEN: dict[str, Literal["tree_nut", "peanut"]] = {TREE_NUT_FREE: "tree_nut", PEANUT_FREE: "peanut"}
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Two vendors, so the judges don't share blind spots. `extra` is merged into the request body.
 JUDGES: dict[str, tuple[str, dict[str, Any]]] = {
@@ -89,8 +93,12 @@ shrimp paste, Worcestershire sauce). Parmesan and pesto are acceptable. Meat-fre
 Plant alternatives, cocoa butter and nut butters are fine.
 - gluten-free: no wheat, barley, rye, malt or ordinary oats, including pasta, bread, flour, couscous, noodles, \
 soy sauce and gnocchi unless labelled gluten-free. Rice, corn, potato and gram flours are fine.
-- nut-free: no tree nuts or peanuts or products made from them (pine nuts, pesto, marzipan, praline, satay, \
-nut butters, almond milk). Coconut, nutmeg, seeds and butternut squash are not nuts.
+- tree-nut-free: no tree nuts (almonds, cashews, hazelnuts, walnuts, pecans, pistachios, macadamias, Brazil nuts, \
+pine nuts) or products made from them (pesto, marzipan, praline, nut butters, almond milk). Peanuts, peanut butter \
+and satay are not tree nuts. Coconut, nutmeg, seeds and butternut squash are not nuts.
+- peanut-free: no peanuts or products made from them (peanut butter, groundnut oil, satay, chilli crisp). Tree nuts \
+such as almonds, cashews and pine nuts are not peanuts. Coconut, nutmeg, seeds and butternut squash are not peanuts.
+For either nut flag an unspecified "nuts" or "nut butter" is "unsure".
 """
 
 
@@ -133,16 +141,26 @@ def _words(*words: str) -> re.Pattern[str]:
     return re.compile(r"\b(?:" + "|".join(re.escape(word) for word in words) + r")(?:s|es)?\b")
 
 
+_PEANUT_TERMS = ("peanut", "satay")
+# The deleted rules' bare "nut" forbade "pine nuts" and "mixed nuts" alike; for peanut it names only the
+# unspecified kind.
+_PEANUT_OR_UNSPECIFIED_NUT = re.compile(r"\b(?:peanut|satay)(?:s|es)?\b|(?<!pine )(?<!brazil )\bnuts?\b")
+
+
 def _regex_rules() -> dict[str, tuple[tuple[re.Pattern[str], re.Pattern[str]], ...]]:
     terms = json.loads(_TERMS_PATH.read_text())
     pair = {group: (_words(*lists["forbidden"]), _words(*lists["safe"])) for group, lists in terms.items()}
-    meat, dairy, eggs, gluten, nuts = (pair[g] for g in ("meat-and-fish", "dairy", "eggs-and-honey", "gluten", "nuts"))
+    meat, dairy, eggs, gluten = (pair[g] for g in ("meat-and-fish", "dairy", "eggs-and-honey", "gluten"))
+    nut_safe = pair["nuts"][1]
+    tree_nuts = (_words(*(t for t in terms["nuts"]["forbidden"] if t not in _PEANUT_TERMS)), nut_safe)
+    peanuts = (_PEANUT_OR_UNSPECIFIED_NUT, nut_safe)
     return {
         "vegetarian": (meat,),
         "vegan": (meat, dairy, eggs),
         "dairy-free": (dairy,),
         "gluten-free": (gluten,),
-        NUT_FREE: (nuts,),
+        TREE_NUT_FREE: (tree_nuts,),
+        PEANUT_FREE: (peanuts,),
     }
 
 
@@ -202,7 +220,20 @@ def load_recipes(corpus_dir: Path) -> list[AuditRecipe]:
     return sorted(recipes, key=lambda recipe: recipe.recipe_id)
 
 
-def judge_schema() -> dict[str, Any]:
+def carried_verdicts(verdicts: dict[str, str]) -> dict[str, str]:
+    """What a stored judgement made under the old single nut-free flag already answers for the two new ones:
+    "fine" there means no tree nut and no peanut, so it holds for both. "breaks" and "unsure" don't say which."""
+    if verdicts.get(LEGACY_NUT_FREE) == "fine":
+        return dict.fromkeys(NUT_FLAGS, "fine")
+    return {}
+
+
+def flags_to_ask(verdicts: dict[str, str]) -> tuple[str, ...]:
+    answered = {*verdicts, *carried_verdicts(verdicts)}
+    return tuple(flag for flag in FLAGS if flag not in answered)
+
+
+def judge_schema(flags: tuple[str, ...] = FLAGS) -> dict[str, Any]:
     verdict = {
         "type": "object",
         "properties": {
@@ -214,16 +245,16 @@ def judge_schema() -> dict[str, Any]:
     }
     return {
         "type": "object",
-        "properties": dict.fromkeys(FLAGS, verdict),
-        "required": list(FLAGS),
+        "properties": dict.fromkeys(flags, verdict),
+        "required": list(flags),
         "additionalProperties": False,
     }
 
 
-def parse_judge_reply(reply: str) -> dict[str, str]:
+def parse_judge_reply(reply: str, flags: tuple[str, ...] = FLAGS) -> dict[str, str]:
     try:
         body = json.loads(reply)
-        verdicts = {flag: body[flag]["verdict"] for flag in FLAGS}
+        verdicts = {flag: body[flag]["verdict"] for flag in flags}
     except (ValueError, KeyError, TypeError) as exc:
         raise JudgeReplyError(f"Judge reply wasn't the requested shape: {reply[:200]!r}") from exc
     if any(verdict not in _VERDICTS for verdict in verdicts.values()):
@@ -285,10 +316,11 @@ def render_disagreements(
     return header + "\n".join(rows)
 
 
-# The maintainer's labels of the nut-free recipes both judges were unsure about (2026-10-16). They override
-# every other signal; "may contain" warnings never count. Tree nuts and peanuts are separate concerns: the
-# chilli crisp recipe is fine for a tree-nut allergy though #161's single flag stays on the safe side for peanuts.
-MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
+# The maintainer's labels of the recipes both judges were unsure about when there was one nut-free flag
+# (2026-10-16). They override every other signal; "may contain" warnings never count. Tree nuts and peanuts are
+# separate allergies: the chilli crisp recipe is fine for a tree-nut allergy and breaks peanut-free, as chilli crisp
+# is made with peanuts. Every other label held for both.
+_TREE_NUT_LABELS: dict[str, str] = {
     **dict.fromkeys(
         (
             "rec_12d9df09a90bd7c7",  # chilli crisp
@@ -314,6 +346,10 @@ MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
     "rec_9549ace7527cd5ff": "fine",
     "rec_96e4c5716655075c": "fine",
 }
+MAINTAINER_LABELS: dict[str, dict[str, str]] = {
+    TREE_NUT_FREE: _TREE_NUT_LABELS,
+    PEANUT_FREE: {**_TREE_NUT_LABELS, "rec_12d9df09a90bd7c7": "exclude"},
+}
 
 
 _PROCESSED = re.compile(
@@ -332,30 +368,36 @@ def processed_ingredients(ingredient_names: list[str]) -> list[str]:
     return [name for name in cleaned if _PROCESSED.search(name) and not _NOT_A_PRODUCT.search(name)]
 
 
-_NUT_DERIVED = re.compile(r"\b(?:marzipan|praline|frangipane|nutella|gianduja|nougat|baklava|satay)\b", re.IGNORECASE)
+_TREE_NUT_DERIVED = re.compile(r"\b(?:marzipan|praline|frangipane|nutella|gianduja|nougat|baklava)\b", re.IGNORECASE)
+_PEANUT_DERIVED = re.compile(r"\b(?:satay|chilli crisp)\b", re.IGNORECASE)
 _FREE_FROM = re.compile(r"\b(?:nut|peanut)[- ]free\b|\bfree from (?:nuts|peanuts)\b", re.IGNORECASE)
 
 
-def names_an_allergen(ingredient_name: str) -> bool:
-    """The name itself says tree nut or peanut ("almonds", "peanut oil", "marzipan"), whatever a shelf says about
-    other ingredients. "Nut-free pesto" does not."""
+def names_an_allergen(ingredient_name: str, flag: str) -> bool:
+    """The name itself says what `flag` forbids ("almonds", "marzipan" for tree-nut-free; "peanut oil", "satay" for
+    peanut-free), whatever a shelf says about other ingredients. "Nut-free pesto" does not."""
     name = _FREE_FROM.sub("", ingredient_name)
     facts = classify(Product(retailer="recipe", name=name, url="", ingredients_text=name))
-    return bool(facts.tree_nut_ingredients or facts.peanut_ingredients or _NUT_DERIVED.search(name))
+    if flag == PEANUT_FREE:
+        return bool(facts.peanut_ingredients or _PEANUT_DERIVED.search(name))
+    return bool(facts.tree_nut_ingredients or _TREE_NUT_DERIVED.search(name))
 
 
 def retailer_truth(
-    ingredient_names: list[str], lookup: Callable[[str], IngredientVerdict], policy: ContainsPolicy | None
+    flag: str,
+    ingredient_names: list[str],
+    lookup: Callable[[str], IngredientVerdict],
+    policy: ContainsPolicy | None,
 ) -> str | None:
-    """The whole recipe, not just its pastes: "breaks" when any ingredient is itself a nut or peanut or any
-    processed ingredient contains one on the shelf; "fine" only when every processed ingredient is read and safe
-    and nothing else names an allergen; otherwise None, because an unsettled ingredient is never assumed safe."""
+    """The whole recipe, not just its pastes: "breaks" when any ingredient is itself what `flag` forbids or any
+    processed ingredient contains it on the shelf; "fine" only when every processed ingredient is read and safe
+    and nothing else names the allergen; otherwise None, because an unsettled ingredient is never assumed safe."""
     processed = processed_ingredients(ingredient_names)
     if not processed:
         return None
-    if any(names_an_allergen(name) for name in ingredient_names):
+    if any(names_an_allergen(name, flag) for name in ingredient_names):
         return "breaks"
-    settled = [is_unsafe(lookup(name), policy) for name in processed]
+    settled = [is_unsafe(lookup(name), policy, allergen=_ALLERGEN[flag]) for name in processed]
     if any(settled):
         return "breaks"
     return "fine" if all(found is False for found in settled) else None
@@ -376,12 +418,12 @@ def resolve_truth(
 ) -> str | None:
     """ "breaks", "fine" or None (unresolved). The retailer's shelf is ground truth, asked only where the judges are
     both unsure or disagree; where it can't settle the recipe a maintainer label decides, else the three signals."""
-    if flag == NUT_FREE:
+    if flag in NUT_FLAGS:
         if lookup is not None and _judges_unsettled(found):
-            shelf = retailer_truth(ingredient_names, lookup, policy)
+            shelf = retailer_truth(flag, ingredient_names, lookup, policy)
             if shelf is not None:
                 return shelf
-        label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id)
+        label = MAINTAINER_LABELS[flag].get(recipe_id)
         if label is not None:
             return "breaks" if label == "exclude" else "fine"
     return ground_truth(list(found.judges.values()), found.regex)
@@ -391,17 +433,18 @@ def render_retailer_section(
     recipes: dict[str, AuditRecipe],
     signals: dict[str, Signals],
     *,
+    flag: str,
     lookup: Callable[[str], IngredientVerdict],
     policy: ContainsPolicy | None,
 ) -> str:
     """What the retailer's shelf says about each recipe the judges can't settle, next to the maintainer's label."""
-    lines = ["## nut-free: recipes the judges can't settle, resolved by the retailer's shelf"]
+    lines = [f"## {flag}: recipes the judges can't settle, resolved by the retailer's shelf"]
     for recipe_id in sorted(signals):
         if not _judges_unsettled(signals[recipe_id]):
             continue
         recipe = recipes[recipe_id]
-        truth = retailer_truth(recipe.ingredient_names, lookup, policy)
-        label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id, "none")
+        truth = retailer_truth(flag, recipe.ingredient_names, lookup, policy)
+        label = MAINTAINER_LABELS[flag].get(recipe_id, "none")
         lines.append(f"- {recipe.title} (`{recipe_id}`): retailer {truth or 'unresolved'}; maintainer label {label}")
         for name in processed_ingredients(recipe.ingredient_names):
             shelf = lookup(name)
@@ -485,7 +528,7 @@ def run_decisions(
             return recipe.recipe_id, None
         return recipe.recipe_id, {
             "model": answer.model,
-            "probabilities": {flag: answer.noul(flag).noul for flag in FLAGS},
+            "probabilities": {flag: answer.noul(flag).noul for flag in questions},
             "cost": answer.usage.cost,
             "criteria": criteria,
             "content_hash": content_fingerprint(recipe.title, recipe.ingredient_names),
@@ -499,7 +542,9 @@ def run_decisions(
     print(f"decisions: {len(store['entries'])} recipes, spend ${_spend(path):.4f}")
 
 
-def _judge_one(http: httpx.Client, judge: str, recipe: AuditRecipe) -> tuple[dict[str, str], float]:
+def _judge_one(
+    http: httpx.Client, judge: str, recipe: AuditRecipe, flags: tuple[str, ...]
+) -> tuple[dict[str, str], float]:
     model, extra = JUDGES[judge]
     body = {
         "model": model,
@@ -511,7 +556,7 @@ def _judge_one(http: httpx.Client, judge: str, recipe: AuditRecipe) -> tuple[dic
         ],
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "dietary_labels", "strict": True, "schema": judge_schema()},
+            "json_schema": {"name": "dietary_labels", "strict": True, "schema": judge_schema(flags)},
         },
         "usage": {"include": True},
         **extra,
@@ -519,35 +564,49 @@ def _judge_one(http: httpx.Client, judge: str, recipe: AuditRecipe) -> tuple[dic
     response = http.post(CHAT_URL, json=body)
     response.raise_for_status()
     payload = response.json()
-    return parse_judge_reply(payload["choices"][0]["message"]["content"]), float(payload["usage"]["cost"])
+    return parse_judge_reply(payload["choices"][0]["message"]["content"], flags), float(payload["usage"]["cost"])
 
 
 def run_judge(
     data_dir: Path, judge: str, api_key: SecretStr, *, budget: float, limit: int | None, workers: int = 6
 ) -> None:
+    """Judge every recipe on the flags a stored judgement can't already answer. `budget` caps this run's spend."""
     path = data_dir / f"judge-{judge}.json"
     store = _load(path)
-    recipes = [r for r in load_recipes(data_dir / "corpus") if r.recipe_id not in store["entries"]][:limit]
-    running = [_spend(path)]
+
+    def stored(recipe_id: str) -> dict[str, str]:
+        return store["entries"].get(recipe_id, {}).get("verdicts", {})
+
+    recipes = [r for r in load_recipes(data_dir / "corpus") if flags_to_ask(stored(r.recipe_id))][:limit]
+    # What a stored judgement already answers is kept, with no request: a recipe judged "fine" under the old single
+    # nut-free flag is fine for both new ones.
+    for entry in store["entries"].values():
+        entry["verdicts"] = {**entry["verdicts"], **carried_verdicts(entry["verdicts"])}
+    spent = [0.0]
     with httpx.Client(headers={"Authorization": f"Bearer {api_key.get_secret_value()}"}, timeout=180.0) as http:
 
         def ask(recipe: AuditRecipe) -> tuple[str, dict[str, Any] | None]:
-            if running[0] > budget:
+            if spent[0] > budget:
                 return recipe.recipe_id, None
+            known = stored(recipe.recipe_id)
             try:
-                verdicts, cost = _judge_one(http, judge, recipe)
+                verdicts, cost = _judge_one(http, judge, recipe, flags_to_ask(known))
             except (httpx.HTTPError, JudgeReplyError, KeyError) as exc:
                 print(f"{judge} failed for {recipe.recipe_id}: {type(exc).__name__}")
                 return recipe.recipe_id, None
-            running[0] += cost
-            return recipe.recipe_id, {"verdicts": verdicts, "cost": cost}
+            spent[0] += cost
+            earlier = store["entries"].get(recipe.recipe_id, {}).get("cost", 0.0)
+            kept = {flag: verdict for flag, verdict in known.items() if flag in FLAGS}
+            return recipe.recipe_id, {"verdicts": {**kept, **verdicts}, "cost": earlier + cost}
 
         with ThreadPoolExecutor(workers) as pool:
             for recipe_id, entry in pool.map(ask, recipes):
                 if entry is not None:
                     store["entries"][recipe_id] = entry
     path.write_text(json.dumps(store, indent=1))
-    print(f"{judge}: {len(store['entries'])} recipes judged, spend ${_spend(path):.4f}")
+    print(
+        f"{judge}: {len(store['entries'])} recipes judged, spent ${spent[0]:.4f} this run, ${_spend(path):.4f} in all"
+    )
 
 
 def build_signals(
@@ -572,7 +631,9 @@ def build_signals(
     complete = [
         rid
         for rid in recipes
-        if rid in decisions and rid in baseline and all(rid in entries for entries in judged.values())
+        if rid in decisions
+        and rid in baseline
+        and all(rid in entries and set(FLAGS) <= set(entries[rid]["verdicts"]) for entries in judged.values())
     ]
     signals: dict[str, dict[str, Signals]] = {flag: {} for flag in FLAGS}
     for rid in complete:
@@ -581,7 +642,7 @@ def build_signals(
                 judges={name: entries[rid]["verdicts"][flag] for name, entries in judged.items()},
                 regex=regex_excludes(flag, recipes[rid].ingredient_names),
                 probability=decisions[rid]["probabilities"][flag],
-                baseline_probability=baseline[rid]["probabilities"][flag],
+                baseline_probability=baseline[rid]["probabilities"].get(flag),
             )
     return recipes, signals
 
@@ -638,6 +699,14 @@ def _score(lines: list[str], title: str, labelled: list[tuple[str, str, float]],
     ]
 
 
+def _threshold_of(flag: str) -> float:
+    return THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
+
+
+# Thresholds tried against each nut flag's ground truth, beside the one in dietary_decisions.py.
+_NUT_THRESHOLD_CANDIDATES = (0.12, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
+
+
 def run_report(
     data_dir: Path,
     *,
@@ -646,7 +715,8 @@ def run_report(
     lookup: Callable[[str], IngredientVerdict] | None = None,
     policy: ContainsPolicy | None = None,
 ) -> None:
-    """Score #161 (decision only) and #145 (regex or decision) against the agreed ground truth.
+    """Score the decision alone against the agreed ground truth, per flag, and #145 (regex or decision) for the
+    flags it asked about.
 
     Ground truth needs both judges and the regex to agree, so #145 can't miss an agreed-unsafe recipe by
     construction. Its real exposure is the recipes the signals disagree on, so each flag is also scored
@@ -655,10 +725,9 @@ def run_report(
     recipes, signals = build_signals(data_dir, baseline_questions=baseline_questions)
     lines = [f"Recipes with all signals: {len(signals[FLAGS[0]])} of {len(recipes)}", ""]
     for flag in FLAGS:
-        thresholds = {
-            "#161": NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD,
-            "#145": baseline_thresholds[0] if flag == NUT_FREE else baseline_thresholds[1],
-        }
+        thresholds = {"#169": _threshold_of(flag)}
+        if flag in baseline_questions:
+            thresholds["#145"] = baseline_thresholds[0] if flag == LEGACY_NUT_FREE else baseline_thresholds[1]
         agreed, provisional = [], []
         for rid, found in signals[flag].items():
             truth = resolve_truth(flag, rid, recipes[rid].ingredient_names, found, lookup=lookup, policy=policy)
@@ -674,71 +743,69 @@ def run_report(
             f"{len(provisional)} with judge consensus"
         )
         for set_name, rows in (("agreed truth", agreed), ("judge-consensus truth", provisional)):
-            for config, is_baseline in (("#161", False), ("#145", True)):
+            for config, threshold in thresholds.items():
                 labelled = [
-                    (rid, truth, _effective_probability(found, baseline=is_baseline)) for rid, found, truth in rows
+                    (rid, truth, _effective_probability(found, baseline=config == "#145")) for rid, found, truth in rows
                 ]
-                _score(lines, f"{set_name}, {config}", labelled, thresholds[config])
+                _score(lines, f"{set_name}, {config}", labelled, threshold)
         lines.append("")
-    nut_signals = signals[NUT_FREE]
-    lines += ["## nut-free threshold table (ground truth: maintainer labels, then agreed signals)"]
-    for config, is_baseline, thresholds in (
-        ("#161", False, sorted({0.12, 0.2, NUT_FREE_THRESHOLD, 0.4, 0.5})),
-        ("#145", True, [baseline_thresholds[0]]),
-    ):
-        labelled = [
-            (rid, truth, _effective_probability(found, baseline=is_baseline))
-            for rid, found in nut_signals.items()
-            if (
-                truth := resolve_truth(
-                    NUT_FREE, rid, recipes[rid].ingredient_names, found, lookup=lookup, policy=policy
-                )
+    for flag in NUT_FLAGS:
+        lines += _nut_flag_section(flag, recipes, signals[flag], lookup=lookup, policy=policy)
+        (data_dir / f"{flag}-both-unsure.md").write_text(
+            render_disagreements(
+                recipes,
+                signals[flag],
+                flag=flag,
+                thresholds=(_threshold_of(flag), _threshold_of(flag)),
+                select=lambda found: set(found.judges.values()) == {"unsure"},
+                title=f"{flag}: both judges unsure",
             )
-            is not None
-        ]
-        lines += [
-            f"- {config} at {row.threshold}: FN {row.false_negatives} of {row.unsafe} unsafe, "
-            f"FP {row.false_positives} of {row.safe} safe, lowest unsafe {row.lowest_unsafe}, "
-            f"highest safe {row.highest_safe}"
-            for row in threshold_table(labelled, thresholds)
-        ]
-    lines.append("")
-    kept_161 = judge_flagged_but_kept(nut_signals, threshold=NUT_FREE_THRESHOLD)
-    kept_145 = judge_flagged_but_kept(
-        {
-            rid: Signals(found.judges, found.regex, 1.0 if found.regex else found.baseline_probability or 0.0)
-            for rid, found in nut_signals.items()
-        },
-        threshold=baseline_thresholds[0],
-    )
+        )
+        (data_dir / f"{flag}-disagreements.md").write_text(
+            render_disagreements(
+                recipes, signals[flag], flag=flag, thresholds=(_threshold_of(flag), _threshold_of(flag))
+            )
+        )
+    (data_dir / "report.md").write_text("\n".join(lines))
+    print("\n".join(lines))
+
+
+def _nut_flag_section(
+    flag: str,
+    recipes: dict[str, AuditRecipe],
+    signals: dict[str, Signals],
+    *,
+    lookup: Callable[[str], IngredientVerdict] | None,
+    policy: ContainsPolicy | None,
+) -> list[str]:
+    """One nut flag's threshold table, the judge-flagged recipes the decision keeps, and the retailer's rulings."""
+    labelled = [
+        (rid, truth, found.probability)
+        for rid, found in signals.items()
+        if (truth := resolve_truth(flag, rid, recipes[rid].ingredient_names, found, lookup=lookup, policy=policy))
+        is not None
+    ]
+    threshold = _threshold_of(flag)
+    table = threshold_table(labelled, sorted({*_NUT_THRESHOLD_CANDIDATES, threshold}))
+    kept = judge_flagged_but_kept(signals, threshold=threshold)
+    lines = [f"## {flag} threshold table (ground truth: retailer, maintainer labels, then agreed signals)"]
     lines += [
-        f'## nut-free disagreement recipes where a judge says "breaks" but the recipe is kept: '
-        f"#161 {len(kept_161)}, #145 {len(kept_145)}",
-        f"- #161: {kept_161}",
+        f"- decision at {row.threshold}: FN {row.false_negatives} of {row.unsafe} unsafe, "
+        f"FP {row.false_positives} of {row.safe} safe, lowest unsafe {row.lowest_unsafe}, "
+        f"highest safe {row.highest_safe}"
+        for row in table
+    ]
+    lines += [
+        "",
+        f'## {flag} disagreement recipes where a judge says "breaks" but the decision keeps them at {threshold}: '
+        f"{len(kept)}",
+        f"- {kept}",
         "",
     ]
     if lookup is not None:
-        lines += render_retailer_section(recipes, nut_signals, lookup=lookup, policy=policy).splitlines()
-    (data_dir / "report.md").write_text("\n".join(lines))
-    (data_dir / f"{NUT_FREE}-both-unsure.md").write_text(
-        render_disagreements(
-            recipes,
-            nut_signals,
-            flag=NUT_FREE,
-            thresholds=(NUT_FREE_THRESHOLD, baseline_thresholds[0]),
-            select=lambda found: set(found.judges.values()) == {"unsure"},
-            title="nut-free: both judges unsure",
-        )
-    )
-    (data_dir / f"{NUT_FREE}-disagreements.md").write_text(
-        render_disagreements(
-            recipes,
-            signals[NUT_FREE],
-            flag=NUT_FREE,
-            thresholds=(NUT_FREE_THRESHOLD, baseline_thresholds[0]),
-        )
-    )
-    print("\n".join(lines))
+        lines += render_retailer_section(recipes, signals, flag=flag, lookup=lookup, policy=policy).splitlines()
+        lines.append("")
+    return lines
 
 
 def _api_key() -> SecretStr:
@@ -764,7 +831,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--retailer-ground-truth",
         action="store_true",
-        help="report: settle nut-free recipes the judges can't by reading Ocado (then Sainsbury's) product pages. "
+        help="report: settle tree-nut-free and peanut-free recipes the judges can't by reading Ocado "
+        "(then Sainsbury's) product pages. "
         "Needs the `audit` dependency group (uv run --group audit).",
     )
     parser.add_argument("--ground-truth-cache", type=Path, default=DEFAULT_GROUND_TRUTH_CACHE)

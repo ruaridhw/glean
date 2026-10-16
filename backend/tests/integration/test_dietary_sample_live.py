@@ -14,9 +14,8 @@ import pytest
 
 from glean.decisions import DecisionClient
 from glean.meal_plan.dietary_decisions import (
-    NUT_FREE,
-    NUT_FREE_THRESHOLD,
     PREFERENCE_THRESHOLD,
+    THRESHOLDS,
     dietary_questions,
 )
 
@@ -41,10 +40,10 @@ def test_live_model_separates_the_labelled_samples_at_the_chosen_thresholds(open
         decision = client.decide({"recipe_title": row["title"], "ingredients": row["ingredients"]}, dietary_questions())
         for flag, violates in row["violates"].items():
             probability = decision.noul(flag).noul
-            excluded = probability >= (NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD)
+            excluded = probability >= THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
             if violates and not excluded:
                 missed.append(f"{row['id']}/{flag}={probability}")
-            if not violates and excluded and flag != NUT_FREE:
+            if not violates and excluded and flag not in THRESHOLDS:
                 wrongly_excluded.append(f"{row['id']}/{flag}={probability}")
 
     assert missed == []
