@@ -44,16 +44,12 @@ _MEASURED = [json.loads((FIXTURES / f"{name}_measured.json").read_text()) for na
 PROBABILITIES = {row_id: answers for measured in _MEASURED for row_id, answers in measured["probabilities"].items()}
 MODELS = {measured["model"] for measured in _MEASURED}
 
-# Nut-free is an allergy, so its strict threshold also drops these nut-butter lookalikes
-# (tahini 0.18, hummus wrap 0.15). Anything else it drops is a regression.
-ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"heldout-nut-tahini", "ordinary-15"}
-
 # candidate selection treats recipes sharing this fraction of their ingredients as variants of one dish
 _NEAR_DUPLICATE_OVERLAP = 0.7
 
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
 PREFERENCE_MARGIN = 0.15
-NUT_FREE_MARGIN_ABOVE_CLEAN = 0.02
+NUT_FREE_MARGIN_ABOVE_CLEAN = 0.09
 NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
 
 
@@ -152,12 +148,12 @@ def test_every_labelled_recipe_that_is_fine_for_a_preference_flag_is_still_offer
     assert fine - offered_by_flag[flag] == set()
 
 
-def test_nut_free_still_offers_coconut_milk_nutmeg_butternut_and_the_ordinary_recipes(offered_by_flag) -> None:
+def test_nut_free_offers_coconut_milk_nutmeg_butternut_tahini_and_the_ordinary_recipes(offered_by_flag) -> None:
     offered = offered_by_flag[NUT_FREE]
 
     fine = {row["id"] for row in ROWS if row["violates"].get(NUT_FREE) is False}
-    assert {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut"} <= offered
-    assert fine - offered == ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS & fine
+    assert {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut", "heldout-nut-tahini"} <= offered
+    assert fine - offered == set()
 
 
 @pytest.mark.parametrize(
@@ -192,11 +188,7 @@ def test_the_regex_coverage_labels_every_forbidden_word_and_safe_qualifier() -> 
 def test_the_thresholds_keep_their_recorded_margins_on_the_measured_sample(flag: str) -> None:
     threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
     violators = [PROBABILITIES[row["id"]][flag] for row in ROWS if row["violates"].get(flag)]
-    clean = [
-        PROBABILITIES[row["id"]][flag]
-        for row in ROWS
-        if row["violates"].get(flag) is False and row["id"] not in ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS
-    ]
+    clean = [PROBABILITIES[row["id"]][flag] for row in ROWS if row["violates"].get(flag) is False]
 
     if flag == NUT_FREE:
         assert threshold - max(clean) >= NUT_FREE_MARGIN_ABOVE_CLEAN
