@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from grocery_fixtures import (
     ACCESS_DENIED,
@@ -31,15 +32,15 @@ SEARCH = "https://www.ocado.com/search?q=korma%20paste"
 SB_SEARCH = "https://www.sainsburys.co.uk/gol-ui/SearchResults/korma%20paste"
 
 
-def _ocado_shop(*products: tuple[str, str | None, str | None]) -> FakePageSource:
-    """An Ocado serving a search for 'korma paste' that lists the given (name, ingredients, allergy) products."""
+def _ocado_shop(*products: tuple[str, str | None, str | None], query: str = "korma paste") -> FakePageSource:
+    """An Ocado serving a search for `query` that lists the given (name, ingredients, allergy) products."""
     pages = {}
     rows = []
     for index, (name, ingredients, allergy) in enumerate(products):
         path = f"/products/item-{index}/{index}"
         rows.append((name, path))
         pages[f"https://www.ocado.com{path}"] = ocado_product(name, ingredients, allergy)
-    pages[SEARCH] = ocado_search(*rows)
+    pages[f"https://www.ocado.com/search?q={quote(query)}"] = ocado_search(*rows)
     return FakePageSource(pages)
 
 
@@ -204,3 +205,17 @@ def test_an_unresolved_ingredient_is_neither_safe_nor_unsafe() -> None:
     blocked = IngredientVerdict(ingredient="korma paste", status="blocked")
 
     assert is_unsafe(blocked) is None
+
+
+def test_a_recipe_that_names_a_brand_is_judged_by_that_brands_products_alone() -> None:
+    shop = _ocado_shop(
+        ("Patak's Korma Spice Paste", "Water, Spices, Coconut", None),
+        ("Acme Korma Paste", "Water, Cashew Nuts", None),
+        ("Bravo Korma Paste", "Water, Almonds", None),
+        query="pataks korma paste",
+    )
+
+    named = ground_truth("pataks korma paste", 5, readers=[OcadoReader(shop)])
+
+    assert (named.products_read, named.tree_nut) == (1, Frequency.RARELY)
+    assert is_unsafe(named) is False
