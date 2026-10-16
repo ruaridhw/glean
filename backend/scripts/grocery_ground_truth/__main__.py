@@ -31,14 +31,15 @@ def main(argv: list[str] | None = None) -> int:
             args.ingredient, args.n, readers=[OcadoReader(source), SainsburysReader(source)], cache=cache
         )
     print(f"{verdict.ingredient}: {verdict.status}" + (f" via {verdict.retailer}" if verdict.retailer else ""))
+    if verdict.status in ("resolved", "insufficient"):
+        print(f"  products read: {verdict.products_read}, unread: {verdict.products_unread}")
     if verdict.status == "resolved":
-        print(f"  products read: {verdict.products_read}")
         print(f"  tree nut as ingredient: {verdict.tree_nut} ({verdict.tree_nut_products})")
         print(f"  peanut as ingredient: {verdict.peanut} ({verdict.peanut_products})")
         print(f"  may contain nuts: {verdict.may_contain} ({verdict.may_contain_products}, kept separate)")
         print(f"  contains under the policy: {is_unsafe(verdict, policy)}")
-        for item in verdict.evidence:
-            print(f"  - [{item.kind}] {item.product_name} {item.url}\n      {item.quote}")
+    for item in verdict.evidence:
+        print(f"  - [{item.kind}] {item.product_name} {item.url}\n      {item.quote}")
     return 0
 
 

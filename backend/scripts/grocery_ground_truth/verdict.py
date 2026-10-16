@@ -13,7 +13,7 @@ from .retailers import ProductUnreadable, RetailerBlocked
 
 if TYPE_CHECKING:
     from .cache import ProductCache
-    from .models import Product
+    from .models import Product, ProductRef
     from .retailers import RetailerReader
 
 
@@ -36,10 +36,16 @@ class ContainsPolicy(BaseModel):
 
 
 class Evidence(BaseModel):
-    kind: Literal["ingredient", "may_contain"] = Field(description="Whether the quote is an ingredient or a warning.")
+    kind: Literal["ingredients", "may_contain", "unread"] = Field(
+        description="'ingredients': a product read, quoted whether or not it lists a nut; 'may_contain': a warning, "
+        "kept separate; 'unread': a matching product whose page could not be read."
+    )
     url: str = Field(description="The product page the quote was read from.")
     product_name: str = Field(description="The product's name.")
-    quote: str = Field(description="The text as the page prints it.")
+    quote: str = Field(description="The text as the page prints it; empty for an unread product.")
+    allergens: list[str] = Field(
+        default_factory=list, description="The tree nut and peanut terms the ingredients list names, if any."
+    )
 
 
 class IngredientVerdict(BaseModel):
@@ -51,6 +57,7 @@ class IngredientVerdict(BaseModel):
     )
     retailer: str | None = Field(default=None, description="The retailer the products were read from.")
     products_read: int = Field(default=0, description="How many products with an ingredients list were read.")
+    products_unread: int = Field(default=0, description="How many matching products' pages could not be read.")
     tree_nut_products: int = Field(default=0, description="Products listing a tree nut as an ingredient.")
     peanut_products: int = Field(default=0, description="Products listing peanut as an ingredient.")
     may_contain_products: int = Field(
@@ -79,15 +86,31 @@ def is_unsafe(verdict: IngredientVerdict, policy: ContainsPolicy | None = None) 
     return any(frequency in reached for frequency in found)
 
 
-def _verdict(ingredient: str, retailer: str, products: list[Product]) -> IngredientVerdict:
+_MINIMUM_READ = 3
+
+
+def _usually_could_flip(count: int, read: int, unread: int) -> bool:
+    """Whether the unread products could move 'most products list it' either way."""
+    return (count * 2 > read + unread) != ((count + unread) * 2 > read + unread)
+
+
+def _verdict(
+    ingredient: str, retailer: str, products: list[Product], unread: list[ProductRef], minimum_read: int
+) -> IngredientVerdict:
     evidence: list[Evidence] = []
     tree = peanut = warned = 0
     for product in products:
         facts = classify(product)
-        if facts.tree_nut_ingredients or facts.peanut_ingredients:
-            evidence.append(
-                Evidence(kind="ingredient", url=product.url, product_name=product.name, quote=product.ingredients_text)
+        allergens = [*facts.tree_nut_ingredients, *facts.peanut_ingredients]
+        evidence.append(
+            Evidence(
+                kind="ingredients",
+                url=product.url,
+                product_name=product.name,
+                quote=product.ingredients_text,
+                allergens=allergens,
             )
+        )
         if facts.may_contain_quote:
             evidence.append(
                 Evidence(kind="may_contain", url=product.url, product_name=product.name, quote=facts.may_contain_quote)
@@ -95,67 +118,98 @@ def _verdict(ingredient: str, retailer: str, products: list[Product]) -> Ingredi
         tree += bool(facts.tree_nut_ingredients)
         peanut += bool(facts.peanut_ingredients)
         warned += facts.may_contain_tree_nut or facts.may_contain_peanut
-    total = len(products)
+    evidence += [Evidence(kind="unread", url=ref.url, product_name=ref.name, quote="") for ref in unread]
+    read, missed = len(products), len(unread)
+    common = {
+        "ingredient": ingredient,
+        "retailer": retailer,
+        "products_read": read,
+        "products_unread": missed,
+        "tree_nut_products": tree,
+        "peanut_products": peanut,
+        "may_contain_products": warned,
+        "evidence": evidence,
+    }
+    too_thin = read < min(minimum_read, read + missed)
+    if too_thin or _usually_could_flip(tree, read, missed) or _usually_could_flip(peanut, read, missed):
+        return IngredientVerdict(status="insufficient", **common)
     return IngredientVerdict(
-        ingredient=ingredient,
         status="resolved",
-        retailer=retailer,
-        products_read=total,
-        tree_nut_products=tree,
-        peanut_products=peanut,
-        may_contain_products=warned,
-        tree_nut=frequency(tree, total),
-        peanut=frequency(peanut, total),
-        may_contain=frequency(warned, total),
-        evidence=evidence,
+        tree_nut=frequency(tree, read),
+        peanut=frequency(peanut, read),
+        may_contain=frequency(warned, read),
+        **common,
     )
 
 
-_GENERIC_WORDS = frozenset(
-    {"paste", "pastes", "sauce", "sauces", "curry", "seasoning", "spice", "spices", "mix", "powder", "pot", "pots"}
-)
+# What the ingredient is: a product must be this kind of thing, so "curry paste" never reads almond butter.
+_KINDS = frozenset({"paste", "sauce", "seasoning", "mix", "powder", "marinade"})
+# Words that name the cuisine more than the product; they only matter when nothing else distinguishes the query.
+_GENERIC_WORDS = frozenset({"curry", "spice", "pot"})
+_NOT_THE_INGREDIENT = frozenset({"meal", "pie", "soup", "kit", "bake", "snack", "crisps"})
 
 
-def _words(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", text.casefold().replace("'", "").replace("\u2019", ""))
+def _tokens(text: str) -> set[str]:
+    """Whole lower-case words with apostrophes dropped and a plural 's' folded away."""
+    words = re.findall(r"[a-z0-9]+", text.casefold().replace("'", "").replace("\u2019", ""))
+    return {word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word for word in words}
 
 
 def _is_relevant(query: str, product_name: str) -> bool:
-    """A hit is on topic when it names every distinctive word of the query: 'korma' in 'korma curry paste',
-    and the brand in "Patak's korma paste", which narrows the read to that brand's products."""
-    name = " ".join(_words(product_name))
-    return all(word in name for word in _words(query) if word not in _GENERIC_WORDS)
+    """A hit is the ingredient asked for: it names the query's kind ('paste') and every distinctive word ('korma',
+    or the brand in "Patak's korma paste", which narrows the read to that brand), and isn't a ready meal.
+
+    When a query has nothing distinctive ('curry paste') the cuisine word has to match too."""
+    wanted, name = _tokens(query), _tokens(product_name)
+    distinctive = wanted - _KINDS - _GENERIC_WORDS or wanted & _GENERIC_WORDS
+    return (wanted & _KINDS) <= name and distinctive <= name and not name & _NOT_THE_INGREDIENT
 
 
-def _read_products(reader: RetailerReader, query: str, n: int) -> list[Product]:
-    products = []
+def _read_products(reader: RetailerReader, query: str, n: int) -> tuple[list[Product], list[ProductRef]]:
+    products, unread = [], []
     for ref in [ref for ref in reader.search(query) if _is_relevant(query, ref.name)][:n]:
         try:
             products.append(reader.read(ref))
         except ProductUnreadable:
-            continue
-    return products
+            unread.append(ref)
+    return products, unread
 
 
 def ground_truth(
-    ingredient_name: str, n: int = 5, *, readers: list[RetailerReader], cache: ProductCache | None = None
+    ingredient_name: str,
+    n: int = 5,
+    *,
+    readers: list[RetailerReader],
+    cache: ProductCache | None = None,
+    minimum_read: int = _MINIMUM_READ,
 ) -> IngredientVerdict:
     """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts.
 
-    Readers are tried in order; a blocked or empty one hands over to the next. Nothing is ever guessed.
-    A cache hit costs no browser requests; blocked and empty reads are never cached.
+    A result any retailer has cached answers first, with no browser request at all. Otherwise readers are tried in
+    order; a blocked or empty one hands over to the next. Fewer than `minimum_read` readable pages, or unread pages
+    that could change the answer, give 'insufficient'. Blocked, empty and partial reads are never cached.
     """
+    if cache:
+        for reader in readers:
+            cached = cache.get(reader.name, ingredient_name, n)
+            if cached:
+                return _verdict(ingredient_name, reader.name, cached, [], minimum_read)
     blocked = False
+    insufficient: IngredientVerdict | None = None
     for reader in readers:
-        products = cache.get(reader.name, ingredient_name, n) if cache else None
-        if products is None:
-            try:
-                products = _read_products(reader, ingredient_name, n)
-            except RetailerBlocked:
-                blocked = True
-                continue
-            if products and cache:
+        try:
+            products, unread = _read_products(reader, ingredient_name, n)
+        except RetailerBlocked:
+            blocked = True
+            continue
+        if not products and not unread:
+            continue
+        found = _verdict(ingredient_name, reader.name, products, unread, minimum_read)
+        if found.status == "resolved":
+            if cache and not unread:
                 cache.put(reader.name, ingredient_name, n, products)
-        if products:
-            return _verdict(ingredient_name, reader.name, products)
+            return found
+        insufficient = insufficient or found
+    if insufficient:
+        return insufficient
     return IngredientVerdict(ingredient=ingredient_name, status="blocked" if blocked else "not_found")
