@@ -353,7 +353,8 @@ MAINTAINER_LABELS: dict[str, dict[str, str]] = {
 
 
 _PROCESSED = re.compile(
-    r"\b(?:pastes?|sauces?|seasonings?|pesto|crisp|nduja|sambal|marinades?|masala|spice mix|curry powder)\b",
+    r"\b(?:pastes?|sauces?|seasonings?|pesto|crisp|nduja|sambal|marinades?|masala|spice mix|curry powder"
+    r"|chil(?:li|i) (?:oil|crisp|crunch))\b",
     re.IGNORECASE,
 )
 _NOT_A_PRODUCT = re.compile(r"\b(?:for the|to serve)\b", re.IGNORECASE)
@@ -369,7 +370,7 @@ def processed_ingredients(ingredient_names: list[str]) -> list[str]:
 
 
 _TREE_NUT_DERIVED = re.compile(r"\b(?:marzipan|praline|frangipane|nutella|gianduja|nougat|baklava)\b", re.IGNORECASE)
-_PEANUT_DERIVED = re.compile(r"\b(?:satay|chilli crisp)\b", re.IGNORECASE)
+_PEANUT_DERIVED = re.compile(r"\b(?:satay|chil(?:li|i) crisp)\b", re.IGNORECASE)
 _FREE_FROM = re.compile(r"\b(?:nut|peanut)[- ]free\b|\bfree from (?:nuts|peanuts)\b", re.IGNORECASE)
 
 
