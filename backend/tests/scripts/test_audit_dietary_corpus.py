@@ -395,3 +395,23 @@ def test_other_flags_never_consult_the_retailer() -> None:
         raise AssertionError(f"asked about {name}")
 
     assert audit.resolve_truth("vegan", "rec_x", ["Green Pesto"], _UNSURE, lookup=shelf) is None
+
+
+def test_the_retailer_section_lists_each_both_unsure_recipe_with_its_shelf_and_the_maintainers_label() -> None:
+    labelled = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+    recipes = {
+        labelled: audit.AuditRecipe(labelled, "Korma", ["Korma Curry Paste", "Rice"]),
+        "rec_y": audit.AuditRecipe("rec_y", "Pesto pasta", ["Green Pesto"]),
+        "rec_z": audit.AuditRecipe("rec_z", "Plain", ["Rice"]),
+    }
+    signals = {
+        labelled: _UNSURE,
+        "rec_y": _UNSURE,
+        "rec_z": audit.Signals(judges={"a": "fine", "b": "fine"}, regex=False, probability=0.0),
+    }
+
+    report = audit.render_retailer_section(recipes, signals, lookup=_PESTO_ONLY, policy=None)
+
+    assert "Korma (`" + labelled + "`): retailer fine; maintainer label exclude" in report
+    assert "Pesto pasta (`rec_y`): retailer breaks; maintainer label none" in report
+    assert "Plain" not in report

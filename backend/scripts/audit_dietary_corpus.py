@@ -4,14 +4,17 @@
 Three signals per (recipe, flag): two LLM judges from different vendors reading the full ingredient list
 through structured output, and the dietary regex #159 deleted (frozen in
 tests/fixtures/decisions/dietary_regex_terms.json). Where all three agree that is ground truth; the
-decision model's probabilities are then scored against it. All audit data lives in --data-dir, outside git:
+decision model's probabilities are then scored against it. Where the judges are both unsure or disagree on
+nut-free, the retailer's shelf (Ocado, then Sainsbury's: `--retailer-ground-truth`) is ground truth, ahead of the
+maintainer's labels. All audit data lives in --data-dir, outside git:
 the recipes are third-party content.
 
     aws s3 sync s3://<bucket>/corpus/ <data-dir>/corpus/ --exclude '*' --include '*.json'   # read-only
-    uv run python scripts/audit_dietary_corpus.py decisions --data-dir <data-dir>
-    uv run python scripts/audit_dietary_corpus.py judge --judge anthropic --data-dir <data-dir>
-    uv run python scripts/audit_dietary_corpus.py judge --judge openai --data-dir <data-dir>
-    uv run python scripts/audit_dietary_corpus.py report --data-dir <data-dir>
+    uv run python -m scripts.audit_dietary_corpus decisions --data-dir <data-dir>
+    uv run python -m scripts.audit_dietary_corpus judge --judge anthropic --data-dir <data-dir>
+    uv run python -m scripts.audit_dietary_corpus judge --judge openai --data-dir <data-dir>
+    uv run python -m scripts.audit_dietary_corpus report --data-dir <data-dir> --baseline-source <145 file>
+    uv run --group audit python -m scripts.audit_dietary_corpus report ... --retailer-ground-truth
 
 Needs OPENROUTER_API_KEY in the environment for `decisions` and `judge`.
 """
@@ -31,6 +34,16 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import SecretStr, ValidationError
+from scripts.grocery_ground_truth import (
+    ContainsPolicy,
+    Frequency,
+    IngredientVerdict,
+    OcadoReader,
+    ProductCache,
+    SainsburysReader,
+    is_unsafe,
+)
+from scripts.grocery_ground_truth import ground_truth as read_retailer_shelf
 
 from glean.decisions import DecisionClient, DecisionError, NoulQuestion
 from glean.meal_plan.dietary_decisions import (
@@ -44,8 +57,6 @@ from glean.meal_plan.dietary_decisions import (
 )
 from glean.recipes.stored import StoredRecipe
 
-from .grocery_ground_truth import ContainsPolicy, IngredientVerdict, is_unsafe
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -56,6 +67,7 @@ JUDGES: dict[str, tuple[str, dict[str, Any]]] = {
     "anthropic": ("anthropic/claude-sonnet-5.5", {"reasoning": {"effort": "low"}}),
     "openai": ("openai/gpt-6.1-sol", {"reasoning": {"effort": "low"}}),
 }
+DEFAULT_GROUND_TRUTH_CACHE = Path(__file__).parents[1] / ".cache" / "grocery_ground_truth"
 _TERMS_PATH = Path(__file__).parents[1] / "tests" / "fixtures" / "decisions" / "dietary_regex_terms.json"
 _VERDICTS = ("breaks", "fine", "unsure")
 
@@ -355,6 +367,34 @@ def resolve_truth(
     return ground_truth(list(found.judges.values()), found.regex)
 
 
+def render_retailer_section(
+    recipes: dict[str, AuditRecipe],
+    signals: dict[str, Signals],
+    *,
+    lookup: Callable[[str], IngredientVerdict],
+    policy: ContainsPolicy | None,
+) -> str:
+    """What the retailer's shelf says about each recipe the judges can't settle, next to the maintainer's label."""
+    lines = ["## nut-free: recipes the judges can't settle, resolved by the retailer's shelf"]
+    for recipe_id in sorted(signals):
+        if not _judges_unsettled(signals[recipe_id]):
+            continue
+        recipe = recipes[recipe_id]
+        truth = retailer_truth(recipe.ingredient_names, lookup, policy)
+        label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id, "none")
+        lines.append(f"- {recipe.title} (`{recipe_id}`): retailer {truth or 'unresolved'}; maintainer label {label}")
+        for name in processed_ingredients(recipe.ingredient_names):
+            shelf = lookup(name)
+            detail = (
+                f"{shelf.retailer}, {shelf.products_read} products, tree nut {shelf.tree_nut}, peanut {shelf.peanut}, "
+                f"may contain {shelf.may_contain}"
+                if shelf.status == "resolved"
+                else shelf.status
+            )
+            lines.append(f"  - {name}: {detail}")
+    return "\n".join(lines) + "\n"
+
+
 def judge_flagged_but_kept(signals: dict[str, Signals], *, threshold: float) -> list[str]:
     """Disagreement recipes where at least one judge says "breaks" but the decision stays below the threshold."""
     return sorted(
@@ -579,7 +619,12 @@ def _score(lines: list[str], title: str, labelled: list[tuple[str, str, float]],
 
 
 def run_report(
-    data_dir: Path, *, baseline_questions: dict[str, NoulQuestion], baseline_thresholds: tuple[float, float]
+    data_dir: Path,
+    *,
+    baseline_questions: dict[str, NoulQuestion],
+    baseline_thresholds: tuple[float, float],
+    lookup: Callable[[str], IngredientVerdict] | None = None,
+    policy: ContainsPolicy | None = None,
 ) -> None:
     """Score #161 (decision only) and #145 (regex or decision) against the agreed ground truth.
 
@@ -596,7 +641,7 @@ def run_report(
         }
         agreed, provisional = [], []
         for rid, found in signals[flag].items():
-            truth = resolve_truth(flag, rid, recipes[rid].ingredient_names, found)
+            truth = resolve_truth(flag, rid, recipes[rid].ingredient_names, found, lookup=lookup, policy=policy)
             if truth is not None:
                 agreed.append((rid, found, truth))
             consensus = next(iter(found.judges.values())) if len(set(found.judges.values())) == 1 else None
@@ -624,7 +669,12 @@ def run_report(
         labelled = [
             (rid, truth, _effective_probability(found, baseline=is_baseline))
             for rid, found in nut_signals.items()
-            if (truth := resolve_truth(NUT_FREE, rid, recipes[rid].ingredient_names, found)) is not None
+            if (
+                truth := resolve_truth(
+                    NUT_FREE, rid, recipes[rid].ingredient_names, found, lookup=lookup, policy=policy
+                )
+            )
+            is not None
         ]
         lines += [
             f"- {config} at {row.threshold}: FN {row.false_negatives} of {row.unsafe} unsafe, "
@@ -647,6 +697,8 @@ def run_report(
         f"- #161: {kept_161}",
         "",
     ]
+    if lookup is not None:
+        lines += render_retailer_section(recipes, nut_signals, lookup=lookup, policy=policy).splitlines()
     (data_dir / "report.md").write_text("\n".join(lines))
     (data_dir / f"{NUT_FREE}-both-unsure.md").write_text(
         render_disagreements(
@@ -689,6 +741,15 @@ def main(argv: list[str] | None = None) -> int:
         help="decisions: another revision of dietary_decisions.py (e.g. #145's) whose criteria to ask under, "
         "stored as decisions-145.json; report: its thresholds are read from here too.",
     )
+    parser.add_argument(
+        "--retailer-ground-truth",
+        action="store_true",
+        help="report: settle nut-free recipes the judges can't by reading Ocado (then Sainsbury's) product pages. "
+        "Needs the `audit` dependency group (uv run --group audit).",
+    )
+    parser.add_argument("--ground-truth-cache", type=Path, default=DEFAULT_GROUND_TRUTH_CACHE)
+    parser.add_argument("--contains-minimum", choices=[f.value for f in Frequency], default=Frequency.USUALLY.value)
+    parser.add_argument("--may-contain-counts", action="store_true", help="Count 'may contain' warnings as containing.")
     args = parser.parse_args(argv)
     baseline = load_questions(args.baseline_source) if args.baseline_source else None
     if args.command == "decisions":
@@ -704,7 +765,23 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if baseline is None:
             raise SystemExit("--baseline-source is required for the report")
-        run_report(args.data_dir, baseline_questions=baseline[0], baseline_thresholds=(baseline[1], baseline[2]))
+        thresholds = (baseline[1], baseline[2])
+        if not args.retailer_ground_truth:
+            run_report(args.data_dir, baseline_questions=baseline[0], baseline_thresholds=thresholds)
+            return 0
+        from scripts.grocery_ground_truth.browser import PlaywrightPageSource  # noqa: PLC0415  (needs the audit group)
+
+        policy = ContainsPolicy(minimum=Frequency(args.contains_minimum), may_contain_counts=args.may_contain_counts)
+        cache = ProductCache(args.ground_truth_cache)
+        with PlaywrightPageSource() as source:
+            readers = [OcadoReader(source), SainsburysReader(source)]
+            run_report(
+                args.data_dir,
+                baseline_questions=baseline[0],
+                baseline_thresholds=thresholds,
+                lookup=lambda name: read_retailer_shelf(name, 5, readers=readers, cache=cache),
+                policy=policy,
+            )
     return 0
 
 
