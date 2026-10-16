@@ -15,10 +15,13 @@ from grocery_fixtures import (
 )
 from scripts.grocery_ground_truth import (
     Frequency,
+    IngredientVerdict,
+    MayContainPolicy,
     OcadoReader,
     ProductCache,
     SainsburysReader,
     ground_truth,
+    is_unsafe,
 )
 
 if TYPE_CHECKING:
@@ -158,3 +161,39 @@ def test_a_blocked_read_is_not_cached_so_the_next_run_tries_again(tmp_path: Path
     verdict = ground_truth("korma paste", 3, readers=[OcadoReader(shop)], cache=ProductCache(tmp_path))
 
     assert verdict.status == "resolved"
+
+
+def _korma_like_verdict() -> IngredientVerdict:
+    """No product lists a nut, but 4 of 9 warn 'may contain nuts': the shape of the korma paste evidence."""
+    return IngredientVerdict(
+        ingredient="korma paste",
+        status="resolved",
+        retailer="ocado",
+        products_read=9,
+        may_contain_products=4,
+        tree_nut=Frequency.RARELY,
+        peanut=Frequency.RARELY,
+        may_contain=Frequency.SOMETIMES,
+    )
+
+
+def test_by_default_only_nuts_listed_as_ingredients_make_an_ingredient_unsafe() -> None:
+    assert is_unsafe(_korma_like_verdict()) is False
+    assert is_unsafe(_korma_like_verdict(), MayContainPolicy.INGREDIENTS_ONLY) is False
+
+
+def test_the_may_contain_policy_can_count_a_warning_as_unsafe() -> None:
+    assert is_unsafe(_korma_like_verdict(), MayContainPolicy.COUNTS_AS_UNSAFE) is True
+
+
+def test_an_ingredient_some_products_list_a_nut_or_peanut_in_is_unsafe_under_either_policy() -> None:
+    tree = _korma_like_verdict().model_copy(update={"tree_nut": Frequency.SOMETIMES})
+    peanut = _korma_like_verdict().model_copy(update={"peanut": Frequency.USUALLY})
+
+    assert [is_unsafe(v, policy) for v in (tree, peanut) for policy in MayContainPolicy] == [True] * 4
+
+
+def test_an_unresolved_ingredient_is_neither_safe_nor_unsafe() -> None:
+    blocked = IngredientVerdict(ingredient="korma paste", status="blocked")
+
+    assert [is_unsafe(blocked, policy) for policy in MayContainPolicy] == [None, None]
