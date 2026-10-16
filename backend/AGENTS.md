@@ -94,3 +94,11 @@ Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass a
 Allergen and diet ground truth for processed ingredients (curry pastes, seasonings, sauces) comes from the
 ingredient lists on the Tesco, Sainsbury's and Ocado online shops. A maintainer label overrides any LLM judge.
 Tree nuts and peanuts are separate concerns; the single `nut-free` flag stays on the safe side for both.
+
+Retailer ground truth is a dev-only helper, `scripts/grocery_ground_truth/` (Playwright lives in the `audit`
+dependency group and is never imported by `src/glean`). Run it with
+`uv run --group audit python -m scripts.grocery_ground_truth "korma curry paste" --n 5`; the audit's
+`report --retailer-ground-truth` uses it where the judges are both unsure or disagree. Only listed ingredients
+count by default, never "may contain"; a type of ingredient contains an allergen when most products read list it.
+Both are `ContainsPolicy` settings. Reads are throttled (one every 2.5 s), cached under `.cache/`, and a block
+page is reported as blocked, never worked around.
