@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING
 
 import httpx
 import pytest
+from grocery_fixtures import FakePageSource, ocado_product, ocado_search
 from pydantic import SecretStr
 from scripts import audit_dietary_corpus as audit
-from scripts.grocery_ground_truth import ContainsPolicy, Frequency, IngredientVerdict
+from scripts.grocery_ground_truth import ContainsPolicy, Frequency, IngredientVerdict, OcadoReader, retailer_lookup
 
 from glean.decisions import DECISION_MODEL, DecisionClient
 from glean.meal_plan.dietary_decisions import dietary_questions
@@ -452,3 +453,24 @@ def test_a_recipe_is_fine_only_when_every_processed_ingredient_is_settled_safe()
     names = ["Green Pesto", "Korma Paste", "Rice"]
 
     assert audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=shelf) is None
+
+
+def test_the_audits_retailer_lookup_carries_the_selected_policy_so_incomplete_samples_stay_unknown() -> None:
+    brands = ["Acme", "Bravo", "Corner", "Delta", "Echo"]
+    pages = {
+        f"https://www.ocado.com/products/p{i}/{i}": ocado_product(
+            f"{b} Korma Paste", None if i == 4 else "Water, Spices"
+        )
+        for i, b in enumerate(brands)
+    }
+    pages["https://www.ocado.com/search?q=Korma%20Paste"] = ocado_search(
+        *((f"{b} Korma Paste", f"/products/p{i}/{i}") for i, b in enumerate(brands))
+    )
+    names = ["Korma Paste", "Rice"]
+
+    def truth(policy: ContainsPolicy | None) -> str | None:
+        lookup = retailer_lookup([OcadoReader(FakePageSource(pages))], policy=policy)
+        return audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=lookup, policy=policy)
+
+    assert truth(None) == "fine"
+    assert truth(ContainsPolicy(minimum=Frequency.SOMETIMES)) is None
