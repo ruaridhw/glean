@@ -1,13 +1,15 @@
 """Per-user limit on the paid-model routes, observed through the HTTP API.
 
 The real routes and domain code run. Only the external boundaries are stubbed: the LLM router,
-AWS (S3, Textract), outbound HTTP and DNS, and the recipe store (a local filesystem tree).
+the decisions endpoint, AWS (S3, Textract), outbound HTTP and DNS, and the recipe and shopping-parse
+stores (local filesystem trees).
 """
 
 from __future__ import annotations
 
 import json
 import socket
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,13 +20,15 @@ import httpx
 import pytest
 from fastapi import Request  # noqa: TC002 - FastAPI resolves this annotation at runtime.
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from glean.config import Settings, get_settings
-from glean.dependencies import get_llm_router, verify_cognito_token
+from glean.decisions import DecisionClient
+from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
 from glean.main import app
 from glean.meal_plan.schemas import MealPlanResponse
 from glean.receipts.schemas import ScanResponse
-from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipe_api.blob_store import FilesystemBlobStore, get_shopping_parse_store
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
 from glean.shopping.schemas import ShoppingParseResponse
@@ -50,6 +54,9 @@ class FakeLLMRouter:
 
     def invoke(self, feature: object, schema: type, *_: object, **__: object) -> Any:
         return self._EMPTY_RESPONSES[schema]
+
+    def model_id_for(self, feature: object, **_: object) -> str:
+        return "fake/model"
 
 
 class _StaticPage:
@@ -179,9 +186,28 @@ def _sign_in_as_header_user(request: Request) -> str:
     return request.headers.get("x-test-user", "user-a")
 
 
+def _canned_decisions(request: httpx.Request) -> httpx.Response:
+    """The decisions endpoint, answering every asked question with a low probability."""
+    names = json.loads(request.content)["questions"]
+    return httpx.Response(
+        200,
+        json={
+            "id": "gen-dec-rate-limit",
+            "model": "typesafe/jev-1.14-20261014",
+            "provider": "TypeSafe",
+            "answers": {name: {"type": "noul", "noul": 0.1} for name in names},
+            "usage": {"input_tokens": 1, "output_tokens": 1, "cost": 0.0},
+        },
+    )
+
+
 def _client(settings: Settings, *, signed_in: bool = True) -> TestClient:
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_llm_router] = FakeLLMRouter
+    decisions = DecisionClient(api_key=SecretStr("test"), transport=httpx.MockTransport(_canned_decisions))
+    app.dependency_overrides[get_decision_client] = lambda: decisions
+    parse_cache = FilesystemBlobStore(Path(tempfile.mkdtemp(prefix="rate-limit-parse-cache-")))
+    app.dependency_overrides[get_shopping_parse_store] = lambda: parse_cache
     if signed_in:
         app.dependency_overrides[verify_cognito_token] = _sign_in_as_header_user
     return TestClient(app)
