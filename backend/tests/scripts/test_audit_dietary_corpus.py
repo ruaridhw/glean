@@ -250,21 +250,6 @@ def test_decision_scoring_asks_again_when_a_recipe_changes(tmp_path: Path) -> No
     assert api.requests == 3
 
 
-@pytest.mark.parametrize(
-    ("ingredients", "unsafe"),
-    [
-        (["Korma Curry Paste", "Onion"], True),
-        (["Pasanda Style Seasoning"], False),
-        (["Tikka Masala Seasoning"], True),
-        (["Nut-Free Korma Paste"], False),
-        (["Chicken Breast", "Onion"], False),
-        (["Tikka Masala Sauce"], False),
-    ],
-)
-def test_the_maintainers_paste_policy_marks_korma_and_tikka_masala_pastes_unsafe(ingredients, unsafe) -> None:
-    assert audit.violates_paste_policy(ingredients) is unsafe
-
-
 def test_disagreements_count_recipes_a_judge_says_contain_nuts_that_the_decision_keeps() -> None:
     signals = {
         "r1": audit.Signals(judges={"a": "breaks", "b": "fine"}, regex=False, probability=0.05),
@@ -276,33 +261,26 @@ def test_disagreements_count_recipes_a_judge_says_contain_nuts_that_the_decision
     assert audit.judge_flagged_but_kept(signals, threshold=0.12) == ["r1"]
 
 
-def test_a_maintainer_label_overrides_the_judges_the_regex_and_the_paste_policy() -> None:
+def test_a_maintainer_label_overrides_the_judges_and_the_regex() -> None:
     both_judges_say_breaks = audit.Signals(judges={"a": "breaks", "b": "breaks"}, regex=True, probability=0.9)
-    fine_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "fine")
-    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+    labelled = next(iter(audit.MAINTAINER_NUT_FREE_LABELS))
 
-    assert audit.resolve_truth("nut-free", fine_label, ["Korma Paste"], both_judges_say_breaks) == "fine"
-    assert (
-        audit.resolve_truth("nut-free", exclude_label, ["Rice"], audit.Signals({"a": "fine"}, False, 0.0)) == "breaks"
-    )
+    assert audit.resolve_truth("nut-free", labelled, ["Rice"], both_judges_say_breaks) == "fine"
+    assert audit.resolve_truth("nut-free", "rec_unlabelled", ["Rice"], both_judges_say_breaks) == "breaks"
 
 
-def test_the_maintainers_seventeen_labels_cover_two_excludes_and_fifteen_fines() -> None:
-    labels = list(audit.MAINTAINER_NUT_FREE_LABELS.values())
+def test_the_maintainers_seventeen_labels_are_all_fine_after_the_korma_and_tikka_correction() -> None:
+    assert list(audit.MAINTAINER_NUT_FREE_LABELS.values()) == ["fine"] * 17
+    assert {"rec_9549ace7527cd5ff", "rec_96e4c5716655075c"} <= set(audit.MAINTAINER_NUT_FREE_LABELS)
 
-    assert (len(labels), labels.count("exclude"), labels.count("fine")) == (17, 2, 15)
 
-
-def test_without_a_label_the_paste_policy_then_the_three_signals_decide_truth() -> None:
+def test_without_a_label_the_three_signals_decide_truth_and_curry_pastes_get_no_special_treatment() -> None:
     judges_fine = audit.Signals(judges={"a": "fine", "b": "fine"}, regex=False, probability=0.0)
+    unsure = audit.Signals({"a": "fine", "b": "unsure"}, False, 0)
 
-    assert audit.resolve_truth("nut-free", "rec_x", ["Patak's Korma Paste"], judges_fine) == "breaks"
-    assert audit.resolve_truth("nut-free", "rec_x", ["Rice"], judges_fine) == "fine"
-    assert audit.resolve_truth("vegan", "rec_x", ["Korma Paste"], judges_fine) == "fine"
-    assert (
-        audit.resolve_truth("nut-free", "rec_x", ["Rice"], audit.Signals({"a": "fine", "b": "unsure"}, False, 0))
-        is None
-    )
+    assert audit.resolve_truth("nut-free", "rec_x", ["Patak's Korma Paste"], judges_fine) == "fine"
+    assert audit.resolve_truth("nut-free", "rec_x", ["Tikka Masala Paste"], judges_fine) == "fine"
+    assert audit.resolve_truth("nut-free", "rec_x", ["Rice"], unsure) is None
 
 
 def test_the_threshold_table_reports_errors_and_the_extreme_scores() -> None:

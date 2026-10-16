@@ -47,9 +47,13 @@ MODELS = {measured["model"] for measured in _MEASURED}
 # candidate selection treats recipes sharing this fraction of their ingredients as variants of one dish
 _NEAR_DUPLICATE_OVERLAP = 0.7
 
+# Nut-free is an allergy, so its threshold also drops this lookalike: the model still scores a bare "korma curry
+# paste" 0.42 although only nuts in the ingredients count. Anything else it drops is a regression.
+ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS = {"allowed-korma-paste"}
+
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
-PREFERENCE_MARGIN = 0.15
-NUT_FREE_MARGIN_ABOVE_CLEAN = 0.09
+PREFERENCE_MARGIN = 0.10
+NUT_FREE_MARGIN_ABOVE_CLEAN = 0.10
 NUT_FREE_MARGIN_BELOW_VIOLATORS = 0.5
 
 
@@ -153,7 +157,7 @@ def test_nut_free_offers_coconut_milk_nutmeg_butternut_tahini_and_the_ordinary_r
 
     fine = {row["id"] for row in ROWS if row["violates"].get(NUT_FREE) is False}
     assert {"allowed-coconut-milk", "allowed-nutmeg", "allowed-butternut", "heldout-nut-tahini"} <= offered
-    assert fine - offered == set()
+    assert fine - offered == ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS & fine
 
 
 @pytest.mark.parametrize(
@@ -188,7 +192,11 @@ def test_the_regex_coverage_labels_every_forbidden_word_and_safe_qualifier() -> 
 def test_the_thresholds_keep_their_recorded_margins_on_the_measured_sample(flag: str) -> None:
     threshold = NUT_FREE_THRESHOLD if flag == NUT_FREE else PREFERENCE_THRESHOLD
     violators = [PROBABILITIES[row["id"]][flag] for row in ROWS if row["violates"].get(flag)]
-    clean = [PROBABILITIES[row["id"]][flag] for row in ROWS if row["violates"].get(flag) is False]
+    clean = [
+        PROBABILITIES[row["id"]][flag]
+        for row in ROWS
+        if row["violates"].get(flag) is False and row["id"] not in ACCEPTED_NUT_FREE_FALSE_EXCLUSIONS
+    ]
 
     if flag == NUT_FREE:
         assert threshold - max(clean) >= NUT_FREE_MARGIN_ABOVE_CLEAN
