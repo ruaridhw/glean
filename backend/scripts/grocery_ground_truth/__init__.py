@@ -12,13 +12,14 @@ from .retailers import (
     RetailerReader,
     SainsburysReader,
 )
-from .verdict import Evidence, Frequency, IngredientVerdict, ground_truth
+from .verdict import Evidence, Frequency, IngredientVerdict, MayContainPolicy, ground_truth, is_unsafe
 
 __all__ = [
     "AllergenFacts",
     "Evidence",
     "Frequency",
     "IngredientVerdict",
+    "MayContainPolicy",
     "OcadoReader",
     "Page",
     "PageSource",
@@ -31,4 +32,5 @@ __all__ = [
     "SainsburysReader",
     "classify",
     "ground_truth",
+    "is_unsafe",
 ]

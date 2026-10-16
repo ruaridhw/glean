@@ -23,6 +23,13 @@ class Frequency(StrEnum):
     RARELY = "rarely"
 
 
+class MayContainPolicy(StrEnum):
+    """How a 'may contain' warning maps to unsafe. A policy setting, not a fact about the products."""
+
+    INGREDIENTS_ONLY = "ingredients-only"
+    COUNTS_AS_UNSAFE = "counts"
+
+
 class Evidence(BaseModel):
     kind: Literal["ingredient", "may_contain"] = Field(description="Whether the quote is an ingredient or a warning.")
     url: str = Field(description="The product page the quote was read from.")
@@ -54,6 +61,16 @@ def frequency(count: int, total: int) -> Frequency:
     if count == 0:
         return Frequency.RARELY
     return Frequency.USUALLY if count * 2 > total else Frequency.SOMETIMES
+
+
+def is_unsafe(verdict: IngredientVerdict, policy: MayContainPolicy = MayContainPolicy.INGREDIENTS_ONLY) -> bool | None:
+    """Whether a nut-free recipe is broken by this ingredient; None when the shelf couldn't be read."""
+    if verdict.status != "resolved":
+        return None
+    listed = (verdict.tree_nut, verdict.peanut)
+    if policy is MayContainPolicy.COUNTS_AS_UNSAFE:
+        listed = (*listed, verdict.may_contain)
+    return any(found in (Frequency.USUALLY, Frequency.SOMETIMES) for found in listed)
 
 
 def _verdict(ingredient: str, retailer: str, products: list[Product]) -> IngredientVerdict:
