@@ -106,4 +106,28 @@ void main() {
       expect(logged, isNot(contains('live-access-token')));
     },
   );
+
+  test(
+    'a rate-limited request is logged with the endpoint and HTTP 429, never the token or the body',
+    () async {
+      final GleanApiClient client = clientReturning(
+        http.Response(
+          jsonEncode(<String, Object?>{
+            'detail': 'limit reached for live-access-token-9f8e7d',
+          }),
+          429,
+        ),
+      );
+
+      await expectLater(
+        client.getRecipe('r1'),
+        throwsA(isA<ApiRateLimitException>()),
+      );
+
+      final String logged = logFile.readAll();
+      expect(logged, contains('/recipes/r1'));
+      expect(logged, contains('HTTP 429'));
+      expect(logged, isNot(contains('live-access-token')));
+    },
+  );
 }

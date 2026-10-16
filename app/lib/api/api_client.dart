@@ -248,6 +248,8 @@ class GleanApiClient {
       ApiServerException(
         :final statusCode,
       ) => '${uri.path} failed with HTTP $statusCode',
+      ApiRateLimitException() =>
+        '${uri.path} hit the hourly AI request limit (HTTP 429)',
       ApiValidationException() => '${uri.path} rejected the request (HTTP 422)',
       ApiTimeoutException() => '${uri.path} timed out',
       ApiNetworkException() => '${uri.path} could not reach the server',
