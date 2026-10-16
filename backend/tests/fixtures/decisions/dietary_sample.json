@@ -793,7 +793,7 @@
    }
   },
   {
-   "id": "policy-nut-korma-paste",
+   "id": "allowed-korma-paste",
    "title": "Korma Curry Paste rice bowl",
    "ingredients": [
     "basmati rice",
@@ -802,11 +802,11 @@
     "korma curry paste"
    ],
    "violates": {
-    "nut-free": true
+    "nut-free": false
    }
   },
   {
-   "id": "policy-nut-tikka-masala-paste",
+   "id": "allowed-tikka-masala-seasoning",
    "title": "Tikka Masala Seasoning rice bowl",
    "ingredients": [
     "basmati rice",
@@ -815,11 +815,11 @@
     "tikka masala seasoning"
    ],
    "violates": {
-    "nut-free": true
+    "nut-free": false
    }
   },
   {
-   "id": "policy-nut-free-korma-paste",
+   "id": "allowed-nut-free-korma-paste",
    "title": "Nut-Free Korma Curry Paste rice bowl",
    "ingredients": [
     "basmati rice",

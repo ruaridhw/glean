@@ -269,20 +269,9 @@ def render_disagreements(
     return header + "\n".join(rows)
 
 
-_PASTE_POLICY = re.compile(r"\b(?:korma|tikka masala)\b.*\b(?:paste|seasoning|spice|mix|powder)s?\b", re.IGNORECASE)
-
-
-def violates_paste_policy(ingredient_names: list[str]) -> bool:
-    """The maintainer's nut-free policy: korma and tikka masala pastes and seasonings contain nuts
-    unless labelled nut-free."""
-    return any(
-        _PASTE_POLICY.search(name) and not re.search(r"nut[- ]free", name, re.IGNORECASE) for name in ingredient_names
-    )
-
-
 # The maintainer's labels of the nut-free recipes both judges were unsure about (2026-10-16). They override
-# every other signal. Tree nuts and peanuts are separate concerns: the chilli crisp recipe is fine for a tree-nut
-# allergy though #161's single flag stays on the safe side for peanuts.
+# every other signal; "may contain" warnings never count. Tree nuts and peanuts are separate concerns: the
+# chilli crisp recipe is fine for a tree-nut allergy though #161's single flag stays on the safe side for peanuts.
 MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
     **dict.fromkeys(
         (
@@ -304,19 +293,19 @@ MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
         ),
         "fine",
     ),
-    "rec_9549ace7527cd5ff": "exclude",  # tikka masala paste
-    "rec_96e4c5716655075c": "exclude",  # korma curry paste
+    # Tikka masala paste and korma curry paste were first labelled exclude and corrected to fine on 2026-10-16
+    # ("only nuts in the ingredients count"; supermarket lists show a tree nut in 0 of 9 korma, 1 of 7 tikka pastes).
+    "rec_9549ace7527cd5ff": "fine",
+    "rec_96e4c5716655075c": "fine",
 }
 
 
 def resolve_truth(flag: str, recipe_id: str, ingredient_names: list[str], found: Signals) -> str | None:
-    """ "breaks", "fine" or None (unresolved): a maintainer label, else the paste policy, else the three signals."""
+    """ "breaks", "fine" or None (unresolved): a maintainer label, else the three signals agreeing."""
     if flag == NUT_FREE:
         label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id)
         if label is not None:
             return "breaks" if label == "exclude" else "fine"
-        if violates_paste_policy(ingredient_names):
-            return "breaks"
     return ground_truth(list(found.judges.values()), found.regex)
 
 
@@ -581,7 +570,7 @@ def run_report(
                 _score(lines, f"{set_name}, {config}", labelled, thresholds[config])
         lines.append("")
     nut_signals = signals[NUT_FREE]
-    lines += ["## nut-free threshold table (ground truth: maintainer labels, paste policy, then agreed signals)"]
+    lines += ["## nut-free threshold table (ground truth: maintainer labels, then agreed signals)"]
     for config, is_baseline, thresholds in (
         ("#161", False, sorted({0.12, 0.2, NUT_FREE_THRESHOLD, 0.4, 0.5})),
         ("#145", True, [baseline_thresholds[0]]),
