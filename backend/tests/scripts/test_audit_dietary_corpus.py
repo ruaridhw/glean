@@ -10,6 +10,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 from scripts import audit_dietary_corpus as audit
+from scripts.grocery_ground_truth import ContainsPolicy, Frequency, IngredientVerdict
 
 from glean.decisions import DECISION_MODEL, DecisionClient
 from glean.meal_plan.dietary_decisions import dietary_questions
@@ -293,3 +294,104 @@ def test_the_threshold_table_reports_errors_and_the_extreme_scores() -> None:
         (0.5, 1, 1, 2, 2),
     ]
     assert (rows[0].lowest_unsafe, rows[0].highest_safe) == (0.3, 0.7)
+
+
+def _shelf(*, tree_nut=Frequency.RARELY, peanut=Frequency.RARELY, may_contain=Frequency.RARELY) -> IngredientVerdict:
+    return IngredientVerdict(
+        ingredient="x", status="resolved", retailer="ocado", products_read=7,
+        tree_nut=tree_nut, peanut=peanut, may_contain=may_contain,
+    )  # fmt: skip
+
+
+_UNSURE = audit.Signals(judges={"a": "unsure", "b": "unsure"}, regex=False, probability=0.3)
+_PESTO_ONLY = lambda name: _shelf(tree_nut=Frequency.USUALLY) if "pesto" in name.casefold() else _shelf()  # noqa: E731
+
+
+def test_a_retailer_verdict_settles_a_recipe_both_judges_are_unsure_about() -> None:
+    def resolve(names: list[str]) -> str | None:
+        return audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=_PESTO_ONLY)
+
+    assert resolve(["Green Pesto", "Pasta"]) == "breaks"
+    assert resolve(["Thai Green Curry Paste", "Rice"]) == "fine"
+
+
+def test_a_retailer_verdict_settles_a_recipe_the_judges_disagree_about() -> None:
+    disagree = audit.Signals(judges={"a": "breaks", "b": "fine"}, regex=False, probability=0.3)
+
+    assert audit.resolve_truth("nut-free", "rec_x", ["Green Pesto"], disagree, lookup=lambda _: _shelf()) == "fine"
+
+
+def test_the_retailer_outranks_a_maintainer_label_where_it_gives_a_definite_answer() -> None:
+    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+
+    truth = audit.resolve_truth("nut-free", exclude_label, ["Korma Curry Paste"], _UNSURE, lookup=lambda _: _shelf())
+
+    assert truth == "fine"
+
+
+def test_the_maintainer_label_decides_where_the_retailer_cannot() -> None:
+    blocked = lambda name: IngredientVerdict(ingredient=name, status="blocked")  # noqa: E731
+    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+
+    assert audit.resolve_truth("nut-free", exclude_label, ["Korma Curry Paste"], _UNSURE, lookup=blocked) == "breaks"
+
+
+def test_the_retailer_is_not_asked_when_the_judges_agree() -> None:
+    asked: list[str] = []
+
+    def shelf(name: str) -> IngredientVerdict:
+        asked.append(name)
+        return _shelf(tree_nut=Frequency.USUALLY)
+
+    agree = audit.Signals(judges={"a": "fine", "b": "fine"}, regex=False, probability=0.0)
+
+    assert audit.resolve_truth("nut-free", "rec_x", ["Green Pesto"], agree, lookup=shelf) == "fine"
+    assert asked == []
+
+
+def test_an_unresolved_processed_ingredient_stays_unknown_and_never_silently_safe() -> None:
+    blocked = lambda name: IngredientVerdict(ingredient=name, status="blocked")  # noqa: E731
+
+    assert audit.resolve_truth("nut-free", "rec_x", ["Green Pesto", "Rice"], _UNSURE, lookup=blocked) is None
+
+
+def test_one_unsafe_ingredient_breaks_the_recipe_even_when_another_could_not_be_read() -> None:
+    def shelf(name: str) -> IngredientVerdict:
+        if "pesto" in name.casefold():
+            return _shelf(tree_nut=Frequency.USUALLY)
+        return IngredientVerdict(ingredient=name, status="not_found")
+
+    assert audit.resolve_truth("nut-free", "rec_x", ["Green Pesto", "Satay Sauce"], _UNSURE, lookup=shelf) == "breaks"
+
+
+def test_a_name_that_is_not_a_processed_ingredient_is_not_looked_up() -> None:
+    asked: list[str] = []
+
+    def shelf(name: str) -> IngredientVerdict:
+        asked.append(name)
+        return _shelf()
+
+    names = ["Rice", "Milliliter(s) Water for the Sauce"]
+
+    assert audit.resolve_truth("nut-free", "rec_x", names, _UNSURE, lookup=shelf) is None
+    assert asked == []
+
+
+def test_the_contains_policy_changes_what_a_retailer_verdict_means_for_a_recipe() -> None:
+    sometimes = lambda _: _shelf(tree_nut=Frequency.SOMETIMES, may_contain=Frequency.USUALLY)  # noqa: E731
+
+    def truth(policy: ContainsPolicy | None) -> str | None:
+        return audit.resolve_truth(
+            "nut-free", "rec_x", ["Tikka Masala Paste"], _UNSURE, lookup=sometimes, policy=policy
+        )
+
+    assert truth(None) == "fine"
+    assert truth(ContainsPolicy(minimum=Frequency.SOMETIMES)) == "breaks"
+    assert truth(ContainsPolicy(may_contain_counts=True)) == "breaks"
+
+
+def test_other_flags_never_consult_the_retailer() -> None:
+    def shelf(name: str) -> IngredientVerdict:
+        raise AssertionError(f"asked about {name}")
+
+    assert audit.resolve_truth("vegan", "rec_x", ["Green Pesto"], _UNSURE, lookup=shelf) is None

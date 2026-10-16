@@ -44,6 +44,8 @@ from glean.meal_plan.dietary_decisions import (
 )
 from glean.recipes.stored import StoredRecipe
 
+from .grocery_ground_truth import ContainsPolicy, IngredientVerdict, is_unsafe
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -300,9 +302,53 @@ MAINTAINER_NUT_FREE_LABELS: dict[str, str] = {
 }
 
 
-def resolve_truth(flag: str, recipe_id: str, ingredient_names: list[str], found: Signals) -> str | None:
-    """ "breaks", "fine" or None (unresolved): a maintainer label, else the three signals agreeing."""
+_PROCESSED = re.compile(
+    r"\b(?:pastes?|sauces?|seasonings?|pesto|crisp|nduja|sambal|marinades?|masala|spice mix|curry powder)\b",
+    re.IGNORECASE,
+)
+_NOT_A_PRODUCT = re.compile(r"\b(?:for the|to serve)\b", re.IGNORECASE)
+
+
+def processed_ingredients(ingredient_names: list[str]) -> list[str]:
+    """The names a retailer's shelf can answer for: pastes, sauces, seasonings and the like, as products
+    ("Milliliter(s) Water for the Sauce" is a quantity of something else)."""
+    cleaned = (
+        re.sub(r"^milliliters?\(s\)\s+|\s*\(.*?\)", "", name, flags=re.IGNORECASE).strip() for name in ingredient_names
+    )
+    return [name for name in cleaned if _PROCESSED.search(name) and not _NOT_A_PRODUCT.search(name)]
+
+
+def retailer_truth(
+    ingredient_names: list[str], lookup: Callable[[str], IngredientVerdict], policy: ContainsPolicy | None
+) -> str | None:
+    """ "breaks" when any processed ingredient contains a nut or peanut on the shelf, "fine" when every one is read
+    and doesn't, else None: an ingredient that couldn't be read is never assumed safe."""
+    unsafe = [is_unsafe(lookup(name), policy) for name in processed_ingredients(ingredient_names)]
+    if any(unsafe):
+        return "breaks"
+    return "fine" if unsafe and all(found is False for found in unsafe) else None
+
+
+def _judges_unsettled(found: Signals) -> bool:
+    return set(found.judges.values()) == {"unsure"} or len(set(found.judges.values())) > 1
+
+
+def resolve_truth(
+    flag: str,
+    recipe_id: str,
+    ingredient_names: list[str],
+    found: Signals,
+    *,
+    lookup: Callable[[str], IngredientVerdict] | None = None,
+    policy: ContainsPolicy | None = None,
+) -> str | None:
+    """ "breaks", "fine" or None (unresolved). The retailer's shelf is ground truth, asked only where the judges are
+    both unsure or disagree; where it can't settle the recipe a maintainer label decides, else the three signals."""
     if flag == NUT_FREE:
+        if lookup is not None and _judges_unsettled(found):
+            shelf = retailer_truth(ingredient_names, lookup, policy)
+            if shelf is not None:
+                return shelf
         label = MAINTAINER_NUT_FREE_LABELS.get(recipe_id)
         if label is not None:
             return "breaks" if label == "exclude" else "fine"
