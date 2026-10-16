@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from judge_study.results import OutputItem
+    from judge_study.results import Attempt, OutputItem, Results
 
 LEVELS = 5
 
@@ -151,6 +151,8 @@ def drift(items: list[OutputItem], judge: Literal["llm", "decision"]) -> Drift:
 
 @dataclass(frozen=True)
 class CostSummary:
+    """`total` is a known subtotal; `mean` covers only judgements whose every attempt was priced."""
+
     judgements: int
     total: float
     mean: float | None
@@ -159,12 +161,38 @@ class CostSummary:
 
 def cost_summary(items: list[OutputItem], judge: Literal["llm", "decision"]) -> CostSummary:
     judgements = [j for item in items for j in item.judgements if j.judge == judge]
-    costs = [j.cost_usd for j in judgements if j.cost_usd is not None]
+    complete = [j.cost_usd for j in judgements if j.cost_usd is not None and j.unpriced_attempts == 0]
     return CostSummary(
         judgements=len(judgements),
-        total=sum(costs),
-        mean=sum(costs) / len(costs) if costs else None,
-        unreported=len(judgements) - len(costs),
+        total=sum(j.cost_usd for j in judgements if j.cost_usd is not None),
+        mean=sum(complete) / len(complete) if complete else None,
+        unreported=len(judgements) - len(complete),
+    )
+
+
+@dataclass(frozen=True)
+class Spend:
+    """What was spent: the cost that is known, and how many calls could not be priced."""
+
+    known: float
+    unpriced_calls: int
+
+
+def spend_of(attempts: list[Attempt]) -> Spend:
+    return Spend(
+        known=sum(a.cost_usd for a in attempts if a.cost_usd is not None),
+        unpriced_calls=sum(a.cost_usd is None for a in attempts),
+    )
+
+
+def study_spend(results: Results) -> Spend:
+    """Every logged call once, plus legacy judgements that have no ledger entries, so nothing is counted twice."""
+    logged = {(a.judge, a.item_id, a.repeat) for a in results.attempts}
+    ledger = spend_of(results.attempts)
+    legacy = [j for item in results.items for j in item.judgements if (j.judge, item.item_id, j.repeat) not in logged]
+    return Spend(
+        known=ledger.known + sum(j.cost_usd for j in legacy if j.cost_usd is not None),
+        unpriced_calls=ledger.unpriced_calls + sum(j.cost_usd is None for j in legacy),
     )
 
 

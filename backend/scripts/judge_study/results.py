@@ -44,11 +44,17 @@ class Judgement(BaseModel):
     cost_usd: float | None = Field(
         default=None,
         description=(
-            "Total over every attempt at this judgement, failed ones included. See `cost_basis` for whether it is "
-            "reported or estimated. None when no attempt could be priced."
+            "Known cost over every attempt at this judgement, earlier runs' and failed ones included. See `cost_basis` "
+            "for whether it is reported or estimated, and `unpriced_attempts` for how many calls it leaves out. "
+            "None when no attempt could be priced."
         ),
     )
     cost_basis: CostBasis | None = COST_BASIS_FIELD
+    unpriced_attempts: int = Field(
+        default=0,
+        ge=0,
+        description="Attempts at this judgement whose cost is unknown. When above 0, `cost_usd` is only a lower bound.",
+    )
     attempts: int = Field(default=1, ge=1, description="Calls it took to obtain this judgement; failed calls are paid.")
     weighted_score: float | None = Field(
         default=None, description="Decision judge only: probability-weighted position on the 1-5 scale."
