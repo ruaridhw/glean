@@ -31,29 +31,6 @@ sam deploy \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset
 
-echo "==> Storing runtime secrets in Secrets Manager..."
-echo "  Enter your Anthropic API key (sk-ant-...):"
-read -rs ANTHROPIC_KEY
-aws secretsmanager create-secret \
-  --name "glean/prod/anthropic-api-key" \
-  --secret-string "$ANTHROPIC_KEY" \
-  --region "$REGION" 2>/dev/null || \
-aws secretsmanager put-secret-value \
-  --secret-id "glean/prod/anthropic-api-key" \
-  --secret-string "$ANTHROPIC_KEY" \
-  --region "$REGION"
-
-echo "  Enter your Recipe API key (rapi_...):"
-read -rs RECIPE_KEY
-aws secretsmanager create-secret \
-  --name "glean/prod/recipe-api-key" \
-  --secret-string "$RECIPE_KEY" \
-  --region "$REGION" 2>/dev/null || \
-aws secretsmanager put-secret-value \
-  --secret-id "glean/prod/recipe-api-key" \
-  --secret-string "$RECIPE_KEY" \
-  --region "$REGION"
-
 echo ""
 echo "==> Stack outputs (paste these into GitHub):"
 aws cloudformation describe-stacks \
