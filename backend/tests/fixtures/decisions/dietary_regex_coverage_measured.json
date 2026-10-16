@@ -15,7 +15,7 @@
    "vegan": 0.99,
    "dairy-free": 0.08,
    "gluten-free": 0.17,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-pork": {
@@ -39,7 +39,7 @@
    "vegan": 0.97,
    "dairy-free": 0.1,
    "gluten-free": 0.13,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-meat": {
@@ -47,7 +47,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.15,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-meatball": {
@@ -63,7 +63,7 @@
    "vegan": 0.99,
    "dairy-free": 0.09,
    "gluten-free": 0.16,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-bacon": {
@@ -79,7 +79,7 @@
    "vegan": 0.98,
    "dairy-free": 0.12,
    "gluten-free": 0.24,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-chorizo": {
@@ -95,7 +95,7 @@
    "vegan": 0.96,
    "dairy-free": 0.12,
    "gluten-free": 0.17,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-ham": {
@@ -103,7 +103,7 @@
    "vegan": 0.98,
    "dairy-free": 0.1,
    "gluten-free": 0.33,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-salami": {
@@ -111,7 +111,7 @@
    "vegan": 0.98,
    "dairy-free": 0.14,
    "gluten-free": 0.38,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-pancetta": {
@@ -119,7 +119,7 @@
    "vegan": 0.99,
    "dairy-free": 0.12,
    "gluten-free": 0.14,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-prosciutto": {
@@ -127,7 +127,7 @@
    "vegan": 0.98,
    "dairy-free": 0.12,
    "gluten-free": 0.16,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-sausage": {
@@ -135,7 +135,7 @@
    "vegan": 0.98,
    "dairy-free": 0.15,
    "gluten-free": 0.46,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-turkey": {
@@ -151,7 +151,7 @@
    "vegan": 0.99,
    "dairy-free": 0.09,
    "gluten-free": 0.11,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-venison": {
@@ -167,7 +167,7 @@
    "vegan": 0.95,
    "dairy-free": 0.1,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-lard": {
@@ -175,7 +175,7 @@
    "vegan": 0.97,
    "dairy-free": 0.1,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-suet": {
@@ -207,7 +207,7 @@
    "vegan": 0.98,
    "dairy-free": 0.1,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.05
   },
   "regex-forbidden-meat-and-fish-haddock": {
@@ -231,7 +231,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.11,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-mackerel": {
@@ -263,7 +263,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-shrimp": {
@@ -271,7 +271,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-crab": {
@@ -295,7 +295,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.11,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-pollock": {
@@ -311,7 +311,7 @@
    "vegan": 0.98,
    "dairy-free": 0.1,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-sea-bass": {
@@ -327,7 +327,7 @@
    "vegan": 0.99,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-bream": {
@@ -343,7 +343,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-sardine": {
@@ -367,7 +367,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.05
   },
   "regex-forbidden-meat-and-fish-tilapia": {
@@ -375,7 +375,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-meat-and-fish-kipper": {
@@ -399,7 +399,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-meat-and-fish-clam": {
@@ -407,7 +407,7 @@
    "vegan": 0.98,
    "dairy-free": 0.09,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.05
   },
   "regex-forbidden-meat-and-fish-calamari": {
@@ -455,7 +455,7 @@
    "vegan": 0.98,
    "dairy-free": 0.99,
    "gluten-free": 0.13,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-dairy-parmesan": {
@@ -495,7 +495,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.14,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-dairy-mascarpone": {
@@ -503,7 +503,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.13,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-dairy-butter": {
@@ -519,7 +519,7 @@
    "vegan": 0.97,
    "dairy-free": 0.98,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-forbidden-dairy-milk": {
@@ -543,7 +543,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.13,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "regex-forbidden-dairy-cr\u00e8me-fra\u00eeche": {
@@ -567,7 +567,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-eggs-and-honey-egg": {
@@ -583,7 +583,7 @@
    "vegan": 0.97,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-eggs-and-honey-mayonnaise": {
@@ -599,7 +599,7 @@
    "vegan": 0.96,
    "dairy-free": 0.16,
    "gluten-free": 0.21,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-wheat": {
@@ -615,7 +615,7 @@
    "vegan": 0.12,
    "dairy-free": 0.09,
    "gluten-free": 0.91,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.05
   },
   "regex-forbidden-gluten-bread": {
@@ -631,7 +631,7 @@
    "vegan": 0.28,
    "dairy-free": 0.19,
    "gluten-free": 0.92,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-panko": {
@@ -639,7 +639,7 @@
    "vegan": 0.31,
    "dairy-free": 0.16,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-pasta": {
@@ -655,7 +655,7 @@
    "vegan": 0.13,
    "dairy-free": 0.09,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-linguine": {
@@ -663,7 +663,7 @@
    "vegan": 0.27,
    "dairy-free": 0.11,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-tagliatelle": {
@@ -687,7 +687,7 @@
    "vegan": 0.12,
    "dairy-free": 0.11,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.06
   },
   "regex-forbidden-gluten-tortiglioni": {
@@ -703,7 +703,7 @@
    "vegan": 0.15,
    "dairy-free": 0.12,
    "gluten-free": 0.94,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-orzo": {
@@ -719,7 +719,7 @@
    "vegan": 0.43,
    "dairy-free": 0.35,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-couscous": {
@@ -783,7 +783,7 @@
    "vegan": 0.46,
    "dairy-free": 0.25,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-pitta": {
@@ -791,7 +791,7 @@
    "vegan": 0.27,
    "dairy-free": 0.16,
    "gluten-free": 0.96,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-pita": {
@@ -855,7 +855,7 @@
    "vegan": 0.1,
    "dairy-free": 0.09,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-beer": {
@@ -871,7 +871,7 @@
    "vegan": 0.24,
    "dairy-free": 0.08,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-teriyaki": {
@@ -879,7 +879,7 @@
    "vegan": 0.65,
    "dairy-free": 0.11,
    "gluten-free": 0.95,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.09
   },
   "regex-forbidden-gluten-hoisin": {
@@ -895,7 +895,7 @@
    "vegan": 0.19,
    "dairy-free": 0.1,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-forbidden-gluten-kecap-manis": {
@@ -903,7 +903,7 @@
    "vegan": 0.37,
    "dairy-free": 0.1,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-gluten-ketjap-manis": {
@@ -911,7 +911,7 @@
    "vegan": 0.35,
    "dairy-free": 0.1,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-forbidden-nuts-peanut": {
@@ -919,7 +919,7 @@
    "vegan": 0.1,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.99
   },
   "regex-forbidden-nuts-almond": {
@@ -967,7 +967,7 @@
    "vegan": 0.09,
    "dairy-free": 0.09,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.99,
+   "tree-nut-free": 0.98,
    "peanut-free": 0.06
   },
   "regex-forbidden-nuts-macadamia": {
@@ -999,7 +999,7 @@
    "vegan": 0.41,
    "dairy-free": 0.49,
    "gluten-free": 0.21,
-   "tree-nut-free": 0.97,
+   "tree-nut-free": 0.98,
    "peanut-free": 0.35
   },
   "regex-forbidden-nuts-nut": {
@@ -1007,7 +1007,7 @@
    "vegan": 0.1,
    "dairy-free": 0.1,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.91,
+   "tree-nut-free": 0.93,
    "peanut-free": 0.6
   },
   "regex-safe-meat-and-fish-vegan-mince": {
@@ -1023,7 +1023,7 @@
    "vegan": 0.22,
    "dairy-free": 0.2,
    "gluten-free": 0.5,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.12
   },
   "regex-safe-meat-and-fish-veggie-meatballs": {
@@ -1031,7 +1031,7 @@
    "vegan": 0.26,
    "dairy-free": 0.24,
    "gluten-free": 0.52,
-   "tree-nut-free": 0.12,
+   "tree-nut-free": 0.11,
    "peanut-free": 0.12
   },
   "regex-safe-meat-and-fish-plant-based-mince": {
@@ -1047,7 +1047,7 @@
    "vegan": 0.21,
    "dairy-free": 0.21,
    "gluten-free": 0.51,
-   "tree-nut-free": 0.09,
+   "tree-nut-free": 0.1,
    "peanut-free": 0.11
   },
   "regex-safe-meat-and-fish-meat-free-bacon": {
@@ -1055,7 +1055,7 @@
    "vegan": 0.19,
    "dairy-free": 0.17,
    "gluten-free": 0.43,
-   "tree-nut-free": 0.1,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.11
   },
   "regex-safe-meat-and-fish-meatless-chicken-pieces": {
@@ -1063,7 +1063,7 @@
    "vegan": 0.18,
    "dairy-free": 0.15,
    "gluten-free": 0.4,
-   "tree-nut-free": 0.1,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.1
   },
   "regex-safe-dairy-vegan-cheese": {
@@ -1071,7 +1071,7 @@
    "vegan": 0.1,
    "dairy-free": 0.09,
    "gluten-free": 0.2,
-   "tree-nut-free": 0.22,
+   "tree-nut-free": 0.19,
    "peanut-free": 0.1
   },
   "regex-safe-dairy-vegan-butter": {
@@ -1095,7 +1095,7 @@
    "vegan": 0.09,
    "dairy-free": 0.07,
    "gluten-free": 0.18,
-   "tree-nut-free": 0.23,
+   "tree-nut-free": 0.22,
    "peanut-free": 0.11
   },
   "regex-safe-dairy-dairy-free-cream": {
@@ -1103,7 +1103,7 @@
    "vegan": 0.15,
    "dairy-free": 0.09,
    "gluten-free": 0.2,
-   "tree-nut-free": 0.13,
+   "tree-nut-free": 0.12,
    "peanut-free": 0.09
   },
   "regex-safe-dairy-dairy-free-cheese": {
@@ -1111,7 +1111,7 @@
    "vegan": 0.15,
    "dairy-free": 0.08,
    "gluten-free": 0.17,
-   "tree-nut-free": 0.17,
+   "tree-nut-free": 0.15,
    "peanut-free": 0.09
   },
   "regex-safe-dairy-coconut-milk": {
@@ -1119,7 +1119,7 @@
    "vegan": 0.09,
    "dairy-free": 0.07,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.04
   },
   "regex-safe-dairy-coconut-cream": {
@@ -1135,7 +1135,7 @@
    "vegan": 0.13,
    "dairy-free": 0.08,
    "gluten-free": 0.11,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.06
   },
   "regex-safe-dairy-oat-milk": {
@@ -1143,7 +1143,7 @@
    "vegan": 0.09,
    "dairy-free": 0.06,
    "gluten-free": 0.78,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-dairy-oat-cream": {
@@ -1151,7 +1151,7 @@
    "vegan": 0.19,
    "dairy-free": 0.07,
    "gluten-free": 0.91,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-safe-dairy-almond-milk": {
@@ -1159,7 +1159,7 @@
    "vegan": 0.09,
    "dairy-free": 0.07,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.99,
+   "tree-nut-free": 0.98,
    "peanut-free": 0.06
   },
   "regex-safe-dairy-almond-butter": {
@@ -1175,7 +1175,7 @@
    "vegan": 0.1,
    "dairy-free": 0.07,
    "gluten-free": 0.12,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.09
   },
   "regex-safe-dairy-soya-yoghurt": {
@@ -1207,7 +1207,7 @@
    "vegan": 0.1,
    "dairy-free": 0.11,
    "gluten-free": 0.13,
-   "tree-nut-free": 0.78,
+   "tree-nut-free": 0.82,
    "peanut-free": 0.82
   },
   "regex-safe-dairy-cocoa-butter": {
@@ -1223,7 +1223,7 @@
    "vegan": 0.09,
    "dairy-free": 0.09,
    "gluten-free": 0.22,
-   "tree-nut-free": 0.13,
+   "tree-nut-free": 0.12,
    "peanut-free": 0.12
   },
   "regex-safe-eggs-and-honey-vegetarian-mayonnaise": {
@@ -1239,7 +1239,7 @@
    "vegan": 0.33,
    "dairy-free": 0.19,
    "gluten-free": 0.32,
-   "tree-nut-free": 0.11,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.15
   },
   "regex-safe-eggs-and-honey-plant-based-mayonnaise": {
@@ -1247,7 +1247,7 @@
    "vegan": 0.11,
    "dairy-free": 0.1,
    "gluten-free": 0.22,
-   "tree-nut-free": 0.16,
+   "tree-nut-free": 0.13,
    "peanut-free": 0.14
   },
   "regex-safe-eggs-and-honey-meat-free-mayo": {
@@ -1255,7 +1255,7 @@
    "vegan": 0.15,
    "dairy-free": 0.19,
    "gluten-free": 0.34,
-   "tree-nut-free": 0.13,
+   "tree-nut-free": 0.11,
    "peanut-free": 0.19
   },
   "regex-safe-eggs-and-honey-meatless-mayo": {
@@ -1271,7 +1271,7 @@
    "vegan": 0.15,
    "dairy-free": 0.11,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "regex-safe-gluten-gluten-free-flour": {
@@ -1287,7 +1287,7 @@
    "vegan": 0.3,
    "dairy-free": 0.18,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.09,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-gluten-gluten-free-soy-sauce": {
@@ -1295,7 +1295,7 @@
    "vegan": 0.15,
    "dairy-free": 0.08,
    "gluten-free": 0.07,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-gluten-rice-noodles": {
@@ -1335,7 +1335,7 @@
    "vegan": 0.11,
    "dairy-free": 0.1,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-gluten-buckwheat-noodles": {
@@ -1343,7 +1343,7 @@
    "vegan": 0.12,
    "dairy-free": 0.1,
    "gluten-free": 0.21,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-safe-gluten-buckwheat-flour": {
@@ -1351,7 +1351,7 @@
    "vegan": 0.1,
    "dairy-free": 0.1,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-safe-gluten-tapioca-flour": {
@@ -1367,7 +1367,7 @@
    "vegan": 0.68,
    "dairy-free": 0.45,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-gluten-potato-flour": {
@@ -1375,7 +1375,7 @@
    "vegan": 0.1,
    "dairy-free": 0.09,
    "gluten-free": 0.09,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "regex-safe-gluten-chickpea-pasta": {
@@ -1391,7 +1391,7 @@
    "vegan": 0.11,
    "dairy-free": 0.09,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "regex-safe-gluten-coconut-flour": {
@@ -1415,7 +1415,7 @@
    "vegan": 0.48,
    "dairy-free": 0.56,
    "gluten-free": 0.28,
-   "tree-nut-free": 0.09,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "regex-safe-nuts-nut-free-pesto": {
@@ -1423,7 +1423,7 @@
    "vegan": 0.69,
    "dairy-free": 0.65,
    "gluten-free": 0.28,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.07
   },
   "regex-safe-nuts-nutmeg": {
@@ -1439,7 +1439,7 @@
    "vegan": 0.13,
    "dairy-free": 0.17,
    "gluten-free": 0.29,
-   "tree-nut-free": 0.11,
+   "tree-nut-free": 0.1,
    "peanut-free": 0.13
   },
   "regex-safe-nuts-coconut-flakes": {

@@ -50,18 +50,18 @@ _NEAR_DUPLICATE_OVERLAP = 0.7
 
 NUT_FLAGS = (TREE_NUT_FREE, PEANUT_FREE)
 
-# The nut flags are allergies, so each threshold also drops these lookalikes: the model still scores a bare "korma
-# curry paste" 0.38 for tree nuts although only nuts in the ingredients count, and dukkah and praline (hazelnuts,
-# almonds) 0.44 and 0.35 for peanuts. Anything else a nut flag drops is a regression.
+# Peanut-free is an allergy flag, so its threshold also drops these lookalikes: the model scores dukkah and praline
+# (hazelnuts, almonds) 0.44 and 0.35 for peanuts. Tree-nut-free drops none: pastes score low there. Anything else a
+# nut flag drops is a regression.
 ACCEPTED_FALSE_EXCLUSIONS = {
-    TREE_NUT_FREE: {"allowed-korma-paste"},
+    TREE_NUT_FREE: set(),
     PEANUT_FREE: {"table-nut-dukkah", "regex-forbidden-nuts-praline"},
 }
 
 # The margins recorded beside the thresholds in dietary_decisions.py, held to a little under what was measured.
 PREFERENCE_MARGIN = 0.10
-NUT_MARGIN_ABOVE_CLEAN = {TREE_NUT_FREE: 0.05, PEANUT_FREE: 0.005}
-NUT_MARGIN_BELOW_VIOLATORS = {TREE_NUT_FREE: 0.4, PEANUT_FREE: 0.25}
+NUT_MARGIN_ABOVE_CLEAN = {TREE_NUT_FREE: 0.15, PEANUT_FREE: 0.005}
+NUT_MARGIN_BELOW_VIOLATORS = {TREE_NUT_FREE: 0.5, PEANUT_FREE: 0.25}
 
 
 @pytest.fixture(scope="module")
@@ -190,10 +190,10 @@ def test_pine_nuts_pesto_and_almonds_fail_tree_nut_free_and_pass_peanut_free(off
     assert tree_nut_recipes <= offered_by_flag[PEANUT_FREE]
 
 
-def test_a_tikka_masala_or_pasanda_paste_is_not_excluded_for_either_nut_flag_for_being_that_paste(
+def test_a_korma_tikka_masala_or_pasanda_paste_is_not_excluded_for_either_nut_flag_for_being_that_paste(
     offered_by_flag,
 ) -> None:
-    pastes = {"allowed-tikka-masala-seasoning", "allowed-pasanda-paste"}
+    pastes = {"allowed-korma-paste", "allowed-tikka-masala-seasoning", "allowed-pasanda-paste"}
 
     assert pastes <= offered_by_flag[TREE_NUT_FREE]
     assert pastes <= offered_by_flag[PEANUT_FREE]
