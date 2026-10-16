@@ -96,7 +96,7 @@ soy sauce and gnocchi unless labelled gluten-free. Rice, corn, potato and gram f
 - tree-nut-free: no tree nuts (almonds, cashews, hazelnuts, walnuts, pecans, pistachios, macadamias, Brazil nuts, \
 pine nuts) or products made from them (pesto, marzipan, praline, nut butters, almond milk). Peanuts, peanut butter \
 and satay are not tree nuts. Coconut, nutmeg, seeds and butternut squash are not nuts.
-- peanut-free: no peanuts or products made from them (peanut butter, groundnut oil, satay, chilli crisp). Tree nuts \
+- peanut-free: no peanuts or products made from them (peanut butter, groundnut oil, satay). Tree nuts \
 such as almonds, cashews and pine nuts are not peanuts. Coconut, nutmeg, seeds and butternut squash are not peanuts.
 For either nut flag an unspecified "nuts" or "nut butter" is "unsure".
 """
@@ -317,9 +317,8 @@ def render_disagreements(
 
 
 # The maintainer's labels of the recipes both judges were unsure about when there was one nut-free flag
-# (2026-10-16). They override every other signal; "may contain" warnings never count. Tree nuts and peanuts are
-# separate allergies: the chilli crisp recipe is fine for a tree-nut allergy and breaks peanut-free, as chilli crisp
-# is made with peanuts. Every other label held for both.
+# (2026-10-16). They were given from the tree-nut side, so they apply to tree-nut-free only; there are no peanut
+# labels. They override every other signal; "may contain" warnings never count.
 _TREE_NUT_LABELS: dict[str, str] = {
     **dict.fromkeys(
         (
@@ -348,7 +347,7 @@ _TREE_NUT_LABELS: dict[str, str] = {
 }
 MAINTAINER_LABELS: dict[str, dict[str, str]] = {
     TREE_NUT_FREE: _TREE_NUT_LABELS,
-    PEANUT_FREE: {**_TREE_NUT_LABELS, "rec_12d9df09a90bd7c7": "exclude"},
+    PEANUT_FREE: {},
 }
 
 
@@ -370,7 +369,7 @@ def processed_ingredients(ingredient_names: list[str]) -> list[str]:
 
 
 _TREE_NUT_DERIVED = re.compile(r"\b(?:marzipan|praline|frangipane|nutella|gianduja|nougat|baklava)\b", re.IGNORECASE)
-_PEANUT_DERIVED = re.compile(r"\b(?:satay|chil(?:li|i) crisp)\b", re.IGNORECASE)
+_PEANUT_DERIVED = re.compile(r"\bsatay\b", re.IGNORECASE)
 _FREE_FROM = re.compile(r"\b(?:nut|peanut)[- ]free\b|\bfree from (?:nuts|peanuts)\b", re.IGNORECASE)
 
 

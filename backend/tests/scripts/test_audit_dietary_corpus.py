@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 
 TREE_LABELS = audit.MAINTAINER_LABELS["tree-nut-free"]
-PEANUT_LABELS = audit.MAINTAINER_LABELS["peanut-free"]
 
 
 @pytest.mark.parametrize(
@@ -319,15 +318,15 @@ def test_a_maintainer_label_overrides_the_judges_and_the_regex() -> None:
     assert audit.resolve_truth("tree-nut-free", "rec_unlabelled", ["Rice"], both_judges_say_breaks) == "breaks"
 
 
-def test_the_chilli_crisp_the_maintainer_called_fine_for_a_tree_nut_allergy_breaks_peanut_free() -> None:
-    chilli_crisp = "rec_12d9df09a90bd7c7"
-    found = audit.Signals(judges={"a": "fine", "b": "fine"}, regex=False, probability=0.0)
+def test_the_maintainers_labels_were_given_for_tree_nuts_so_peanut_free_has_none() -> None:
+    labelled = next(iter(TREE_LABELS))
+    both_judges_say_breaks = audit.Signals(judges={"a": "breaks", "b": "breaks"}, regex=True, probability=0.9)
+    unsure = audit.Signals(judges={"a": "unsure", "b": "unsure"}, regex=False, probability=0.9)
 
-    assert TREE_LABELS[chilli_crisp] == "fine"
-    assert audit.resolve_truth("peanut-free", chilli_crisp, ["Rice"], found) == "breaks"
-    assert audit.resolve_truth("tree-nut-free", chilli_crisp, ["Rice"], found) == "fine"
-    assert set(PEANUT_LABELS) == set(TREE_LABELS)
-    assert [rid for rid, label in PEANUT_LABELS.items() if label != "fine"] == [chilli_crisp]
+    assert audit.MAINTAINER_LABELS["peanut-free"] == {}
+    assert audit.resolve_truth("peanut-free", labelled, ["Rice"], both_judges_say_breaks) == "breaks"
+    assert audit.resolve_truth("peanut-free", labelled, ["Rice"], unsure) is None
+    assert audit.resolve_truth("tree-nut-free", labelled, ["Rice"], both_judges_say_breaks) == "fine"
 
 
 def test_the_maintainers_seventeen_labels_are_all_fine_after_the_korma_and_tikka_correction() -> None:
@@ -615,12 +614,15 @@ def _shelf_where(**by_product: IngredientVerdict):
     return lookup
 
 
-def test_a_chilli_crisp_by_name_breaks_peanut_free_whatever_a_safe_soy_sauce_shelf_says() -> None:
-    for name in ("Chilli Crisp", "chili crisp", "Crunchy Chilli Crisp"):
-        names = [name, "Soy Sauce"]
+@pytest.mark.parametrize("name", ["Chilli Crisp", "chili crisp", "Crunchy Chilli Crisp", "Crispy Chilli Oil"])
+def test_a_chilli_crisp_follows_what_its_shelf_lists_with_no_named_exception(name: str) -> None:
+    sometimes = _shelf_where(chil=_shelf(peanut=Frequency.SOMETIMES))
+    usually = _shelf_where(chil=_shelf(peanut=Frequency.USUALLY))
+    names = [name, "Soy Sauce"]
 
-        assert audit.resolve_truth("peanut-free", "rec_x", names, _UNSURE, lookup=_all_safe) == "breaks", name
-        assert audit.resolve_truth("tree-nut-free", "rec_x", names, _UNSURE, lookup=_all_safe) == "fine", name
+    assert audit.resolve_truth("peanut-free", "rec_x", names, _UNSURE, lookup=sometimes) == "fine"
+    assert audit.resolve_truth("peanut-free", "rec_x", names, _UNSURE, lookup=usually) == "breaks"
+    assert audit.resolve_truth("tree-nut-free", "rec_x", names, _UNSURE, lookup=usually) == "fine"
 
 
 def test_a_crispy_chilli_oil_is_settled_by_its_own_shelf_not_by_the_soy_sauce_beside_it() -> None:
