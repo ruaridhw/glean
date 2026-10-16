@@ -2,7 +2,15 @@
 
 from .classify import classify
 from .models import AllergenFacts, Product, ProductRef
-from .retailers import OcadoReader, Page, PageSource, ProductUnreadable, RetailerBlocked, RetailerReader
+from .retailers import (
+    OcadoReader,
+    Page,
+    PageSource,
+    ProductUnreadable,
+    RetailerBlocked,
+    RetailerReader,
+    SainsburysReader,
+)
 
 __all__ = [
     "AllergenFacts",
@@ -14,5 +22,6 @@ __all__ = [
     "ProductUnreadable",
     "RetailerBlocked",
     "RetailerReader",
+    "SainsburysReader",
     "classify",
 ]

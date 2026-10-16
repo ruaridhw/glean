@@ -104,3 +104,28 @@ class OcadoReader:
 
     def read(self, ref: ProductRef) -> Product:
         return parse_product(self._source.fetch(ref.url), ref)
+
+
+class SainsburysReader:
+    """Selectors follow the manual reading of 2026-10-16; headless Chromium got HTTP 403 from the live shop then."""
+
+    name = "sainsburys"
+    _base = "https://www.sainsburys.co.uk"
+
+    def __init__(self, source: PageSource) -> None:
+        self._source = source
+
+    def search(self, query: str) -> list[ProductRef]:
+        page = self._source.fetch(f"{self._base}/gol-ui/SearchResults/{quote(query)}")
+        raise_if_blocked(page)
+        refs: dict[str, ProductRef] = {}
+        for link in BeautifulSoup(page.html, "html.parser").select('a[href*="/product/"]'):
+            href = link.get("href")
+            title = link.get_text(" ", strip=True)
+            if title and isinstance(href, str):
+                url = urljoin(self._base, urlsplit(href).path)
+                refs.setdefault(url, ProductRef(retailer=self.name, name=title, url=url))
+        return list(refs.values())
+
+    def read(self, ref: ProductRef) -> Product:
+        return parse_product(self._source.fetch(ref.url), ref)
