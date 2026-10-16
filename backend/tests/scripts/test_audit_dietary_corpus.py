@@ -603,3 +603,50 @@ def test_the_report_scores_each_nut_flag_on_its_own_and_writes_a_disagreement_fi
     assert "#145" not in report.split("## tree-nut-free:")[1].split("## ")[0]
     assert (data_dir / "tree-nut-free-disagreements.md").exists()
     assert (data_dir / "peanut-free-both-unsure.md").exists()
+
+
+_CHILLI_OIL_RECIPE = ["Crispy Chilli Oil", "Soy Sauce", "Chicken Thigh", "Cherry Tomatoes"]
+
+
+def _shelf_where(**by_product: IngredientVerdict):
+    def lookup(name: str) -> IngredientVerdict:
+        return next((v for key, v in by_product.items() if key in name.casefold().replace(" ", "_")), _shelf())
+
+    return lookup
+
+
+def test_a_chilli_crisp_by_name_breaks_peanut_free_whatever_a_safe_soy_sauce_shelf_says() -> None:
+    for name in ("Chilli Crisp", "chili crisp", "Crunchy Chilli Crisp"):
+        names = [name, "Soy Sauce"]
+
+        assert audit.resolve_truth("peanut-free", "rec_x", names, _UNSURE, lookup=_all_safe) == "breaks", name
+        assert audit.resolve_truth("tree-nut-free", "rec_x", names, _UNSURE, lookup=_all_safe) == "fine", name
+
+
+def test_a_crispy_chilli_oil_is_settled_by_its_own_shelf_not_by_the_soy_sauce_beside_it() -> None:
+    peanut_oil = _shelf_where(chilli_oil=_shelf(peanut=Frequency.USUALLY))
+    clean_oil = _shelf_where(chilli_oil=_shelf())
+
+    assert audit.resolve_truth("peanut-free", "rec_x", _CHILLI_OIL_RECIPE, _UNSURE, lookup=peanut_oil) == "breaks"
+    assert audit.resolve_truth("tree-nut-free", "rec_x", _CHILLI_OIL_RECIPE, _UNSURE, lookup=peanut_oil) == "fine"
+    assert audit.resolve_truth("peanut-free", "rec_x", _CHILLI_OIL_RECIPE, _UNSURE, lookup=clean_oil) == "fine"
+
+
+@pytest.mark.parametrize("name", ["Chilli Oil", "Chili Oil", "Crispy Chilli Oil", "Chilli Crunch"])
+@pytest.mark.parametrize("flag", ["tree-nut-free", "peanut-free"])
+def test_a_recipe_is_never_fine_while_its_chilli_oil_is_unread(name: str, flag: str) -> None:
+    def shelf(ingredient: str) -> IngredientVerdict:
+        if "chil" in ingredient.casefold():
+            return IngredientVerdict(ingredient=ingredient, status="not_found")
+        return _shelf()
+
+    truth = audit.resolve_truth(flag, "rec_x", [name, "Soy Sauce"], _UNSURE, lookup=shelf)
+
+    assert truth is None
+
+
+def test_a_plain_chilli_oil_the_shelf_reads_as_nut_free_is_fine_for_both_flags() -> None:
+    names = ["Chilli Oil", "Soy Sauce"]
+
+    for flag in audit.NUT_FLAGS:
+        assert audit.resolve_truth(flag, "rec_x", names, _UNSURE, lookup=_all_safe) == "fine"
