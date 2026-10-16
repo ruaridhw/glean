@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 from .classify import classify
-from .retailers import ProductUnreadable
+from .retailers import ProductUnreadable, RetailerBlocked
 
 if TYPE_CHECKING:
     from .models import Product
@@ -86,13 +86,28 @@ def _verdict(ingredient: str, retailer: str, products: list[Product]) -> Ingredi
     )
 
 
-def ground_truth(ingredient_name: str, n: int = 5, *, readers: list[RetailerReader]) -> IngredientVerdict:
-    """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts."""
-    reader = readers[0]
+def _read_products(reader: RetailerReader, query: str, n: int) -> list[Product]:
     products = []
-    for ref in reader.search(ingredient_name)[:n]:
+    for ref in reader.search(query)[:n]:
         try:
             products.append(reader.read(ref))
         except ProductUnreadable:
             continue
-    return _verdict(ingredient_name, reader.name, products)
+    return products
+
+
+def ground_truth(ingredient_name: str, n: int = 5, *, readers: list[RetailerReader]) -> IngredientVerdict:
+    """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts.
+
+    Readers are tried in order; a blocked or empty one hands over to the next. Nothing is ever guessed.
+    """
+    blocked = False
+    for reader in readers:
+        try:
+            products = _read_products(reader, ingredient_name, n)
+        except RetailerBlocked:
+            blocked = True
+            continue
+        if products:
+            return _verdict(ingredient_name, reader.name, products)
+    return IngredientVerdict(ingredient=ingredient_name, status="blocked" if blocked else "not_found")
