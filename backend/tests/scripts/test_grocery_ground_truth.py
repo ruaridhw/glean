@@ -682,3 +682,54 @@ def test_the_helper_and_its_command_line_import_without_playwright_loaded() -> N
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)  # noqa: S603
 
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("ingredient", "heading"),
+    [
+        ("coriander paste", "Coriander Paste 100g"),
+        ("Korma Curry Paste 200g", "Korma Curry Paste 200g"),
+        ("Acme Korma Paste", "Acme Korma Paste"),
+        ("harissa paste", "Harissa Paste"),
+        ("Bakers Korma Paste", "Bakers Korma Paste"),
+    ],
+)
+def test_a_word_that_is_neither_a_listed_brand_nor_a_possessive_is_generic_and_needs_three_products(
+    ingredient: str, heading: str
+) -> None:
+    shop = _ocado_shop((heading, "Water, Spices", None), query=ingredient)
+
+    verdict = read_shelf(ingredient, 5, readers=[OcadoReader(shop)])
+
+    assert (verdict.status, verdict.products_read) == ("insufficient", 1)
+
+
+@pytest.mark.parametrize(
+    ("ingredient", "heading"),
+    [
+        ("Patak's Korma Paste Pot", "Patak's Korma Paste Pot"),
+        ("Spice Tailor Tikka Masala Paste Kit", "The Spice Tailor Tikka Masala Paste Kit 120g"),
+        ("Lee Kum Kee Hoisin Sauce", "Lee Kum Kee Hoisin Sauce 240g"),
+        ("Zed's Korma Paste", "Zed's Korma Paste"),
+    ],
+)
+def test_a_listed_brand_or_a_possessive_brand_names_a_product(ingredient: str, heading: str) -> None:
+    shop = _ocado_shop((heading, "Water, Spices", None), query=ingredient)
+
+    verdict = read_shelf(ingredient, 5, readers=[OcadoReader(shop)])
+
+    assert (verdict.status, verdict.products_read) == ("resolved", 1)
+
+
+def test_a_possessive_food_phrase_is_not_a_brand() -> None:
+    shop = _ocado_shop(("Baker's Korma Paste", "Water, Spices", None), query="Baker's Korma Paste")
+
+    assert read_shelf("Baker's Korma Paste", 5, readers=[OcadoReader(shop)]).status == "insufficient"
+
+
+def test_the_list_of_brands_is_configurable() -> None:
+    shop = _ocado_shop(("Acme Korma Paste", "Water, Spices", None), query="Acme Korma Paste")
+
+    verdict = read_shelf("Acme Korma Paste", 5, readers=[OcadoReader(shop)], brands=("Acme",))
+
+    assert verdict.status == "resolved"
