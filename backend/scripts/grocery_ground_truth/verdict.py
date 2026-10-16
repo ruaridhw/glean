@@ -115,11 +115,15 @@ _GENERIC_WORDS = frozenset(
 )
 
 
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.casefold().replace("'", "").replace("\u2019", ""))
+
+
 def _is_relevant(query: str, product_name: str) -> bool:
-    """A hit is on topic when it names every distinctive word of the query ('korma' in 'korma curry paste')."""
-    words = [word for word in re.findall(r"[a-z]+", query.casefold()) if word not in _GENERIC_WORDS]
-    name = product_name.casefold()
-    return all(word in name for word in words)
+    """A hit is on topic when it names every distinctive word of the query: 'korma' in 'korma curry paste',
+    and the brand in "Patak's korma paste", which narrows the read to that brand's products."""
+    name = " ".join(_words(product_name))
+    return all(word in name for word in _words(query) if word not in _GENERIC_WORDS)
 
 
 def _read_products(reader: RetailerReader, query: str, n: int) -> list[Product]:
