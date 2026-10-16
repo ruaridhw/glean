@@ -175,11 +175,15 @@ _CURRY_STYLES = frozenset(
 _NOT_THE_INGREDIENT = frozenset({"meal", "ready", "pie", "soup", "bake", "snack", "crisps"})
 
 
-def _tokens(text: str) -> set[str]:
-    """Whole lower-case words with apostrophes dropped and a plural 's' folded away."""
+def _word_list(text: str) -> list[str]:
+    """Whole lower-case words, in order, with apostrophes dropped and a plural 's' folded away."""
     plain = unicodedata.normalize("NFKD", text.casefold()).encode("ascii", "ignore").decode()
     words = re.findall(r"[a-z0-9]+", plain.replace("'", ""))
-    return {word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word for word in words}
+    return [word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word for word in words]
+
+
+def _tokens(text: str) -> set[str]:
+    return set(_word_list(text))
 
 
 def _is_relevant(query: str, product_name: str) -> bool:
@@ -199,33 +203,55 @@ def _is_relevant(query: str, product_name: str) -> bool:
 
 _SIZE = re.compile(r"x?\d+(?:x\d+)?(?:g|kg|ml|cl|l|pack)?")
 _STOPWORDS = frozenset({"the", "a", "an", "and", "of", "with", "by", "in", "for", "to"})
-# Words that say what a product is rather than whose it is. A query word outside this list (and not a size) is
-# taken to be a brand, so an unlisted food word errs towards "not a named product", which needs three products.
-_VOCABULARY = (
-    _KINDS
-    | _GENERIC_WORDS
-    | _CURRY_STYLES
-    | _STOPWORDS
-    | frozenset().union(*_SAME_KIND.values())
-    | frozenset(
-        {"kit", "indian", "mild", "medium", "hot", "spicy", "sweet", "authentic", "style", "traditional", "classic"}
-        | {"red", "green", "yellow", "black", "white", "dark", "light", "organic", "fresh", "dried", "ground", "whole"}
-        | {"tomato", "soy", "soya", "chicken", "beef", "pork", "lamb", "fish", "vegetable", "vegan", "stock", "oyster"}
-        | {"hoisin", "chipotle", "chilli", "chili", "garlic", "ginger", "sriracha", "sambal", "harissa", "miso"}
-        | {"tamarind", "pesto", "basil", "teriyaki", "nduja", "gochujang", "peri", "five", "worcestershire", "bbq"}
-        | {"hot", "sauce", "chinese", "japanese", "cantonese", "north", "south", "mango", "lemon", "coconut", "meat"}
-    )
+# Brands a recipe can name, as phrases. Kept short and explicit on purpose: a brand missing from this list (and not
+# written as a possessive such as "Patak's") is treated as generic, which needs three products, the safe direction.
+KNOWN_BRANDS: tuple[str, ...] = (
+    "Patak's",
+    "Sharwood's",
+    "Spice Tailor",
+    "Blue Dragon",
+    "Lee Kum Kee",
+    "Geeta's",
+    "Maggi",
+    "Knorr",
+    "Oxo",
+    "Bisto",
+    "Schwartz",
+    "Hellmann's",
+    "Heinz",
+    "Sacla",
+    "Barts",
 )
+# Possessives that are food phrases, not brands: "baker's yeast", "devil's food".
+_NOT_BRANDS = frozenset({"chef", "baker", "cook", "butcher", "farmer", "mum", "grandma", "nanna", "devil"})
+_POSSESSIVE = re.compile(r"\b(\w+)['\u2019]s?(?!\w)")
 
 
-def _names_exactly(query: str, product_name: str) -> bool:
-    """The query names this very product: it carries a brand (a word that is no size, kind or cuisine word) that the
-    product's name carries too, and every significant word of the product's name is in the query. "Patak's korma
-    paste" names Patak's Korma Spice Paste 290g; "korma curry paste 200g" names no product at all."""
-    wanted, name = _tokens(query), _tokens(product_name)
-    brand = {word for word in wanted - _VOCABULARY if not _SIZE.fullmatch(word)}
-    significant = {word for word in name - _GENERIC_WORDS - _STOPWORDS if not _SIZE.fullmatch(word)}
-    return bool(brand) and brand <= name and significant <= wanted
+def _contains_phrase(words: list[str], phrase: list[str]) -> bool:
+    return any(words[i : i + len(phrase)] == phrase for i in range(len(words) - len(phrase) + 1))
+
+
+def _brands_in(query: str, brands: tuple[str, ...]) -> list[list[str]]:
+    """The brands the query names: a listed brand (as a phrase) or a possessive such as "Patak's"."""
+    words = _word_list(query)
+    named = [phrase for brand in brands if _contains_phrase(words, phrase := _word_list(brand))]
+    for match in _POSSESSIVE.finditer(query):
+        if match.group(1).casefold() not in _NOT_BRANDS and (phrase := _word_list(match.group(0))) not in named:
+            named.append(phrase)
+    return named
+
+
+def _names_exactly(query: str, product_name: str, brands: tuple[str, ...] = KNOWN_BRANDS) -> bool:
+    """The query names this very product: it names a brand that the product's name carries too, and every significant
+    word of the product's name is in the query. "Patak's korma paste" names Patak's Korma Spice Paste 290g.
+
+    A brand is a listed one or a possessive; anything else is generic. So the heuristic errs one way only: a real
+    brand that is neither listed nor possessive ("Acme korma paste") is treated as generic and needs three products."""
+    named = _brands_in(query, brands)
+    product = _word_list(product_name)
+    significant = _tokens(product_name) - _GENERIC_WORDS - _STOPWORDS
+    significant = {word for word in significant if not _SIZE.fullmatch(word)}
+    return bool(named) and all(_contains_phrase(product, phrase) for phrase in named) and significant <= _tokens(query)
 
 
 def _read_products(reader: RetailerReader, query: str, n: int) -> tuple[list[Product], list[ProductRef]]:
@@ -249,9 +275,10 @@ def _judge(
     unread: list[ProductRef],
     minimum_read: int,
     policy: ContainsPolicy,
+    brands: tuple[str, ...],
 ) -> IngredientVerdict:
     """A named product is judged by its own ingredients alone, and one product is enough for it."""
-    exact = [product for product in products if _names_exactly(query, product.name)]
+    exact = [product for product in products if _names_exactly(query, product.name, brands)]
     if exact:
         return _verdict(query, retailer, exact, [], minimum_read=1, policy=policy)
     return _verdict(query, retailer, products, unread, minimum_read=minimum_read, policy=policy)
@@ -264,6 +291,7 @@ def _from_cache(
     n: int,
     minimum_read: int,
     policy: ContainsPolicy,
+    brands: tuple[str, ...],
 ) -> tuple[IngredientVerdict | None, IngredientVerdict | None, set[str]]:
     """What the caches say, before any browser request: a sufficient result (from any retailer) that answers at once,
     else the first thin one, and the retailers whose cache was thin so they aren't read again."""
@@ -273,7 +301,7 @@ def _from_cache(
         cached = cache.get(reader.name, query, n) if cache else None
         if not cached:
             continue
-        found = _judge(query, reader.name, cached, [], minimum_read, policy)
+        found = _judge(query, reader.name, cached, [], minimum_read, policy, brands)
         if found.status == "resolved":
             return found, None, set()
         thin = thin or found
@@ -289,6 +317,7 @@ def ground_truth(
     cache: ProductCache | None = None,
     minimum_read: int = _MINIMUM_READ,
     policy: ContainsPolicy | None = None,
+    brands: tuple[str, ...] = KNOWN_BRANDS,
 ) -> IngredientVerdict:
     """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts.
 
@@ -296,10 +325,11 @@ def ground_truth(
     order; a blocked, empty or thin one hands over to the next. Fewer than `minimum_read` distinct readable products
     give 'insufficient', unless the query names one exact product and that product was read (then its own
     ingredients settle it). Unread pages that could change the answer under `policy` also give 'insufficient'.
-    Blocked, empty and partial reads are never cached.
+    `brands` lists the brands that can name a product (see KNOWN_BRANDS). Blocked, empty and partial reads are
+    never cached.
     """
     policy = policy or ContainsPolicy()
-    resolved, insufficient, already_read = _from_cache(ingredient_name, readers, cache, n, minimum_read, policy)
+    resolved, insufficient, already_read = _from_cache(ingredient_name, readers, cache, n, minimum_read, policy, brands)
     if resolved:
         return resolved
     blocked = False
@@ -313,7 +343,7 @@ def ground_truth(
             continue
         if not products and not unread:
             continue
-        found = _judge(ingredient_name, reader.name, products, unread, minimum_read, policy)
+        found = _judge(ingredient_name, reader.name, products, unread, minimum_read, policy, brands)
         if found.status == "resolved":
             if cache and not unread:
                 cache.put(reader.name, ingredient_name, n, products)
