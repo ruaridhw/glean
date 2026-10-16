@@ -7,7 +7,7 @@
    "vegan": 0.86,
    "dairy-free": 0.89,
    "gluten-free": 0.24,
-   "tree-nut-free": 0.96,
+   "tree-nut-free": 0.95,
    "peanut-free": 0.1
   },
   "table-nut-marzipan": {
@@ -15,7 +15,7 @@
    "vegan": 0.45,
    "dairy-free": 0.21,
    "gluten-free": 0.19,
-   "tree-nut-free": 0.99,
+   "tree-nut-free": 0.98,
    "peanut-free": 0.08
   },
   "table-nut-frangipane": {
@@ -39,7 +39,7 @@
    "vegan": 0.22,
    "dairy-free": 0.13,
    "gluten-free": 0.27,
-   "tree-nut-free": 0.94,
+   "tree-nut-free": 0.95,
    "peanut-free": 0.44
   },
   "table-nut-romesco": {
@@ -47,7 +47,7 @@
    "vegan": 0.6,
    "dairy-free": 0.23,
    "gluten-free": 0.45,
-   "tree-nut-free": 0.97,
+   "tree-nut-free": 0.96,
    "peanut-free": 0.25
   },
   "table-veg-caesar": {
@@ -55,7 +55,7 @@
    "vegan": 0.88,
    "dairy-free": 0.78,
    "gluten-free": 0.59,
-   "tree-nut-free": 0.11,
+   "tree-nut-free": 0.1,
    "peanut-free": 0.1
   },
   "table-veg-thai-red-curry-paste": {
@@ -63,7 +63,7 @@
    "vegan": 0.52,
    "dairy-free": 0.11,
    "gluten-free": 0.22,
-   "tree-nut-free": 0.1,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.18
   },
   "allowed-veg-pesto": {
@@ -71,7 +71,7 @@
    "vegan": 0.86,
    "dairy-free": 0.89,
    "gluten-free": 0.27,
-   "tree-nut-free": 0.96,
+   "tree-nut-free": 0.95,
    "peanut-free": 0.1
   },
   "table-vegan-pesto": {
@@ -79,7 +79,7 @@
    "vegan": 0.85,
    "dairy-free": 0.88,
    "gluten-free": 0.22,
-   "tree-nut-free": 0.95,
+   "tree-nut-free": 0.94,
    "peanut-free": 0.09
   },
   "table-vegan-naan": {
@@ -87,7 +87,7 @@
    "vegan": 0.82,
    "dairy-free": 0.87,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.08
   },
   "table-dairy-whey": {
@@ -95,7 +95,7 @@
    "vegan": 0.96,
    "dairy-free": 0.98,
    "gluten-free": 0.18,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.06
   },
   "table-dairy-buttermilk": {
@@ -103,7 +103,7 @@
    "vegan": 0.97,
    "dairy-free": 0.99,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "table-dairy-pesto": {
@@ -119,7 +119,7 @@
    "vegan": 0.82,
    "dairy-free": 0.87,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "table-gluten-malt-vinegar": {
@@ -127,7 +127,7 @@
    "vegan": 0.11,
    "dairy-free": 0.07,
    "gluten-free": 0.93,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.06
   },
   "table-gluten-oats": {
@@ -135,7 +135,7 @@
    "vegan": 0.1,
    "dairy-free": 0.1,
    "gluten-free": 0.95,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.06
   },
   "allowed-coconut-milk": {
@@ -167,7 +167,7 @@
    "vegan": 0.16,
    "dairy-free": 0.08,
    "gluten-free": 0.05,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.05
   },
   "allowed-butternut": {
@@ -175,7 +175,7 @@
    "vegan": 0.14,
    "dairy-free": 0.09,
    "gluten-free": 0.17,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.05
   },
   "ordinary-00": {
@@ -183,7 +183,7 @@
    "vegan": 0.99,
    "dairy-free": 0.12,
    "gluten-free": 0.98,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.05
   },
   "ordinary-01": {
@@ -199,7 +199,7 @@
    "vegan": 0.99,
    "dairy-free": 0.99,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.05
   },
   "ordinary-03": {
@@ -207,7 +207,7 @@
    "vegan": 0.99,
    "dairy-free": 0.08,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.04,
    "peanut-free": 0.05
   },
   "ordinary-04": {
@@ -215,7 +215,7 @@
    "vegan": 0.08,
    "dairy-free": 0.08,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.05
   },
   "ordinary-05": {
@@ -223,7 +223,7 @@
    "vegan": 0.99,
    "dairy-free": 0.07,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.04,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.05
   },
   "ordinary-06": {
@@ -255,7 +255,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.11,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.04,
    "peanut-free": 0.05
   },
   "ordinary-10": {
@@ -287,7 +287,7 @@
    "vegan": 0.09,
    "dairy-free": 0.08,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.05
   },
   "ordinary-14": {
@@ -295,7 +295,7 @@
    "vegan": 0.98,
    "dairy-free": 0.08,
    "gluten-free": 0.27,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.07
   },
   "ordinary-15": {
@@ -311,7 +311,7 @@
    "vegan": 0.09,
    "dairy-free": 0.07,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.07,
    "peanut-free": 0.05
   },
   "ordinary-17": {
@@ -319,7 +319,7 @@
    "vegan": 0.98,
    "dairy-free": 0.98,
    "gluten-free": 0.15,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.05
   },
   "ordinary-18": {
@@ -335,7 +335,7 @@
    "vegan": 0.98,
    "dairy-free": 0.99,
    "gluten-free": 0.16,
-   "tree-nut-free": 0.06,
+   "tree-nut-free": 0.05,
    "peanut-free": 0.05
   },
   "heldout-nut-gianduja": {
@@ -367,7 +367,7 @@
    "vegan": 0.11,
    "dairy-free": 0.09,
    "gluten-free": 0.1,
-   "tree-nut-free": 0.1,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.08
   },
   "heldout-veg-oyster-sauce": {
@@ -375,7 +375,7 @@
    "vegan": 0.91,
    "dairy-free": 0.1,
    "gluten-free": 0.58,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "heldout-veg-stock-cube": {
@@ -415,7 +415,7 @@
    "vegan": 0.08,
    "dairy-free": 0.07,
    "gluten-free": 0.07,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.08,
    "peanut-free": 0.07
   },
   "heldout-gluten-soy-sauce": {
@@ -431,7 +431,7 @@
    "vegan": 0.1,
    "dairy-free": 0.08,
    "gluten-free": 0.97,
-   "tree-nut-free": 0.05,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "heldout-gluten-rice-noodles": {
@@ -447,7 +447,7 @@
    "vegan": 0.87,
    "dairy-free": 0.88,
    "gluten-free": 0.26,
-   "tree-nut-free": 0.96,
+   "tree-nut-free": 0.95,
    "peanut-free": 0.1
   },
   "allowed-korma-paste": {
@@ -455,7 +455,7 @@
    "vegan": 0.46,
    "dairy-free": 0.28,
    "gluten-free": 0.34,
-   "tree-nut-free": 0.38,
+   "tree-nut-free": 0.11,
    "peanut-free": 0.29
   },
   "allowed-tikka-masala-seasoning": {
@@ -463,7 +463,7 @@
    "vegan": 0.49,
    "dairy-free": 0.37,
    "gluten-free": 0.42,
-   "tree-nut-free": 0.15,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.14
   },
   "allowed-nut-free-korma-paste": {
@@ -471,7 +471,7 @@
    "vegan": 0.3,
    "dairy-free": 0.25,
    "gluten-free": 0.26,
-   "tree-nut-free": 0.07,
+   "tree-nut-free": 0.06,
    "peanut-free": 0.07
   },
   "heldout-peanut-chilli-crisp": {
@@ -479,7 +479,7 @@
    "vegan": 0.36,
    "dairy-free": 0.1,
    "gluten-free": 0.28,
-   "tree-nut-free": 0.12,
+   "tree-nut-free": 0.1,
    "peanut-free": 0.77
   },
   "heldout-peanut-groundnut-oil": {
@@ -487,7 +487,7 @@
    "vegan": 0.1,
    "dairy-free": 0.08,
    "gluten-free": 0.08,
-   "tree-nut-free": 0.08,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.99
   },
   "heldout-tree-brazil-nuts": {
@@ -503,7 +503,7 @@
    "vegan": 0.46,
    "dairy-free": 0.23,
    "gluten-free": 0.41,
-   "tree-nut-free": 0.23,
+   "tree-nut-free": 0.09,
    "peanut-free": 0.21
   }
  }

@@ -286,3 +286,38 @@ def _save(corpus: RecipeCorpusStore, external_id: str, title: str, ingredients: 
             ingredients=[StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in ingredients],
         )
     )
+
+
+def test_a_store_written_before_the_split_is_upgraded_by_asking_only_the_two_new_flags(tmp_path) -> None:
+    """The deploy transition: decisions keyed by the old `nut-free` flag sit beside still-valid preference ones."""
+    corpus = _corpus(tmp_path)
+    kept = ("vegetarian", "vegan", "dairy-free", "gluten-free")
+    parent_store = [
+        DietaryDecision(
+            recipe_id=rid,
+            flag=flag,
+            probability=0.0,
+            model=SNAPSHOT,
+            content_hash=content_fingerprint(title, ingredients),
+            criteria_hash=question_hash(dietary_questions()[flag]) if flag in kept else "0" * 64,
+            computed_at=datetime(2026, 10, 15, tzinfo=UTC),
+        )
+        for rid, title, ingredients in (
+            ("rec_pesto", "Pesto Pasta", ["spaghetti", "basil pesto"]),
+            ("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"]),
+        )
+        for flag in (*kept, "nut-free")
+    ]
+    DietaryDecisionStore(corpus.store).save(parent_store)
+    api = FakeDecisionApi()
+
+    report = produce_missing_decisions(corpus, api.client())
+
+    assert {frozenset(request["questions"]) for request in api.requests} == {
+        frozenset({"tree-nut-free", "peanut-free"})
+    }
+    assert (report.computed, report.coverage, report.uncovered) == (4, 1.0, [])
+    assert {d.flag for d in DietaryDecisionStore(corpus.store).load()} >= {"tree-nut-free", "peanut-free"}
+    second = FakeDecisionApi()
+    assert produce_missing_decisions(corpus, second.client()).computed == 0
+    assert second.requests == []
