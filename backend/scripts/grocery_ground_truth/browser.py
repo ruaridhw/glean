@@ -5,8 +5,6 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from playwright.sync_api import sync_playwright  # the dev-only dependency group `audit`
-
 from .retailers import Page
 
 if TYPE_CHECKING:
@@ -36,6 +34,9 @@ class PlaywrightPageSource:
         self._context = None
 
     def __enter__(self) -> PlaywrightPageSource:
+        # Imported here so everything else imports without the dev-only `audit` group installed.
+        from playwright.sync_api import sync_playwright  # noqa: PLC0415
+
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch()
         self._context = self._browser.new_context(user_agent=USER_AGENT, locale="en-GB")
