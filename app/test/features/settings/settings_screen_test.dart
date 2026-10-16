@@ -15,6 +15,7 @@
 // or `tester.pump`) drives it forward. This is what timed out the suite at
 // 10 minutes before the fix — not a debounce, and not a leaked production
 // timer (verified: `_maxTimeDebounce` is cancelled in `dispose()`).
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -232,6 +233,36 @@ void main() {
           find.byKey(_dinnersSliderKey),
         );
         expect(reloaded.value, 7.0);
+      },
+    );
+
+    _settingsWidgetTest(
+      'offers Tree-nut-free and Peanut-free chips instead of Nut-Free, both '
+      'selected for a household that stored the old Nut-Free choice',
+      (WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(const Size(420, 2000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.runAsync(
+          () => db
+              .into(db.userConfig)
+              .insert(
+                UserConfigCompanion.insert(
+                  id: _userId,
+                  dietaryFlags: const Value('["Nut-Free"]'),
+                ),
+              ),
+        );
+
+        await tester.pumpWidget(_buildApp(db: db));
+        await _waitForContent(tester);
+
+        expect(find.text('Nut-Free'), findsNothing);
+        for (final label in <String>['Tree-nut-free', 'Peanut-free']) {
+          final chip = tester.widget<FilterChip>(
+            find.widgetWithText(FilterChip, label),
+          );
+          expect(chip.selected, isTrue, reason: '$label is selected');
+        }
       },
     );
 

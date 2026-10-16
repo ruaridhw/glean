@@ -4,7 +4,9 @@
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/features/settings/settings_presentation.dart';
 
 import 'fixture.dart';
 
@@ -94,6 +96,72 @@ void main() {
         expect(config.maxActiveTimeMins, 45);
       },
     );
+
+    group('a stored legacy "nut-free" choice', () {
+      Future<void> storeRaw(String json) => db
+          .into(db.userConfig)
+          .insert(
+            UserConfigCompanion.insert(id: userId, dietaryFlags: Value(json)),
+          );
+
+      test('reads back as both the tree-nut and peanut flags', () async {
+        await storeRaw('["nut-free"]');
+
+        final config = await repository.get(userId);
+
+        expect(config.dietaryFlags, ['Tree-nut-free', 'Peanut-free']);
+      });
+
+      test(
+        'is matched whatever its case and keeps the other flags in order',
+        () async {
+          await storeRaw('["Vegan"," Nut-Free ","Keto"]');
+
+          final config = await repository.get(userId);
+
+          expect(config.dietaryFlags, [
+            'Vegan',
+            'Tree-nut-free',
+            'Peanut-free',
+            'Keto',
+          ]);
+        },
+      );
+
+      test('adds no duplicate when a new flag is already stored', () async {
+        await storeRaw('["Tree-nut-free","nut-free"]');
+
+        final config = await repository.get(userId);
+
+        expect(config.dietaryFlags, ['Tree-nut-free', 'Peanut-free']);
+      });
+
+      test('is written back as the two new flags on the next save', () async {
+        await storeRaw('["nut-free"]');
+
+        await repository.save(await repository.get(userId));
+
+        final raw = (await db.select(db.userConfig).getSingle()).dietaryFlags;
+        expect(raw, '["Tree-nut-free","Peanut-free"]');
+      });
+
+      test('is not turned into a flag the household did not choose', () async {
+        await storeRaw('["Peanut-free"]');
+
+        final config = await repository.get(userId);
+
+        expect(config.dietaryFlags, ['Peanut-free']);
+      });
+
+      test('shows as both chips the Settings screen offers', () async {
+        await storeRaw('["nut-free"]');
+
+        final config = await repository.get(userId);
+
+        expect(config.dietaryFlags, everyElement(isIn(dietaryOptions)));
+        expect(dietaryOptions, isNot(contains('Nut-Free')));
+      });
+    });
 
     test('a second save overwrites rather than duplicating the row', () async {
       await repository.save(UserConfigView.defaults(userId));
