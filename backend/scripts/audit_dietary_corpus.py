@@ -44,8 +44,8 @@ from scripts.grocery_ground_truth import (
     SainsburysReader,
     classify,
     is_unsafe,
+    retailer_lookup,
 )
-from scripts.grocery_ground_truth import ground_truth as read_retailer_shelf
 
 from glean.decisions import DecisionClient, DecisionError, NoulQuestion
 from glean.meal_plan.dietary_decisions import (
@@ -799,7 +799,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.data_dir,
                 baseline_questions=baseline[0],
                 baseline_thresholds=thresholds,
-                lookup=lambda name: read_retailer_shelf(name, 5, readers=readers, cache=cache),
+                lookup=retailer_lookup(readers, cache=cache, policy=policy),
                 policy=policy,
             )
     return 0
