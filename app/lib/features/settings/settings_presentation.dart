@@ -8,7 +8,8 @@ const List<String> dietaryOptions = <String>[
   'Vegan',
   'Gluten-Free',
   'Dairy-Free',
-  'Nut-Free',
+  'Tree-nut-free',
+  'Peanut-free',
   'Keto',
   'Paleo',
 ];

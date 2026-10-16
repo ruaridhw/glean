@@ -72,7 +72,28 @@ class UserConfigRepository {
     purchaseTolerance: row.purchaseTolerance,
     preferredServings: row.preferredServings,
     mealsPerWeek: row.mealsPerWeek,
-    dietaryFlags: (jsonDecode(row.dietaryFlags) as List).cast<String>(),
+    dietaryFlags: _withLegacyNutFreeSplit(
+      (jsonDecode(row.dietaryFlags) as List).cast<String>(),
+    ),
     maxActiveTimeMins: row.maxActiveTimeMins,
   );
+}
+
+const String _treeNutFreeFlag = 'Tree-nut-free';
+const String _peanutFreeFlag = 'Peanut-free';
+
+/// Older builds stored one "Nut-Free" flag. It stands for both allergies, so a
+/// household that chose it keeps both and nothing becomes less strict. The
+/// stored list is only rewritten on the next save, so no schema step is needed.
+List<String> _withLegacyNutFreeSplit(List<String> stored) {
+  final flags = <String>[];
+  for (final flag in stored) {
+    final replacement = flag.trim().toLowerCase() == 'nut-free'
+        ? const [_treeNutFreeFlag, _peanutFreeFlag]
+        : [flag];
+    for (final next in replacement) {
+      if (!flags.contains(next)) flags.add(next);
+    }
+  }
+  return flags;
 }
