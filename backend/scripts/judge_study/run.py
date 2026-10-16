@@ -33,6 +33,7 @@ from glean.llm import Feature, LLMRouter, ModelPurpose, create_chat_model
 from judge_study.decision_judge import DecisionJudge
 from judge_study.freeze import freeze_feature
 from judge_study.llm_judge import LlmJudge, UsageRecorder, fetch_prices
+from judge_study.metrics import Spend, spend_of
 from judge_study.orchestrate import run_jobs
 from judge_study.report import Narrative, build_report
 from judge_study.results import Results
@@ -114,6 +115,11 @@ def add_stress(out: Path) -> None:
     print(f"{len(added)} stress variants added")
 
 
+def _money(spend: Spend) -> str:
+    unpriced = f" + {spend.unpriced_calls} unpriced calls" if spend.unpriced_calls else ""
+    return f"${spend.known:.4f} known{unpriced}"
+
+
 def _llm_judge_id(feature: FeatureName, router: LLMRouter) -> str:
     return os.environ.get("GLEAN_JUDGE_MODEL") or router.model_id_for(SOURCES[feature][1], purpose=ModelPurpose.EVAL)
 
@@ -160,8 +166,8 @@ def judge(out: Path, repeats: int, cap: float, *, fresh: bool) -> None:
     updated = updated.model_copy(update={"models": models})
     updated.save(out / "results.json")
     new = updated.attempts[before:]
-    spend = sum(a.cost_usd or 0.0 for a in new)
-    print(f"{len(new)} calls made, {sum(a.outcome != 'ok' for a in new)} failed; spend ${spend:.4f} (cap ${cap})")
+    spend = spend_of(new)
+    print(f"{len(new)} calls made, {sum(a.outcome != 'ok' for a in new)} failed; spend {_money(spend)} (cap ${cap})")
     for failure in updated.failures:
         print("MISSING", failure.item_id, failure.judge, failure.repeat, failure.error)
 
@@ -187,7 +193,7 @@ def panel(out: Path, cap: float) -> None:
     updated = run_jobs(results, jobs, make_judge, workers=WORKERS, spend_cap=cap)
     updated.save(out / "results.json")
     new = updated.attempts[before:]
-    print(f"panel spend ${sum(a.cost_usd or 0.0 for a in new):.4f} (cap ${cap}); {len(new)} calls")
+    print(f"panel spend {_money(spend_of(new))} (cap ${cap}); {len(new)} calls")
 
 
 def report(out: Path) -> None:
