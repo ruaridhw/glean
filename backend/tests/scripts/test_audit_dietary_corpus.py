@@ -322,18 +322,21 @@ def test_a_retailer_verdict_settles_a_recipe_the_judges_disagree_about() -> None
 
 
 def test_the_retailer_outranks_a_maintainer_label_where_it_gives_a_definite_answer() -> None:
-    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+    fine_label = next(iter(audit.MAINTAINER_NUT_FREE_LABELS))
 
-    truth = audit.resolve_truth("nut-free", exclude_label, ["Korma Curry Paste"], _UNSURE, lookup=lambda _: _shelf())
+    truth = audit.resolve_truth("nut-free", fine_label, ["Green Pesto"], _UNSURE, lookup=_PESTO_ONLY)
 
-    assert truth == "fine"
+    assert audit.MAINTAINER_NUT_FREE_LABELS[fine_label] == "fine"
+    assert truth == "breaks"
 
 
 def test_the_maintainer_label_decides_where_the_retailer_cannot() -> None:
     blocked = lambda name: IngredientVerdict(ingredient=name, status="blocked")  # noqa: E731
-    exclude_label = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+    fine_label = next(iter(audit.MAINTAINER_NUT_FREE_LABELS))
+    unsure_and_unlabelled = audit.resolve_truth("nut-free", "rec_x", ["Green Pesto"], _UNSURE, lookup=blocked)
 
-    assert audit.resolve_truth("nut-free", exclude_label, ["Korma Curry Paste"], _UNSURE, lookup=blocked) == "breaks"
+    assert audit.resolve_truth("nut-free", fine_label, ["Green Pesto"], _UNSURE, lookup=blocked) == "fine"
+    assert unsure_and_unlabelled is None
 
 
 def test_the_retailer_is_not_asked_when_the_judges_agree() -> None:
@@ -398,7 +401,7 @@ def test_other_flags_never_consult_the_retailer() -> None:
 
 
 def test_the_retailer_section_lists_each_both_unsure_recipe_with_its_shelf_and_the_maintainers_label() -> None:
-    labelled = next(rid for rid, label in audit.MAINTAINER_NUT_FREE_LABELS.items() if label == "exclude")
+    labelled = next(iter(audit.MAINTAINER_NUT_FREE_LABELS))
     recipes = {
         labelled: audit.AuditRecipe(labelled, "Korma", ["Korma Curry Paste", "Rice"]),
         "rec_y": audit.AuditRecipe("rec_y", "Pesto pasta", ["Green Pesto"]),
@@ -412,6 +415,6 @@ def test_the_retailer_section_lists_each_both_unsure_recipe_with_its_shelf_and_t
 
     report = audit.render_retailer_section(recipes, signals, lookup=_PESTO_ONLY, policy=None)
 
-    assert "Korma (`" + labelled + "`): retailer fine; maintainer label exclude" in report
+    assert "Korma (`" + labelled + "`): retailer fine; maintainer label fine" in report
     assert "Pesto pasta (`rec_y`): retailer breaks; maintainer label none" in report
     assert "Plain" not in report
