@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import quote
@@ -668,3 +670,15 @@ def test_the_command_line_applies_the_selected_policy_to_incomplete_samples(tmp_
 
     assert "korma paste: insufficient" in cautious
     assert "korma paste: resolved" in default
+
+
+def test_the_helper_and_its_command_line_import_without_playwright_loaded() -> None:
+    code = (
+        "import sys\n"
+        "import scripts.grocery_ground_truth, scripts.grocery_ground_truth.__main__, scripts.audit_dietary_corpus\n"
+        "assert 'playwright' not in sys.modules, 'playwright was imported'\n"
+    )
+
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)  # noqa: S603
+
+    assert result.returncode == 0, result.stderr

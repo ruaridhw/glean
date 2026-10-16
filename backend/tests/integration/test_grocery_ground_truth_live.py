@@ -21,6 +21,7 @@ pytestmark = [
 
 
 def test_a_real_ocado_product_is_read_with_its_ingredients() -> None:
+    pytest.importorskip("playwright")
     with PlaywrightPageSource() as source:
         reader = OcadoReader(source)
         try:
