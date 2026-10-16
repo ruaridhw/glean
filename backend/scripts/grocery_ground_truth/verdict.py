@@ -203,8 +203,9 @@ def _is_relevant(query: str, product_name: str) -> bool:
 
 _SIZE = re.compile(r"x?\d+(?:x\d+)?(?:g|kg|ml|cl|l|pack)?")
 _STOPWORDS = frozenset({"the", "a", "an", "and", "of", "with", "by", "in", "for", "to"})
-# Brands a recipe can name, as phrases. Kept short and explicit on purpose: a brand missing from this list (and not
-# written as a possessive such as "Patak's") is treated as generic, which needs three products, the safe direction.
+# The only brands that can name a product, as phrases. Kept short and explicit on purpose: a brand missing from this
+# list is treated as generic, which needs three products, the safe direction. No other rule (such as "a possessive
+# is a brand") is used, because food phrases like "shepherd's seasoning" look the same.
 KNOWN_BRANDS: tuple[str, ...] = (
     "Patak's",
     "Sharwood's",
@@ -222,9 +223,6 @@ KNOWN_BRANDS: tuple[str, ...] = (
     "Sacla",
     "Barts",
 )
-# Possessives that are food phrases, not brands: "baker's yeast", "devil's food".
-_NOT_BRANDS = frozenset({"chef", "baker", "cook", "butcher", "farmer", "mum", "grandma", "nanna", "devil"})
-_POSSESSIVE = re.compile(r"\b(\w+)['\u2019]s?(?!\w)")
 
 
 def _contains_phrase(words: list[str], phrase: list[str]) -> bool:
@@ -232,21 +230,18 @@ def _contains_phrase(words: list[str], phrase: list[str]) -> bool:
 
 
 def _brands_in(query: str, brands: tuple[str, ...]) -> list[list[str]]:
-    """The brands the query names: a listed brand (as a phrase) or a possessive such as "Patak's"."""
+    """The listed brands the query names, each as a phrase. Curly and straight apostrophes and plural possessives
+    match alike, so "Patak\u2019s" and "Pataks" find "Patak's"."""
     words = _word_list(query)
-    named = [phrase for brand in brands if _contains_phrase(words, phrase := _word_list(brand))]
-    for match in _POSSESSIVE.finditer(query):
-        if match.group(1).casefold() not in _NOT_BRANDS and (phrase := _word_list(match.group(0))) not in named:
-            named.append(phrase)
-    return named
+    return [phrase for brand in brands if _contains_phrase(words, phrase := _word_list(brand))]
 
 
 def _names_exactly(query: str, product_name: str, brands: tuple[str, ...] = KNOWN_BRANDS) -> bool:
     """The query names this very product: it names a brand that the product's name carries too, and every significant
     word of the product's name is in the query. "Patak's korma paste" names Patak's Korma Spice Paste 290g.
 
-    A brand is a listed one or a possessive; anything else is generic. So the heuristic errs one way only: a real
-    brand that is neither listed nor possessive ("Acme korma paste") is treated as generic and needs three products."""
+    A brand is a listed one; anything else is generic. So the heuristic errs one way only: a real brand that isn't
+    listed ("Acme korma paste") is treated as generic and needs three products."""
     named = _brands_in(query, brands)
     product = _word_list(product_name)
     significant = _tokens(product_name) - _GENERIC_WORDS - _STOPWORDS
