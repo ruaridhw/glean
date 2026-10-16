@@ -7,7 +7,7 @@ date: 2026-10-06
 
 Search results are **previewed, not silently saved**: tapping a result opens it, and an explicit save/unsave toggle is what adds it to the library. Saved recipes are **deletable** — a library that can only grow isn't a library. Deleting a recipe keeps any plan entry that references it: the entry snapshots what you're cooking and just loses the link. "Add to plan" happens **in place** on the recipe screen, with the button reflecting "In plan" — no navigation, and nothing left behind that can re-add the recipe on a later visit to Plan.
 
-**Source links are hidden.** Surfacing `source_url` as tappable attribution was tried, and in practice it kicked the user into the source's own app demanding a sign-in (Gousto) — attribution isn't worth that trap.
+**Source links are hidden.** Surfacing `source_url` as tappable attribution was tried, and in practice it kicked the user into the source's own app demanding a sign-in — attribution isn't worth that trap.
 
 ## Considered options
 
