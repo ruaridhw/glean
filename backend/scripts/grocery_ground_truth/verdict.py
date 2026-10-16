@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
@@ -11,6 +12,7 @@ from .classify import classify
 from .retailers import ProductUnreadable, RetailerBlocked
 
 if TYPE_CHECKING:
+    from .cache import ProductCache
     from .models import Product
     from .retailers import RetailerReader
 
@@ -86,9 +88,21 @@ def _verdict(ingredient: str, retailer: str, products: list[Product]) -> Ingredi
     )
 
 
+_GENERIC_WORDS = frozenset(
+    {"paste", "pastes", "sauce", "sauces", "curry", "seasoning", "spice", "spices", "mix", "powder", "pot", "pots"}
+)
+
+
+def _is_relevant(query: str, product_name: str) -> bool:
+    """A hit is on topic when it names every distinctive word of the query ('korma' in 'korma curry paste')."""
+    words = [word for word in re.findall(r"[a-z]+", query.casefold()) if word not in _GENERIC_WORDS]
+    name = product_name.casefold()
+    return all(word in name for word in words)
+
+
 def _read_products(reader: RetailerReader, query: str, n: int) -> list[Product]:
     products = []
-    for ref in reader.search(query)[:n]:
+    for ref in [ref for ref in reader.search(query) if _is_relevant(query, ref.name)][:n]:
         try:
             products.append(reader.read(ref))
         except ProductUnreadable:
@@ -96,18 +110,25 @@ def _read_products(reader: RetailerReader, query: str, n: int) -> list[Product]:
     return products
 
 
-def ground_truth(ingredient_name: str, n: int = 5, *, readers: list[RetailerReader]) -> IngredientVerdict:
+def ground_truth(
+    ingredient_name: str, n: int = 5, *, readers: list[RetailerReader], cache: ProductCache | None = None
+) -> IngredientVerdict:
     """Read the top `n` products for `ingredient_name` and say how often they carry nuts or peanuts.
 
     Readers are tried in order; a blocked or empty one hands over to the next. Nothing is ever guessed.
+    A cache hit costs no browser requests; blocked and empty reads are never cached.
     """
     blocked = False
     for reader in readers:
-        try:
-            products = _read_products(reader, ingredient_name, n)
-        except RetailerBlocked:
-            blocked = True
-            continue
+        products = cache.get(reader.name, ingredient_name, n) if cache else None
+        if products is None:
+            try:
+                products = _read_products(reader, ingredient_name, n)
+            except RetailerBlocked:
+                blocked = True
+                continue
+            if products and cache:
+                cache.put(reader.name, ingredient_name, n, products)
         if products:
             return _verdict(ingredient_name, reader.name, products)
     return IngredientVerdict(ingredient=ingredient_name, status="blocked" if blocked else "not_found")

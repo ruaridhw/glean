@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+
 from grocery_fixtures import (
     ACCESS_DENIED,
     FakePageSource,
@@ -10,7 +13,16 @@ from grocery_fixtures import (
     sainsburys_product,
     sainsburys_search,
 )
-from scripts.grocery_ground_truth import Frequency, OcadoReader, SainsburysReader, ground_truth
+from scripts.grocery_ground_truth import (
+    Frequency,
+    OcadoReader,
+    ProductCache,
+    SainsburysReader,
+    ground_truth,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SEARCH = "https://www.ocado.com/search?q=korma%20paste"
 SB_SEARCH = "https://www.sainsburys.co.uk/gol-ui/SearchResults/korma%20paste"
@@ -94,3 +106,55 @@ def test_an_ingredient_no_retailer_stocks_is_not_found_rather_than_nut_free() ->
 
     assert verdict.status == "not_found"
     assert verdict.tree_nut is None
+
+
+def test_search_hits_that_are_not_the_ingredient_asked_for_are_not_read() -> None:
+    shop = _ocado_shop(
+        ("Acme Korma Paste", "Water, Cashew Nuts", None),
+        ("Acme Butter Chicken Paste", "Water, Spices", None),
+    )
+
+    verdict = ground_truth("korma paste", 5, readers=[OcadoReader(shop)])
+
+    assert verdict.products_read == 1
+    assert not any("butter" in url for url in shop.requested)
+
+
+def test_a_cached_re_run_makes_no_browser_requests(tmp_path: Path) -> None:
+    shop = _ocado_shop(("Acme Korma Paste", "Water, Cashew Nuts", None))
+    cache = ProductCache(tmp_path)
+    first = ground_truth("korma paste", 3, readers=[OcadoReader(shop)], cache=cache)
+    requests_after_first_run = len(shop.requested)
+
+    second = ground_truth("korma paste", 3, readers=[OcadoReader(shop)], cache=ProductCache(tmp_path))
+
+    assert requests_after_first_run > 0
+    assert len(shop.requested) == requests_after_first_run
+    assert second == first
+
+
+def test_a_cache_entry_older_than_the_refetch_period_is_read_again(tmp_path: Path) -> None:
+    shop = _ocado_shop(("Acme Korma Paste", "Water, Cashew Nuts", None))
+    start = datetime(2026, 10, 16, tzinfo=UTC)
+    ground_truth("korma paste", 3, readers=[OcadoReader(shop)], cache=ProductCache(tmp_path, clock=lambda: start))
+    requests_after_first_run = len(shop.requested)
+    later = start + timedelta(days=31)
+
+    ground_truth(
+        "korma paste",
+        3,
+        readers=[OcadoReader(shop)],
+        cache=ProductCache(tmp_path, max_age=timedelta(days=30), clock=lambda: later),
+    )
+
+    assert len(shop.requested) == 2 * requests_after_first_run
+
+
+def test_a_blocked_read_is_not_cached_so_the_next_run_tries_again(tmp_path: Path) -> None:
+    blocked = FakePageSource({SEARCH: ACCESS_DENIED})
+    ground_truth("korma paste", 3, readers=[OcadoReader(blocked)], cache=ProductCache(tmp_path))
+
+    shop = _ocado_shop(("Acme Korma Paste", "Water, Cashew Nuts", None))
+    verdict = ground_truth("korma paste", 3, readers=[OcadoReader(shop)], cache=ProductCache(tmp_path))
+
+    assert verdict.status == "resolved"
