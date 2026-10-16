@@ -63,7 +63,10 @@ def _kappa(value: float | None) -> str:
 def _usd(value: float | None) -> str:
     if value is None:
         return "unknown"
-    return f"${value:.2f}" if value >= 1 else f"${value:.5f}".rstrip("0").rstrip(".")
+    if value >= 1:
+        return f"${value:.2f}"
+    decimals = 5 if value >= 0.01 or value == 0 else 2 - math.floor(math.log10(value))
+    return f"${value:.{decimals}f}".rstrip("0").rstrip(".")
 
 
 def _spend(spend: Spend) -> str:
