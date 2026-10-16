@@ -93,8 +93,9 @@ Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass a
 
 Allergen and diet ground truth for processed ingredients (curry pastes, seasonings, sauces) comes from the
 ingredient lists on the Tesco, Sainsbury's and Ocado online shops. A maintainer label overrides any LLM judge.
-Tree nuts and peanuts are separate allergies with a flag each (`tree-nut-free`, `peanut-free`). Satay and chilli crisp
-are peanut; pine nuts, so pesto, are tree nut. A `nut-free` sent by an older app build applies both.
+Tree nuts and peanuts are separate allergies with a flag each (`tree-nut-free`, `peanut-free`). Satay is peanut;
+pine nuts, so pesto, are tree nut. Other processed ingredients, chilli crisp included, follow the retailer data with
+no named exception. A `nut-free` sent by an older app build applies both.
 
 Retailer ground truth is a dev-only helper, `scripts/grocery_ground_truth/` (Playwright lives in the `audit`
 dependency group and is never imported by `src/glean`). Run it with
