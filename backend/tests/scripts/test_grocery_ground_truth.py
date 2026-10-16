@@ -20,11 +20,14 @@ from scripts.grocery_ground_truth import (
     Frequency,
     IngredientVerdict,
     OcadoReader,
+    Product,
     ProductCache,
     SainsburysReader,
     is_unsafe,
+    retailer_lookup,
 )
 from scripts.grocery_ground_truth import ground_truth as read_shelf
+from scripts.grocery_ground_truth.__main__ import main as cli_main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -527,3 +530,141 @@ def test_unread_products_that_cannot_change_the_answer_under_the_policy_still_re
     verdict = read_shelf("korma paste", 5, readers=[OcadoReader(cashew)], policy=policy)
 
     assert (verdict.status, is_unsafe(verdict, policy)) == ("resolved", True)
+
+
+@pytest.mark.parametrize(
+    ("query", "heading"),
+    [
+        ("korma paste", "Korma Curry Paste 200g"),
+        ("curry paste", "Curry Paste 200g"),
+        ("tikka masala paste", "Tikka Masala Curry Paste 2 x 70g"),
+    ],
+)
+def test_a_product_heading_made_only_of_generic_words_does_not_name_a_product(query: str, heading: str) -> None:
+    shop = _ocado_shop((heading, "Water, Spices", None), query=query)
+
+    verdict = read_shelf(query, 5, readers=[OcadoReader(shop)])
+
+    assert (verdict.status, verdict.products_read) == ("insufficient", 1)
+    assert is_unsafe(verdict) is None
+
+
+@pytest.mark.parametrize(
+    ("ingredient", "heading"),
+    [
+        ("Patak\u2019s Korma Paste Pot", "Patak's Korma Paste Pot"),
+        ("Spice Tailor Tikka Masala Paste Kit", "The Spice Tailor Tikka Masala Paste Kit 120g"),
+        ("Sharwood's Korma Paste", "Sharwood's Korma Curry Paste 290g"),
+    ],
+)
+def test_an_ingredient_that_names_a_brand_the_product_carries_is_settled_by_that_product(
+    ingredient: str, heading: str
+) -> None:
+    shop = _ocado_shop((heading, "Water, Spices", None), query=ingredient)
+
+    verdict = read_shelf(ingredient, 5, readers=[OcadoReader(shop)])
+
+    assert (verdict.status, verdict.products_read) == ("resolved", 1)
+
+
+def test_a_brand_with_a_different_kind_of_product_is_not_the_named_product() -> None:
+    shop = _ocado_shop(("Patak's Korma Spice Paste", "Water, Spices", None), query="Patak's Tikka Masala Paste")
+
+    assert read_shelf("Patak's Tikka Masala Paste", 5, readers=[OcadoReader(shop)]).status == "not_found"
+
+
+def test_a_brand_the_product_does_not_carry_is_not_the_named_product() -> None:
+    shop = _ocado_shop(("Korma Curry Paste 200g", "Water, Spices", None), query="Sharwood's Korma Paste")
+
+    assert read_shelf("Sharwood's Korma Paste", 5, readers=[OcadoReader(shop)]).status in {"not_found", "insufficient"}
+
+
+def _cache_entry(cache_dir: Path, retailer: str, names: list[str]) -> None:
+    products = [
+        Product(
+            retailer=retailer,
+            name=f"{name} Korma Paste",
+            url=f"https://{retailer}.test/{name}",
+            ingredients_text="Water",
+        )
+        for name in names
+    ]
+    ProductCache(cache_dir).put(retailer, "korma paste", 5, products)
+
+
+def test_a_thin_cached_result_moves_on_to_the_next_retailers_cache(tmp_path: Path) -> None:
+    _cache_entry(tmp_path, "ocado", ["Acme", "Bravo"])
+    _cache_entry(tmp_path, "sainsburys", ["Acme", "Bravo", "Corner"])
+    ocado, sainsburys = FakePageSource({}), FakePageSource({})
+
+    verdict = read_shelf(
+        "korma paste",
+        5,
+        readers=[OcadoReader(ocado), SainsburysReader(sainsburys)],
+        cache=ProductCache(tmp_path),
+    )
+
+    assert (verdict.status, verdict.retailer, verdict.products_read) == ("resolved", "sainsburys", 3)
+    assert ocado.requested == sainsburys.requested == []
+
+
+def test_a_thin_cached_result_does_not_stop_a_live_read_from_the_next_retailer(tmp_path: Path) -> None:
+    _cache_entry(tmp_path, "ocado", ["Acme", "Bravo"])
+    ocado = FakePageSource({})
+    sainsburys = FakePageSource(
+        {
+            SB_SEARCH: sainsburys_search(*((f"{_BRANDS[i]} Korma Paste", f"p{i}") for i in range(3))),
+            **{
+                f"https://www.sainsburys.co.uk/gol-ui/product/p{i}": sainsburys_product(
+                    f"{_BRANDS[i]} Korma Paste", "Water"
+                )
+                for i in range(3)
+            },
+        }
+    )
+
+    verdict = read_shelf(
+        "korma paste", 5, readers=[OcadoReader(ocado), SainsburysReader(sainsburys)], cache=ProductCache(tmp_path)
+    )
+
+    assert (verdict.status, verdict.retailer) == ("resolved", "sainsburys")
+    assert ocado.requested == []
+
+
+def test_when_every_cache_is_thin_the_thin_verdict_is_returned_without_requests(tmp_path: Path) -> None:
+    _cache_entry(tmp_path, "ocado", ["Acme", "Bravo"])
+    ocado = FakePageSource({})
+
+    verdict = read_shelf("korma paste", 5, readers=[OcadoReader(ocado)], cache=ProductCache(tmp_path))
+
+    assert (verdict.status, verdict.products_read) == ("insufficient", 2)
+    assert ocado.requested == []
+
+
+def test_the_lookup_the_audit_uses_applies_the_active_policy_to_incomplete_samples() -> None:
+    policy = ContainsPolicy(minimum=Frequency.SOMETIMES)
+    lookup = retailer_lookup([OcadoReader(_five_pastes())], policy=policy)
+
+    assert lookup("korma paste").status == "insufficient"
+    assert retailer_lookup([OcadoReader(_five_pastes())])("korma paste").status == "resolved"
+
+
+def test_the_command_line_applies_the_selected_policy_to_incomplete_samples(tmp_path: Path, capsys) -> None:
+    class Browser:
+        def __init__(self) -> None:
+            self.shop = _five_pastes()
+
+        def __enter__(self) -> FakePageSource:
+            return self.shop
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    args = ["korma paste", "--cache-dir", str(tmp_path)]
+    cli_main([*args, "--minimum", "sometimes"], browser=Browser)
+    cautious = capsys.readouterr().out
+    cli_main(args, browser=Browser)
+    default = capsys.readouterr().out
+
+    assert "korma paste: insufficient" in cautious
+    assert "korma paste: resolved" in default

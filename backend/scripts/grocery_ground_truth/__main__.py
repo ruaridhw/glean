@@ -8,14 +8,23 @@ from __future__ import annotations
 import argparse
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import ContainsPolicy, Frequency, OcadoReader, ProductCache, SainsburysReader, ground_truth, is_unsafe
 from .browser import PlaywrightPageSource
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextlib import AbstractContextManager
+
+    from .retailers import PageSource
+
 DEFAULT_CACHE_DIR = Path(__file__).parents[2] / ".cache" / "grocery_ground_truth"
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None, *, browser: Callable[[], AbstractContextManager[PageSource]] = PlaywrightPageSource
+) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("ingredient")
     parser.add_argument("--n", type=int, default=5, help="Read this many products.")
@@ -26,9 +35,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     policy = ContainsPolicy(minimum=Frequency(args.minimum), may_contain_counts=args.may_contain_counts)
     cache = ProductCache(args.cache_dir, max_age=timedelta(days=args.refetch_after_days))
-    with PlaywrightPageSource() as source:
+    with browser() as source:
         verdict = ground_truth(
-            args.ingredient, args.n, readers=[OcadoReader(source), SainsburysReader(source)], cache=cache
+            args.ingredient,
+            args.n,
+            readers=[OcadoReader(source), SainsburysReader(source)],
+            cache=cache,
+            policy=policy,
         )
     print(f"{verdict.ingredient}: {verdict.status}" + (f" via {verdict.retailer}" if verdict.retailer else ""))
     if verdict.status in ("resolved", "insufficient"):

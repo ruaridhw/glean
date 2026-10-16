@@ -13,6 +13,8 @@ from .classify import classify
 from .retailers import ProductUnreadable, RetailerBlocked
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .cache import ProductCache
     from .models import Product, ProductRef
     from .retailers import RetailerReader
@@ -196,13 +198,34 @@ def _is_relevant(query: str, product_name: str) -> bool:
 
 
 _SIZE = re.compile(r"x?\d+(?:x\d+)?(?:g|kg|ml|cl|l|pack)?")
+_STOPWORDS = frozenset({"the", "a", "an", "and", "of", "with", "by", "in", "for", "to"})
+# Words that say what a product is rather than whose it is. A query word outside this list (and not a size) is
+# taken to be a brand, so an unlisted food word errs towards "not a named product", which needs three products.
+_VOCABULARY = (
+    _KINDS
+    | _GENERIC_WORDS
+    | _CURRY_STYLES
+    | _STOPWORDS
+    | frozenset().union(*_SAME_KIND.values())
+    | frozenset(
+        {"kit", "indian", "mild", "medium", "hot", "spicy", "sweet", "authentic", "style", "traditional", "classic"}
+        | {"red", "green", "yellow", "black", "white", "dark", "light", "organic", "fresh", "dried", "ground", "whole"}
+        | {"tomato", "soy", "soya", "chicken", "beef", "pork", "lamb", "fish", "vegetable", "vegan", "stock", "oyster"}
+        | {"hoisin", "chipotle", "chilli", "chili", "garlic", "ginger", "sriracha", "sambal", "harissa", "miso"}
+        | {"tamarind", "pesto", "basil", "teriyaki", "nduja", "gochujang", "peri", "five", "worcestershire", "bbq"}
+        | {"hot", "sauce", "chinese", "japanese", "cantonese", "north", "south", "mango", "lemon", "coconut", "meat"}
+    )
+)
 
 
 def _names_exactly(query: str, product_name: str) -> bool:
-    """The query names this very product: every significant word of the product's name is in the query
-    (sizes and cuisine words aside), so "Patak's korma paste" names Patak's Korma Spice Paste 290g."""
-    significant = {word for word in _tokens(product_name) - _GENERIC_WORDS if not _SIZE.fullmatch(word)}
-    return significant <= _tokens(query)
+    """The query names this very product: it carries a brand (a word that is no size, kind or cuisine word) that the
+    product's name carries too, and every significant word of the product's name is in the query. "Patak's korma
+    paste" names Patak's Korma Spice Paste 290g; "korma curry paste 200g" names no product at all."""
+    wanted, name = _tokens(query), _tokens(product_name)
+    brand = {word for word in wanted - _VOCABULARY if not _SIZE.fullmatch(word)}
+    significant = {word for word in name - _GENERIC_WORDS - _STOPWORDS if not _SIZE.fullmatch(word)}
+    return bool(brand) and brand <= name and significant <= wanted
 
 
 def _read_products(reader: RetailerReader, query: str, n: int) -> tuple[list[Product], list[ProductRef]]:
@@ -234,6 +257,30 @@ def _judge(
     return _verdict(query, retailer, products, unread, minimum_read=minimum_read, policy=policy)
 
 
+def _from_cache(
+    query: str,
+    readers: list[RetailerReader],
+    cache: ProductCache | None,
+    n: int,
+    minimum_read: int,
+    policy: ContainsPolicy,
+) -> tuple[IngredientVerdict | None, IngredientVerdict | None, set[str]]:
+    """What the caches say, before any browser request: a sufficient result (from any retailer) that answers at once,
+    else the first thin one, and the retailers whose cache was thin so they aren't read again."""
+    thin: IngredientVerdict | None = None
+    thin_retailers: set[str] = set()
+    for reader in readers if cache else []:
+        cached = cache.get(reader.name, query, n) if cache else None
+        if not cached:
+            continue
+        found = _judge(query, reader.name, cached, [], minimum_read, policy)
+        if found.status == "resolved":
+            return found, None, set()
+        thin = thin or found
+        thin_retailers.add(reader.name)
+    return None, thin, thin_retailers
+
+
 def ground_truth(
     ingredient_name: str,
     n: int = 5,
@@ -252,14 +299,13 @@ def ground_truth(
     Blocked, empty and partial reads are never cached.
     """
     policy = policy or ContainsPolicy()
-    if cache:
-        for reader in readers:
-            cached = cache.get(reader.name, ingredient_name, n)
-            if cached:
-                return _judge(ingredient_name, reader.name, cached, [], minimum_read, policy)
+    resolved, insufficient, already_read = _from_cache(ingredient_name, readers, cache, n, minimum_read, policy)
+    if resolved:
+        return resolved
     blocked = False
-    insufficient: IngredientVerdict | None = None
     for reader in readers:
+        if reader.name in already_read:
+            continue
         try:
             products, unread = _read_products(reader, ingredient_name, n)
         except RetailerBlocked:
@@ -276,3 +322,14 @@ def ground_truth(
     if insufficient:
         return insufficient
     return IngredientVerdict(ingredient=ingredient_name, status="blocked" if blocked else "not_found")
+
+
+def retailer_lookup(
+    readers: list[RetailerReader],
+    *,
+    cache: ProductCache | None = None,
+    policy: ContainsPolicy | None = None,
+    n: int = 5,
+) -> Callable[[str], IngredientVerdict]:
+    """`ground_truth` bound to its readers, cache and the active policy: what the audit's `resolve_truth` is given."""
+    return lambda name: ground_truth(name, n, readers=readers, cache=cache, policy=policy)
