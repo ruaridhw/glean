@@ -99,11 +99,17 @@ class GroupRules(BaseModel):
     allowed_forms: tuple[Form, ...] = Field(
         description="The forms an item in the group may have. Only not_applicable where the group has no forms."
     )
-    unopened_shelf_life_days: Mapping[Form, int] = Field(
-        description="Unopened shelf life in days for each allowed form. Never derived from form alone."
+    unopened_shelf_life_days: Mapping[Form, int | None] = Field(
+        description=(
+            "Unopened shelf life in days for each allowed form. Never derived from form alone. "
+            "None means no shelf life: the item never expires. That is the rule for non-food groups."
+        )
     )
     once_opened_shelf_life_days: Mapping[Form, int | None] = Field(
-        description="Once-opened shelf life in days for each allowed form. None where an opened pack has no limit."
+        description=(
+            "Once-opened shelf life in days for each allowed form. None where opening the pack makes no difference "
+            "(loose fresh herbs, eggs) and for items that never expire."
+        )
     )
 
     @property
@@ -145,7 +151,7 @@ def _plain(
     food_group: FoodGroup,
     tracking_mode: TrackingMode,
     *,
-    shelf_life: int,
+    shelf_life: int | None,
     once_opened: int | None,
     stock_unit: StockUnit | None = None,
     kind: Kind = Kind.INGREDIENT,
@@ -252,7 +258,9 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
         GroupId.EGGS: _plain(
             "Eggs", FoodGroup.PROTEIN, _C, shelf_life=21, once_opened=None, stock_unit=StockUnit.COUNT
         ),
-        GroupId.DAIRY: _plain("Dairy", FoodGroup.DAIRY, _C, shelf_life=7, once_opened=5, stock_unit=StockUnit.GRAMS),
+        # Chilled dairy is bought in a bigger pack than one recipe needs and goes off, so it carries a use-by date.
+        # Tinned and whole-pack items (evaporated milk, halloumi, mozzarella) are counted by override.
+        GroupId.DAIRY: _plain("Dairy", FoodGroup.DAIRY, _PER, shelf_life=7, once_opened=5),
         GroupId.GRAINS: _plain(
             "Grains", FoodGroup.CARBOHYDRATES, _C, shelf_life=365, once_opened=180, stock_unit=StockUnit.GRAMS
         ),
@@ -279,11 +287,13 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
         GroupId.SNACKS_AND_TREATS: _plain(
             "Snacks & treats", FoodGroup.OTHER, _C, shelf_life=180, once_opened=14, stock_unit=StockUnit.COUNT
         ),
+        # Non-food never expires. Baby and Pet also hold edible items (formula, pet food), which carry shelf lives
+        # through item overrides.
         GroupId.HOUSEHOLD: _plain(
             "Household",
             FoodGroup.OTHER,
             _C,
-            shelf_life=1095,
+            shelf_life=None,
             once_opened=None,
             stock_unit=StockUnit.COUNT,
             kind=Kind.HOUSEHOLD,
@@ -292,7 +302,7 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             "Health & beauty",
             FoodGroup.OTHER,
             _C,
-            shelf_life=730,
+            shelf_life=None,
             once_opened=None,
             stock_unit=StockUnit.COUNT,
             kind=Kind.HOUSEHOLD,
@@ -301,7 +311,7 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             "Baby",
             FoodGroup.OTHER,
             _C,
-            shelf_life=730,
+            shelf_life=None,
             once_opened=None,
             stock_unit=StockUnit.COUNT,
             kind=Kind.HOUSEHOLD,
@@ -310,7 +320,7 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
             "Pet",
             FoodGroup.OTHER,
             _C,
-            shelf_life=365,
+            shelf_life=None,
             once_opened=None,
             stock_unit=StockUnit.COUNT,
             kind=Kind.HOUSEHOLD,

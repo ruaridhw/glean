@@ -69,8 +69,13 @@ def test_item_overrides_beat_the_group_defaults() -> None:
     )
     assert paste.unopened_shelf_life_days == 365
     assert paste.once_opened_shelf_life_days == 28
-    milk = item("milk", GroupId.DAIRY, overrides=ItemOverrides(stock_unit=StockUnit.MILLILITRES))
-    assert milk.stock_unit is StockUnit.MILLILITRES
+    evaporated = item(
+        "evaporated milk",
+        GroupId.DAIRY,
+        overrides=ItemOverrides(tracking_mode=TrackingMode.COUNTED, stock_unit=StockUnit.GRAMS),
+    )
+    assert evaporated.tracking_mode is TrackingMode.COUNTED
+    assert evaporated.stock_unit is StockUnit.GRAMS
 
 
 def test_overriding_a_presence_item_to_counted_needs_a_stock_unit() -> None:
@@ -92,3 +97,16 @@ def test_density_must_be_positive() -> None:
 
 def test_aliases_are_trimmed() -> None:
     assert item("coriander", GroupId.FRESH_HERBS, aliases=("  fresh coriander ",)).aliases == ("fresh coriander",)
+
+
+def test_a_household_item_never_expires_unless_overridden() -> None:
+    toilet_roll = item("toilet roll", GroupId.HOUSEHOLD)
+    assert toilet_roll.unopened_shelf_life_days is None
+    assert toilet_roll.once_opened_shelf_life_days is None
+    pouch = item(
+        "dog food pouches",
+        GroupId.PET,
+        overrides=ItemOverrides(unopened_shelf_life_days=730, once_opened_shelf_life_days=2),
+    )
+    assert pouch.unopened_shelf_life_days == 730
+    assert pouch.once_opened_shelf_life_days == 2
