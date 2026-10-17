@@ -267,7 +267,8 @@ GROUPS: Mapping[GroupId, GroupRules] = MappingProxyType(
         GroupId.PASTA_AND_RICE: _plain(
             "Pasta & rice", FoodGroup.CARBOHYDRATES, _C, shelf_life=365, once_opened=365, stock_unit=StockUnit.GRAMS
         ),
-        GroupId.BREAD: _plain("Bread", FoodGroup.CARBOHYDRATES, _PER, shelf_life=5, once_opened=None),
+        # A bag of bread opened for a sandwich goes stale in days, so a once-opened life applies.
+        GroupId.BREAD: _plain("Bread", FoodGroup.CARBOHYDRATES, _PER, shelf_life=5, once_opened=4),
         GroupId.OILS_AND_FATS: _plain("Oils & fats", FoodGroup.FATS, _P, shelf_life=365, once_opened=180),
         GroupId.FRESH_HERBS: _plain("Fresh herbs", FoodGroup.CONDIMENTS, _PER, shelf_life=5, once_opened=None),
         GroupId.DRIED_HERBS: _plain("Dried herbs", FoodGroup.CONDIMENTS, _P, shelf_life=365, once_opened=None),
