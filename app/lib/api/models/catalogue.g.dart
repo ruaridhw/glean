@@ -16,7 +16,7 @@ CatalogueGroup _$CatalogueGroupFromJson(Map<String, dynamic> json) =>
       allowedForms: (json['allowed_forms'] as List<dynamic>)
           .map((e) => e as String)
           .toList(),
-      unopenedShelfLifeDays: Map<String, int>.from(
+      unopenedShelfLifeDays: Map<String, int?>.from(
         json['unopened_shelf_life_days'] as Map,
       ),
       onceOpenedShelfLifeDays: Map<String, int?>.from(

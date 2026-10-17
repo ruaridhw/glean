@@ -450,4 +450,38 @@ void main() {
 
     expect(requests, hasLength(1));
   });
+
+  test('a group with no shelf life is stored as null, not zero, and an item '
+      'override of its own is stored beside it', () async {
+    respond(
+      _body(
+        version: 1,
+        items: [
+          _item(
+            'baby-formula',
+            'baby formula',
+            group: 'baby',
+            overrides: {'unopened_shelf_life_days': 730},
+          ),
+          _item('toilet-roll', 'toilet roll', group: 'household'),
+        ],
+      ),
+    );
+    await sync.sync();
+
+    final household = await (db.select(
+      db.ingredientGroups,
+    )..where((g) => g.id.equals('household'))).getSingle();
+    expect(jsonDecode(household.unopenedShelfLifeDays), <String, Object?>{
+      'not_applicable': null,
+    });
+    expect(jsonDecode(household.onceOpenedShelfLifeDays), <String, Object?>{
+      'not_applicable': null,
+    });
+    final items = {
+      for (final i in await db.select(db.catalogueItems).get())
+        i.id: i.overrideUnopenedShelfLifeDays,
+    };
+    expect(items, <String, int?>{'baby-formula': 730, 'toilet-roll': null});
+  });
 }
