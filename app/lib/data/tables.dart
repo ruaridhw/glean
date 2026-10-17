@@ -196,3 +196,64 @@ class UserConfig extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// An ingredient group and the default rules its catalogue items take: seeded in the app, then kept in step with
+/// the backend by catalogue sync. The per-form shelf lives are JSON objects keyed by form, because which forms a
+/// group allows differs by group.
+class IngredientGroups extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get kind => text()();
+  TextColumn get foodGroup => text()();
+  TextColumn get trackingMode => text()();
+  TextColumn get stockUnit => text().nullable()();
+  TextColumn get allowedForms => text()();
+  TextColumn get unopenedShelfLifeDays => text()();
+  TextColumn get onceOpenedShelfLifeDays => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// A synced copy of one backend catalogue item, keyed by its stable id. `groupId` is deliberately not a foreign key:
+/// a newer backend may send a group this build has not seen, and the item must still be stored. The `override*`
+/// columns are the item's own changes to its group's rules, null where the group's apply.
+class CatalogueItems extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get groupId => text()();
+  TextColumn get form => text()();
+  TextColumn get source => text()();
+  RealColumn get densityGPerMl => real().nullable()();
+  TextColumn get overrideTrackingMode => text().nullable()();
+  TextColumn get overrideStockUnit => text().nullable()();
+  IntColumn get overrideUnopenedShelfLifeDays => integer().nullable()();
+  IntColumn get overrideOnceOpenedShelfLifeDays => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Every name that resolves to a catalogue item, its canonical name included. `key` is the case-folded,
+/// whitespace-collapsed form the backend sends for lookups.
+class CatalogueAliases extends Table {
+  TextColumn get key => text()();
+  TextColumn get name => text()();
+  TextColumn get itemId => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+/// How far catalogue sync has got: one row (`id` 1), absent until the first successful sync. `fullSyncedAt` is when
+/// the last full (`since=0`) sync succeeded; ordinary delta syncs leave it alone, so they can never postpone the
+/// next full one.
+class CatalogueSyncState extends Table {
+  IntColumn get id => integer()();
+  IntColumn get version => integer()();
+  TextColumn get syncedAt => text()();
+  TextColumn get fullSyncedAt => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

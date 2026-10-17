@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -13,6 +13,8 @@ from pydantic import (
 )
 
 from glean.catalogue.dynamo_store import DynamoCatalogueStore
+from glean.catalogue.groups import GROUPS, Form, GroupId, GroupRules, Kind, StockUnit, TrackingMode
+from glean.catalogue.models import CatalogueItem, ItemOverrides, Source, name_key
 from glean.catalogue.normalise import MAX_NAMES, NormalisedName, normalise
 from glean.catalogue.store import CatalogueStore  # noqa: TC001 - FastAPI resolves this via Depends at runtime.
 from glean.config import Settings, get_settings
@@ -51,6 +53,68 @@ class NormaliseResponse(BaseModel):
     )
 
 
+class SyncGroup(BaseModel):
+    id: GroupId = Field(description="Stable group id.")
+    name: str = Field(description="Plain-English display name of the group.")
+    kind: Kind = Field(description="Whether items in the group are ingredients or household items.")
+    food_group: str = Field(description="The one food group the meal plan counts the group towards.")
+    tracking_mode: TrackingMode = Field(description="Default tracking mode for items in the group.")
+    stock_unit: StockUnit | None = Field(description="Default stock unit; null unless the group is counted.")
+    allowed_forms: list[Form] = Field(description="The forms an item in the group may take.")
+    unopened_shelf_life_days: dict[Form, int | None] = Field(
+        description="Default unopened shelf life, per allowed form. Null where the group never expires."
+    )
+    once_opened_shelf_life_days: dict[Form, int | None] = Field(
+        description="Default once-opened shelf life, per allowed form. Null where an opened pack has no limit."
+    )
+
+
+class SyncItem(BaseModel):
+    id: str = Field(description="Stable id, unique within the catalogue. Never reused or replaced.")
+    name: str = Field(description="The canonical name.")
+    group: GroupId = Field(description="The ingredient group the item takes its default rules from.")
+    form: Form = Field(description="The form the ingredient is sold and kept in.")
+    overrides: ItemOverrides = Field(description="Per-item changes to the group's rules; null fields use the group's.")
+    density_g_per_ml: float | None = Field(description="Density in g/ml, where known.")
+    source: Source = Field(description="Whether the item came from the seed or was added provisionally by an LLM.")
+
+
+class SyncAlias(BaseModel):
+    key: str = Field(description="The name, case-folded and whitespace-collapsed: what a lookup matches on.")
+    name: str = Field(description="The name as written.")
+    item_id: str = Field(description="The catalogue item the name resolves to.")
+
+
+class CatalogueSyncResponse(BaseModel):
+    version: int = Field(description="The catalogue version this response brings a device up to. Send it as `since`.")
+    groups: list[SyncGroup] = Field(
+        description="Every ingredient group, every time: groups are fixed by the backend release, not versioned."
+    )
+    items: list[SyncItem] = Field(description="Items written after `since`. Empty when the device is up to date.")
+    aliases: list[SyncAlias] = Field(
+        description="Every name, canonical name included, of the items sent. Upsert by `key`."
+    )
+
+
+def _sync_group(group_id: GroupId, rules: GroupRules) -> SyncGroup:
+    return SyncGroup(
+        id=group_id,
+        name=rules.name,
+        kind=rules.kind,
+        food_group=rules.food_group.value,
+        tracking_mode=rules.tracking_mode,
+        stock_unit=rules.stock_unit,
+        allowed_forms=list(rules.allowed_forms),
+        unopened_shelf_life_days=dict(rules.unopened_shelf_life_days),
+        once_opened_shelf_life_days=dict(rules.once_opened_shelf_life_days),
+    )
+
+
+def _sync_aliases(item: CatalogueItem) -> list[SyncAlias]:
+    names = {name_key(name): name for name in (*reversed(item.aliases), item.name)}
+    return [SyncAlias(key=key, name=name, item_id=item.id) for key, name in sorted(names.items())]
+
+
 @lru_cache(maxsize=2)
 def _dynamo_store(table_name: str, region: str) -> DynamoCatalogueStore:
     return DynamoCatalogueStore(table_name, region=region)
@@ -80,3 +144,28 @@ def normalise_names(
 ) -> NormaliseResponse:
     results = normalise(request.names, store=store, decisions=decisions, llm_router=llm_router, context=request.context)
     return NormaliseResponse(results=results)
+
+
+@router.get("", response_model=CatalogueSyncResponse)
+def sync_catalogue(
+    store: Annotated[CatalogueStore, Depends(get_catalogue_store)],
+    since: Annotated[int, Query(ge=0, description="The catalogue version the device holds; 0 is everything.")] = 0,
+) -> CatalogueSyncResponse:
+    changes = store.changes_since(since)
+    return CatalogueSyncResponse(
+        version=changes.version,
+        groups=[_sync_group(group_id, rules) for group_id, rules in GROUPS.items()],
+        items=[
+            SyncItem(
+                id=item.id,
+                name=item.name,
+                group=item.group,
+                form=item.form,
+                overrides=item.overrides,
+                density_g_per_ml=item.density_g_per_ml,
+                source=item.source,
+            )
+            for item in changes.items
+        ],
+        aliases=[alias for item in changes.items for alias in _sync_aliases(item)],
+    )

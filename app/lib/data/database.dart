@@ -3,8 +3,11 @@
 // Connection-agnostic: callers pass a `QueryExecutor` (production: `driftDatabase()` in
 // `providers/database_providers.dart`; tests: `NativeDatabase.memory()`), and both run the same `onCreate`
 // seeding.
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
+import 'seed/ingredient_groups.dart';
 import 'seed/taxonomy.dart';
 import 'tables.dart';
 
@@ -22,13 +25,17 @@ part 'database.g.dart';
     CookedAdjustments,
     ShoppingListItems,
     UserConfig,
+    IngredientGroups,
+    CatalogueItems,
+    CatalogueAliases,
+    CatalogueSyncState,
   ],
 )
 class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -36,6 +43,7 @@ class GleanDatabase extends _$GleanDatabase {
       onCreate: (m) async {
         await m.createAll();
         await _seed();
+        await _seedIngredientGroups();
       },
       onUpgrade: (m, from, to) async {
         // A database written by a newer build: opening it here would skip
@@ -65,6 +73,9 @@ class GleanDatabase extends _$GleanDatabase {
           await m.addColumn(ingredients, ingredients.storeSection);
           await m.addColumn(userConfig, userConfig.groupShoppingBySection);
         }
+        if (from < 4) {
+          await _addCatalogueTables(m);
+        }
       },
       beforeOpen: (details) async {
         // SQLite disables foreign-key enforcement by default; the schema relies on it for
@@ -72,6 +83,36 @@ class GleanDatabase extends _$GleanDatabase {
         await customStatement('PRAGMA foreign_keys = ON');
       },
     );
+  }
+
+  // The catalogue's tables, additive only: nothing here touches an older table. Self-contained so it can be
+  // renumbered by changing only the `from <` guard that calls it.
+  Future<void> _addCatalogueTables(Migrator m) async {
+    await m.createTable(ingredientGroups);
+    await m.createTable(catalogueItems);
+    await m.createTable(catalogueAliases);
+    await m.createTable(catalogueSyncState);
+    await _seedIngredientGroups();
+  }
+
+  // The groups the app works from before its first sync. A sync later overwrites them by id.
+  Future<void> _seedIngredientGroups() async {
+    await batch((b) {
+      b.insertAll(ingredientGroups, [
+        for (final seed in ingredientGroupSeeds)
+          IngredientGroupsCompanion.insert(
+            id: seed.id,
+            name: seed.name,
+            kind: seed.kind,
+            foodGroup: seed.foodGroup,
+            trackingMode: seed.trackingMode,
+            stockUnit: Value(seed.stockUnit),
+            allowedForms: jsonEncode(seed.allowedForms),
+            unopenedShelfLifeDays: jsonEncode(seed.unopenedShelfLifeDays),
+            onceOpenedShelfLifeDays: jsonEncode(seed.onceOpenedShelfLifeDays),
+          ),
+      ]);
+    });
   }
 
   // Seeds the 23-category taxonomy and 10 staples on fresh database creation; `onCreate` only fires on a

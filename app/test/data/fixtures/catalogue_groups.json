@@ -1,0 +1,585 @@
+[
+  {
+    "id": "leafy_greens",
+    "name": "Leafy greens & salad",
+    "kind": "ingredient",
+    "food_group": "vegetables",
+    "tracking_mode": "perishable",
+    "stock_unit": null,
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 5,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "cabbage_and_broccoli",
+    "name": "Cabbage & broccoli",
+    "kind": "ingredient",
+    "food_group": "vegetables",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 10,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "onions_and_garlic",
+    "name": "Onions & garlic",
+    "kind": "ingredient",
+    "food_group": "vegetables",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 21,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 5,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "root_veg",
+    "name": "Root veg",
+    "kind": "ingredient",
+    "food_group": "vegetables",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 21,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "tomatoes_peppers_and_aubergines",
+    "name": "Tomatoes, peppers & aubergines",
+    "kind": "ingredient",
+    "food_group": "vegetables",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 7,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 5,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "beans_and_pulses",
+    "name": "Beans & pulses",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 5,
+      "frozen": 365,
+      "tinned_jarred": 730,
+      "dried": 730
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 365
+    }
+  },
+  {
+    "id": "fruit",
+    "name": "Fruit",
+    "kind": "ingredient",
+    "food_group": "fruit",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 7,
+      "frozen": 270,
+      "tinned_jarred": 730,
+      "dried": 365
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 180
+    }
+  },
+  {
+    "id": "red_meat",
+    "name": "Red meat",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 3,
+      "frozen": 180,
+      "tinned_jarred": 730,
+      "dried": 180
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 2,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 90
+    }
+  },
+  {
+    "id": "poultry",
+    "name": "Poultry",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 2,
+      "frozen": 180,
+      "tinned_jarred": 730,
+      "dried": 180
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 2,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 90
+    }
+  },
+  {
+    "id": "fish_and_seafood",
+    "name": "Fish & seafood",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "fresh",
+      "frozen",
+      "tinned_jarred",
+      "dried"
+    ],
+    "unopened_shelf_life_days": {
+      "fresh": 2,
+      "frozen": 120,
+      "tinned_jarred": 730,
+      "dried": 180
+    },
+    "once_opened_shelf_life_days": {
+      "fresh": 2,
+      "frozen": 90,
+      "tinned_jarred": 3,
+      "dried": 90
+    }
+  },
+  {
+    "id": "eggs",
+    "name": "Eggs",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 21
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "dairy",
+    "name": "Dairy",
+    "kind": "ingredient",
+    "food_group": "dairy",
+    "tracking_mode": "perishable",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 7
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 5
+    }
+  },
+  {
+    "id": "grains",
+    "name": "Grains",
+    "kind": "ingredient",
+    "food_group": "carbohydrates",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 180
+    }
+  },
+  {
+    "id": "pasta_and_rice",
+    "name": "Pasta & rice",
+    "kind": "ingredient",
+    "food_group": "carbohydrates",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 365
+    }
+  },
+  {
+    "id": "bread",
+    "name": "Bread",
+    "kind": "ingredient",
+    "food_group": "carbohydrates",
+    "tracking_mode": "perishable",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 5
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 4
+    }
+  },
+  {
+    "id": "oils_and_fats",
+    "name": "Oils & fats",
+    "kind": "ingredient",
+    "food_group": "fats",
+    "tracking_mode": "presence",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 180
+    }
+  },
+  {
+    "id": "fresh_herbs",
+    "name": "Fresh herbs",
+    "kind": "ingredient",
+    "food_group": "condiments",
+    "tracking_mode": "perishable",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 5
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "dried_herbs",
+    "name": "Dried herbs",
+    "kind": "ingredient",
+    "food_group": "condiments",
+    "tracking_mode": "presence",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "spices",
+    "name": "Spices",
+    "kind": "ingredient",
+    "food_group": "condiments",
+    "tracking_mode": "presence",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "sauces_and_condiments",
+    "name": "Sauces & condiments",
+    "kind": "ingredient",
+    "food_group": "condiments",
+    "tracking_mode": "presence",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 90
+    }
+  },
+  {
+    "id": "baking",
+    "name": "Baking",
+    "kind": "ingredient",
+    "food_group": "carbohydrates",
+    "tracking_mode": "presence",
+    "stock_unit": null,
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 240
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 240
+    }
+  },
+  {
+    "id": "nuts_and_seeds",
+    "name": "Nuts & seeds",
+    "kind": "ingredient",
+    "food_group": "protein",
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 180
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 90
+    }
+  },
+  {
+    "id": "drinks",
+    "name": "Drinks",
+    "kind": "ingredient",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "ml",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 5
+    }
+  },
+  {
+    "id": "snacks_and_treats",
+    "name": "Snacks & treats",
+    "kind": "ingredient",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 180
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": 14
+    }
+  },
+  {
+    "id": "household",
+    "name": "Household",
+    "kind": "household",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": null
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "health_and_beauty",
+    "name": "Health & beauty",
+    "kind": "household",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": null
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "baby",
+    "name": "Baby",
+    "kind": "household",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": null
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "pet",
+    "name": "Pet",
+    "kind": "household",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": null
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  },
+  {
+    "id": "other",
+    "name": "Other",
+    "kind": "ingredient",
+    "food_group": "other",
+    "tracking_mode": "counted",
+    "stock_unit": "count",
+    "allowed_forms": [
+      "not_applicable"
+    ],
+    "unopened_shelf_life_days": {
+      "not_applicable": 365
+    },
+    "once_opened_shelf_life_days": {
+      "not_applicable": null
+    }
+  }
+]

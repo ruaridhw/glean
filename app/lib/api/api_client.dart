@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'api_exception.dart';
+import 'models/catalogue.dart';
 import 'models/meal_plan.dart';
 import 'models/receipts.dart';
 import 'models/recipes.dart';
@@ -139,6 +140,19 @@ class GleanApiClient {
       ),
       (dynamic json) =>
           ShoppingParseResponse.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  // --- Catalogue ---
+
+  /// The catalogue changes since [since], the version the device last synced to; zero is the whole catalogue.
+  Future<CatalogueSyncResponse> getCatalogue({int since = 0}) {
+    final uri = _uri('/catalogue', {'since': '$since'});
+    return _send(
+      uri,
+      () async => httpClient.get(uri, headers: await _authHeaders()),
+      (dynamic json) =>
+          CatalogueSyncResponse.fromJson(json as Map<String, dynamic>),
     );
   }
 
