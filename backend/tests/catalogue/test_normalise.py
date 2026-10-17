@@ -382,6 +382,23 @@ def test_a_perishable_decision_is_stored_with_a_new_item_so_a_repeat_agrees(stor
 
 
 def test_a_non_perishable_decision_leaves_the_groups_default_rules_alone(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Custard powder": "custard powder"}))
+
+    [first] = normalise(
+        ["Custard powder"], store=store, decisions=decide_group(GroupId.BAKING, perishable=0.05), llm_router=router
+    )
+    [again] = normalise(["Custard powder"], store=store, decisions=no_decisions(), llm_router=FakeRouter())
+
+    assert first.perishable is False
+    assert again.perishable is False
+    assert store.get_by_name("custard powder").overrides.tracking_mode is None  # ty: ignore[unresolved-attribute]
+
+
+def test_a_group_that_is_perishable_by_default_stays_perishable_and_a_repeat_agrees(
+    store: InMemoryCatalogueStore,
+) -> None:
+    # Dairy is perishable by default, so a "not perishable" decision changes nothing: the first answer already says
+    # what the stored item says, and a repeat does not contradict it.
     router = FakeRouter(script=naming(**{"Tinned custard": "custard"}))
 
     [first] = normalise(
@@ -389,9 +406,8 @@ def test_a_non_perishable_decision_leaves_the_groups_default_rules_alone(store: 
     )
     [again] = normalise(["Tinned custard"], store=store, decisions=no_decisions(), llm_router=FakeRouter())
 
-    assert first.perishable is False
-    assert again.perishable is False
-    assert store.get_by_name("custard").overrides.tracking_mode is None  # ty: ignore[unresolved-attribute]
+    assert first.perishable is True
+    assert again.perishable is True
 
 
 def test_a_confident_match_does_not_rewrite_a_curated_items_tracking(store: InMemoryCatalogueStore) -> None:
@@ -452,3 +468,43 @@ def test_a_naming_that_loses_an_alias_race_reuses_the_winner(store: InMemoryCata
     )
 
     assert (result.status, result.catalogue_item_id) == (Status.MATCHED, "basil")
+
+
+def test_a_created_household_item_has_no_shelf_life_so_it_never_expires(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Birthday Candles": "birthday candles"}))
+
+    normalise(["Birthday Candles"], store=store, decisions=unseen(GroupId.HOUSEHOLD), llm_router=router)
+
+    candles = store.get_by_name("birthday candles")
+    assert candles is not None
+    assert candles.unopened_shelf_life_days is None
+    assert candles.once_opened_shelf_life_days is None
+
+
+def test_a_household_item_judged_perishable_still_never_expires_rather_than_expiring_at_zero(
+    store: InMemoryCatalogueStore,
+) -> None:
+    router = FakeRouter(script=naming(**{"Scented candle": "scented candle"}))
+
+    normalise(
+        ["Scented candle"], store=store, decisions=decide_group(GroupId.HOUSEHOLD, perishable=0.9), llm_router=router
+    )
+
+    candle = store.get_by_name("scented candle")
+    assert candle is not None
+    assert candle.unopened_shelf_life_days is None
+
+
+def test_a_created_edible_item_takes_its_groups_shelf_life(store: InMemoryCatalogueStore) -> None:
+    router = FakeRouter(script=naming(**{"Fresh buffalo cream pot": "buffalo cream"}))
+
+    normalise(
+        ["Fresh buffalo cream pot"],
+        store=store,
+        decisions=decide_group(GroupId.DAIRY, perishable=0.99),
+        llm_router=router,
+    )
+
+    cream = store.get_by_name("buffalo cream")
+    assert cream is not None
+    assert cream.unopened_shelf_life_days == 7
