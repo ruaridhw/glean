@@ -19,6 +19,7 @@ from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_llm_router, verify_cognito_token
 from glean.llm import LLMRouter  # noqa: TC001 - FastAPI resolves this via Depends at runtime.
+from glean.rate_limit import enforce_ai_rate_limit
 
 router = APIRouter(prefix="/catalogue", tags=["catalogue"], dependencies=[Depends(verify_cognito_token)])
 
@@ -70,7 +71,7 @@ def get_decision_client(settings: Annotated[Settings, Depends(get_settings)]) ->
     return _decision_client(settings.openrouter_api_key)
 
 
-@router.post("/normalise", response_model=NormaliseResponse)
+@router.post("/normalise", response_model=NormaliseResponse, dependencies=[Depends(enforce_ai_rate_limit)])
 def normalise_names(
     request: NormaliseRequest,
     store: Annotated[CatalogueStore, Depends(get_catalogue_store)],
