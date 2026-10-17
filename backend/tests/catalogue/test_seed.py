@@ -35,7 +35,7 @@ def by_name(name: str) -> CatalogueItem:
 
 
 def test_the_seed_is_versioned_and_every_item_is_a_seed_item() -> None:
-    assert seed().version == 1
+    assert seed().version == 2
     assert {item.source for item in seed().items} == {Source.SEED}
 
 
@@ -175,3 +175,106 @@ def test_no_fruit_item_has_a_shorter_shelf_life_than_it_had_as_a_subgroup() -> N
     old_fresh_minimum = {"strawberries": 4, "peach": 5, "lemon": 14, "mango": 7, "banana": 7, "avocado": 7}
     for name, days in old_fresh_minimum.items():
         assert by_name(name).unopened_shelf_life_days >= days, name
+
+
+NON_FOOD_GROUPS = {GroupId.HOUSEHOLD, GroupId.HEALTH_AND_BEAUTY}
+EDIBLE_PET_AND_BABY = {
+    "baby formula milk powder",
+    "baby rice",
+    "baby fruit puree pouch",
+    "baby pasta stars",
+    "baby teething biscuits",
+    "baby vegetable meal jar",
+    "baby corn puffs",
+    "dog food pouches",
+    "cat food tins",
+    "dry dog food",
+    "dry cat food",
+    "dog treats",
+    "cat treats",
+    "wild bird seed",
+}
+
+
+def test_household_and_health_and_beauty_items_never_expire() -> None:
+    items = [item for item in seed().items if item.group in NON_FOOD_GROUPS]
+    assert items
+    for item in items:
+        assert item.unopened_shelf_life_days is None, item.name
+        assert item.once_opened_shelf_life_days is None, item.name
+
+
+def test_non_edible_baby_and_pet_items_never_expire_and_edible_ones_keep_shelf_lives() -> None:
+    baby_and_pet = [item for item in seed().items if item.group in {GroupId.BABY, GroupId.PET}]
+    edible = {item.name for item in baby_and_pet if item.unopened_shelf_life_days is not None}
+    assert edible == EDIBLE_PET_AND_BABY
+    assert by_name("cat litter").unopened_shelf_life_days is None
+    for name in EDIBLE_PET_AND_BABY:
+        assert by_name(name).once_opened_shelf_life_days is not None, name
+
+
+def test_every_food_item_has_an_unopened_shelf_life() -> None:
+    assert [
+        item.name
+        for item in seed().items
+        if item.group not in NON_FOOD_GROUPS
+        and item.group not in {GroupId.BABY, GroupId.PET}
+        and not item.unopened_shelf_life_days
+    ] == []
+
+
+def test_every_perishable_food_item_opens_into_a_once_opened_shelf_life_except_loose_herbs() -> None:
+    perishable = [item for item in seed().items if item.tracking_mode is TrackingMode.PERISHABLE]
+    assert perishable
+    no_once_opened = {item.name for item in perishable if item.once_opened_shelf_life_days is None}
+    assert {by_name(name).group for name in no_once_opened} <= {GroupId.FRESH_HERBS}
+    assert {item.name for item in perishable if item.group is GroupId.BREAD} >= {"white loaf", "pitta bread"}
+    assert by_name("white loaf").once_opened_shelf_life_days == 4
+
+
+def test_every_milk_is_perishable() -> None:
+    milks = ["milk", "whole milk", "semi-skimmed milk", "skimmed milk", "buttermilk", "kefir"]
+    for name in milks:
+        assert by_name(name).tracking_mode is TrackingMode.PERISHABLE, name
+        assert by_name(name).stock_unit is None, name
+
+
+def test_chilled_dairy_is_perishable_with_a_use_by_except_tinned_and_whole_pack_items() -> None:
+    counted = {
+        item.name
+        for item in seed().items
+        if item.group is GroupId.DAIRY and item.tracking_mode is not TrackingMode.PERISHABLE
+    }
+    assert counted == {"evaporated milk", "halloumi", "mozzarella", "ghee"}
+    assert by_name("ghee").tracking_mode is TrackingMode.PRESENCE
+    assert by_name("butter").tracking_mode is TrackingMode.PERISHABLE
+    assert by_name("cheddar cheese").tracking_mode is TrackingMode.PERISHABLE
+
+
+def test_coconut_milk_is_counted_in_millilitres_like_the_400_ml_tin_it_comes_in() -> None:
+    coconut = by_name("coconut milk")
+    assert coconut.tracking_mode is TrackingMode.COUNTED
+    assert coconut.stock_unit is StockUnit.MILLILITRES
+
+
+def test_tins_are_counted_in_grams_except_the_small_use_jars() -> None:
+    tinned = [item for item in seed().items if item.form is Form.TINNED_JARRED]
+    not_counted = {item.name for item in tinned if item.tracking_mode is not TrackingMode.COUNTED}
+    assert not_counted == {"garlic puree", "sun-dried tomato", "roasted red pepper"}
+    for name in ("tinned chopped tomatoes", "tinned chickpeas", "tinned kidney beans", "tinned tuna chunks"):
+        assert by_name(name).tracking_mode is TrackingMode.COUNTED, name
+        assert by_name(name).stock_unit is StockUnit.GRAMS, name
+    assert by_name("tomato paste").tracking_mode is TrackingMode.PRESENCE
+    assert "tomato puree" in by_name("tomato paste").aliases
+
+
+def test_condiment_jars_keep_and_are_presence_while_short_life_pastes_are_perishable() -> None:
+    sauces = {item.name: item.tracking_mode for item in seed().items if item.group is GroupId.SAUCES_AND_CONDIMENTS}
+    perishable = {name for name, mode in sauces.items() if mode is TrackingMode.PERISHABLE}
+    counted = {name for name, mode in sauces.items() if mode is TrackingMode.COUNTED}
+    assert perishable == {"curry paste", "pesto", "chipotle paste", "harissa paste", "anchovy paste"}
+    assert counted == {"coconut milk"}
+    for name in ("soy sauce", "fish sauce", "malt vinegar", "ketchup", "preserved lemons", "shrimp paste"):
+        assert by_name(name).tracking_mode is TrackingMode.PRESENCE, name
+    for name in perishable - {"curry paste"}:
+        assert (by_name(name).once_opened_shelf_life_days or 0) <= 28, name
