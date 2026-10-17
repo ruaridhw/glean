@@ -27,7 +27,9 @@ class CatalogueGroup {
   final String trackingMode;
   final String? stockUnit;
   final List<String> allowedForms;
-  final Map<String, int> unopenedShelfLifeDays;
+
+  /// Null for a form of a group that never expires.
+  final Map<String, int?> unopenedShelfLifeDays;
 
   /// Null for a form whose opened pack has no limit.
   final Map<String, int?> onceOpenedShelfLifeDays;
