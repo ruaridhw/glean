@@ -103,6 +103,71 @@ void main() {
       expect(carrot.onceOpenedShelfLifeDays, 3);
     });
 
+    test('an item in a group with no shelf life never expires: null, not zero '
+        'and not an error', () async {
+      await syncItems([_item('toilet-roll', group: 'household')]);
+
+      final roll = await catalogue.effectiveIngredient('toilet-roll');
+
+      expect(roll, isNotNull);
+      expect(roll!.unopenedShelfLifeDays, isNull);
+      expect(roll.onceOpenedShelfLifeDays, isNull);
+    });
+
+    test(
+      'a group that never expires is not the same as an unset item '
+      'override: unset inherits the group, whatever the group says',
+      () async {
+        await syncItems([
+          _item('toilet-roll', group: 'household'),
+          _item('milk', group: 'dairy'),
+        ]);
+
+        expect(
+          (await catalogue.effectiveIngredient(
+            'toilet-roll',
+          ))!.unopenedShelfLifeDays,
+          isNull,
+          reason: 'the group says never expires',
+        );
+        expect(
+          (await catalogue.effectiveIngredient('milk'))!.unopenedShelfLifeDays,
+          7,
+          reason: 'the item override is unset, so the group\'s 7 days apply',
+        );
+      },
+    );
+
+    test('an item\'s own days win over a group that never expires', () async {
+      await syncItems([
+        _item(
+          'baby-formula',
+          group: 'baby',
+          overrides: {'unopened_shelf_life_days': 730},
+        ),
+      ]);
+
+      final formula = await catalogue.effectiveIngredient('baby-formula');
+
+      expect(formula!.unopenedShelfLifeDays, 730);
+      expect(formula.onceOpenedShelfLifeDays, isNull);
+    });
+
+    test('a household override gives a never-expiring item a shelf life '
+        'without changing the item', () async {
+      await syncItems([_item('toilet-roll', group: 'household')]);
+      await householdOverride('toilet-roll', unopenedShelfLifeDays: 90);
+
+      expect(
+        (await catalogue.effectiveIngredient(
+          'toilet-roll',
+        ))!.unopenedShelfLifeDays,
+        90,
+      );
+      final stored = await db.select(db.catalogueItems).getSingle();
+      expect(stored.overrideUnopenedShelfLifeDays, isNull);
+    });
+
     test('an id that is not in the catalogue resolves to nothing', () async {
       expect(await catalogue.effectiveIngredient('no-such-item'), isNull);
     });

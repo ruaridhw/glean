@@ -62,7 +62,7 @@ class CatalogueRepository {
       unopenedShelfLifeDays:
           overridden((o) => o.unopenedShelfLifeDays) ??
           item.overrideUnopenedShelfLifeDays ??
-          unopened[item.form] as int,
+          unopened[item.form] as int?,
       onceOpenedShelfLifeDays:
           overridden((o) => o.onceOpenedShelfLifeDays) ??
           item.overrideOnceOpenedShelfLifeDays ??
