@@ -22,6 +22,9 @@ from fastapi import Request  # noqa: TC002 - FastAPI resolves this annotation at
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from glean.catalogue.router import get_catalogue_store
+from glean.catalogue.seed import load_seed
+from glean.catalogue.store import InMemoryCatalogueStore
 from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
@@ -133,6 +136,17 @@ def _recipe_page_boundaries(tmp_path: Path) -> Iterator[None]:
         yield
 
 
+@contextmanager
+def _catalogue_boundaries(tmp_path: Path) -> Iterator[None]:
+    """The DynamoDB table is the boundary: the seed in memory stands in for it. A known name needs no model call."""
+    catalogue = InMemoryCatalogueStore(load_seed().items)
+    app.dependency_overrides[get_catalogue_store] = lambda: catalogue
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_catalogue_store, None)
+
+
 @dataclass(frozen=True)
 class AiRoute:
     name: str
@@ -178,6 +192,12 @@ AI_ROUTES = [
         path="/recipes/import-url",
         boundaries=_recipe_page_boundaries,
         request_kwargs={"json": {"url": "https://example.com/carbonara"}},
+    ),
+    AiRoute(
+        name="catalogue normalise",
+        path="/catalogue/normalise",
+        boundaries=_catalogue_boundaries,
+        request_kwargs={"json": {"names": ["toilet roll"]}},
     ),
 ]
 
