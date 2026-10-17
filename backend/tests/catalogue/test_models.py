@@ -110,3 +110,19 @@ def test_a_household_item_never_expires_unless_overridden() -> None:
     )
     assert pouch.unopened_shelf_life_days == 730
     assert pouch.once_opened_shelf_life_days == 2
+
+
+def test_an_item_has_no_former_ids_unless_it_absorbed_others() -> None:
+    assert item("coriander", GroupId.FRESH_HERBS).former_ids == ()
+    assert item("coriander", GroupId.FRESH_HERBS, former_ids=("cilantro",)).former_ids == ("cilantro",)
+
+
+def test_a_former_id_cannot_be_blank() -> None:
+    with pytest.raises(ValidationError):
+        item("coriander", GroupId.FRESH_HERBS, former_ids=("",))
+
+
+def test_former_ids_survive_the_stored_json_round_trip() -> None:
+    original = item("coriander", GroupId.FRESH_HERBS, former_ids=("cilantro", "fresh-coriander"))
+
+    assert CatalogueItem.model_validate_json(original.model_dump_json()) == original

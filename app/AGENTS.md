@@ -67,6 +67,14 @@ backend catalogue (`GET /catalogue?since=<version>`). The 29 groups are seeded i
 pins that seed to the backend's output. `CatalogueSyncLifecycle` syncs in the background on launch, resume and
 sign-in; a failed sync changes nothing. Pantry, Plan and Shop must keep working with zero catalogue items.
 
+Each synced item carries the store `section` the backend computed (the app never copies the section rule) and its
+`former_ids`, which sync stores in `catalogue_item_redirects`. `ingredient_overrides` holds the household's own
+changes to tracking mode, stock unit, shelf lives and section, keyed by item id; sync never writes it.
+`CatalogueRepository.effectiveIngredient(id)` is the one resolver: it follows redirects from a former id to the
+surviving item, then takes each field from the override (the surviving id's, then a former id's), else the item,
+else the group default (section: override, else synced section, else Other). Anything reading those fields goes
+through it.
+
 ## Standards
 
 `test/standards/house_rules_test.dart` enforces the import half of rule 1,

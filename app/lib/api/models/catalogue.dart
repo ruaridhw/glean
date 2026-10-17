@@ -65,6 +65,8 @@ class CatalogueItemDto {
     required this.overrides,
     required this.source,
     this.densityGPerMl,
+    this.section,
+    this.formerIds = const <String>[],
   });
 
   factory CatalogueItemDto.fromJson(Map<String, dynamic> json) =>
@@ -80,6 +82,13 @@ class CatalogueItemDto {
 
   /// `seed`, or `llm` for a provisional item.
   final String source;
+
+  /// The store section the backend computed for the item. Null from a backend that does not send it yet.
+  final String? section;
+
+  /// Ids of items merged into this one; empty when none, or from a backend that does not send them yet.
+  @JsonKey(defaultValue: <String>[])
+  final List<String> formerIds;
 }
 
 /// A name, canonical or alias, that resolves to a catalogue item. [key] is what lookups match on.
