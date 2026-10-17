@@ -1,7 +1,7 @@
 # Glean — root Makefile
 #
 # Backend: Python (uv) deployed as AWS Lambda; runs locally via FastAPI dev server
-# App:     Flutter (iOS + Android)
+# App:     Flutter (iOS + Android; `make start-web` for a Chrome dev loop)
 #
 # Usage:
 #   make setup            — install all dependencies
@@ -11,6 +11,7 @@
 #   make start-backend-docker — Dockerized FastAPI server on :8000
 #   make start-ios         — Flutter on iOS Simulator (macOS only)
 #   make start-android     — Flutter on a running Android emulator
+#   make start-web         — Flutter in Chrome with hot reload (web dev loop)
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -18,7 +19,11 @@
 # same values the old Expo app read as EXPO_PUBLIC_COGNITO_*) — see
 # app/README.md for where those come from. Neither target, nor `test-app`'s
 # integration counterpart, can run on a Linux box with no Android
-# SDK/Java/Xcode; `setup-app`, `test-app` and `lint-app` can and do.
+# SDK/Java/Xcode; `setup-app`, `test-app`, `lint-app` and `start-web` can and do.
+#
+# Machine-local overrides (bind addresses, ports) live in an untracked
+# `.env.local` at the repo root, one `KEY=value` per line — never commit
+# hostnames or addresses to this file.
 
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
@@ -32,6 +37,11 @@ API_HOST      ?=
 API_PORT      ?= 8000
 COGNITO_DOMAIN    ?=
 COGNITO_CLIENT_ID ?=
+WEB_HOST          ?= 127.0.0.1
+WEB_PORT          ?= 8090
+
+# Optional, gitignored. Sets e.g. WEB_HOST for a headless box reached over the network.
+-include .env.local
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +134,25 @@ start-android:  ## Start Flutter on a running Android emulator (needs COGNITO_DO
 		--dart-define=API_BASE_URL=http://$(if $(API_HOST),$(API_HOST),10.0.2.2):$(API_PORT) \
 		--dart-define=COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
 		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID)
+
+# No Cognito values needed: the web dev loop runs the e2e entrypoint, whose
+# auth bypass only requires non-empty placeholders. API_BASE_URL stays on
+# localhost (as the *browser* sees it) so the bypass's production-URL guard
+# passes; AI-backed calls fail by design because the bypass carries no token.
+.PHONY: start-web
+start-web:  ## Start Flutter web dev loop (hot reload; set WEB_HOST/WEB_PORT in .env.local for a remote box)
+	cd app && flutter run -d web-server \
+		--target lib/main_e2e.dart \
+		--pid-file .dart_tool/start-web.pid \
+		--web-hostname $(WEB_HOST) --web-port $(WEB_PORT) \
+		--dart-define=API_BASE_URL=http://localhost:$(API_PORT) \
+		--dart-define=COGNITO_DOMAIN=web-dev-loop \
+		--dart-define=COGNITO_CLIENT_ID=web-dev-loop
+
+.PHONY: reload-web
+reload-web:  ## Hot-reload the running `make start-web` (for agents without its terminal; `r` works there)
+	@[ -f app/.dart_tool/start-web.pid ] || { echo "start-web is not running"; exit 1; }
+	kill -USR1 $$(cat app/.dart_tool/start-web.pid)
 
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
 # Worktrees live in .worktrees/ which is already in .gitignore.

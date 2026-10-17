@@ -49,3 +49,6 @@ plans/
 # macOS
 .DS_Store
 .DS_Store?
+
+# Machine-local Makefile overrides (bind addresses, ports)
+.env.local
