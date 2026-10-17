@@ -135,3 +135,25 @@ def test_fruit_is_one_group_with_a_generic_fresh_default_of_a_week() -> None:
     assert fruit.name == "Fruit"
     assert fruit.unopened_shelf_life_days[Form.FRESH] == 7
     assert fruit.has_forms
+
+
+NON_FOOD_GROUPS = (GroupId.HOUSEHOLD, GroupId.HEALTH_AND_BEAUTY, GroupId.BABY, GroupId.PET)
+
+
+def test_non_food_groups_have_no_shelf_life_at_all() -> None:
+    for group_id in NON_FOOD_GROUPS:
+        rules = GROUPS[group_id]
+        assert rules.unopened_shelf_life_days == {Form.NOT_APPLICABLE: None}, group_id
+        assert rules.once_opened_shelf_life_days == {Form.NOT_APPLICABLE: None}, group_id
+
+
+def test_every_other_group_gives_an_unopened_shelf_life_for_each_form() -> None:
+    for group_id, rules in GROUPS.items():
+        if group_id in NON_FOOD_GROUPS:
+            continue
+        assert all(days is not None and days > 0 for days in rules.unopened_shelf_life_days.values()), group_id
+
+
+def test_dairy_defaults_to_perishable() -> None:
+    assert GROUPS[GroupId.DAIRY].tracking_mode is TrackingMode.PERISHABLE
+    assert GROUPS[GroupId.DAIRY].stock_unit is None

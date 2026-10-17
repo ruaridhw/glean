@@ -83,11 +83,13 @@ class CatalogueItem(BaseModel):
         return self.overrides.stock_unit or GROUPS[self.group].stock_unit
 
     @property
-    def unopened_shelf_life_days(self) -> int:
+    def unopened_shelf_life_days(self) -> int | None:
+        """Days the item keeps unopened. None means no shelf life: it never expires."""
         return self.overrides.unopened_shelf_life_days or GROUPS[self.group].unopened_shelf_life_days[self.form]
 
     @property
     def once_opened_shelf_life_days(self) -> int | None:
+        """Days the item keeps once opened. None where opening makes no difference or the item never expires."""
         return self.overrides.once_opened_shelf_life_days or GROUPS[self.group].once_opened_shelf_life_days[self.form]
 
     @property
