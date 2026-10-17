@@ -26,7 +26,7 @@ for deeper context. `CLAUDE.md` files are compatibility symlinks to these files.
 
 ```
 backend/   — Python / FastAPI, deployed as AWS Lambda (uv)
-app/       — Flutter app (iOS + Android)
+app/       — Flutter app (iOS + Android; web target for the local dev loop only)
 Makefile   — unified task runner for both sub-projects
 ```
 
@@ -50,13 +50,14 @@ make start-backend    # FastAPI dev server on :8000 (hot reload)
 make start-backend-docker # Dockerized FastAPI dev server on :8000 (hot reload)
 make start-ios        # Flutter on iOS Simulator (macOS only)
 make start-android    # Flutter on a running Android emulator
+make start-web        # Flutter in Chrome with hot reload (no toolchain needed; see app/README.md)
 make test-e2e         # Flutter integration_test suite (needs a booted simulator/emulator)
 ```
 
 `start-ios`/`start-android`/`test-e2e` need `COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...`
 — see `app/README.md` for where those values come from. None of the three can
 run without an Android SDK/Java/Xcode toolchain (a Mac, for both platforms);
-`setup-app`, `test-app` and `lint-app` need none of that and run anywhere,
+`setup-app`, `test-app`, `lint-app` and `start-web` need none of that and run anywhere,
 including a plain Linux box.
 
 ### Worktrees
