@@ -67,15 +67,15 @@ How the pantry keeps track of an ingredient: counted, presence or perishable.
 _Avoid_: stock type, inventory mode
 
 **Counted**:
-Tracked by quantity in its stock unit, e.g. 500 g of rice or 6 eggs.
+Tracked by quantity in its stock unit, e.g. 500 g of rice, 400 ml of coconut milk or 6 eggs. For things where one recipe uses most or all of a typical pack, like a 400 g tin of tomatoes, and for staples that are used up over several meals, like rice and pasta.
 _Avoid_: quantity-tracked
 
 **Presence**:
-Tracked only as in stock or not, with no quantity, e.g. ground cumin or soy sauce.
+Tracked only as in stock or not, with no quantity, e.g. ground cumin or soy sauce. For things where one recipe uses only a small fraction of the pack, and that keep: spices, sauces, vinegar, oils, condiment jars.
 _Avoid_: cupboard basic, staple, untracked
 
 **Perishable**:
-Tracked as in stock or not, plus a use-by date. For things bought in a much bigger pack than one recipe needs, which then go off: fresh herbs, ginger, cream, an opened jar of curry paste.
+Tracked as in stock or not, plus a use-by date. For things bought in a much bigger pack than one recipe needs, which then go off: fresh herbs, bread, ginger, milk, cream, an opened jar of curry paste.
 _Avoid_: fresh, short-life
 
 **Stock unit**:
@@ -87,7 +87,7 @@ The unit a recipe states an amount in, kept as written for spoons and metric amo
 _Avoid_: display unit
 
 **Shelf life**:
-How many days an ingredient keeps. There are two: **unopened**, and **once opened**.
+How many days an ingredient keeps. There are two: **unopened**, and **once opened**. Both depend on the form where a group has forms: an opened tin keeps days, an opened bag of dried pulses or frozen peas keeps months. Groups without forms have one value of each. A once-opened value is left out only where opening makes no difference, such as loose fresh herbs or eggs. Food always has a shelf life, even if nobody enters a use-by date. Non-food (household, health and beauty, and non-edible pet and baby items) has **no shelf life** and never expires; edible pet and baby items are food.
 _Avoid_: expiry period, best-before
 
 **Opened date**:
@@ -95,7 +95,7 @@ The day a pantry item was first used. Its once-opened shelf life counts from her
 _Avoid_: open date, first-use date
 
 **Food group**:
-The broad nutritional bucket an ingredient counts towards when the meal plan balances a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments. Each ingredient group maps to one food group.
+The broad nutritional bucket an ingredient counts towards when the meal plan balances a week: vegetables, fruit, protein, dairy, carbohydrates, fats or condiments. Each ingredient group maps to one food group. Drinks, Snacks & treats and the non-food groups (Household, Health & beauty, Baby, Pet, Other) map to **other**, which doesn't count towards the week's balance.
 _Avoid_: meal-plan group, nutrition group
 
 **Store section**:

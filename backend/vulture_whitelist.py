@@ -71,6 +71,23 @@ BOTTLE  # ShoppingUnit member
 BAG  # ShoppingUnit member
 BOX  # ShoppingUnit member
 _drop_unit_price  # Pydantic field validator (ShoppingProposalItem.unit_price)
+# catalogue/: the store contract is consumed by normalisation (#123) and the DynamoDB store (#130), not yet in src
+CatalogueStore
+InMemoryCatalogueStore
+shortlist
+upsert_alias
+create_provisional
+record_unmatched
+is_unmatched
+density_g_per_ml  # CatalogueItem Pydantic field
+_trim_aliases  # Pydantic field validator
+_check_form_and_stock_unit  # Pydantic model validator
+section  # CatalogueItem resolved rule
+SEED  # Source enum member
+load_seed  # seed loader, consumed by the DynamoDB store loader (#130)
+version  # SeedData Pydantic field
+unmatched_names
+counts_towards_balance  # FoodGroup property, consumed by the meal plan
 
 # TODO: the first consuming PRs (#125's dietary check, #123's normalisation) must remove the
 # decisions.py entries below as they start using each name.

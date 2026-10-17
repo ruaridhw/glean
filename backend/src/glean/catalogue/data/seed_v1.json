@@ -1,0 +1,4824 @@
+{
+ "version": 2,
+ "items": [
+  {
+   "name": "onion",
+   "aliases": [
+    "brown onion",
+    "yellow onion",
+    "cooking onion"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh"
+  },
+  {
+   "name": "garlic",
+   "aliases": [
+    "garlic bulb"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh"
+  },
+  {
+   "name": "eggs",
+   "aliases": [
+    "free range eggs",
+    "hen eggs",
+    "large eggs",
+    "medium eggs"
+   ],
+   "group": "eggs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "butter",
+   "aliases": [
+    "salted butter",
+    "dairy butter",
+    "block butter"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "olive oil",
+   "aliases": [
+    "extra virgin olive oil",
+    "evoo",
+    "cooking oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.91
+  },
+  {
+   "name": "salt",
+   "aliases": [
+    "table salt",
+    "cooking salt",
+    "sea salt"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "black pepper",
+   "aliases": [
+    "peppercorns",
+    "ground black pepper",
+    "cracked black pepper"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tomato paste",
+   "aliases": [
+    "double concentrated tomato paste",
+    "tomato puree"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "plain flour",
+   "aliases": [
+    "all-purpose flour",
+    "white flour",
+    "baking flour"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "lettuce",
+   "aliases": [
+    "iceberg",
+    "gem hearts",
+    "round lettuce"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "spinach",
+   "aliases": [
+    "baby spinach",
+    "leaf spinach"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen spinach",
+   "aliases": [
+    "chopped spinach"
+   ],
+   "group": "leafy_greens",
+   "form": "frozen",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
+  },
+  {
+   "name": "rocket",
+   "aliases": [
+    "arugula",
+    "wild rocket"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "kale",
+   "aliases": [
+    "curly kale"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "spring greens",
+   "aliases": [
+    "collard greens"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "watercress",
+   "aliases": [
+    "peppery greens"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "mixed salad leaves",
+   "aliases": [
+    "salad bag",
+    "seasonal salad leaves"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "cabbage",
+   "aliases": [
+    "white cabbage",
+    "pointed cabbage"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "bok choy",
+   "aliases": [
+    "pak choi"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen peas",
+   "aliases": [
+    "garden peas",
+    "petit pois"
+   ],
+   "group": "beans_and_pulses",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen broccoli",
+   "aliases": [
+    "broccoli florets"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "frozen"
+  },
+  {
+   "name": "broccoli",
+   "aliases": [
+    "calabrese"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "cauliflower",
+   "aliases": [
+    "cauliflower head"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "savoy cabbage",
+   "aliases": [
+    "curly cabbage"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "red cabbage",
+   "aliases": [
+    "purple cabbage"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "tenderstem broccoli",
+   "aliases": [
+    "baby broccoli"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen cauliflower",
+   "aliases": [
+    "frozen cauliflower florets"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned red cabbage",
+   "aliases": [
+    "pickled red cabbage"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "cavolo nero",
+   "aliases": [
+    "dino kale",
+    "black cabbage",
+    "tuscan kale"
+   ],
+   "group": "cabbage_and_broccoli",
+   "form": "fresh"
+  },
+  {
+   "name": "red onion",
+   "aliases": [
+    "purple onion"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh"
+  },
+  {
+   "name": "spring onion",
+   "aliases": [
+    "salad onion",
+    "scallion"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "unopened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "shallot",
+   "aliases": [
+    "banana shallot"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen diced onion",
+   "aliases": [
+    "frozen chopped onion"
+   ],
+   "group": "onions_and_garlic",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen garlic",
+   "aliases": [
+    "frozen minced garlic"
+   ],
+   "group": "onions_and_garlic",
+   "form": "frozen"
+  },
+  {
+   "name": "dried onion flakes",
+   "aliases": [
+    "dehydrated onion"
+   ],
+   "group": "onions_and_garlic",
+   "form": "dried"
+  },
+  {
+   "name": "garlic puree",
+   "aliases": [
+    "garlic paste"
+   ],
+   "group": "onions_and_garlic",
+   "form": "tinned_jarred",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "garlic powder",
+   "aliases": [
+    "dried garlic"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "potato",
+   "aliases": [
+    "spud",
+    "white potato",
+    "baking potato",
+    "maris piper"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "sweet potato",
+   "aliases": [
+    "orange potato"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "carrot",
+   "aliases": [
+    "chantenay",
+    "bunched carrots"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "parsnip",
+   "aliases": [],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "beetroot",
+   "aliases": [
+    "golden beetroot",
+    "candy beetroot"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "swede",
+   "aliases": [
+    "neep"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "ginger",
+   "aliases": [
+    "root ginger"
+   ],
+   "group": "root_veg",
+   "form": "fresh",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "frozen mashed potato",
+   "aliases": [
+    "frozen mash"
+   ],
+   "group": "root_veg",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen carrot slices",
+   "aliases": [
+    "sliced carrots"
+   ],
+   "group": "root_veg",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned sliced beetroot",
+   "aliases": [
+    "pickled beetroot",
+    "jarred beetroot"
+   ],
+   "group": "root_veg",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned potatoes",
+   "aliases": [
+    "tinned new potatoes"
+   ],
+   "group": "root_veg",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "turnip",
+   "aliases": [
+    "white turnip"
+   ],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "tomato",
+   "aliases": [
+    "vine tomatoes",
+    "salad tomatoes",
+    "round tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "cherry tomato",
+   "aliases": [
+    "baby plum tomatoes",
+    "snack tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "aubergine",
+   "aliases": [
+    "eggplant",
+    "brinjal"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "red pepper",
+   "aliases": [
+    "red bell pepper"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "green pepper",
+   "aliases": [
+    "green bell pepper"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "yellow pepper",
+   "aliases": [
+    "yellow bell pepper"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned chopped tomatoes",
+   "aliases": [
+    "canned tomatoes",
+    "chopped tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned plum tomatoes",
+   "aliases": [
+    "whole peeled tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned cherry tomatoes",
+   "aliases": [
+    "canned cherry tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "passata",
+   "aliases": [
+    "sieved tomatoes",
+    "tomato passata"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "sun-dried tomato",
+   "aliases": [
+    "dried tomatoes",
+    "sun-dried tomatoes in oil"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "frozen diced mixed peppers",
+   "aliases": [
+    "frozen mixed peppers",
+    "peppers strips"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen grilled aubergine",
+   "aliases": [
+    "frozen aubergine slices"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "frozen"
+  },
+  {
+   "name": "roasted red pepper",
+   "aliases": [
+    "jarred peppers",
+    "grilled peppers"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "beef tomato",
+   "aliases": [
+    "large tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "plum tomato",
+   "aliases": [
+    "roma tomato"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "orange pepper",
+   "aliases": [],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "baby aubergine",
+   "aliases": [
+    "thai aubergine"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned tomato sauce",
+   "aliases": [
+    "pizza topping sauce",
+    "pasta sauce base"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen chopped tomatoes",
+   "aliases": [
+    "frozen tomatoes"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned chickpeas",
+   "aliases": [
+    "garbanzo beans",
+    "canned chickpeas"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried chickpeas",
+   "aliases": [
+    "dried gram",
+    "chana"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "tinned baked beans",
+   "aliases": [
+    "beans in tomato sauce"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried red lentils",
+   "aliases": [
+    "split red lentils"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried green lentils",
+   "aliases": [
+    "puy lentils"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "tinned kidney beans",
+   "aliases": [
+    "red kidney beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned cannellini beans",
+   "aliases": [
+    "white kidney beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned butter beans",
+   "aliases": [
+    "lima beans",
+    "large white beans",
+    "tinned butter beans in water"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned borlotti beans",
+   "aliases": [
+    "cranberry beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "tinned black beans",
+   "aliases": [
+    "black turtle beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried pinto beans",
+   "aliases": [
+    "mottled beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried cannellini beans",
+   "aliases": [
+    "dried white beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "tinned flageolet beans",
+   "aliases": [
+    "canned flageolet"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried black-eyed beans",
+   "aliases": [
+    "black-eyed peas"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "tinned mixed beans",
+   "aliases": [
+    "bean salad mix"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried mung beans",
+   "aliases": [
+    "green gram"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "frozen broad beans",
+   "aliases": [
+    "fava beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen edamame beans",
+   "aliases": [
+    "soya beans",
+    "shelled edamame"
+   ],
+   "group": "beans_and_pulses",
+   "form": "frozen"
+  },
+  {
+   "name": "dried urad dal",
+   "aliases": [
+    "split black gram"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried chana dal",
+   "aliases": [
+    "split chickpeas"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "tinned haricot beans",
+   "aliases": [
+    "navy beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried brown lentils",
+   "aliases": [
+    "continental lentils"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried beluga lentils",
+   "aliases": [
+    "black lentils"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried adzuki beans",
+   "aliases": [
+    "azuki beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "dried yellow split peas",
+   "aliases": [
+    "split peas"
+   ],
+   "group": "beans_and_pulses",
+   "form": "dried"
+  },
+  {
+   "name": "lemon",
+   "aliases": [
+    "fresh lemon"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "lime",
+   "aliases": [
+    "fresh lime"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "orange",
+   "aliases": [
+    "eating orange",
+    "navel orange"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "grapefruit",
+   "aliases": [
+    "pink grapefruit",
+    "ruby grapefruit"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "dried candied mixed peel",
+   "aliases": [
+    "mixed peel",
+    "baking peel"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "tinned mandarin segments",
+   "aliases": [
+    "tinned easy peelers",
+    "canned mandarins"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "mango",
+   "aliases": [
+    "kent mango"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "pineapple",
+   "aliases": [
+    "ananas"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "papaya",
+   "aliases": [
+    "pawpaw"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "kiwi",
+   "aliases": [
+    "kiwifruit",
+    "green kiwi",
+    "kiwi fruit"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "passion fruit",
+   "aliases": [
+    "maracuya"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned pineapple chunks",
+   "aliases": [
+    "canned pineapple",
+    "pineapple pieces"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen mango chunks",
+   "aliases": [
+    "mango pieces"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "dried mango slices",
+   "aliases": [
+    "dried mango pieces"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "frozen tropical fruit mix",
+   "aliases": [
+    "tropical smoothie mix"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned lychees",
+   "aliases": [
+    "canned lychees"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "dried apricots",
+   "aliases": [
+    "soft dried apricots"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "dried coconut flakes",
+   "aliases": [
+    "dessicated coconut",
+    "coconut shreds"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "peach",
+   "aliases": [
+    "peaches"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "nectarine",
+   "aliases": [
+    "nectarines"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "plum",
+   "aliases": [
+    "plums"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "apricot",
+   "aliases": [
+    "apricots"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "cherry",
+   "aliases": [
+    "cherries"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "tinned peaches",
+   "aliases": [
+    "canned peaches",
+    "peaches in syrup",
+    "peaches in juice"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen cherries",
+   "aliases": [
+    "stoned cherries"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned prunes",
+   "aliases": [
+    "stewed prunes"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "strawberries",
+   "aliases": [
+    "punnet of strawberries"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
+  },
+  {
+   "name": "blueberries",
+   "aliases": [
+    "punnet of blueberries"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "raspberries",
+   "aliases": [
+    "punnet of raspberries"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
+  },
+  {
+   "name": "blackberries",
+   "aliases": [
+    "brambles"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
+  },
+  {
+   "name": "frozen mixed berries",
+   "aliases": [
+    "summer berry mix",
+    "frozen berry mix"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen strawberries",
+   "aliases": [
+    "frozen whole strawberries"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "dried cranberries",
+   "aliases": [
+    "craisins"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "dried goji berries",
+   "aliases": [
+    "goji"
+   ],
+   "group": "fruit",
+   "form": "dried"
+  },
+  {
+   "name": "gooseberries",
+   "aliases": [
+    "tinned gooseberries"
+   ],
+   "group": "fruit",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen raspberries",
+   "aliases": [
+    "frozen whole raspberries"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "redcurrants",
+   "aliases": [
+    "frozen redcurrants"
+   ],
+   "group": "fruit",
+   "form": "frozen"
+  },
+  {
+   "name": "beef mince",
+   "aliases": [
+    "minced beef",
+    "ground beef"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "lamb chops",
+   "aliases": [
+    "chump chops",
+    "loin chops"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "beef steak",
+   "aliases": [
+    "sirloin steak",
+    "rump steak",
+    "ribeye"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "lamb leg",
+   "aliases": [
+    "leg of lamb"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen beef burgers",
+   "aliases": [
+    "burgers",
+    "beef patties"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned corned beef",
+   "aliases": [
+    "bully beef"
+   ],
+   "group": "red_meat",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen beef meatballs",
+   "aliases": [
+    "meatballs"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "dried beef jerky",
+   "aliases": [
+    "beef biltong",
+    "dried meat snack"
+   ],
+   "group": "red_meat",
+   "form": "dried"
+  },
+  {
+   "name": "lamb mince",
+   "aliases": [
+    "minced lamb"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen lamb chops",
+   "aliases": [
+    "frozen chops"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "beef brisket",
+   "aliases": [
+    "rolled brisket"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "stewing beef",
+   "aliases": [
+    "diced beef",
+    "braising steak"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned beef stew",
+   "aliases": [
+    "canned beef stew"
+   ],
+   "group": "red_meat",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen diced beef",
+   "aliases": [
+    "frozen stewing steak"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "beef rib",
+   "aliases": [
+    "beef short ribs"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "lamb shoulder",
+   "aliases": [],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned meatballs in sauce",
+   "aliases": [
+    "canned meatballs"
+   ],
+   "group": "red_meat",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "beef liver",
+   "aliases": [
+    "calves liver"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "lamb shank",
+   "aliases": [
+    "lamb shanks"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen lamb pieces",
+   "aliases": [
+    "diced lamb"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "beef silverside",
+   "aliases": [
+    "roasting beef"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen ribeye steak",
+   "aliases": [
+    "frozen steak"
+   ],
+   "group": "red_meat",
+   "form": "frozen"
+  },
+  {
+   "name": "chicken breast",
+   "aliases": [
+    "chicken fillets",
+    "chicken breast fillets"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "chicken thighs",
+   "aliases": [
+    "thighs"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "whole chicken",
+   "aliases": [
+    "roasting chicken",
+    "whole bird"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "chicken drumsticks",
+   "aliases": [
+    "drumsticks"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen chicken breast",
+   "aliases": [
+    "frozen chicken fillets",
+    "frozen chicken"
+   ],
+   "group": "poultry",
+   "form": "frozen"
+  },
+  {
+   "name": "frozen chicken nuggets",
+   "aliases": [
+    "chicken dippers",
+    "frozen nuggets"
+   ],
+   "group": "poultry",
+   "form": "frozen"
+  },
+  {
+   "name": "breaded chicken goujons",
+   "aliases": [
+    "chicken strips",
+    "frozen goujons"
+   ],
+   "group": "poultry",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned chicken",
+   "aliases": [
+    "canned chicken",
+    "chicken in brine"
+   ],
+   "group": "poultry",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen turkey steaks",
+   "aliases": [
+    "turkey escalopes"
+   ],
+   "group": "poultry",
+   "form": "frozen"
+  },
+  {
+   "name": "chicken wings",
+   "aliases": [
+    "buffalo wings"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "diced chicken breast",
+   "aliases": [
+    "stir fry chicken"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "salmon fillet",
+   "aliases": [
+    "salmon"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "cod fillet",
+   "aliases": [
+    "cod"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned tuna chunks",
+   "aliases": [
+    "canned tuna",
+    "tuna"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen prawns",
+   "aliases": [
+    "king prawns",
+    "peeled prawns"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "smoked salmon",
+   "aliases": [
+    "scottish smoked salmon"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10
+   }
+  },
+  {
+   "name": "fish fingers",
+   "aliases": [
+    "breaded fish fingers"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned sardines",
+   "aliases": [
+    "sardines in oil",
+    "sardines in tomato"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen calamari",
+   "aliases": [
+    "squid rings",
+    "breaded squid"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "fresh mussels",
+   "aliases": [
+    "mussels"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "dried salted cod",
+   "aliases": [
+    "bacalao"
+   ],
+   "group": "fish_and_seafood",
+   "form": "dried"
+  },
+  {
+   "name": "tinned mackerel",
+   "aliases": [
+    "mackerel fillets"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "haddock fillet",
+   "aliases": [
+    "smoked haddock"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen fish pie mix",
+   "aliases": [
+    "seafood pie mix"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "tinned anchovies",
+   "aliases": [
+    "anchovy fillets"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "sea bass fillet",
+   "aliases": [
+    "seabass"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen seafood cocktail",
+   "aliases": [
+    "seafood mix"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "crab meat",
+   "aliases": [
+    "dressed crab",
+    "white crab meat"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned crab",
+   "aliases": [
+    "canned crab"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen scampi",
+   "aliases": [
+    "breaded scampi"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "trout fillet",
+   "aliases": [
+    "rainbow trout"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "frozen scallops",
+   "aliases": [
+    "king scallops"
+   ],
+   "group": "fish_and_seafood",
+   "form": "frozen"
+  },
+  {
+   "name": "kippers",
+   "aliases": [
+    "smoked herring"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "tinned salmon",
+   "aliases": [
+    "canned salmon",
+    "pink salmon"
+   ],
+   "group": "fish_and_seafood",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "monkfish tail",
+   "aliases": [
+    "monkfish"
+   ],
+   "group": "fish_and_seafood",
+   "form": "fresh"
+  },
+  {
+   "name": "duck eggs",
+   "aliases": [
+    "free range duck eggs"
+   ],
+   "group": "eggs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "quail eggs",
+   "aliases": [
+    "bobby quail eggs"
+   ],
+   "group": "eggs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "double cream",
+   "aliases": [
+    "thick cream",
+    "pouring cream"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "milk",
+   "aliases": [
+    "cows milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cheddar cheese",
+   "aliases": [
+    "mature cheddar",
+    "mild cheddar",
+    "block cheese",
+    "yellow cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "greek yogurt",
+   "aliases": [
+    "greek style yogurt",
+    "strained yogurt"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "natural yogurt",
+   "aliases": [
+    "plain yogurt"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "mozzarella",
+   "aliases": [
+    "pizza cheese",
+    "fresh mozzarella ball"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 14,
+    "once_opened_shelf_life_days": 3
+   }
+  },
+  {
+   "name": "parmesan",
+   "aliases": [
+    "hard cheese",
+    "grated parmesan",
+    "parmigiano reggiano"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "single cream",
+   "aliases": [
+    "light cream",
+    "coffee cream"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "creme fraiche",
+   "aliases": [
+    "sour cream style"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cottage cheese",
+   "aliases": [
+    "low fat cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "feta cheese",
+   "aliases": [
+    "greek cheese",
+    "salty cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 60,
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "cream cheese",
+   "aliases": [
+    "spreadable cheese",
+    "philadelphia"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "margarine",
+   "aliases": [
+    "spread",
+    "vegetable spread",
+    "soft spread"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "clotted cream",
+   "aliases": [
+    "devon cream"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "halloumi",
+   "aliases": [
+    "grilling cheese",
+    "frying cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 90,
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "buttermilk",
+   "aliases": [
+    "cultured milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "mascarpone",
+   "aliases": [
+    "italian cream cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "goats cheese",
+   "aliases": [
+    "goat cheese",
+    "soft goats log"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sour cream",
+   "aliases": [
+    "deli sour cream"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "blue cheese",
+   "aliases": [
+    "stilton",
+    "danish blue",
+    "gorgonzola"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 45,
+    "once_opened_shelf_life_days": 21
+   }
+  },
+  {
+   "name": "ricotta",
+   "aliases": [
+    "whey cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "kefir",
+   "aliases": [
+    "fermented milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "double gloucester",
+   "aliases": [
+    "red cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "emmental",
+   "aliases": [
+    "swiss cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 21
+   }
+  },
+  {
+   "name": "brie",
+   "aliases": [
+    "french soft cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "camembert",
+   "aliases": [
+    "baking cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "ghee",
+   "aliases": [
+    "clarified butter"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "presence",
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "quark",
+   "aliases": [
+    "skimmed milk soft cheese"
+   ],
+   "group": "dairy",
+   "form": "not_applicable"
+  },
+  {
+   "name": "red leicester",
+   "aliases": [
+    "coloured cheddar"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "evaporated milk",
+   "aliases": [
+    "tinned milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 365
+   }
+  },
+  {
+   "name": "long grain rice",
+   "aliases": [
+    "easy cook rice",
+    "long grain white rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "brown rice",
+   "aliases": [
+    "wholewheat rice",
+    "wholegrain rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "quinoa",
+   "aliases": [
+    "white quinoa"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pearl barley",
+   "aliases": [
+    "barley"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "couscous",
+   "aliases": [
+    "medium couscous"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bulgur wheat",
+   "aliases": [
+    "cracked wheat"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "oats",
+   "aliases": [
+    "porridge oats",
+    "rolled oats"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "polenta",
+   "aliases": [
+    "cornmeal",
+    "maize meal"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "buckwheat",
+   "aliases": [
+    "buckwheat groats"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "farro",
+   "aliases": [
+    "spelt grains"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "black rice",
+   "aliases": [
+    "forbidden rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "wild rice",
+   "aliases": [
+    "black wild rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "risotto rice",
+   "aliases": [
+    "carnaroli rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "millet",
+   "aliases": [
+    "hulled millet"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "spaghetti",
+   "aliases": [
+    "pasta strands",
+    "long pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "basmati rice",
+   "aliases": [],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "penne",
+   "aliases": [
+    "quill pasta",
+    "tube pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "fusilli",
+   "aliases": [
+    "spirals",
+    "corkscrew pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "rigatoni",
+   "aliases": [
+    "large tubes"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "farfalle",
+   "aliases": [
+    "bow tie pasta",
+    "butterfly pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "lasagne sheets",
+   "aliases": [
+    "lasagna pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "macaroni",
+   "aliases": [
+    "elbow pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tagliatelle",
+   "aliases": [
+    "ribbon pasta",
+    "flat pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "jasmine rice",
+   "aliases": [
+    "thai fragrant rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "arborio rice",
+   "aliases": [],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "easy cook long grain rice",
+   "aliases": [
+    "parboiled rice"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "vermicelli",
+   "aliases": [
+    "thin noodles",
+    "angel hair pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "orzo",
+   "aliases": [
+    "risoni",
+    "rice shaped pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "egg noodles",
+   "aliases": [
+    "dried egg noodles"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "wholewheat spaghetti",
+   "aliases": [
+    "brown pasta"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "gnocchi",
+   "aliases": [
+    "potato dumplings"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "white loaf",
+   "aliases": [
+    "bread",
+    "sliced bread",
+    "sandwich loaf"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "wholemeal loaf",
+   "aliases": [
+    "brown bread",
+    "wholewheat bread"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "seeded loaf",
+   "aliases": [
+    "brown seeded bread",
+    "multigrain bread"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sourdough loaf",
+   "aliases": [
+    "artisan loaf"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tiger bread",
+   "aliases": [
+    "giraffe bread"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "white baps",
+   "aliases": [
+    "bread rolls",
+    "baps",
+    "barm cakes",
+    "buns"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bagels",
+   "aliases": [
+    "plain bagels"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pitta bread",
+   "aliases": [
+    "pittas"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tortilla wraps",
+   "aliases": [
+    "wraps",
+    "flour tortillas"
+   ],
+   "group": "bread",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 21,
+    "once_opened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "crumpets",
+   "aliases": [
+    "breakfast crumpets"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "english muffins",
+   "aliases": [
+    "breakfast muffins"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "focaccia",
+   "aliases": [
+    "italian bread"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "naan bread",
+   "aliases": [
+    "naan"
+   ],
+   "group": "bread",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14,
+    "once_opened_shelf_life_days": 5
+   }
+  },
+  {
+   "name": "brioche buns",
+   "aliases": [
+    "brioche baps"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "vegetable oil",
+   "aliases": [
+    "rapeseed oil",
+    "sunflower oil",
+    "neutral oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.92
+  },
+  {
+   "name": "lard",
+   "aliases": [
+    "pork fat",
+    "dripping"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "coconut oil",
+   "aliases": [
+    "organic coconut oil",
+    "cooking fat"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sesame oil",
+   "aliases": [
+    "toasted sesame oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.92
+  },
+  {
+   "name": "chilli oil",
+   "aliases": [
+    "spicy oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.91
+  },
+  {
+   "name": "duck fat",
+   "aliases": [
+    "roasting fat"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "peanut oil",
+   "aliases": [
+    "groundnut oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.92
+  },
+  {
+   "name": "avocado oil",
+   "aliases": [
+    "salad oil"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.91
+  },
+  {
+   "name": "low fat spread",
+   "aliases": [
+    "light spread",
+    "diet spread"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "goose fat",
+   "aliases": [
+    "roast potato fat"
+   ],
+   "group": "oils_and_fats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "coriander",
+   "aliases": [
+    "cilantro",
+    "fresh coriander"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "parsley",
+   "aliases": [
+    "flat-leaf parsley",
+    "curly parsley"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "basil",
+   "aliases": [
+    "fresh basil",
+    "sweet basil"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mint",
+   "aliases": [
+    "fresh mint",
+    "spearmint"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "thyme",
+   "aliases": [
+    "fresh thyme"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "rosemary",
+   "aliases": [
+    "fresh rosemary"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chives",
+   "aliases": [
+    "fresh chives"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dill",
+   "aliases": [
+    "fresh dill"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "oregano",
+   "aliases": [
+    "fresh oregano"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tarragon",
+   "aliases": [
+    "fresh tarragon"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sage",
+   "aliases": [
+    "fresh sage"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bay leaves",
+   "aliases": [
+    "fresh bay leaves"
+   ],
+   "group": "fresh_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried mixed herbs",
+   "aliases": [
+    "mixed herbs",
+    "dried herbs",
+    "herbes de provence"
+   ],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried oregano",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried basil",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried thyme",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried parsley",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried rosemary",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried bay leaves",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried coriander",
+   "aliases": [
+    "coriander leaf"
+   ],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried dill",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried mint",
+   "aliases": [
+    "dried peppermint"
+   ],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried sage",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried tarragon",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried marjoram",
+   "aliases": [
+    "marjoram"
+   ],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried chives",
+   "aliases": [],
+   "group": "dried_herbs",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground cumin",
+   "aliases": [
+    "cumin powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "smoked paprika",
+   "aliases": [
+    "pimenton",
+    "spanish paprika"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground turmeric",
+   "aliases": [
+    "turmeric powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground coriander",
+   "aliases": [
+    "coriander powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chilli powder",
+   "aliases": [
+    "hot chilli powder",
+    "mild chilli powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "onion powder",
+   "aliases": [
+    "dried onion"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "curry powder",
+   "aliases": [
+    "mild curry powder",
+    "hot curry powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "garam masala",
+   "aliases": [
+    "indian spice mix"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground ginger",
+   "aliases": [
+    "dried ginger"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cayenne pepper",
+   "aliases": [
+    "ground cayenne"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground cinnamon",
+   "aliases": [
+    "cinnamon powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mixed spice",
+   "aliases": [
+    "baking spice"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mustard powder",
+   "aliases": [
+    "english mustard powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground nutmeg",
+   "aliases": [
+    "nutmeg powder"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cloves",
+   "aliases": [
+    "ground cloves",
+    "whole cloves"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "fennel seeds",
+   "aliases": [
+    "whole fennel"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cardamom pods",
+   "aliases": [
+    "green cardamom"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "star anise",
+   "aliases": [
+    "whole star anise"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sumac",
+   "aliases": [
+    "ground sumac"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "allspice",
+   "aliases": [
+    "ground allspice",
+    "pimento"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "coriander seeds",
+   "aliases": [
+    "whole coriander"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mustard seeds",
+   "aliases": [
+    "brown mustard seeds",
+    "black mustard seeds"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chilli flakes",
+   "aliases": [
+    "crushed chillies",
+    "dried chilli flakes"
+   ],
+   "group": "spices",
+   "form": "not_applicable"
+  },
+  {
+   "name": "curry paste",
+   "aliases": [
+    "korma paste",
+    "tikka masala paste",
+    "thai curry paste"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "brown sauce",
+   "aliases": [
+    "hp sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ketchup",
+   "aliases": [
+    "tomato sauce",
+    "red sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "english mustard",
+   "aliases": [
+    "hot mustard"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dijon mustard",
+   "aliases": [
+    "french mustard"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "wholegrain mustard",
+   "aliases": [
+    "grainy mustard"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mayonnaise",
+   "aliases": [
+    "mayo",
+    "salad cream alternative"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.95
+  },
+  {
+   "name": "salad cream",
+   "aliases": [
+    "tangy salad dressing"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "malt vinegar",
+   "aliases": [
+    "chippy vinegar"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.01
+  },
+  {
+   "name": "balsamic vinegar",
+   "aliases": [
+    "balsamic glaze"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.15
+  },
+  {
+   "name": "worcestershire sauce",
+   "aliases": [
+    "worcester sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "soy sauce",
+   "aliases": [
+    "light soy sauce",
+    "dark soy sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.15
+  },
+  {
+   "name": "sweet chilli sauce",
+   "aliases": [
+    "thai sweet chilli"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "barbecue sauce",
+   "aliases": [
+    "bbq sauce",
+    "smoky bbq"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "horseradish sauce",
+   "aliases": [
+    "creamy horseradish"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mint sauce",
+   "aliases": [
+    "mint jelly"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cranberry sauce",
+   "aliases": [],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tartare sauce",
+   "aliases": [
+    "tartar sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mango chutney",
+   "aliases": [
+    "sweet chutney"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "piccalilli",
+   "aliases": [
+    "mustard pickle"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "apple sauce",
+   "aliases": [
+    "cooking apple sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "red wine vinegar",
+   "aliases": [
+    "vinegar"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.01
+  },
+  {
+   "name": "white wine vinegar",
+   "aliases": [],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.01
+  },
+  {
+   "name": "fish sauce",
+   "aliases": [
+    "nam pla"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.2
+  },
+  {
+   "name": "hoisin sauce",
+   "aliases": [
+    "peking sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "oyster sauce",
+   "aliases": [
+    "stir fry sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pesto",
+   "aliases": [
+    "green pesto",
+    "basil pesto"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "cranberry jelly",
+   "aliases": [
+    "jellied cranberry"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "french dressing",
+   "aliases": [
+    "vinaigrette"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "caesar dressing",
+   "aliases": [
+    "creamy salad dressing"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "honey mustard",
+   "aliases": [
+    "sweet mustard"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sriracha",
+   "aliases": [
+    "chilli garlic sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chipotle paste",
+   "aliases": [
+    "smoked chilli paste"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "harissa paste",
+   "aliases": [
+    "spicy chilli paste"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "capers",
+   "aliases": [
+    "pickled capers"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "gherkins",
+   "aliases": [
+    "pickles",
+    "cornichons"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pickled onions",
+   "aliases": [
+    "jarred onions"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "preserved lemons",
+   "aliases": [
+    "salted lemons"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "anchovy paste",
+   "aliases": [
+    "anchovy essence"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "tahini",
+   "aliases": [
+    "sesame paste"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.1
+  },
+  {
+   "name": "peanut satay sauce",
+   "aliases": [
+    "satay sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "steak sauce",
+   "aliases": [],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "shrimp paste",
+   "aliases": [
+    "belacan"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "black bean sauce",
+   "aliases": [
+    "chinese bean sauce"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "vegan mayonnaise",
+   "aliases": [
+    "egg free mayo"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sweet onion sauce",
+   "aliases": [
+    "onion relish"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sugar",
+   "aliases": [
+    "granulated sugar",
+    "white sugar"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "self-raising flour",
+   "aliases": [
+    "self raising flour",
+    "sr flour"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "brown sugar",
+   "aliases": [
+    "light brown sugar",
+    "soft brown sugar",
+    "muscovado"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "icing sugar",
+   "aliases": [
+    "powdered sugar",
+    "confectioners sugar"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "baking powder",
+   "aliases": [
+    "raising agent"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bicarbonate of soda",
+   "aliases": [
+    "baking soda",
+    "bicarb"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cocoa powder",
+   "aliases": [
+    "baking cocoa",
+    "drinking chocolate"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "vanilla extract",
+   "aliases": [
+    "vanilla essence",
+    "vanilla flavouring"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dried yeast",
+   "aliases": [
+    "fast action yeast",
+    "easy bake yeast"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "ground almonds",
+   "aliases": [
+    "almond flour",
+    "almond meal"
+   ],
+   "group": "baking",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
+  },
+  {
+   "name": "cornflour",
+   "aliases": [
+    "corn starch",
+    "maize starch"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "golden syrup",
+   "aliases": [],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dark chocolate",
+   "aliases": [
+    "baking chocolate",
+    "cooking chocolate"
+   ],
+   "group": "baking",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
+  },
+  {
+   "name": "demerara sugar",
+   "aliases": [
+    "raw sugar"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "gelatine powder",
+   "aliases": [
+    "gelatine",
+    "setting agent"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "raisins",
+   "aliases": [
+    "sultanas",
+    "dried fruit"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "currants",
+   "aliases": [
+    "baking currants"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "glace cherries",
+   "aliases": [
+    "candied cherries"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chocolate chips",
+   "aliases": [
+    "baking chocolate drops"
+   ],
+   "group": "baking",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
+  },
+  {
+   "name": "cream of tartar",
+   "aliases": [
+    "tartaric acid"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "treacle",
+   "aliases": [
+    "black treacle",
+    "molasses"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "orange juice",
+   "aliases": [
+    "oj",
+    "freshly squeezed juice",
+    "fruit juice"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.04
+  },
+  {
+   "name": "apple juice",
+   "aliases": [
+    "cloudy apple juice",
+    "pressed apple juice"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.04
+  },
+  {
+   "name": "oat drink",
+   "aliases": [
+    "oat milk",
+    "plant-based milk"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.02,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
+  },
+  {
+   "name": "soya drink",
+   "aliases": [
+    "soya milk",
+    "soy milk"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.02,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
+  },
+  {
+   "name": "almond drink",
+   "aliases": [
+    "almond milk"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.01,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
+  },
+  {
+   "name": "coca cola",
+   "aliases": [
+    "coke",
+    "cola",
+    "fizzy drink"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.05
+  },
+  {
+   "name": "lemonade",
+   "aliases": [
+    "fizzy lemon drink",
+    "clear lemonade"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.04
+  },
+  {
+   "name": "tonic water",
+   "aliases": [
+    "mixer"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.04
+  },
+  {
+   "name": "cordial",
+   "aliases": [
+    "squash",
+    "concentrated juice"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.15,
+   "overrides": {
+    "tracking_mode": "presence",
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "blackcurrant squash",
+   "aliases": [
+    "ribena"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.15,
+   "overrides": {
+    "tracking_mode": "presence",
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "still water",
+   "aliases": [
+    "bottled water",
+    "spring water"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.0
+  },
+  {
+   "name": "sparkling water",
+   "aliases": [
+    "fizzy water",
+    "soda water"
+   ],
+   "group": "drinks",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.0
+  },
+  {
+   "name": "potato crisps",
+   "aliases": [
+    "crisps",
+    "packet crisps",
+    "snack chips"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chocolate bar",
+   "aliases": [
+    "chocolate",
+    "confectionery bar",
+    "sweet treat"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cereal bar",
+   "aliases": [
+    "granola bar",
+    "snack bar",
+    "breakfast bar"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "digestive biscuits",
+   "aliases": [
+    "biscuits",
+    "plain biscuits",
+    "tea biscuits"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "popped popcorn",
+   "aliases": [
+    "popcorn",
+    "snack popcorn"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "salted peanuts",
+   "aliases": [
+    "nuts",
+    "peanuts",
+    "roasted nuts"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "jelly sweets",
+   "aliases": [
+    "gummies",
+    "sweets",
+    "candy"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "rice cakes",
+   "aliases": [
+    "corn cakes",
+    "snack cakes"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chocolate cookies",
+   "aliases": [
+    "cookies",
+    "choc chip cookies"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "shortbread",
+   "aliases": [
+    "shortbread fingers",
+    "buttery biscuits"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "breadsticks",
+   "aliases": [
+    "dipping sticks",
+    "grissini"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "flapjacks",
+   "aliases": [
+    "oat bars",
+    "oat slices"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "jaffa cakes",
+   "aliases": [
+    "orange sponge biscuits"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chewing gum",
+   "aliases": [
+    "gum",
+    "mints"
+   ],
+   "group": "snacks_and_treats",
+   "form": "not_applicable"
+  },
+  {
+   "name": "washing up liquid",
+   "aliases": [
+    "fairy liquid",
+    "dish soap",
+    "washing liquid",
+    "detergent"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "laundry detergent",
+   "aliases": [
+    "washing powder",
+    "laundry liquid",
+    "washing capsules"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "fabric conditioner",
+   "aliases": [
+    "fabric softener",
+    "lenor",
+    "conditioning liquid"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "dishwasher tablets",
+   "aliases": [
+    "dishwasher pods",
+    "finish tablets",
+    "dishwasher tabs"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "kitchen roll",
+   "aliases": [
+    "paper towels",
+    "kitchen paper",
+    "kitchen towels"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "toilet roll",
+   "aliases": [
+    "loo roll",
+    "toilet paper",
+    "toilet tissue"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "surface cleaner",
+   "aliases": [
+    "multi-purpose spray",
+    "antibacterial spray",
+    "counter spray"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bin bags",
+   "aliases": [
+    "refuse sacks",
+    "bin liners",
+    "rubbish bags"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sponge scourer",
+   "aliases": [
+    "washing up sponge",
+    "scouring pad",
+    "kitchen sponge"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "aluminium foil",
+   "aliases": [
+    "tin foil",
+    "foil"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cling film",
+   "aliases": [
+    "food wrap",
+    "plastic wrap",
+    "cling wrap"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "toilet cleaner",
+   "aliases": [
+    "loo bleach",
+    "toilet gel"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bleach",
+   "aliases": [
+    "thick bleach",
+    "disinfectant"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "glass cleaner",
+   "aliases": [
+    "window cleaner",
+    "glass spray"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "floor cleaner",
+   "aliases": [
+    "floor wash",
+    "mop solution"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "baking paper",
+   "aliases": [
+    "parchment paper",
+    "greaseproof paper"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "tea towels",
+   "aliases": [
+    "dish towels",
+    "drying cloths"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "food storage bags",
+   "aliases": [
+    "sandwich bags",
+    "freezer bags",
+    "ziplock bags"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "matches",
+   "aliases": [
+    "safety matches"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "air freshener",
+   "aliases": [
+    "room spray",
+    "deodoriser"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "microfibre cloth",
+   "aliases": [
+    "dusting cloth",
+    "cleaning cloth"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "stain remover",
+   "aliases": [
+    "vanish",
+    "pre-wash spray"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "bathroom cleaner",
+   "aliases": [
+    "bath spray",
+    "shower cleaner"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "drain unblocker",
+   "aliases": [
+    "sink unblocker",
+    "plughole cleaner"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "rubber gloves",
+   "aliases": [
+    "cleaning gloves",
+    "washing up gloves"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "furniture polish",
+   "aliases": [
+    "dusting spray",
+    "pledge"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
+   "name": "toothpaste",
+   "aliases": [
+    "dental cream",
+    "teeth cleaning gel"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "shampoo",
+   "aliases": [
+    "hair cleanser",
+    "wash"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "conditioner",
+   "aliases": [
+    "hair cream",
+    "hair conditioner"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "shower gel",
+   "aliases": [
+    "body wash",
+    "bath foam"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "hand soap",
+   "aliases": [
+    "liquid soap",
+    "bar soap"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "deodorant",
+   "aliases": [
+    "anti-perspirant",
+    "body spray"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "moisturiser",
+   "aliases": [
+    "face cream",
+    "body lotion"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sun cream",
+   "aliases": [
+    "sun block",
+    "spf lotion"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cotton buds",
+   "aliases": [
+    "q-tips",
+    "cotton swabs"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "face wash",
+   "aliases": [
+    "cleanser",
+    "facial scrub"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mouthwash",
+   "aliases": [
+    "dental rinse"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "hand cream",
+   "aliases": [
+    "hand lotion"
+   ],
+   "group": "health_and_beauty",
+   "form": "not_applicable"
+  },
+  {
+   "name": "baby formula milk powder",
+   "aliases": [
+    "infant formula",
+    "baby milk powder",
+    "baby formula"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "density_g_per_ml": 0.5,
+   "overrides": {
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "baby rice",
+   "aliases": [
+    "first cereal",
+    "baby porridge base"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "baby fruit puree pouch",
+   "aliases": [
+    "baby food pouch",
+    "fruit pouch"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 1
+   }
+  },
+  {
+   "name": "baby pasta stars",
+   "aliases": [
+    "baby pasta",
+    "pastina"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "baby teething biscuits",
+   "aliases": [
+    "teething rusks",
+    "baby biscuits"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "baby vegetable meal jar",
+   "aliases": [
+    "baby food jar",
+    "vegetable tray food"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 2
+   }
+  },
+  {
+   "name": "baby corn puffs",
+   "aliases": [
+    "pick ups",
+    "baby finger food snacks"
+   ],
+   "group": "baby",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "dog food pouches",
+   "aliases": [
+    "wet dog food",
+    "dog sachets"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 2
+   }
+  },
+  {
+   "name": "cat food tins",
+   "aliases": [
+    "wet cat food",
+    "tinned cat food"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 2
+   }
+  },
+  {
+   "name": "dry dog food",
+   "aliases": [
+    "dog kibble",
+    "dog biscuits",
+    "dry dog kibble"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 60
+   }
+  },
+  {
+   "name": "dry cat food",
+   "aliases": [
+    "cat kibble",
+    "cat biscuits",
+    "dry cat kibble"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 60
+   }
+  },
+  {
+   "name": "dog treats",
+   "aliases": [
+    "dog snacks",
+    "training treats"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "cat treats",
+   "aliases": [
+    "cat snacks",
+    "cat goodies"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
+   }
+  },
+  {
+   "name": "wild bird seed",
+   "aliases": [
+    "bird food",
+    "bird seed mix"
+   ],
+   "group": "pet",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 180
+   }
+  },
+  {
+   "name": "cat litter",
+   "aliases": [
+    "pet litter",
+    "kitten litter"
+   ],
+   "group": "pet",
+   "form": "not_applicable"
+  },
+  {
+   "name": "caster sugar",
+   "aliases": [
+    "superfine sugar"
+   ],
+   "group": "baking",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pasta",
+   "aliases": [
+    "dried pasta",
+    "pasta shapes"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "whole milk",
+   "aliases": [
+    "full fat milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.03
+  },
+  {
+   "name": "semi-skimmed milk",
+   "aliases": [
+    "semi skimmed milk"
+   ],
+   "group": "dairy",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.03
+  },
+  {
+   "name": "skimmed milk",
+   "aliases": [],
+   "group": "dairy",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.03
+  },
+  {
+   "name": "red chilli",
+   "aliases": [
+    "chilli",
+    "fresh red chilli",
+    "chillies"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh",
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
+  },
+  {
+   "name": "green chilli",
+   "aliases": [
+    "fresh green chilli"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh",
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
+  },
+  {
+   "name": "courgette",
+   "aliases": [
+    "zucchini"
+   ],
+   "group": "tomatoes_peppers_and_aubergines",
+   "form": "fresh"
+  },
+  {
+   "name": "cucumber",
+   "aliases": [],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "celery",
+   "aliases": [
+    "celery stick"
+   ],
+   "group": "leafy_greens",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "asparagus",
+   "aliases": [],
+   "group": "leafy_greens",
+   "form": "fresh"
+  },
+  {
+   "name": "leek",
+   "aliases": [
+    "leeks"
+   ],
+   "group": "onions_and_garlic",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
+  },
+  {
+   "name": "mushrooms",
+   "aliases": [
+    "button mushrooms",
+    "chestnut mushrooms"
+   ],
+   "group": "root_veg",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "butternut squash",
+   "aliases": [],
+   "group": "root_veg",
+   "form": "fresh"
+  },
+  {
+   "name": "sweetcorn",
+   "aliases": [
+    "corn on the cob"
+   ],
+   "group": "root_veg",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
+  },
+  {
+   "name": "tinned sweetcorn",
+   "aliases": [
+    "canned sweetcorn"
+   ],
+   "group": "root_veg",
+   "form": "tinned_jarred"
+  },
+  {
+   "name": "frozen sweetcorn",
+   "aliases": [],
+   "group": "root_veg",
+   "form": "frozen"
+  },
+  {
+   "name": "green beans",
+   "aliases": [
+    "fine beans",
+    "french beans"
+   ],
+   "group": "beans_and_pulses",
+   "form": "fresh"
+  },
+  {
+   "name": "fresh peas",
+   "aliases": [
+    "petits pois"
+   ],
+   "group": "beans_and_pulses",
+   "form": "fresh"
+  },
+  {
+   "name": "avocado",
+   "aliases": [
+    "avocados"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "banana",
+   "aliases": [
+    "bananas"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "apple",
+   "aliases": [
+    "apples",
+    "eating apple"
+   ],
+   "group": "fruit",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 30
+   }
+  },
+  {
+   "name": "pear",
+   "aliases": [
+    "pears"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "grapes",
+   "aliases": [
+    "red grapes",
+    "green grapes",
+    "seedless grapes"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "pork chops",
+   "aliases": [
+    "pork loin steaks"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "pork mince",
+   "aliases": [
+    "minced pork"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "bacon",
+   "aliases": [
+    "back bacon",
+    "streaky bacon",
+    "bacon rashers"
+   ],
+   "group": "red_meat",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10,
+    "once_opened_shelf_life_days": 3
+   }
+  },
+  {
+   "name": "sausages",
+   "aliases": [
+    "pork sausages"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "gammon",
+   "aliases": [
+    "gammon steak"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "ham",
+   "aliases": [
+    "cooked ham",
+    "sliced ham"
+   ],
+   "group": "red_meat",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10,
+    "once_opened_shelf_life_days": 3
+   }
+  },
+  {
+   "name": "chorizo",
+   "aliases": [
+    "chorizo sausage"
+   ],
+   "group": "red_meat",
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 7
+   }
+  },
+  {
+   "name": "pork belly",
+   "aliases": [
+    "pork belly slices"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "diced pork",
+   "aliases": [
+    "pork shoulder"
+   ],
+   "group": "red_meat",
+   "form": "fresh"
+  },
+  {
+   "name": "turkey breast",
+   "aliases": [
+    "turkey steaks"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "turkey mince",
+   "aliases": [
+    "turkey mince meat"
+   ],
+   "group": "poultry",
+   "form": "fresh"
+  },
+  {
+   "name": "chicken stock cube",
+   "aliases": [
+    "chicken stock cubes",
+    "chicken bouillon"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "vegetable stock cube",
+   "aliases": [
+    "vegetable stock cubes",
+    "veg stock cube"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "beef stock cube",
+   "aliases": [
+    "beef stock cubes"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "gravy granules",
+   "aliases": [
+    "gravy"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "honey",
+   "aliases": [
+    "runny honey"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.42
+  },
+  {
+   "name": "peanut butter",
+   "aliases": [
+    "smooth peanut butter",
+    "crunchy peanut butter"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "jam",
+   "aliases": [
+    "strawberry jam",
+    "raspberry jam"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "marmalade",
+   "aliases": [
+    "orange marmalade"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable"
+  },
+  {
+   "name": "maple syrup",
+   "aliases": [],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "density_g_per_ml": 1.33
+  },
+  {
+   "name": "coconut milk",
+   "aliases": [
+    "tinned coconut milk",
+    "canned coconut milk"
+   ],
+   "group": "sauces_and_condiments",
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "ml",
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 4
+   }
+  },
+  {
+   "name": "almonds",
+   "aliases": [
+    "flaked almonds",
+    "whole almonds"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "walnuts",
+   "aliases": [
+    "walnut halves"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cashew nuts",
+   "aliases": [
+    "cashews"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pine nuts",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sunflower seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "rice noodles",
+   "aliases": [
+    "thin rice noodles"
+   ],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "udon noodles",
+   "aliases": [],
+   "group": "pasta_and_rice",
+   "form": "not_applicable"
+  },
+  {
+   "name": "cornflakes",
+   "aliases": [
+    "corn flakes"
+   ],
+   "group": "grains",
+   "form": "not_applicable"
+  },
+  {
+   "name": "garlic bread",
+   "aliases": [
+    "garlic baguette"
+   ],
+   "group": "bread",
+   "form": "not_applicable"
+  },
+  {
+   "name": "gruyere",
+   "aliases": [],
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 75,
+    "once_opened_shelf_life_days": 28
+   }
+  },
+  {
+   "name": "pecans",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "hazelnuts",
+   "aliases": [
+    "hazelnut kernels"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pistachios",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "pumpkin seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "chia seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "sesame seeds",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "linseed",
+   "aliases": [
+    "flaxseed"
+   ],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "brazil nuts",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "mixed nuts",
+   "aliases": [],
+   "group": "nuts_and_seeds",
+   "form": "not_applicable"
+  },
+  {
+   "name": "melon",
+   "aliases": [
+    "cantaloupe melon",
+    "honeydew melon"
+   ],
+   "group": "fruit",
+   "form": "fresh"
+  },
+  {
+   "name": "watermelon",
+   "aliases": [],
+   "group": "fruit",
+   "form": "fresh"
+  }
+ ]
+}
