@@ -24,9 +24,11 @@ class EffectiveIngredient {
 
   /// `g`, `ml` or `count` for a counted ingredient; null otherwise.
   final String? stockUnit;
-  final int unopenedShelfLifeDays;
 
-  /// Null where an opened pack has no limit.
+  /// Null means no shelf life: the ingredient never expires. Not the same as unset, which inherits the group's.
+  final int? unopenedShelfLifeDays;
+
+  /// Null where opening makes no difference, or the ingredient never expires.
   final int? onceOpenedShelfLifeDays;
   final String section;
 }
