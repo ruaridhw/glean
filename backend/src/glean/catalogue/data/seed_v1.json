@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "items": [
   {
    "name": "onion",
@@ -38,14 +38,17 @@
     "block butter"
    ],
    "group": "dairy",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "olive oil",
    "aliases": [
     "extra virgin olive oil",
-    "evoo",
-    "cooking oil"
+    "evoo"
    ],
    "group": "oils_and_fats",
    "form": "not_applicable",
@@ -74,10 +77,14 @@
   {
    "name": "tomato paste",
    "aliases": [
-    "double concentrated tomato paste"
+    "double concentrated tomato paste",
+    "tomato puree"
    ],
    "group": "sauces_and_condiments",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "plain flour",
@@ -114,7 +121,11 @@
     "chopped spinach"
    ],
    "group": "leafy_greens",
-   "form": "frozen"
+   "form": "frozen",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
   },
   {
    "name": "rocket",
@@ -143,9 +154,7 @@
   },
   {
    "name": "watercress",
-   "aliases": [
-    "peppery greens"
-   ],
+   "aliases": [],
    "group": "leafy_greens",
    "form": "fresh"
   },
@@ -275,7 +284,8 @@
    "group": "onions_and_garlic",
    "form": "fresh",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "perishable",
+    "unopened_shelf_life_days": 7
    }
   },
   {
@@ -345,7 +355,6 @@
   {
    "name": "sweet potato",
    "aliases": [
-    "yam",
     "orange potato"
    ],
    "group": "root_veg",
@@ -362,9 +371,7 @@
   },
   {
    "name": "parsnip",
-   "aliases": [
-    "honey roasted parsnip"
-   ],
+   "aliases": [],
    "group": "root_veg",
    "form": "fresh"
   },
@@ -516,25 +523,13 @@
    "form": "tinned_jarred"
   },
   {
-   "name": "tomato puree",
-   "aliases": [],
-   "group": "tomatoes_peppers_and_aubergines",
-   "form": "tinned_jarred",
-   "overrides": {
-    "once_opened_shelf_life_days": 28
-   }
-  },
-  {
    "name": "passata",
    "aliases": [
     "sieved tomatoes",
     "tomato passata"
    ],
    "group": "tomatoes_peppers_and_aubergines",
-   "form": "tinned_jarred",
-   "overrides": {
-    "once_opened_shelf_life_days": 3
-   }
+   "form": "tinned_jarred"
   },
   {
    "name": "sun-dried tomato",
@@ -545,6 +540,7 @@
    "group": "tomatoes_peppers_and_aubergines",
    "form": "tinned_jarred",
    "overrides": {
+    "tracking_mode": "perishable",
     "once_opened_shelf_life_days": 14
    }
   },
@@ -574,6 +570,7 @@
    "group": "tomatoes_peppers_and_aubergines",
    "form": "tinned_jarred",
    "overrides": {
+    "tracking_mode": "perishable",
     "once_opened_shelf_life_days": 7
    }
   },
@@ -588,17 +585,14 @@
   {
    "name": "plum tomato",
    "aliases": [
-    "roma tomato",
-    "plum plum"
+    "roma tomato"
    ],
    "group": "tomatoes_peppers_and_aubergines",
    "form": "fresh"
   },
   {
    "name": "orange pepper",
-   "aliases": [
-    "sweet baby peppers"
-   ],
+   "aliases": [],
    "group": "tomatoes_peppers_and_aubergines",
    "form": "fresh"
   },
@@ -617,10 +611,7 @@
     "pasta sauce base"
    ],
    "group": "tomatoes_peppers_and_aubergines",
-   "form": "tinned_jarred",
-   "overrides": {
-    "once_opened_shelf_life_days": 3
-   }
+   "form": "tinned_jarred"
   },
   {
    "name": "frozen chopped tomatoes",
@@ -691,7 +682,8 @@
   {
    "name": "tinned butter beans",
    "aliases": [
-    "lima beans"
+    "lima beans",
+    "large white beans"
    ],
    "group": "beans_and_pulses",
    "form": "tinned_jarred"
@@ -818,14 +810,6 @@
    "form": "dried"
   },
   {
-   "name": "tinned butter beans in water",
-   "aliases": [
-    "large white beans"
-   ],
-   "group": "beans_and_pulses",
-   "form": "tinned_jarred"
-  },
-  {
    "name": "dried adzuki beans",
    "aliases": [
     "azuki beans"
@@ -908,8 +892,7 @@
   {
    "name": "mango",
    "aliases": [
-    "kent mango",
-    "fruit"
+    "kent mango"
    ],
    "group": "fruit",
    "form": "fresh"
@@ -1314,9 +1297,7 @@
   },
   {
    "name": "lamb shoulder",
-   "aliases": [
-    "rolled lamb leg"
-   ],
+   "aliases": [],
    "group": "red_meat",
    "form": "fresh"
   },
@@ -1502,7 +1483,10 @@
     "scottish smoked salmon"
    ],
    "group": "fish_and_seafood",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10
+   }
   },
   {
    "name": "fish fingers",
@@ -1683,30 +1667,22 @@
     "pouring cream"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "milk",
    "aliases": [
-    "cows milk",
-    "semi skimmed milk"
+    "cows milk"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "stock_unit": "ml"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "cheddar cheese",
    "aliases": [
     "mature cheddar",
     "mild cheddar",
-    "block cheese",
-    "yellow cheese"
+    "block cheese"
    ],
    "group": "dairy",
    "form": "not_applicable",
@@ -1724,7 +1700,7 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "unopened_shelf_life_days": 14
    }
   },
   {
@@ -1735,7 +1711,7 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "unopened_shelf_life_days": 14
    }
   },
   {
@@ -1747,15 +1723,17 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 14,
+    "once_opened_shelf_life_days": 3
    }
   },
   {
    "name": "parmesan",
    "aliases": [
-    "hard cheese",
-    "italin hard cheese",
-    "grated parmesan"
+    "grated parmesan",
+    "parmigiano reggiano"
    ],
    "group": "dairy",
    "form": "not_applicable",
@@ -1771,38 +1749,24 @@
     "coffee cream"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "creme fraiche",
-   "aliases": [
-    "sour cream style"
-   ],
+   "aliases": [],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "cottage cheese",
-   "aliases": [
-    "low fat cheese"
-   ],
+   "aliases": [],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "feta cheese",
    "aliases": [
-    "greek cheese",
-    "salty cheese"
+    "greek cheese"
    ],
    "group": "dairy",
    "form": "not_applicable",
@@ -1818,10 +1782,7 @@
     "philadelphia"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "margarine",
@@ -1833,7 +1794,8 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "unopened_shelf_life_days": 28
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
    }
   },
   {
@@ -1842,10 +1804,7 @@
     "devon cream"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "halloumi",
@@ -1856,6 +1815,8 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g",
     "unopened_shelf_life_days": 90,
     "once_opened_shelf_life_days": 14
    }
@@ -1868,7 +1829,7 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "stock_unit": "ml"
+    "unopened_shelf_life_days": 14
    }
   },
   {
@@ -1877,10 +1838,7 @@
     "italian cream cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "goats cheese",
@@ -1889,10 +1847,7 @@
     "soft goats log"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "sour cream",
@@ -1900,10 +1855,7 @@
     "deli sour cream"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "blue cheese",
@@ -1925,10 +1877,7 @@
     "whey cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "kefir",
@@ -1938,14 +1887,12 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "stock_unit": "ml"
+    "unopened_shelf_life_days": 14
    }
   },
   {
    "name": "double gloucester",
-   "aliases": [
-    "red cheese"
-   ],
+   "aliases": [],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -1979,9 +1926,7 @@
   },
   {
    "name": "camembert",
-   "aliases": [
-    "baking cheese"
-   ],
+   "aliases": [],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -1997,7 +1942,9 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "unopened_shelf_life_days": 180
+    "tracking_mode": "presence",
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
    }
   },
   {
@@ -2006,16 +1953,11 @@
     "skimmed milk soft cheese"
    ],
    "group": "dairy",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "red leicester",
-   "aliases": [
-    "coloured cheddar"
-   ],
+   "aliases": [],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -2031,8 +1973,9 @@
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
-    "unopened_shelf_life_days": 365,
-    "stock_unit": "ml"
+    "tracking_mode": "counted",
+    "stock_unit": "g",
+    "unopened_shelf_life_days": 365
    }
   },
   {
@@ -2339,8 +2282,7 @@
    "aliases": [
     "bread rolls",
     "baps",
-    "barm cakes",
-    "buns"
+    "barm cakes"
    ],
    "group": "bread",
    "form": "not_applicable"
@@ -2368,7 +2310,11 @@
     "flour tortillas"
    ],
    "group": "bread",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 21,
+    "once_opened_shelf_life_days": 7
+   }
   },
   {
    "name": "crumpets",
@@ -2400,7 +2346,11 @@
     "naan"
    ],
    "group": "bread",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 14,
+    "once_opened_shelf_life_days": 5
+   }
   },
   {
    "name": "brioche buns",
@@ -2433,8 +2383,7 @@
   {
    "name": "coconut oil",
    "aliases": [
-    "organic coconut oil",
-    "cooking fat"
+    "organic coconut oil"
    ],
    "group": "oils_and_fats",
    "form": "not_applicable"
@@ -2489,8 +2438,12 @@
     "light spread",
     "diet spread"
    ],
-   "group": "oils_and_fats",
-   "form": "not_applicable"
+   "group": "dairy",
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 56,
+    "once_opened_shelf_life_days": 28
+   }
   },
   {
    "name": "goose fat",
@@ -2943,8 +2896,7 @@
   {
    "name": "mayonnaise",
    "aliases": [
-    "mayo",
-    "salad cream alternative"
+    "mayo"
    ],
    "group": "sauces_and_condiments",
    "form": "not_applicable",
@@ -3067,9 +3019,7 @@
   },
   {
    "name": "red wine vinegar",
-   "aliases": [
-    "vinegar"
-   ],
+   "aliases": [],
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "density_g_per_ml": 1.01
@@ -3100,9 +3050,7 @@
   },
   {
    "name": "oyster sauce",
-   "aliases": [
-    "stir fry sauce"
-   ],
+   "aliases": [],
    "group": "sauces_and_condiments",
    "form": "not_applicable"
   },
@@ -3115,7 +3063,8 @@
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 14
    }
   },
   {
@@ -3166,7 +3115,8 @@
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
    }
   },
   {
@@ -3177,7 +3127,8 @@
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
    }
   },
   {
@@ -3211,10 +3162,7 @@
     "salted lemons"
    ],
    "group": "sauces_and_condiments",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "anchovy paste",
@@ -3224,7 +3172,8 @@
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "overrides": {
-    "tracking_mode": "perishable"
+    "tracking_mode": "perishable",
+    "once_opened_shelf_life_days": 28
    }
   },
   {
@@ -3256,10 +3205,7 @@
     "belacan"
    ],
    "group": "sauces_and_condiments",
-   "form": "not_applicable",
-   "overrides": {
-    "tracking_mode": "perishable"
-   }
+   "form": "not_applicable"
   },
   {
    "name": "black bean sauce",
@@ -3342,8 +3288,7 @@
   {
    "name": "cocoa powder",
    "aliases": [
-    "baking cocoa",
-    "drinking chocolate"
+    "baking cocoa"
    ],
    "group": "baking",
    "form": "not_applicable"
@@ -3373,7 +3318,11 @@
     "almond meal"
    ],
    "group": "baking",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
   },
   {
    "name": "cornflour",
@@ -3397,7 +3346,11 @@
     "cooking chocolate"
    ],
    "group": "baking",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
   },
   {
    "name": "demerara sugar",
@@ -3419,8 +3372,7 @@
   {
    "name": "raisins",
    "aliases": [
-    "sultanas",
-    "dried fruit"
+    "sultanas"
    ],
    "group": "baking",
    "form": "not_applicable"
@@ -3447,7 +3399,11 @@
     "baking chocolate drops"
    ],
    "group": "baking",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "g"
+   }
   },
   {
    "name": "cream of tartar",
@@ -3490,12 +3446,14 @@
   {
    "name": "oat drink",
    "aliases": [
-    "oat milk",
-    "plant-based milk"
+    "oat milk"
    ],
    "group": "drinks",
    "form": "not_applicable",
-   "density_g_per_ml": 1.02
+   "density_g_per_ml": 1.02,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
   },
   {
    "name": "soya drink",
@@ -3505,7 +3463,10 @@
    ],
    "group": "drinks",
    "form": "not_applicable",
-   "density_g_per_ml": 1.02
+   "density_g_per_ml": 1.02,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
   },
   {
    "name": "almond drink",
@@ -3514,14 +3475,16 @@
    ],
    "group": "drinks",
    "form": "not_applicable",
-   "density_g_per_ml": 1.01
+   "density_g_per_ml": 1.01,
+   "overrides": {
+    "tracking_mode": "perishable"
+   }
   },
   {
    "name": "coca cola",
    "aliases": [
     "coke",
-    "cola",
-    "fizzy drink"
+    "cola"
    ],
    "group": "drinks",
    "form": "not_applicable",
@@ -3539,9 +3502,7 @@
   },
   {
    "name": "tonic water",
-   "aliases": [
-    "mixer"
-   ],
+   "aliases": [],
    "group": "drinks",
    "form": "not_applicable",
    "density_g_per_ml": 1.04
@@ -3554,7 +3515,11 @@
    ],
    "group": "drinks",
    "form": "not_applicable",
-   "density_g_per_ml": 1.15
+   "density_g_per_ml": 1.15,
+   "overrides": {
+    "tracking_mode": "presence",
+    "once_opened_shelf_life_days": 90
+   }
   },
   {
    "name": "blackcurrant squash",
@@ -3563,7 +3528,11 @@
    ],
    "group": "drinks",
    "form": "not_applicable",
-   "density_g_per_ml": 1.15
+   "density_g_per_ml": 1.15,
+   "overrides": {
+    "tracking_mode": "presence",
+    "once_opened_shelf_life_days": 90
+   }
   },
   {
    "name": "still water",
@@ -3598,9 +3567,7 @@
   {
    "name": "chocolate bar",
    "aliases": [
-    "chocolate",
-    "confectionery bar",
-    "sweet treat"
+    "confectionery bar"
    ],
    "group": "snacks_and_treats",
    "form": "not_applicable"
@@ -3618,7 +3585,6 @@
   {
    "name": "digestive biscuits",
    "aliases": [
-    "biscuits",
     "plain biscuits",
     "tea biscuits"
    ],
@@ -3637,9 +3603,7 @@
   {
    "name": "salted peanuts",
    "aliases": [
-    "nuts",
-    "peanuts",
-    "roasted nuts"
+    "peanuts"
    ],
    "group": "nuts_and_seeds",
    "form": "not_applicable"
@@ -3710,8 +3674,7 @@
   {
    "name": "chewing gum",
    "aliases": [
-    "gum",
-    "mints"
+    "gum"
    ],
    "group": "snacks_and_treats",
    "form": "not_applicable"
@@ -3721,8 +3684,7 @@
    "aliases": [
     "fairy liquid",
     "dish soap",
-    "washing liquid",
-    "detergent"
+    "washing liquid"
    ],
    "group": "household",
    "form": "not_applicable"
@@ -3830,8 +3792,7 @@
    "name": "toilet cleaner",
    "aliases": [
     "loo bleach",
-    "toilet gel",
-    "descaler"
+    "toilet gel"
    ],
    "group": "household",
    "form": "not_applicable"
@@ -3894,8 +3855,7 @@
   {
    "name": "matches",
    "aliases": [
-    "safety matches",
-    "fire lighters"
+    "safety matches"
    ],
    "group": "household",
    "form": "not_applicable"
@@ -3975,8 +3935,7 @@
   {
    "name": "shampoo",
    "aliases": [
-    "hair cleanser",
-    "wash"
+    "hair cleanser"
    ],
    "group": "health_and_beauty",
    "form": "not_applicable"
@@ -3984,7 +3943,7 @@
   {
    "name": "conditioner",
    "aliases": [
-    "hair cream"
+    "hair conditioner"
    ],
    "group": "health_and_beauty",
    "form": "not_applicable"
@@ -4077,11 +4036,12 @@
    ],
    "group": "baby",
    "form": "not_applicable",
+   "density_g_per_ml": 0.5,
    "overrides": {
     "stock_unit": "g",
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 28
-   },
-   "density_g_per_ml": 0.5
+   }
   },
   {
    "name": "baby rice",
@@ -4092,6 +4052,7 @@
    "group": "baby",
    "form": "not_applicable",
    "overrides": {
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 28
    }
   },
@@ -4104,6 +4065,7 @@
    "group": "baby",
    "form": "not_applicable",
    "overrides": {
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 1
    }
   },
@@ -4114,7 +4076,11 @@
     "pastina"
    ],
    "group": "baby",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 90
+   }
   },
   {
    "name": "baby teething biscuits",
@@ -4125,6 +4091,7 @@
    "group": "baby",
    "form": "not_applicable",
    "overrides": {
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 7
    }
   },
@@ -4137,6 +4104,7 @@
    "group": "baby",
    "form": "not_applicable",
    "overrides": {
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 2
    }
   },
@@ -4149,6 +4117,7 @@
    "group": "baby",
    "form": "not_applicable",
    "overrides": {
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 14
    }
   },
@@ -4156,11 +4125,14 @@
    "name": "dog food pouches",
    "aliases": [
     "wet dog food",
-    "dog meat",
     "dog sachets"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 2
+   }
   },
   {
    "name": "cat food tins",
@@ -4169,7 +4141,11 @@
     "tinned cat food"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 730,
+    "once_opened_shelf_life_days": 2
+   }
   },
   {
    "name": "dry dog food",
@@ -4179,7 +4155,11 @@
     "dry dog kibble"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 60
+   }
   },
   {
    "name": "dry cat food",
@@ -4189,7 +4169,11 @@
     "dry cat kibble"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 60
+   }
   },
   {
    "name": "dog treats",
@@ -4198,7 +4182,11 @@
     "training treats"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
+   }
   },
   {
    "name": "cat treats",
@@ -4207,7 +4195,11 @@
     "cat goodies"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 90
+   }
   },
   {
    "name": "wild bird seed",
@@ -4216,7 +4208,11 @@
     "bird seed mix"
    ],
    "group": "pet",
-   "form": "not_applicable"
+   "form": "not_applicable",
+   "overrides": {
+    "unopened_shelf_life_days": 365,
+    "once_opened_shelf_life_days": 180
+   }
   },
   {
    "name": "cat litter",
@@ -4251,9 +4247,6 @@
    ],
    "group": "dairy",
    "form": "not_applicable",
-   "overrides": {
-    "stock_unit": "ml"
-   },
    "density_g_per_ml": 1.03
   },
   {
@@ -4261,9 +4254,6 @@
    "aliases": [],
    "group": "dairy",
    "form": "not_applicable",
-   "overrides": {
-    "stock_unit": "ml"
-   },
    "density_g_per_ml": 1.03
   },
   {
@@ -4271,15 +4261,11 @@
    "aliases": [],
    "group": "dairy",
    "form": "not_applicable",
-   "overrides": {
-    "stock_unit": "ml"
-   },
    "density_g_per_ml": 1.03
   },
   {
    "name": "red chilli",
    "aliases": [
-    "chilli",
     "fresh red chilli",
     "chillies"
    ],
@@ -4320,7 +4306,10 @@
     "celery stick"
    ],
    "group": "leafy_greens",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "asparagus",
@@ -4334,7 +4323,10 @@
     "leeks"
    ],
    "group": "onions_and_garlic",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 14
+   }
   },
   {
    "name": "mushrooms",
@@ -4343,7 +4335,10 @@
     "chestnut mushrooms"
    ],
    "group": "root_veg",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 7
+   }
   },
   {
    "name": "butternut squash",
@@ -4357,7 +4352,10 @@
     "corn on the cob"
    ],
    "group": "root_veg",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 4
+   }
   },
   {
    "name": "tinned sweetcorn",
@@ -4460,7 +4458,11 @@
     "bacon rashers"
    ],
    "group": "red_meat",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10,
+    "once_opened_shelf_life_days": 3
+   }
   },
   {
    "name": "sausages",
@@ -4485,7 +4487,11 @@
     "sliced ham"
    ],
    "group": "red_meat",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 10,
+    "once_opened_shelf_life_days": 3
+   }
   },
   {
    "name": "chorizo",
@@ -4493,7 +4499,11 @@
     "chorizo sausage"
    ],
    "group": "red_meat",
-   "form": "fresh"
+   "form": "fresh",
+   "overrides": {
+    "unopened_shelf_life_days": 28,
+    "once_opened_shelf_life_days": 7
+   }
   },
   {
    "name": "pork belly",
@@ -4612,6 +4622,9 @@
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "overrides": {
+    "tracking_mode": "counted",
+    "stock_unit": "ml",
+    "unopened_shelf_life_days": 730,
     "once_opened_shelf_life_days": 4
    }
   },
