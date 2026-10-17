@@ -5,7 +5,7 @@ date: 2026-10-15
 
 # Android version codes are build timestamps
 
-Every Android build, whether a Codemagic tester build or an owner build made on gordon, sets its **versionCode to the number of minutes since 2024-01-01 00:00 UTC** at build time. Android only installs an update with a higher versionCode, and there are now two build pipelines with no shared counter. A timestamp always goes up, whichever pipeline made the build, so neither has to know about the other. The human-facing versionName ("1.0.0") is unaffected, and Codemagic's own build number stays in the release notes.
+Every Android build, whether a Codemagic tester build or an owner build made on the home server, sets its **versionCode to the number of minutes since 2024-01-01 00:00 UTC** at build time. Android only installs an update with a higher versionCode, and there are now two build pipelines with no shared counter. A timestamp always goes up, whichever pipeline made the build, so neither has to know about the other. The human-facing versionName ("1.0.0") is unaffected, and Codemagic's own build number stays in the release notes.
 
 ## Considered options
 
