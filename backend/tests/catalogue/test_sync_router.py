@@ -90,6 +90,20 @@ def test_a_group_is_sent_with_the_defaults_its_items_take(wired: TestClient, aut
     assert herbs["stock_unit"] is None
 
 
+def test_a_group_with_no_shelf_life_is_sent_as_null_not_zero_and_an_edible_baby_item_keeps_its_own(
+    wired: TestClient, auth_headers: dict[str, str]
+) -> None:
+    body = wired.get("/catalogue", headers=auth_headers).json()
+    groups = {group["id"]: group for group in body["groups"]}
+    items = {item["id"]: item for item in body["items"]}
+
+    assert groups["household"]["unopened_shelf_life_days"] == {"not_applicable": None}
+    assert groups["household"]["once_opened_shelf_life_days"] == {"not_applicable": None}
+    assert groups["baby"]["unopened_shelf_life_days"] == {"not_applicable": None}
+    assert items["baby-formula-milk-powder"]["overrides"]["unopened_shelf_life_days"] == 730
+    assert items["toilet-roll"]["overrides"]["unopened_shelf_life_days"] is None
+
+
 def test_a_second_sync_with_no_changes_transfers_no_items(wired: TestClient, auth_headers: dict[str, str]) -> None:
     first = wired.get("/catalogue", params={"since": 0}, headers=auth_headers).json()
 
