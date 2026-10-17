@@ -15,6 +15,7 @@ from moto.dynamodb.models import DynamoDBBackend
 
 from glean.catalogue.dynamo_store import DynamoCatalogueStore
 from glean.catalogue.groups import Form, GroupId
+from glean.catalogue.seed import load_seed
 from glean.catalogue.store import AliasConflictError
 from tests.catalogue.test_store_contract import CatalogueStoreContract, seed_items
 from tests.infra.cfn import catalogue_table_properties
@@ -253,3 +254,34 @@ def test_reseeding_a_renamed_item_keeps_its_old_name_as_an_alias(dynamo_store: D
         assert {"ground cumin", "jeera"} <= {found.name, *found.aliases}
         assert [item.id for item in dynamo_store.shortlist(name)][:1] == ["ground-cumin"]
     assert dynamo_store.seed(renamed) == 0
+
+
+def _stored_shelf_lives(store: DynamoCatalogueStore, name: str) -> tuple[int | None, int | None]:
+    item = store.get_by_name(name)
+    assert item is not None, name
+    return item.unopened_shelf_life_days, item.once_opened_shelf_life_days
+
+
+def test_an_item_with_no_shelf_life_still_has_none_after_a_round_trip(dynamo_store: DynamoCatalogueStore) -> None:
+    assert _stored_shelf_lives(dynamo_store, "toilet roll") == (None, None)
+
+
+def test_a_provisional_non_food_item_never_expires_rather_than_expiring_at_zero(
+    dynamo_store: DynamoCatalogueStore,
+) -> None:
+    dynamo_store.create_provisional("birthday candles", GroupId.HOUSEHOLD, Form.NOT_APPLICABLE)
+    assert _stored_shelf_lives(dynamo_store, "birthday candles") == (None, None)
+
+
+def test_the_whole_seed_round_trips_every_shelf_life_through_the_table(table: Any) -> None:
+    store = DynamoCatalogueStore(TABLE_NAME, region=REGION)
+    items = load_seed().items
+    store.seed(items)
+    for item in items:
+        stored = store.get_by_name(item.name)
+        assert stored is not None, item.name
+        assert stored.unopened_shelf_life_days == item.unopened_shelf_life_days, item.name
+        assert stored.once_opened_shelf_life_days == item.once_opened_shelf_life_days, item.name
+    assert _stored_shelf_lives(store, "baby formula milk powder")[0] is not None
+    assert _stored_shelf_lives(store, "dog food pouches")[0] is not None
+    assert any(item.unopened_shelf_life_days is None for item in items)
