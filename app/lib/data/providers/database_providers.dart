@@ -10,7 +10,18 @@ import '../database.dart';
 final Provider<GleanDatabase> gleanDatabaseProvider = Provider<GleanDatabase>((
   ref,
 ) {
-  final db = GleanDatabase(driftDatabase(name: 'glean'));
+  final db = GleanDatabase(
+    driftDatabase(
+      name: 'glean',
+      // Only read when compiled for the web dev loop (`make start-web`); the
+      // two assets live in `web/` and must match the pinned drift/sqlite3
+      // versions. Native builds ignore this.
+      web: DriftWebOptions(
+        sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+        driftWorker: Uri.parse('drift_worker.js'),
+      ),
+    ),
+  );
   ref.onDispose(() => closeDatabase(db));
   return db;
 });
