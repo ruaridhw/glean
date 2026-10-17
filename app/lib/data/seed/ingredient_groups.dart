@@ -24,7 +24,9 @@ class IngredientGroupSeed {
   final String trackingMode;
   final String? stockUnit;
   final List<String> allowedForms;
-  final Map<String, int> unopenedShelfLifeDays;
+
+  /// Null for a group that never expires.
+  final Map<String, int?> unopenedShelfLifeDays;
   final Map<String, int?> onceOpenedShelfLifeDays;
 }
 
@@ -35,9 +37,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'vegetables',
     trackingMode: 'perishable',
-
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 5,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -58,7 +59,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 10,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -79,7 +80,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 21,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -100,7 +101,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 21,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -121,7 +122,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 7,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -142,7 +143,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 5,
       'frozen': 365,
       'tinned_jarred': 730,
@@ -163,7 +164,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 7,
       'frozen': 270,
       'tinned_jarred': 730,
@@ -184,7 +185,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 3,
       'frozen': 180,
       'tinned_jarred': 730,
@@ -205,7 +206,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 2,
       'frozen': 180,
       'tinned_jarred': 730,
@@ -226,7 +227,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['fresh', 'frozen', 'tinned_jarred', 'dried'],
-    unopenedShelfLifeDays: <String, int>{
+    unopenedShelfLifeDays: <String, int?>{
       'fresh': 2,
       'frozen': 120,
       'tinned_jarred': 730,
@@ -247,7 +248,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 21},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 21},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -255,10 +256,9 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     name: 'Dairy',
     kind: 'ingredient',
     foodGroup: 'dairy',
-    trackingMode: 'counted',
-    stockUnit: 'g',
+    trackingMode: 'perishable',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 7},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 7},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 5},
   ),
   IngredientGroupSeed(
@@ -269,7 +269,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 180},
   ),
   IngredientGroupSeed(
@@ -280,7 +280,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 365},
   ),
   IngredientGroupSeed(
@@ -289,10 +289,9 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'carbohydrates',
     trackingMode: 'perishable',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 5},
-    onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 5},
+    onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 4},
   ),
   IngredientGroupSeed(
     id: 'oils_and_fats',
@@ -300,9 +299,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'fats',
     trackingMode: 'presence',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 180},
   ),
   IngredientGroupSeed(
@@ -311,9 +309,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'condiments',
     trackingMode: 'perishable',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 5},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 5},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -322,9 +319,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'condiments',
     trackingMode: 'presence',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -333,9 +329,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'condiments',
     trackingMode: 'presence',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -344,9 +339,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'condiments',
     trackingMode: 'presence',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 90},
   ),
   IngredientGroupSeed(
@@ -355,9 +349,8 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     kind: 'ingredient',
     foodGroup: 'carbohydrates',
     trackingMode: 'presence',
-
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 240},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 240},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 240},
   ),
   IngredientGroupSeed(
@@ -368,7 +361,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'g',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 180},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 180},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 90},
   ),
   IngredientGroupSeed(
@@ -379,7 +372,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'ml',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 5},
   ),
   IngredientGroupSeed(
@@ -390,7 +383,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 180},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 180},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': 14},
   ),
   IngredientGroupSeed(
@@ -401,7 +394,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 1095},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': null},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -412,7 +405,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 730},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': null},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -423,7 +416,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 730},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': null},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -434,7 +427,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': null},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
   IngredientGroupSeed(
@@ -445,7 +438,7 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     trackingMode: 'counted',
     stockUnit: 'count',
     allowedForms: <String>['not_applicable'],
-    unopenedShelfLifeDays: <String, int>{'not_applicable': 365},
+    unopenedShelfLifeDays: <String, int?>{'not_applicable': 365},
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
 ];
