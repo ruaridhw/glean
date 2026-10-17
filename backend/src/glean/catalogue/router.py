@@ -61,7 +61,9 @@ class SyncGroup(BaseModel):
     tracking_mode: TrackingMode = Field(description="Default tracking mode for items in the group.")
     stock_unit: StockUnit | None = Field(description="Default stock unit; null unless the group is counted.")
     allowed_forms: list[Form] = Field(description="The forms an item in the group may take.")
-    unopened_shelf_life_days: dict[Form, int] = Field(description="Default unopened shelf life, per allowed form.")
+    unopened_shelf_life_days: dict[Form, int | None] = Field(
+        description="Default unopened shelf life, per allowed form. Null where the group never expires."
+    )
     once_opened_shelf_life_days: dict[Form, int | None] = Field(
         description="Default once-opened shelf life, per allowed form. Null where an opened pack has no limit."
     )

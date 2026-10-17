@@ -281,8 +281,8 @@
     "name": "Dairy",
     "kind": "ingredient",
     "food_group": "dairy",
-    "tracking_mode": "counted",
-    "stock_unit": "g",
+    "tracking_mode": "perishable",
+    "stock_unit": null,
     "allowed_forms": [
       "not_applicable"
     ],
@@ -341,7 +341,7 @@
       "not_applicable": 5
     },
     "once_opened_shelf_life_days": {
-      "not_applicable": null
+      "not_applicable": 4
     }
   },
   {
@@ -508,7 +508,7 @@
       "not_applicable"
     ],
     "unopened_shelf_life_days": {
-      "not_applicable": 1095
+      "not_applicable": null
     },
     "once_opened_shelf_life_days": {
       "not_applicable": null
@@ -525,7 +525,7 @@
       "not_applicable"
     ],
     "unopened_shelf_life_days": {
-      "not_applicable": 730
+      "not_applicable": null
     },
     "once_opened_shelf_life_days": {
       "not_applicable": null
@@ -542,7 +542,7 @@
       "not_applicable"
     ],
     "unopened_shelf_life_days": {
-      "not_applicable": 730
+      "not_applicable": null
     },
     "once_opened_shelf_life_days": {
       "not_applicable": null
@@ -559,7 +559,7 @@
       "not_applicable"
     ],
     "unopened_shelf_life_days": {
-      "not_applicable": 365
+      "not_applicable": null
     },
     "once_opened_shelf_life_days": {
       "not_applicable": null
