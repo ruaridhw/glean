@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from functools import cache
+from pathlib import Path
 
 import pytest
 
 from glean.catalogue.groups import GROUPS, Form, GroupId, Kind, StockUnit, TrackingMode
 from glean.catalogue.models import CatalogueItem, Source, name_key
 from glean.catalogue.seed import SeedData, load_seed
+from glean.catalogue.store import InMemoryCatalogueStore
 
 TEN_STAPLES = {
     "olive oil": GroupId.OILS_AND_FATS,
@@ -278,3 +281,65 @@ def test_condiment_jars_keep_and_are_presence_while_short_life_pastes_are_perish
         assert by_name(name).tracking_mode is TrackingMode.PRESENCE, name
     for name in perishable - {"curry paste"}:
         assert (by_name(name).once_opened_shelf_life_days or 0) <= 28, name
+
+
+# Every canonical name and alias the v1 seed knew, mapped to its v1 canonical name.
+V1_SPELLINGS: dict[str, str] = json.loads(
+    (Path(__file__).parent / "fixtures" / "seed_v1_spellings.json").read_text(encoding="utf-8")
+)
+
+# Spellings v2 deliberately dropped because they named a different product, or were typos.
+DELIBERATELY_REMOVED = {
+    "dog meat",  # not a product we stock
+    "plum plum",  # typo
+    "italin hard cheese",  # typo; parmigiano reggiano covers the real name
+    "fruit",  # far too generic for mango
+    "honey roasted parsnip",  # a different product from parsnip
+    "sweet baby peppers",  # not orange pepper
+    "rolled lamb leg",  # lamb leg, not lamb shoulder
+    "yam",  # a different vegetable from sweet potato
+    "descaler",  # kettle descaler, not toilet cleaner
+    "fire lighters",  # not matches
+}
+
+# Spellings that still resolve, but now to a different item than in v1 (duplicates merged or a spelling moved).
+MOVED_TO = {
+    "tomato puree": "tomato paste",
+    "tinned butter beans in water": "tinned butter beans",
+    "large white beans": "tinned butter beans",
+    "semi skimmed milk": "semi-skimmed milk",
+}
+
+
+@cache
+def v2_store() -> InMemoryCatalogueStore:
+    return InMemoryCatalogueStore(seed().items)
+
+
+@pytest.mark.parametrize(
+    ("spelling", "canonical"),
+    [("tinned butter beans in water", "tinned butter beans"), ("semi skimmed milk", "semi-skimmed milk")],
+)
+def test_the_spellings_a_merge_or_move_could_lose_still_resolve(spelling: str, canonical: str) -> None:
+    found = v2_store().get_by_name(spelling)
+    assert found is not None
+    assert found.name == canonical
+
+
+def test_every_v1_name_and_alias_still_resolves_unless_deliberately_removed() -> None:
+    lost = [
+        spelling
+        for spelling in V1_SPELLINGS
+        if spelling not in DELIBERATELY_REMOVED and v2_store().get_by_name(spelling) is None
+    ]
+    assert lost == []
+
+
+def test_removed_spellings_are_really_gone_and_moved_ones_land_on_the_right_item() -> None:
+    assert [s for s in DELIBERATELY_REMOVED if v2_store().get_by_name(s) is not None] == []
+    for spelling, canonical in V1_SPELLINGS.items():
+        if spelling in DELIBERATELY_REMOVED:
+            continue
+        found = v2_store().get_by_name(spelling)
+        assert found is not None
+        assert found.name == MOVED_TO.get(spelling, canonical), spelling

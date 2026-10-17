@@ -48,7 +48,8 @@
    "name": "olive oil",
    "aliases": [
     "extra virgin olive oil",
-    "evoo"
+    "evoo",
+    "cooking oil"
    ],
    "group": "oils_and_fats",
    "form": "not_applicable",
@@ -154,7 +155,9 @@
   },
   {
    "name": "watercress",
-   "aliases": [],
+   "aliases": [
+    "peppery greens"
+   ],
    "group": "leafy_greens",
    "form": "fresh"
   },
@@ -683,7 +686,8 @@
    "name": "tinned butter beans",
    "aliases": [
     "lima beans",
-    "large white beans"
+    "large white beans",
+    "tinned butter beans in water"
    ],
    "group": "beans_and_pulses",
    "form": "tinned_jarred"
@@ -1682,7 +1686,8 @@
    "aliases": [
     "mature cheddar",
     "mild cheddar",
-    "block cheese"
+    "block cheese",
+    "yellow cheese"
    ],
    "group": "dairy",
    "form": "not_applicable",
@@ -1732,6 +1737,7 @@
   {
    "name": "parmesan",
    "aliases": [
+    "hard cheese",
     "grated parmesan",
     "parmigiano reggiano"
    ],
@@ -1753,20 +1759,25 @@
   },
   {
    "name": "creme fraiche",
-   "aliases": [],
+   "aliases": [
+    "sour cream style"
+   ],
    "group": "dairy",
    "form": "not_applicable"
   },
   {
    "name": "cottage cheese",
-   "aliases": [],
+   "aliases": [
+    "low fat cheese"
+   ],
    "group": "dairy",
    "form": "not_applicable"
   },
   {
    "name": "feta cheese",
    "aliases": [
-    "greek cheese"
+    "greek cheese",
+    "salty cheese"
    ],
    "group": "dairy",
    "form": "not_applicable",
@@ -1892,7 +1903,9 @@
   },
   {
    "name": "double gloucester",
-   "aliases": [],
+   "aliases": [
+    "red cheese"
+   ],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -1926,7 +1939,9 @@
   },
   {
    "name": "camembert",
-   "aliases": [],
+   "aliases": [
+    "baking cheese"
+   ],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -1957,7 +1972,9 @@
   },
   {
    "name": "red leicester",
-   "aliases": [],
+   "aliases": [
+    "coloured cheddar"
+   ],
    "group": "dairy",
    "form": "not_applicable",
    "overrides": {
@@ -2282,7 +2299,8 @@
    "aliases": [
     "bread rolls",
     "baps",
-    "barm cakes"
+    "barm cakes",
+    "buns"
    ],
    "group": "bread",
    "form": "not_applicable"
@@ -2383,7 +2401,8 @@
   {
    "name": "coconut oil",
    "aliases": [
-    "organic coconut oil"
+    "organic coconut oil",
+    "cooking fat"
    ],
    "group": "oils_and_fats",
    "form": "not_applicable"
@@ -2896,7 +2915,8 @@
   {
    "name": "mayonnaise",
    "aliases": [
-    "mayo"
+    "mayo",
+    "salad cream alternative"
    ],
    "group": "sauces_and_condiments",
    "form": "not_applicable",
@@ -3019,7 +3039,9 @@
   },
   {
    "name": "red wine vinegar",
-   "aliases": [],
+   "aliases": [
+    "vinegar"
+   ],
    "group": "sauces_and_condiments",
    "form": "not_applicable",
    "density_g_per_ml": 1.01
@@ -3050,7 +3072,9 @@
   },
   {
    "name": "oyster sauce",
-   "aliases": [],
+   "aliases": [
+    "stir fry sauce"
+   ],
    "group": "sauces_and_condiments",
    "form": "not_applicable"
   },
@@ -3288,7 +3312,8 @@
   {
    "name": "cocoa powder",
    "aliases": [
-    "baking cocoa"
+    "baking cocoa",
+    "drinking chocolate"
    ],
    "group": "baking",
    "form": "not_applicable"
@@ -3372,7 +3397,8 @@
   {
    "name": "raisins",
    "aliases": [
-    "sultanas"
+    "sultanas",
+    "dried fruit"
    ],
    "group": "baking",
    "form": "not_applicable"
@@ -3446,7 +3472,8 @@
   {
    "name": "oat drink",
    "aliases": [
-    "oat milk"
+    "oat milk",
+    "plant-based milk"
    ],
    "group": "drinks",
    "form": "not_applicable",
@@ -3484,7 +3511,8 @@
    "name": "coca cola",
    "aliases": [
     "coke",
-    "cola"
+    "cola",
+    "fizzy drink"
    ],
    "group": "drinks",
    "form": "not_applicable",
@@ -3502,7 +3530,9 @@
   },
   {
    "name": "tonic water",
-   "aliases": [],
+   "aliases": [
+    "mixer"
+   ],
    "group": "drinks",
    "form": "not_applicable",
    "density_g_per_ml": 1.04
@@ -3567,7 +3597,9 @@
   {
    "name": "chocolate bar",
    "aliases": [
-    "confectionery bar"
+    "chocolate",
+    "confectionery bar",
+    "sweet treat"
    ],
    "group": "snacks_and_treats",
    "form": "not_applicable"
@@ -3585,6 +3617,7 @@
   {
    "name": "digestive biscuits",
    "aliases": [
+    "biscuits",
     "plain biscuits",
     "tea biscuits"
    ],
@@ -3603,7 +3636,9 @@
   {
    "name": "salted peanuts",
    "aliases": [
-    "peanuts"
+    "nuts",
+    "peanuts",
+    "roasted nuts"
    ],
    "group": "nuts_and_seeds",
    "form": "not_applicable"
@@ -3674,7 +3709,8 @@
   {
    "name": "chewing gum",
    "aliases": [
-    "gum"
+    "gum",
+    "mints"
    ],
    "group": "snacks_and_treats",
    "form": "not_applicable"
@@ -3684,7 +3720,8 @@
    "aliases": [
     "fairy liquid",
     "dish soap",
-    "washing liquid"
+    "washing liquid",
+    "detergent"
    ],
    "group": "household",
    "form": "not_applicable"
@@ -3935,7 +3972,8 @@
   {
    "name": "shampoo",
    "aliases": [
-    "hair cleanser"
+    "hair cleanser",
+    "wash"
    ],
    "group": "health_and_beauty",
    "form": "not_applicable"
@@ -3943,6 +3981,7 @@
   {
    "name": "conditioner",
    "aliases": [
+    "hair cream",
     "hair conditioner"
    ],
    "group": "health_and_beauty",
@@ -4251,7 +4290,9 @@
   },
   {
    "name": "semi-skimmed milk",
-   "aliases": [],
+   "aliases": [
+    "semi skimmed milk"
+   ],
    "group": "dairy",
    "form": "not_applicable",
    "density_g_per_ml": 1.03
@@ -4266,6 +4307,7 @@
   {
    "name": "red chilli",
    "aliases": [
+    "chilli",
     "fresh red chilli",
     "chillies"
    ],
