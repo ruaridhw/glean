@@ -4,6 +4,14 @@ set -euo pipefail
 REGION="eu-west-2"
 STACK_NAME="glean-bootstrap"
 
+# Where DynamoDB budget alerts go. Never hard-code it: this repo is public.
+# Usage: ALERT_EMAIL=<your address> infra/bootstrap.sh   (or: infra/bootstrap.sh <your address>)
+ALERT_EMAIL="${1:-${ALERT_EMAIL:-}}"
+if [ -z "$ALERT_EMAIL" ]; then
+  echo "error: set ALERT_EMAIL (or pass the address as the first argument); the DynamoDB budget alert needs it" >&2
+  exit 1
+fi
+
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 echo "==> Creating SAM artefact S3 buckets..."
@@ -19,31 +27,9 @@ sam deploy \
   --stack-name "$STACK_NAME" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "$REGION" \
+  --parameter-overrides "AlertEmail=$ALERT_EMAIL" \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset
-
-echo "==> Storing runtime secrets in Secrets Manager..."
-echo "  Enter your Anthropic API key (sk-ant-...):"
-read -rs ANTHROPIC_KEY
-aws secretsmanager create-secret \
-  --name "glean/prod/anthropic-api-key" \
-  --secret-string "$ANTHROPIC_KEY" \
-  --region "$REGION" 2>/dev/null || \
-aws secretsmanager put-secret-value \
-  --secret-id "glean/prod/anthropic-api-key" \
-  --secret-string "$ANTHROPIC_KEY" \
-  --region "$REGION"
-
-echo "  Enter your Recipe API key (rapi_...):"
-read -rs RECIPE_KEY
-aws secretsmanager create-secret \
-  --name "glean/prod/recipe-api-key" \
-  --secret-string "$RECIPE_KEY" \
-  --region "$REGION" 2>/dev/null || \
-aws secretsmanager put-secret-value \
-  --secret-id "glean/prod/recipe-api-key" \
-  --secret-string "$RECIPE_KEY" \
-  --region "$REGION"
 
 echo ""
 echo "==> Stack outputs (paste these into GitHub):"
