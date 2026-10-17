@@ -1,0 +1,875 @@
+[
+ {
+  "input": "Tesco Root Ginger Loose",
+  "source": "receipt",
+  "expected": "ginger",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Duncan's Eggs 6 Large Free Range Scottish Eggs",
+  "source": "receipt",
+  "expected": "eggs",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco British Semi Skimmed Milk 1.13l, 2 Pints",
+  "source": "receipt",
+  "expected": "semi-skimmed milk",
+  "also_acceptable": [
+   "milk"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Paneer Cheese 200g",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "dairy"
+  ]
+ },
+ {
+  "input": "Azura Sun Joy Baby Plum Tomatoes 250g",
+  "source": "receipt",
+  "expected": "plum tomato",
+  "also_acceptable": [
+   "cherry tomato"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Red Peppers Each",
+  "source": "receipt",
+  "expected": "red pepper",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Parmigiano Reggiano Cheese 200 G",
+  "source": "receipt",
+  "expected": "parmesan",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Limes Each",
+  "source": "receipt",
+  "expected": "lime",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Ready To Eat Large Avocados Each",
+  "source": "receipt",
+  "expected": "avocado",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Curled Leaf Parsley 30g",
+  "source": "receipt",
+  "expected": "parsley",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Filippo Berio Extra Virgin Olive Oil 500ml",
+  "source": "receipt",
+  "expected": "olive oil",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco British Creme Fraiche 300ml",
+  "source": "receipt",
+  "expected": "creme fraiche",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Bunched Spring Onions 100g",
+  "source": "receipt",
+  "expected": "spring onion",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Lee Kum Kee Sesame Wok Oil 207ml",
+  "source": "receipt",
+  "expected": "sesame oil",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Finest Jacket Potatoes 4 Pack",
+  "source": "receipt",
+  "expected": "potato",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Green Beans 220g",
+  "source": "receipt",
+  "expected": "green beans",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Fresh Cut Coriander 30g",
+  "source": "receipt",
+  "expected": "coriander",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Lean Pork Mince 5% Fat 500g",
+  "source": "receipt",
+  "expected": "pork mince",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Pak Choi 250g",
+  "source": "receipt",
+  "expected": "bok choy",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Napolina Chopped Tomatoes 400g",
+  "source": "receipt",
+  "expected": "tinned chopped tomatoes",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Sesame Seeds 100g",
+  "source": "receipt",
+  "expected": "sesame seeds",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "7m Lint Roller",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "household"
+  ]
+ },
+ {
+  "input": "Tesco Bacon, Lettuce & Tomato Sandwich",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "other",
+   "bread",
+   "snacks_and_treats"
+  ]
+ },
+ {
+  "input": "Mccoy's Salt & Vinegar Grab Bag Crisps 45g",
+  "source": "receipt",
+  "expected": "potato crisps",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Innocent Berry Set Go Juice 330ml",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "drinks"
+  ]
+ },
+ {
+  "input": "Tesco Harissa Paste 90g",
+  "source": "receipt",
+  "expected": "harissa paste",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Aubergine Each",
+  "source": "receipt",
+  "expected": "aubergine",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Chicken Breast Fillets 320g",
+  "source": "receipt",
+  "expected": "chicken breast",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Flash Bathroom Cleaning Spray 800ml",
+  "source": "receipt",
+  "expected": "bathroom cleaner",
+  "also_acceptable": [
+   "surface cleaner"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Garlic 4 Pack",
+  "source": "receipt",
+  "expected": "garlic",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Bloo Power Active Lemon Rim Blocks 2 X 50g",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [
+   "toilet cleaner"
+  ],
+  "expected_groups": [
+   "household"
+  ]
+ },
+ {
+  "input": "Arla Skyr Natural Icelandic Style Yogurt 450g",
+  "source": "receipt",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "dairy"
+  ]
+ },
+ {
+  "input": "Tesco Bird Eye Chillies 25g",
+  "source": "receipt",
+  "expected": "red chilli",
+  "also_acceptable": [
+   "green chilli"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Tesco Lemons Each",
+  "source": "receipt",
+  "expected": "lemon",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Kellogg's Nutri-grain Blueberry Snack Bars 6x37g",
+  "source": "receipt",
+  "expected": "cereal bar",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Colgate Max White One Whitening Toothpaste 75ml",
+  "source": "receipt",
+  "expected": "toothpaste",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Sure Men Active Dry 48h Antiperspirant Deodorant 200ml",
+  "source": "receipt",
+  "expected": "deodorant",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Original Source Mint & Tea Tree Shower Gel 500ml",
+  "source": "receipt",
+  "expected": "shower gel",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Ogx Coconut Milk Conditioner For Dry And Damaged Hair 385ml",
+  "source": "receipt",
+  "expected": "conditioner",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Paterson's Shortbread Fingers 300g",
+  "source": "receipt",
+  "expected": "shortbread",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Mcvitie's Dark Chocolate Digestives Biscuits Twin Pack 2 X 266g",
+  "source": "receipt",
+  "expected": "digestive biscuits",
+  "also_acceptable": [
+   "chocolate cookies"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Aussie Miracle Moist Shampoo 400ml",
+  "source": "receipt",
+  "expected": "shampoo",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "taco shells",
+  "source": "shopping",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "bread",
+   "grains",
+   "other",
+   "snacks_and_treats"
+  ]
+ },
+ {
+  "input": "whole milk",
+  "source": "shopping",
+  "expected": "whole milk",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "limes",
+  "source": "shopping",
+  "expected": "lime",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "lunchbox snacks",
+  "source": "shopping",
+  "expected": null,
+  "also_acceptable": [
+   "cereal bar",
+   "potato crisps"
+  ],
+  "expected_groups": [
+   "snacks_and_treats"
+  ]
+ },
+ {
+  "input": "chopped tomatoes",
+  "source": "shopping",
+  "expected": "tinned chopped tomatoes",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "greek yogurt",
+  "source": "shopping",
+  "expected": "greek yogurt",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "blueberries",
+  "source": "shopping",
+  "expected": "blueberries",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "orange juice",
+  "source": "shopping",
+  "expected": "orange juice",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "spinach",
+  "source": "shopping",
+  "expected": "spinach",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "a bag of spinach",
+  "source": "shopping",
+  "expected": "spinach",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "2 tins of chopped tomatoes",
+  "source": "shopping",
+  "expected": "tinned chopped tomatoes",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "500g pasta",
+  "source": "shopping",
+  "expected": "pasta",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "porridge oats 1kg",
+  "source": "shopping",
+  "expected": "oats",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "1kg chicken breast",
+  "source": "shopping",
+  "expected": "chicken breast",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "a dozen eggs",
+  "source": "shopping",
+  "expected": "eggs",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "2 packs tofu",
+  "source": "shopping",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "beans_and_pulses",
+   "other",
+   "dairy",
+   "grains",
+   "sauces_and_condiments"
+  ]
+ },
+ {
+  "input": "6 bananas",
+  "source": "shopping",
+  "expected": "banana",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "one basil plant",
+  "source": "shopping",
+  "expected": "basil",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "750g potatoes",
+  "source": "shopping",
+  "expected": "potato",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "broccoli",
+  "source": "shopping",
+  "expected": "broccoli",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "basmati rice 800g",
+  "source": "shopping",
+  "expected": "basmati rice",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "British Beef Mince",
+  "source": "recipe",
+  "expected": "beef mince",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Garlic Clove",
+  "source": "recipe",
+  "expected": "garlic",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Central American Style Spice Mix",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "spices",
+   "sauces_and_condiments"
+  ]
+ },
+ {
+  "input": "Al'Fez Harissa Paste",
+  "source": "recipe",
+  "expected": "harissa paste",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Boneless Skinless Chicken Thigh",
+  "source": "recipe",
+  "expected": "chicken thighs",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Roasted Red Peppers",
+  "source": "recipe",
+  "expected": "roasted red pepper",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Chickpeas",
+  "source": "recipe",
+  "expected": "tinned chickpeas",
+  "also_acceptable": [
+   "dried chickpeas"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "Whole Chicken",
+  "source": "recipe",
+  "expected": "whole chicken",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Bacon lardons",
+  "source": "recipe",
+  "expected": "bacon",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Ground cumin",
+  "source": "recipe",
+  "expected": "ground cumin",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Dried chilli flakes",
+  "source": "recipe",
+  "expected": "chilli flakes",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Microwave Rice",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [
+   "basmati rice",
+   "long grain rice"
+  ],
+  "expected_groups": [
+   "pasta_and_rice"
+  ]
+ },
+ {
+  "input": "Cooked Lentils",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [
+   "dried brown lentils",
+   "dried green lentils"
+  ],
+  "expected_groups": [
+   "beans_and_pulses"
+  ]
+ },
+ {
+  "input": "Clove Garlic",
+  "source": "recipe",
+  "expected": "garlic",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Stick Celery",
+  "source": "recipe",
+  "expected": "celery",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Stick Cinnamon",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [
+   "ground cinnamon"
+  ],
+  "expected_groups": [
+   "spices"
+  ]
+ },
+ {
+  "input": "Microwaveable Basmati Rice",
+  "source": "recipe",
+  "expected": "basmati rice",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tenderstem Broccoli",
+  "source": "recipe",
+  "expected": "tenderstem broccoli",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Tomato",
+  "source": "recipe",
+  "expected": "tomato",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "guanciale or pancetta",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [
+   "bacon"
+  ],
+  "expected_groups": [
+   "red_meat",
+   "other"
+  ]
+ },
+ {
+  "input": "large egg yolks",
+  "source": "recipe",
+  "expected": "eggs",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "pecorino romano",
+  "source": "recipe",
+  "expected": null,
+  "also_acceptable": [
+   "parmesan"
+  ],
+  "expected_groups": [
+   "dairy"
+  ]
+ },
+ {
+  "input": "Freshly ground black pepper",
+  "source": "recipe",
+  "expected": "black pepper",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "spaghetti",
+  "source": "recipe",
+  "expected": "spaghetti",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "Birthday Candles",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "household"
+  ]
+ },
+ {
+  "input": "toilet roll",
+  "source": "typed",
+  "expected": "toilet roll",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "loo roll 9 pack",
+  "source": "typed",
+  "expected": "toilet roll",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "cat food",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [
+   "cat food tins",
+   "dry cat food"
+  ],
+  "expected_groups": [
+   "pet"
+  ]
+ },
+ {
+  "input": "Dettol antibacterial wipes",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [
+   "surface cleaner"
+  ],
+  "expected_groups": [
+   "household",
+   "health_and_beauty"
+  ]
+ },
+ {
+  "input": "nappies size 4",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "baby"
+  ]
+ },
+ {
+  "input": "lemon scented candle",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "household"
+  ]
+ },
+ {
+  "input": "coriander plant pot",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "household",
+   "other"
+  ]
+ },
+ {
+  "input": "asdkjh",
+  "source": "typed",
+  "expected": "NONSENSE",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "qwzx plorb",
+  "source": "typed",
+  "expected": "NONSENSE",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "hmmm",
+  "source": "typed",
+  "expected": "NONSENSE",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "cilantro",
+  "source": "typed",
+  "expected": "coriander",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "fresh coriander",
+  "source": "typed",
+  "expected": "coriander",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "korma paste",
+  "source": "typed",
+  "expected": "curry paste",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "pak choy",
+  "source": "typed",
+  "expected": "bok choy",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "harisa",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [
+   "harissa paste"
+  ],
+  "expected_groups": [
+   "sauces_and_condiments",
+   "spices"
+  ]
+ },
+ {
+  "input": "choclate digestives",
+  "source": "typed",
+  "expected": "digestive biscuits",
+  "also_acceptable": [
+   "chocolate cookies"
+  ],
+  "expected_groups": []
+ },
+ {
+  "input": "kimchi",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "sauces_and_condiments",
+   "leafy_greens",
+   "cabbage_and_broccoli",
+   "other"
+  ]
+ },
+ {
+  "input": "dragon fruit",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "fruit"
+  ]
+ },
+ {
+  "input": "fresh lemongrass",
+  "source": "typed",
+  "expected": null,
+  "also_acceptable": [],
+  "expected_groups": [
+   "fresh_herbs",
+   "root_veg",
+   "spices",
+   "other"
+  ]
+ },
+ {
+  "input": "frozen peas",
+  "source": "typed",
+  "expected": "frozen peas",
+  "also_acceptable": [],
+  "expected_groups": []
+ },
+ {
+  "input": "tinned tomatoes",
+  "source": "typed",
+  "expected": "tinned chopped tomatoes",
+  "also_acceptable": [
+   "tinned plum tomatoes"
+  ],
+  "expected_groups": []
+ }
+]
