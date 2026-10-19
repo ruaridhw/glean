@@ -83,6 +83,25 @@ void main() {
         'and recipe row intact and every ingredient on its group', () async {
       final File file = await _fixtureFile(version);
       final old = sqlite3.open(file.path);
+      // Rows no frozen file holds: one ingredient in every old category (so every arm of the mapping runs, the four
+      // fruit categories included) and a cooked adjustment, which the undo of "Cooked" depends on.
+      for (final String category in _groupOfOldCategory.keys) {
+        old.execute(
+          'INSERT INTO ingredients (canonical_name, category) '
+          "VALUES ('one of $category', '$category')",
+        );
+      }
+      old.execute('''
+        INSERT INTO meal_plan_entries (user_id, recipe_id, recipe_title,
+          planned_date, cooked_at, servings)
+        VALUES ('cook-user', 1, 'Cooked dinner', '2026-10-04',
+          '2026-10-04T19:00:00Z', 2);
+        INSERT INTO cooked_adjustments (user_id, meal_plan_entry_id,
+          ingredient_id, amount_deducted, unit, previous_last_used_at,
+          created_at)
+        VALUES ('cook-user', (SELECT max(id) FROM meal_plan_entries), 11,
+          125.5, 'g', '2026-10-01T08:00:00Z', '2026-10-04T19:00:01Z');
+      ''');
       final tables = <String>[
         for (final Row t in old.select(
           "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -105,7 +124,12 @@ void main() {
       final int oldPantryCount =
           _one(old, 'SELECT count(*) AS n FROM pantry_items')['n']! as int;
       old.close();
-      expect(oldIngredients.length, greaterThanOrEqualTo(11));
+      expect(oldIngredients.length, greaterThanOrEqualTo(11 + 23));
+      expect(
+        before['cooked_adjustments']!.where((r) => r.contains('cook-user')),
+        hasLength(1),
+        reason: 'the cooked row is really in the file before the upgrade',
+      );
       expect(oldPantryCount, greaterThanOrEqualTo(1));
 
       await _open(file);
@@ -131,6 +155,30 @@ void main() {
         );
       }
       expect(upgraded.select('PRAGMA foreign_key_check'), isEmpty);
+      expect(
+        upgraded
+            .select(
+              'SELECT amount_deducted, unit, previous_last_used_at '
+              "FROM cooked_adjustments WHERE user_id = 'cook-user'",
+            )
+            .single
+            .values,
+        <Object?>[125.5, 'g', '2026-10-01T08:00:00Z'],
+      );
+      expect(
+        _one(
+          upgraded,
+          "SELECT group_id AS g FROM ingredients WHERE canonical_name = 'one of tropical_fruit'",
+        )['g'],
+        'fruit',
+      );
+      expect(
+        _one(
+          upgraded,
+          "SELECT group_id AS g FROM ingredients WHERE canonical_name = 'one of stone_fruit'",
+        )['g'],
+        'fruit',
+      );
       final String snapshot = File(
         'test/data/fixtures/schema_v6_snapshot.sql',
       ).readAsStringSync();
@@ -416,6 +464,7 @@ void main() {
     final before = <String, List<List<Object?>>>{
       for (final String t in tables) t: _rows(raw, t, _columns(raw, t)),
     };
+    final bytesBefore = file.readAsBytesSync();
     final schemaBefore = raw
         .select('SELECT sql FROM sqlite_master ORDER BY name')
         .map((Row r) => r['sql'])
@@ -426,6 +475,11 @@ void main() {
     await expectLater(db.customSelect('SELECT 1').get(), throwsA(anything));
     await db.close();
 
+    expect(
+      file.readAsBytesSync(),
+      bytesBefore,
+      reason: 'the file on disk is byte-for-byte what it was',
+    );
     final after = sqlite3.open(file.path);
     addTearDown(after.close);
     expect(after.select('PRAGMA user_version').single.values.single, 5);
