@@ -81,7 +81,10 @@ void main() {
 
       final sqlite.Database onDisk = sqlite.sqlite3.open(liveFile.path);
       addTearDown(onDisk.close);
-      expect(onDisk.select('PRAGMA user_version').single.values.single, 2);
+      expect(
+        onDisk.select('PRAGMA user_version').single.values.single,
+        freshInstall.schemaVersion,
+      );
       expect(
         onDisk
             .select('SELECT title FROM recipes')
