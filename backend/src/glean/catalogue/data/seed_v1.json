@@ -3835,6 +3835,16 @@
    "form": "not_applicable"
   },
   {
+   "name": "limescale remover",
+   "aliases": [
+    "descaler",
+    "limescale descaler",
+    "kettle descaler"
+   ],
+   "group": "household",
+   "form": "not_applicable"
+  },
+  {
    "name": "bleach",
    "aliases": [
     "thick bleach",
