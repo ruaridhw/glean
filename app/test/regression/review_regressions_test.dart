@@ -333,10 +333,7 @@ void main() {
       );
       expect(
         await tester.runAsync(
-          () => plan.getWeek(
-            userId: h.userId,
-            weekStart: week.add(const Duration(days: 7)),
-          ),
+          () => plan.getWeek(userId: h.userId, weekStart: shiftWeeks(week, 1)),
         ),
         hasLength(1),
       );

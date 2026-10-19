@@ -45,7 +45,7 @@ void main() {
           recipeId: r,
           recipeTitle: 'Old $i',
           servings: 1,
-          plannedDate: week.subtract(const Duration(days: 7)),
+          plannedDate: shiftWeeks(week, -1),
         );
       }
       await plan.rolloverUncookedMeals(userId: h.userId, referenceDate: week);
@@ -54,10 +54,7 @@ void main() {
         hasLength(2),
       );
       expect(
-        await plan.getWeek(
-          userId: h.userId,
-          weekStart: week.subtract(const Duration(days: 7)),
-        ),
+        await plan.getWeek(userId: h.userId, weekStart: shiftWeeks(week, -1)),
         hasLength(2),
       );
       await plan.rolloverUncookedMeals(userId: h.userId, referenceDate: week);

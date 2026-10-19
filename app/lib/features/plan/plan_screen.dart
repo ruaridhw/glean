@@ -74,7 +74,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
     _weekTimer?.cancel();
     final now = ref.read(clockProvider)();
     final week = startOfWeek(now);
-    final next = DateTime(week.year, week.month, week.day + 7);
+    final next = shiftWeeks(week, 1);
     _weekTimer = Timer(next.difference(now), () {
       unawaited(_rollToCurrentWeek());
       _scheduleWeekBoundary();
@@ -125,13 +125,11 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
   void _goToPreviousWeek() {
     ref
         .read(viewedPlanWeekProvider.notifier)
-        .select(_weekStart.subtract(const Duration(days: 7)));
+        .select(shiftWeeks(_weekStart, -1));
   }
 
   void _goToNextWeek() {
-    ref
-        .read(viewedPlanWeekProvider.notifier)
-        .select(_weekStart.add(const Duration(days: 7)));
+    ref.read(viewedPlanWeekProvider.notifier).select(shiftWeeks(_weekStart, 1));
   }
 
   @override

@@ -53,7 +53,7 @@ const List<String> _months = <String>[
 /// `21–27 Jul` or, across a month boundary, `28 Jul – 3 Aug`.
 String weekRangeLabel(DateTime weekStart) {
   final DateTime start = dateOnly(weekStart);
-  final DateTime end = start.add(const Duration(days: 6));
+  final DateTime end = addDays(start, 6);
   if (start.month == end.month) {
     return '${start.day}–${end.day} ${_months[start.month - 1]}';
   }

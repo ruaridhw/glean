@@ -87,7 +87,7 @@ void main() {
     tester,
   ) async {
     await dinner('Today');
-    await dinner('Next dinner', date: week.add(const Duration(days: 7)));
+    await dinner('Next dinner', date: shiftWeeks(week, 1));
     await open(tester);
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Next dinner'), findsNothing);
@@ -125,10 +125,7 @@ void main() {
   gleanWidgetTest(
     'rollover on load retains entry identity and is not repeated on refocus',
     (tester) async {
-      final id = await dinner(
-        'Old dinner',
-        date: week.subtract(const Duration(days: 7)),
-      );
+      final id = await dinner('Old dinner', date: shiftWeeks(week, -1));
       await open(tester);
       expect(find.text('Old dinner'), findsOneWidget);
       await tab(tester, 'Pantry');
