@@ -41,6 +41,14 @@ class ShoppingRepository {
               _db.ingredients.catalogueItemId,
             ),
           ),
+          // Also not read, and at most one row per ingredient (former_id is its key): a sync that only adds a redirect
+          // changes which override applies, so the stream must re-emit.
+          leftOuterJoin(
+            _db.catalogueItemRedirects,
+            _db.catalogueItemRedirects.formerId.equalsExp(
+              _db.ingredients.catalogueItemId,
+            ),
+          ),
           leftOuterJoin(
             _db.pantryItems,
             _db.pantryItems.userId.equalsExp(_db.shoppingListItems.userId) &
@@ -426,13 +434,16 @@ class ShoppingRepository {
     final ingredient = await (_db.select(
       _db.ingredients,
     )..where((t) => t.id.equals(ingredientId))).getSingle();
-    final String? itemId = ingredient.catalogueItemId;
-    if (itemId == null) {
+    final String? linkedId = ingredient.catalogueItemId;
+    if (linkedId == null) {
       await (_db.update(_db.ingredients)
             ..where((t) => t.id.equals(ingredientId)))
           .write(IngredientsCompanion(storeSection: Value(section.dbValue)));
       return;
     }
+    // The choice belongs to the surviving item, which is where reads look first, so it takes effect even when the
+    // ingredient is still linked to a former id.
+    final String itemId = await _db.survivingCatalogueItemId(linkedId);
     await _db
         .into(_db.ingredientOverrides)
         .insert(
