@@ -13,6 +13,7 @@ import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/pantry_providers.dart';
 import 'package:glean/data/providers/plan_providers.dart';
 import 'package:glean/data/providers/recipes_providers.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/shopping_providers.dart';
 import 'package:glean/data/providers/user_config_providers.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
@@ -307,6 +308,24 @@ Future<List<int>> _fullBackupBytes(Directory dir, String name) async {
   return file.readAsBytesSync();
 }
 
+/// A backup whose settings differ from the phone's in every field the Settings form shows.
+Future<List<int>> _settingsBackupBytes(Directory dir, String name) async {
+  final File file = File('${dir.path}/$name.sqlite');
+  final GleanDatabase db = GleanDatabase(NativeDatabase(file));
+  await UserConfigRepository(db).save(
+    const UserConfigView(
+      id: 'user-1',
+      purchaseTolerance: 0.7,
+      preferredServings: 3,
+      mealsPerWeek: 6,
+      dietaryFlags: <String>['Vegetarian'],
+      maxActiveTimeMins: 45,
+    ),
+  );
+  await db.close();
+  return file.readAsBytesSync();
+}
+
 /// A database file claiming a schema version this build does not know.
 List<int> _newerBackupBytes(Directory dir) {
   final File file = File('${dir.path}/newer.sqlite');
@@ -439,6 +458,111 @@ void main() {
       expect(download.url.toString(), _exportedUrl);
       expect(download.headers.containsKey('Authorization'), isFalse);
       expect(h.tempRoot.listSync(), isEmpty);
+    },
+  );
+
+  _settingsWidgetTest(
+    'after a restore the Settings form shows the restored values, and changing one control keeps the rest',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(420, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final _Harness h = await openedWithLiveData(tester);
+      h.backups = <Map<String, Object?>>[
+        _entry(id: 'db-exports/user-1/s/', url: _exportedUrl),
+      ];
+      h.downloads[_exportedUrl] = (await tester.runAsync(
+        () => _settingsBackupBytes(dir, 'settings'),
+      ))!;
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+      await _unlockDeveloperMode(tester);
+
+      await chooseAndConfirm(tester, 'db-exports/user-1/s/', 'database v2');
+      await _until(tester, 'Backup restored');
+      await _waitForContent(tester);
+
+      double sliderValue(String key) =>
+          tester.widget<Slider>(find.byKey(Key(key))).value;
+      expect(sliderValue('settings.toleranceSlider'), 0.7);
+      expect(sliderValue('settings.dinnersSlider'), 6);
+      expect(sliderValue('settings.servingsSlider'), 3);
+      expect(find.widgetWithText(TextField, '45'), findsOneWidget);
+
+      // Touch only the tolerance slider.
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('settings.toleranceSlider'))),
+      );
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      final UserConfigView saved = (await tester.runAsync(
+        () => containerOf(
+          tester,
+        ).read(userConfigRepositoryProvider).get('user-1'),
+      ))!;
+      expect(saved.purchaseTolerance, lessThan(0.7));
+      expect(saved.mealsPerWeek, 6);
+      expect(saved.preferredServings, 3);
+      expect(saved.dietaryFlags, <String>['Vegetarian']);
+      expect(saved.maxActiveTimeMins, 45);
+    },
+  );
+
+  _settingsWidgetTest(
+    'a settings row changed under the mounted form is shown, and changing one control keeps the rest',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(420, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final _Harness h = await openedWithLiveData(tester);
+      await tester.pumpWidget(h.app());
+      await _waitForContent(tester);
+
+      await tester.runAsync(
+        () => containerOf(tester)
+            .read(userConfigRepositoryProvider)
+            .save(
+              const UserConfigView(
+                id: 'user-1',
+                purchaseTolerance: 0.7,
+                preferredServings: 3,
+                mealsPerWeek: 6,
+                dietaryFlags: <String>['Vegetarian'],
+                maxActiveTimeMins: 45,
+              ),
+            ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+
+      double sliderValue(String key) =>
+          tester.widget<Slider>(find.byKey(Key(key))).value;
+      expect(sliderValue('settings.toleranceSlider'), 0.7);
+      expect(sliderValue('settings.dinnersSlider'), 6);
+      expect(sliderValue('settings.servingsSlider'), 3);
+      expect(find.widgetWithText(TextField, '45'), findsOneWidget);
+
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('settings.toleranceSlider'))),
+      );
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      final UserConfigView saved = (await tester.runAsync(
+        () => containerOf(
+          tester,
+        ).read(userConfigRepositoryProvider).get('user-1'),
+      ))!;
+      expect(saved.purchaseTolerance, lessThan(0.7));
+      expect(saved.mealsPerWeek, 6);
+      expect(saved.preferredServings, 3);
+      expect(saved.dietaryFlags, <String>['Vegetarian']);
+      expect(saved.maxActiveTimeMins, 45);
     },
   );
 
