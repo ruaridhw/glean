@@ -11,16 +11,19 @@ import 'package:drift/drift.dart';
 import '../database.dart';
 import '../models/shopping_list_item_view.dart';
 import '../models/store_section.dart';
+import 'catalogue_repository.dart';
 import 'ingredients_repository.dart';
 import 'pantry_repository.dart' show PantryUnitMismatchException;
 import '../util/recipe_servings.dart';
 import '../util/unit_normalization.dart';
 
 class ShoppingRepository {
-  ShoppingRepository(this._db, this._ingredients);
+  ShoppingRepository(this._db, this._ingredients)
+    : _catalogue = CatalogueRepository(_db);
 
   final GleanDatabase _db;
   final IngredientsRepository _ingredients;
+  final CatalogueRepository _catalogue;
 
   // Joining stock and cooking state makes demand react to either table, not
   // only to cart mutations. Physical rows retain per-meal cascade ownership.
@@ -30,6 +33,8 @@ class ShoppingRepository {
             _db.ingredients,
             _db.ingredients.id.equalsExp(_db.shoppingListItems.ingredientId),
           ),
+          // Not read: it makes the stream re-emit when a household override changes. The override itself is resolved
+          // through the catalogue (see `_householdSections`), which also follows merged ids.
           leftOuterJoin(
             _db.ingredientOverrides,
             _db.ingredientOverrides.itemId.equalsExp(
@@ -54,9 +59,31 @@ class ShoppingRepository {
         ..orderBy([OrderingTerm.asc(_db.shoppingListItems.id)]);
 
   Stream<List<ShoppingListItemView>> watchAll(String userId) =>
-      _query(userId).watch().map(_visible);
+      _query(userId).watch().asyncMap(_resolveVisible);
 
-  List<ShoppingListItemView> _visible(List<TypedResult> rows) {
+  Future<List<ShoppingListItemView>> _resolveVisible(
+    List<TypedResult> rows,
+  ) async => _visible(rows, await _householdSections(rows));
+
+  // The household's chosen section label for each catalogue item the rows' ingredients are linked to, through the
+  // same resolver `effectiveIngredient` uses, so the two can never disagree.
+  Future<Map<String, String>> _householdSections(List<TypedResult> rows) async {
+    final itemIds = <String>{
+      for (final joined in rows)
+        ?joined.readTable(_db.ingredients).catalogueItemId,
+    };
+    final sections = <String, String>{};
+    for (final id in itemIds) {
+      final label = await _catalogue.householdSection(id);
+      if (label != null) sections[id] = label;
+    }
+    return sections;
+  }
+
+  List<ShoppingListItemView> _visible(
+    List<TypedResult> rows,
+    Map<String, String> householdSections,
+  ) {
     final canonicalUnits = <int, String?>{};
     final remainingStock = <(int, String?), double>{};
     final grouped = <(int, String?, bool), ShoppingListItemView>{};
@@ -64,7 +91,6 @@ class ShoppingRepository {
     for (final joined in rows) {
       final row = joined.readTable(_db.shoppingListItems);
       final ingredient = joined.readTable(_db.ingredients);
-      final override = joined.readTableOrNull(_db.ingredientOverrides);
       final meal = joined.readTableOrNull(_db.mealPlanEntries);
       if (!row.isRequirement) {
         // Plan-gap rows written before requirement rows existed keep their own quantity, but still name the
@@ -73,7 +99,7 @@ class ShoppingRepository {
           _mapRow(
             row,
             ingredient,
-            override,
+            householdSections,
             recipeTitles: [if (meal != null) meal.recipeTitle],
           ),
         );
@@ -117,7 +143,7 @@ class ShoppingRepository {
       grouped[key] = _mapRow(
         row,
         ingredient,
-        override,
+        householdSections,
         quantity: missing + (prior?.quantity ?? 0),
         unit: unit,
         memberIds: [...?prior?.ids, row.id],
@@ -140,7 +166,7 @@ class ShoppingRepository {
   ShoppingListItemView _mapRow(
     ShoppingListItem row,
     Ingredient ingredient,
-    IngredientOverride? override, {
+    Map<String, String> householdSections, {
     double? quantity,
     String? unit,
     List<int> memberIds = const [],
@@ -160,7 +186,7 @@ class ShoppingRepository {
     section: resolveStoreSection(
       name: ingredient.canonicalName,
       groupId: ingredient.groupId,
-      override: _chosenSection(ingredient, override),
+      override: _chosenSection(ingredient, householdSections),
     ),
     memberIds: memberIds,
     recipeTitles: recipeTitles,
@@ -170,9 +196,10 @@ class ShoppingRepository {
   // still held on the ingredient (an ingredient with no item yet, or one whose choice the override could not take).
   StoreSection? _chosenSection(
     Ingredient ingredient,
-    IngredientOverride? override,
+    Map<String, String> householdSections,
   ) {
-    final String? label = override?.section;
+    final String? itemId = ingredient.catalogueItemId;
+    final String? label = itemId == null ? null : householdSections[itemId];
     if (label != null) {
       return StoreSection.values.firstWhere((s) => s.label == label);
     }
@@ -265,9 +292,9 @@ class ShoppingRepository {
         await (_db.select(_db.recipes)
               ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
             .getSingle();
-    final before = _visible(
+    final before = (await _resolveVisible(
       await _query(userId).get(),
-    ).expand((item) => item.ids).toSet();
+    )).expand((item) => item.ids).toSet();
     final requirements =
         <int, ({Ingredient ingredient, double quantity, String unit})>{};
     final rows =
@@ -347,9 +374,9 @@ class ShoppingRepository {
             ),
           );
     }
-    return _visible(
+    return (await _resolveVisible(
       await _query(userId).get(),
-    ).expand((item) => item.ids).where((id) => !before.contains(id)).length;
+    )).expand((item) => item.ids).where((id) => !before.contains(id)).length;
   });
 
   Future<List<ShoppingListItem>> deleteRowsWithSnapshot({

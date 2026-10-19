@@ -32,13 +32,8 @@ class CatalogueRepository {
     )..where((t) => t.id.equals(item.groupId))).getSingleOrNull();
     if (group == null) return null;
     final overrides = await _overridesFor(item.id);
-    T? overridden<T>(T? Function(IngredientOverride o) field) {
-      for (final o in overrides) {
-        final value = field(o);
-        if (value != null) return value;
-      }
-      return null;
-    }
+    T? overridden<T>(T? Function(IngredientOverride o) field) =>
+        _firstOverride(overrides, field);
 
     final unopened =
         jsonDecode(group.unopenedShelfLifeDays) as Map<String, dynamic>;
@@ -69,6 +64,25 @@ class CatalogueRepository {
           onceOpened[item.form] as int?,
       section: overridden((o) => o.section) ?? item.section ?? 'Other',
     );
+  }
+
+  /// The store section the household chose for the catalogue item [id], as a section label: the override on the
+  /// surviving item's own id, else one on a former id, exactly as [effectiveIngredient] reads it. Null when the
+  /// household has not chosen one. [id] may be a former id.
+  Future<String?> householdSection(String id) async {
+    final survivingId = await _survivingId(id);
+    return _firstOverride(await _overridesFor(survivingId), (o) => o.section);
+  }
+
+  T? _firstOverride<T>(
+    List<IngredientOverride> overrides,
+    T? Function(IngredientOverride o) field,
+  ) {
+    for (final o in overrides) {
+      final value = field(o);
+      if (value != null) return value;
+    }
+    return null;
   }
 
   /// Follows redirects from a former id to the item that survives. A merge cycle, which no backend should send,

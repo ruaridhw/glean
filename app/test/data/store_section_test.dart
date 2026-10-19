@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
 import 'package:glean/data/models/store_section.dart';
+import 'package:glean/data/repositories/catalogue_repository.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 
@@ -286,5 +287,78 @@ void main() {
         );
       },
     );
+
+    Future<void> mergedOnion({required Map<String, String> overrides}) =>
+        db.batch((b) {
+          b.insert(
+            db.catalogueItems,
+            CatalogueItemsCompanion.insert(
+              id: 'new-onion',
+              name: 'onion',
+              groupId: 'onions_and_garlic',
+              form: 'fresh',
+              source: 'seed',
+            ),
+          );
+          b.insert(
+            db.catalogueAliases,
+            CatalogueAliasesCompanion.insert(
+              key: 'onion',
+              name: 'onion',
+              itemId: 'old-onion',
+            ),
+          );
+          b.insert(
+            db.catalogueItemRedirects,
+            CatalogueItemRedirectsCompanion.insert(
+              formerId: 'old-onion',
+              itemId: 'new-onion',
+            ),
+          );
+          for (final e in overrides.entries) {
+            b.insert(
+              db.ingredientOverrides,
+              IngredientOverridesCompanion.insert(
+                itemId: e.key,
+                section: Value(e.value),
+              ),
+            );
+          }
+        });
+
+    test('a household section chosen on a former id of a merged item places '
+        'its rows exactly as the catalogue resolver says', () async {
+      await mergedOnion(overrides: {'old-onion': 'Frozen'});
+
+      await shopping.addManualItem(userId: userId, name: 'Onion');
+
+      final effective = await CatalogueRepository(
+        db,
+      ).effectiveIngredient('new-onion');
+      expect(effective!.section, 'Frozen');
+      expect(
+        (await shopping.watchAll(userId).first).single.section,
+        StoreSection.frozen,
+      );
+    });
+
+    test('the surviving id\'s own override beats one on a former id', () async {
+      await mergedOnion(
+        overrides: {'old-onion': 'Frozen', 'new-onion': 'Baking'},
+      );
+
+      await shopping.addManualItem(userId: userId, name: 'Onion');
+
+      expect(
+        (await CatalogueRepository(
+          db,
+        ).effectiveIngredient('new-onion'))!.section,
+        'Baking',
+      );
+      expect(
+        (await shopping.watchAll(userId).first).single.section,
+        StoreSection.baking,
+      );
+    });
   });
 }
