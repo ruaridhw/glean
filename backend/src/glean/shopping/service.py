@@ -173,8 +173,8 @@ def _read_cached(cache: BlobStore, path: str) -> ShoppingParseResponse | None:
 
 
 def _write_cached(cache: BlobStore, path: str, response: ShoppingParseResponse) -> None:
-    # food_group and api_ingredient_id are computed on read, so only stored fields are cached.
-    entry = response.model_dump_json(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}})
+    # food_group is computed on read, so only stored fields are cached.
+    entry = response.model_dump_json(exclude={"items": {"__all__": {"food_group"}}})
     try:
         cache.write(path, entry)
     except Exception:  # a cache outage must not fail the parse; S3 raises its own client errors

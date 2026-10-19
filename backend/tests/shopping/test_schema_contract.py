@@ -25,7 +25,7 @@ def test_recorded_model_payload_validates_into_the_typed_response(case: dict[str
     assert len(response.clarifying_questions) == case["expect"]["questions"]
     for item in response.items:
         assert item.unit_price is None
-        assert item.api_ingredient_id is None
+        assert "api_ingredient_id" not in item.model_dump()
 
 
 def test_a_hallucinated_api_ingredient_id_fails_validation() -> None:

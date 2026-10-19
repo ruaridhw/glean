@@ -135,3 +135,46 @@ def test_uncategorised_ingredient_also_satisfies_meal_plan_food_group_validation
     )
 
     assert pantry_item.food_group == "other"
+
+
+def test_an_ingredient_group_sets_the_food_group_and_fills_the_older_category() -> None:
+    ingredient = _make_ingredient(ingredient_group="tomatoes_peppers_and_aubergines")
+    assert ingredient.ingredient_group == "tomatoes_peppers_and_aubergines"
+    assert ingredient.category == "nightshades"
+    assert ingredient.food_group == "vegetables"
+
+
+def test_a_group_with_no_older_category_leaves_category_null_but_still_sets_the_food_group() -> None:
+    ingredient = _make_ingredient(ingredient_group="baking")
+    assert ingredient.category is None
+    assert ingredient.food_group == "carbohydrates"
+
+
+def test_a_household_group_has_the_other_food_group() -> None:
+    ingredient = _make_ingredient(ingredient_group="household")
+    assert ingredient.food_group == "other"
+
+
+def test_a_category_alone_fills_the_ingredient_group() -> None:
+    ingredient = _make_ingredient(category="berries")
+    assert ingredient.ingredient_group == "fruit"
+
+
+def test_an_out_of_catalogue_group_falls_back_to_null_and_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING, logger="glean"):
+        ingredient = _make_ingredient(ingredient_group="artisanal-cheese-boutique")
+
+    assert ingredient.ingredient_group is None
+    assert ingredient.food_group == "other"
+    assert any("out-of-catalogue" in record.message for record in caplog.records)
+
+
+def test_the_group_wins_where_category_and_group_disagree() -> None:
+    ingredient = _make_ingredient(ingredient_group="dairy", category="red_meat")
+    assert ingredient.category == "dairy"
+    assert ingredient.food_group == "dairy"
+
+
+def test_a_category_in_the_groups_own_fruit_family_is_kept() -> None:
+    ingredient = _make_ingredient(ingredient_group="fruit", category="citrus")
+    assert ingredient.category == "citrus"

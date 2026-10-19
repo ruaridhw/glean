@@ -85,7 +85,7 @@ class _FakeLLMRouter:
             units.append(
                 {
                     "number": number,
-                    **reply.model_dump(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}}),
+                    **reply.model_dump(exclude={"items": {"__all__": {"food_group"}}}),
                 }
             )
         return ShoppingBatchParseResponse.model_validate({"units": units})

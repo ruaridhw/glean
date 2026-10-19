@@ -1,39 +1,16 @@
 # backend/src/glean/receipts/schemas.py
-from typing import Literal
+from typing import Literal, Self, cast
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from glean.catalogue.groups import GROUPS, GroupId
+from glean.catalogue.legacy_categories import LEGACY_CATEGORY_GROUPS, legacy_category_for
 from glean.observability import logger
 
-# The 23-category taxonomy the Flutter client already uses
-# (app/lib/data/seed/taxonomy.dart) and expects `food_group` to be derived
-# from. Keep this mapping in sync with that file — it is the single source
-# `food_group` is derived from, so the client never receives a category it
-# can't map.
+# The 23 categories older app builds still read, each with the food group it always had. Derived from the catalogue's
+# ingredient groups so the two can't drift; `category` goes once every phone reads `ingredient_group`.
 INGREDIENT_CATEGORY_FOOD_GROUPS: dict[str, str] = {
-    "leafy_greens": "vegetables",
-    "brassicas": "vegetables",
-    "alliums": "vegetables",
-    "root_vegetables": "vegetables",
-    "nightshades": "vegetables",
-    "legumes": "protein",
-    "citrus": "fruit",
-    "tropical_fruit": "fruit",
-    "stone_fruit": "fruit",
-    "berries": "fruit",
-    "red_meat": "protein",
-    "poultry": "protein",
-    "seafood": "protein",
-    "eggs": "protein",
-    "dairy": "dairy",
-    "grains": "carbohydrates",
-    "pasta_rice": "carbohydrates",
-    "bread": "carbohydrates",
-    "oils_fats": "fats",
-    "herbs_fresh": "condiments",
-    "herbs_dried": "condiments",
-    "spices": "condiments",
-    "condiments": "condiments",
+    category: GROUPS[group].food_group.value for category, group in LEGACY_CATEGORY_GROUPS.items()
 }
 
 # `ty` requires Literal args to be written out (it can't evaluate a dynamic tuple), so this
@@ -88,6 +65,32 @@ class ParsedIngredient(BaseModel):
         description="Ingredient category drawn from the fixed taxonomy; null only when genuinely unclassifiable.",
     )
 
+    ingredient_group: GroupId | None = Field(
+        default=None,
+        description="Ingredient group from the catalogue's fixed list; null only when genuinely unclassifiable.",
+    )
+
+    @field_validator("ingredient_group", mode="before")
+    @classmethod
+    def _fallback_out_of_catalogue_group(cls, value: object) -> object:
+        """Coerce a group the catalogue doesn't have to null instead of failing the whole response."""
+        if value is None or value in {group.value for group in GroupId}:
+            return value
+        logger.warning("llm returned out-of-catalogue ingredient group", extra={"ingredient_group": value})
+        return None
+
+    @model_validator(mode="after")
+    def _agree_category_and_group(self) -> Self:
+        """Until every phone reads `ingredient_group`, each of the two fills the other when it is missing, and the
+        group wins where they disagree. Drop with `category`."""
+        if self.ingredient_group is None and self.category is not None:
+            self.ingredient_group = LEGACY_CATEGORY_GROUPS[self.category]
+        elif self.ingredient_group is not None:
+            current = LEGACY_CATEGORY_GROUPS.get(self.category) if self.category is not None else None
+            if current is not self.ingredient_group:
+                self.category = cast("IngredientCategory | None", legacy_category_for(self.ingredient_group))
+        return self
+
     @field_validator("category", mode="before")
     @classmethod
     def _fallback_out_of_taxonomy_category(cls, value: object) -> object:
@@ -104,7 +107,7 @@ class ParsedIngredient(BaseModel):
 
     @computed_field(
         return_type=str,
-        description='Food group derived deterministically from category; "other" when category is null.',
+        description='Food group derived from the ingredient group (else category); "other" when neither is set.',
     )
     @property
     def food_group(self) -> str:
@@ -112,6 +115,8 @@ class ParsedIngredient(BaseModel):
         # choose it independently of category. Meal-plan input food_group is
         # separately nullable (#95), so this fallback is not a validation rule.
         # "other" matches the clients' uncategorised pantry fallback.
+        if self.ingredient_group is not None:
+            return GROUPS[self.ingredient_group].food_group.value
         if self.category is None:
             return "other"
         return INGREDIENT_CATEGORY_FOOD_GROUPS.get(self.category, "other")

@@ -20,7 +20,7 @@ def unauth_client(test_settings: Settings) -> TestClient:
 
 def _batch_of(response: ShoppingParseResponse) -> ShoppingBatchParseResponse:
     """The batch reply that carries one phrase's parse."""
-    stored = response.model_dump(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}})
+    stored = response.model_dump(exclude={"items": {"__all__": {"food_group"}}})
     return ShoppingBatchParseResponse.model_validate({"units": [{"number": 1, **stored}]})
 
 
@@ -57,8 +57,8 @@ def test_parse_shopping_description_returns_items(client: TestClient, auth_heade
             "unit": "pack",
             "unit_price": None,
             "confidence": 0.82,
-            "api_ingredient_id": None,
             "category": "grains",
+            "ingredient_group": "grains",
             "food_group": "carbohydrates",
         }
     ]
@@ -156,8 +156,8 @@ def test_a_multi_item_description_returns_the_merged_proposals_in_the_existing_r
         "unit",
         "unit_price",
         "confidence",
-        "api_ingredient_id",
         "category",
+        "ingredient_group",
         "food_group",
     }
     assert body["clarifying_questions"] == ["Which snacks?"]

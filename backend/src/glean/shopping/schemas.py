@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from glean.receipts.schemas import ParsedIngredient
 
@@ -54,14 +54,6 @@ class ShoppingProposalItem(ParsedIngredient):
     @field_validator("unit_price", mode="after")
     @classmethod
     def _drop_unit_price(cls, _: float | None) -> None:
-        return None
-
-    @computed_field(
-        return_type=str | None,
-        description="Trusted ingredient catalogue ID; null until backend resolution is available.",
-    )
-    @property
-    def api_ingredient_id(self) -> str | None:
         return None
 
 
