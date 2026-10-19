@@ -207,5 +207,147 @@ void main() {
         expect(second.canonicalUnit, 'g');
       });
     });
+
+    group('with a synced catalogue', () {
+      Future<void> syncOnion() async {
+        await db.batch((b) {
+          b.insert(
+            db.catalogueItems,
+            CatalogueItemsCompanion.insert(
+              id: 'onion',
+              name: 'onion',
+              groupId: 'onions_and_garlic',
+              form: 'fresh',
+              source: 'seed',
+            ),
+          );
+          b.insert(
+            db.catalogueItems,
+            CatalogueItemsCompanion.insert(
+              id: 'shallot',
+              name: 'shallot',
+              groupId: 'onions_and_garlic',
+              form: 'fresh',
+              source: 'seed',
+            ),
+          );
+          b.insertAll(db.catalogueAliases, [
+            for (final name in ['onion', 'brown onion', 'onions'])
+              CatalogueAliasesCompanion.insert(
+                key: name,
+                name: name,
+                itemId: 'onion',
+              ),
+            CatalogueAliasesCompanion.insert(
+              key: 'shallot',
+              name: 'shallot',
+              itemId: 'shallot',
+            ),
+            CatalogueAliasesCompanion.insert(
+              key: 'banana shallot',
+              name: 'banana shallot',
+              itemId: 'old-shallot',
+            ),
+          ]);
+          b.insert(
+            db.catalogueItemRedirects,
+            CatalogueItemRedirectsCompanion.insert(
+              formerId: 'old-shallot',
+              itemId: 'shallot',
+            ),
+          );
+        });
+      }
+
+      test('a known alias resolves to the ingredient already linked to its '
+          'item instead of creating a second one', () async {
+        final onion = await repository.resolveOrCreate(
+          canonicalName: 'onion',
+          groupId: 'onions_and_garlic',
+        );
+        await syncOnion();
+        await db.linkIngredientsToCatalogue();
+
+        final brown = await repository.resolveOrCreate(
+          canonicalName: 'Brown Onion',
+        );
+
+        expect(brown.id, onion.id);
+        expect(
+          (await db.select(db.ingredients).get()).where(
+            (i) => i.catalogueItemId == 'onion',
+          ),
+          hasLength(1),
+        );
+      });
+
+      test('an alias of a merged item resolves through the redirect', () async {
+        await syncOnion();
+        final first = await repository.resolveOrCreate(
+          canonicalName: 'banana shallot',
+        );
+        final second = await repository.resolveOrCreate(
+          canonicalName: 'shallot',
+        );
+
+        expect(first.catalogueItemId, 'shallot');
+        expect(second.id, first.id);
+      });
+
+      test('a known name with no ingredient yet creates one linked to its '
+          'item, with no form', () async {
+        await syncOnion();
+
+        final created = await repository.resolveOrCreate(
+          canonicalName: 'onions',
+        );
+
+        expect(created.canonicalName, 'onions');
+        expect(created.catalogueItemId, 'onion');
+        expect(created.form, isNull);
+      });
+
+      test('an existing row for the exact name is linked and reused, not '
+          'duplicated', () async {
+        final before = await repository.resolveOrCreate(
+          canonicalName: 'onions',
+        );
+        await syncOnion();
+
+        final after = await repository.resolveOrCreate(canonicalName: 'onions');
+
+        expect(after.id, before.id);
+        expect(after.catalogueItemId, 'onion');
+      });
+
+      test('resolving a catalogue id that several existing ingredients share '
+          'picks the oldest one, every time, and never throws', () async {
+        final oldest = await repository.resolveOrCreate(canonicalName: 'onion');
+        final newer = await repository.resolveOrCreate(
+          canonicalName: 'brown onion',
+        );
+        await syncOnion();
+        await db.linkIngredientsToCatalogue();
+        // Both pre-existing rows now carry the item.
+        expect(
+          (await db.select(db.ingredients).get())
+              .where((i) => i.catalogueItemId == 'onion')
+              .map((i) => i.id),
+          unorderedEquals([oldest.id, newer.id]),
+        );
+
+        for (var i = 0; i < 2; i++) {
+          final byId = await repository.resolveOrCreate(
+            canonicalName: 'anything',
+            catalogueItemId: 'onion',
+          );
+          expect(byId.id, oldest.id);
+          final byAlias = await repository.resolveOrCreate(
+            canonicalName: 'onions',
+          );
+          expect(byAlias.id, oldest.id);
+        }
+      });
+    });
   });
 }

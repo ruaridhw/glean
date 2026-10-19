@@ -109,6 +109,44 @@ void main() {
       );
     });
 
+    test('stocking a known alias tops up the pantry row of the ingredient '
+        'already linked to its item, not a second row', () async {
+      await db.batch((b) {
+        b.insert(
+          db.catalogueItems,
+          CatalogueItemsCompanion.insert(
+            id: 'onion',
+            name: 'onion',
+            groupId: 'onions_and_garlic',
+            form: 'fresh',
+            source: 'seed',
+          ),
+        );
+        b.insertAll(db.catalogueAliases, [
+          for (final name in ['onion', 'brown onion'])
+            CatalogueAliasesCompanion.insert(
+              key: name,
+              name: name,
+              itemId: 'onion',
+            ),
+        ]);
+      });
+      for (final name in ['onion', 'Brown Onion']) {
+        await repository.addItem(
+          userId: userId,
+          name: name,
+          quantity: 200,
+          unit: 'g',
+          groupId: 'onions_and_garlic',
+          now: DateTime(2026, 1, 1),
+        );
+      }
+
+      final items = await repository.watchAll(userId).first;
+      expect(items, hasLength(1));
+      expect(items.single.quantity, 400);
+    });
+
     test('a linked ingredient takes its shelf life from the catalogue item, '
         'household override included', () async {
       await db

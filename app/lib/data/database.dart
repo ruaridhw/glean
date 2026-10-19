@@ -14,6 +14,13 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
+/// A name as `catalogue_aliases.key` holds it: case-folded and whitespace-collapsed, as the backend sends it.
+String catalogueNameKey(String name) => name
+    .toLowerCase()
+    .split(RegExp(r'\s+'))
+    .where((w) => w.isNotEmpty)
+    .join(' ');
+
 @DriftDatabase(
   tables: [
     Ingredients,
@@ -173,12 +180,7 @@ class GleanDatabase extends _$GleanDatabase {
               .get();
       if (unlinked.isEmpty) return;
       final keyOf = {
-        for (final i in unlinked)
-          i.id: i.canonicalName
-              .toLowerCase()
-              .split(RegExp(r'\s+'))
-              .where((w) => w.isNotEmpty)
-              .join(' '),
+        for (final i in unlinked) i.id: catalogueNameKey(i.canonicalName),
       };
       final itemByKey = <String, String>{};
       final keys = keyOf.values.toSet().toList();
@@ -194,7 +196,7 @@ class GleanDatabase extends _$GleanDatabase {
       for (final ingredient in unlinked) {
         final aliasItem = itemByKey[keyOf[ingredient.id]];
         if (aliasItem == null) continue;
-        final itemId = await _survivingItemId(aliasItem);
+        final itemId = await survivingCatalogueItemId(aliasItem);
         final item = await (select(
           catalogueItems,
         )..where((t) => t.id.equals(itemId))).getSingleOrNull();
@@ -213,6 +215,21 @@ class GleanDatabase extends _$GleanDatabase {
       }
     },
   );
+
+  /// The surviving catalogue item a name or alias resolves to, or null when the catalogue holds none for it. A name
+  /// is matched as the catalogue matches it (see [catalogueNameKey]) and a merged item is followed to the one that
+  /// survives.
+  Future<String?> catalogueItemIdForName(String name) async {
+    final alias = await (select(
+      catalogueAliases,
+    )..where((t) => t.key.equals(catalogueNameKey(name)))).getSingleOrNull();
+    if (alias == null) return null;
+    final itemId = await survivingCatalogueItemId(alias.itemId);
+    final item = await (select(
+      catalogueItems,
+    )..where((t) => t.id.equals(itemId))).getSingleOrNull();
+    return item?.id;
+  }
 
   // The label `ingredient_overrides.section` holds for a stored `StoreSection.dbValue`; null when there is no choice or
   // the value is one this build doesn't know, which is then left where it is rather than guessed at.
@@ -246,8 +263,8 @@ class GleanDatabase extends _$GleanDatabase {
     return existing.section == label;
   }
 
-  // Follows a merged item to the item that survives; a cycle stops at the first id seen twice.
-  Future<String> _survivingItemId(String id) async {
+  /// Follows a merged item to the item that survives; a cycle stops at the first id seen twice.
+  Future<String> survivingCatalogueItemId(String id) async {
     final seen = <String>{id};
     var current = id;
     while (true) {
