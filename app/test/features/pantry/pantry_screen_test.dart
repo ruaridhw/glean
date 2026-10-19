@@ -231,18 +231,18 @@ void main() {
       await tester.tap(find.text('onion'));
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(TextField, 'Quantity'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Unit'), findsOneWidget);
+      expect(labeledTextField('Quantity'), findsOneWidget);
+      expect(labeledTextField('Unit'), findsOneWidget);
       expect(find.text('Save'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
 
       // Decimal input is freely typeable, and 0 fails validation.
-      await tester.enterText(find.widgetWithText(TextField, 'Quantity'), '0');
+      await tester.enterText(labeledTextField('Quantity'), '0');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(find.text('Enter a quantity greater than 0'), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Quantity'), '1.5');
+      await tester.enterText(labeledTextField('Quantity'), '1.5');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 

@@ -103,7 +103,7 @@ void main() {
         ),
       );
 
-      final qtyField = find.widgetWithText(TextField, 'Qty');
+      final qtyField = labeledTextField('Qty');
       await tester.enterText(qtyField, '1.5');
       await tester.pump();
 
@@ -139,7 +139,7 @@ void main() {
         ),
       );
 
-      final qtyField = find.widgetWithText(TextField, 'Qty');
+      final qtyField = labeledTextField('Qty');
 
       await tester.enterText(qtyField, '0');
       await tester.pump();
@@ -439,7 +439,7 @@ void main() {
       );
 
       // The user clears what was parsed rather than leaving it as typed.
-      await tester.enterText(find.widgetWithText(TextField, 'Unit'), '');
+      await tester.enterText(labeledTextField('Unit'), '');
       await tester.pump();
 
       await tester.tap(find.text('Add 1 item'));

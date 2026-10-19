@@ -23,6 +23,12 @@ void main() {
   });
   tearDown(() => harness.dispose());
 
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+  }
+
   Future<void> review(WidgetTester tester) async {
     unawaited(
       harness.router.pushNamed(
@@ -106,17 +112,14 @@ void main() {
         find.widgetWithText(TextField, 'beans'),
         'black beans',
       );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Qty').first,
-        '1.5',
-      );
-      await tester.tap(find.byType(Checkbox).at(1));
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Answer').first,
-        'Beans please',
-      );
+      await tester.enterText(labeledTextField('Qty').first, '1.5');
+      await tapVisible(tester, find.byType(Checkbox).at(1));
+      await tester.enterText(labeledTextField('Answer').first, 'Beans please');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Update suggestions'),
+      );
       await pumpUntil(
         tester,
         () => find.text('taco shells').evaluate().isNotEmpty,
@@ -211,35 +214,31 @@ void main() {
         );
       });
       await review(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Qty').first,
-        '1.5',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Unit').first,
-        'kg',
-      );
+      await tester.enterText(labeledTextField('Qty').first, '1.5');
+      await tester.enterText(labeledTextField('Unit').first, 'kg');
       await tester.tap(find.byTooltip('Remove').at(1));
       await tester.pump();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Answer').first,
-        'Beans please',
-      );
+      await tester.enterText(labeledTextField('Answer').first, 'Beans please');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Update suggestions'),
+      );
       await pumpUntil(
         tester,
         () => find.text('Soft or hard?').evaluate().isNotEmpty,
         description: 'second answer round',
       );
       expect(find.text('onion'), findsNothing);
-      await tester.tap(find.byType(Checkbox).at(1));
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Answer').first,
-        'Hard shells',
-      );
+      await tapVisible(tester, find.byType(Checkbox).at(1));
+      await tester.drag(find.byType(ListView), const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      await tester.enterText(labeledTextField('Answer').first, 'Hard shells');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
+      await tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Update suggestions'),
+      );
       await pumpUntil(
         tester,
         () => find.text('Add 2 items').evaluate().isNotEmpty,
@@ -273,12 +272,12 @@ void main() {
       ),
     ).thenAnswer((_) async => http.Response('{}', 500));
     await review(tester);
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Answer').first,
-      'Beans',
-    );
+    await tester.enterText(labeledTextField('Answer').first, 'Beans');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
+    await tapVisible(
+      tester,
+      find.widgetWithText(FilledButton, 'Update suggestions'),
+    );
     await pumpUntil(
       tester,
       () => find
@@ -314,10 +313,7 @@ void main() {
         ),
       );
       await review(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Answer').first,
-        'Beans',
-      );
+      await tester.enterText(labeledTextField('Answer').first, 'Beans');
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Update suggestions'));
       await pumpUntil(

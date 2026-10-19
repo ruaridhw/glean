@@ -79,30 +79,32 @@ class ReviewItemRow extends StatelessWidget {
               children: <Widget>[
                 SizedBox(
                   width: 90,
-                  child: TextField(
-                    controller: quantityController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      labelText: 'Qty',
-                      // The default errorText renderer ellipsizes inside this
-                      // 90px field, hiding the validation rule on a phone.
-                      error: quantityErrorText == null
-                          ? null
-                          : Text(quantityErrorText!),
+                  child: GleanField(
+                    label: 'Qty',
+                    child: TextField(
+                      controller: quantityController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        // The default errorText renderer ellipsizes inside this
+                        // 90px field, hiding the validation rule on a phone.
+                        error: quantityErrorText == null
+                            ? null
+                            : Text(quantityErrorText!),
+                      ),
                     ),
                   ),
                 ),
                 SizedBox(width: tokens.spacing.sm),
                 SizedBox(
                   width: 90,
-                  child: TextField(
-                    controller: unitController,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Unit',
+                  child: GleanField(
+                    label: 'Unit',
+                    child: TextField(
+                      controller: unitController,
+                      decoration: const InputDecoration(isDense: true),
                     ),
                   ),
                 ),
@@ -110,23 +112,26 @@ class ReviewItemRow extends StatelessWidget {
             ),
             if (requiresGroup) ...<Widget>[
               SizedBox(height: tokens.spacing.sm),
-              DropdownButtonFormField<String>(
-                initialValue: selectedGroupId,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  labelText: 'Ingredient group',
-                  helperText:
-                      "Optional: we couldn't identify an ingredient group for this item.",
-                  helperMaxLines: 2,
+              GleanField(
+                label: 'Ingredient group',
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: selectedGroupId,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    helperText:
+                        "Optional: we couldn't identify an ingredient group for this item.",
+                    helperMaxLines: 2,
+                  ),
+                  items: <DropdownMenuItem<String>>[
+                    for (final IngredientGroupSeed seed in selectableGroupSeeds)
+                      DropdownMenuItem<String>(
+                        value: seed.id,
+                        child: Text(seed.name),
+                      ),
+                  ],
+                  onChanged: onGroupChanged,
                 ),
-                items: <DropdownMenuItem<String>>[
-                  for (final IngredientGroupSeed seed in selectableGroupSeeds)
-                    DropdownMenuItem<String>(
-                      value: seed.id,
-                      child: Text(seed.name),
-                    ),
-                ],
-                onChanged: onGroupChanged,
               ),
             ],
           ],

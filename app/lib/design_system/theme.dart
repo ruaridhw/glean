@@ -207,18 +207,22 @@ ThemeData get gleanLightTheme {
       hintStyle: textTheme.bodyLarge?.copyWith(color: _Brand.textDisabled),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
+        gapPadding: 0,
         borderRadius: BorderRadius.circular(AppRadius.standard.md),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
+        gapPadding: 0,
         borderRadius: BorderRadius.circular(AppRadius.standard.md),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
+        gapPadding: 0,
         borderRadius: BorderRadius.circular(AppRadius.standard.md),
         borderSide: const BorderSide(color: _Brand.primary, width: 2),
       ),
       errorBorder: OutlineInputBorder(
+        gapPadding: 0,
         borderRadius: BorderRadius.circular(AppRadius.standard.md),
         borderSide: const BorderSide(color: _Brand.danger, width: 1.5),
       ),

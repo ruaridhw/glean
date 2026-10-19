@@ -37,6 +37,14 @@ import 'package:riverpod/misc.dart';
 import '../auth/support/fakes.dart';
 import '../data/fixture.dart';
 
+/// Finds the editable input associated with a persistent design-system label.
+Finder labeledTextField(String label) => find.descendant(
+  of: find.byWidgetPredicate(
+    (widget) => widget is GleanField && widget.label == label,
+  ),
+  matching: find.byType(TextField),
+);
+
 class AppTestHarness {
   AppTestHarness({
     this.userId = 'test-user',

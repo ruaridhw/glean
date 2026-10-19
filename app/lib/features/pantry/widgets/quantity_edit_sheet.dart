@@ -115,24 +115,24 @@ class _QuantityEditSheetState extends ConsumerState<QuantityEditSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
-                child: TextField(
-                  controller: _quantityController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Quantity',
-                    errorText: quantityError,
+                child: GleanField(
+                  label: 'Quantity',
+                  child: TextField(
+                    controller: _quantityController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(errorText: quantityError),
                   ),
                 ),
               ),
               SizedBox(width: tokens.spacing.md),
               Expanded(
-                child: TextField(
-                  controller: _unitController,
-                  decoration: InputDecoration(
-                    labelText: 'Unit',
-                    errorText: unitError,
+                child: GleanField(
+                  label: 'Unit',
+                  child: TextField(
+                    controller: _unitController,
+                    decoration: InputDecoration(errorText: unitError),
                   ),
                 ),
               ),
