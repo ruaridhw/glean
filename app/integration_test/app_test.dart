@@ -149,14 +149,14 @@ void main() {
       await tester.enterText(find.byType(TextField).at(0), 'test chicken');
       await tester.enterText(find.byType(TextField).at(1), '500');
 
-      // Category is required (no LLM classification behind a manually typed
-      // item — see `manual_entry_screen.dart`'s doc comment). "Leafy Greens"
-      // is simply the first taxonomy entry, chosen so it's on-screen the
-      // moment the menu opens with no scroll needed; which category is
+      // An ingredient group is required (no LLM classification behind a manually typed
+      // item — see `manual_entry_screen.dart`'s doc comment). "Leafy greens & salad"
+      // is simply the first group, chosen so it's on-screen the
+      // moment the menu opens with no scroll needed; which group is
       // picked doesn't matter to this smoke test.
       await tester.tap(find.byType(DropdownButtonFormField<String>));
-      await _pumpUntilFound(tester, find.text('Leafy Greens'));
-      await tester.tap(find.text('Leafy Greens'));
+      await _pumpUntilFound(tester, find.text('Leafy greens & salad'));
+      await tester.tap(find.text('Leafy greens & salad'));
       await _pumpUntilFound(tester, find.text('Add to pantry'));
 
       await tester.tap(find.text('Add to pantry'));
