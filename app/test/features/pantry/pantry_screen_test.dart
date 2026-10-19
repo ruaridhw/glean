@@ -47,7 +47,7 @@ void main() {
         name: 'milk',
         quantity: 1,
         unit: 'l',
-        category: 'dairy',
+        groupId: 'dairy',
         now: DateTime(2026, 1, 1),
       );
 
@@ -69,7 +69,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         now: DateTime(2026, 1, 1),
       );
 
@@ -123,7 +123,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         now: DateTime(2026, 1, 1),
       );
 
@@ -149,7 +149,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         now: DateTime(2026, 1, 1),
       );
 
@@ -178,8 +178,7 @@ void main() {
         name: 'strawberries',
         quantity: 1,
         unit: 'punnet',
-        category:
-            'berries', // only berries item -> its own "Veg & Fruit" section
+        groupId: 'fruit', // only fruit item -> its own "Veg & Fruit" section
         now: DateTime(2026, 1, 1),
       );
       await pantry.addItem(
@@ -187,7 +186,7 @@ void main() {
         name: 'chicken breast',
         quantity: 500,
         unit: 'g',
-        category: 'poultry',
+        groupId: 'poultry',
         now: DateTime(2026, 1, 1),
       );
 
@@ -222,7 +221,7 @@ void main() {
         name: 'onion',
         quantity: 3,
         unit: 'unit',
-        category: 'alliums',
+        groupId: 'onions_and_garlic',
         now: DateTime(2026, 1, 1),
       );
 
@@ -261,7 +260,7 @@ void main() {
           name: 'butter',
           quantity: 250,
           unit: 'g',
-          category: 'dairy',
+          groupId: 'dairy',
           now: DateTime(2026, 1, 1),
         );
         await harness.failDeletesOn('pantry_items');

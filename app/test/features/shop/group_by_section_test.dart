@@ -25,7 +25,7 @@ void main() {
             name: 'Milk',
             quantity: 1,
             unit: 'l',
-            category: 'dairy',
+            groupId: 'dairy',
           ),
         ],
       );
@@ -37,13 +37,13 @@ void main() {
             name: 'Pears',
             quantity: 2,
             unit: 'x',
-            category: 'stone_fruit',
+            groupId: 'fruit',
           ),
           AiShoppingItem(
             name: 'Apples',
             quantity: 4,
             unit: 'x',
-            category: 'citrus',
+            groupId: 'fruit',
           ),
         ],
       );

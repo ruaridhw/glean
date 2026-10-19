@@ -54,7 +54,7 @@ void main() {
       name: 'chicken breast',
       quantity: 500,
       unit: 'g',
-      category: 'poultry',
+      groupId: 'poultry',
     );
     final recipeId = await harness.container
         .read(recipesRepositoryProvider)

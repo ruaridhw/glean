@@ -11,7 +11,6 @@ RecipeIngredientOut _$RecipeIngredientOutFromJson(Map<String, dynamic> json) =>
       canonicalName: json['canonical_name'] as String,
       quantity: (json['quantity'] as num).toDouble(),
       unit: json['unit'] as String,
-      apiIngredientId: json['api_ingredient_id'] as String?,
       preparation: json['preparation'] as String?,
       isOptional: json['is_optional'] as bool? ?? false,
       substitutions:

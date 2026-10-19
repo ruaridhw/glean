@@ -1,8 +1,8 @@
 // Widget coverage for the shared intake review screen: decimal
 // quantities round-trip, zero/NaN is rejected, the
 // commit is atomic and a retry can't double, a pantry-only
-// review never touches the shopping list, and a null-category
-// pantry row can be confirmed with or without a category pick.
+// review never touches the shopping list, and an unclassified
+// pantry row can be confirmed with or without a group pick.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -52,7 +52,7 @@ void main() {
                 quantity: 2,
                 unit: 'units',
                 confidence: 0.9,
-                category: 'alliums',
+                groupId: 'onions_and_garlic',
               ),
             ],
           ),
@@ -97,7 +97,7 @@ void main() {
               // which would conflate the two concerns here.
               unit: 'bottle',
               confidence: 0.9,
-              category: 'oils_fats',
+              groupId: 'oils_and_fats',
             ),
           ],
         ),
@@ -133,7 +133,7 @@ void main() {
               quantity: 1,
               unit: 'kg',
               confidence: 0.9,
-              category: 'grains',
+              groupId: 'grains',
             ),
           ],
         ),
@@ -181,7 +181,7 @@ void main() {
               quantity: 3,
               unit: 'unit',
               confidence: 0.9,
-              category: 'alliums',
+              groupId: 'onions_and_garlic',
             ),
             ReviewItemDraft(
               reviewId: 'bad',
@@ -189,7 +189,7 @@ void main() {
               quantity: 1,
               unit: 'unit',
               confidence: 0.9,
-              category: 'not_a_real_category', // rejected by the taxonomy FK
+              groupId: 'not_a_real_category', // rejected by the group FK
             ),
           ],
         ),
@@ -249,7 +249,7 @@ void main() {
               quantity: 250,
               unit: 'g',
               confidence: 0.9,
-              category: 'dairy',
+              groupId: 'dairy',
             ),
           ],
         ),
@@ -265,8 +265,57 @@ void main() {
       expect(after!.single.name, 'bread');
     });
 
-    testWidgets('a null-category pantry row can be given a category before '
-        'it is confirmed', (WidgetTester tester) async {
+    testWidgets(
+      'an unclassified pantry row can be given an ingredient group before '
+      'it is confirmed',
+      (WidgetTester tester) async {
+        await pumpReview(
+          tester,
+          const ReviewArgs(
+            destination: ReviewDestination.pantry,
+            items: <ReviewItemDraft>[
+              ReviewItemDraft(
+                reviewId: 'a',
+                name: 'mystery vegetable',
+                quantity: 1,
+                unit: 'unit',
+                confidence: 0.5,
+                groupId: null,
+              ),
+            ],
+          ),
+        );
+
+        expect(
+          find.text(
+            "Optional: we couldn't identify an ingredient group for this item.",
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Leafy greens & salad').last);
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+          isNotNull,
+        );
+
+        await tester.tap(find.text('Add 1 item'));
+        await tester.pumpAndSettle();
+
+        final saved = (await tester.runAsync(
+          () => pantry.watchAll('test-user').first,
+        ))!.single;
+        expect(saved.groupId, 'leafy_greens');
+        // Expiry inference fired now that a group exists.
+        expect(saved.expiryDate, isNotNull);
+      },
+    );
+
+    testWidgets('an unclassified pantry row is confirmed as is, stored with no '
+        'ingredient group', (WidgetTester tester) async {
       await pumpReview(
         tester,
         const ReviewArgs(
@@ -278,51 +327,7 @@ void main() {
               quantity: 1,
               unit: 'unit',
               confidence: 0.5,
-              category: null,
-            ),
-          ],
-        ),
-      );
-
-      expect(
-        find.text("Optional: we couldn't identify a category for this item."),
-        findsOneWidget,
-      );
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Leafy Greens').last);
-      await tester.pumpAndSettle();
-
-      expect(
-        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-        isNotNull,
-      );
-
-      await tester.tap(find.text('Add 1 item'));
-      await tester.pumpAndSettle();
-
-      final saved = (await tester.runAsync(
-        () => pantry.watchAll('test-user').first,
-      ))!.single;
-      expect(saved.category, 'leafy_greens');
-      // Expiry inference fired now that a category exists.
-      expect(saved.expiryDate, isNotNull);
-    });
-
-    testWidgets('a null-category pantry row is confirmed as is, stored with no '
-        'category', (WidgetTester tester) async {
-      await pumpReview(
-        tester,
-        const ReviewArgs(
-          destination: ReviewDestination.pantry,
-          items: <ReviewItemDraft>[
-            ReviewItemDraft(
-              reviewId: 'a',
-              name: 'mystery vegetable',
-              quantity: 1,
-              unit: 'unit',
-              confidence: 0.5,
-              category: null,
+              groupId: null,
             ),
           ],
         ),
@@ -335,7 +340,7 @@ void main() {
         () => pantry.watchAll('test-user').first,
       ))!.single;
       expect(saved.canonicalName, 'mystery vegetable');
-      expect(saved.category, isNull);
+      expect(saved.groupId, isNull);
       expect(saved.foodGroup, 'other');
     });
 
@@ -352,7 +357,7 @@ void main() {
               quantity: 1,
               unit: 'loaf',
               confidence: 0.4,
-              category: null,
+              groupId: null,
             ),
           ],
           clarifyingQuestions: <String>['Sliced or whole?'],
@@ -398,7 +403,7 @@ void main() {
               quantity: 1,
               unit: 'l',
               confidence: 0.9,
-              category: 'dairy',
+              groupId: 'dairy',
             ),
           ],
         ),
@@ -427,7 +432,7 @@ void main() {
               quantity: 1,
               unit: 'g',
               confidence: 0.9,
-              category: 'grains',
+              groupId: 'grains',
             ),
           ],
         ),
@@ -467,7 +472,7 @@ void main() {
           name: 'garlic',
           quantity: 3,
           unit: 'units',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
         );
 
         await pumpReview(
@@ -481,7 +486,7 @@ void main() {
                 quantity: 50,
                 unit: 'g',
                 confidence: 0.9,
-                category: 'alliums',
+                groupId: 'onions_and_garlic',
               ),
             ],
           ),

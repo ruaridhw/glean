@@ -59,7 +59,7 @@ class _PantryDescribeScreenState extends ConsumerState<PantryDescribeScreen> {
           unit: response.items[i].unit,
           confidence: response.items[i].confidence,
           unitPrice: response.items[i].unitPrice,
-          category: response.items[i].category,
+          groupId: response.items[i].groupId,
         ),
     ];
     context.goNamed(

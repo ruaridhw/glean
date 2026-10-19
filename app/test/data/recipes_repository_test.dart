@@ -52,7 +52,6 @@ void main() {
           ),
           SaveRecipeIngredient(
             canonicalName: 'tomato',
-            apiIngredientId: 'api-tomato',
             quantity: 3,
             unit: 'unit',
           ),

@@ -3,18 +3,34 @@
 part of 'database.dart';
 
 // ignore_for_file: type=lint
-class $IngredientCategoriesTable extends IngredientCategories
-    with TableInfo<$IngredientCategoriesTable, IngredientCategory> {
+class $IngredientGroupsTable extends IngredientGroups
+    with TableInfo<$IngredientGroupsTable, IngredientGroup> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $IngredientCategoriesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _categoryMeta = const VerificationMeta(
-    'category',
-  );
+  $IngredientGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<String> category = GeneratedColumn<String>(
-    'category',
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -31,38 +47,105 @@ class $IngredientCategoriesTable extends IngredientCategories
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _shelfLifeDaysMeta = const VerificationMeta(
-    'shelfLifeDays',
+  static const VerificationMeta _trackingModeMeta = const VerificationMeta(
+    'trackingMode',
   );
   @override
-  late final GeneratedColumn<int> shelfLifeDays = GeneratedColumn<int>(
-    'shelf_life_days',
+  late final GeneratedColumn<String> trackingMode = GeneratedColumn<String>(
+    'tracking_mode',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _stockUnitMeta = const VerificationMeta(
+    'stockUnit',
+  );
   @override
-  List<GeneratedColumn> get $columns => [category, foodGroup, shelfLifeDays];
+  late final GeneratedColumn<String> stockUnit = GeneratedColumn<String>(
+    'stock_unit',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _allowedFormsMeta = const VerificationMeta(
+    'allowedForms',
+  );
+  @override
+  late final GeneratedColumn<String> allowedForms = GeneratedColumn<String>(
+    'allowed_forms',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _unopenedShelfLifeDaysMeta =
+      const VerificationMeta('unopenedShelfLifeDays');
+  @override
+  late final GeneratedColumn<String> unopenedShelfLifeDays =
+      GeneratedColumn<String>(
+        'unopened_shelf_life_days',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _onceOpenedShelfLifeDaysMeta =
+      const VerificationMeta('onceOpenedShelfLifeDays');
+  @override
+  late final GeneratedColumn<String> onceOpenedShelfLifeDays =
+      GeneratedColumn<String>(
+        'once_opened_shelf_life_days',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    kind,
+    foodGroup,
+    trackingMode,
+    stockUnit,
+    allowedForms,
+    unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'ingredient_categories';
+  static const String $name = 'ingredient_groups';
   @override
   VerificationContext validateIntegrity(
-    Insertable<IngredientCategory> instance, {
+    Insertable<IngredientGroup> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('category')) {
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
       context.handle(
-        _categoryMeta,
-        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
       );
     } else if (isInserting) {
-      context.missing(_categoryMeta);
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
     }
     if (data.containsKey('food_group')) {
       context.handle(
@@ -72,179 +155,386 @@ class $IngredientCategoriesTable extends IngredientCategories
     } else if (isInserting) {
       context.missing(_foodGroupMeta);
     }
-    if (data.containsKey('shelf_life_days')) {
+    if (data.containsKey('tracking_mode')) {
       context.handle(
-        _shelfLifeDaysMeta,
-        shelfLifeDays.isAcceptableOrUnknown(
-          data['shelf_life_days']!,
-          _shelfLifeDaysMeta,
+        _trackingModeMeta,
+        trackingMode.isAcceptableOrUnknown(
+          data['tracking_mode']!,
+          _trackingModeMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_shelfLifeDaysMeta);
+      context.missing(_trackingModeMeta);
+    }
+    if (data.containsKey('stock_unit')) {
+      context.handle(
+        _stockUnitMeta,
+        stockUnit.isAcceptableOrUnknown(data['stock_unit']!, _stockUnitMeta),
+      );
+    }
+    if (data.containsKey('allowed_forms')) {
+      context.handle(
+        _allowedFormsMeta,
+        allowedForms.isAcceptableOrUnknown(
+          data['allowed_forms']!,
+          _allowedFormsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_allowedFormsMeta);
+    }
+    if (data.containsKey('unopened_shelf_life_days')) {
+      context.handle(
+        _unopenedShelfLifeDaysMeta,
+        unopenedShelfLifeDays.isAcceptableOrUnknown(
+          data['unopened_shelf_life_days']!,
+          _unopenedShelfLifeDaysMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_unopenedShelfLifeDaysMeta);
+    }
+    if (data.containsKey('once_opened_shelf_life_days')) {
+      context.handle(
+        _onceOpenedShelfLifeDaysMeta,
+        onceOpenedShelfLifeDays.isAcceptableOrUnknown(
+          data['once_opened_shelf_life_days']!,
+          _onceOpenedShelfLifeDaysMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_onceOpenedShelfLifeDaysMeta);
     }
     return context;
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {category};
+  Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  IngredientCategory map(Map<String, dynamic> data, {String? tablePrefix}) {
+  IngredientGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return IngredientCategory(
-      category: attachedDatabase.typeMapping.read(
+    return IngredientGroup(
+      id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}category'],
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
       )!,
       foodGroup: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}food_group'],
       )!,
-      shelfLifeDays: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}shelf_life_days'],
+      trackingMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tracking_mode'],
+      )!,
+      stockUnit: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stock_unit'],
+      ),
+      allowedForms: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}allowed_forms'],
+      )!,
+      unopenedShelfLifeDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}unopened_shelf_life_days'],
+      )!,
+      onceOpenedShelfLifeDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}once_opened_shelf_life_days'],
       )!,
     );
   }
 
   @override
-  $IngredientCategoriesTable createAlias(String alias) {
-    return $IngredientCategoriesTable(attachedDatabase, alias);
+  $IngredientGroupsTable createAlias(String alias) {
+    return $IngredientGroupsTable(attachedDatabase, alias);
   }
 }
 
-class IngredientCategory extends DataClass
-    implements Insertable<IngredientCategory> {
-  final String category;
+class IngredientGroup extends DataClass implements Insertable<IngredientGroup> {
+  final String id;
+  final String name;
+  final String kind;
   final String foodGroup;
-  final int shelfLifeDays;
-  const IngredientCategory({
-    required this.category,
+  final String trackingMode;
+  final String? stockUnit;
+  final String allowedForms;
+  final String unopenedShelfLifeDays;
+  final String onceOpenedShelfLifeDays;
+  const IngredientGroup({
+    required this.id,
+    required this.name,
+    required this.kind,
     required this.foodGroup,
-    required this.shelfLifeDays,
+    required this.trackingMode,
+    this.stockUnit,
+    required this.allowedForms,
+    required this.unopenedShelfLifeDays,
+    required this.onceOpenedShelfLifeDays,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['category'] = Variable<String>(category);
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['kind'] = Variable<String>(kind);
     map['food_group'] = Variable<String>(foodGroup);
-    map['shelf_life_days'] = Variable<int>(shelfLifeDays);
+    map['tracking_mode'] = Variable<String>(trackingMode);
+    if (!nullToAbsent || stockUnit != null) {
+      map['stock_unit'] = Variable<String>(stockUnit);
+    }
+    map['allowed_forms'] = Variable<String>(allowedForms);
+    map['unopened_shelf_life_days'] = Variable<String>(unopenedShelfLifeDays);
+    map['once_opened_shelf_life_days'] = Variable<String>(
+      onceOpenedShelfLifeDays,
+    );
     return map;
   }
 
-  IngredientCategoriesCompanion toCompanion(bool nullToAbsent) {
-    return IngredientCategoriesCompanion(
-      category: Value(category),
+  IngredientGroupsCompanion toCompanion(bool nullToAbsent) {
+    return IngredientGroupsCompanion(
+      id: Value(id),
+      name: Value(name),
+      kind: Value(kind),
       foodGroup: Value(foodGroup),
-      shelfLifeDays: Value(shelfLifeDays),
+      trackingMode: Value(trackingMode),
+      stockUnit: stockUnit == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stockUnit),
+      allowedForms: Value(allowedForms),
+      unopenedShelfLifeDays: Value(unopenedShelfLifeDays),
+      onceOpenedShelfLifeDays: Value(onceOpenedShelfLifeDays),
     );
   }
 
-  factory IngredientCategory.fromJson(
+  factory IngredientGroup.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return IngredientCategory(
-      category: serializer.fromJson<String>(json['category']),
+    return IngredientGroup(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      kind: serializer.fromJson<String>(json['kind']),
       foodGroup: serializer.fromJson<String>(json['foodGroup']),
-      shelfLifeDays: serializer.fromJson<int>(json['shelfLifeDays']),
+      trackingMode: serializer.fromJson<String>(json['trackingMode']),
+      stockUnit: serializer.fromJson<String?>(json['stockUnit']),
+      allowedForms: serializer.fromJson<String>(json['allowedForms']),
+      unopenedShelfLifeDays: serializer.fromJson<String>(
+        json['unopenedShelfLifeDays'],
+      ),
+      onceOpenedShelfLifeDays: serializer.fromJson<String>(
+        json['onceOpenedShelfLifeDays'],
+      ),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'category': serializer.toJson<String>(category),
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'kind': serializer.toJson<String>(kind),
       'foodGroup': serializer.toJson<String>(foodGroup),
-      'shelfLifeDays': serializer.toJson<int>(shelfLifeDays),
+      'trackingMode': serializer.toJson<String>(trackingMode),
+      'stockUnit': serializer.toJson<String?>(stockUnit),
+      'allowedForms': serializer.toJson<String>(allowedForms),
+      'unopenedShelfLifeDays': serializer.toJson<String>(unopenedShelfLifeDays),
+      'onceOpenedShelfLifeDays': serializer.toJson<String>(
+        onceOpenedShelfLifeDays,
+      ),
     };
   }
 
-  IngredientCategory copyWith({
-    String? category,
+  IngredientGroup copyWith({
+    String? id,
+    String? name,
+    String? kind,
     String? foodGroup,
-    int? shelfLifeDays,
-  }) => IngredientCategory(
-    category: category ?? this.category,
+    String? trackingMode,
+    Value<String?> stockUnit = const Value.absent(),
+    String? allowedForms,
+    String? unopenedShelfLifeDays,
+    String? onceOpenedShelfLifeDays,
+  }) => IngredientGroup(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    kind: kind ?? this.kind,
     foodGroup: foodGroup ?? this.foodGroup,
-    shelfLifeDays: shelfLifeDays ?? this.shelfLifeDays,
+    trackingMode: trackingMode ?? this.trackingMode,
+    stockUnit: stockUnit.present ? stockUnit.value : this.stockUnit,
+    allowedForms: allowedForms ?? this.allowedForms,
+    unopenedShelfLifeDays: unopenedShelfLifeDays ?? this.unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays:
+        onceOpenedShelfLifeDays ?? this.onceOpenedShelfLifeDays,
   );
-  IngredientCategory copyWithCompanion(IngredientCategoriesCompanion data) {
-    return IngredientCategory(
-      category: data.category.present ? data.category.value : this.category,
+  IngredientGroup copyWithCompanion(IngredientGroupsCompanion data) {
+    return IngredientGroup(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      kind: data.kind.present ? data.kind.value : this.kind,
       foodGroup: data.foodGroup.present ? data.foodGroup.value : this.foodGroup,
-      shelfLifeDays: data.shelfLifeDays.present
-          ? data.shelfLifeDays.value
-          : this.shelfLifeDays,
+      trackingMode: data.trackingMode.present
+          ? data.trackingMode.value
+          : this.trackingMode,
+      stockUnit: data.stockUnit.present ? data.stockUnit.value : this.stockUnit,
+      allowedForms: data.allowedForms.present
+          ? data.allowedForms.value
+          : this.allowedForms,
+      unopenedShelfLifeDays: data.unopenedShelfLifeDays.present
+          ? data.unopenedShelfLifeDays.value
+          : this.unopenedShelfLifeDays,
+      onceOpenedShelfLifeDays: data.onceOpenedShelfLifeDays.present
+          ? data.onceOpenedShelfLifeDays.value
+          : this.onceOpenedShelfLifeDays,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('IngredientCategory(')
-          ..write('category: $category, ')
+    return (StringBuffer('IngredientGroup(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('kind: $kind, ')
           ..write('foodGroup: $foodGroup, ')
-          ..write('shelfLifeDays: $shelfLifeDays')
+          ..write('trackingMode: $trackingMode, ')
+          ..write('stockUnit: $stockUnit, ')
+          ..write('allowedForms: $allowedForms, ')
+          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
+          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(category, foodGroup, shelfLifeDays);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    kind,
+    foodGroup,
+    trackingMode,
+    stockUnit,
+    allowedForms,
+    unopenedShelfLifeDays,
+    onceOpenedShelfLifeDays,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is IngredientCategory &&
-          other.category == this.category &&
+      (other is IngredientGroup &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.kind == this.kind &&
           other.foodGroup == this.foodGroup &&
-          other.shelfLifeDays == this.shelfLifeDays);
+          other.trackingMode == this.trackingMode &&
+          other.stockUnit == this.stockUnit &&
+          other.allowedForms == this.allowedForms &&
+          other.unopenedShelfLifeDays == this.unopenedShelfLifeDays &&
+          other.onceOpenedShelfLifeDays == this.onceOpenedShelfLifeDays);
 }
 
-class IngredientCategoriesCompanion
-    extends UpdateCompanion<IngredientCategory> {
-  final Value<String> category;
+class IngredientGroupsCompanion extends UpdateCompanion<IngredientGroup> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> kind;
   final Value<String> foodGroup;
-  final Value<int> shelfLifeDays;
+  final Value<String> trackingMode;
+  final Value<String?> stockUnit;
+  final Value<String> allowedForms;
+  final Value<String> unopenedShelfLifeDays;
+  final Value<String> onceOpenedShelfLifeDays;
   final Value<int> rowid;
-  const IngredientCategoriesCompanion({
-    this.category = const Value.absent(),
+  const IngredientGroupsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.kind = const Value.absent(),
     this.foodGroup = const Value.absent(),
-    this.shelfLifeDays = const Value.absent(),
+    this.trackingMode = const Value.absent(),
+    this.stockUnit = const Value.absent(),
+    this.allowedForms = const Value.absent(),
+    this.unopenedShelfLifeDays = const Value.absent(),
+    this.onceOpenedShelfLifeDays = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  IngredientCategoriesCompanion.insert({
-    required String category,
+  IngredientGroupsCompanion.insert({
+    required String id,
+    required String name,
+    required String kind,
     required String foodGroup,
-    required int shelfLifeDays,
+    required String trackingMode,
+    this.stockUnit = const Value.absent(),
+    required String allowedForms,
+    required String unopenedShelfLifeDays,
+    required String onceOpenedShelfLifeDays,
     this.rowid = const Value.absent(),
-  }) : category = Value(category),
+  }) : id = Value(id),
+       name = Value(name),
+       kind = Value(kind),
        foodGroup = Value(foodGroup),
-       shelfLifeDays = Value(shelfLifeDays);
-  static Insertable<IngredientCategory> custom({
-    Expression<String>? category,
+       trackingMode = Value(trackingMode),
+       allowedForms = Value(allowedForms),
+       unopenedShelfLifeDays = Value(unopenedShelfLifeDays),
+       onceOpenedShelfLifeDays = Value(onceOpenedShelfLifeDays);
+  static Insertable<IngredientGroup> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? kind,
     Expression<String>? foodGroup,
-    Expression<int>? shelfLifeDays,
+    Expression<String>? trackingMode,
+    Expression<String>? stockUnit,
+    Expression<String>? allowedForms,
+    Expression<String>? unopenedShelfLifeDays,
+    Expression<String>? onceOpenedShelfLifeDays,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (category != null) 'category': category,
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (kind != null) 'kind': kind,
       if (foodGroup != null) 'food_group': foodGroup,
-      if (shelfLifeDays != null) 'shelf_life_days': shelfLifeDays,
+      if (trackingMode != null) 'tracking_mode': trackingMode,
+      if (stockUnit != null) 'stock_unit': stockUnit,
+      if (allowedForms != null) 'allowed_forms': allowedForms,
+      if (unopenedShelfLifeDays != null)
+        'unopened_shelf_life_days': unopenedShelfLifeDays,
+      if (onceOpenedShelfLifeDays != null)
+        'once_opened_shelf_life_days': onceOpenedShelfLifeDays,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  IngredientCategoriesCompanion copyWith({
-    Value<String>? category,
+  IngredientGroupsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? kind,
     Value<String>? foodGroup,
-    Value<int>? shelfLifeDays,
+    Value<String>? trackingMode,
+    Value<String?>? stockUnit,
+    Value<String>? allowedForms,
+    Value<String>? unopenedShelfLifeDays,
+    Value<String>? onceOpenedShelfLifeDays,
     Value<int>? rowid,
   }) {
-    return IngredientCategoriesCompanion(
-      category: category ?? this.category,
+    return IngredientGroupsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      kind: kind ?? this.kind,
       foodGroup: foodGroup ?? this.foodGroup,
-      shelfLifeDays: shelfLifeDays ?? this.shelfLifeDays,
+      trackingMode: trackingMode ?? this.trackingMode,
+      stockUnit: stockUnit ?? this.stockUnit,
+      allowedForms: allowedForms ?? this.allowedForms,
+      unopenedShelfLifeDays:
+          unopenedShelfLifeDays ?? this.unopenedShelfLifeDays,
+      onceOpenedShelfLifeDays:
+          onceOpenedShelfLifeDays ?? this.onceOpenedShelfLifeDays,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -252,14 +542,36 @@ class IngredientCategoriesCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (category.present) {
-      map['category'] = Variable<String>(category.value);
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
     }
     if (foodGroup.present) {
       map['food_group'] = Variable<String>(foodGroup.value);
     }
-    if (shelfLifeDays.present) {
-      map['shelf_life_days'] = Variable<int>(shelfLifeDays.value);
+    if (trackingMode.present) {
+      map['tracking_mode'] = Variable<String>(trackingMode.value);
+    }
+    if (stockUnit.present) {
+      map['stock_unit'] = Variable<String>(stockUnit.value);
+    }
+    if (allowedForms.present) {
+      map['allowed_forms'] = Variable<String>(allowedForms.value);
+    }
+    if (unopenedShelfLifeDays.present) {
+      map['unopened_shelf_life_days'] = Variable<String>(
+        unopenedShelfLifeDays.value,
+      );
+    }
+    if (onceOpenedShelfLifeDays.present) {
+      map['once_opened_shelf_life_days'] = Variable<String>(
+        onceOpenedShelfLifeDays.value,
+      );
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -269,10 +581,16 @@ class IngredientCategoriesCompanion
 
   @override
   String toString() {
-    return (StringBuffer('IngredientCategoriesCompanion(')
-          ..write('category: $category, ')
+    return (StringBuffer('IngredientGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('kind: $kind, ')
           ..write('foodGroup: $foodGroup, ')
-          ..write('shelfLifeDays: $shelfLifeDays, ')
+          ..write('trackingMode: $trackingMode, ')
+          ..write('stockUnit: $stockUnit, ')
+          ..write('allowedForms: $allowedForms, ')
+          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
+          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -310,17 +628,6 @@ class $IngredientsTable extends Ingredients
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
-  static const VerificationMeta _apiIngredientIdMeta = const VerificationMeta(
-    'apiIngredientId',
-  );
-  @override
-  late final GeneratedColumn<String> apiIngredientId = GeneratedColumn<String>(
-    'api_ingredient_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   static const VerificationMeta _apiNameMeta = const VerificationMeta(
     'apiName',
   );
@@ -332,19 +639,39 @@ class $IngredientsTable extends Ingredients
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _categoryMeta = const VerificationMeta(
-    'category',
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
   );
   @override
-  late final GeneratedColumn<String> category = GeneratedColumn<String>(
-    'category',
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES ingredient_categories (category)',
+      'REFERENCES ingredient_groups (id)',
     ),
+  );
+  static const VerificationMeta _catalogueItemIdMeta = const VerificationMeta(
+    'catalogueItemId',
+  );
+  @override
+  late final GeneratedColumn<String> catalogueItemId = GeneratedColumn<String>(
+    'catalogue_item_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _formMeta = const VerificationMeta('form');
+  @override
+  late final GeneratedColumn<String> form = GeneratedColumn<String>(
+    'form',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _canonicalUnitMeta = const VerificationMeta(
     'canonicalUnit',
@@ -387,9 +714,10 @@ class $IngredientsTable extends Ingredients
   List<GeneratedColumn> get $columns => [
     id,
     canonicalName,
-    apiIngredientId,
     apiName,
-    category,
+    groupId,
+    catalogueItemId,
+    form,
     canonicalUnit,
     isStaple,
     storeSection,
@@ -420,25 +748,31 @@ class $IngredientsTable extends Ingredients
     } else if (isInserting) {
       context.missing(_canonicalNameMeta);
     }
-    if (data.containsKey('api_ingredient_id')) {
-      context.handle(
-        _apiIngredientIdMeta,
-        apiIngredientId.isAcceptableOrUnknown(
-          data['api_ingredient_id']!,
-          _apiIngredientIdMeta,
-        ),
-      );
-    }
     if (data.containsKey('api_name')) {
       context.handle(
         _apiNameMeta,
         apiName.isAcceptableOrUnknown(data['api_name']!, _apiNameMeta),
       );
     }
-    if (data.containsKey('category')) {
+    if (data.containsKey('group_id')) {
       context.handle(
-        _categoryMeta,
-        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    }
+    if (data.containsKey('catalogue_item_id')) {
+      context.handle(
+        _catalogueItemIdMeta,
+        catalogueItemId.isAcceptableOrUnknown(
+          data['catalogue_item_id']!,
+          _catalogueItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('form')) {
+      context.handle(
+        _formMeta,
+        form.isAcceptableOrUnknown(data['form']!, _formMeta),
       );
     }
     if (data.containsKey('canonical_unit')) {
@@ -482,17 +816,21 @@ class $IngredientsTable extends Ingredients
         DriftSqlType.string,
         data['${effectivePrefix}canonical_name'],
       )!,
-      apiIngredientId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}api_ingredient_id'],
-      ),
       apiName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}api_name'],
       ),
-      category: attachedDatabase.typeMapping.read(
+      groupId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}category'],
+        data['${effectivePrefix}group_id'],
+      ),
+      catalogueItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}catalogue_item_id'],
+      ),
+      form: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}form'],
       ),
       canonicalUnit: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -518,18 +856,20 @@ class $IngredientsTable extends Ingredients
 class Ingredient extends DataClass implements Insertable<Ingredient> {
   final int id;
   final String canonicalName;
-  final String? apiIngredientId;
   final String? apiName;
-  final String? category;
+  final String? groupId;
+  final String? catalogueItemId;
+  final String? form;
   final String? canonicalUnit;
   final bool isStaple;
   final String? storeSection;
   const Ingredient({
     required this.id,
     required this.canonicalName,
-    this.apiIngredientId,
     this.apiName,
-    this.category,
+    this.groupId,
+    this.catalogueItemId,
+    this.form,
     this.canonicalUnit,
     required this.isStaple,
     this.storeSection,
@@ -539,14 +879,17 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['canonical_name'] = Variable<String>(canonicalName);
-    if (!nullToAbsent || apiIngredientId != null) {
-      map['api_ingredient_id'] = Variable<String>(apiIngredientId);
-    }
     if (!nullToAbsent || apiName != null) {
       map['api_name'] = Variable<String>(apiName);
     }
-    if (!nullToAbsent || category != null) {
-      map['category'] = Variable<String>(category);
+    if (!nullToAbsent || groupId != null) {
+      map['group_id'] = Variable<String>(groupId);
+    }
+    if (!nullToAbsent || catalogueItemId != null) {
+      map['catalogue_item_id'] = Variable<String>(catalogueItemId);
+    }
+    if (!nullToAbsent || form != null) {
+      map['form'] = Variable<String>(form);
     }
     if (!nullToAbsent || canonicalUnit != null) {
       map['canonical_unit'] = Variable<String>(canonicalUnit);
@@ -562,15 +905,16 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     return IngredientsCompanion(
       id: Value(id),
       canonicalName: Value(canonicalName),
-      apiIngredientId: apiIngredientId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(apiIngredientId),
       apiName: apiName == null && nullToAbsent
           ? const Value.absent()
           : Value(apiName),
-      category: category == null && nullToAbsent
+      groupId: groupId == null && nullToAbsent
           ? const Value.absent()
-          : Value(category),
+          : Value(groupId),
+      catalogueItemId: catalogueItemId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(catalogueItemId),
+      form: form == null && nullToAbsent ? const Value.absent() : Value(form),
       canonicalUnit: canonicalUnit == null && nullToAbsent
           ? const Value.absent()
           : Value(canonicalUnit),
@@ -589,9 +933,10 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     return Ingredient(
       id: serializer.fromJson<int>(json['id']),
       canonicalName: serializer.fromJson<String>(json['canonicalName']),
-      apiIngredientId: serializer.fromJson<String?>(json['apiIngredientId']),
       apiName: serializer.fromJson<String?>(json['apiName']),
-      category: serializer.fromJson<String?>(json['category']),
+      groupId: serializer.fromJson<String?>(json['groupId']),
+      catalogueItemId: serializer.fromJson<String?>(json['catalogueItemId']),
+      form: serializer.fromJson<String?>(json['form']),
       canonicalUnit: serializer.fromJson<String?>(json['canonicalUnit']),
       isStaple: serializer.fromJson<bool>(json['isStaple']),
       storeSection: serializer.fromJson<String?>(json['storeSection']),
@@ -603,9 +948,10 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'canonicalName': serializer.toJson<String>(canonicalName),
-      'apiIngredientId': serializer.toJson<String?>(apiIngredientId),
       'apiName': serializer.toJson<String?>(apiName),
-      'category': serializer.toJson<String?>(category),
+      'groupId': serializer.toJson<String?>(groupId),
+      'catalogueItemId': serializer.toJson<String?>(catalogueItemId),
+      'form': serializer.toJson<String?>(form),
       'canonicalUnit': serializer.toJson<String?>(canonicalUnit),
       'isStaple': serializer.toJson<bool>(isStaple),
       'storeSection': serializer.toJson<String?>(storeSection),
@@ -615,20 +961,22 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
   Ingredient copyWith({
     int? id,
     String? canonicalName,
-    Value<String?> apiIngredientId = const Value.absent(),
     Value<String?> apiName = const Value.absent(),
-    Value<String?> category = const Value.absent(),
+    Value<String?> groupId = const Value.absent(),
+    Value<String?> catalogueItemId = const Value.absent(),
+    Value<String?> form = const Value.absent(),
     Value<String?> canonicalUnit = const Value.absent(),
     bool? isStaple,
     Value<String?> storeSection = const Value.absent(),
   }) => Ingredient(
     id: id ?? this.id,
     canonicalName: canonicalName ?? this.canonicalName,
-    apiIngredientId: apiIngredientId.present
-        ? apiIngredientId.value
-        : this.apiIngredientId,
     apiName: apiName.present ? apiName.value : this.apiName,
-    category: category.present ? category.value : this.category,
+    groupId: groupId.present ? groupId.value : this.groupId,
+    catalogueItemId: catalogueItemId.present
+        ? catalogueItemId.value
+        : this.catalogueItemId,
+    form: form.present ? form.value : this.form,
     canonicalUnit: canonicalUnit.present
         ? canonicalUnit.value
         : this.canonicalUnit,
@@ -641,11 +989,12 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       canonicalName: data.canonicalName.present
           ? data.canonicalName.value
           : this.canonicalName,
-      apiIngredientId: data.apiIngredientId.present
-          ? data.apiIngredientId.value
-          : this.apiIngredientId,
       apiName: data.apiName.present ? data.apiName.value : this.apiName,
-      category: data.category.present ? data.category.value : this.category,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      catalogueItemId: data.catalogueItemId.present
+          ? data.catalogueItemId.value
+          : this.catalogueItemId,
+      form: data.form.present ? data.form.value : this.form,
       canonicalUnit: data.canonicalUnit.present
           ? data.canonicalUnit.value
           : this.canonicalUnit,
@@ -661,9 +1010,10 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
     return (StringBuffer('Ingredient(')
           ..write('id: $id, ')
           ..write('canonicalName: $canonicalName, ')
-          ..write('apiIngredientId: $apiIngredientId, ')
           ..write('apiName: $apiName, ')
-          ..write('category: $category, ')
+          ..write('groupId: $groupId, ')
+          ..write('catalogueItemId: $catalogueItemId, ')
+          ..write('form: $form, ')
           ..write('canonicalUnit: $canonicalUnit, ')
           ..write('isStaple: $isStaple, ')
           ..write('storeSection: $storeSection')
@@ -675,9 +1025,10 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
   int get hashCode => Object.hash(
     id,
     canonicalName,
-    apiIngredientId,
     apiName,
-    category,
+    groupId,
+    catalogueItemId,
+    form,
     canonicalUnit,
     isStaple,
     storeSection,
@@ -688,9 +1039,10 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
       (other is Ingredient &&
           other.id == this.id &&
           other.canonicalName == this.canonicalName &&
-          other.apiIngredientId == this.apiIngredientId &&
           other.apiName == this.apiName &&
-          other.category == this.category &&
+          other.groupId == this.groupId &&
+          other.catalogueItemId == this.catalogueItemId &&
+          other.form == this.form &&
           other.canonicalUnit == this.canonicalUnit &&
           other.isStaple == this.isStaple &&
           other.storeSection == this.storeSection);
@@ -699,18 +1051,20 @@ class Ingredient extends DataClass implements Insertable<Ingredient> {
 class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   final Value<int> id;
   final Value<String> canonicalName;
-  final Value<String?> apiIngredientId;
   final Value<String?> apiName;
-  final Value<String?> category;
+  final Value<String?> groupId;
+  final Value<String?> catalogueItemId;
+  final Value<String?> form;
   final Value<String?> canonicalUnit;
   final Value<bool> isStaple;
   final Value<String?> storeSection;
   const IngredientsCompanion({
     this.id = const Value.absent(),
     this.canonicalName = const Value.absent(),
-    this.apiIngredientId = const Value.absent(),
     this.apiName = const Value.absent(),
-    this.category = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.catalogueItemId = const Value.absent(),
+    this.form = const Value.absent(),
     this.canonicalUnit = const Value.absent(),
     this.isStaple = const Value.absent(),
     this.storeSection = const Value.absent(),
@@ -718,9 +1072,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   IngredientsCompanion.insert({
     this.id = const Value.absent(),
     required String canonicalName,
-    this.apiIngredientId = const Value.absent(),
     this.apiName = const Value.absent(),
-    this.category = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.catalogueItemId = const Value.absent(),
+    this.form = const Value.absent(),
     this.canonicalUnit = const Value.absent(),
     this.isStaple = const Value.absent(),
     this.storeSection = const Value.absent(),
@@ -728,9 +1083,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   static Insertable<Ingredient> custom({
     Expression<int>? id,
     Expression<String>? canonicalName,
-    Expression<String>? apiIngredientId,
     Expression<String>? apiName,
-    Expression<String>? category,
+    Expression<String>? groupId,
+    Expression<String>? catalogueItemId,
+    Expression<String>? form,
     Expression<String>? canonicalUnit,
     Expression<bool>? isStaple,
     Expression<String>? storeSection,
@@ -738,9 +1094,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (canonicalName != null) 'canonical_name': canonicalName,
-      if (apiIngredientId != null) 'api_ingredient_id': apiIngredientId,
       if (apiName != null) 'api_name': apiName,
-      if (category != null) 'category': category,
+      if (groupId != null) 'group_id': groupId,
+      if (catalogueItemId != null) 'catalogue_item_id': catalogueItemId,
+      if (form != null) 'form': form,
       if (canonicalUnit != null) 'canonical_unit': canonicalUnit,
       if (isStaple != null) 'is_staple': isStaple,
       if (storeSection != null) 'store_section': storeSection,
@@ -750,9 +1107,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
   IngredientsCompanion copyWith({
     Value<int>? id,
     Value<String>? canonicalName,
-    Value<String?>? apiIngredientId,
     Value<String?>? apiName,
-    Value<String?>? category,
+    Value<String?>? groupId,
+    Value<String?>? catalogueItemId,
+    Value<String?>? form,
     Value<String?>? canonicalUnit,
     Value<bool>? isStaple,
     Value<String?>? storeSection,
@@ -760,9 +1118,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     return IngredientsCompanion(
       id: id ?? this.id,
       canonicalName: canonicalName ?? this.canonicalName,
-      apiIngredientId: apiIngredientId ?? this.apiIngredientId,
       apiName: apiName ?? this.apiName,
-      category: category ?? this.category,
+      groupId: groupId ?? this.groupId,
+      catalogueItemId: catalogueItemId ?? this.catalogueItemId,
+      form: form ?? this.form,
       canonicalUnit: canonicalUnit ?? this.canonicalUnit,
       isStaple: isStaple ?? this.isStaple,
       storeSection: storeSection ?? this.storeSection,
@@ -778,14 +1137,17 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     if (canonicalName.present) {
       map['canonical_name'] = Variable<String>(canonicalName.value);
     }
-    if (apiIngredientId.present) {
-      map['api_ingredient_id'] = Variable<String>(apiIngredientId.value);
-    }
     if (apiName.present) {
       map['api_name'] = Variable<String>(apiName.value);
     }
-    if (category.present) {
-      map['category'] = Variable<String>(category.value);
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (catalogueItemId.present) {
+      map['catalogue_item_id'] = Variable<String>(catalogueItemId.value);
+    }
+    if (form.present) {
+      map['form'] = Variable<String>(form.value);
     }
     if (canonicalUnit.present) {
       map['canonical_unit'] = Variable<String>(canonicalUnit.value);
@@ -804,9 +1166,10 @@ class IngredientsCompanion extends UpdateCompanion<Ingredient> {
     return (StringBuffer('IngredientsCompanion(')
           ..write('id: $id, ')
           ..write('canonicalName: $canonicalName, ')
-          ..write('apiIngredientId: $apiIngredientId, ')
           ..write('apiName: $apiName, ')
-          ..write('category: $category, ')
+          ..write('groupId: $groupId, ')
+          ..write('catalogueItemId: $catalogueItemId, ')
+          ..write('form: $form, ')
           ..write('canonicalUnit: $canonicalUnit, ')
           ..write('isStaple: $isStaple, ')
           ..write('storeSection: $storeSection')
@@ -5253,600 +5616,6 @@ class UserConfigCompanion extends UpdateCompanion<UserConfigData> {
   }
 }
 
-class $IngredientGroupsTable extends IngredientGroups
-    with TableInfo<$IngredientGroupsTable, IngredientGroup> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $IngredientGroupsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _nameMeta = const VerificationMeta('name');
-  @override
-  late final GeneratedColumn<String> name = GeneratedColumn<String>(
-    'name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
-  @override
-  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
-    'kind',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _foodGroupMeta = const VerificationMeta(
-    'foodGroup',
-  );
-  @override
-  late final GeneratedColumn<String> foodGroup = GeneratedColumn<String>(
-    'food_group',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _trackingModeMeta = const VerificationMeta(
-    'trackingMode',
-  );
-  @override
-  late final GeneratedColumn<String> trackingMode = GeneratedColumn<String>(
-    'tracking_mode',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _stockUnitMeta = const VerificationMeta(
-    'stockUnit',
-  );
-  @override
-  late final GeneratedColumn<String> stockUnit = GeneratedColumn<String>(
-    'stock_unit',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _allowedFormsMeta = const VerificationMeta(
-    'allowedForms',
-  );
-  @override
-  late final GeneratedColumn<String> allowedForms = GeneratedColumn<String>(
-    'allowed_forms',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _unopenedShelfLifeDaysMeta =
-      const VerificationMeta('unopenedShelfLifeDays');
-  @override
-  late final GeneratedColumn<String> unopenedShelfLifeDays =
-      GeneratedColumn<String>(
-        'unopened_shelf_life_days',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
-      );
-  static const VerificationMeta _onceOpenedShelfLifeDaysMeta =
-      const VerificationMeta('onceOpenedShelfLifeDays');
-  @override
-  late final GeneratedColumn<String> onceOpenedShelfLifeDays =
-      GeneratedColumn<String>(
-        'once_opened_shelf_life_days',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
-      );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    name,
-    kind,
-    foodGroup,
-    trackingMode,
-    stockUnit,
-    allowedForms,
-    unopenedShelfLifeDays,
-    onceOpenedShelfLifeDays,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'ingredient_groups';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<IngredientGroup> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('name')) {
-      context.handle(
-        _nameMeta,
-        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_nameMeta);
-    }
-    if (data.containsKey('kind')) {
-      context.handle(
-        _kindMeta,
-        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_kindMeta);
-    }
-    if (data.containsKey('food_group')) {
-      context.handle(
-        _foodGroupMeta,
-        foodGroup.isAcceptableOrUnknown(data['food_group']!, _foodGroupMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_foodGroupMeta);
-    }
-    if (data.containsKey('tracking_mode')) {
-      context.handle(
-        _trackingModeMeta,
-        trackingMode.isAcceptableOrUnknown(
-          data['tracking_mode']!,
-          _trackingModeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_trackingModeMeta);
-    }
-    if (data.containsKey('stock_unit')) {
-      context.handle(
-        _stockUnitMeta,
-        stockUnit.isAcceptableOrUnknown(data['stock_unit']!, _stockUnitMeta),
-      );
-    }
-    if (data.containsKey('allowed_forms')) {
-      context.handle(
-        _allowedFormsMeta,
-        allowedForms.isAcceptableOrUnknown(
-          data['allowed_forms']!,
-          _allowedFormsMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_allowedFormsMeta);
-    }
-    if (data.containsKey('unopened_shelf_life_days')) {
-      context.handle(
-        _unopenedShelfLifeDaysMeta,
-        unopenedShelfLifeDays.isAcceptableOrUnknown(
-          data['unopened_shelf_life_days']!,
-          _unopenedShelfLifeDaysMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_unopenedShelfLifeDaysMeta);
-    }
-    if (data.containsKey('once_opened_shelf_life_days')) {
-      context.handle(
-        _onceOpenedShelfLifeDaysMeta,
-        onceOpenedShelfLifeDays.isAcceptableOrUnknown(
-          data['once_opened_shelf_life_days']!,
-          _onceOpenedShelfLifeDaysMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_onceOpenedShelfLifeDaysMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  IngredientGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return IngredientGroup(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      name: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}name'],
-      )!,
-      kind: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}kind'],
-      )!,
-      foodGroup: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}food_group'],
-      )!,
-      trackingMode: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}tracking_mode'],
-      )!,
-      stockUnit: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}stock_unit'],
-      ),
-      allowedForms: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}allowed_forms'],
-      )!,
-      unopenedShelfLifeDays: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}unopened_shelf_life_days'],
-      )!,
-      onceOpenedShelfLifeDays: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}once_opened_shelf_life_days'],
-      )!,
-    );
-  }
-
-  @override
-  $IngredientGroupsTable createAlias(String alias) {
-    return $IngredientGroupsTable(attachedDatabase, alias);
-  }
-}
-
-class IngredientGroup extends DataClass implements Insertable<IngredientGroup> {
-  final String id;
-  final String name;
-  final String kind;
-  final String foodGroup;
-  final String trackingMode;
-  final String? stockUnit;
-  final String allowedForms;
-  final String unopenedShelfLifeDays;
-  final String onceOpenedShelfLifeDays;
-  const IngredientGroup({
-    required this.id,
-    required this.name,
-    required this.kind,
-    required this.foodGroup,
-    required this.trackingMode,
-    this.stockUnit,
-    required this.allowedForms,
-    required this.unopenedShelfLifeDays,
-    required this.onceOpenedShelfLifeDays,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['name'] = Variable<String>(name);
-    map['kind'] = Variable<String>(kind);
-    map['food_group'] = Variable<String>(foodGroup);
-    map['tracking_mode'] = Variable<String>(trackingMode);
-    if (!nullToAbsent || stockUnit != null) {
-      map['stock_unit'] = Variable<String>(stockUnit);
-    }
-    map['allowed_forms'] = Variable<String>(allowedForms);
-    map['unopened_shelf_life_days'] = Variable<String>(unopenedShelfLifeDays);
-    map['once_opened_shelf_life_days'] = Variable<String>(
-      onceOpenedShelfLifeDays,
-    );
-    return map;
-  }
-
-  IngredientGroupsCompanion toCompanion(bool nullToAbsent) {
-    return IngredientGroupsCompanion(
-      id: Value(id),
-      name: Value(name),
-      kind: Value(kind),
-      foodGroup: Value(foodGroup),
-      trackingMode: Value(trackingMode),
-      stockUnit: stockUnit == null && nullToAbsent
-          ? const Value.absent()
-          : Value(stockUnit),
-      allowedForms: Value(allowedForms),
-      unopenedShelfLifeDays: Value(unopenedShelfLifeDays),
-      onceOpenedShelfLifeDays: Value(onceOpenedShelfLifeDays),
-    );
-  }
-
-  factory IngredientGroup.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return IngredientGroup(
-      id: serializer.fromJson<String>(json['id']),
-      name: serializer.fromJson<String>(json['name']),
-      kind: serializer.fromJson<String>(json['kind']),
-      foodGroup: serializer.fromJson<String>(json['foodGroup']),
-      trackingMode: serializer.fromJson<String>(json['trackingMode']),
-      stockUnit: serializer.fromJson<String?>(json['stockUnit']),
-      allowedForms: serializer.fromJson<String>(json['allowedForms']),
-      unopenedShelfLifeDays: serializer.fromJson<String>(
-        json['unopenedShelfLifeDays'],
-      ),
-      onceOpenedShelfLifeDays: serializer.fromJson<String>(
-        json['onceOpenedShelfLifeDays'],
-      ),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'name': serializer.toJson<String>(name),
-      'kind': serializer.toJson<String>(kind),
-      'foodGroup': serializer.toJson<String>(foodGroup),
-      'trackingMode': serializer.toJson<String>(trackingMode),
-      'stockUnit': serializer.toJson<String?>(stockUnit),
-      'allowedForms': serializer.toJson<String>(allowedForms),
-      'unopenedShelfLifeDays': serializer.toJson<String>(unopenedShelfLifeDays),
-      'onceOpenedShelfLifeDays': serializer.toJson<String>(
-        onceOpenedShelfLifeDays,
-      ),
-    };
-  }
-
-  IngredientGroup copyWith({
-    String? id,
-    String? name,
-    String? kind,
-    String? foodGroup,
-    String? trackingMode,
-    Value<String?> stockUnit = const Value.absent(),
-    String? allowedForms,
-    String? unopenedShelfLifeDays,
-    String? onceOpenedShelfLifeDays,
-  }) => IngredientGroup(
-    id: id ?? this.id,
-    name: name ?? this.name,
-    kind: kind ?? this.kind,
-    foodGroup: foodGroup ?? this.foodGroup,
-    trackingMode: trackingMode ?? this.trackingMode,
-    stockUnit: stockUnit.present ? stockUnit.value : this.stockUnit,
-    allowedForms: allowedForms ?? this.allowedForms,
-    unopenedShelfLifeDays: unopenedShelfLifeDays ?? this.unopenedShelfLifeDays,
-    onceOpenedShelfLifeDays:
-        onceOpenedShelfLifeDays ?? this.onceOpenedShelfLifeDays,
-  );
-  IngredientGroup copyWithCompanion(IngredientGroupsCompanion data) {
-    return IngredientGroup(
-      id: data.id.present ? data.id.value : this.id,
-      name: data.name.present ? data.name.value : this.name,
-      kind: data.kind.present ? data.kind.value : this.kind,
-      foodGroup: data.foodGroup.present ? data.foodGroup.value : this.foodGroup,
-      trackingMode: data.trackingMode.present
-          ? data.trackingMode.value
-          : this.trackingMode,
-      stockUnit: data.stockUnit.present ? data.stockUnit.value : this.stockUnit,
-      allowedForms: data.allowedForms.present
-          ? data.allowedForms.value
-          : this.allowedForms,
-      unopenedShelfLifeDays: data.unopenedShelfLifeDays.present
-          ? data.unopenedShelfLifeDays.value
-          : this.unopenedShelfLifeDays,
-      onceOpenedShelfLifeDays: data.onceOpenedShelfLifeDays.present
-          ? data.onceOpenedShelfLifeDays.value
-          : this.onceOpenedShelfLifeDays,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('IngredientGroup(')
-          ..write('id: $id, ')
-          ..write('name: $name, ')
-          ..write('kind: $kind, ')
-          ..write('foodGroup: $foodGroup, ')
-          ..write('trackingMode: $trackingMode, ')
-          ..write('stockUnit: $stockUnit, ')
-          ..write('allowedForms: $allowedForms, ')
-          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
-          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    name,
-    kind,
-    foodGroup,
-    trackingMode,
-    stockUnit,
-    allowedForms,
-    unopenedShelfLifeDays,
-    onceOpenedShelfLifeDays,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is IngredientGroup &&
-          other.id == this.id &&
-          other.name == this.name &&
-          other.kind == this.kind &&
-          other.foodGroup == this.foodGroup &&
-          other.trackingMode == this.trackingMode &&
-          other.stockUnit == this.stockUnit &&
-          other.allowedForms == this.allowedForms &&
-          other.unopenedShelfLifeDays == this.unopenedShelfLifeDays &&
-          other.onceOpenedShelfLifeDays == this.onceOpenedShelfLifeDays);
-}
-
-class IngredientGroupsCompanion extends UpdateCompanion<IngredientGroup> {
-  final Value<String> id;
-  final Value<String> name;
-  final Value<String> kind;
-  final Value<String> foodGroup;
-  final Value<String> trackingMode;
-  final Value<String?> stockUnit;
-  final Value<String> allowedForms;
-  final Value<String> unopenedShelfLifeDays;
-  final Value<String> onceOpenedShelfLifeDays;
-  final Value<int> rowid;
-  const IngredientGroupsCompanion({
-    this.id = const Value.absent(),
-    this.name = const Value.absent(),
-    this.kind = const Value.absent(),
-    this.foodGroup = const Value.absent(),
-    this.trackingMode = const Value.absent(),
-    this.stockUnit = const Value.absent(),
-    this.allowedForms = const Value.absent(),
-    this.unopenedShelfLifeDays = const Value.absent(),
-    this.onceOpenedShelfLifeDays = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  IngredientGroupsCompanion.insert({
-    required String id,
-    required String name,
-    required String kind,
-    required String foodGroup,
-    required String trackingMode,
-    this.stockUnit = const Value.absent(),
-    required String allowedForms,
-    required String unopenedShelfLifeDays,
-    required String onceOpenedShelfLifeDays,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       name = Value(name),
-       kind = Value(kind),
-       foodGroup = Value(foodGroup),
-       trackingMode = Value(trackingMode),
-       allowedForms = Value(allowedForms),
-       unopenedShelfLifeDays = Value(unopenedShelfLifeDays),
-       onceOpenedShelfLifeDays = Value(onceOpenedShelfLifeDays);
-  static Insertable<IngredientGroup> custom({
-    Expression<String>? id,
-    Expression<String>? name,
-    Expression<String>? kind,
-    Expression<String>? foodGroup,
-    Expression<String>? trackingMode,
-    Expression<String>? stockUnit,
-    Expression<String>? allowedForms,
-    Expression<String>? unopenedShelfLifeDays,
-    Expression<String>? onceOpenedShelfLifeDays,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (name != null) 'name': name,
-      if (kind != null) 'kind': kind,
-      if (foodGroup != null) 'food_group': foodGroup,
-      if (trackingMode != null) 'tracking_mode': trackingMode,
-      if (stockUnit != null) 'stock_unit': stockUnit,
-      if (allowedForms != null) 'allowed_forms': allowedForms,
-      if (unopenedShelfLifeDays != null)
-        'unopened_shelf_life_days': unopenedShelfLifeDays,
-      if (onceOpenedShelfLifeDays != null)
-        'once_opened_shelf_life_days': onceOpenedShelfLifeDays,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  IngredientGroupsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? name,
-    Value<String>? kind,
-    Value<String>? foodGroup,
-    Value<String>? trackingMode,
-    Value<String?>? stockUnit,
-    Value<String>? allowedForms,
-    Value<String>? unopenedShelfLifeDays,
-    Value<String>? onceOpenedShelfLifeDays,
-    Value<int>? rowid,
-  }) {
-    return IngredientGroupsCompanion(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      kind: kind ?? this.kind,
-      foodGroup: foodGroup ?? this.foodGroup,
-      trackingMode: trackingMode ?? this.trackingMode,
-      stockUnit: stockUnit ?? this.stockUnit,
-      allowedForms: allowedForms ?? this.allowedForms,
-      unopenedShelfLifeDays:
-          unopenedShelfLifeDays ?? this.unopenedShelfLifeDays,
-      onceOpenedShelfLifeDays:
-          onceOpenedShelfLifeDays ?? this.onceOpenedShelfLifeDays,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (name.present) {
-      map['name'] = Variable<String>(name.value);
-    }
-    if (kind.present) {
-      map['kind'] = Variable<String>(kind.value);
-    }
-    if (foodGroup.present) {
-      map['food_group'] = Variable<String>(foodGroup.value);
-    }
-    if (trackingMode.present) {
-      map['tracking_mode'] = Variable<String>(trackingMode.value);
-    }
-    if (stockUnit.present) {
-      map['stock_unit'] = Variable<String>(stockUnit.value);
-    }
-    if (allowedForms.present) {
-      map['allowed_forms'] = Variable<String>(allowedForms.value);
-    }
-    if (unopenedShelfLifeDays.present) {
-      map['unopened_shelf_life_days'] = Variable<String>(
-        unopenedShelfLifeDays.value,
-      );
-    }
-    if (onceOpenedShelfLifeDays.present) {
-      map['once_opened_shelf_life_days'] = Variable<String>(
-        onceOpenedShelfLifeDays.value,
-      );
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('IngredientGroupsCompanion(')
-          ..write('id: $id, ')
-          ..write('name: $name, ')
-          ..write('kind: $kind, ')
-          ..write('foodGroup: $foodGroup, ')
-          ..write('trackingMode: $trackingMode, ')
-          ..write('stockUnit: $stockUnit, ')
-          ..write('allowedForms: $allowedForms, ')
-          ..write('unopenedShelfLifeDays: $unopenedShelfLifeDays, ')
-          ..write('onceOpenedShelfLifeDays: $onceOpenedShelfLifeDays, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $CatalogueItemsTable extends CatalogueItems
     with TableInfo<$CatalogueItemsTable, CatalogueItem> {
   @override
@@ -7825,8 +7594,9 @@ class CatalogueItemRedirectsCompanion
 abstract class _$GleanDatabase extends GeneratedDatabase {
   _$GleanDatabase(QueryExecutor e) : super(e);
   $GleanDatabaseManager get managers => $GleanDatabaseManager(this);
-  late final $IngredientCategoriesTable ingredientCategories =
-      $IngredientCategoriesTable(this);
+  late final $IngredientGroupsTable ingredientGroups = $IngredientGroupsTable(
+    this,
+  );
   late final $IngredientsTable ingredients = $IngredientsTable(this);
   late final $PantryItemsTable pantryItems = $PantryItemsTable(this);
   late final $RecipesTable recipes = $RecipesTable(this);
@@ -7842,9 +7612,6 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
   late final $ShoppingListItemsTable shoppingListItems =
       $ShoppingListItemsTable(this);
   late final $UserConfigTable userConfig = $UserConfigTable(this);
-  late final $IngredientGroupsTable ingredientGroups = $IngredientGroupsTable(
-    this,
-  );
   late final $CatalogueItemsTable catalogueItems = $CatalogueItemsTable(this);
   late final $CatalogueAliasesTable catalogueAliases = $CatalogueAliasesTable(
     this,
@@ -7860,7 +7627,7 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    ingredientCategories,
+    ingredientGroups,
     ingredients,
     pantryItems,
     recipes,
@@ -7870,7 +7637,6 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
     cookedAdjustments,
     shoppingListItems,
     userConfig,
-    ingredientGroups,
     catalogueItems,
     catalogueAliases,
     catalogueSyncState,
@@ -7917,29 +7683,41 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
   ]);
 }
 
-typedef $$IngredientCategoriesTableCreateCompanionBuilder =
-    IngredientCategoriesCompanion Function({
-      required String category,
+typedef $$IngredientGroupsTableCreateCompanionBuilder =
+    IngredientGroupsCompanion Function({
+      required String id,
+      required String name,
+      required String kind,
       required String foodGroup,
-      required int shelfLifeDays,
+      required String trackingMode,
+      Value<String?> stockUnit,
+      required String allowedForms,
+      required String unopenedShelfLifeDays,
+      required String onceOpenedShelfLifeDays,
       Value<int> rowid,
     });
-typedef $$IngredientCategoriesTableUpdateCompanionBuilder =
-    IngredientCategoriesCompanion Function({
-      Value<String> category,
+typedef $$IngredientGroupsTableUpdateCompanionBuilder =
+    IngredientGroupsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> kind,
       Value<String> foodGroup,
-      Value<int> shelfLifeDays,
+      Value<String> trackingMode,
+      Value<String?> stockUnit,
+      Value<String> allowedForms,
+      Value<String> unopenedShelfLifeDays,
+      Value<String> onceOpenedShelfLifeDays,
       Value<int> rowid,
     });
 
-final class $$IngredientCategoriesTableReferences
+final class $$IngredientGroupsTableReferences
     extends
         BaseReferences<
           _$GleanDatabase,
-          $IngredientCategoriesTable,
-          IngredientCategory
+          $IngredientGroupsTable,
+          IngredientGroup
         > {
-  $$IngredientCategoriesTableReferences(
+  $$IngredientGroupsTableReferences(
     super.$_db,
     super.$_table,
     super.$_typedResult,
@@ -7948,15 +7726,14 @@ final class $$IngredientCategoriesTableReferences
   static MultiTypedResultKey<$IngredientsTable, List<Ingredient>>
   _ingredientsRefsTable(_$GleanDatabase db) => MultiTypedResultKey.fromTable(
     db.ingredients,
-    aliasName: 'ingredient_categories__category__ingredients__category',
+    aliasName: 'ingredient_groups__id__ingredients__group_id',
   );
 
   $$IngredientsTableProcessedTableManager get ingredientsRefs {
-    final manager = $$IngredientsTableTableManager($_db, $_db.ingredients)
-        .filter(
-          (f) =>
-              f.category.category.sqlEquals($_itemColumn<String>('category')!),
-        );
+    final manager = $$IngredientsTableTableManager(
+      $_db,
+      $_db.ingredients,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_ingredientsRefsTable($_db));
     return ProcessedTableManager(
@@ -7965,17 +7742,27 @@ final class $$IngredientCategoriesTableReferences
   }
 }
 
-class $$IngredientCategoriesTableFilterComposer
-    extends Composer<_$GleanDatabase, $IngredientCategoriesTable> {
-  $$IngredientCategoriesTableFilterComposer({
+class $$IngredientGroupsTableFilterComposer
+    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
+  $$IngredientGroupsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get category => $composableBuilder(
-    column: $table.category,
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7984,8 +7771,28 @@ class $$IngredientCategoriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get shelfLifeDays => $composableBuilder(
-    column: $table.shelfLifeDays,
+  ColumnFilters<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stockUnit => $composableBuilder(
+    column: $table.stockUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get allowedForms => $composableBuilder(
+    column: $table.allowedForms,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7994,9 +7801,9 @@ class $$IngredientCategoriesTableFilterComposer
   ) {
     final $$IngredientsTableFilterComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.category,
+      getCurrentColumn: (t) => t.id,
       referencedTable: $db.ingredients,
-      getReferencedColumn: (t) => t.category,
+      getReferencedColumn: (t) => t.groupId,
       builder:
           (
             joinBuilder, {
@@ -8015,17 +7822,27 @@ class $$IngredientCategoriesTableFilterComposer
   }
 }
 
-class $$IngredientCategoriesTableOrderingComposer
-    extends Composer<_$GleanDatabase, $IngredientCategoriesTable> {
-  $$IngredientCategoriesTableOrderingComposer({
+class $$IngredientGroupsTableOrderingComposer
+    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
+  $$IngredientGroupsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get category => $composableBuilder(
-    column: $table.category,
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8034,29 +7851,73 @@ class $$IngredientCategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get shelfLifeDays => $composableBuilder(
-    column: $table.shelfLifeDays,
+  ColumnOrderings<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stockUnit => $composableBuilder(
+    column: $table.stockUnit,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get allowedForms => $composableBuilder(
+    column: $table.allowedForms,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$IngredientCategoriesTableAnnotationComposer
-    extends Composer<_$GleanDatabase, $IngredientCategoriesTable> {
-  $$IngredientCategoriesTableAnnotationComposer({
+class $$IngredientGroupsTableAnnotationComposer
+    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
+  $$IngredientGroupsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get category =>
-      $composableBuilder(column: $table.category, builder: (column) => column);
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   GeneratedColumn<String> get foodGroup =>
       $composableBuilder(column: $table.foodGroup, builder: (column) => column);
 
-  GeneratedColumn<int> get shelfLifeDays => $composableBuilder(
-    column: $table.shelfLifeDays,
+  GeneratedColumn<String> get trackingMode => $composableBuilder(
+    column: $table.trackingMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stockUnit =>
+      $composableBuilder(column: $table.stockUnit, builder: (column) => column);
+
+  GeneratedColumn<String> get allowedForms => $composableBuilder(
+    column: $table.allowedForms,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get unopenedShelfLifeDays => $composableBuilder(
+    column: $table.unopenedShelfLifeDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get onceOpenedShelfLifeDays => $composableBuilder(
+    column: $table.onceOpenedShelfLifeDays,
     builder: (column) => column,
   );
 
@@ -8065,9 +7926,9 @@ class $$IngredientCategoriesTableAnnotationComposer
   ) {
     final $$IngredientsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.category,
+      getCurrentColumn: (t) => t.id,
       referencedTable: $db.ingredients,
-      getReferencedColumn: (t) => t.category,
+      getReferencedColumn: (t) => t.groupId,
       builder:
           (
             joinBuilder, {
@@ -8086,69 +7947,87 @@ class $$IngredientCategoriesTableAnnotationComposer
   }
 }
 
-class $$IngredientCategoriesTableTableManager
+class $$IngredientGroupsTableTableManager
     extends
         RootTableManager<
           _$GleanDatabase,
-          $IngredientCategoriesTable,
-          IngredientCategory,
-          $$IngredientCategoriesTableFilterComposer,
-          $$IngredientCategoriesTableOrderingComposer,
-          $$IngredientCategoriesTableAnnotationComposer,
-          $$IngredientCategoriesTableCreateCompanionBuilder,
-          $$IngredientCategoriesTableUpdateCompanionBuilder,
-          (IngredientCategory, $$IngredientCategoriesTableReferences),
-          IngredientCategory,
+          $IngredientGroupsTable,
+          IngredientGroup,
+          $$IngredientGroupsTableFilterComposer,
+          $$IngredientGroupsTableOrderingComposer,
+          $$IngredientGroupsTableAnnotationComposer,
+          $$IngredientGroupsTableCreateCompanionBuilder,
+          $$IngredientGroupsTableUpdateCompanionBuilder,
+          (IngredientGroup, $$IngredientGroupsTableReferences),
+          IngredientGroup,
           PrefetchHooks Function({bool ingredientsRefs})
         > {
-  $$IngredientCategoriesTableTableManager(
+  $$IngredientGroupsTableTableManager(
     _$GleanDatabase db,
-    $IngredientCategoriesTable table,
+    $IngredientGroupsTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$IngredientCategoriesTableFilterComposer($db: db, $table: table),
+              $$IngredientGroupsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$IngredientCategoriesTableOrderingComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$IngredientGroupsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$IngredientCategoriesTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
+              $$IngredientGroupsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<String> category = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> kind = const Value.absent(),
                 Value<String> foodGroup = const Value.absent(),
-                Value<int> shelfLifeDays = const Value.absent(),
+                Value<String> trackingMode = const Value.absent(),
+                Value<String?> stockUnit = const Value.absent(),
+                Value<String> allowedForms = const Value.absent(),
+                Value<String> unopenedShelfLifeDays = const Value.absent(),
+                Value<String> onceOpenedShelfLifeDays = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => IngredientCategoriesCompanion(
-                category: category,
+              }) => IngredientGroupsCompanion(
+                id: id,
+                name: name,
+                kind: kind,
                 foodGroup: foodGroup,
-                shelfLifeDays: shelfLifeDays,
+                trackingMode: trackingMode,
+                stockUnit: stockUnit,
+                allowedForms: allowedForms,
+                unopenedShelfLifeDays: unopenedShelfLifeDays,
+                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String category,
+                required String id,
+                required String name,
+                required String kind,
                 required String foodGroup,
-                required int shelfLifeDays,
+                required String trackingMode,
+                Value<String?> stockUnit = const Value.absent(),
+                required String allowedForms,
+                required String unopenedShelfLifeDays,
+                required String onceOpenedShelfLifeDays,
                 Value<int> rowid = const Value.absent(),
-              }) => IngredientCategoriesCompanion.insert(
-                category: category,
+              }) => IngredientGroupsCompanion.insert(
+                id: id,
+                name: name,
+                kind: kind,
                 foodGroup: foodGroup,
-                shelfLifeDays: shelfLifeDays,
+                trackingMode: trackingMode,
+                stockUnit: stockUnit,
+                allowedForms: allowedForms,
+                unopenedShelfLifeDays: unopenedShelfLifeDays,
+                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
                   e.readTable(table),
-                  $$IngredientCategoriesTableReferences(db, table, e),
+                  $$IngredientGroupsTableReferences(db, table, e),
                 ),
               )
               .toList(),
@@ -8161,23 +8040,21 @@ class $$IngredientCategoriesTableTableManager
                 return [
                   if (ingredientsRefs)
                     await $_getPrefetchedData<
-                      IngredientCategory,
-                      $IngredientCategoriesTable,
+                      IngredientGroup,
+                      $IngredientGroupsTable,
                       Ingredient
                     >(
                       currentTable: table,
-                      referencedTable: $$IngredientCategoriesTableReferences
+                      referencedTable: $$IngredientGroupsTableReferences
                           ._ingredientsRefsTable(db),
                       managerFromTypedResult: (p0) =>
-                          $$IngredientCategoriesTableReferences(
+                          $$IngredientGroupsTableReferences(
                             db,
                             table,
                             p0,
                           ).ingredientsRefs,
                       referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.category == item.category,
-                          ),
+                          referencedItems.where((e) => e.groupId == item.id),
                       typedResults: items,
                     ),
                 ];
@@ -8188,27 +8065,28 @@ class $$IngredientCategoriesTableTableManager
       );
 }
 
-typedef $$IngredientCategoriesTableProcessedTableManager =
+typedef $$IngredientGroupsTableProcessedTableManager =
     ProcessedTableManager<
       _$GleanDatabase,
-      $IngredientCategoriesTable,
-      IngredientCategory,
-      $$IngredientCategoriesTableFilterComposer,
-      $$IngredientCategoriesTableOrderingComposer,
-      $$IngredientCategoriesTableAnnotationComposer,
-      $$IngredientCategoriesTableCreateCompanionBuilder,
-      $$IngredientCategoriesTableUpdateCompanionBuilder,
-      (IngredientCategory, $$IngredientCategoriesTableReferences),
-      IngredientCategory,
+      $IngredientGroupsTable,
+      IngredientGroup,
+      $$IngredientGroupsTableFilterComposer,
+      $$IngredientGroupsTableOrderingComposer,
+      $$IngredientGroupsTableAnnotationComposer,
+      $$IngredientGroupsTableCreateCompanionBuilder,
+      $$IngredientGroupsTableUpdateCompanionBuilder,
+      (IngredientGroup, $$IngredientGroupsTableReferences),
+      IngredientGroup,
       PrefetchHooks Function({bool ingredientsRefs})
     >;
 typedef $$IngredientsTableCreateCompanionBuilder =
     IngredientsCompanion Function({
       Value<int> id,
       required String canonicalName,
-      Value<String?> apiIngredientId,
       Value<String?> apiName,
-      Value<String?> category,
+      Value<String?> groupId,
+      Value<String?> catalogueItemId,
+      Value<String?> form,
       Value<String?> canonicalUnit,
       Value<bool> isStaple,
       Value<String?> storeSection,
@@ -8217,9 +8095,10 @@ typedef $$IngredientsTableUpdateCompanionBuilder =
     IngredientsCompanion Function({
       Value<int> id,
       Value<String> canonicalName,
-      Value<String?> apiIngredientId,
       Value<String?> apiName,
-      Value<String?> category,
+      Value<String?> groupId,
+      Value<String?> catalogueItemId,
+      Value<String?> form,
       Value<String?> canonicalUnit,
       Value<bool> isStaple,
       Value<String?> storeSection,
@@ -8229,18 +8108,18 @@ final class $$IngredientsTableReferences
     extends BaseReferences<_$GleanDatabase, $IngredientsTable, Ingredient> {
   $$IngredientsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static $IngredientCategoriesTable _categoryTable(_$GleanDatabase db) => db
-      .ingredientCategories
-      .createAlias('ingredients__category__ingredient_categories__category');
+  static $IngredientGroupsTable _groupIdTable(_$GleanDatabase db) => db
+      .ingredientGroups
+      .createAlias('ingredients__group_id__ingredient_groups__id');
 
-  $$IngredientCategoriesTableProcessedTableManager? get category {
-    final $_column = $_itemColumn<String>('category');
+  $$IngredientGroupsTableProcessedTableManager? get groupId {
+    final $_column = $_itemColumn<String>('group_id');
     if ($_column == null) return null;
-    final manager = $$IngredientCategoriesTableTableManager(
+    final manager = $$IngredientGroupsTableTableManager(
       $_db,
-      $_db.ingredientCategories,
-    ).filter((f) => f.category.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_categoryTable($_db));
+      $_db.ingredientGroups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -8348,13 +8227,18 @@ class $$IngredientsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get apiIngredientId => $composableBuilder(
-    column: $table.apiIngredientId,
+  ColumnFilters<String> get apiName => $composableBuilder(
+    column: $table.apiName,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get apiName => $composableBuilder(
-    column: $table.apiName,
+  ColumnFilters<String> get catalogueItemId => $composableBuilder(
+    column: $table.catalogueItemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get form => $composableBuilder(
+    column: $table.form,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8373,20 +8257,20 @@ class $$IngredientsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  $$IngredientCategoriesTableFilterComposer get category {
-    final $$IngredientCategoriesTableFilterComposer composer = $composerBuilder(
+  $$IngredientGroupsTableFilterComposer get groupId {
+    final $$IngredientGroupsTableFilterComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.category,
-      referencedTable: $db.ingredientCategories,
-      getReferencedColumn: (t) => t.category,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.ingredientGroups,
+      getReferencedColumn: (t) => t.id,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$IngredientCategoriesTableFilterComposer(
+          }) => $$IngredientGroupsTableFilterComposer(
             $db: $db,
-            $table: $db.ingredientCategories,
+            $table: $db.ingredientGroups,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -8516,13 +8400,18 @@ class $$IngredientsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get apiIngredientId => $composableBuilder(
-    column: $table.apiIngredientId,
+  ColumnOrderings<String> get apiName => $composableBuilder(
+    column: $table.apiName,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get apiName => $composableBuilder(
-    column: $table.apiName,
+  ColumnOrderings<String> get catalogueItemId => $composableBuilder(
+    column: $table.catalogueItemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get form => $composableBuilder(
+    column: $table.form,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8541,27 +8430,26 @@ class $$IngredientsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  $$IngredientCategoriesTableOrderingComposer get category {
-    final $$IngredientCategoriesTableOrderingComposer composer =
-        $composerBuilder(
-          composer: this,
-          getCurrentColumn: (t) => t.category,
-          referencedTable: $db.ingredientCategories,
-          getReferencedColumn: (t) => t.category,
-          builder:
-              (
-                joinBuilder, {
-                $addJoinBuilderToRootComposer,
+  $$IngredientGroupsTableOrderingComposer get groupId {
+    final $$IngredientGroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.ingredientGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$IngredientGroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.ingredientGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
                 $removeJoinBuilderFromRootComposer,
-              }) => $$IngredientCategoriesTableOrderingComposer(
-                $db: $db,
-                $table: $db.ingredientCategories,
-                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-                joinBuilder: joinBuilder,
-                $removeJoinBuilderFromRootComposer:
-                    $removeJoinBuilderFromRootComposer,
-              ),
-        );
+          ),
+    );
     return composer;
   }
 }
@@ -8583,13 +8471,16 @@ class $$IngredientsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get apiIngredientId => $composableBuilder(
-    column: $table.apiIngredientId,
+  GeneratedColumn<String> get apiName =>
+      $composableBuilder(column: $table.apiName, builder: (column) => column);
+
+  GeneratedColumn<String> get catalogueItemId => $composableBuilder(
+    column: $table.catalogueItemId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get apiName =>
-      $composableBuilder(column: $table.apiName, builder: (column) => column);
+  GeneratedColumn<String> get form =>
+      $composableBuilder(column: $table.form, builder: (column) => column);
 
   GeneratedColumn<String> get canonicalUnit => $composableBuilder(
     column: $table.canonicalUnit,
@@ -8604,27 +8495,26 @@ class $$IngredientsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  $$IngredientCategoriesTableAnnotationComposer get category {
-    final $$IngredientCategoriesTableAnnotationComposer composer =
-        $composerBuilder(
-          composer: this,
-          getCurrentColumn: (t) => t.category,
-          referencedTable: $db.ingredientCategories,
-          getReferencedColumn: (t) => t.category,
-          builder:
-              (
-                joinBuilder, {
-                $addJoinBuilderToRootComposer,
+  $$IngredientGroupsTableAnnotationComposer get groupId {
+    final $$IngredientGroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.ingredientGroups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$IngredientGroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.ingredientGroups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
                 $removeJoinBuilderFromRootComposer,
-              }) => $$IngredientCategoriesTableAnnotationComposer(
-                $db: $db,
-                $table: $db.ingredientCategories,
-                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-                joinBuilder: joinBuilder,
-                $removeJoinBuilderFromRootComposer:
-                    $removeJoinBuilderFromRootComposer,
-              ),
-        );
+          ),
+    );
     return composer;
   }
 
@@ -8746,7 +8636,7 @@ class $$IngredientsTableTableManager
           (Ingredient, $$IngredientsTableReferences),
           Ingredient,
           PrefetchHooks Function({
-            bool category,
+            bool groupId,
             bool pantryItemsRefs,
             bool recipeIngredientsRefs,
             bool cookedAdjustmentsRefs,
@@ -8768,18 +8658,20 @@ class $$IngredientsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> canonicalName = const Value.absent(),
-                Value<String?> apiIngredientId = const Value.absent(),
                 Value<String?> apiName = const Value.absent(),
-                Value<String?> category = const Value.absent(),
+                Value<String?> groupId = const Value.absent(),
+                Value<String?> catalogueItemId = const Value.absent(),
+                Value<String?> form = const Value.absent(),
                 Value<String?> canonicalUnit = const Value.absent(),
                 Value<bool> isStaple = const Value.absent(),
                 Value<String?> storeSection = const Value.absent(),
               }) => IngredientsCompanion(
                 id: id,
                 canonicalName: canonicalName,
-                apiIngredientId: apiIngredientId,
                 apiName: apiName,
-                category: category,
+                groupId: groupId,
+                catalogueItemId: catalogueItemId,
+                form: form,
                 canonicalUnit: canonicalUnit,
                 isStaple: isStaple,
                 storeSection: storeSection,
@@ -8788,18 +8680,20 @@ class $$IngredientsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String canonicalName,
-                Value<String?> apiIngredientId = const Value.absent(),
                 Value<String?> apiName = const Value.absent(),
-                Value<String?> category = const Value.absent(),
+                Value<String?> groupId = const Value.absent(),
+                Value<String?> catalogueItemId = const Value.absent(),
+                Value<String?> form = const Value.absent(),
                 Value<String?> canonicalUnit = const Value.absent(),
                 Value<bool> isStaple = const Value.absent(),
                 Value<String?> storeSection = const Value.absent(),
               }) => IngredientsCompanion.insert(
                 id: id,
                 canonicalName: canonicalName,
-                apiIngredientId: apiIngredientId,
                 apiName: apiName,
-                category: category,
+                groupId: groupId,
+                catalogueItemId: catalogueItemId,
+                form: form,
                 canonicalUnit: canonicalUnit,
                 isStaple: isStaple,
                 storeSection: storeSection,
@@ -8814,7 +8708,7 @@ class $$IngredientsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
-                category = false,
+                groupId = false,
                 pantryItemsRefs = false,
                 recipeIngredientsRefs = false,
                 cookedAdjustmentsRefs = false,
@@ -8844,18 +8738,18 @@ class $$IngredientsTableTableManager
                           dynamic
                         >
                       >(state) {
-                        if (category) {
+                        if (groupId) {
                           state =
                               state.withJoin(
                                     currentTable: table,
-                                    currentColumn: table.category,
+                                    currentColumn: table.groupId,
                                     referencedTable:
                                         $$IngredientsTableReferences
-                                            ._categoryTable(db),
+                                            ._groupIdTable(db),
                                     referencedColumn:
                                         $$IngredientsTableReferences
-                                            ._categoryTable(db)
-                                            .category,
+                                            ._groupIdTable(db)
+                                            .id,
                                   )
                                   as T;
                         }
@@ -8969,7 +8863,7 @@ typedef $$IngredientsTableProcessedTableManager =
       (Ingredient, $$IngredientsTableReferences),
       Ingredient,
       PrefetchHooks Function({
-        bool category,
+        bool groupId,
         bool pantryItemsRefs,
         bool recipeIngredientsRefs,
         bool cookedAdjustmentsRefs,
@@ -12699,300 +12593,6 @@ typedef $$UserConfigTableProcessedTableManager =
       UserConfigData,
       PrefetchHooks Function()
     >;
-typedef $$IngredientGroupsTableCreateCompanionBuilder =
-    IngredientGroupsCompanion Function({
-      required String id,
-      required String name,
-      required String kind,
-      required String foodGroup,
-      required String trackingMode,
-      Value<String?> stockUnit,
-      required String allowedForms,
-      required String unopenedShelfLifeDays,
-      required String onceOpenedShelfLifeDays,
-      Value<int> rowid,
-    });
-typedef $$IngredientGroupsTableUpdateCompanionBuilder =
-    IngredientGroupsCompanion Function({
-      Value<String> id,
-      Value<String> name,
-      Value<String> kind,
-      Value<String> foodGroup,
-      Value<String> trackingMode,
-      Value<String?> stockUnit,
-      Value<String> allowedForms,
-      Value<String> unopenedShelfLifeDays,
-      Value<String> onceOpenedShelfLifeDays,
-      Value<int> rowid,
-    });
-
-class $$IngredientGroupsTableFilterComposer
-    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
-  $$IngredientGroupsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get kind => $composableBuilder(
-    column: $table.kind,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get foodGroup => $composableBuilder(
-    column: $table.foodGroup,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get trackingMode => $composableBuilder(
-    column: $table.trackingMode,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get stockUnit => $composableBuilder(
-    column: $table.stockUnit,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get allowedForms => $composableBuilder(
-    column: $table.allowedForms,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get unopenedShelfLifeDays => $composableBuilder(
-    column: $table.unopenedShelfLifeDays,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get onceOpenedShelfLifeDays => $composableBuilder(
-    column: $table.onceOpenedShelfLifeDays,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$IngredientGroupsTableOrderingComposer
-    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
-  $$IngredientGroupsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get kind => $composableBuilder(
-    column: $table.kind,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get foodGroup => $composableBuilder(
-    column: $table.foodGroup,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get trackingMode => $composableBuilder(
-    column: $table.trackingMode,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get stockUnit => $composableBuilder(
-    column: $table.stockUnit,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get allowedForms => $composableBuilder(
-    column: $table.allowedForms,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get unopenedShelfLifeDays => $composableBuilder(
-    column: $table.unopenedShelfLifeDays,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get onceOpenedShelfLifeDays => $composableBuilder(
-    column: $table.onceOpenedShelfLifeDays,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$IngredientGroupsTableAnnotationComposer
-    extends Composer<_$GleanDatabase, $IngredientGroupsTable> {
-  $$IngredientGroupsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => column);
-
-  GeneratedColumn<String> get kind =>
-      $composableBuilder(column: $table.kind, builder: (column) => column);
-
-  GeneratedColumn<String> get foodGroup =>
-      $composableBuilder(column: $table.foodGroup, builder: (column) => column);
-
-  GeneratedColumn<String> get trackingMode => $composableBuilder(
-    column: $table.trackingMode,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get stockUnit =>
-      $composableBuilder(column: $table.stockUnit, builder: (column) => column);
-
-  GeneratedColumn<String> get allowedForms => $composableBuilder(
-    column: $table.allowedForms,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get unopenedShelfLifeDays => $composableBuilder(
-    column: $table.unopenedShelfLifeDays,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get onceOpenedShelfLifeDays => $composableBuilder(
-    column: $table.onceOpenedShelfLifeDays,
-    builder: (column) => column,
-  );
-}
-
-class $$IngredientGroupsTableTableManager
-    extends
-        RootTableManager<
-          _$GleanDatabase,
-          $IngredientGroupsTable,
-          IngredientGroup,
-          $$IngredientGroupsTableFilterComposer,
-          $$IngredientGroupsTableOrderingComposer,
-          $$IngredientGroupsTableAnnotationComposer,
-          $$IngredientGroupsTableCreateCompanionBuilder,
-          $$IngredientGroupsTableUpdateCompanionBuilder,
-          (
-            IngredientGroup,
-            BaseReferences<
-              _$GleanDatabase,
-              $IngredientGroupsTable,
-              IngredientGroup
-            >,
-          ),
-          IngredientGroup,
-          PrefetchHooks Function()
-        > {
-  $$IngredientGroupsTableTableManager(
-    _$GleanDatabase db,
-    $IngredientGroupsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$IngredientGroupsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$IngredientGroupsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$IngredientGroupsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> name = const Value.absent(),
-                Value<String> kind = const Value.absent(),
-                Value<String> foodGroup = const Value.absent(),
-                Value<String> trackingMode = const Value.absent(),
-                Value<String?> stockUnit = const Value.absent(),
-                Value<String> allowedForms = const Value.absent(),
-                Value<String> unopenedShelfLifeDays = const Value.absent(),
-                Value<String> onceOpenedShelfLifeDays = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => IngredientGroupsCompanion(
-                id: id,
-                name: name,
-                kind: kind,
-                foodGroup: foodGroup,
-                trackingMode: trackingMode,
-                stockUnit: stockUnit,
-                allowedForms: allowedForms,
-                unopenedShelfLifeDays: unopenedShelfLifeDays,
-                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String name,
-                required String kind,
-                required String foodGroup,
-                required String trackingMode,
-                Value<String?> stockUnit = const Value.absent(),
-                required String allowedForms,
-                required String unopenedShelfLifeDays,
-                required String onceOpenedShelfLifeDays,
-                Value<int> rowid = const Value.absent(),
-              }) => IngredientGroupsCompanion.insert(
-                id: id,
-                name: name,
-                kind: kind,
-                foodGroup: foodGroup,
-                trackingMode: trackingMode,
-                stockUnit: stockUnit,
-                allowedForms: allowedForms,
-                unopenedShelfLifeDays: unopenedShelfLifeDays,
-                onceOpenedShelfLifeDays: onceOpenedShelfLifeDays,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$IngredientGroupsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$GleanDatabase,
-      $IngredientGroupsTable,
-      IngredientGroup,
-      $$IngredientGroupsTableFilterComposer,
-      $$IngredientGroupsTableOrderingComposer,
-      $$IngredientGroupsTableAnnotationComposer,
-      $$IngredientGroupsTableCreateCompanionBuilder,
-      $$IngredientGroupsTableUpdateCompanionBuilder,
-      (
-        IngredientGroup,
-        BaseReferences<
-          _$GleanDatabase,
-          $IngredientGroupsTable,
-          IngredientGroup
-        >,
-      ),
-      IngredientGroup,
-      PrefetchHooks Function()
-    >;
 typedef $$CatalogueItemsTableCreateCompanionBuilder =
     CatalogueItemsCompanion Function({
       required String id,
@@ -14100,8 +13700,8 @@ typedef $$CatalogueItemRedirectsTableProcessedTableManager =
 class $GleanDatabaseManager {
   final _$GleanDatabase _db;
   $GleanDatabaseManager(this._db);
-  $$IngredientCategoriesTableTableManager get ingredientCategories =>
-      $$IngredientCategoriesTableTableManager(_db, _db.ingredientCategories);
+  $$IngredientGroupsTableTableManager get ingredientGroups =>
+      $$IngredientGroupsTableTableManager(_db, _db.ingredientGroups);
   $$IngredientsTableTableManager get ingredients =>
       $$IngredientsTableTableManager(_db, _db.ingredients);
   $$PantryItemsTableTableManager get pantryItems =>
@@ -14120,8 +13720,6 @@ class $GleanDatabaseManager {
       $$ShoppingListItemsTableTableManager(_db, _db.shoppingListItems);
   $$UserConfigTableTableManager get userConfig =>
       $$UserConfigTableTableManager(_db, _db.userConfig);
-  $$IngredientGroupsTableTableManager get ingredientGroups =>
-      $$IngredientGroupsTableTableManager(_db, _db.ingredientGroups);
   $$CatalogueItemsTableTableManager get catalogueItems =>
       $$CatalogueItemsTableTableManager(_db, _db.catalogueItems);
   $$CatalogueAliasesTableTableManager get catalogueAliases =>

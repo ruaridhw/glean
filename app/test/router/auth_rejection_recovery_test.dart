@@ -24,7 +24,7 @@ void main() {
             name: 'chicken breast',
             quantity: 200,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
           );
       await h.pumpAt(tester, AppRoutes.meals.path);
       await tester.pumpAndSettle();

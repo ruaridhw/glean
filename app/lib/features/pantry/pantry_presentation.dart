@@ -8,7 +8,7 @@ import 'package:glean/data/util/week.dart';
 
 /// Display metadata for a pantry section, keyed by food group. Several food groups fold into one display
 /// section (`vegetables` and `fruit` under "Veg & Fruit"; `carbohydrates`/`fats`/`condiments` under "Cupboard"),
-/// since the pantry groups coarser than the 23-category taxonomy.
+/// since the pantry groups coarser than the ingredient groups.
 @immutable
 class PantryCategoryMeta {
   const PantryCategoryMeta({
@@ -150,7 +150,7 @@ class ExpiryBadge {
 }
 
 /// Builds the expiry badge for [expiryDate] relative to [now], or null when there is nothing to show (a null
-/// expiry, e.g. a category-less item, shows no badge rather than a fabricated one).
+/// expiry, e.g. an unclassified item, shows no badge rather than a fabricated one).
 ExpiryBadge? expiryBadgeFor(DateTime? expiryDate, {DateTime? now}) {
   if (expiryDate == null) return null;
 
@@ -197,10 +197,3 @@ String formatQuantitySeed(double quantity) {
   text = text.replaceFirst(RegExp(r'\.$'), '');
   return text;
 }
-
-/// A human-readable label for a taxonomy category key (e.g. `leafy_greens` -> `Leafy Greens`), shared by manual
-/// entry's and the review screen's category pickers.
-String categoryLabel(String key) => key
-    .split('_')
-    .map((String w) => '${w[0].toUpperCase()}${w.substring(1)}')
-    .join(' ');

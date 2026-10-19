@@ -31,7 +31,7 @@ void main() {
             name: 'Chicken breast',
             quantity: 200,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
           );
       await h.pumpAt(tester, AppRoutes.pantry.path);
       await tester.pumpAndSettle();

@@ -17,7 +17,7 @@ class ReviewItemDraft {
     required this.unit,
     required this.confidence,
     this.unitPrice,
-    this.category,
+    this.groupId,
     this.sourceRowIds = const <int>[],
   });
 
@@ -31,8 +31,8 @@ class ReviewItemDraft {
   /// Pantry-only; always null for shop drafts.
   final double? unitPrice;
 
-  /// Backend-classified taxonomy category; null when the backend could not classify it.
-  final String? category;
+  /// Backend-classified ingredient group id; null when the backend could not classify it.
+  final String? groupId;
 
   /// The Shopping rows this draft stands for ("Done shopping" only); confirming clears exactly these.
   final List<int> sourceRowIds;
@@ -43,7 +43,7 @@ class ReviewItemDraft {
     String? unit,
     double? confidence,
     double? unitPrice,
-    String? category,
+    String? groupId,
   }) {
     return ReviewItemDraft(
       reviewId: reviewId,
@@ -52,7 +52,7 @@ class ReviewItemDraft {
       unit: unit ?? this.unit,
       confidence: confidence ?? this.confidence,
       unitPrice: unitPrice ?? this.unitPrice,
-      category: category ?? this.category,
+      groupId: groupId ?? this.groupId,
       sourceRowIds: sourceRowIds,
     );
   }

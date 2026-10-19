@@ -19,14 +19,15 @@ void main() {
 
     tearDown(() => db.close());
 
-    test('creates a new ingredient with the given category', () async {
+    test('creates a new ingredient with the given ingredient group', () async {
       final ingredient = await repository.resolveOrCreate(
         canonicalName: 'Harissa Paste',
-        category: 'condiments',
+        groupId: 'sauces_and_condiments',
       );
 
       expect(ingredient.canonicalName, 'harissa paste');
-      expect(ingredient.category, 'condiments');
+      expect(ingredient.groupId, 'sauces_and_condiments');
+      expect(ingredient.form, isNull, reason: 'form is never defaulted');
 
       // The 10 seeded staples plus this one new ingredient.
       final all = await db.select(db.ingredients).get();
@@ -38,11 +39,11 @@ void main() {
       () async {
         final first = await repository.resolveOrCreate(
           canonicalName: 'flour',
-          category: 'grains',
+          groupId: 'grains',
         );
         final second = await repository.resolveOrCreate(
           canonicalName: 'Flour',
-          category: 'grains',
+          groupId: 'grains',
         );
 
         expect(second.id, first.id);
@@ -52,15 +53,15 @@ void main() {
       },
     );
 
-    test('resolves by api ingredient id before falling back to name', () async {
+    test('resolves by catalogue item id before falling back to name', () async {
       final first = await repository.resolveOrCreate(
         canonicalName: 'tomato',
-        apiIngredientId: 'api-123',
-        category: 'nightshades',
+        catalogueItemId: 'tomato',
+        groupId: 'tomatoes_peppers_and_aubergines',
       );
       final second = await repository.resolveOrCreate(
         canonicalName: 'different display name for the same product',
-        apiIngredientId: 'api-123',
+        catalogueItemId: 'tomato',
       );
 
       expect(second.id, first.id);
@@ -68,52 +69,52 @@ void main() {
     });
 
     test(
-      'upgrades a null category on an existing ingredient instead of keeping it null forever',
+      'upgrades an unclassified group on an existing ingredient instead of keeping it unclassified forever',
       () async {
         // Simulates an ingredient first created via recipe import, which has
-        // no category source (only the parse endpoints do).
+        // no group source (only the parse endpoints do).
         final fromRecipeImport = await repository.resolveOrCreate(
           canonicalName: 'harissa paste',
         );
-        expect(fromRecipeImport.category, isNull);
+        expect(fromRecipeImport.groupId, isNull);
 
         final fromPantryIntake = await repository.resolveOrCreate(
           canonicalName: 'harissa paste',
-          category: 'condiments',
+          groupId: 'sauces_and_condiments',
         );
 
         expect(fromPantryIntake.id, fromRecipeImport.id);
-        expect(fromPantryIntake.category, 'condiments');
+        expect(fromPantryIntake.groupId, 'sauces_and_condiments');
 
         final persisted = await (db.select(
           db.ingredients,
         )..where((t) => t.id.equals(fromRecipeImport.id))).getSingle();
-        expect(persisted.category, 'condiments');
+        expect(persisted.groupId, 'sauces_and_condiments');
       },
     );
 
-    test('never downgrades an existing non-null category', () async {
+    test('never downgrades an existing classified group', () async {
       final first = await repository.resolveOrCreate(
         canonicalName: 'flour',
-        category: 'grains',
+        groupId: 'grains',
       );
 
       final second = await repository.resolveOrCreate(
         canonicalName: 'flour',
-        category: 'condiments',
+        groupId: 'sauces_and_condiments',
       );
 
       expect(second.id, first.id);
-      expect(second.category, 'grains');
+      expect(second.groupId, 'grains');
     });
 
     test(
-      'rejects a category outside the taxonomy via the foreign key',
+      'rejects a group the catalogue does not have via the foreign key',
       () async {
         await expectLater(
           repository.resolveOrCreate(
             canonicalName: 'mystery item',
-            category: 'not_a_real_category',
+            groupId: 'not_a_real_category',
           ),
           throwsA(anything),
         );
@@ -126,7 +127,7 @@ void main() {
         () async {
           final ingredient = await repository.resolveOrCreate(
             canonicalName: 'beef mince',
-            category: 'red_meat',
+            groupId: 'red_meat',
             unit: 'kg',
           );
 
@@ -139,7 +140,7 @@ void main() {
         () async {
           final ingredient = await repository.resolveOrCreate(
             canonicalName: 'whole milk',
-            category: 'dairy',
+            groupId: 'dairy',
             unit: 'l',
           );
 
@@ -151,7 +152,7 @@ void main() {
           'verbatim', () async {
         final ingredient = await repository.resolveOrCreate(
           canonicalName: 'lemon',
-          category: 'citrus',
+          groupId: 'fruit',
           unit: 'unit',
         );
 
@@ -161,7 +162,7 @@ void main() {
       test('no unit given leaves canonicalUnit null', () async {
         final ingredient = await repository.resolveOrCreate(
           canonicalName: 'harissa paste',
-          category: 'condiments',
+          groupId: 'sauces_and_condiments',
         );
 
         expect(ingredient.canonicalUnit, isNull);

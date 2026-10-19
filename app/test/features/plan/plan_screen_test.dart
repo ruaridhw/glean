@@ -71,7 +71,7 @@ void main() {
         name: 'chicken breast',
         quantity: 500,
         unit: 'g',
-        category: 'poultry',
+        groupId: 'poultry',
       );
   Future<void> tab(WidgetTester tester, String label) async {
     await tester.tap(

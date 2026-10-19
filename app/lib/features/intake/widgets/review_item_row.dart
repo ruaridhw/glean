@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:glean/data/seed/taxonomy.dart';
+import 'package:glean/data/seed/ingredient_groups.dart';
 import 'package:glean/design_system/design_system.dart';
 
-import '../../pantry/pantry_presentation.dart';
 import '../intake_presentation.dart';
 
 /// One editable row on the shared intake review screen. Quantity is a free-typed [TextField], not a seed that
@@ -18,9 +17,9 @@ class ReviewItemRow extends StatelessWidget {
     required this.confidence,
     required this.quantityErrorText,
     required this.onRemove,
-    this.selectedCategory,
-    this.onCategoryChanged,
-    this.requiresCategory = false,
+    this.selectedGroupId,
+    this.onGroupChanged,
+    this.requiresGroup = false,
   });
 
   final TextEditingController nameController;
@@ -30,13 +29,13 @@ class ReviewItemRow extends StatelessWidget {
   final String? quantityErrorText;
   final VoidCallback onRemove;
 
-  /// The row's chosen taxonomy category, when one is needed.
-  final String? selectedCategory;
-  final ValueChanged<String?>? onCategoryChanged;
+  /// The row's chosen ingredient group id, when one is needed.
+  final String? selectedGroupId;
+  final ValueChanged<String?>? onGroupChanged;
 
-  /// True for a pantry-destined row whose category came back null: the category is optional, so the row can be
-  /// confirmed as is (stored uncategorised) or given one here. Shop rows never show it.
-  final bool requiresCategory;
+  /// True for a pantry-destined row whose ingredient group came back null: the group is optional, so the row can be
+  /// confirmed as is (stored unclassified) or given one here. Shop rows never show it.
+  final bool requiresGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -109,25 +108,25 @@ class ReviewItemRow extends StatelessWidget {
                 ),
               ],
             ),
-            if (requiresCategory) ...<Widget>[
+            if (requiresGroup) ...<Widget>[
               SizedBox(height: tokens.spacing.sm),
               DropdownButtonFormField<String>(
-                initialValue: selectedCategory,
+                initialValue: selectedGroupId,
                 decoration: const InputDecoration(
                   isDense: true,
-                  labelText: 'Category',
+                  labelText: 'Ingredient group',
                   helperText:
-                      "Optional: we couldn't identify a category for this item.",
+                      "Optional: we couldn't identify an ingredient group for this item.",
                   helperMaxLines: 2,
                 ),
                 items: <DropdownMenuItem<String>>[
-                  for (final CategorySeed seed in ingredientCategorySeeds)
+                  for (final IngredientGroupSeed seed in selectableGroupSeeds)
                     DropdownMenuItem<String>(
-                      value: seed.category,
-                      child: Text(categoryLabel(seed.category)),
+                      value: seed.id,
+                      child: Text(seed.name),
                     ),
                 ],
-                onChanged: onCategoryChanged,
+                onChanged: onGroupChanged,
               ),
             ],
           ],

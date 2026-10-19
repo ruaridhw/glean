@@ -99,7 +99,7 @@ void main() {
       final widget = tester.widget<ReviewScreen>(find.byType(ReviewScreen));
       expect(widget.args.destination, ReviewDestination.shop);
       expect(widget.args.items.single.name, 'milk');
-      expect(widget.args.items.single.category, 'dairy');
+      expect(widget.args.items.single.groupId, 'dairy');
       // Pantry-only field never carried for a shop draft.
       expect(widget.args.items.single.unitPrice, isNull);
       expect(widget.args.originalDescription, 'milk');

@@ -29,7 +29,7 @@ PantryItemView _item({
     updatedAt: _now,
     canonicalName: canonicalName,
     isStaple: isStaple,
-    category: 'poultry',
+    groupId: 'poultry',
     foodGroup: foodGroup,
     shelfLifeDays: 2,
   );

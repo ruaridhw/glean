@@ -33,7 +33,7 @@ void main() {
         name: 'chicken breast',
         quantity: 200,
         unit: 'g',
-        category: 'poultry',
+        groupId: 'poultry',
       );
       final container = ProviderContainer(
         overrides: [

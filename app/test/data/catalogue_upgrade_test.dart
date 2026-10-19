@@ -79,6 +79,13 @@ void main() {
               c['name'] as String,
           ],
       };
+      // The two tables this version rewrote: the ingredient group migration has its own tests, and here only the
+      // columns that survive it are compared.
+      columns.remove('ingredient_categories');
+      columns['ingredients'] = <String>[
+        for (final String c in columns['ingredients']!)
+          if (c != 'category' && c != 'api_ingredient_id') c,
+      ];
       final Map<String, List<List<Object?>>> before =
           <String, List<List<Object?>>>{
             for (final String table in columns.keys)
@@ -119,7 +126,7 @@ void main() {
 
       final upgraded = sqlite3.open(file.path);
       addTearDown(upgraded.close);
-      expect(upgraded.select('PRAGMA user_version').single.values.single, 5);
+      expect(upgraded.select('PRAGMA user_version').single.values.single, 6);
       for (final String table in columns.keys) {
         expect(
           _rowsOf(upgraded, table, columns[table]!),

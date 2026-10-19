@@ -13,6 +13,7 @@ ParsedIngredient _$ParsedIngredientFromJson(Map<String, dynamic> json) =>
       unit: json['unit'] as String,
       foodGroup: requireFoodGroup(json['food_group']),
       confidence: (json['confidence'] as num).toDouble(),
+      ingredientGroup: json['ingredient_group'] as String?,
       category: json['category'] as String?,
       unitPrice: (json['unit_price'] as num?)?.toDouble(),
     );
@@ -24,6 +25,7 @@ Map<String, dynamic> _$ParsedIngredientToJson(ParsedIngredient instance) =>
       'unit': instance.unit,
       'food_group': instance.foodGroup,
       'confidence': instance.confidence,
+      'ingredient_group': instance.ingredientGroup,
       'category': instance.category,
       'unit_price': instance.unitPrice,
     };

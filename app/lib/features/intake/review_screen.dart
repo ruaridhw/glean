@@ -75,7 +75,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   bool get _isPantry => widget.args.destination == ReviewDestination.pantry;
 
-  /// A pantry row's category is optional: without one the Pantry item is stored uncategorised (no expiry is
+  /// A pantry row's ingredient group is optional: without one the Pantry item is stored unclassified (no expiry is
   /// inferred), which must never block confirming a row that came from the shopping list.
   bool _rowIsValid(ReviewRow row) => row.parsedQuantity != null;
 
@@ -121,7 +121,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         quantity: item.quantity,
         unit: item.unit,
         confidence: item.confidence,
-        category: item.category,
+        groupId: item.groupId,
       );
       if (existing != null) {
         existing.refine(proposal);
@@ -235,7 +235,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             name: row.nameController.text.trim(),
             quantity: row.parsedQuantity!,
             unit: row.unitController.text.trim(),
-            category: row.category,
+            groupId: row.groupId,
             unitPrice: row.unitPrice,
           ),
       ];
@@ -266,7 +266,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           name: row.nameController.text.trim(),
           quantity: row.parsedQuantity!,
           unit: row.unitController.text.trim(),
-          category: row.category,
+          groupId: row.groupId,
         ),
     ];
     await ref

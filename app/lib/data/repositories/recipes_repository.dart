@@ -18,7 +18,6 @@ class SaveRecipeIngredient {
     required this.canonicalName,
     required this.quantity,
     required this.unit,
-    this.apiIngredientId,
     this.preparation,
     this.isOptional = false,
     this.substitutions = const [],
@@ -27,7 +26,6 @@ class SaveRecipeIngredient {
   final String canonicalName;
   final double quantity;
   final String unit;
-  final String? apiIngredientId;
   final String? preparation;
   final bool isOptional;
   final List<String> substitutions;
@@ -129,12 +127,11 @@ class RecipesRepository {
       }
 
       for (final ing in ingredients) {
-        // Recipe endpoints return no category, so this ingredient may stay null-categoried until a pantry/shopping
+        // Recipe endpoints return no group, so this ingredient may stay unclassified until a pantry/shopping
         // resolution upgrades it. Deliberately no `unit:`: a recipe's unit reflects that recipe's phrasing, not how
         // the ingredient is stocked.
         final ingredient = await _ingredients.resolveOrCreate(
           canonicalName: ing.canonicalName,
-          apiIngredientId: ing.apiIngredientId,
         );
         await _db
             .into(_db.recipeIngredients)
@@ -178,9 +175,8 @@ class RecipesRepository {
         ingredient: IngredientView(
           id: ing.id,
           canonicalName: ing.canonicalName,
-          apiIngredientId: ing.apiIngredientId,
           apiName: ing.apiName,
-          category: ing.category,
+          groupId: ing.groupId,
           canonicalUnit: ing.canonicalUnit,
           isStaple: ing.isStaple,
         ),

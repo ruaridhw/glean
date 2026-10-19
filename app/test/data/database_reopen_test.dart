@@ -25,12 +25,9 @@ void main() {
         );
         expect(recipe?.title, 'Persisted dinner');
         expect((await recipes.getIngredients(recipe!.id)).single.quantity, 200);
-        final categories = await db.select(db.ingredientCategories).get();
-        expect(
-          categories.map((c) => c.category).toSet().length,
-          categories.length,
-        );
-        expect(categories, hasLength(23));
+        final groups = await db.select(db.ingredientGroups).get();
+        expect(groups.map((g) => g.id).toSet().length, groups.length);
+        expect(groups, hasLength(29));
         expect(
           (await db.select(db.ingredients).get()).where((i) => i.isStaple),
           hasLength(10),

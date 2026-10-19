@@ -40,7 +40,7 @@ void main() {
         name: 'milk',
         quantity: 1,
         unit: 'l',
-        category: 'dairy',
+        groupId: 'dairy',
       );
 
       expect(await pantry.watchAll(userA).first, hasLength(1));
@@ -99,14 +99,14 @@ void main() {
           name: 'garlic',
           quantity: 3,
           unit: 'unit',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
         );
         await pantry.addItem(
           userId: userB,
           name: 'garlic',
           quantity: 5,
           unit: 'unit',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
         );
 
         final aItems = await pantry.watchAll(userA).first;

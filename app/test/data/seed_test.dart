@@ -1,7 +1,5 @@
-// Verifies the seed data by querying a real in-memory database,
-// not by counting SQL calls — see the Expo app's
-// `src/db/ingredient-categories.ts` and `src/db/seed.ts` (see git history)
-// for the ported source of truth.
+// Verifies the seed data by querying a real in-memory database, not by counting SQL calls.
+import 'package:glean/data/seed/ingredient_groups.dart';
 import 'package:glean/data/seed/taxonomy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,21 +11,14 @@ void main() {
 
     tearDownAll(() => db.close());
 
-    test('seeds exactly the 23-category taxonomy', () async {
-      final rows = await db.select(db.ingredientCategories).get();
+    test('seeds exactly the 29 ingredient groups', () async {
+      final rows = await db.select(db.ingredientGroups).get();
 
-      expect(rows, hasLength(23));
+      expect(rows, hasLength(29));
       expect(
-        rows.map((r) => r.category).toSet(),
-        ingredientCategorySeeds.map((s) => s.category).toSet(),
+        rows.map((r) => r.id).toSet(),
+        ingredientGroupSeeds.map((s) => s.id).toSet(),
       );
-      for (final row in rows) {
-        final expected = ingredientCategorySeeds.firstWhere(
-          (s) => s.category == row.category,
-        );
-        expect(row.foodGroup, expected.foodGroup);
-        expect(row.shelfLifeDays, expected.shelfLifeDays);
-      }
     });
 
     test('seeds exactly the 10 staples, all marked isStaple', () async {
@@ -44,17 +35,17 @@ void main() {
         final expected = stapleSeeds.firstWhere(
           (s) => s.canonicalName == row.canonicalName,
         );
-        expect(row.category, expected.category);
+        expect(row.groupId, expected.groupId);
       }
     });
 
-    test('every staple category exists in the taxonomy', () async {
-      final categories = (await db.select(db.ingredientCategories).get())
-          .map((r) => r.category)
+    test('every staple names an ingredient group the app seeds', () async {
+      final groups = (await db.select(db.ingredientGroups).get())
+          .map((r) => r.id)
           .toSet();
 
       for (final staple in stapleSeeds) {
-        expect(categories.contains(staple.category), isTrue);
+        expect(groups.contains(staple.groupId), isTrue);
       }
     });
   });

@@ -9,7 +9,6 @@ class RecipeIngredientOut {
     required this.canonicalName,
     required this.quantity,
     required this.unit,
-    this.apiIngredientId,
     this.preparation,
     this.isOptional = false,
     this.substitutions = const [],
@@ -18,7 +17,6 @@ class RecipeIngredientOut {
   factory RecipeIngredientOut.fromJson(Map<String, dynamic> json) =>
       _$RecipeIngredientOutFromJson(json);
 
-  final String? apiIngredientId;
   final String canonicalName;
   final double quantity;
   final String unit;

@@ -91,7 +91,7 @@ Future<void> deleteShoppingItemWithUndo(
 }
 
 /// The pantry review pre-filled with the checked Shopping items: name, quantity and unit as listed (a missing
-/// quantity counts as one) and the ingredient's category where it has one. Null when nothing is checked.
+/// quantity counts as one) and the ingredient's group where it has one. Null when nothing is checked.
 Future<ReviewArgs?> checkedItemsReviewArgs(WidgetRef ref) async {
   final List<ShoppingListItemView> checked = <ShoppingListItemView>[
     for (final ShoppingListItemView item
@@ -100,9 +100,9 @@ Future<ReviewArgs?> checkedItemsReviewArgs(WidgetRef ref) async {
       if (item.isChecked) item,
   ];
   if (checked.isEmpty) return null;
-  final Map<int, String> categories = await ref
+  final Map<int, String> groups = await ref
       .read(ingredientsRepositoryProvider)
-      .categoriesById(<int>[for (final item in checked) item.ingredientId]);
+      .groupsById(<int>[for (final item in checked) item.ingredientId]);
   return ReviewArgs(
     destination: ReviewDestination.pantry,
     returnToShop: true,
@@ -115,7 +115,7 @@ Future<ReviewArgs?> checkedItemsReviewArgs(WidgetRef ref) async {
           quantity: (item.quantity ?? 0) > 0 ? item.quantity! : 1,
           unit: item.unit ?? '',
           confidence: 1,
-          category: categories[item.ingredientId],
+          groupId: groups[item.ingredientId],
           sourceRowIds: item.ids,
         ),
     ],

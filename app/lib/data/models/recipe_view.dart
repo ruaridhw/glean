@@ -31,18 +31,16 @@ class IngredientView {
   const IngredientView({
     required this.id,
     required this.canonicalName,
-    required this.apiIngredientId,
     required this.apiName,
-    required this.category,
+    required this.groupId,
     required this.canonicalUnit,
     required this.isStaple,
   });
 
   final int id;
   final String canonicalName;
-  final String? apiIngredientId;
   final String? apiName;
-  final String? category;
+  final String? groupId;
   final String? canonicalUnit;
   final bool isStaple;
 }

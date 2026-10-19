@@ -1,15 +1,15 @@
 /// Manual pantry entry, reachable from the `+` sheet whether the pantry is empty or full. With no LLM
-/// classification behind a typed item, this is the one intake surface that must ask for a category directly,
+/// classification behind a typed item, this is the one intake surface that must ask for an ingredient group directly,
 /// which is also what lets expiry inference fire.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/providers/database_providers.dart';
+import 'package:glean/data/seed/ingredient_groups.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/pantry_repository.dart'
     show PantryUnitMismatchException;
-import 'package:glean/data/seed/taxonomy.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:go_router/go_router.dart';
@@ -29,7 +29,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   String _unit = _commonUnits.first;
-  String? _category;
+  String? _groupId;
   bool _saving = false;
   bool _submitted = false;
 
@@ -44,8 +44,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
     setState(() => _submitted = true);
     final String name = _nameController.text.trim();
     final double? quantity = parsePositiveQuantity(_quantityController.text);
-    final String? category = _category;
-    if (name.isEmpty || quantity == null || category == null) return;
+    final String? groupId = _groupId;
+    if (name.isEmpty || quantity == null || groupId == null) return;
 
     setState(() => _saving = true);
     try {
@@ -56,7 +56,7 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
             name: name,
             quantity: quantity,
             unit: _unit,
-            category: category,
+            groupId: groupId,
           );
       if (!mounted) return;
       ref.read(hapticsProvider).mediumImpact();
@@ -85,8 +85,8 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
         _submitted && parsePositiveQuantity(_quantityController.text) == null
         ? 'Enter a quantity greater than 0'
         : null;
-    final String? categoryError = _submitted && _category == null
-        ? 'Choose a category'
+    final String? groupError = _submitted && _groupId == null
+        ? 'Choose an ingredient group'
         : null;
 
     return Scaffold(
@@ -132,19 +132,19 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
               ),
               SizedBox(height: tokens.spacing.md),
               DropdownButtonFormField<String>(
-                initialValue: _category,
+                initialValue: _groupId,
                 decoration: InputDecoration(
-                  labelText: 'Category',
-                  errorText: categoryError,
+                  labelText: 'Ingredient group',
+                  errorText: groupError,
                 ),
                 items: <DropdownMenuItem<String>>[
-                  for (final CategorySeed seed in ingredientCategorySeeds)
+                  for (final IngredientGroupSeed seed in selectableGroupSeeds)
                     DropdownMenuItem<String>(
-                      value: seed.category,
-                      child: Text(categoryLabel(seed.category)),
+                      value: seed.id,
+                      child: Text(seed.name),
                     ),
                 ],
-                onChanged: (String? value) => setState(() => _category = value),
+                onChanged: (String? value) => setState(() => _groupId = value),
               ),
               SizedBox(height: tokens.spacing.xl),
               FilledButton(

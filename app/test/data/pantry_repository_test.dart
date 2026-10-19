@@ -1,5 +1,6 @@
 // Real-outcome tests for pantry reads/writes, including automatic expiry
 // inference and a guaranteed non-null `foodGroup` on every row.
+import 'package:drift/drift.dart' show Value;
 import 'package:glean/data/database.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -21,7 +22,7 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'addItem infers an expiry date from the category shelf life',
+      'addItem infers an expiry date from the ingredient group\'s shelf life',
       () async {
         final now = DateTime(2026, 1, 1);
         await repository.addItem(
@@ -29,49 +30,160 @@ void main() {
           name: 'strawberries',
           quantity: 1,
           unit: 'punnet',
-          category: 'berries', // 4-day shelf life
+          groupId: 'fruit', // 7-day fresh shelf life
           now: now,
         );
 
         final items = await repository.watchAll(userId).first;
         expect(items, hasLength(1));
-        expect(items.single.expiryDate, DateTime(2026, 1, 5));
+        expect(items.single.expiryDate, DateTime(2026, 1, 8));
       },
     );
 
     test(
-      'the persisted category survives — food_group is never null',
+      'an ingredient with no ingredient group, or in Other, gets no inferred '
+      'expiry',
       () async {
-        await repository.addItem(
-          userId: userId,
-          name: 'aubergine',
-          quantity: 2,
-          unit: 'unit',
-          category: 'nightshades',
-          now: DateTime(2026, 1, 1),
-        );
+        for (final groupId in <String?>[null, 'other']) {
+          await repository.addItem(
+            userId: userId,
+            name: 'mystery $groupId',
+            quantity: 1,
+            unit: 'unit',
+            groupId: groupId,
+            now: DateTime(2026, 1, 1),
+          );
+        }
 
         final items = await repository.watchAll(userId).first;
-        expect(items.single.category, 'nightshades');
-        expect(items.single.foodGroup, 'vegetables');
+        expect(items.map((i) => i.expiryDate), [null, null]);
+        expect(items.map((i) => i.shelfLifeDays), [null, null]);
       },
     );
 
+    test('a group that never expires gets no inferred expiry, and one with a '
+        'single shelf life uses it', () async {
+      await repository.addItem(
+        userId: userId,
+        name: 'washing-up liquid',
+        quantity: 1,
+        unit: 'unit',
+        groupId: 'household',
+        now: DateTime(2026, 1, 1),
+      );
+      await repository.addItem(
+        userId: userId,
+        name: 'sourdough',
+        quantity: 1,
+        unit: 'unit',
+        groupId: 'bread',
+        now: DateTime(2026, 1, 1),
+      );
+
+      final byName = {
+        for (final i in await repository.watchAll(userId).first)
+          i.canonicalName: i,
+      };
+      expect(byName['washing-up liquid']!.expiryDate, isNull);
+      expect(byName['sourdough']!.expiryDate, DateTime(2026, 1, 6));
+    });
+
+    test('an ingredient with no stated form is not given one, and beans and '
+        'pulses keep the dry-stock shelf life they always had', () async {
+      final id = await repository.addItem(
+        userId: userId,
+        name: 'lentils',
+        quantity: 500,
+        unit: 'g',
+        groupId: 'beans_and_pulses',
+        now: DateTime(2026, 1, 1),
+      );
+
+      final item = (await repository.watchAll(userId).first).single;
+      expect(item.expiryDate, DateTime(2026, 6, 30));
+      expect(
+        (await (db.select(
+          db.ingredients,
+        )..where((t) => t.id.equals(id))).getSingle()).form,
+        isNull,
+      );
+    });
+
+    test('a linked ingredient takes its shelf life from the catalogue item, '
+        'household override included', () async {
+      await db
+          .into(db.catalogueItems)
+          .insert(
+            CatalogueItemsCompanion.insert(
+              id: 'strawberries',
+              name: 'strawberries',
+              groupId: 'fruit',
+              form: 'fresh',
+              source: 'seed',
+            ),
+          );
+      await db
+          .into(db.catalogueAliases)
+          .insert(
+            CatalogueAliasesCompanion.insert(
+              key: 'strawberries',
+              name: 'strawberries',
+              itemId: 'strawberries',
+            ),
+          );
+      await db
+          .into(db.ingredientOverrides)
+          .insert(
+            IngredientOverridesCompanion.insert(
+              itemId: 'strawberries',
+              unopenedShelfLifeDays: const Value(3),
+            ),
+          );
+
+      await repository.addItem(
+        userId: userId,
+        name: 'strawberries',
+        quantity: 1,
+        unit: 'punnet',
+        groupId: 'fruit',
+        now: DateTime(2026, 1, 1),
+      );
+
+      final item = (await repository.watchAll(userId).first).single;
+      expect(item.expiryDate, DateTime(2026, 1, 4));
+      expect(item.shelfLifeDays, 3);
+    });
+
+    test('the persisted group survives — food_group is never null', () async {
+      await repository.addItem(
+        userId: userId,
+        name: 'aubergine',
+        quantity: 2,
+        unit: 'unit',
+        groupId: 'tomatoes_peppers_and_aubergines',
+        now: DateTime(2026, 1, 1),
+      );
+
+      final items = await repository.watchAll(userId).first;
+      expect(items.single.groupId, 'tomatoes_peppers_and_aubergines');
+      expect(items.single.foodGroup, 'vegetables');
+    });
+
     test(
-      'a pantry item whose ingredient has no category still appears, with foodGroup "other" (regression)',
+      'a pantry item whose ingredient has no ingredient group still appears, with foodGroup "other" (regression)',
       () async {
         // Simulates an ingredient that reached the pantry with no
-        // category at all — e.g. one first created by recipe import
-        // (which has no category source) and never since resolved
+        // ingredient group at all — e.g. one first created by recipe import
+        // (which has no ingredient group source) and never since resolved
         // through a categorised pantry/shopping intake path. `addItem`
-        // itself always supplies a category, so this bypasses it
+        // itself always supplies a group, so this bypasses it
         // deliberately, the same way a future insert path that forgets to
         // would.
         final ingredients = IngredientsRepository(db);
         final ingredient = await ingredients.resolveOrCreate(
           canonicalName: 'mystery meat',
         );
-        expect(ingredient.category, isNull);
+        expect(ingredient.groupId, isNull);
         await db
             .into(db.pantryItems)
             .insert(
@@ -92,7 +204,7 @@ void main() {
         // history).
         expect(items, hasLength(1));
         expect(items.single.canonicalName, 'mystery meat');
-        expect(items.single.category, isNull);
+        expect(items.single.groupId, isNull);
         expect(items.single.foodGroup, 'other');
         expect(items.single.shelfLifeDays, isNull);
       },
@@ -106,7 +218,7 @@ void main() {
           name: 'milk',
           quantity: 500,
           unit: 'ml',
-          category: 'dairy',
+          groupId: 'dairy',
           now: DateTime(2026, 1, 1),
         );
         await repository.addItem(
@@ -114,7 +226,7 @@ void main() {
           name: 'milk',
           quantity: 500,
           unit: 'ml',
-          category: 'dairy',
+          groupId: 'dairy',
           now: DateTime(2026, 1, 3),
         );
 
@@ -141,7 +253,7 @@ void main() {
           name: 'plain flour',
           quantity: 1,
           unit: 'kg',
-          category: 'grains',
+          groupId: 'grains',
           now: DateTime(2026, 1, 1),
         );
 
@@ -159,7 +271,7 @@ void main() {
         name: 'plain flour',
         quantity: 2,
         unit: 'kg',
-        category: 'grains',
+        groupId: 'grains',
         now: DateTime(2026, 1, 1),
       );
       await repository.addItem(
@@ -167,7 +279,7 @@ void main() {
         name: 'plain flour',
         quantity: 500,
         unit: 'g',
-        category: 'grains',
+        groupId: 'grains',
         now: DateTime(2026, 1, 3),
       );
 
@@ -186,7 +298,7 @@ void main() {
         name: 'garlic',
         quantity: 3,
         unit: 'units',
-        category: 'alliums',
+        groupId: 'onions_and_garlic',
         now: DateTime(2026, 1, 1),
       );
 
@@ -199,7 +311,7 @@ void main() {
           name: 'garlic',
           quantity: 50,
           unit: 'g',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
           now: DateTime(2026, 1, 2),
         ),
         throwsA(isA<PantryUnitMismatchException>()),
@@ -225,7 +337,7 @@ void main() {
         name: 'chia seeds',
         quantity: 1,
         unit: '',
-        category: 'grains',
+        groupId: 'grains',
         now: DateTime(2026, 1, 1),
       );
 
@@ -250,7 +362,7 @@ void main() {
         name: 'chia seeds',
         quantity: 200,
         unit: 'g',
-        category: 'grains',
+        groupId: 'grains',
         now: DateTime(2026, 1, 2),
       );
 
@@ -267,7 +379,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         now: now,
       );
       final before = (await repository.watchAll(userId).first).single;
@@ -291,7 +403,7 @@ void main() {
         name: 'eggs',
         quantity: 6,
         unit: 'unit',
-        category: 'eggs',
+        groupId: 'eggs',
         now: DateTime(2026, 1, 1),
       );
       final item = (await repository.watchAll(userId).first).single;
@@ -311,7 +423,7 @@ void main() {
             name: 'chicken breast',
             quantity: 500,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
             now: addedAt,
           );
           final before = (await repository.watchAll(userId).first).single;
@@ -355,7 +467,7 @@ void main() {
             name: 'rice',
             quantity: 100,
             unit: 'g',
-            category: 'pasta_rice',
+            groupId: 'pasta_and_rice',
             now: DateTime(2026, 1, 1),
           );
           final before = (await repository.watchAll(userId).first).single;
@@ -378,7 +490,7 @@ void main() {
         () async {
           final ingredient = await IngredientsRepository(
             db,
-          ).resolveOrCreate(canonicalName: 'saffron', category: 'spices');
+          ).resolveOrCreate(canonicalName: 'saffron', groupId: 'spices');
 
           final delta = await repository.decrementForCook(
             userId: userId,
@@ -399,7 +511,7 @@ void main() {
           name: 'strawberries',
           quantity: 1,
           unit: 'punnet',
-          category: 'berries',
+          groupId: 'fruit',
           now: DateTime(2026, 1, 1),
         );
 
@@ -410,14 +522,14 @@ void main() {
       });
 
       test(
-        'a pantry item whose ingredient has no category still appears, '
+        'a pantry item whose ingredient has no ingredient group still appears, '
         'with foodGroup "other" (regression, same join shape as watchAll)',
         () async {
           final ingredients = IngredientsRepository(db);
           final ingredient = await ingredients.resolveOrCreate(
             canonicalName: 'mystery meat',
           );
-          expect(ingredient.category, isNull);
+          expect(ingredient.groupId, isNull);
           await db
               .into(db.pantryItems)
               .insert(
@@ -433,11 +545,11 @@ void main() {
           final snapshot = await repository.getAll(userId);
 
           // Same non-dropping guarantee as watchAll's leftOuterJoin — a
-          // null category must never disappear the row (data-loss bug
+          // unclassified ingredient must never disappear the row (data-loss bug
           // already fixed once for the stream version).
           expect(snapshot, hasLength(1));
           expect(snapshot.single.canonicalName, 'mystery meat');
-          expect(snapshot.single.category, isNull);
+          expect(snapshot.single.groupId, isNull);
           expect(snapshot.single.foodGroup, 'other');
           expect(snapshot.single.shelfLifeDays, isNull);
         },
@@ -449,7 +561,7 @@ void main() {
           name: 'garlic',
           quantity: 1,
           unit: 'unit',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
           now: DateTime(2026, 1, 1),
         );
         await repository.addItem(
@@ -457,7 +569,7 @@ void main() {
           name: 'ginger',
           quantity: 1,
           unit: 'unit',
-          category: 'alliums',
+          groupId: 'onions_and_garlic',
           now: DateTime(2026, 1, 1),
         );
 
@@ -476,13 +588,13 @@ void main() {
               name: 'onion',
               quantity: 3,
               unit: 'unit',
-              category: 'alliums',
+              groupId: 'onions_and_garlic',
             ),
             PantryItemInput(
               name: 'lemon',
               quantity: 2,
               unit: 'unit',
-              category: 'citrus',
+              groupId: 'fruit',
             ),
           ],
           now: DateTime(2026, 1, 1),
@@ -500,13 +612,13 @@ void main() {
               name: 'onion',
               quantity: 3,
               unit: 'unit',
-              category: 'alliums',
+              groupId: 'onions_and_garlic',
             ),
             const PantryItemInput(
               name: 'mystery item',
               quantity: 1,
               unit: 'unit',
-              category: 'not_a_real_category', // rejected by the taxonomy FK
+              groupId: 'not_a_real_category', // rejected by the group FK
             ),
           ];
 
@@ -530,7 +642,7 @@ void main() {
               name: 'onion',
               quantity: 3,
               unit: 'unit',
-              category: 'alliums',
+              groupId: 'onions_and_garlic',
             ),
           ];
           await repository.addItems(
@@ -555,7 +667,7 @@ void main() {
           name: 'milk',
           quantity: 1,
           unit: 'l',
-          category: 'dairy',
+          groupId: 'dairy',
           now: DateTime(2026, 1, 1),
         );
 
@@ -566,13 +678,13 @@ void main() {
               name: 'milk',
               quantity: 2,
               unit: 'l',
-              category: 'dairy',
+              groupId: 'dairy',
             ),
             PantryItemInput(
               name: 'eggs',
               quantity: 6,
               unit: 'units',
-              category: 'dairy',
+              groupId: 'dairy',
             ),
           ],
           now: DateTime(2026, 1, 2),
@@ -594,7 +706,7 @@ void main() {
     );
 
     test(
-      'a Pantry item added without a category is stored uncategorised, in the '
+      'a Pantry item added without an ingredient group is stored unclassified, in the '
       '"other" food group, with no inferred expiry',
       () async {
         await repository.addItems(
@@ -604,14 +716,14 @@ void main() {
               name: 'mystery sauce',
               quantity: 1,
               unit: 'jar',
-              category: null,
+              groupId: null,
             ),
           ],
           now: DateTime(2026, 1, 1),
         );
 
         final item = (await repository.watchAll(userId).first).single;
-        expect(item.category, isNull);
+        expect(item.groupId, isNull);
         expect(item.foodGroup, 'other');
         expect(item.expiryDate, isNull);
       },
