@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from glean.catalogue.router import router as catalogue_router
@@ -36,6 +37,18 @@ app.include_router(receipts_router)
 app.include_router(recipes_router)
 app.include_router(shopping_router)
 app.include_router(meal_plan_router)
+
+# Only a browser needs CORS, and the only browser client is the Flutter web
+# dev loop (`make start-web`) talking to a server run locally with
+# `make start-backend`. Inside Lambda there is no browser caller, so the
+# deployed API sends no CORS headers at all.
+if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?://[^/]+$",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 if local_auth_bypass_enabled(os.environ):
     app.dependency_overrides[verify_cognito_token] = lambda: "local-dev-user"

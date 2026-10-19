@@ -256,8 +256,12 @@ WEB_HEADLESS=1                             # Chrome runs headless
 
 Chrome's DevTools protocol then listens on `WEB_DEBUG_PORT` (default 9222)
 on loopback; an automation tool attaches there to screenshot and drive the
-very tab Flutter is hot-reloading, and any other browser can open
-`http://WEB_HOST:WEB_PORT/` too (that tab needs a refresh after a reload).
+very tab Flutter is hot-reloading (set the viewport to 390×844 from the
+tool, since Flutter opens Chrome at desktop size), and any other browser can
+open `http://WEB_HOST:WEB_PORT/` too (that tab needs a refresh after a
+reload). The backend adds CORS headers only when it is not running in
+Lambda, which is what lets the browser read responses from
+`make start-backend`.
 Never commit hostnames or addresses to the Makefile or this file.
 `.env.local.example` at the repo root lists every variable with a
 placeholder; keep the real values in your password manager.
