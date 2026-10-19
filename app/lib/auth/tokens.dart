@@ -51,4 +51,28 @@ class CognitoTokens {
       expiresAt: expiresAt,
     );
   }
+
+  /// Builds tokens from JWTs issued out-of-band (a scripted
+  /// `USER_PASSWORD_AUTH` sign-in for the e2e entrypoint), taking the expiry
+  /// from the access token's `exp` claim since no `expires_in` accompanies
+  /// them. Throws [FormatException] without a numeric `exp` or a usable `sub`.
+  factory CognitoTokens.fromIssuedTokens({
+    required String accessToken,
+    required String idToken,
+    required String refreshToken,
+  }) {
+    final Object? exp = decodeJwtPayload(accessToken)['exp'];
+    if (exp is! num) {
+      throw const FormatException('Access token is missing an "exp" claim.');
+    }
+    return CognitoTokens.fromIdToken(
+      accessToken: accessToken,
+      idToken: idToken,
+      refreshToken: refreshToken,
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(
+        exp.toInt() * 1000,
+        isUtc: true,
+      ),
+    );
+  }
 }

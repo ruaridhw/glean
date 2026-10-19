@@ -8,6 +8,7 @@ library;
 import 'auth_status.dart';
 import 'auth_controller.dart';
 import 'auth_mode.dart';
+import 'tokens.dart';
 
 /// The identity `main_e2e.dart` signs in as unless it supplies its own.
 const String kAuthBypassUserSub = 'e2e-bypass-user-sub';
@@ -19,6 +20,20 @@ const String kAuthBypassUserSub = 'e2e-bypass-user-sub';
 /// call a real AI endpoint.
 AuthSessionSnapshot bypassAuthSnapshot({String userId = kAuthBypassUserSub}) =>
     AuthSessionSnapshot(status: AuthStatus.active, userId: userId);
+
+/// A bypass session that *does* carry tokens: those of a dedicated Cognito
+/// test user, issued by a script (`scripts/e2e_tokens.sh`) and handed to
+/// `main_e2e.dart` as `--dart-define=E2E_*_TOKEN=...`. Lets a web dev loop or
+/// an e2e run reach the AI-backed flows against a local backend, which
+/// verifies them against the real pool's public keys. The identity is the
+/// token's `sub`, so on-device data lands under the test user, not the
+/// placeholder.
+AuthSessionSnapshot bypassAuthSnapshotWithTokens(CognitoTokens tokens) =>
+    AuthSessionSnapshot(
+      status: AuthStatus.active,
+      userId: tokens.userSub,
+      tokens: tokens,
+    );
 
 /// `main_e2e.dart` must call this, with the same API base URL it's about to
 /// configure `apiBaseUrlProvider` with, before installing any bypass
