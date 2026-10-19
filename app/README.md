@@ -294,16 +294,17 @@ verifies the tokens against the pool's public keys. Nothing changes in the
 backend and no verification is skipped.
 
 One-time, with AWS credentials for the account, create the user in the
-**dev** pool (ids are the `glean-api-dev` stack's outputs):
+**dev** pool (ids are the `glean-api-dev` stack's outputs; the pool uses email
+addresses as usernames, and the address never receives mail):
 
 ```bash
-scripts/e2e_user.sh <dev UserPoolId> e2e-test-user '<password>'
+scripts/e2e_user.sh <dev UserPoolId> e2e-test-user@example.invalid '<password>'
 ```
 
 Then in `.env.local` (never committed):
 
 ```
-E2E_USERNAME=e2e-test-user
+E2E_USERNAME=e2e-test-user@example.invalid
 E2E_PASSWORD=<password>
 COGNITO_CLIENT_ID=<dev UserPoolClientId>
 COGNITO_DOMAIN=<dev CognitoDomain>
