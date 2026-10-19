@@ -12,9 +12,11 @@ class IngredientsRepository {
 
   final GleanDatabase _db;
 
-  /// Resolves an existing ingredient by catalogue item id (preferred) or canonical name, or creates one. `groupId`
-  /// must be null or a key in `ingredient_groups`; the foreign key makes an invalid group throw. A new ingredient
-  /// with no [catalogueItemId] is linked to the catalogue item its name matches, if one is already synced.
+  /// Resolves an ingredient through the catalogue first: the item named by [catalogueItemId], else the item
+  /// [canonicalName] or an alias of it resolves to (a merged item following its redirect), reusing the oldest
+  /// ingredient already linked to that item. Failing that it uses the ingredient with exactly that name, linking it,
+  /// or creates one linked to the item. With no matching item it is a plain name lookup. `groupId` must be null or a
+  /// key in `ingredient_groups`; the foreign key makes an invalid group throw.
   ///
   /// Intake passes the group the backend classified, or null when it could not: such an ingredient reads back with
   /// food group "other" until a later resolve supplies a group. Recipe import passes null (recipe endpoints return no
@@ -40,19 +42,21 @@ class IngredientsRepository {
   }) async {
     final name = canonicalName.toLowerCase().trim();
 
-    if (catalogueItemId != null) {
-      final byItem = await _findByCatalogueItem(catalogueItemId);
-      if (byItem != null) return _upgradeIfNeeded(byItem, groupId, unit);
+    // Identity comes from the catalogue first: the item the caller names, else the one the name or an alias
+    // resolves to. An ingredient already linked to that item is the household's one ingredient for it.
+    final String? itemId = catalogueItemId != null
+        ? await _db.survivingCatalogueItemId(catalogueItemId)
+        : await _db.catalogueItemIdForName(name);
+    if (itemId != null) {
+      final byItem = await _findByCatalogueItem(itemId);
+      if (byItem != null) {
+        return _upgradeIfNeeded(byItem, groupId, unit);
+      }
     }
 
     final byName = await _findByName(name);
     if (byName != null) {
-      return _upgradeIfNeeded(
-        byName,
-        groupId,
-        unit,
-        catalogueItemId: catalogueItemId,
-      );
+      return _upgradeIfNeeded(byName, groupId, unit, catalogueItemId: itemId);
     }
 
     final id = await _db
@@ -60,15 +64,12 @@ class IngredientsRepository {
         .insert(
           IngredientsCompanion.insert(
             canonicalName: name,
-            catalogueItemId: Value(catalogueItemId),
+            catalogueItemId: Value(itemId),
             apiName: Value(apiName),
             groupId: Value(groupId),
             canonicalUnit: Value(unit == null ? null : canonicalUnitFor(unit)),
           ),
         );
-    if (catalogueItemId == null) {
-      await _db.linkIngredientsToCatalogue(ingredientId: id);
-    }
     return (_db.select(
       _db.ingredients,
     )..where((t) => t.id.equals(id))).getSingle();
@@ -85,10 +86,13 @@ class IngredientsRepository {
     };
   }
 
+  // Several rows may share one item (older household rows that name it differently), so the oldest wins, always.
   Future<Ingredient?> _findByCatalogueItem(String itemId) {
-    return (_db.select(
-      _db.ingredients,
-    )..where((t) => t.catalogueItemId.equals(itemId))).getSingleOrNull();
+    return (_db.select(_db.ingredients)
+          ..where((t) => t.catalogueItemId.equals(itemId))
+          ..orderBy([(t) => OrderingTerm.asc(t.id)])
+          ..limit(1))
+        .getSingleOrNull();
   }
 
   Future<Ingredient?> _findByName(String name) {
