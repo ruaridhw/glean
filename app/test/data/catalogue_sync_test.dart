@@ -9,6 +9,7 @@ import 'package:glean/data/database.dart';
 import 'package:glean/data/models/store_section.dart';
 import 'package:glean/data/repositories/catalogue_repository.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/repositories/pantry_repository.dart';
 import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -304,6 +305,167 @@ void main() {
 
       expect((await ingredient('cilantro')).catalogueItemId, 'coriander');
     });
+
+    Future<void> syncMerge() async {
+      respond(
+        _body(
+          version: 1,
+          items: [_item('old-onion', 'onion')],
+          aliases: [_alias('onion', 'old-onion')],
+        ),
+      );
+      await sync.sync();
+    }
+
+    test('after a merge, an alias or the former id still resolves to the '
+        'ingredient already linked to the former id, and its link moves to the '
+        'survivor', () async {
+      final repository = IngredientsRepository(db);
+      final onion = await repository.resolveOrCreate(canonicalName: 'onion');
+      await syncMerge();
+      expect((await ingredient('onion')).catalogueItemId, 'old-onion');
+      await PantryRepository(db, repository).addItem(
+        userId: 'u',
+        name: 'onion',
+        quantity: 100,
+        unit: 'g',
+        groupId: 'onions_and_garlic',
+      );
+
+      clock = clock.add(const Duration(minutes: 5));
+      respond(
+        _body(
+          version: 2,
+          items: [
+            _item('new-onion', 'onion', formerIds: ['old-onion']),
+          ],
+          aliases: [
+            _alias('onion', 'new-onion'),
+            _alias('brown onion', 'new-onion'),
+          ],
+        ),
+      );
+      await sync.sync();
+
+      expect(
+        (await ingredient('onion')).catalogueItemId,
+        'new-onion',
+        reason: 'the existing link follows the merge',
+      );
+      final byAlias = await repository.resolveOrCreate(
+        canonicalName: 'brown onion',
+      );
+      final byFormerId = await repository.resolveOrCreate(
+        canonicalName: 'anything',
+        catalogueItemId: 'old-onion',
+      );
+      final bySurvivor = await repository.resolveOrCreate(
+        canonicalName: 'anything',
+        catalogueItemId: 'new-onion',
+      );
+      expect(
+        [byAlias.id, byFormerId.id, bySurvivor.id],
+        [onion.id, onion.id, onion.id],
+      );
+      expect(
+        await db.select(db.ingredients).get(),
+        hasLength(10),
+        reason: 'only the ten seeded staples: no duplicate was created',
+      );
+      expect(
+        (await db.select(db.pantryItems).getSingle()).ingredientId,
+        onion.id,
+        reason: 'the stock stays on the ingredient it was added to',
+      );
+    });
+
+    test(
+      'a link to a former id is found even before a sync has moved it',
+      () async {
+        final repository = IngredientsRepository(db);
+        final onion = await repository.resolveOrCreate(canonicalName: 'onion');
+        await syncMerge();
+        // A redirect arrives by a path that does not run the linker.
+        await db
+            .into(db.catalogueItems)
+            .insert(
+              CatalogueItemsCompanion.insert(
+                id: 'new-onion',
+                name: 'onion',
+                groupId: 'onions_and_garlic',
+                form: 'fresh',
+                source: 'seed',
+              ),
+            );
+        await db
+            .into(db.catalogueItemRedirects)
+            .insert(
+              CatalogueItemRedirectsCompanion.insert(
+                formerId: 'old-onion',
+                itemId: 'new-onion',
+              ),
+            );
+
+        final byId = await repository.resolveOrCreate(
+          canonicalName: 'anything',
+          catalogueItemId: 'new-onion',
+        );
+
+        expect(byId.id, onion.id);
+      },
+    );
+
+    test(
+      'an open shopping list notices a sync that only adds a redirect',
+      () async {
+        final repository = IngredientsRepository(db);
+        final shopping = ShoppingRepository(db, repository);
+        respond(
+          _body(
+            version: 1,
+            items: [_item('new-onion', 'onion', group: 'onions_and_garlic')],
+            aliases: [_alias('onion', 'new-onion')],
+          ),
+        );
+        await sync.sync();
+        await shopping.addManualItem(userId: 'u', name: 'onion');
+        await db
+            .into(db.ingredientOverrides)
+            .insert(
+              IngredientOverridesCompanion.insert(
+                itemId: 'old-onion',
+                section: const Value('Frozen'),
+              ),
+            );
+        final seen = <StoreSection>[];
+        final subscription = shopping
+            .watchAll('u')
+            .listen((rows) => seen.add(rows.single.section));
+        addTearDown(subscription.cancel);
+        await pumpEventQueue();
+        expect(seen.last, StoreSection.fruitAndVeg);
+
+        clock = clock.add(const Duration(minutes: 5));
+        respond(
+          _body(
+            version: 2,
+            items: [
+              _item(
+                'new-onion',
+                'onion',
+                group: 'onions_and_garlic',
+                formerIds: ['old-onion'],
+              ),
+            ],
+            aliases: [_alias('onion', 'new-onion')],
+          ),
+        );
+        await sync.sync();
+        await pumpEventQueue();
+
+        expect(seen.last, StoreSection.frozen);
+      },
+    );
 
     test('a store section chosen for an ingredient moves into the override of '
         'the item it links to, and a different choice already held there '
