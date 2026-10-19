@@ -16,7 +16,7 @@ def _fixture_images() -> list[Path]:
 
 class TestFixtureImagePrivacy:
     def test_there_are_fixture_images_to_check(self) -> None:
-        assert len(_fixture_images()) == 5
+        assert len(_fixture_images()) == 4
 
     def test_every_committed_fixture_image_has_no_exif(self) -> None:
         leaking = []
@@ -28,13 +28,12 @@ class TestFixtureImagePrivacy:
 
 
 class TestExpectedResults:
-    def test_five_photos_of_four_receipts_with_glare_and_shadow_sharing_one_result(self) -> None:
+    def test_one_photo_for_each_of_the_four_receipts(self) -> None:
         cases = load_photo_cases()
 
-        assert len(cases) == 5
+        assert len(cases) == 4
         assert len({id(c.expected) for c in cases}) == 4
-        glare, shadow = (c for c in cases if c.case_id.startswith("long-food-shop/"))
-        assert glare.expected is shadow.expected
+        assert [c.case_id for c in cases if c.case_id.startswith("long-food-shop/")] == ["long-food-shop/shadow"]
 
     def test_item_prices_net_of_discounts_reconcile_with_the_printed_total(self) -> None:
         for case in load_photo_cases():
