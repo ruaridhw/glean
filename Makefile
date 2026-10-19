@@ -22,8 +22,8 @@
 # integration counterpart, can run on a Linux box with no Android
 # SDK/Java/Xcode; `setup-app`, `test-app`, `lint-app` and `start-web` can and do.
 #
-# Machine-local overrides (bind addresses, ports) live in an untracked
-# `.env.local` at the repo root, one `KEY=value` per line — never commit
+# Machine-local overrides (bind addresses, ports, test credentials) live in an untracked
+# `.env.local` at the repo root (see .env.local.example) — never commit
 # hostnames or addresses to this file.
 
 .DEFAULT_GOAL := help

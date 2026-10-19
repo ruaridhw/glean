@@ -259,6 +259,8 @@ on loopback; an automation tool attaches there to screenshot and drive the
 very tab Flutter is hot-reloading, and any other browser can open
 `http://WEB_HOST:WEB_PORT/` too (that tab needs a refresh after a reload).
 Never commit hostnames or addresses to the Makefile or this file.
+`.env.local.example` at the repo root lists every variable with a
+placeholder; keep the real values in your password manager.
 
 For agents driving the tab: Flutter renders to a canvas, so the DOM is empty
 until the hidden "Enable accessibility" placeholder is clicked (`page
@@ -301,7 +303,7 @@ addresses as usernames, and the address never receives mail):
 scripts/e2e_user.sh <dev UserPoolId> e2e-test-user@example.invalid '<password>'
 ```
 
-Then in `.env.local` (never committed):
+Then in `.env.local` (never committed; `.env.local.example` lists them):
 
 ```
 E2E_USERNAME=e2e-test-user@example.invalid
@@ -314,8 +316,10 @@ With those set, `make start-web` and `make test-e2e` sign the user in via
 `USER_PASSWORD_AUTH` (`scripts/e2e_tokens.sh`, no AWS credentials needed) and
 pass the tokens through; `make e2e-tokens` prints them as exports for a
 hand-run `flutter` command. Point `make start-backend` at the dev pool with
-the same ids in `backend/.env`, plus an `OPENROUTER_API_KEY` that is kept
-separate from the production key so test spend is visible on its own.
+the same ids in `backend/.env`, plus the **dev** `OPENROUTER_API_KEY`. There
+are three OpenRouter keys so spend splits by purpose: dev (local
+`backend/.env`), test (GitHub Actions secret for CI) and production
+(Secrets Manager).
 
 The test user owns no server-side data (all state is on-device), and the
 `isProductionApiBaseUrl` guard still refuses to start the e2e entrypoint
