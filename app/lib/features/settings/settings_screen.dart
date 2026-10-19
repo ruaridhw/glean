@@ -1,11 +1,13 @@
 /// The Settings screen. Auto-save, no Save button: every control persists on its own commit point (a slider's
 /// release, a chip's tap, the max-time field's debounce) through [UserConfigRepository.save].
-/// [_SettingsContentState] seeds its local fields once from the resolved `config`, and thereafter this screen is
-/// the only writer of that row, so the stream re-emitting after a save never fights an in-progress edit.
+/// [_SettingsContentState] seeds its local fields from the resolved `config`. The stream re-emitting this screen's own
+/// saves never fights an in-progress edit, while a row changed by anything else (a restored backup) replaces the form,
+/// so the next control change cannot write a stale row back.
 library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api.dart';
@@ -105,6 +107,36 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
     );
   }
 
+  /// The rows this screen saved recently; the stream echoing one back is not an outside change.
+  final List<UserConfigView> _ownWrites = <UserConfigView>[];
+
+  @override
+  void didUpdateWidget(_SettingsContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final UserConfigView next = widget.config;
+    if (identical(next, oldWidget.config)) return;
+    if (_sameSettings(next, _snapshot())) return;
+    if (_ownWrites.any((UserConfigView w) => _sameSettings(w, next))) return;
+    _ownWrites.clear();
+    _tolerance = next.purchaseTolerance;
+    _dinners = next.mealsPerWeek;
+    _servings = next.preferredServings;
+    _dietaryFlags = next.dietaryFlags.toSet();
+    // Leave the field alone while it already parses to the stored value, so a half-typed entry survives.
+    if (_parsedMaxTime() != next.maxActiveTimeMins) {
+      _maxTimeDebounce?.cancel();
+      _maxTimeController.text = next.maxActiveTimeMins?.toString() ?? '';
+      _maxTimeError = null;
+    }
+  }
+
+  static bool _sameSettings(UserConfigView a, UserConfigView b) =>
+      a.purchaseTolerance == b.purchaseTolerance &&
+      a.preferredServings == b.preferredServings &&
+      a.mealsPerWeek == b.mealsPerWeek &&
+      a.maxActiveTimeMins == b.maxActiveTimeMins &&
+      setEquals(a.dietaryFlags.toSet(), b.dietaryFlags.toSet());
+
   @override
   void dispose() {
     _maxTimeDebounce?.cancel();
@@ -129,8 +161,11 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
   /// The single write path for every control. [fireCommitHaptic] is false for dietary chips, which are on the
   /// `selectionClick` rung, not `mediumImpact`.
   Future<void> _persist({required bool fireCommitHaptic}) async {
+    final UserConfigView row = _snapshot();
+    _ownWrites.add(row);
+    if (_ownWrites.length > 8) _ownWrites.removeAt(0);
     try {
-      await ref.read(userConfigRepositoryProvider).save(_snapshot());
+      await ref.read(userConfigRepositoryProvider).save(row);
       if (!mounted) return;
       if (fireCommitHaptic) ref.read(hapticsProvider).mediumImpact();
     } catch (_) {
