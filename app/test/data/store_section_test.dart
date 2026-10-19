@@ -360,5 +360,50 @@ void main() {
         StoreSection.baking,
       );
     });
+
+    test(
+      'moving an ingredient linked to a former id writes the choice on the '
+      'surviving item, so it takes effect over the survivor\'s own section',
+      () async {
+        await mergedOnion(overrides: {'new-onion': 'Frozen'});
+        final row = await shopping.addManualItem(userId: userId, name: 'Onion');
+        final ingredientId = (await shopping.watchAll(userId).first)
+            .firstWhere((i) => i.id == row)
+            .ingredientId;
+        // Linked before the merge, so it still holds the former id.
+        await (db.update(
+          db.ingredients,
+        )..where((t) => t.id.equals(ingredientId))).write(
+          const IngredientsCompanion(catalogueItemId: Value('old-onion')),
+        );
+        await (db.update(
+          db.ingredientOverrides,
+        )..where((t) => t.itemId.equals('new-onion'))).write(
+          const IngredientOverridesCompanion(unopenedShelfLifeDays: Value(9)),
+        );
+
+        await shopping.moveToSection(
+          ingredientId: ingredientId,
+          section: StoreSection.baking,
+        );
+
+        final effective = (await CatalogueRepository(
+          db,
+        ).effectiveIngredient('old-onion'))!;
+        expect(effective.section, 'Baking');
+        expect(
+          (await shopping.watchAll(userId).first).single.section,
+          StoreSection.baking,
+        );
+        final survivor = await (db.select(
+          db.ingredientOverrides,
+        )..where((t) => t.itemId.equals('new-onion'))).getSingle();
+        expect(
+          survivor.unopenedShelfLifeDays,
+          9,
+          reason: 'other columns are kept',
+        );
+      },
+    );
   });
 }
