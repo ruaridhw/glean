@@ -50,7 +50,8 @@ make start-backend    # FastAPI dev server on :8000 (hot reload)
 make start-backend-docker # Dockerized FastAPI dev server on :8000 (hot reload)
 make start-ios        # Flutter on iOS Simulator (macOS only)
 make start-android    # Flutter on a running Android emulator
-make start-web        # Flutter in Chrome with hot reload (no toolchain needed; see app/README.md)
+make start-web        # Flutter in a Chrome it launches, hot reload (no toolchain needed; see app/README.md)
+make e2e-tokens       # Cognito test-user tokens so the e2e entrypoint can call a local backend
 make test-e2e         # Flutter integration_test suite (needs a booted simulator/emulator)
 ```
 

@@ -233,52 +233,92 @@ support) against the real drift/SQLite layer, which on web needs the two
 assets in `web/`: `sqlite3.wasm` and `drift_worker.js`.
 
 ```bash
-make start-web        # from the repo root; serves on 127.0.0.1:8090 by default
+make start-web        # from the repo root
 ```
 
-Then open the URL in a browser with a phone-sized viewport (DevTools device
-toolbar, or a 390×844 window). Edit Dart, press `r` in the terminal (or run
-`make reload-web` from another shell; it signals the pid file `flutter run`
-writes, which is how an agent that started the server in the background
-reloads it), **then refresh the browser tab**. The `web-server` device
-recompiles on reload but only pushes the new code to a browser running the
-Dart Debug extension, so without it a refresh is the last step. The
-in-browser database persists across refreshes, so onboarding and seeded
-data survive; the route does not, the app reopens on the Pantry tab.
+Flutter launches and drives its own Chrome, so hot reload reaches the page
+with no browser extension: edit Dart, press `r` in that terminal (`R` for a
+hot restart), or run `make reload-web` from another shell, which signals the
+pid file `flutter run` writes. That is how an agent that started the server
+in the background reloads it. On a laptop the window opens in front of you;
+resize it to a phone shape (or use the DevTools device toolbar at 390×844).
+The in-browser database persists across restarts and reloads, so onboarding
+and seeded data survive.
 
-For agents driving the URL with a browser automation tool: Flutter renders
-to a canvas, so the DOM is empty until the hidden "Enable accessibility"
-placeholder is clicked (`page.locator('flt-semantics-placeholder')
-.dispatchEvent('click')`). Flutter then mirrors its semantics tree into the
-DOM, exposing headings, labels and roles for locators. Those nodes are a
-transparent overlay above the canvas and overlap each other, so Playwright's
-actionability check reports the target as obscured; click with
-`{force: true}`.
-
-To serve from a headless or remote box, put the bind address in an untracked
-`.env.local` at the repo root; the Makefile includes it when present:
+On a headless or remote box, put these in an untracked `.env.local` at the
+repo root; the Makefile includes it when present:
 
 ```
-WEB_HOST=<address the browser can reach>
+WEB_HOST=<address the browser can reach>   # default 127.0.0.1
 WEB_PORT=8090
+WEB_HEADLESS=1                             # Chrome runs headless
 ```
 
+Chrome's DevTools protocol then listens on `WEB_DEBUG_PORT` (default 9222)
+on loopback; an automation tool attaches there to screenshot and drive the
+very tab Flutter is hot-reloading, and any other browser can open
+`http://WEB_HOST:WEB_PORT/` too (that tab needs a refresh after a reload).
 Never commit hostnames or addresses to the Makefile or this file.
+
+For agents driving the tab: Flutter renders to a canvas, so the DOM is empty
+until the hidden "Enable accessibility" placeholder is clicked (`page
+.locator('flt-semantics-placeholder').dispatchEvent('click')`). Flutter then
+mirrors its semantics tree into the DOM, exposing headings, labels and roles
+for locators. Those nodes are a transparent overlay above the canvas and
+overlap each other, so Playwright's actionability check reports the target
+as obscured; click with `{force: true}`.
 
 ### What web does and doesn't cover
 
 - **Covers:** layout, spacing, theme and design-system work, navigation, the
   tabs, manual entry, pantry/plan/shop screens, anything backed by the local
-  database. `defaultTargetPlatform` is the host OS on web, but the design
+  database, and (with e2e tokens, below) the AI-backed flows against a local
+  backend. `defaultTargetPlatform` is the host OS on web, but the design
   system is Material-everywhere with no platform branching, so this is moot.
 - **Doesn't cover:** camera (receipt scan), real Cognito sign-in, secure
-  storage, haptics, connectivity, and every AI-backed flow — the bypass
-  session carries no token, so `review items` after a scan/describe can't be
-  reached on web. Those stay on a real device: the Codemagic build on the
-  owner's phone, and the emulator/simulator `integration_test` jobs in CI,
-  remain the pre-merge visual check for anything they touch.
+  storage, haptics, connectivity. Those stay on a real device: the Codemagic
+  build on the owner's phone, and the emulator/simulator `integration_test`
+  jobs in CI, remain the pre-merge visual check for anything they touch.
 - `flutter test --platform chrome` is **not** part of this loop; Flutter marks
   it deprecated/internal.
+
+### Calling the backend from the e2e entrypoint
+
+Without tokens the bypass session cannot call an AI endpoint, so the
+**Review items** screen after a scan/describe is unreachable. To reach it,
+`lib/main_e2e.dart` accepts the real tokens of a dedicated Cognito test user
+as `--dart-define=E2E_ACCESS_TOKEN/E2E_ID_TOKEN/E2E_REFRESH_TOKEN` (all three
+or none). The bypass then signs in as that user, refreshes through the real
+dev Cognito domain, and a local backend configured with the dev pool ids
+verifies the tokens against the pool's public keys. Nothing changes in the
+backend and no verification is skipped.
+
+One-time, with AWS credentials for the account, create the user in the
+**dev** pool (ids are the `glean-api-dev` stack's outputs):
+
+```bash
+scripts/e2e_user.sh <dev UserPoolId> e2e-test-user '<password>'
+```
+
+Then in `.env.local` (never committed):
+
+```
+E2E_USERNAME=e2e-test-user
+E2E_PASSWORD=<password>
+COGNITO_CLIENT_ID=<dev UserPoolClientId>
+COGNITO_DOMAIN=<dev CognitoDomain>
+```
+
+With those set, `make start-web` and `make test-e2e` sign the user in via
+`USER_PASSWORD_AUTH` (`scripts/e2e_tokens.sh`, no AWS credentials needed) and
+pass the tokens through; `make e2e-tokens` prints them as exports for a
+hand-run `flutter` command. Point `make start-backend` at the dev pool with
+the same ids in `backend/.env`, plus an `OPENROUTER_API_KEY` that is kept
+separate from the production key so test spend is visible on its own.
+
+The test user owns no server-side data (all state is on-device), and the
+`isProductionApiBaseUrl` guard still refuses to start the e2e entrypoint
+against anything but a loopback backend.
 
 ### Pinned web assets
 
