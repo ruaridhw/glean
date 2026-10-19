@@ -298,7 +298,6 @@ DELIBERATELY_REMOVED = {
     "sweet baby peppers",  # not orange pepper
     "rolled lamb leg",  # lamb leg, not lamb shoulder
     "yam",  # a different vegetable from sweet potato
-    "descaler",  # kettle descaler, not toilet cleaner
     "fire lighters",  # not matches
 }
 
@@ -308,6 +307,7 @@ MOVED_TO = {
     "tinned butter beans in water": "tinned butter beans",
     "large white beans": "tinned butter beans",
     "semi skimmed milk": "semi-skimmed milk",
+    "descaler": "limescale remover",  # a limescale descaler, not toilet cleaner
 }
 
 
