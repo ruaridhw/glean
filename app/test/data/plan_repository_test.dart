@@ -342,7 +342,7 @@ void main() {
             name: 'chicken breast',
             quantity: 500,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
             now: DateTime(2026, 1, 1),
           );
           final recipeId = await saveChickenRecipe();
@@ -379,7 +379,7 @@ void main() {
           name: 'chicken breast',
           quantity: 500,
           unit: 'g',
-          category: 'poultry',
+          groupId: 'poultry',
           now: DateTime(2026, 1, 1),
         );
         final recipeId = await saveChickenRecipe();
@@ -425,7 +425,7 @@ void main() {
             name: 'chicken breast',
             quantity: 100,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
             now: DateTime(2026, 1, 1),
           );
           final recipeId = await saveChickenRecipe();
@@ -490,7 +490,7 @@ void main() {
           name: 'chicken breast',
           quantity: 1000,
           unit: 'g',
-          category: 'poultry',
+          groupId: 'poultry',
           now: DateTime(2026, 1, 1),
         );
         final recipeId = await saveChickenRecipe();
@@ -557,7 +557,7 @@ void main() {
             name: 'chicken breast',
             quantity: 1000,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
             now: DateTime(2026, 1, 1),
           );
           final recipeId = await saveChickenRecipe();

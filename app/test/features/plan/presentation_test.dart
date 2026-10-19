@@ -46,7 +46,7 @@ PantryItemView _pantryItem({
     updatedAt: DateTime(2026, 1, 1),
     canonicalName: canonicalName,
     isStaple: isStaple,
-    category: 'poultry',
+    groupId: 'poultry',
     foodGroup: 'protein',
     shelfLifeDays: 2,
   );

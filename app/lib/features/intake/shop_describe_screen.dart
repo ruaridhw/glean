@@ -63,7 +63,7 @@ class _ShopDescribeScreenState extends ConsumerState<ShopDescribeScreen> {
           quantity: response.items[i].quantity,
           unit: acceptedShoppingUnit(response.items[i].unit),
           confidence: response.items[i].confidence,
-          category: response.items[i].category,
+          groupId: response.items[i].groupId,
           // `unitPrice` stays unset: it's pantry-only (see
           // `ReviewItemDraft.unitPrice`'s doc comment) — shop drafts never
           // carry a per-unit price even though `ShoppingProposalItem`

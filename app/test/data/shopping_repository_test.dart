@@ -54,7 +54,7 @@ void main() {
             name: 'chia seeds',
             quantity: 1,
             unit: '',
-            category: 'grains',
+            groupId: 'grains',
           ),
         ],
       );
@@ -225,7 +225,7 @@ void main() {
               name: 'chia seeds',
               quantity: 1,
               unit: 'bag',
-              category: 'grains',
+              groupId: 'grains',
             ),
           ],
         );
@@ -316,7 +316,7 @@ void main() {
             name: 'chicken breast',
             quantity: 200,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
           );
 
           await repository.addGapsForRecipe(
@@ -343,7 +343,7 @@ void main() {
           name: 'salt',
           quantity: 500,
           unit: 'g',
-          category: 'spices',
+          groupId: 'spices',
         );
 
         await repository.addGapsForRecipe(
@@ -444,7 +444,7 @@ void main() {
             name: 'chicken breast',
             quantity: 3000,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
           );
           final stockId = (await pantry.getAll(userId)).single.id;
           final first = await saveRecipeAndPlanEntry(
@@ -523,7 +523,7 @@ void main() {
             name: 'milk',
             quantity: 515,
             unit: 'g',
-            category: 'dairy',
+            groupId: 'dairy',
           );
           final stockId = (await pantry.getAll(userId)).single.id;
           final first = await saveRecipeAndPlanEntry(
@@ -573,7 +573,7 @@ void main() {
           name: 'rice',
           quantity: 50,
           unit: 'g',
-          category: 'pasta_rice',
+          groupId: 'pasta_and_rice',
         );
 
         // 3 servings * 100g = 300g needed, 50g in pantry -> 250g shortfall.

@@ -1,24 +1,24 @@
 /// Computes real `food_groups`/`food_group_coverage` for `POST /meal-plan`, so the backend's "balance food group
 /// coverage across the week" prompt rule is live. Uses each recipe's own ingredients and the same
-/// category -> food-group taxonomy as the pantry.
+/// ingredient group -> food-group mapping as the pantry.
 library;
 
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
-import 'package:glean/data/seed/taxonomy.dart';
+import 'package:glean/data/seed/ingredient_groups.dart';
 
-/// Matches `PantryRepository`'s fallback for an ingredient with no taxonomy category.
-const String uncategorisedFoodGroup = 'other';
+/// Matches `PantryRepository`'s fallback for an ingredient with no ingredient group.
+const String unclassifiedFoodGroup = 'other';
 
-final Map<String, String> _categoryToFoodGroup = <String, String>{
-  for (final CategorySeed seed in ingredientCategorySeeds)
-    seed.category: seed.foodGroup,
+final Map<String, String> _groupToFoodGroup = <String, String>{
+  for (final IngredientGroupSeed seed in ingredientGroupSeeds)
+    seed.id: seed.foodGroup,
 };
 
-String foodGroupForCategory(String? category) {
-  if (category == null) return uncategorisedFoodGroup;
-  return _categoryToFoodGroup[category] ?? uncategorisedFoodGroup;
+String foodGroupForGroup(String? groupId) {
+  if (groupId == null) return unclassifiedFoodGroup;
+  return _groupToFoodGroup[groupId] ?? unclassifiedFoodGroup;
 }
 
 /// The distinct food groups [recipeId]'s ingredients cover — what
@@ -34,7 +34,7 @@ Future<List<String>> foodGroupsForRecipe(
   );
   final Set<String> groups = <String>{
     for (final RecipeIngredientView ingredient in ingredients)
-      foodGroupForCategory(ingredient.ingredient.category),
+      foodGroupForGroup(ingredient.ingredient.groupId),
   };
   return groups.toList()..sort();
 }

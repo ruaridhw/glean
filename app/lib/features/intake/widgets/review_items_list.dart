@@ -56,10 +56,10 @@ class ReviewItemsList extends StatelessWidget {
           quantityErrorText: row.isActive && row.parsedQuantity == null
               ? 'Enter a quantity greater than 0'
               : null,
-          requiresCategory: isPantry && row.category == null,
-          selectedCategory: row.category,
-          onCategoryChanged: (value) {
-            row.category = value;
+          requiresGroup: isPantry && row.groupId == null,
+          selectedGroupId: row.groupId,
+          onGroupChanged: (value) {
+            row.groupId = value;
             onChanged();
           },
           onRemove: () => onRemove(rowIndex),

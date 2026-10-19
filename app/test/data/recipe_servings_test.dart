@@ -72,7 +72,7 @@ void main() {
         name: 'beef',
         quantity: 175,
         unit: 'g',
-        category: 'red_meat',
+        groupId: 'red_meat',
       );
       final entry = await plan.addEntry(
         userId: 'owner',
@@ -116,7 +116,7 @@ void main() {
         name: 'beef',
         quantity: 1100,
         unit: 'g',
-        category: 'red_meat',
+        groupId: 'red_meat',
       );
       final entry = await plan.addEntry(
         userId: 'owner',

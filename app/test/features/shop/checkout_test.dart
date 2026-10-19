@@ -189,7 +189,7 @@ void main() {
         name: 'eggs',
         quantity: 4,
         unit: 'units',
-        category: 'dairy',
+        groupId: 'dairy',
       );
       final int milkId = await shopping().addManualItem(
         userId: 'test-user',
@@ -243,12 +243,12 @@ void main() {
     });
 
     testWidgets('a checked Shopping item arrives with its ingredient\'s '
-        'category, and one without a category confirms uncategorised', (
+        'ingredient group, and one without a group confirms unclassified', (
       WidgetTester tester,
     ) async {
       await ingredients().resolveOrCreate(
         canonicalName: 'milk',
-        category: 'dairy',
+        groupId: 'dairy',
       );
       final int milkId = await shopping().addManualItem(
         userId: 'test-user',
@@ -269,9 +269,11 @@ void main() {
       await tester.tap(find.text('Done shopping'));
       await tester.pumpAndSettle();
 
-      // Only the row with no category asks for one.
+      // Only the row with no group asks for one.
       expect(
-        find.text("Optional: we couldn't identify a category for this item."),
+        find.text(
+          "Optional: we couldn't identify an ingredient group for this item.",
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Add 2 items'));
@@ -281,7 +283,7 @@ void main() {
         () => pantry().getAll('test-user'),
       ))!;
       expect(
-        {for (final i in stocked) i.canonicalName: i.category},
+        {for (final i in stocked) i.canonicalName: i.groupId},
         {'milk': 'dairy', 'plan plums': null},
       );
     });

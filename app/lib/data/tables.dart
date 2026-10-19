@@ -2,7 +2,8 @@
 //
 // - Every user-data table carries a `userId` column, so switching accounts on one device never exposes
 //   another user's data.
-// - `ingredient_categories.shelfLifeDays` is the basis for automatic expiry inference.
+// - `ingredients.groupId` is the ingredient group; `catalogueItemId` links an ingredient to a synced catalogue item
+//   once its name matches one, and `form` stays null until someone states it (it is never defaulted).
 // - `meal_plan_entries.recipeId` is nullable with `onDelete: setNull`, and the entry snapshots `recipeTitle`,
 //   so deleting a recipe only drops the link.
 // - `shopping_list_items.ingredientId` is NOT NULL, and `sourceMealPlanEntryId` cascades a deleted plan
@@ -14,33 +15,25 @@
 // camelCase to snake_case.
 import 'package:drift/drift.dart';
 
-/// The 23-category ingredient taxonomy, each with the shelf life in days used to infer pantry expiry.
-class IngredientCategories extends Table {
-  TextColumn get category => text()();
-  TextColumn get foodGroup => text()();
-  IntColumn get shelfLifeDays => integer()();
-
-  @override
-  Set<Column> get primaryKey => {category};
-}
-
 /// A resolved ingredient identity shared across pantry, recipes and shopping. Not user-scoped: it is a
 /// catalog of names.
 ///
-/// `category` is nullable because recipe-import ingredients have no category source, but every pantry/shopping
-/// intake path requires a non-null, taxonomy-valid one, which makes `food_group` non-nullable on pantry reads.
-/// See `IngredientsRepository.resolveOrCreate`.
+/// `groupId` is nullable because recipe-import ingredients have no group source; a pantry read then shows food group
+/// "other". `catalogueItemId` is deliberately not a foreign key: the catalogue may be empty or behind, and an
+/// ingredient must work without an item. See `IngredientsRepository.resolveOrCreate`.
 class Ingredients extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get canonicalName => text().unique()();
-  TextColumn get apiIngredientId => text().nullable()();
   TextColumn get apiName => text().nullable()();
-  TextColumn get category =>
-      text().nullable().references(IngredientCategories, #category)();
+  TextColumn get groupId =>
+      text().nullable().references(IngredientGroups, #id)();
+  TextColumn get catalogueItemId => text().nullable()();
+  TextColumn get form => text().nullable()();
   TextColumn get canonicalUnit => text().nullable()();
   BoolColumn get isStaple => boolean().withDefault(const Constant(false))();
   // The household's own choice of store section for this ingredient (a `StoreSection.dbValue`), or null to
-  // use the section derived from its name and category.
+  // use the section derived from its name and group. Only held here while the ingredient has no catalogue item:
+  // linking moves it into `ingredient_overrides`.
   TextColumn get storeSection => text().nullable()();
 }
 

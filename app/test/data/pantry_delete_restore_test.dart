@@ -16,7 +16,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         unitPrice: 2.5,
       );
       await db.customStatement(
@@ -45,7 +45,7 @@ void main() {
         name: 'butter',
         quantity: 250,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         now: DateTime(2026, 1, 1),
       );
       final deleted = (await pantry.getAll('a')).single;
@@ -55,7 +55,7 @@ void main() {
         name: 'butter',
         quantity: 100,
         unit: 'g',
-        category: 'dairy',
+        groupId: 'dairy',
         unitPrice: 3,
         now: DateTime(2026, 2, 1),
       );
@@ -79,7 +79,7 @@ void main() {
       name: 'butter',
       quantity: 250,
       unit: 'g',
-      category: 'dairy',
+      groupId: 'dairy',
     );
     final item = (await pantry.getAll('a')).single;
     expect(

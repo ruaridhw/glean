@@ -9,7 +9,7 @@ import 'fixture.dart';
 
 void main() {
   test(
-    'serialized backend proposals persist against the actual seeded taxonomy',
+    'serialized backend proposals persist against the actual seeded ingredient groups',
     () async {
       final response = ScanResponse.fromJson(
         jsonDecode(
@@ -31,42 +31,45 @@ void main() {
               name: item.name,
               quantity: item.quantity,
               unit: item.unit,
-              category: item.category,
+              groupId: item.groupId,
             ),
         ],
       );
       final pantry = PantryRepository(db, ingredients);
-      for (final item in response.items.where(
-        (item) => item.category != null,
-      )) {
+      for (final item in response.items.where((item) => item.groupId != null)) {
         await pantry.addItem(
           userId: 'contract',
           name: item.name,
           quantity: item.quantity,
           unit: item.unit,
-          category: item.category!,
+          groupId: item.groupId!,
         );
       }
       final saved = await pantry.getAll('contract');
-      for (final item in response.items.where(
-        (item) => item.category != null,
-      )) {
+      for (final item in response.items.where((item) => item.groupId != null)) {
         final row = saved.singleWhere(
           (row) => row.canonicalName == item.name.toLowerCase(),
         );
-        expect(row.category, item.category);
+        expect(row.groupId, item.ingredientGroup);
         expect(row.foodGroup, item.foodGroup);
       }
       final seeded = {
-        for (final row in await db.select(db.ingredientCategories).get())
-          row.category: row.foodGroup,
+        for (final row in await db.select(db.ingredientGroups).get())
+          row.id: row.foodGroup,
       };
-      expect(seeded, {
-        for (final item in response.items.where(
-          (item) => item.category != null,
-        ))
-          item.category!: item.foodGroup,
-      });
+      expect(
+        {
+          for (final item in response.items.where(
+            (item) => item.ingredientGroup != null,
+          ))
+            item.ingredientGroup!: item.foodGroup,
+        },
+        {
+          for (final entry in seeded.entries)
+            if (response.items.any((i) => i.ingredientGroup == entry.key))
+              entry.key: entry.value,
+        },
+      );
       expect(
         (await shopping.watchAll('contract').first).length,
         response.items.length,

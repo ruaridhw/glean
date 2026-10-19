@@ -24,7 +24,7 @@ PantryItemView _item({
     updatedAt: DateTime(2026, 1, 1),
     canonicalName: 'spinach',
     isStaple: false,
-    category: category,
+    groupId: category,
     foodGroup: foodGroup,
     shelfLifeDays: 5,
   );
@@ -162,13 +162,6 @@ void main() {
 
     test('trims surrounding whitespace', () {
       expect(parsePositiveQuantity('  2  '), 2);
-    });
-  });
-
-  group('categoryLabel', () {
-    test('title-cases each underscore-separated word', () {
-      expect(categoryLabel('leafy_greens'), 'Leafy Greens');
-      expect(categoryLabel('dairy'), 'Dairy');
     });
   });
 

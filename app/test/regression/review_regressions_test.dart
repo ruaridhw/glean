@@ -81,7 +81,7 @@ void main() {
         name: 'chicken breast',
         quantity: 500,
         unit: 'g',
-        category: 'poultry',
+        groupId: 'poultry',
       );
       final r = await recipe(h, 'Repeat dinner', 50, 'g');
       final plan = h.container.read(planRepositoryProvider);
@@ -170,7 +170,7 @@ void main() {
             name: 'chicken breast',
             quantity: 200,
             unit: 'g',
-            category: 'poultry',
+            groupId: 'poultry',
           );
       final r = await recipe(h, 'Dinner', 0.3, 'kg');
       final p = h.container.read(planRepositoryProvider);
@@ -213,7 +213,7 @@ void main() {
           name: 'chicken breast',
           quantity: 200,
           unit: 'g',
-          category: 'poultry',
+          groupId: 'poultry',
         );
         final plan = h.container.read(planRepositoryProvider);
         final shop = h.container.read(shoppingRepositoryProvider);
@@ -289,7 +289,7 @@ void main() {
             name: 'chicken breast',
             quantity: 3,
             unit: 'units',
-            category: 'poultry',
+            groupId: 'poultry',
           );
       final r = await recipe(h, 'Dinner', 200, 'g');
       final p = h.container.read(planRepositoryProvider);
@@ -464,7 +464,7 @@ void main() {
         name: 'chicken breast',
         quantity: 100,
         unit: 'g',
-        category: 'poultry',
+        groupId: 'poultry',
       );
       final r = await recipe(h, 'Cooked dinner', 50, 'g');
       final plan = h.container.read(planRepositoryProvider);
@@ -632,7 +632,7 @@ void main() {
                 quantity: 100,
                 unit: 'g',
                 confidence: 1,
-                category: 'poultry',
+                groupId: 'poultry',
               ),
             ],
           ),

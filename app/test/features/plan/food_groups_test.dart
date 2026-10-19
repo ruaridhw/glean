@@ -15,18 +15,15 @@ import 'package:glean/features/plan/food_groups.dart';
 import '../../data/fixture.dart';
 
 void main() {
-  group('foodGroupForCategory', () {
+  group('foodGroupForGroup', () {
     test('resolves a known category to its taxonomy food group', () {
-      expect(foodGroupForCategory('poultry'), 'protein');
-      expect(foodGroupForCategory('leafy_greens'), 'vegetables');
+      expect(foodGroupForGroup('poultry'), 'protein');
+      expect(foodGroupForGroup('leafy_greens'), 'vegetables');
     });
 
     test('falls back to "other" for null or unrecognised categories', () {
-      expect(foodGroupForCategory(null), uncategorisedFoodGroup);
-      expect(
-        foodGroupForCategory('not-a-real-category'),
-        uncategorisedFoodGroup,
-      );
+      expect(foodGroupForGroup(null), unclassifiedFoodGroup);
+      expect(foodGroupForGroup('not-a-real-category'), unclassifiedFoodGroup);
     });
   });
 
@@ -62,7 +59,7 @@ void main() {
       // intake would (recipe import alone leaves it uncategorised).
       await IngredientsRepository(
         db,
-      ).resolveOrCreate(canonicalName: 'chicken breast', category: 'poultry');
+      ).resolveOrCreate(canonicalName: 'chicken breast', groupId: 'poultry');
 
       final groups = await foodGroupsForRecipe(recipes, recipeId);
       expect(groups, <String>['protein']);
@@ -84,7 +81,7 @@ void main() {
         );
 
         final groups = await foodGroupsForRecipe(recipes, recipeId);
-        expect(groups, <String>[uncategorisedFoodGroup]);
+        expect(groups, <String>[unclassifiedFoodGroup]);
       },
     );
 

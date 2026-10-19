@@ -14,9 +14,7 @@ class ShoppingParseRequest {
   Map<String, dynamic> toJson() => _$ShoppingParseRequestToJson(this);
 }
 
-/// A shopping-item proposal parsed from a free-text description. Adds [apiIngredientId], the trusted
-/// ingredient-catalogue id, still always null until server-side ingredient resolution exists. Inherits
-/// `category`/`food_group` from `ParsedIngredient` unchanged: [category] nullable, [foodGroup] required.
+/// A shopping-item proposal parsed from a free-text description: the fields every parse endpoint returns, unchanged.
 @JsonSerializable(fieldRename: FieldRename.snake)
 class ShoppingProposalItem extends ParsedIngredient {
   const ShoppingProposalItem({
@@ -25,15 +23,13 @@ class ShoppingProposalItem extends ParsedIngredient {
     required super.unit,
     required super.foodGroup,
     required super.confidence,
+    super.ingredientGroup,
     super.category,
     super.unitPrice,
-    this.apiIngredientId,
   });
 
   factory ShoppingProposalItem.fromJson(Map<String, dynamic> json) =>
       _$ShoppingProposalItemFromJson(json);
-
-  final String? apiIngredientId;
 
   @override
   Map<String, dynamic> toJson() => _$ShoppingProposalItemToJson(this);

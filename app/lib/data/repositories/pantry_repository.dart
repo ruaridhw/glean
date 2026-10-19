@@ -1,11 +1,13 @@
 // Pantry persistence. Every query is scoped by `userId`, and `addItem` infers an expiry date from the
-// ingredient's category shelf life.
+// ingredient's shelf life.
 import 'package:drift/drift.dart';
 
 import '../database.dart';
 import '../models/pantry_item_view.dart';
+import '../util/shelf_life.dart';
 import '../util/unit_normalization.dart';
 import '../util/week.dart';
+import 'catalogue_repository.dart';
 import 'ingredients_repository.dart';
 
 /// One accepted row from the review screen, ready to commit via `addItems`.
@@ -14,7 +16,7 @@ class PantryItemInput {
     required this.name,
     required this.quantity,
     required this.unit,
-    required this.category,
+    required this.groupId,
     this.unitPrice,
   });
 
@@ -22,8 +24,8 @@ class PantryItemInput {
   final double quantity;
   final String unit;
 
-  /// Null stores the Pantry item uncategorised (food group "other") with no inferred expiry.
-  final String? category;
+  /// Null stores the Pantry item unclassified (food group "other") with no inferred expiry.
+  final String? groupId;
   final double? unitPrice;
 }
 
@@ -96,18 +98,20 @@ class PantryUnitMismatchException implements Exception {
 }
 
 class PantryRepository {
-  PantryRepository(this._db, this._ingredients);
+  PantryRepository(this._db, this._ingredients)
+    : _catalogue = CatalogueRepository(_db);
 
   final GleanDatabase _db;
   final IngredientsRepository _ingredients;
+  final CatalogueRepository _catalogue;
 
   /// All of [userId]'s pantry items, soonest expiry first, then longest-unused first within the same expiry.
   ///
-  /// `ingredients` is inner-joined (the FK is NOT NULL), but `ingredient_categories` is left-joined because
-  /// `ingredients.category` is nullable: a category-less ingredient must still surface its pantry row. `_mapRow`
+  /// `ingredients` is inner-joined (the FK is NOT NULL), but `ingredient_groups` is left-joined because
+  /// `ingredients.group_id` is nullable: an unclassified ingredient must still surface its pantry row. `_mapRow`
   /// coalesces the missing food group to `"other"`, matching the backend.
   Stream<List<PantryItemView>> watchAll(String userId) =>
-      _itemsQuery(userId).watch().map(_mapRows);
+      _itemsQuery(userId).watch().asyncMap(_mapRows);
 
   /// One-shot twin of [watchAll]: same query, a plain `.get()` rather than a
   /// subscription opened and immediately cancelled.
@@ -121,10 +125,8 @@ class PantryRepository {
             _db.ingredients.id.equalsExp(_db.pantryItems.ingredientId),
           ),
           leftOuterJoin(
-            _db.ingredientCategories,
-            _db.ingredientCategories.category.equalsExp(
-              _db.ingredients.category,
-            ),
+            _db.ingredientGroups,
+            _db.ingredientGroups.id.equalsExp(_db.ingredients.groupId),
           ),
         ])
         ..where(_db.pantryItems.userId.equals(userId))
@@ -143,16 +145,17 @@ class PantryRepository {
           ),
         ]);
 
-  List<PantryItemView> _mapRows(List<TypedResult> rows) =>
-      rows.map(_mapRow).toList();
+  Future<List<PantryItemView>> _mapRows(List<TypedResult> rows) async => [
+    for (final row in rows) await _mapRow(row),
+  ];
 
-  // Fallback for a pantry item whose ingredient has no taxonomy category; matches the backend's "other" bucket.
-  static const String _uncategorisedFoodGroup = 'other';
+  // Fallback for a pantry item whose ingredient has no group; matches the backend's "other" bucket.
+  static const String _unclassifiedFoodGroup = 'other';
 
-  PantryItemView _mapRow(TypedResult row) {
+  Future<PantryItemView> _mapRow(TypedResult row) async {
     final item = row.readTable(_db.pantryItems);
     final ingredient = row.readTable(_db.ingredients);
-    final category = row.readTableOrNull(_db.ingredientCategories);
+    final group = row.readTableOrNull(_db.ingredientGroups);
     return PantryItemView(
       id: item.id,
       userId: item.userId,
@@ -167,21 +170,35 @@ class PantryRepository {
       updatedAt: DateTime.parse(item.updatedAt),
       canonicalName: ingredient.canonicalName,
       isStaple: ingredient.isStaple,
-      category: category?.category,
-      foodGroup: category?.foodGroup ?? _uncategorisedFoodGroup,
-      shelfLifeDays: category?.shelfLifeDays,
+      groupId: ingredient.groupId,
+      foodGroup: group?.foodGroup ?? _unclassifiedFoodGroup,
+      shelfLifeDays: await _shelfLifeDays(ingredient, group),
     );
   }
 
+  /// The ingredient's unopened shelf life in days, null when it has none to infer. A linked ingredient asks the
+  /// catalogue's resolver, so the household's own shelf lives count; an unlinked one takes its group's.
+  Future<int?> _shelfLifeDays(
+    Ingredient ingredient,
+    IngredientGroup? group,
+  ) async {
+    final itemId = ingredient.catalogueItemId;
+    if (itemId != null) {
+      final effective = await _catalogue.effectiveIngredient(itemId);
+      if (effective != null) return effective.unopenedShelfLifeDays;
+    }
+    return unlinkedShelfLifeDays(group, ingredient.form);
+  }
+
   /// Resolves (or creates) the ingredient for [name], normalizes quantity/unit against its canonical unit,
-  /// infers an expiry from the category's shelf life, and upserts the pantry row. A top-up adds to the existing
+  /// infers an expiry from the ingredient's shelf life, and upserts the pantry row. A top-up adds to the existing
   /// quantity and refreshes the expiry, since the new stock is what's now on the shelf.
   Future<int> addItem({
     required String userId,
     required String name,
     required double quantity,
     required String unit,
-    required String? category,
+    required String? groupId,
     double? unitPrice,
     DateTime? now,
   }) async {
@@ -193,7 +210,7 @@ class PantryRepository {
     final String effectiveUnit = trimmedUnit.isEmpty ? 'units' : trimmedUnit;
     final ingredient = await _ingredients.resolveOrCreate(
       canonicalName: name,
-      category: category,
+      groupId: groupId,
       unit: trimmedUnit.isEmpty ? null : trimmedUnit,
     );
     final normalized = normalizeUnit(
@@ -202,11 +219,14 @@ class PantryRepository {
       canonicalUnit: ingredient.canonicalUnit,
       canonicalName: ingredient.canonicalName,
     );
-    // An ingredient still without a category has no shelf life to infer an expiry from.
-    final String? resolvedCategory = ingredient.category;
-    final DateTime? expiry = resolvedCategory == null
+    // An ingredient with no shelf life to infer (unclassified, or one that never expires) gets no expiry.
+    final int? shelfLifeDays = await _shelfLifeDays(
+      ingredient,
+      await _groupOf(ingredient),
+    );
+    final DateTime? expiry = shelfLifeDays == null
         ? null
-        : addDays(effectiveNow, await _shelfLifeDaysFor(resolvedCategory));
+        : addDays(effectiveNow, shelfLifeDays);
 
     await _upsert(
       userId: userId,
@@ -237,7 +257,7 @@ class PantryRepository {
             name: item.name,
             quantity: item.quantity,
             unit: item.unit,
-            category: item.category,
+            groupId: item.groupId,
             unitPrice: item.unitPrice,
             now: now,
           ),
@@ -319,11 +339,12 @@ class PantryRepository {
     });
   }
 
-  Future<int> _shelfLifeDaysFor(String category) async {
-    final row = await (_db.select(
-      _db.ingredientCategories,
-    )..where((t) => t.category.equals(category))).getSingle();
-    return row.shelfLifeDays;
+  Future<IngredientGroup?> _groupOf(Ingredient ingredient) {
+    final groupId = ingredient.groupId;
+    if (groupId == null) return Future.value();
+    return (_db.select(
+      _db.ingredientGroups,
+    )..where((t) => t.id.equals(groupId))).getSingleOrNull();
   }
 
   /// [canonicalName] is only needed for the density fallback in the

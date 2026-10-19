@@ -84,7 +84,7 @@ void main() {
           name: name,
           quantity: 1,
           unit: 'l',
-          category: 'dairy',
+          groupId: 'dairy',
           now: now,
         );
     await addMilk('whole milk', DateTime(2026, 1, 1));

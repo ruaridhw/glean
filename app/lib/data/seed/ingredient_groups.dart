@@ -442,3 +442,9 @@ const List<IngredientGroupSeed> ingredientGroupSeeds = <IngredientGroupSeed>[
     onceOpenedShelfLifeDays: <String, int?>{'not_applicable': null},
   ),
 ];
+
+/// The groups a person can pick for an ingredient: every group but Other, which is where an unclassified one lands.
+final List<IngredientGroupSeed> selectableGroupSeeds = <IngredientGroupSeed>[
+  for (final IngredientGroupSeed seed in ingredientGroupSeeds)
+    if (seed.id != 'other') seed,
+];

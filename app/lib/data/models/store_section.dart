@@ -2,7 +2,7 @@
 // (a walk round a UK supermarket), with *Other* as the fallback.
 //
 // Until the ingredient catalogue supplies group and form, [resolveStoreSection] derives a section from the
-// ingredient's name and its category (one of today's 23); a household's own move for an ingredient overrides it.
+// ingredient's name and its ingredient group; a household's own move for an ingredient overrides it.
 
 /// A store section. Declaration order is display order, with [other] last.
 enum StoreSection {
@@ -36,30 +36,35 @@ enum StoreSection {
   );
 }
 
-const Map<String, StoreSection> _sectionByCategory = <String, StoreSection>{
+const Map<String, StoreSection> _sectionByGroup = <String, StoreSection>{
   'leafy_greens': StoreSection.fruitAndVeg,
-  'brassicas': StoreSection.fruitAndVeg,
-  'alliums': StoreSection.fruitAndVeg,
-  'root_vegetables': StoreSection.fruitAndVeg,
-  'nightshades': StoreSection.fruitAndVeg,
-  'citrus': StoreSection.fruitAndVeg,
-  'tropical_fruit': StoreSection.fruitAndVeg,
-  'stone_fruit': StoreSection.fruitAndVeg,
-  'berries': StoreSection.fruitAndVeg,
-  'herbs_fresh': StoreSection.fruitAndVeg,
+  'cabbage_and_broccoli': StoreSection.fruitAndVeg,
+  'onions_and_garlic': StoreSection.fruitAndVeg,
+  'root_veg': StoreSection.fruitAndVeg,
+  'tomatoes_peppers_and_aubergines': StoreSection.fruitAndVeg,
+  'fruit': StoreSection.fruitAndVeg,
+  'fresh_herbs': StoreSection.fruitAndVeg,
   'red_meat': StoreSection.meatAndFish,
   'poultry': StoreSection.meatAndFish,
-  'seafood': StoreSection.meatAndFish,
+  'fish_and_seafood': StoreSection.meatAndFish,
   'dairy': StoreSection.dairyEggsChilled,
   'eggs': StoreSection.dairyEggsChilled,
   'bread': StoreSection.bakery,
-  'legumes': StoreSection.pastaRiceGrains,
+  'beans_and_pulses': StoreSection.pastaRiceGrains,
   'grains': StoreSection.pastaRiceGrains,
-  'pasta_rice': StoreSection.pastaRiceGrains,
-  'oils_fats': StoreSection.foodCupboard,
-  'herbs_dried': StoreSection.foodCupboard,
+  'pasta_and_rice': StoreSection.pastaRiceGrains,
+  'oils_and_fats': StoreSection.foodCupboard,
+  'dried_herbs': StoreSection.foodCupboard,
   'spices': StoreSection.foodCupboard,
-  'condiments': StoreSection.foodCupboard,
+  'sauces_and_condiments': StoreSection.foodCupboard,
+  'nuts_and_seeds': StoreSection.foodCupboard,
+  'baking': StoreSection.baking,
+  'snacks_and_treats': StoreSection.snacksAndTreats,
+  'drinks': StoreSection.drinks,
+  'household': StoreSection.household,
+  'health_and_beauty': StoreSection.healthAndBeauty,
+  'baby': StoreSection.babyAndToddler,
+  'pet': StoreSection.pet,
 };
 
 const Set<String> _bakingLastWords = <String>{'flour', 'sugar'};
@@ -78,13 +83,13 @@ const Set<String> _foodCupboardWords = <String>{
   'bouillon',
 };
 
-/// The section for an ingredient called [name] with the optional [category] (a key of the 23-category
-/// taxonomy). A household's own choice, [override], always wins. Otherwise the name outranks the category where it says more: "plain flour" is a grain by category but
-/// shelved with Baking, and frozen peas are legumes by category but live in Frozen. Where nothing places it,
+/// The section for an ingredient called [name] with the optional [groupId] (an ingredient group id). A household's
+/// own choice, [override], always wins. Otherwise the name outranks the group where it says more: "plain flour" is a
+/// grain but shelved with Baking, and frozen peas are beans and pulses but live in Frozen. Where nothing places it,
 /// [StoreSection.other].
 StoreSection resolveStoreSection({
   required String name,
-  String? category,
+  String? groupId,
   StoreSection? override,
 }) {
   if (override != null) return override;
@@ -100,5 +105,5 @@ StoreSection resolveStoreSection({
   }
   if (_bakingPhrases.any(lower.contains)) return StoreSection.baking;
   if (words.any(_foodCupboardWords.contains)) return StoreSection.foodCupboard;
-  return _sectionByCategory[category] ?? StoreSection.other;
+  return _sectionByGroup[groupId] ?? StoreSection.other;
 }

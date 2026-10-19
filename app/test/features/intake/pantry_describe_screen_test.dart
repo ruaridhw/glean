@@ -129,7 +129,7 @@ void main() {
       final widget = tester.widget<ReviewScreen>(find.byType(ReviewScreen));
       expect(widget.args.destination, ReviewDestination.pantry);
       expect(widget.args.returnToShop, isFalse);
-      expect(widget.args.items.single.category, 'red_meat');
+      expect(widget.args.items.single.groupId, 'red_meat');
     });
 
     testWidgets('a parse failure shows a recoverable inline error', (

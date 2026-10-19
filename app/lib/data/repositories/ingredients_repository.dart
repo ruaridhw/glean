@@ -1,9 +1,10 @@
-// Resolves ingredient identities. Resolving by an existing name/api-id match upgrades a null category to a
-// newly supplied one, so a category-less ingredient (e.g. from recipe import) cannot permanently poison
-// pantry/shopping rows that later resolve it with a real category.
+// Resolves ingredient identities. Resolving an existing ingredient upgrades an unclassified group to a newly
+// supplied one, so a group-less ingredient (e.g. from recipe import) cannot permanently poison pantry/shopping rows
+// that later resolve it with a real group.
 import 'package:drift/drift.dart';
 
 import '../database.dart';
+import '../seed/taxonomy.dart' show otherGroupId;
 import '../util/unit_normalization.dart' show canonicalUnitFor;
 
 class IngredientsRepository {
@@ -11,12 +12,13 @@ class IngredientsRepository {
 
   final GleanDatabase _db;
 
-  /// Resolves an existing ingredient by api id (preferred) or canonical name, or creates one. `category` must
-  /// be null or a key in `ingredient_categories`; the foreign key makes an invalid category throw.
+  /// Resolves an existing ingredient by catalogue item id (preferred) or canonical name, or creates one. `groupId`
+  /// must be null or a key in `ingredient_groups`; the foreign key makes an invalid group throw. A new ingredient
+  /// with no [catalogueItemId] is linked to the catalogue item its name matches, if one is already synced.
   ///
-  /// Intake passes the category the backend classified, or null when it could not: such an ingredient reads
-  /// back with food group "other" until a later resolve supplies a category. Recipe import passes null
-  /// (recipe endpoints return no category).
+  /// Intake passes the group the backend classified, or null when it could not: such an ingredient reads back with
+  /// food group "other" until a later resolve supplies a group. Recipe import passes null (recipe endpoints return no
+  /// group). Form is never set here: nobody has stated it.
   ///
   /// [unit], when supplied, seeds/upgrades `canonicalUnit`, the target `PantryRepository.addItem` normalises
   /// every future add into. It derives from the first unit the ingredient is resolved with. A recognised
@@ -31,52 +33,62 @@ class IngredientsRepository {
   /// Recipe import never passes a unit: a recipe's unit reflects its phrasing, not how the ingredient is stocked.
   Future<Ingredient> resolveOrCreate({
     required String canonicalName,
-    String? apiIngredientId,
+    String? catalogueItemId,
     String? apiName,
-    String? category,
+    String? groupId,
     String? unit,
   }) async {
     final name = canonicalName.toLowerCase().trim();
 
-    if (apiIngredientId != null) {
-      final byId = await _findByApiId(apiIngredientId);
-      if (byId != null) return _upgradeIfNeeded(byId, category, unit);
+    if (catalogueItemId != null) {
+      final byItem = await _findByCatalogueItem(catalogueItemId);
+      if (byItem != null) return _upgradeIfNeeded(byItem, groupId, unit);
     }
 
     final byName = await _findByName(name);
-    if (byName != null) return _upgradeIfNeeded(byName, category, unit);
+    if (byName != null) {
+      return _upgradeIfNeeded(
+        byName,
+        groupId,
+        unit,
+        catalogueItemId: catalogueItemId,
+      );
+    }
 
     final id = await _db
         .into(_db.ingredients)
         .insert(
           IngredientsCompanion.insert(
             canonicalName: name,
-            apiIngredientId: Value(apiIngredientId),
+            catalogueItemId: Value(catalogueItemId),
             apiName: Value(apiName),
-            category: Value(category),
+            groupId: Value(groupId),
             canonicalUnit: Value(unit == null ? null : canonicalUnitFor(unit)),
           ),
         );
+    if (catalogueItemId == null) {
+      await _db.linkIngredientsToCatalogue(ingredientId: id);
+    }
     return (_db.select(
       _db.ingredients,
     )..where((t) => t.id.equals(id))).getSingle();
   }
 
-  /// The category of each of [ids] that has one; ingredients without a category are left out.
-  Future<Map<int, String>> categoriesById(Iterable<int> ids) async {
+  /// The ingredient group of each of [ids] that has one; ingredients without a group are left out.
+  Future<Map<int, String>> groupsById(Iterable<int> ids) async {
     final rows = await (_db.select(
       _db.ingredients,
     )..where((t) => t.id.isIn(ids.toList()))).get();
     return {
       for (final row in rows)
-        if (row.category != null) row.id: row.category!,
+        if (row.groupId != null) row.id: row.groupId!,
     };
   }
 
-  Future<Ingredient?> _findByApiId(String apiId) {
+  Future<Ingredient?> _findByCatalogueItem(String itemId) {
     return (_db.select(
       _db.ingredients,
-    )..where((t) => t.apiIngredientId.equals(apiId))).getSingleOrNull();
+    )..where((t) => t.catalogueItemId.equals(itemId))).getSingleOrNull();
   }
 
   Future<Ingredient?> _findByName(String name) {
@@ -85,22 +97,32 @@ class IngredientsRepository {
     )..where((t) => t.canonicalName.equals(name))).getSingleOrNull();
   }
 
-  /// Upgrades whichever of `category`/`canonicalUnit` is null on [existing] and newly supplied; an already-set
-  /// value is left alone (first real value wins).
+  /// Fills in whichever of `groupId`/`canonicalUnit`/`catalogueItemId` is unset on [existing] and newly supplied; an
+  /// already-set value is left alone (first real value wins). Other counts as unset for the group: it is where an
+  /// unclassified ingredient lands, so a later real group still replaces it.
   Future<Ingredient> _upgradeIfNeeded(
     Ingredient existing,
-    String? category,
-    String? unit,
-  ) async {
+    String? groupId,
+    String? unit, {
+    String? catalogueItemId,
+  }) async {
+    final bool groupUnset =
+        existing.groupId == null || existing.groupId == otherGroupId;
     final companion = IngredientsCompanion(
-      category: existing.category == null && category != null
-          ? Value(category)
+      groupId: groupUnset && groupId != null && groupId != existing.groupId
+          ? Value(groupId)
           : const Value.absent(),
       canonicalUnit: existing.canonicalUnit == null && unit != null
           ? Value(canonicalUnitFor(unit))
           : const Value.absent(),
+      catalogueItemId:
+          existing.catalogueItemId == null && catalogueItemId != null
+          ? Value(catalogueItemId)
+          : const Value.absent(),
     );
-    if (!companion.category.present && !companion.canonicalUnit.present) {
+    if (!companion.groupId.present &&
+        !companion.canonicalUnit.present &&
+        !companion.catalogueItemId.present) {
       return existing;
     }
     await (_db.update(

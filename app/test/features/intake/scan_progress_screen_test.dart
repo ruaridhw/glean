@@ -225,7 +225,7 @@ void main() {
       final widget = tester.widget<ReviewScreen>(find.byType(ReviewScreen));
       expect(widget.args.destination, ReviewDestination.pantry);
       expect(widget.args.items.single.name, 'Milk');
-      expect(widget.args.items.single.category, 'dairy');
+      expect(widget.args.items.single.groupId, 'dairy');
       // Success also fires the ladder's data-commit weight, routed
       // through `hapticsProvider` rather than `HapticFeedback`
       // directly.

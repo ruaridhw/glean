@@ -1,17 +1,20 @@
 import 'package:json_annotation/json_annotation.dart';
 
+import '../../data/seed/taxonomy.dart';
+
 part 'parsed_ingredient.g.dart';
 
 /// A parsed grocery ingredient with a normalised quantity, returned by all
 /// three parse endpoints: `POST /receipts/scan`, `POST /receipts/describe`
 /// and `POST /shopping/parse-description`.
 ///
-/// [category] and [foodGroup] are asymmetric on purpose, mirroring the backend
+/// [ingredientGroup], [category] and [foodGroup] are asymmetric on purpose, mirroring the backend
 /// (`backend/src/glean/receipts/schemas.py`):
 ///
-/// - [category] is nullable. The backend coerces an out-of-taxonomy or unclassifiable value to `null` rather
-///   than failing the response, so one unclassifiable item doesn't fail the whole parse.
-/// - [foodGroup] is required. The backend derives it from [category] (falling back to `"other"`), and
+/// - [ingredientGroup] and [category] are nullable. The backend coerces an out-of-catalogue or unclassifiable value
+///   to `null` rather than failing the response, so one unclassifiable item doesn't fail the whole parse. A backend
+///   that predates the group sends only [category]; [groupId] reads whichever is there.
+/// - [foodGroup] is required. The backend derives it from the group (falling back to `"other"`), and
 ///   `POST /meal-plan` validates it non-nullably. A missing `food_group` is a contract violation:
 ///   [ParsedIngredient.fromJson] throws [FormatException], which [GleanApiClient] turns into an
 ///   [ApiParseException].
@@ -23,6 +26,7 @@ class ParsedIngredient {
     required this.unit,
     required this.foodGroup,
     required this.confidence,
+    this.ingredientGroup,
     this.category,
     this.unitPrice,
   });
@@ -39,17 +43,24 @@ class ParsedIngredient {
   /// Practical shopping unit such as "g", "ml", "units", "pack", "bottle".
   final String unit;
 
-  /// Food group derived deterministically from [category] server-side;
-  /// `"other"` when [category] is null. Required — see the class-level note.
+  /// Food group derived deterministically from the ingredient group server-side;
+  /// `"other"` when it has none. Required — see the class-level note.
   @JsonKey(fromJson: requireFoodGroup)
   final String foodGroup;
 
   /// Confidence from 0.0 to 1.0 that the item matches the request.
   final double confidence;
 
-  /// One of the 23 ingredient taxonomy values (see `lib/data/seed/taxonomy.dart`), or `null` when the backend
-  /// couldn't classify it.
+  /// One of the catalogue's ingredient group ids (see `lib/data/seed/ingredient_groups.dart`), or `null` when the
+  /// backend couldn't classify it or predates groups.
+  final String? ingredientGroup;
+
+  /// One of the 23 older taxonomy values, which the backend sends until every phone reads [ingredientGroup]; `null`
+  /// when it has none.
   final String? category;
+
+  /// The ingredient group this item belongs to: the backend's own, else the one the older [category] became.
+  String? get groupId => ingredientGroup ?? groupForLegacyCategory(category);
 
   /// Price per requested unit, when the user provided enough pricing detail.
   final double? unitPrice;

@@ -1,8 +1,8 @@
-// Read-side shape for a pantry item joined with its ingredient and category.
+// Read-side shape for a pantry item joined with its ingredient and ingredient group.
 //
-// `foodGroup` is non-nullable by coalescing in `PantryRepository._mapRow`: `ingredients.category` is nullable,
-// so an item whose ingredient has no taxonomy category surfaces with `foodGroup == 'other'` (the backend's
-// fallback too) rather than vanishing. `category` and `shelfLifeDays` stay nullable.
+// `foodGroup` is non-nullable by coalescing in `PantryRepository._mapRow`: `ingredients.group_id` is nullable,
+// so an item whose ingredient has no group surfaces with `foodGroup == 'other'` (the backend's
+// fallback too) rather than vanishing. `groupId` and `shelfLifeDays` stay nullable.
 class PantryItemView {
   const PantryItemView({
     required this.id,
@@ -16,7 +16,7 @@ class PantryItemView {
     required this.updatedAt,
     required this.canonicalName,
     required this.isStaple,
-    required this.category,
+    required this.groupId,
     required this.foodGroup,
     required this.shelfLifeDays,
   });
@@ -32,7 +32,7 @@ class PantryItemView {
   final DateTime updatedAt;
   final String canonicalName;
   final bool isStaple;
-  final String? category;
+  final String? groupId;
   final String foodGroup;
   final int? shelfLifeDays;
 }

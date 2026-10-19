@@ -26,7 +26,7 @@ void main() {
         name: 'Milk',
         quantity: 1,
         unit: 'l',
-        category: 'dairy',
+        groupId: 'dairy',
       );
 
       await harness.pumpAt(tester, AppRoutes.pantry.path);

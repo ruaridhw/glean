@@ -47,7 +47,6 @@ Future<int> saveRecipeProposal(
       for (final ing in detail.ingredients)
         SaveRecipeIngredient(
           canonicalName: ing.canonicalName,
-          apiIngredientId: ing.apiIngredientId,
           quantity: ing.quantity,
           unit: ing.unit,
           preparation: ing.preparation,

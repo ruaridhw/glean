@@ -31,6 +31,12 @@ class ShoppingRepository {
             _db.ingredients.id.equalsExp(_db.shoppingListItems.ingredientId),
           ),
           leftOuterJoin(
+            _db.ingredientOverrides,
+            _db.ingredientOverrides.itemId.equalsExp(
+              _db.ingredients.catalogueItemId,
+            ),
+          ),
+          leftOuterJoin(
             _db.pantryItems,
             _db.pantryItems.userId.equalsExp(_db.shoppingListItems.userId) &
                 _db.pantryItems.ingredientId.equalsExp(
@@ -58,6 +64,7 @@ class ShoppingRepository {
     for (final joined in rows) {
       final row = joined.readTable(_db.shoppingListItems);
       final ingredient = joined.readTable(_db.ingredients);
+      final override = joined.readTableOrNull(_db.ingredientOverrides);
       final meal = joined.readTableOrNull(_db.mealPlanEntries);
       if (!row.isRequirement) {
         // Plan-gap rows written before requirement rows existed keep their own quantity, but still name the
@@ -66,6 +73,7 @@ class ShoppingRepository {
           _mapRow(
             row,
             ingredient,
+            override,
             recipeTitles: [if (meal != null) meal.recipeTitle],
           ),
         );
@@ -109,6 +117,7 @@ class ShoppingRepository {
       grouped[key] = _mapRow(
         row,
         ingredient,
+        override,
         quantity: missing + (prior?.quantity ?? 0),
         unit: unit,
         memberIds: [...?prior?.ids, row.id],
@@ -130,7 +139,8 @@ class ShoppingRepository {
 
   ShoppingListItemView _mapRow(
     ShoppingListItem row,
-    Ingredient ingredient, {
+    Ingredient ingredient,
+    IngredientOverride? override, {
     double? quantity,
     String? unit,
     List<int> memberIds = const [],
@@ -149,17 +159,29 @@ class ShoppingRepository {
         : row.sourceMealPlanEntryId,
     section: resolveStoreSection(
       name: ingredient.canonicalName,
-      category: ingredient.category,
-      override: ingredient.storeSection == null
-          ? null
-          : StoreSection.fromDb(ingredient.storeSection!),
+      groupId: ingredient.groupId,
+      override: _chosenSection(ingredient, override),
     ),
     memberIds: memberIds,
     recipeTitles: recipeTitles,
   );
 
+  // The household's own store section for an ingredient: the one in its catalogue item's override, else the choice
+  // still held on the ingredient (an ingredient with no item yet, or one whose choice the override could not take).
+  StoreSection? _chosenSection(
+    Ingredient ingredient,
+    IngredientOverride? override,
+  ) {
+    final String? label = override?.section;
+    if (label != null) {
+      return StoreSection.values.firstWhere((s) => s.label == label);
+    }
+    final String? held = ingredient.storeSection;
+    return held == null ? null : StoreSection.fromDb(held);
+  }
+
   /// Adds a manual entry, resolving [name] to a real ingredient identity so it can match a receipt at
-  /// checkout. No LLM classification, so the category is left untouched (or uncategorised if new).
+  /// checkout. No LLM classification, so the group is left untouched (or unclassified if new).
   ///
   /// [unit], when given, also seeds/upgrades `canonicalUnit` via `IngredientsRepository.resolveOrCreate`: a
   /// manual entry's unit is a real stock-tracking unit, unlike a recipe's.
@@ -190,7 +212,7 @@ class ShoppingRepository {
         );
   }
 
-  /// Adds AI-parsed items, each resolved to a real ingredient identity with the backend's category. A parsed
+  /// Adds AI-parsed items, each resolved to a real ingredient identity with the backend's ingredient group. A parsed
   /// unit seeds/upgrades `canonicalUnit` only when genuinely non-blank: a blank one defaults to `'units'` for the
   /// row but must never become the ingredient's permanent canonical unit. Runs as a single transaction, so a
   /// failure persists nothing and retrying can't double-insert.
@@ -206,8 +228,7 @@ class ShoppingRepository {
         final String unit = trimmedUnit.isEmpty ? 'units' : trimmedUnit;
         final ingredient = await _ingredients.resolveOrCreate(
           canonicalName: name,
-          apiIngredientId: item.apiIngredientId,
-          category: item.category,
+          groupId: item.groupId,
           unit: trimmedUnit.isEmpty ? null : trimmedUnit,
         );
         await _db
@@ -368,11 +389,38 @@ class ShoppingRepository {
 
   /// Moves every row of [ingredientId] (now and later) to [section]. The choice belongs to the ingredient, so
   /// it also applies to rows added afterwards.
+  ///
+  /// An ingredient with a catalogue item keeps the choice in that item's override, beside the household's other changes
+  /// to it, so it follows the item; one without keeps it on the ingredient until it is linked.
   Future<void> moveToSection({
     required int ingredientId,
     required StoreSection section,
-  }) => (_db.update(_db.ingredients)..where((t) => t.id.equals(ingredientId)))
-      .write(IngredientsCompanion(storeSection: Value(section.dbValue)));
+  }) => _db.transaction(() async {
+    final ingredient = await (_db.select(
+      _db.ingredients,
+    )..where((t) => t.id.equals(ingredientId))).getSingle();
+    final String? itemId = ingredient.catalogueItemId;
+    if (itemId == null) {
+      await (_db.update(_db.ingredients)
+            ..where((t) => t.id.equals(ingredientId)))
+          .write(IngredientsCompanion(storeSection: Value(section.dbValue)));
+      return;
+    }
+    await _db
+        .into(_db.ingredientOverrides)
+        .insert(
+          IngredientOverridesCompanion.insert(
+            itemId: itemId,
+            section: Value(section.label),
+          ),
+          onConflict: DoUpdate(
+            (_) => IngredientOverridesCompanion(section: Value(section.label)),
+            target: [_db.ingredientOverrides.itemId],
+          ),
+        );
+    await (_db.update(_db.ingredients)..where((t) => t.id.equals(ingredientId)))
+        .write(const IngredientsCompanion(storeSection: Value(null)));
+  });
 
   Future<void> toggleRows({
     required List<int> ids,
@@ -406,13 +454,11 @@ class AiShoppingItem {
     required this.name,
     required this.quantity,
     required this.unit,
-    this.apiIngredientId,
-    this.category,
+    this.groupId,
   });
 
   final String name;
   final double quantity;
   final String unit;
-  final String? apiIngredientId;
-  final String? category;
+  final String? groupId;
 }

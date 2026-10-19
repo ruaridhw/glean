@@ -309,39 +309,79 @@ void main() {
   });
 
   group('shopping', () {
-    test('parseShoppingDescription deserialises category, food_group and '
-        'api_ingredient_id', () async {
-      when(
-        () => httpClient.post(
-          any(),
-          headers: any(named: 'headers'),
-          body: any(named: 'body'),
-        ),
-      ).thenAnswer(
-        (_) async => jsonResponse({
-          'items': [
-            {
-              'name': 'Tomatoes',
-              'quantity': 4,
-              'unit': 'units',
-              'confidence': 0.7,
-              'category': 'nightshades',
-              'food_group': 'vegetables',
-              'api_ingredient_id': 'ing-123',
-            },
-          ],
-          'clarifying_questions': ['Tinned or fresh?'],
-        }),
-      );
+    test(
+      'parseShoppingDescription deserialises ingredient_group, category '
+      'and food_group, and ignores a field the backend no longer sends',
+      () async {
+        when(
+          () => httpClient.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => jsonResponse({
+            'items': [
+              {
+                'name': 'Tomatoes',
+                'quantity': 4,
+                'unit': 'units',
+                'confidence': 0.7,
+                'ingredient_group': 'tomatoes_peppers_and_aubergines',
+                'category': 'nightshades',
+                'food_group': 'vegetables',
+                'api_ingredient_id': 'ing-123',
+              },
+            ],
+            'clarifying_questions': ['Tinned or fresh?'],
+          }),
+        );
 
-      final result = await client.parseShoppingDescription('4 tomatoes');
+        final result = await client.parseShoppingDescription('4 tomatoes');
 
-      final item = result.items.single;
-      expect(item.category, 'nightshades');
-      expect(item.foodGroup, 'vegetables');
-      expect(item.apiIngredientId, 'ing-123');
-      expect(result.clarifyingQuestions, ['Tinned or fresh?']);
-    });
+        final item = result.items.single;
+        expect(item.ingredientGroup, 'tomatoes_peppers_and_aubergines');
+        expect(item.category, 'nightshades');
+        expect(item.foodGroup, 'vegetables');
+        expect(item.groupId, 'tomatoes_peppers_and_aubergines');
+        expect(result.clarifyingQuestions, ['Tinned or fresh?']);
+      },
+    );
+
+    test(
+      'a backend that predates ingredient groups still names one through its '
+      'category',
+      () async {
+        when(
+          () => httpClient.post(
+            any(),
+            headers: any(named: 'headers'),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => jsonResponse({
+            'items': [
+              {
+                'name': 'Lemons',
+                'quantity': 2,
+                'unit': 'units',
+                'confidence': 0.9,
+                'category': 'citrus',
+                'food_group': 'fruit',
+              },
+            ],
+            'clarifying_questions': <Object?>[],
+          }),
+        );
+
+        final item = (await client.parseShoppingDescription(
+          '2 lemons',
+        )).items.single;
+
+        expect(item.ingredientGroup, isNull);
+        expect(item.groupId, 'fruit');
+      },
+    );
 
     test('a null category with food_group "other" parses fine — the real '
         'shape of the out-of-taxonomy fallback path', () async {
@@ -371,6 +411,7 @@ void main() {
 
       final item = result.items.single;
       expect(item.category, isNull);
+      expect(item.groupId, isNull);
       expect(item.foodGroup, 'other');
     });
   });
