@@ -10,6 +10,7 @@ import boto3
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages.content import create_image_block, create_text_block
 
+from glean.catalogue.groups import GroupId
 from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, DescribeRequest, ScanResponse
@@ -17,8 +18,9 @@ from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, DescribeRequ
 if TYPE_CHECKING:
     from glean.llm import LLMRouter
 
-# Built from the taxonomy dict, not hand-copied, so the prompt text can't drift from the
-# Literal enum the response schema actually enforces.
+# Built from the catalogue and the legacy category dict, not hand-copied, so the prompt text can't drift from the
+# enum and Literal the response schema actually enforces.
+_GROUP_LIST = ", ".join(group.value for group in GroupId)
 _CATEGORY_LIST = ", ".join(INGREDIENT_CATEGORY_FOOD_GROUPS)
 
 NORMALISE_SYSTEM_PROMPT = f"""You are a grocery ingredient normaliser.
@@ -27,7 +29,9 @@ Given a list of receipt line items (name, quantity, price), return structured it
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
-- category: exactly one of: {_CATEGORY_LIST}. Choose the single best fit; use null only if genuinely none apply
+- ingredient_group: exactly one of: {_GROUP_LIST}. Choose the single best fit; use null only if genuinely none apply
+- category: the older label for the same item, exactly one of: {_CATEGORY_LIST}.
+  Null where none fits (household goods, baking, drinks, snacks, nuts and seeds)
 - confidence: 0.0-1.0 reflecting how certain you are about the normalisation"""
 
 VISION_SYSTEM_PROMPT = f"""You are a grocery receipt scanner and ingredient normaliser.
@@ -36,7 +40,9 @@ Given an image of a grocery receipt, extract all line items and return structure
 - quantity: numeric quantity in a sensible base unit (grams for solids, ml for liquids, units for countables)
 - unit: "g", "ml", or "units"
 - unit_price: price per normalised unit (e.g. if 500g costs £3.50, unit_price = 3.50/500 = 0.007)
-- category: exactly one of: {_CATEGORY_LIST}. Choose the single best fit; use null only if genuinely none apply
+- ingredient_group: exactly one of: {_GROUP_LIST}. Choose the single best fit; use null only if genuinely none apply
+- category: the older label for the same item, exactly one of: {_CATEGORY_LIST}.
+  Null where none fits (household goods, baking, drinks, snacks, nuts and seeds)
 - confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation"""
 
 

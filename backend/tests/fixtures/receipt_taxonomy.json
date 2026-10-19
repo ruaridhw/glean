@@ -7,6 +7,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "leafy_greens",
+      "ingredient_group": "leafy_greens",
       "food_group": "vegetables"
     },
     {
@@ -16,6 +17,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "brassicas",
+      "ingredient_group": "cabbage_and_broccoli",
       "food_group": "vegetables"
     },
     {
@@ -25,6 +27,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "alliums",
+      "ingredient_group": "onions_and_garlic",
       "food_group": "vegetables"
     },
     {
@@ -34,6 +37,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "root_vegetables",
+      "ingredient_group": "root_veg",
       "food_group": "vegetables"
     },
     {
@@ -43,6 +47,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "nightshades",
+      "ingredient_group": "tomatoes_peppers_and_aubergines",
       "food_group": "vegetables"
     },
     {
@@ -52,6 +57,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "legumes",
+      "ingredient_group": "beans_and_pulses",
       "food_group": "protein"
     },
     {
@@ -61,6 +67,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "citrus",
+      "ingredient_group": "fruit",
       "food_group": "fruit"
     },
     {
@@ -70,6 +77,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "tropical_fruit",
+      "ingredient_group": "fruit",
       "food_group": "fruit"
     },
     {
@@ -79,6 +87,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "stone_fruit",
+      "ingredient_group": "fruit",
       "food_group": "fruit"
     },
     {
@@ -88,6 +97,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "berries",
+      "ingredient_group": "fruit",
       "food_group": "fruit"
     },
     {
@@ -97,6 +107,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "red_meat",
+      "ingredient_group": "red_meat",
       "food_group": "protein"
     },
     {
@@ -106,6 +117,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "poultry",
+      "ingredient_group": "poultry",
       "food_group": "protein"
     },
     {
@@ -115,6 +127,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "seafood",
+      "ingredient_group": "fish_and_seafood",
       "food_group": "protein"
     },
     {
@@ -124,6 +137,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "eggs",
+      "ingredient_group": "eggs",
       "food_group": "protein"
     },
     {
@@ -133,6 +147,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "dairy",
+      "ingredient_group": "dairy",
       "food_group": "dairy"
     },
     {
@@ -142,6 +157,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "grains",
+      "ingredient_group": "grains",
       "food_group": "carbohydrates"
     },
     {
@@ -151,6 +167,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "pasta_rice",
+      "ingredient_group": "pasta_and_rice",
       "food_group": "carbohydrates"
     },
     {
@@ -160,6 +177,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "bread",
+      "ingredient_group": "bread",
       "food_group": "carbohydrates"
     },
     {
@@ -169,6 +187,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "oils_fats",
+      "ingredient_group": "oils_and_fats",
       "food_group": "fats"
     },
     {
@@ -178,6 +197,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "herbs_fresh",
+      "ingredient_group": "fresh_herbs",
       "food_group": "condiments"
     },
     {
@@ -187,6 +207,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "herbs_dried",
+      "ingredient_group": "dried_herbs",
       "food_group": "condiments"
     },
     {
@@ -196,6 +217,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "spices",
+      "ingredient_group": "spices",
       "food_group": "condiments"
     },
     {
@@ -205,6 +227,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": "condiments",
+      "ingredient_group": "sauces_and_condiments",
       "food_group": "condiments"
     },
     {
@@ -214,6 +237,7 @@
       "unit_price": null,
       "confidence": 1.0,
       "category": null,
+      "ingredient_group": null,
       "food_group": "other"
     }
   ]

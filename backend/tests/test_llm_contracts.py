@@ -28,7 +28,7 @@ STRUCTURED_LLM_RESPONSE_SCHEMAS: tuple[type[BaseModel], ...] = (
 )
 
 
-def test_shopping_proposal_item_serialises_null_api_ingredient_id() -> None:
+def test_shopping_proposal_item_has_no_api_ingredient_id() -> None:
     item = ShoppingProposalItem(
         name="bananas",
         quantity=6,
@@ -38,8 +38,7 @@ def test_shopping_proposal_item_serialises_null_api_ingredient_id() -> None:
         confidence=0.93,
     )
 
-    assert item.api_ingredient_id is None
-    assert item.model_dump()["api_ingredient_id"] is None
+    assert "api_ingredient_id" not in item.model_dump()
 
 
 def test_shopping_proposal_item_rejects_llm_supplied_api_ingredient_id() -> None:
@@ -64,7 +63,7 @@ def test_shopping_llm_contract_does_not_expose_api_ingredient_id() -> None:
     item_properties = tool_schema["function"]["parameters"]["properties"]["items"]["items"]["properties"]
 
     assert "api_ingredient_id" not in validation_schema["properties"]
-    assert serialisation_schema["properties"]["api_ingredient_id"]["readOnly"] is True
+    assert "api_ingredient_id" not in serialisation_schema["properties"]
     assert "api_ingredient_id" not in item_properties
     assert "api_ingredient_id" not in SHOPPING_PARSE_SYSTEM_PROMPT
 

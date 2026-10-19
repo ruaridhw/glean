@@ -37,7 +37,7 @@ class _FakeLLMRouter:
                 "units": [
                     {
                         "number": 1,
-                        **self.response.model_dump(exclude={"items": {"__all__": {"food_group", "api_ingredient_id"}}}),
+                        **self.response.model_dump(exclude={"items": {"__all__": {"food_group"}}}),
                     }
                 ]
             }
@@ -83,7 +83,6 @@ def test_parse_shopping_description_returns_proposed_items(
     assert response.items[0].quantity == 1
     assert response.items[0].unit == "pack"
     assert response.items[0].unit_price is None
-    assert response.items[0].api_ingredient_id is None
     assert response.items[0].category == "grains"
     assert response.items[0].food_group == "carbohydrates"
     assert response.items[0].confidence == 0.82
