@@ -86,10 +86,11 @@ class IngredientsRepository {
     };
   }
 
-  // Several rows may share one item (older household rows that name it differently), so the oldest wins, always.
-  Future<Ingredient?> _findByCatalogueItem(String itemId) {
+  // Several rows may name one item, directly or by a former id it absorbed in a merge, so the oldest wins, always.
+  Future<Ingredient?> _findByCatalogueItem(String itemId) async {
+    final ids = (await _db.catalogueIdentity(itemId)).toList();
     return (_db.select(_db.ingredients)
-          ..where((t) => t.catalogueItemId.equals(itemId))
+          ..where((t) => t.catalogueItemId.isIn(ids))
           ..orderBy([(t) => OrderingTerm.asc(t.id)])
           ..limit(1))
         .getSingleOrNull();

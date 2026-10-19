@@ -169,6 +169,7 @@ class GleanDatabase extends _$GleanDatabase {
   /// [ingredientId] limits it to one ingredient, for one just created.
   Future<void> linkIngredientsToCatalogue({int? ingredientId}) => transaction(
     () async {
+      if (ingredientId == null) await _repointLinksToSurvivors();
       final unlinked =
           await (select(ingredients)..where(
                 (t) =>
@@ -215,6 +216,46 @@ class GleanDatabase extends _$GleanDatabase {
       }
     },
   );
+
+  // An ingredient linked to a former id of a merged item is moved to the item that survives. That is the app's own
+  // derived link; no household override is read or written here.
+  Future<void> _repointLinksToSurvivors() async {
+    final stale =
+        await (select(ingredients)..where(
+              (t) => t.catalogueItemId.isInQuery(
+                selectOnly(catalogueItemRedirects)
+                  ..addColumns([catalogueItemRedirects.formerId]),
+              ),
+            ))
+            .get();
+    for (final ingredient in stale) {
+      final survivor = await survivingCatalogueItemId(
+        ingredient.catalogueItemId!,
+      );
+      if (survivor == ingredient.catalogueItemId) continue;
+      final item = await (select(
+        catalogueItems,
+      )..where((t) => t.id.equals(survivor))).getSingleOrNull();
+      if (item == null) continue;
+      await (update(ingredients)..where((t) => t.id.equals(ingredient.id)))
+          .write(IngredientsCompanion(catalogueItemId: Value(survivor)));
+    }
+  }
+
+  /// Every id that names the same catalogue item as [survivorId]: itself and each former id merged into it, directly
+  /// or through earlier merges.
+  Future<Set<String>> catalogueIdentity(String survivorId) async {
+    final ids = <String>[survivorId];
+    for (var i = 0; i < ids.length; i++) {
+      final formers = await (select(
+        catalogueItemRedirects,
+      )..where((t) => t.itemId.equals(ids[i]))).get();
+      for (final r in formers) {
+        if (!ids.contains(r.formerId)) ids.add(r.formerId);
+      }
+    }
+    return ids.toSet();
+  }
 
   /// The surviving catalogue item a name or alias resolves to, or null when the catalogue holds none for it. A name
   /// is matched as the catalogue matches it (see [catalogueNameKey]) and a merged item is followed to the one that
