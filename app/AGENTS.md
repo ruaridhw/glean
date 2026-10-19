@@ -75,6 +75,12 @@ surviving item, then takes each field from the override (the surviving id's, the
 else the group default (section: override, else synced section, else Other). Anything reading those fields goes
 through it.
 
+Each `ingredients` row carries its ingredient group (`group_id`), a nullable `catalogue_item_id` and a nullable `form`
+(never defaulted). `GleanDatabase.linkIngredientsToCatalogue()` links a row to the item its name or an alias matches,
+and moves the household's own store-section choice from `ingredients.store_section` into that item's
+`ingredient_overrides` row; it runs in the schema upgrade and at the end of every `applyChanges`, so a catalogue that
+was empty at upgrade time catches up at the first sync. A row that matches nothing stays unlinked and keeps working.
+
 ## Standards
 
 `test/standards/house_rules_test.dart` enforces the import half of rule 1,

@@ -106,7 +106,8 @@ class CatalogueRepository {
     return rows;
   }
 
-  /// Upserts everything in [changes] by stable id and records its version, all or nothing: a failure part-way
+  /// Upserts everything in [changes] by stable id, links the ingredients it names (see
+  /// `GleanDatabase.linkIngredientsToCatalogue`) and records its version, all or nothing: a failure part-way
   /// leaves the previous version in place so the same changes are fetched again. [fullSync] marks [changes] as
   /// the answer to a `since=0` request, which restarts the clock on the next full sync.
   Future<void> applyChanges(
@@ -181,6 +182,8 @@ class CatalogueRepository {
           mode: InsertMode.insertOrReplace,
         );
       });
+      // Names the catalogue now knows join the ingredients the household already has, in the same all-or-nothing step.
+      await _db.linkIngredientsToCatalogue();
     });
   }
 }

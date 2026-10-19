@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/api.dart';
 import 'package:glean/data/catalogue_sync.dart';
 import 'package:glean/data/database.dart';
+import 'package:glean/data/models/store_section.dart';
 import 'package:glean/data/repositories/catalogue_repository.dart';
+import 'package:glean/data/repositories/ingredients_repository.dart';
+import 'package:glean/data/repositories/shopping_repository.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -207,6 +210,172 @@ void main() {
         ('fresh-coriander', 'coriander'),
       ]),
     );
+  });
+
+  group('linking the household\'s ingredients to what a sync delivers', () {
+    Future<Ingredient> ingredient(String name) => (db.select(
+      db.ingredients,
+    )..where((t) => t.canonicalName.equals(name))).getSingle();
+
+    test('an ingredient the first sync names is linked, by its canonical name '
+        'or an alias, and one it does not name stays unlinked', () async {
+      final repository = IngredientsRepository(db);
+      await repository.resolveOrCreate(canonicalName: 'Ground Cumin');
+      await repository.resolveOrCreate(canonicalName: 'cumin powder');
+      await repository.resolveOrCreate(canonicalName: 'saffron threads');
+      respond(
+        _body(
+          version: 1,
+          items: [_item('ground-cumin', 'ground cumin')],
+          aliases: [
+            _alias('ground cumin', 'ground-cumin'),
+            _alias('cumin powder', 'ground-cumin'),
+          ],
+        ),
+      );
+
+      await sync.sync();
+
+      expect(
+        (await ingredient('ground cumin')).catalogueItemId,
+        'ground-cumin',
+      );
+      expect(
+        (await ingredient('cumin powder')).catalogueItemId,
+        'ground-cumin',
+      );
+      expect((await ingredient('saffron threads')).catalogueItemId, isNull);
+    });
+
+    test('an ingredient is linked by a later sync once the catalogue gains its '
+        'name, and an already linked one keeps its item', () async {
+      final repository = IngredientsRepository(db);
+      await repository.resolveOrCreate(canonicalName: 'ground cumin');
+      await repository.resolveOrCreate(canonicalName: 'tahini');
+      respond(
+        _body(
+          version: 1,
+          items: [_item('ground-cumin', 'ground cumin')],
+          aliases: [_alias('ground cumin', 'ground-cumin')],
+        ),
+      );
+      await sync.sync();
+      expect((await ingredient('tahini')).catalogueItemId, isNull);
+
+      clock = clock.add(const Duration(minutes: 5));
+      respond(
+        _body(
+          version: 2,
+          items: [_item('tahini', 'tahini', group: 'sauces_and_condiments')],
+          aliases: [
+            _alias('tahini', 'tahini'),
+            _alias('ground cumin', 'tahini'),
+          ],
+        ),
+      );
+      await sync.sync();
+
+      expect((await ingredient('tahini')).catalogueItemId, 'tahini');
+      expect(
+        (await ingredient('ground cumin')).catalogueItemId,
+        'ground-cumin',
+        reason: 'a link is never moved by a later sync',
+      );
+    });
+
+    test('an alias of a merged item links to the item that survives', () async {
+      await IngredientsRepository(
+        db,
+      ).resolveOrCreate(canonicalName: 'cilantro');
+      respond(
+        _body(
+          version: 1,
+          items: [
+            _item('coriander', 'coriander', formerIds: ['cilantro-id']),
+          ],
+          aliases: [
+            _alias('cilantro', 'cilantro-id'),
+            _alias('coriander', 'coriander'),
+          ],
+        ),
+      );
+
+      await sync.sync();
+
+      expect((await ingredient('cilantro')).catalogueItemId, 'coriander');
+    });
+
+    test('a store section chosen for an ingredient moves into the override of '
+        'the item it links to, and a different choice already held there '
+        'stays where the household put it', () async {
+      final repository = IngredientsRepository(db);
+      final shopping = ShoppingRepository(db, repository);
+      final tahini = await repository.resolveOrCreate(canonicalName: 'tahini');
+      final paste = await repository.resolveOrCreate(
+        canonicalName: 'sesame paste',
+      );
+      await shopping.moveToSection(
+        ingredientId: tahini.id,
+        section: StoreSection.baking,
+      );
+      await shopping.moveToSection(
+        ingredientId: paste.id,
+        section: StoreSection.frozen,
+      );
+      respond(
+        _body(
+          version: 1,
+          items: [_item('tahini', 'tahini')],
+          aliases: [
+            _alias('tahini', 'tahini'),
+            _alias('sesame paste', 'tahini'),
+          ],
+        ),
+      );
+
+      await sync.sync();
+
+      final override = await (db.select(
+        db.ingredientOverrides,
+      )..where((t) => t.itemId.equals('tahini'))).getSingle();
+      expect(override.section, 'Baking');
+      expect((await ingredient('tahini')).storeSection, isNull);
+      expect(
+        (await ingredient('sesame paste')).storeSection,
+        'frozen',
+        reason: 'the second choice for the same item is kept, not overwritten',
+      );
+    });
+
+    test('an ingredient created after the sync is linked at once when its name '
+        'is already in the catalogue', () async {
+      respond(
+        _body(
+          version: 1,
+          items: [_item('ground-cumin', 'ground cumin')],
+          aliases: [_alias('ground cumin', 'ground-cumin')],
+        ),
+      );
+      await sync.sync();
+
+      final created = await IngredientsRepository(
+        db,
+      ).resolveOrCreate(canonicalName: 'Ground  Cumin');
+
+      expect(created.catalogueItemId, 'ground-cumin');
+      expect(created.form, isNull);
+    });
+
+    test('a failed sync links nothing', () async {
+      await IngredientsRepository(
+        db,
+      ).resolveOrCreate(canonicalName: 'ground cumin');
+      respond('{}', 500);
+
+      await sync.sync();
+
+      expect((await ingredient('ground cumin')).catalogueItemId, isNull);
+    });
   });
 
   test('a sync leaves the household overrides exactly as they were, even '
