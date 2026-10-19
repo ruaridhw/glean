@@ -11,7 +11,8 @@
 #   make start-backend-docker — Dockerized FastAPI server on :8000
 #   make start-ios         — Flutter on iOS Simulator (macOS only)
 #   make start-android     — Flutter on a running Android emulator
-#   make start-web         — Flutter in Chrome with hot reload (web dev loop)
+#   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
+#   make e2e-tokens        — Cognito test-user tokens for the e2e entrypoint (see app/README.md)
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -39,9 +40,21 @@ COGNITO_DOMAIN    ?=
 COGNITO_CLIENT_ID ?=
 WEB_HOST          ?= 127.0.0.1
 WEB_PORT          ?= 8090
+WEB_DEBUG_PORT    ?= 9222
+WEB_HEADLESS      ?=
 
-# Optional, gitignored. Sets e.g. WEB_HOST for a headless box reached over the network.
+# Optional, gitignored. Sets e.g. WEB_HOST/WEB_HEADLESS for a headless box
+# reached over the network, and the Cognito test user for `e2e-tokens`.
 -include .env.local
+
+# Real tokens for the e2e entrypoint's bypass session (see app/README.md,
+# "Calling the backend from the e2e entrypoint"). Set E2E_USERNAME and
+# E2E_PASSWORD (plus AWS_PROFILE/COGNITO_CLIENT_ID) in .env.local and the
+# targets below sign that test user in and pass its tokens through; leave
+# them unset and the bypass session carries no token, as before.
+E2E_USERNAME      ?=
+E2E_PASSWORD      ?=
+_E2E_DEFINES = $(if $(E2E_USERNAME),$(shell scripts/e2e_tokens.sh --dart-defines),)
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -79,7 +92,8 @@ test-e2e:  ## Run the integration_test suite (needs a booted simulator/emulator;
 	cd app && flutter test integration_test/app_test.dart \
 		--dart-define=API_BASE_URL=http://$(if $(API_HOST),$(API_HOST),localhost):$(API_PORT) \
 		--dart-define=COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
-		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID)
+		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID) \
+		$(_E2E_DEFINES)
 
 # ── Lint & Format ─────────────────────────────────────────────────────────────
 
@@ -135,24 +149,36 @@ start-android:  ## Start Flutter on a running Android emulator (needs COGNITO_DO
 		--dart-define=COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
 		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID)
 
-# No Cognito values needed: the web dev loop runs the e2e entrypoint, whose
-# auth bypass only requires non-empty placeholders. API_BASE_URL stays on
-# localhost (as the *browser* sees it) so the bypass's production-URL guard
-# passes; AI-backed calls fail by design because the bypass carries no token.
+# The web dev loop runs the e2e entrypoint in a Chrome that Flutter launches
+# and drives itself, so hot reload reaches the page with no browser
+# extension. On a headless box set WEB_HEADLESS=1 in .env.local; the page is
+# still served on WEB_HOST:WEB_PORT for any browser, and Chrome's DevTools
+# protocol on WEB_DEBUG_PORT is where an automation tool attaches for
+# screenshots. Cognito values are placeholders unless e2e tokens are in play
+# (then the real dev-pool domain/client id are needed for token refresh).
+# API_BASE_URL stays on localhost (as the *browser* sees it) so the bypass's
+# production-URL guard passes.
 .PHONY: start-web
-start-web:  ## Start Flutter web dev loop (hot reload; set WEB_HOST/WEB_PORT in .env.local for a remote box)
-	cd app && flutter run -d web-server \
+start-web:  ## Flutter web dev loop in Chrome (hot reload; WEB_HOST/WEB_PORT/WEB_HEADLESS in .env.local)
+	cd app && flutter run -d chrome \
 		--target lib/main_e2e.dart \
 		--pid-file .dart_tool/start-web.pid \
 		--web-hostname $(WEB_HOST) --web-port $(WEB_PORT) \
+		--web-browser-debug-port $(WEB_DEBUG_PORT) \
+		$(if $(WEB_HEADLESS),--web-run-headless,) \
 		--dart-define=API_BASE_URL=http://localhost:$(API_PORT) \
-		--dart-define=COGNITO_DOMAIN=web-dev-loop \
-		--dart-define=COGNITO_CLIENT_ID=web-dev-loop
+		--dart-define=COGNITO_DOMAIN=$(if $(COGNITO_DOMAIN),$(COGNITO_DOMAIN),web-dev-loop) \
+		--dart-define=COGNITO_CLIENT_ID=$(if $(COGNITO_CLIENT_ID),$(COGNITO_CLIENT_ID),web-dev-loop) \
+		$(_E2E_DEFINES)
 
 .PHONY: reload-web
 reload-web:  ## Hot-reload the running `make start-web` (for agents without its terminal; `r` works there)
 	@[ -f app/.dart_tool/start-web.pid ] || { echo "start-web is not running"; exit 1; }
 	kill -USR1 $$(cat app/.dart_tool/start-web.pid)
+
+.PHONY: e2e-tokens
+e2e-tokens:  ## Print the Cognito test user's tokens as shell exports (needs E2E_USERNAME/E2E_PASSWORD in .env.local)
+	@scripts/e2e_tokens.sh --exports
 
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
 # Worktrees live in .worktrees/ which is already in .gitignore.
