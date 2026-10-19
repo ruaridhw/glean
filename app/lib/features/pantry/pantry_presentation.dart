@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
+import 'package:glean/data/util/week.dart';
 
 /// Display metadata for a pantry section, keyed by food group. Several food groups fold into one display
 /// section (`vegetables` and `fruit` under "Veg & Fruit"; `carbohydrates`/`fats`/`condiments` under "Cupboard"),
@@ -153,9 +154,7 @@ class ExpiryBadge {
 ExpiryBadge? expiryBadgeFor(DateTime? expiryDate, {DateTime? now}) {
   if (expiryDate == null) return null;
 
-  final DateTime today = _dateOnly(now ?? DateTime.now());
-  final DateTime expiry = _dateOnly(expiryDate);
-  final int days = expiry.difference(today).inDays;
+  final int days = calendarDaysBetween(now ?? DateTime.now(), expiryDate);
 
   if (days < 0) {
     return const ExpiryBadge(label: 'Expired', tone: ExpiryTone.expired);
@@ -168,8 +167,6 @@ ExpiryBadge? expiryBadgeFor(DateTime? expiryDate, {DateTime? now}) {
   }
   return ExpiryBadge(label: '${days}d left', tone: ExpiryTone.later);
 }
-
-DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 
 /// Whether [item] counts toward the "N expiring" chip/banner: expired or within a couple of days. Shared by the
 /// pantry header and the Plan nudge so both stay in lockstep.

@@ -3,6 +3,7 @@
 // "left to plan" hint: it must be driven by remaining *capacity*
 // (cooked-excluded, per-week), not `target - totalEntries`.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/util/week.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/features/plan/presentation.dart';
@@ -88,17 +89,14 @@ void main() {
   group('isCurrentWeek', () {
     test('true for the week containing now, false otherwise', () {
       final now = DateTime.now();
-      final thisMonday = now.subtract(Duration(days: now.weekday - 1));
+      final thisMonday = startOfWeek(now);
       expect(
         isCurrentWeek(
           DateTime(thisMonday.year, thisMonday.month, thisMonday.day),
         ),
         isTrue,
       );
-      expect(
-        isCurrentWeek(thisMonday.subtract(const Duration(days: 7))),
-        isFalse,
-      );
+      expect(isCurrentWeek(shiftWeeks(thisMonday, -1)), isFalse);
     });
   });
 

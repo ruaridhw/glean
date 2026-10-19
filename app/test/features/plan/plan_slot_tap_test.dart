@@ -92,7 +92,7 @@ void main() {
   gleanWidgetTest(
     'tapping a planned meal opens its recipe and Back returns to the same week',
     (tester) async {
-      final nextWeek = week.add(const Duration(days: 7));
+      final nextWeek = shiftWeeks(week, 1);
       final recipeId = await plannedMeal('Lentil Dal', date: nextWeek);
       await openPlan(tester);
       await tester.tap(find.byTooltip('Next week'));

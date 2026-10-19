@@ -206,9 +206,7 @@ class PantryRepository {
     final String? resolvedCategory = ingredient.category;
     final DateTime? expiry = resolvedCategory == null
         ? null
-        : effectiveNow.add(
-            Duration(days: await _shelfLifeDaysFor(resolvedCategory)),
-          );
+        : addDays(effectiveNow, await _shelfLifeDaysFor(resolvedCategory));
 
     await _upsert(
       userId: userId,

@@ -90,6 +90,15 @@ void main() {
       expect(expiryBadgeFor(null, now: now), isNull);
     });
 
+    test('counts calendar days across the spring clock change', () {
+      // Only 47 elapsed hours in Europe/London, but two dates apart.
+      final badge = expiryBadgeFor(
+        DateTime(2026, 3, 30),
+        now: DateTime(2026, 3, 28, 9),
+      );
+      expect(badge!.label, '2d left');
+    });
+
     test('a past date is "Expired"', () {
       final badge = expiryBadgeFor(DateTime(2026, 1, 5), now: now);
       expect(badge!.label, 'Expired');
