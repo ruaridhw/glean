@@ -59,7 +59,12 @@ jobs:
       # separate top-level directory it does not recurse into, so this is
       # unit + widget only, never the device-bound suite.
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
-      - run: flutter test
+      # Runners are UTC, which has no clock changes. Run in a daylight-saving zone
+      # so a Duration-based "add 7 days" that drifts an hour (#177) fails here too.
+      - name: flutter test (Europe/London, observes DST)
+        run: flutter test
+        env:
+          TZ: Europe/London
       # grep exits 1 only when every path was scanned and nothing matched. A
       # match (0) or a missing path (2) both fail, so a renamed directory
       # cannot turn this guard into a no-op.
