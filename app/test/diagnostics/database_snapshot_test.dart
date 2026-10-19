@@ -37,7 +37,7 @@ void main() {
         'ok',
       ]);
       for (final String table in <String>[
-        'ingredient_categories',
+        'ingredient_groups',
         'ingredients',
         'user_config',
       ]) {
@@ -49,7 +49,10 @@ void main() {
         expect(_count(copy, table), liveCount, reason: table);
       }
       expect(_count(copy, 'user_config'), 1);
-      expect(copy.select('PRAGMA user_version').single.values.single, 2);
+      expect(
+        copy.select('PRAGMA user_version').single.values.single,
+        live.schemaVersion,
+      );
     },
   );
 
