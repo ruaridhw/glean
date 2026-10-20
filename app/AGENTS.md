@@ -59,9 +59,11 @@ dart run build_runner build --delete-conflicting-outputs  # after touching drift
 ```
 
 None of the above need an Android SDK, Java, or Xcode — they run on any
-machine with the Flutter SDK, including this box. `flutter build`/`flutter
-run`/the `integration_test` suite do need a real toolchain; see
-`README.md` for exact commands and what's Mac-only.
+machine with the Flutter SDK, including this box. Nor does `make start-web`
+(repo root), which runs the e2e entrypoint in Chrome with hot reload for
+eyeballing UI changes; `README.md` says what it does and doesn't cover.
+Native `flutter build`/`flutter run`/the `integration_test` suite do need a
+real toolchain; see `README.md` for exact commands and what's Mac-only.
 
 ## Architecture
 

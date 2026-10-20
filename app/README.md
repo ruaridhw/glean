@@ -1,7 +1,8 @@
 # Glean (Flutter)
 
-The Glean mobile app: Flutter, targeting iOS and Android only (no web/desktop
-scaffolding is committed — see [Web target](#web-target-deferred) below).
+The Glean mobile app: Flutter, targeting iOS and Android. A web target is
+also committed, but only as a local dev loop for eyeballing UI changes in
+Chrome — see [Web dev loop](#web-dev-loop) below; nothing ships to the web.
 Replaces the Expo/React Native app that used to live in this repository
 (see git history).
 
@@ -223,31 +224,128 @@ scaled to 92% so every opaque pixel sits inside the 66dp safe-zone circle; the
 monochrome PNGs are the same shape in plain white. There is no
 `android:roundIcon`, so no separate round variant.
 
-## Web target: deferred
+## Web dev loop
 
-No Flutter web harness is committed (confirm with `flutter create --list-samples`
-style checks if in doubt — there's no `web/` directory here and `.metadata`
-lists only `root`, `android`, `ios` platforms). It was only ever a candidate
-*local* dev-loop convenience: worth building only if driving Chrome proves
-meaningfully faster than driving a real emulator for an agent's
-test-and-iterate loop, which couldn't be measured before a Flutter app
-existed. Now that one does, the benchmark is: time an agent driving Chrome
-vs. an agent driving an Android emulator/iOS Simulator through the same
-representative interaction (e.g. the pantry manual-add flow this
-`integration_test` suite covers). Build the web harness only if Chrome wins
-meaningfully — otherwise leave this section as the record of why not.
-
-If it's ever built:
+`web/` exists so the app can run in Chrome with hot reload for quick visual
+checks, without a Mac, an emulator or a build. It runs `lib/main_e2e.dart`
+(the auth bypass, since Cognito sign-in via `flutter_appauth` has no web
+support) against the real drift/SQLite layer, which on web needs the two
+assets in `web/`: `sqlite3.wasm` and `drift_worker.js`.
 
 ```bash
-flutter drive -d web-server --web-browser-flag="--window-size=390,844"
+make start-web        # from the repo root
 ```
 
-with a version-matched headless `chromedriver` on the `PATH`. Note
-`flutter test --platform chrome` is **not** the right tool for this —
-Flutter's own tooling marks it deprecated/internal. Also note
-`defaultTargetPlatform` resolves to the *host* OS on web (Linux in CI, not
-iOS/Android), so platform-adaptive gestures, theming, and native plugins
-would not be faithfully exercised through it — largely moot here since the
-design system is Material-everywhere on both real platforms already (no
-Cupertino, no platform-adaptive branching to miss).
+Flutter launches and drives its own Chrome, so hot reload reaches the page
+with no browser extension: edit Dart, press `r` in that terminal (`R` for a
+hot restart), or run `make reload-web` from another shell, which signals the
+pid file `flutter run` writes. That is how an agent that started the server
+in the background reloads it. On a laptop the window opens in front of you;
+resize it to a phone shape (or use the DevTools device toolbar at 390×844).
+The in-browser database persists across restarts and reloads, so onboarding
+and seeded data survive.
+
+On a headless or remote box, put these in an untracked `.env.local` at the
+repo root; the Makefile includes it when present:
+
+```
+WEB_HOST=<address the browser can reach>   # default 127.0.0.1
+WEB_PORT=8090
+WEB_HEADLESS=1                             # Chrome runs headless
+```
+
+Chrome's DevTools protocol then listens on `WEB_DEBUG_PORT` (default 9222)
+on loopback; an automation tool attaches there to screenshot and drive the
+very tab Flutter is hot-reloading (set the viewport to 390×844 from the
+tool, since Flutter opens Chrome at desktop size), and any other browser can
+open `http://WEB_HOST:WEB_PORT/` too (that tab needs a refresh after a
+reload). The backend adds CORS headers only when it is not running in
+Lambda, which is what lets the browser read responses from
+`make start-backend`.
+Never commit hostnames or addresses to the Makefile or this file.
+`.env.local.example` at the repo root lists every variable with a
+placeholder; keep the real values in your password manager.
+
+For agents driving the tab: Flutter renders to a canvas, so the DOM is empty
+until the hidden "Enable accessibility" placeholder is clicked (`page
+.locator('flt-semantics-placeholder').dispatchEvent('click')`). Flutter then
+mirrors its semantics tree into the DOM, exposing headings, labels and roles
+for locators. Those nodes are a transparent overlay above the canvas and
+overlap each other, so Playwright's actionability check reports the target
+as obscured; click with `{force: true}`.
+
+`web/icons/` and `web/favicon.png` are rendered from `assets/brand/`
+(the full icon, and the adaptive foreground over the launcher background
+colour for the maskable pair), so a Chrome tab shows the Glean mark. The
+scaffold's `manifest.json` would make a `flutter build web` output
+installable as a PWA, but nothing builds web for release: `make start-web`
+serves a debug build with no service worker, and no Makefile target or
+workflow runs `flutter build web`.
+
+### What web does and doesn't cover
+
+- **Covers:** layout, spacing, theme and design-system work, navigation, the
+  tabs, manual entry, pantry/plan/shop screens, anything backed by the local
+  database, and (with e2e tokens, below) the AI-backed flows against a local
+  backend. `defaultTargetPlatform` is the host OS on web, but the design
+  system is Material-everywhere with no platform branching, so this is moot.
+- **Doesn't cover:** camera (receipt scan), real Cognito sign-in, secure
+  storage, haptics, connectivity. Those stay on a real device: the Codemagic
+  build on the owner's phone, and the emulator/simulator `integration_test`
+  jobs in CI, remain the pre-merge visual check for anything they touch.
+- `flutter test --platform chrome` is **not** part of this loop; Flutter marks
+  it deprecated/internal.
+
+### Calling the backend from the e2e entrypoint
+
+Without tokens the bypass session cannot call an AI endpoint, so the
+**Review items** screen after a scan/describe is unreachable. To reach it,
+`lib/main_e2e.dart` accepts the real tokens of a dedicated Cognito test user
+as `--dart-define=E2E_ACCESS_TOKEN/E2E_ID_TOKEN/E2E_REFRESH_TOKEN` (all three
+or none). The bypass then signs in as that user, refreshes through the real
+dev Cognito domain, and a local backend configured with the dev pool ids
+verifies the tokens against the pool's public keys. Nothing changes in the
+backend and no verification is skipped.
+
+One-time, with AWS credentials for the account, create the user in the
+**dev** pool (ids are the `glean-api-dev` stack's outputs; the pool uses email
+addresses as usernames, and the address never receives mail):
+
+```bash
+scripts/e2e_user.sh <dev UserPoolId> e2e-test-user@example.invalid '<password>'
+```
+
+Then in `.env.local` (never committed; `.env.local.example` lists them):
+
+```
+E2E_USERNAME=e2e-test-user@example.invalid
+E2E_PASSWORD=<password>
+COGNITO_CLIENT_ID=<dev UserPoolClientId>
+COGNITO_DOMAIN=<dev CognitoDomain>
+```
+
+With those set, `make start-web` and `make test-e2e` sign the user in via
+`USER_PASSWORD_AUTH` (`scripts/e2e_tokens.sh`, no AWS credentials needed) and
+pass the tokens through; `make e2e-tokens` prints them as exports for a
+hand-run `flutter` command. Point `make start-backend` at the dev pool with
+the same ids in `backend/.env`, plus the **dev** `OPENROUTER_API_KEY`. There
+are three OpenRouter keys so spend splits by purpose: dev (local
+`backend/.env`), test (GitHub Actions secret for CI) and production
+(Secrets Manager).
+
+The test user owns no server-side data (all state is on-device), and the
+`isProductionApiBaseUrl` guard still refuses to start the e2e entrypoint
+against anything but a loopback backend.
+
+### Pinned web assets
+
+`web/sqlite3.wasm` must match the `sqlite3` version in `pubspec.lock` and
+`web/drift_worker.js` the `drift` version. When either dependency is bumped,
+re-download both from their GitHub releases:
+
+```bash
+curl -sSL -o web/sqlite3.wasm \
+  https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-<ver>/sqlite3.wasm
+curl -sSL -o web/drift_worker.js \
+  https://github.com/simolus3/drift/releases/download/drift-<ver>/drift_worker.js
+```

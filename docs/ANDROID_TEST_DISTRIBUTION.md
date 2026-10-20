@@ -111,8 +111,7 @@ reason it fails with.
 2. In **App Distribution**, create tester group `glean-testers` and add testers.
 3. Create service account `codemagic-app-distribution@glean-ruaridhw.iam.gserviceaccount.com`
    with the **Firebase App Distribution Admin** role. Store its JSON key in
-   Codemagic and back it up at
-   `op://Homelab/Glean Firebase App Distribution/credential`.
+   Codemagic and back it up in your password manager.
 
 ### Signing
 
@@ -123,9 +122,8 @@ keytool -genkeypair -v -keystore glean-release.jks -alias glean \
   -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-Keep the JKS and its passwords in 1Password at
-`op://Homelab/Glean Android Release Signing`. The JKS is attached there as
-`glean-release/jks`, and the item records the certificate SHA-256. The key is
+Keep the JKS and its passwords in your password manager, with the JKS file
+attached and the certificate SHA-256 recorded alongside. The key is
 PKCS12, so the key password is the store password. **Never replace it**: Android
 accepts an update only if it is signed by the same key. Codemagic rebuilds the
 JKS on each builder from the `keystore_credentials` group, so nothing goes

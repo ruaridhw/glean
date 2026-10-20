@@ -26,7 +26,7 @@ for deeper context. `CLAUDE.md` files are compatibility symlinks to these files.
 
 ```
 backend/   — Python / FastAPI, deployed as AWS Lambda (uv)
-app/       — Flutter app (iOS + Android)
+app/       — Flutter app (iOS + Android; web target for the local dev loop only)
 Makefile   — unified task runner for both sub-projects
 ```
 
@@ -50,13 +50,15 @@ make start-backend    # FastAPI dev server on :8000 (hot reload)
 make start-backend-docker # Dockerized FastAPI dev server on :8000 (hot reload)
 make start-ios        # Flutter on iOS Simulator (macOS only)
 make start-android    # Flutter on a running Android emulator
+make start-web        # Flutter in a Chrome it launches, hot reload (no toolchain needed; see app/README.md)
+make e2e-tokens       # Cognito test-user tokens so the e2e entrypoint can call a local backend
 make test-e2e         # Flutter integration_test suite (needs a booted simulator/emulator)
 ```
 
 `start-ios`/`start-android`/`test-e2e` need `COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...`
 — see `app/README.md` for where those values come from. None of the three can
 run without an Android SDK/Java/Xcode toolchain (a Mac, for both platforms);
-`setup-app`, `test-app` and `lint-app` need none of that and run anywhere,
+`setup-app`, `test-app`, `lint-app` and `start-web` need none of that and run anywhere,
 including a plain Linux box.
 
 ### Worktrees
@@ -85,6 +87,13 @@ make worktree-prune                      # prune stale git metadata
   with `git push --force-with-lease`. Never merge `main` or a parent branch
   into a PR branch. Make new commits rather than amending or squashing. When a
   parent PR changes, rebase every PR above it, bottom first.
+- **A PR that changes how something looks shows it.** Live-check the change in
+  the web dev loop (`make start-web`, app/README.md), then attach a before and
+  an after screenshot at phone width to the PR, in the body or a comment. The
+  GitHub API cannot attach images to a comment, so when working headless push
+  the PNGs to the orphan `pr-screenshots` branch under `<pr-number>/` and
+  embed their `raw.githubusercontent.com` URLs. A reviewer should see the
+  change without checking the branch out.
 - **Merging a stack.** `delete_branch_on_merge` is on, so GitHub deletes each
   head branch on merge and retargets the PR above it to `main` itself. Use
   GitHub's native stacked-PR merge, bottom PR first, with a merge commit:

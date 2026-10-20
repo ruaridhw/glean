@@ -26,6 +26,23 @@ void main() {
     });
   });
 
+  group('bypassAuthSnapshotWithTokens', () {
+    test('is active as the token\'s subject and carries the tokens', () {
+      final CognitoTokens tokens = CognitoTokens(
+        accessToken: 'a',
+        refreshToken: 'r',
+        idToken: 'i',
+        userSub: 'test-user-sub',
+        email: '',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      );
+      final AuthSessionSnapshot snapshot = bypassAuthSnapshotWithTokens(tokens);
+      expect(snapshot.status, AuthStatus.active);
+      expect(snapshot.userId, 'test-user-sub');
+      expect(snapshot.tokens, same(tokens));
+    });
+  });
+
   group('assertAuthBypassUnreachable', () {
     test('throws for a production-looking API base URL', () {
       expect(

@@ -1,7 +1,7 @@
 # Glean — root Makefile
 #
 # Backend: Python (uv) deployed as AWS Lambda; runs locally via FastAPI dev server
-# App:     Flutter (iOS + Android)
+# App:     Flutter (iOS + Android; `make start-web` for a Chrome dev loop)
 #
 # Usage:
 #   make setup            — install all dependencies
@@ -11,6 +11,8 @@
 #   make start-backend-docker — Dockerized FastAPI server on :8000
 #   make start-ios         — Flutter on iOS Simulator (macOS only)
 #   make start-android     — Flutter on a running Android emulator
+#   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
+#   make e2e-tokens        — Cognito test-user tokens for the e2e entrypoint (see app/README.md)
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -18,7 +20,11 @@
 # same values the old Expo app read as EXPO_PUBLIC_COGNITO_*) — see
 # app/README.md for where those come from. Neither target, nor `test-app`'s
 # integration counterpart, can run on a Linux box with no Android
-# SDK/Java/Xcode; `setup-app`, `test-app` and `lint-app` can and do.
+# SDK/Java/Xcode; `setup-app`, `test-app`, `lint-app` and `start-web` can and do.
+#
+# Machine-local overrides (bind addresses, ports, test credentials) live in an untracked
+# `.env.local` at the repo root (see .env.local.example) — never commit
+# hostnames or addresses to this file.
 
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
@@ -32,6 +38,23 @@ API_HOST      ?=
 API_PORT      ?= 8000
 COGNITO_DOMAIN    ?=
 COGNITO_CLIENT_ID ?=
+WEB_HOST          ?= 127.0.0.1
+WEB_PORT          ?= 8090
+WEB_DEBUG_PORT    ?= 9222
+WEB_HEADLESS      ?=
+
+# Optional, gitignored. Sets e.g. WEB_HOST/WEB_HEADLESS for a headless box
+# reached over the network, and the Cognito test user for `e2e-tokens`.
+-include .env.local
+
+# Real tokens for the e2e entrypoint's bypass session (see app/README.md,
+# "Calling the backend from the e2e entrypoint"). Set E2E_USERNAME and
+# E2E_PASSWORD (plus AWS_PROFILE/COGNITO_CLIENT_ID) in .env.local and the
+# targets below sign that test user in and pass its tokens through; leave
+# them unset and the bypass session carries no token, as before.
+E2E_USERNAME      ?=
+E2E_PASSWORD      ?=
+_E2E_DEFINES = $(if $(E2E_USERNAME),$(shell scripts/e2e_tokens.sh --dart-defines),)
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -69,7 +92,8 @@ test-e2e:  ## Run the integration_test suite (needs a booted simulator/emulator;
 	cd app && flutter test integration_test/app_test.dart \
 		--dart-define=API_BASE_URL=http://$(if $(API_HOST),$(API_HOST),localhost):$(API_PORT) \
 		--dart-define=COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
-		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID)
+		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID) \
+		$(_E2E_DEFINES)
 
 # ── Lint & Format ─────────────────────────────────────────────────────────────
 
@@ -125,6 +149,37 @@ start-android:  ## Start Flutter on a running Android emulator (needs COGNITO_DO
 		--dart-define=COGNITO_DOMAIN=$(COGNITO_DOMAIN) \
 		--dart-define=COGNITO_CLIENT_ID=$(COGNITO_CLIENT_ID)
 
+# The web dev loop runs the e2e entrypoint in a Chrome that Flutter launches
+# and drives itself, so hot reload reaches the page with no browser
+# extension. On a headless box set WEB_HEADLESS=1 in .env.local; the page is
+# still served on WEB_HOST:WEB_PORT for any browser, and Chrome's DevTools
+# protocol on WEB_DEBUG_PORT is where an automation tool attaches for
+# screenshots. Cognito values are placeholders unless e2e tokens are in play
+# (then the real dev-pool domain/client id are needed for token refresh).
+# API_BASE_URL stays on localhost (as the *browser* sees it) so the bypass's
+# production-URL guard passes.
+.PHONY: start-web
+start-web:  ## Flutter web dev loop in Chrome (hot reload; WEB_HOST/WEB_PORT/WEB_HEADLESS in .env.local)
+	cd app && flutter run -d chrome \
+		--target lib/main_e2e.dart \
+		--pid-file .dart_tool/start-web.pid \
+		--web-hostname $(WEB_HOST) --web-port $(WEB_PORT) \
+		--web-browser-debug-port $(WEB_DEBUG_PORT) \
+		$(if $(WEB_HEADLESS),--web-run-headless,) \
+		--dart-define=API_BASE_URL=http://localhost:$(API_PORT) \
+		--dart-define=COGNITO_DOMAIN=$(if $(COGNITO_DOMAIN),$(COGNITO_DOMAIN),web-dev-loop) \
+		--dart-define=COGNITO_CLIENT_ID=$(if $(COGNITO_CLIENT_ID),$(COGNITO_CLIENT_ID),web-dev-loop) \
+		$(_E2E_DEFINES)
+
+.PHONY: reload-web
+reload-web:  ## Hot-reload the running `make start-web` (for agents without its terminal; `r` works there)
+	@[ -f app/.dart_tool/start-web.pid ] || { echo "start-web is not running"; exit 1; }
+	kill -USR1 $$(cat app/.dart_tool/start-web.pid)
+
+.PHONY: e2e-tokens
+e2e-tokens:  ## Print the Cognito test user's tokens as shell exports (needs E2E_USERNAME/E2E_PASSWORD in .env.local)
+	@scripts/e2e_tokens.sh --exports
+
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
 # Worktrees live in .worktrees/ which is already in .gitignore.
 # Each worktree gets its own branch so feature work stays fully isolated.
@@ -161,5 +216,5 @@ worktree-prune:  ## Prune stale worktree metadata
 
 .PHONY: help
 help:  ## Show this help
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'

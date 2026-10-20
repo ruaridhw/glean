@@ -1,4 +1,8 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_appauth/flutter_appauth.dart';
+import 'package:http/http.dart' as http;
 
 import 'tokens.dart';
 
@@ -22,10 +26,14 @@ class CognitoAuthClient {
     required String cognitoDomain,
     required this.clientId,
     this._appAuth = const FlutterAppAuth(),
+    http.Client? httpClient,
+    bool? refreshOverHttp,
   }) : _config = AuthorizationServiceConfiguration(
          authorizationEndpoint: 'https://$cognitoDomain/oauth2/authorize',
          tokenEndpoint: 'https://$cognitoDomain/oauth2/token',
-       );
+       ),
+       _http = httpClient ?? http.Client(),
+       _refreshOverHttp = refreshOverHttp ?? kIsWeb;
 
   /// Must equal what `backend/template.yaml`'s Cognito app client declares
   /// as a `CallbackURL`, and what the native custom-scheme intent filter on
@@ -35,6 +43,12 @@ class CognitoAuthClient {
   final String clientId;
   final AuthorizationServiceConfiguration _config;
   final FlutterAppAuth _appAuth;
+  final http.Client _http;
+
+  /// `flutter_appauth` has no web implementation, so the web dev loop
+  /// (which only ever holds injected tokens, never signs in) refreshes with
+  /// a plain POST to the token endpoint instead. Native builds keep AppAuth.
+  final bool _refreshOverHttp;
 
   /// Opens Cognito Hosted UI -> Google and exchanges the authorization code for tokens in one native
   /// round trip. Consumes the call's return value directly, so there is no deep-link listener that could
@@ -89,6 +103,7 @@ class CognitoAuthClient {
   /// Exchanges [refreshToken] for a new access/id token pair. Returns `null` on any failure, including a
   /// 200 response missing a usable access or id token, so [AuthController] has one uniform failure signal.
   Future<CognitoTokens?> refresh(String refreshToken) async {
+    if (_refreshOverHttp) return _refreshViaHttp(refreshToken);
     TokenResponse response;
     try {
       response = await _appAuth.token(
@@ -121,6 +136,55 @@ class CognitoAuthClient {
         // using the one the caller supplied.
         refreshToken: response.refreshToken ?? refreshToken,
         expiresAt: response.accessTokenExpirationDateTime ?? DateTime.now(),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// The refresh-token grant as a plain HTTP form post, with the same
+  /// "`null` on any failure" contract as the AppAuth path.
+  Future<CognitoTokens?> _refreshViaHttp(String refreshToken) async {
+    http.Response response;
+    try {
+      response = await _http.post(
+        Uri.parse(_config.tokenEndpoint),
+        headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'grant_type': 'refresh_token',
+          'client_id': clientId,
+          'refresh_token': refreshToken,
+        },
+      );
+    } catch (_) {
+      return null;
+    }
+    if (response.statusCode != 200) return null;
+
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      return null;
+    }
+    if (decoded is! Map<String, dynamic>) return null;
+    final Object? accessToken = decoded['access_token'];
+    final Object? idToken = decoded['id_token'];
+    final Object? expiresIn = decoded['expires_in'];
+    if (accessToken is! String ||
+        accessToken.isEmpty ||
+        idToken is! String ||
+        idToken.isEmpty) {
+      return null;
+    }
+    try {
+      return CognitoTokens.fromIdToken(
+        accessToken: accessToken,
+        idToken: idToken,
+        refreshToken: refreshToken,
+        expiresAt: DateTime.now().add(
+          Duration(seconds: expiresIn is num ? expiresIn.toInt() : 0),
+        ),
       );
     } on FormatException {
       return null;

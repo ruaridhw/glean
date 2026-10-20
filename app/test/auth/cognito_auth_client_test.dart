@@ -1,6 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/cognito_auth_client.dart';
+import 'package:glean/auth/tokens.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'support/fakes.dart';
@@ -198,5 +203,57 @@ void main() {
         expect(tokens, isNull);
       },
     );
+  });
+
+  group('refresh over HTTP (web dev loop)', () {
+    CognitoAuthClient clientWith(http.Client httpClient) => CognitoAuthClient(
+      cognitoDomain: 'auth.example.com',
+      clientId: 'client-1',
+      httpClient: httpClient,
+      refreshOverHttp: true,
+    );
+
+    test('posts the refresh grant as a form and keeps the old refresh '
+        'token', () async {
+      http.Request? seen;
+      final client = clientWith(
+        MockClient((request) async {
+          seen = request;
+          return http.Response(
+            jsonEncode({
+              'access_token': 'new-access',
+              'id_token': buildTestJwt({'sub': 'user-1', 'email': 'a@b.c'}),
+              'expires_in': 3600,
+              'token_type': 'Bearer',
+            }),
+            200,
+          );
+        }),
+      );
+      final CognitoTokens? tokens = await client.refresh('old-refresh');
+
+      expect(seen!.url.toString(), 'https://auth.example.com/oauth2/token');
+      expect(seen!.bodyFields, {
+        'grant_type': 'refresh_token',
+        'client_id': 'client-1',
+        'refresh_token': 'old-refresh',
+      });
+      expect(tokens!.accessToken, 'new-access');
+      expect(tokens.refreshToken, 'old-refresh');
+      expect(tokens.userSub, 'user-1');
+      expect(tokens.isExpired, isFalse);
+    });
+
+    test('returns null on a non-200, a malformed body or a thrown '
+        'request', () async {
+      for (final handler in <MockClientHandler>[
+        (_) async => http.Response('{"error":"invalid_grant"}', 400),
+        (_) async => http.Response('not json', 200),
+        (_) async => http.Response(jsonEncode({'access_token': 'x'}), 200),
+        (_) async => throw http.ClientException('offline'),
+      ]) {
+        expect(await clientWith(MockClient(handler)).refresh('r'), isNull);
+      }
+    });
   });
 }
