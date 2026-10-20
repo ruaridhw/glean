@@ -87,6 +87,13 @@ make worktree-prune                      # prune stale git metadata
   with `git push --force-with-lease`. Never merge `main` or a parent branch
   into a PR branch. Make new commits rather than amending or squashing. When a
   parent PR changes, rebase every PR above it, bottom first.
+- **A PR that changes how something looks shows it.** Live-check the change in
+  the web dev loop (`make start-web`, app/README.md), then attach a before and
+  an after screenshot at phone width to the PR, in the body or a comment. The
+  GitHub API cannot attach images to a comment, so when working headless push
+  the PNGs to the orphan `pr-screenshots` branch under `<pr-number>/` and
+  embed their `raw.githubusercontent.com` URLs. A reviewer should see the
+  change without checking the branch out.
 - **Merging a stack.** `delete_branch_on_merge` is on, so GitHub deletes each
   head branch on merge and retargets the PR above it to `main` itself. Use
   GitHub's native stacked-PR merge, bottom PR first, with a merge commit:
