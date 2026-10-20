@@ -318,7 +318,12 @@ def v2_store() -> InMemoryCatalogueStore:
 
 @pytest.mark.parametrize(
     ("spelling", "canonical"),
-    [("tinned butter beans in water", "tinned butter beans"), ("semi skimmed milk", "semi-skimmed milk")],
+    [
+        ("tinned butter beans in water", "tinned butter beans"),
+        ("semi skimmed milk", "semi-skimmed milk"),
+        ("desiccated coconut", "dried coconut flakes"),
+        ("dessicated coconut", "dried coconut flakes"),  # historical alias still resolves
+    ],
 )
 def test_the_spellings_a_merge_or_move_could_lose_still_resolve(spelling: str, canonical: str) -> None:
     found = v2_store().get_by_name(spelling)

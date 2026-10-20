@@ -53,3 +53,26 @@ def test_seeding_after_one_item_changed_rewrites_only_that_item(table: Any) -> N
 
     assert seed_catalogue.seed_catalogue(store) == 1
     assert store.get_by_name(first.name) == first
+
+
+def test_corrected_coconut_alias_reseeds_once_and_reaches_delta_sync(table: Any) -> None:
+    store = DynamoCatalogueStore("seed-test")
+    items = load_seed().items
+    coconut = next(item for item in items if item.id == "dried-coconut-flakes")
+    old_coconut = coconut.model_copy(
+        update={"aliases": tuple(alias for alias in coconut.aliases if alias != "desiccated coconut")}
+    )
+    store.seed(old_coconut if item.id == coconut.id else item for item in items)
+    held_version = store.catalogue_version()
+
+    assert seed_catalogue.seed_catalogue(store) == 1
+    assert store.get_by_name("desiccated coconut") == coconut
+    assert store.get_by_name("dessicated coconut") == coconut  # historical inputs keep matching
+    assert coconut.former_ids == ()  # an alias addition does not rename or merge the item
+    changes = store.changes_since(held_version)
+    assert changes.version == held_version + 1
+    assert changes.items == [coconut]
+
+    assert seed_catalogue.seed_catalogue(store) == 0
+    assert store.changes_since(changes.version).items == []
+    assert store.catalogue_version() == changes.version
