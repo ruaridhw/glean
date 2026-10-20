@@ -61,6 +61,9 @@ Every LLM response is read through `LLMRouter.invoke` -> `invoke_structured`, wh
 ranges) in typed fields and enums, not prompt prose. Shopping units are the `ShoppingUnit` enum, which mirrors the
 app's `shoppingUnits` list by hand (a test catches drift).
 
+Callers pass `invoke` a `system` prompt and a `user` message (text, or text and `ImagePart`s) and never import
+LangChain or the OpenRouter SDK. Only `llm.py` does; ruff's `TID251` rejects those imports anywhere else in `src/glean`.
+
 ### Auth
 
 `verify_cognito_token(request, credentials)` is a FastAPI dependency:
