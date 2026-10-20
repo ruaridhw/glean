@@ -24,7 +24,7 @@ uv run fastapi dev src/glean/main.py
 
 The server starts at `http://localhost:8000` with hot reload.
 
-When `ENVIRONMENT=dev` (set in `.env`), Cognito JWT validation is bypassed and all requests authenticate as `local-dev-user`. This lets you hit the API without a real Cognito token.
+When `ENVIRONMENT=dev` (set in `.env`) and the server runs locally, Cognito JWT validation is bypassed and all requests authenticate as `local-dev-user`. This lets you hit the API without a real Cognito token. A deployed function always verifies tokens, whatever its `ENVIRONMENT`.
 
 ### LangSmith Tracing
 
