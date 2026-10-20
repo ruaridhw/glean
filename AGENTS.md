@@ -94,6 +94,12 @@ make worktree-prune                      # prune stale git metadata
 - **Plans are ephemeral.** Plans, scratch notes and review ledgers live under
   `/tmp` and are never committed. (`docs/*` being gitignored hides plan files;
   it does not make committing them acceptable.)
+- **UI/UX changes pass a design gate.** Before building a ticket that adds or
+  changes a screen or interaction, make two or three options for each affected
+  screen (HTML wireframes, or a clickable prototype for a multi-step flow) and
+  serve them in Plannotator for the owner to annotate. Build from the option
+  the owner picks, with their annotations. Like plans, the options live under
+  `/tmp`.
 - **Worktrees start from `origin/main`.** `make worktree` fetches `origin` and
   branches from `BASE`, which defaults to `origin/main`, so a stale checkout
   never becomes the base. For a stacked PR pass `BASE=<parent branch>`.
