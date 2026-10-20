@@ -97,6 +97,8 @@ paths = ["src/", "vulture_whitelist.py"]
 
 [tool.typos.default]
 locale = "en-gb"
+# Historical coconut alias in the seed and v1 fixture: keep misspelled inputs resolving, not the word elsewhere.
+extend-ignore-re = ['"dessicated coconut"']
 
 [tool.typos.default.extend-words]
 # Standard spellings in HTTP headers, AWS APIs, and OAuth specs
@@ -115,8 +117,6 @@ chiles = "chiles"
 chili = "chili"
 # Thai fish sauce (nam pla), a catalogue alias.
 nam = "nam"
-# The catalogue seed's "dessicated coconut" alias, as written; changing it is a catalogue data change.
-dessicated = "dessicated"
 # Import code mirrors upstream/API spelling and mobile's existing normalization module name.
 normalization = "normalization"
 serialization = "serialization"
