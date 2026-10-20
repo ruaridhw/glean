@@ -13,6 +13,9 @@ repos:
     hooks:
       - id: typos
         files: ^backend/
+        # Report only. The hook's default --write-changes "corrects" library and API spellings
+        # (unicodedata.normalize, CSS color) to en-gb, which breaks the code.
+        args: [--force-exclude]
   - repo: local
     hooks:
       - id: commit-msg-policy
