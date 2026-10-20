@@ -80,6 +80,15 @@ void main() {
           final paragraph = tester.renderObject<RenderParagraph>(error);
           expect(paragraph.overflow, isNot(TextOverflow.ellipsis));
           expect(paragraph.didExceedMaxLines, isFalse);
+          // The message uses the card's available width, not the narrow
+          // quantity field, and sits below both quantity and unit inputs.
+          final nameBounds = tester.getRect(find.byType(TextField).first);
+          final errorBounds = tester.getRect(error);
+          expect(errorBounds.width, greaterThanOrEqualTo(nameBounds.width));
+          expect(
+            errorBounds.top,
+            greaterThan(tester.getBottomRight(find.byType(TextField).at(2)).dy),
+          );
           expect(
             tester.getTopLeft(error).dy,
             greaterThan(

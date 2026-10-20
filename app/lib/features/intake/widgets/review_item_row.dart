@@ -88,11 +88,11 @@ class ReviewItemRow extends StatelessWidget {
                       ),
                       decoration: InputDecoration(
                         isDense: true,
-                        // The default errorText renderer ellipsizes inside this
-                        // 90px field, hiding the validation rule on a phone.
+                        // Keep the input's error state; the message below
+                        // spans the card instead of this narrow field.
                         error: quantityErrorText == null
                             ? null
-                            : Text(quantityErrorText!),
+                            : const SizedBox.shrink(),
                       ),
                     ),
                   ),
@@ -110,6 +110,20 @@ class ReviewItemRow extends StatelessWidget {
                 ),
               ],
             ),
+            if (quantityErrorText != null)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: tokens.spacing.sm,
+                  left: tokens.spacing.md,
+                  right: tokens.spacing.md,
+                ),
+                child: Text(
+                  quantityErrorText!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ),
             if (requiresGroup) ...<Widget>[
               SizedBox(height: tokens.spacing.sm),
               GleanField(
