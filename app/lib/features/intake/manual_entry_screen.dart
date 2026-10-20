@@ -97,20 +97,19 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              TextField(
-                controller: _nameController,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Ingredient name'),
+              GleanField(
+                label: 'Ingredient name',
+                child: TextField(controller: _nameController, autofocus: true),
               ),
               SizedBox(height: tokens.spacing.md),
-              TextField(
-                controller: _quantityController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Quantity',
-                  errorText: quantityError,
+              GleanField(
+                label: 'Quantity',
+                child: TextField(
+                  controller: _quantityController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(errorText: quantityError),
                 ),
               ),
               SizedBox(height: tokens.spacing.md),
@@ -131,20 +130,22 @@ class _ManualEntryScreenState extends ConsumerState<ManualEntryScreen> {
                 ],
               ),
               SizedBox(height: tokens.spacing.md),
-              DropdownButtonFormField<String>(
-                initialValue: _groupId,
-                decoration: InputDecoration(
-                  labelText: 'Ingredient group',
-                  errorText: groupError,
+              GleanField(
+                label: 'Ingredient group',
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _groupId,
+                  decoration: InputDecoration(errorText: groupError),
+                  items: <DropdownMenuItem<String>>[
+                    for (final IngredientGroupSeed seed in selectableGroupSeeds)
+                      DropdownMenuItem<String>(
+                        value: seed.id,
+                        child: Text(seed.name),
+                      ),
+                  ],
+                  onChanged: (String? value) =>
+                      setState(() => _groupId = value),
                 ),
-                items: <DropdownMenuItem<String>>[
-                  for (final IngredientGroupSeed seed in selectableGroupSeeds)
-                    DropdownMenuItem<String>(
-                      value: seed.id,
-                      child: Text(seed.name),
-                    ),
-                ],
-                onChanged: (String? value) => setState(() => _groupId = value),
               ),
               SizedBox(height: tokens.spacing.xl),
               FilledButton(

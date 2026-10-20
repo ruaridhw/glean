@@ -40,12 +40,14 @@ class _ClarifyingQuestionsCardState extends State<ClarifyingQuestionsCard> {
                     top: tokens.spacing.sm,
                     bottom: tokens.spacing.md,
                   ),
-                  child: TextField(
-                    key: ValueKey(question),
-                    enabled: !widget.pending,
-                    decoration: const InputDecoration(labelText: 'Answer'),
-                    onChanged: (value) =>
-                        setState(() => _answers[question] = value),
+                  child: GleanField(
+                    label: 'Answer',
+                    child: TextField(
+                      key: ValueKey(question),
+                      enabled: !widget.pending,
+                      onChanged: (value) =>
+                          setState(() => _answers[question] = value),
+                    ),
                   ),
                 ),
             ],

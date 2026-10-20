@@ -54,11 +54,8 @@ void main() {
         'ingredient group and returns to Pantry', (WidgetTester tester) async {
       await pumpManualEntry(tester);
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Ingredient name'),
-        'kale',
-      );
-      await tester.enterText(find.widgetWithText(TextField, 'Quantity'), '2');
+      await tester.enterText(labeledTextField('Ingredient name'), 'kale');
+      await tester.enterText(labeledTextField('Quantity'), '2');
 
       await tester.tap(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
@@ -99,14 +96,8 @@ void main() {
 
         await pumpManualEntry(tester);
 
-        await tester.enterText(
-          find.widgetWithText(TextField, 'Ingredient name'),
-          'chives',
-        );
-        await tester.enterText(
-          find.widgetWithText(TextField, 'Quantity'),
-          '10',
-        );
+        await tester.enterText(labeledTextField('Ingredient name'), 'chives');
+        await tester.enterText(labeledTextField('Quantity'), '10');
         // 'g' is the default chip selection — no conversion path to the
         // existing row's 'units'.
         await tester.tap(find.byType(DropdownButtonFormField<String>));

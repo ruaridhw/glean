@@ -3,6 +3,7 @@ library;
 
 export 'badge.dart';
 export 'brand_mark.dart';
+export 'field.dart';
 export 'haptics.dart';
 export 'list_skeleton.dart';
 export 'skeleton.dart';
