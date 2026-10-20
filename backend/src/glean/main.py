@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from mangum import Mangum
 
 from glean.catalogue.router import router as catalogue_router
-from glean.dependencies import verify_cognito_token
+from glean.dependencies import local_auth_bypass_enabled, verify_cognito_token
 from glean.dev.router import router as dev_router
 from glean.health.router import router as health_router
 from glean.meal_plan.router import router as meal_plan_router
@@ -37,8 +37,8 @@ app.include_router(recipes_router)
 app.include_router(shopping_router)
 app.include_router(meal_plan_router)
 
-if os.environ.get("ENVIRONMENT") == "dev":
+if local_auth_bypass_enabled(os.environ):
     app.dependency_overrides[verify_cognito_token] = lambda: "local-dev-user"
-    logger.warning("Auth bypassed — ENVIRONMENT=dev")
+    logger.warning("Auth bypassed — ENVIRONMENT=dev, running locally")
 
 handler = Mangum(app)

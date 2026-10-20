@@ -1,5 +1,6 @@
 import json
 import urllib.request
+from collections.abc import Mapping
 from functools import lru_cache
 from typing import Annotated
 
@@ -13,6 +14,12 @@ from glean.decisions import DecisionClient
 from glean.llm import LLMRouter
 
 security = HTTPBearer(auto_error=False)
+
+
+def local_auth_bypass_enabled(environ: Mapping[str, str]) -> bool:
+    """True only for a backend run locally with `ENVIRONMENT=dev`. A deployed function (`AWS_LAMBDA_FUNCTION_NAME`
+    set) always verifies tokens, whatever its `ENVIRONMENT`, so a dev-stage deployment is never open."""
+    return environ.get("ENVIRONMENT") == "dev" and not environ.get("AWS_LAMBDA_FUNCTION_NAME")
 
 
 def get_llm_router(settings: Annotated[Settings, Depends(get_settings)]) -> LLMRouter:
