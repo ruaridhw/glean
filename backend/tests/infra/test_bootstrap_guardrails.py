@@ -38,19 +38,33 @@ def test_the_alert_email_comes_from_a_stack_parameter_not_the_repo() -> None:
     assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", BOOTSTRAP.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("policy", ["GleanDeployPolicyProd", "GleanDeployPolicyDev"])
-def test_deploy_policies_can_manage_only_their_environments_catalogue_table(
-    resources: dict[str, Any], policy: str
-) -> None:
-    env = "prod" if policy.endswith("Prod") else "dev"
-    statements = resources[policy]["Properties"]["PolicyDocument"]["Statement"]
+def test_the_deploy_policy_can_manage_only_the_prod_catalogue_table(resources: dict[str, Any]) -> None:
+    statements = resources["GleanDeployPolicyProd"]["Properties"]["PolicyDocument"]["Statement"]
     dynamo = [s for s in statements if "dynamodb:*" in _as_list(s["Action"])]
     assert len(dynamo) == 1
     assert [r["Sub"] for r in dynamo[0]["Resource"]] == [
-        f"arn:aws:dynamodb:*:${{AWS::AccountId}}:table/glean-catalogue-{env}",
-        f"arn:aws:dynamodb:*:${{AWS::AccountId}}:table/glean-catalogue-{env}/index/*",
+        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod",
+        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod/index/*",
     ]
     assert not any(a.startswith("budgets:") for s in statements for a in _as_list(s["Action"]))
+
+
+def test_every_role_github_can_assume_is_pinned_to_an_approved_environment(resources: dict[str, Any]) -> None:
+    """A role any workflow run could assume would bypass the prod environment's required reviewers."""
+    github_roles = {
+        name: r["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+        for name, r in resources.items()
+        if r["Type"] == "AWS::IAM::Role"
+        and any(
+            s.get("Principal", {}).get("Federated") == {"GetAtt": "GitHubOidcProvider.Arn"}
+            for s in r["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+        )
+    }
+    assert github_roles
+    for name, statements in github_roles.items():
+        for statement in statements:
+            subjects = _as_list(statement["Condition"]["StringLike"]["token.actions.githubusercontent.com:sub"]["Sub"])
+            assert subjects == ["repo:${GitHubOrg}/${GitHubRepo}:environment:prod"], name
 
 
 def _as_list(value: str | list[str]) -> list[str]:

@@ -123,102 +123,6 @@ Resources:
       ManagedPolicyArns:
         - !Ref GleanDeployPolicyProd
 
-  GleanDeployPolicyDev:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: GleanDeployPolicyDev
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action: cloudformation:*
-            Resource: '*'
-          - Effect: Allow
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-              - s3:GetBucketLocation
-              - s3:CreateBucket
-            Resource:
-              - !Sub 'arn:aws:s3:::glean-sam-artefacts-dev-${AWS::AccountId}'
-              - !Sub 'arn:aws:s3:::glean-sam-artefacts-dev-${AWS::AccountId}/*'
-          - Effect: Allow
-            Action: s3:*
-            Resource:
-              - !Sub 'arn:aws:s3:::glean-receipts-dev-${AWS::AccountId}'
-              - !Sub 'arn:aws:s3:::glean-receipts-dev-${AWS::AccountId}/*'
-              - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}'
-              - !Sub 'arn:aws:s3:::glean-recipe-cache-dev-${AWS::AccountId}/*'
-          # The catalogue table (ADR 0001) is created and updated by CloudFormation with the deploy
-          # role's credentials; scope it to this environment's table and its indexes.
-          - Effect: Allow
-            Action: dynamodb:*
-            Resource:
-              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-dev'
-              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-dev/index/*'
-          - Effect: Allow
-            Action:
-              - dynamodb:DescribeLimits
-              - dynamodb:ListTables
-            Resource: '*'
-          - Effect: Allow
-            Action: lambda:*
-            Resource: '*'
-          - Effect: Allow
-            Action: apigateway:*
-            Resource: '*'
-          - Effect: Allow
-            Action: cognito-idp:*
-            Resource: '*'
-          - Effect: Allow
-            Action:
-              - iam:CreateRole
-              - iam:DeleteRole
-              - iam:AttachRolePolicy
-              - iam:DetachRolePolicy
-              - iam:PutRolePolicy
-              - iam:DeleteRolePolicy
-              - iam:PassRole
-              - iam:GetRole
-              - iam:GetRolePolicy
-              - iam:ListRolePolicies
-              - iam:ListAttachedRolePolicies
-              - iam:TagRole
-              - iam:UntagRole
-            Resource: '*'
-          - Effect: Allow
-            Action:
-              - logs:*
-              - cloudwatch:*
-              - xray:*
-              - textract:*
-            Resource: '*'
-          - Effect: Allow
-            Action: secretsmanager:GetSecretValue
-            Resource: !Sub 'arn:aws:secretsmanager:eu-west-2:${AWS::AccountId}:secret:glean/dev/*'
-
-  GleanDeployRoleDev:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: GleanDeployRoleDev
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Federated: !GetAtt GitHubOidcProvider.Arn
-            Action: sts:AssumeRoleWithWebIdentity
-            Condition:
-              StringEquals:
-                token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub:
-                  !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
-      ManagedPolicyArns:
-        - !Ref GleanDeployPolicyDev
-
   # ADR 0001: the catalogue must stay inside the DynamoDB free tier, so any DynamoDB charge at all is an alert.
   DynamoDbChargeBudget:
     Type: AWS::Budgets::Budget
@@ -247,7 +151,5 @@ Resources:
 Outputs:
   GleanDeployRoleProdArn:
     Value: !GetAtt GleanDeployRoleProd.Arn
-  GleanDeployRoleDevArn:
-    Value: !GetAtt GleanDeployRoleDev.Arn
   OidcProviderArn:
     Value: !GetAtt GitHubOidcProvider.Arn
