@@ -274,6 +274,14 @@ for locators. Those nodes are a transparent overlay above the canvas and
 overlap each other, so Playwright's actionability check reports the target
 as obscured; click with `{force: true}`.
 
+`web/icons/` and `web/favicon.png` are rendered from `assets/brand/`
+(the full icon, and the adaptive foreground over the launcher background
+colour for the maskable pair), so a Chrome tab shows the Glean mark. The
+scaffold's `manifest.json` would make a `flutter build web` output
+installable as a PWA, but nothing builds web for release: `make start-web`
+serves a debug build with no service worker, and no Makefile target or
+workflow runs `flutter build web`.
+
 ### What web does and doesn't cover
 
 - **Covers:** layout, spacing, theme and design-system work, navigation, the
