@@ -73,13 +73,14 @@ def all_groups() -> list[str]:
 
 @dataclass
 class FakeRouter:
-    """Stands in for LLMRouter: `invoke(feature, schema, messages, **kwargs)` answers from `script`; records calls."""
+    """Stands in for LLMRouter: `invoke(feature, schema, system=, user=, **kwargs)` answers `script(schema, user)`;
+    records calls."""
 
-    script: Callable[[Any, list[str]], Any] | None = None
+    script: Callable[[Any, Any], Any] | None = None
     calls: list[dict[str, Any]] = field(default_factory=list)
 
-    def invoke(self, feature: Any, schema: type, messages: Any, **kwargs: Any) -> Any:
-        self.calls.append({"feature": feature, "schema": schema, "messages": messages, "kwargs": kwargs})
+    def invoke(self, feature: Any, schema: type, *, system: str, user: Any, **kwargs: Any) -> Any:
+        self.calls.append({"feature": feature, "schema": schema, "system": system, "user": user, "kwargs": kwargs})
         if self.script is None:
             raise AssertionError("unexpected LLM call")
-        return self.script(schema, messages)
+        return self.script(schema, user)

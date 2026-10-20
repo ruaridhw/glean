@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from dotenv import dotenv_values
-from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, SecretStr
 
 from glean.catalogue.groups import GROUPS, GroupId, Kind
@@ -226,10 +225,10 @@ class _Recorder:
             self.decision_cost += answer.usage.cost
         return answer
 
-    def invoke(self, feature: Any, schema: Any, messages: Any, **kwargs: Any) -> Any:
-        reply = self._router.invoke(feature, schema, messages, **kwargs)
+    def invoke(self, feature: Any, schema: Any, *, system: str, user: str, **kwargs: Any) -> Any:
+        reply = self._router.invoke(feature, schema, system=system, user=user, **kwargs)
         self.naming_calls += 1
-        self.naming_cost += _flash_lite_cost(sum(len(m.content) for m in messages), len(reply.model_dump_json()))
+        self.naming_cost += _flash_lite_cost(len(system) + len(user), len(reply.model_dump_json()))
         return reply
 
 
@@ -281,8 +280,9 @@ def _llm_only_run(router: LLMRouter, label: Label, store: InMemoryCatalogueStore
     answer = router.invoke(
         Feature.INGREDIENT_NORMALISATION,
         LLMOnlyAnswer,
-        [SystemMessage(content=_LLM_ONLY_PROMPT), HumanMessage(content=prompt)],
-        request_timeout=30_000,
+        system=_LLM_ONLY_PROMPT,
+        user=prompt,
+        timeout_ms=30_000,
     )
     latency = time.monotonic() - started
     chosen = answer.match if answer.match in {item.name for item in shortlist} else None

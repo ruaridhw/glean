@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from glean.llm import Feature
@@ -56,14 +55,11 @@ def name_items(
     """Name every request in one call. Returns canonical names by input; names the model skipped are absent."""
     payload = json.dumps([request.model_dump() for request in requests], ensure_ascii=False)
     where = f"These came from: {context}.\n" if context else ""
-    options: dict[str, Any] = {} if timeout_ms is None else {"request_timeout": timeout_ms}
     response = llm_router.invoke(
         Feature.INGREDIENT_NORMALISATION,
         NamingResponse,
-        [
-            SystemMessage(content=NAMING_SYSTEM_PROMPT),
-            HumanMessage(content=f"{where}Name these items (JSON, one object per item):\n{payload}"),
-        ],
-        **options,
+        system=NAMING_SYSTEM_PROMPT,
+        user=f"{where}Name these items (JSON, one object per item):\n{payload}",
+        timeout_ms=timeout_ms,
     )
     return {entry.input: entry.canonical_name for entry in response.names}

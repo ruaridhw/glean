@@ -9,7 +9,6 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from glean.llm import Feature
@@ -61,13 +60,13 @@ class SchemaOrgThenLlmParser:
                 confidence=1.0,
             )
 
-        messages = [
-            SystemMessage(content=URL_PARSE_SYSTEM_PROMPT),
-            HumanMessage(content=f"Parse this HTML:\n\n{html[:8000]}"),
-        ]
-
         try:
-            llm_response = llm_router.invoke(Feature.RECIPE_IMPORT, RecipeLlmResponse, messages)
+            llm_response = llm_router.invoke(
+                Feature.RECIPE_IMPORT,
+                RecipeLlmResponse,
+                system=URL_PARSE_SYSTEM_PROMPT,
+                user=f"Parse this HTML:\n\n{html[:8000]}",
+            )
         except ValidationError as exc:
             raise RecipeImportError("invalid_llm_json", "Recipe extraction model returned malformed fields") from exc
         except Exception as exc:

@@ -183,10 +183,10 @@ def test_corpus_mode_offers_sampled_candidates_and_returns_external_ids(tmp_path
     assert [(s.external_id, s.recipe_id, s.title) for s in result.suggestions] == [
         ("rec_bolognese", None, "Beef Bolognese")
     ]
-    args, _ = llm_router.invoke.call_args
+    args, kwargs = llm_router.invoke.call_args
     assert args[0] == Feature.MEAL_PLAN_GENERATION
     assert args[1] is CorpusMealPlanResponse
-    offered = json.loads(args[2][-1].content)["candidates"]
+    offered = json.loads(kwargs["user"])["candidates"]
     assert {candidate["external_id"] for candidate in offered} == {"rec_bolognese", "rec_salmon"}
 
 
@@ -239,8 +239,8 @@ class _ModelThatSuggestsEveryCorpusRecipe:
     def __init__(self, *also: str) -> None:
         self._also = also
 
-    def invoke(self, _feature, _schema, messages, **_kwargs) -> CorpusMealPlanResponse:
-        offered = [candidate["external_id"] for candidate in json.loads(messages[-1].content)["candidates"]]
+    def invoke(self, _feature, _schema, *, user: str, **_kwargs) -> CorpusMealPlanResponse:
+        offered = [candidate["external_id"] for candidate in json.loads(user)["candidates"]]
         return CorpusMealPlanResponse(
             suggestions=[
                 CorpusMealPlanRecipe(external_id=external_id, title=external_id, reason="Looks good.")

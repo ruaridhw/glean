@@ -4,8 +4,6 @@ import json
 import random
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from glean.llm import Feature
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.schemas import (
@@ -90,10 +88,8 @@ def _generate_from_saved(request: MealPlanRequest, *, llm_router: LLMRouter) -> 
     response = llm_router.invoke(
         Feature.MEAL_PLAN_GENERATION,
         MealPlanResponse,
-        [
-            SystemMessage(content=MEAL_PLAN_SYSTEM_PROMPT),
-            HumanMessage(content=json.dumps(context, default=str)),
-        ],
+        system=MEAL_PLAN_SYSTEM_PROMPT,
+        user=json.dumps(context, default=str),
     )
 
     # The app can only plan recipes the user has saved, so drop anything the model invented.
@@ -158,10 +154,8 @@ def _generate_from_corpus(
     response = llm_router.invoke(
         Feature.MEAL_PLAN_GENERATION,
         CorpusMealPlanResponse,
-        [
-            SystemMessage(content=CORPUS_MEAL_PLAN_SYSTEM_PROMPT),
-            HumanMessage(content=json.dumps(context, default=str)),
-        ],
+        system=CORPUS_MEAL_PLAN_SYSTEM_PROMPT,
+        user=json.dumps(context, default=str),
     )
 
     offered = {candidate.external_id for candidate in candidates}

@@ -7,14 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
-from glean.llm import Feature
+from glean.llm import Feature, ImagePart
 from glean.main import app
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
-from glean.receipts.service import describe_purchase
+from glean.receipts.service import NORMALISE_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT, describe_purchase
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -124,9 +123,14 @@ def test_scan_receipt_vision_mode(client: TestClient, auth_headers: dict[str, st
     items = response.json()["items"]
     assert len(items) == 2
     assert items[0]["name"] == "chicken breast"
-    args, _ = llm_router.invoke.call_args
+    args, kwargs = llm_router.invoke.call_args
     assert args[0] == Feature.RECEIPT_SCAN
     assert args[1] is ScanResponse
+    assert kwargs["system"] == VISION_SYSTEM_PROMPT
+    assert kwargs["user"] == [
+        "Extract and normalise all items from this receipt.",
+        ImagePart(data=b"fake-image-bytes", mime_type="image/jpeg"),
+    ]
 
 
 def test_describe_purchase_parses_text(client: TestClient, auth_headers: dict[str, str]) -> None:
@@ -197,9 +201,8 @@ def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
     response = describe_purchase(DescribeRequest(text="I bought chicken and milk"), llm_router=llm_router)
 
     assert len(response.items) == 2
-    args, _ = llm_router.invoke.call_args
+    args, kwargs = llm_router.invoke.call_args
     assert args[0] == Feature.PANTRY_PURCHASE_DESCRIPTION
     assert args[1] is ScanResponse
-    messages = args[2]
-    assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], HumanMessage)
+    assert kwargs["system"] == NORMALISE_SYSTEM_PROMPT
+    assert kwargs["user"] == "Parse this grocery purchase description: I bought chicken and milk"
