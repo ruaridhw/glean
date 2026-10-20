@@ -110,6 +110,13 @@ analyze = "analyze"
 ARTIFACTS = "ARTIFACTS"
 # Recipe names may refer to chile peppers, not the British spelling of the country.
 Chile = "Chile"
+# US recipes and test inputs spell the peppers chiles and chili.
+chiles = "chiles"
+chili = "chili"
+# Thai fish sauce (nam pla), a catalogue alias.
+nam = "nam"
+# The catalogue seed's "dessicated coconut" alias, as written; changing it is a catalogue data change.
+dessicated = "dessicated"
 # Import code mirrors upstream/API spelling and mobile's existing normalization module name.
 normalization = "normalization"
 serialization = "serialization"
@@ -121,3 +128,17 @@ centimeter = "centimeter"
 centimeters = "centimeters"
 fiber = "fiber"
 fiberContent = "fiberContent"
+# Library and web spellings: AWS TransactionCanceledException, Python's unicodedata.normalize and weakref.finalize,
+# and the CSS and SVG in the judge-study HTML pages ("ax" is the chart-axis class).
+canceled = "canceled"
+normalize = "normalize"
+finalize = "finalize"
+color = "color"
+center = "center"
+ax = "ax"
+# Test data: a search prefix for "Baked", a deliberate typo among the normalisation eval's typed names, an outcome
+# label (an accepted spelling) and the tail of "look-alikes".
+ba = "ba"
+choclate = "choclate"
+unparseable = "unparseable"
+alikes = "alikes"
