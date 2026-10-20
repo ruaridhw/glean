@@ -50,6 +50,12 @@ what a module does, not how it does it.
   it through that module's interface. A library's internal state, such as an
   agent framework's checkpoints, is the owning module's implementation detail;
   callers read the state the module exposes instead.
+- **Lint enforces the boundary, not review.** Once a module owns a library,
+  ban the library's imports everywhere else so the boundary cannot erode. In
+  the backend that is ruff's `TID251`: list the library under
+  `[tool.ruff.lint.flake8-tidy-imports.banned-api]` in `backend/pyproject.toml`,
+  with a message naming the module to call instead, and exempt only the owning
+  module in `per-file-ignores`.
 
 ## Makefile
 
