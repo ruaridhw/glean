@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages.content import create_image_block, create_text_block
 from langchain_openrouter import ChatOpenRouter
 from openrouter import OpenRouter
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from langchain_core.language_models import BaseChatModel, LanguageModelInput
+    from langchain_core.messages import BaseMessage
+    from langchain_core.messages.content import ContentBlock
     from langchain_core.runnables import RunnableConfig
     from pydantic import SecretStr
 
@@ -101,6 +106,14 @@ class Feature(StrEnum):
 DEFAULT_LLM_MODEL_POLICY: dict[Feature, LLMModelPolicy] = {feature: feature.policy for feature in Feature}
 
 
+@dataclass(frozen=True, slots=True)
+class ImagePart:
+    """An image in the user message, such as a receipt photo for a vision model."""
+
+    data: bytes
+    mime_type: str
+
+
 class LLMRouter:
     def __init__(
         self,
@@ -127,22 +140,34 @@ class LLMRouter:
         self,
         feature: Feature,
         schema: type[StructuredResponseT],
-        messages: LanguageModelInput,
         *,
+        system: str,
+        user: str | Sequence[str | ImagePart],
         purpose: ModelPurpose = ModelPurpose.PRODUCTION,
-        **kwargs: Any,
+        timeout_ms: int | None = None,
     ) -> StructuredResponseT:
-        """Select the model for *feature*, invoke it under the structured-output policy, and
-        validate the result.
+        """Ask *feature*'s model one question: a *system* prompt and a *user* message, which is text or a
+        sequence of text and image parts. Returns the reply validated as *schema*.
 
-        This is the one seam callers need: it replaces the old two-step dance of pulling a raw
-        `BaseChatModel` via `chat_model(feature)` and then separately calling `invoke_structured`
-        with `config={"metadata": {"feature": feature}}` — a pairing that named `feature` twice
-        per call and handed every caller a raw LangChain object (with_structured_output,
-        LangChain message types, RunnableConfig) it had no other reason to know about.
+        The chat model, messages, structured-output policy and LangSmith metadata (`{"feature": feature}`) all stay
+        in this module, so callers never import LangChain. *timeout_ms* bounds the call; without it the call gets
+        create_chat_model's default.
         """
-        model = create_chat_model(self.model_id_for(feature, purpose=purpose), api_key=self.api_key, **kwargs)
-        return invoke_structured(model, schema, messages, config={"metadata": {"feature": feature}})
+        options: dict[str, Any] = {} if timeout_ms is None else {"request_timeout": timeout_ms}
+        model = create_chat_model(self.model_id_for(feature, purpose=purpose), api_key=self.api_key, **options)
+        return invoke_structured(model, schema, _messages(system, user), config={"metadata": {"feature": feature}})
+
+
+def _messages(system: str, user: str | Sequence[str | ImagePart]) -> list[BaseMessage]:
+    if isinstance(user, str):
+        return [SystemMessage(content=system), HumanMessage(content=user)]
+    return [SystemMessage(content=system), HumanMessage(content_blocks=[_content_block(part) for part in user])]
+
+
+def _content_block(part: str | ImagePart) -> ContentBlock:
+    if isinstance(part, str):
+        return create_text_block(part)
+    return create_image_block(base64=base64.b64encode(part.data).decode(), mime_type=part.mime_type)
 
 
 def validate_model(model_id: str, *, api_key: SecretStr) -> None:

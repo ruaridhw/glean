@@ -49,7 +49,7 @@ def test_every_feature_is_invoked_through_json_schema_structured_output(
 ) -> None:
     router = LLMRouter(api_key=SecretStr("test-key"))
 
-    reply = router.invoke(feature, _Reply, ["message"])
+    reply = router.invoke(feature, _Reply, system="Answer briefly.", user="Hello")
 
     assert reply == _Reply(answer="ok")
     assert chat_model.structured_calls == [(_Reply, {"method": "json_schema"})]

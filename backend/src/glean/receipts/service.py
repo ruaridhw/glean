@@ -1,17 +1,14 @@
 # backend/src/glean/receipts/service.py
 from __future__ import annotations
 
-import base64
 import json
 import uuid
 from typing import TYPE_CHECKING
 
 import boto3
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.messages.content import create_image_block, create_text_block
 
 from glean.catalogue.groups import GroupId
-from glean.llm import Feature
+from glean.llm import Feature, ImagePart
 from glean.observability import logger, tracer
 from glean.receipts.schemas import INGREDIENT_CATEGORY_FOOD_GROUPS, DescribeRequest, ScanResponse
 
@@ -87,7 +84,8 @@ def _scan_via_textract(image_bytes: bytes, *, llm_router: LLMRouter, aws_region:
     response = llm_router.invoke(
         Feature.RECEIPT_SCAN,
         ScanResponse,
-        [SystemMessage(content=NORMALISE_SYSTEM_PROMPT), HumanMessage(content=json.dumps(lines))],
+        system=NORMALISE_SYSTEM_PROMPT,
+        user=json.dumps(lines),
     )
     logger.info("llm normalised items")
     return response
@@ -96,19 +94,13 @@ def _scan_via_textract(image_bytes: bytes, *, llm_router: LLMRouter, aws_region:
 @tracer.capture_method
 def _scan_via_vision(image_bytes: bytes, *, llm_router: LLMRouter) -> ScanResponse:
     """Send the receipt image directly to a vision-capable LLM for OCR + normalisation."""
-    b64 = base64.b64encode(image_bytes).decode()
-    image_block = create_image_block(base64=b64, mime_type="image/jpeg")
     response = llm_router.invoke(
         Feature.RECEIPT_SCAN,
         ScanResponse,
-        [
-            SystemMessage(content=VISION_SYSTEM_PROMPT),
-            HumanMessage(
-                content_blocks=[
-                    create_text_block("Extract and normalise all items from this receipt."),
-                    image_block,
-                ]
-            ),
+        system=VISION_SYSTEM_PROMPT,
+        user=[
+            "Extract and normalise all items from this receipt.",
+            ImagePart(data=image_bytes, mime_type="image/jpeg"),
         ],
     )
     logger.info("vision model scanned receipt")
@@ -134,8 +126,6 @@ def describe_purchase(request: DescribeRequest, *, llm_router: LLMRouter) -> Sca
     return llm_router.invoke(
         Feature.PANTRY_PURCHASE_DESCRIPTION,
         ScanResponse,
-        [
-            SystemMessage(content=NORMALISE_SYSTEM_PROMPT),
-            HumanMessage(content=f"Parse this grocery purchase description: {request.text}"),
-        ],
+        system=NORMALISE_SYSTEM_PROMPT,
+        user=f"Parse this grocery purchase description: {request.text}",
     )

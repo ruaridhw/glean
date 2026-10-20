@@ -62,12 +62,12 @@ class _FakeLLMRouter:
     def model_id_for(self, feature: Feature) -> str:
         return self.model
 
-    def invoke(self, feature: Feature, schema: type[object], messages: list[Any], **kwargs: Any) -> Any:
+    def invoke(self, feature: Feature, schema: type[object], *, system: str, user: str, **kwargs: Any) -> Any:
         if schema is ShoppingBatchParseResponse:
-            return self._batch(messages[1].content)
-        text = messages[1].content.removeprefix("Parse this shopping list description: ")
+            return self._batch(user)
+        text = user.removeprefix("Parse this shopping list description: ")
         with self._lock:
-            self.singles.append((messages[0].content, text))
+            self.singles.append((system, text))
         return ShoppingParseResponse(items=[_item(text)])
 
     def _batch(self, text: str) -> ShoppingBatchParseResponse:

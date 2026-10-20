@@ -67,7 +67,7 @@ def test_a_confident_decision_match_stores_the_input_as_an_alias_so_the_next_cal
 def naming(**canonical_by_input: str | None):
     """A scripted naming reply: input -> canonical name (None = can't be identified)."""
 
-    def reply(schema: type, messages: object) -> object:
+    def reply(schema: type, user: object) -> object:
         return schema(names=[{"input": raw, "canonical_name": name} for raw, name in canonical_by_input.items()])
 
     return reply
@@ -178,7 +178,7 @@ def test_a_name_that_cannot_be_identified_is_unmatched_once_naming_succeeds_and_
 
 
 def failing_naming(error: Exception):
-    def reply(schema: type, messages: object) -> object:
+    def reply(schema: type, user: object) -> object:
         raise error
 
     return reply
@@ -239,7 +239,7 @@ def test_the_naming_call_is_bounded_by_the_time_left(store: InMemoryCatalogueSto
         naming_budget_s=2.0,
     )
 
-    assert 0 < router.calls[0]["kwargs"]["request_timeout"] <= 2000
+    assert 0 < router.calls[0]["kwargs"]["timeout_ms"] <= 2000
 
 
 def test_a_name_the_llm_skipped_is_unresolved_not_unmatched(store: InMemoryCatalogueStore) -> None:
@@ -272,9 +272,9 @@ def test_a_failed_decision_request_leaves_only_that_name_unresolved(store: InMem
 def test_two_concurrent_calls_for_the_same_new_name_create_one_item(store: InMemoryCatalogueStore) -> None:
     both_naming = threading.Barrier(2, timeout=5)
 
-    def slow_naming(schema: type, messages: object) -> object:
+    def slow_naming(schema: type, user: object) -> object:
         both_naming.wait()  # each call is naming "dragon fruit" before either has written
-        return naming(**{"Dragon Fruit Each": "dragon fruit"})(schema, messages)
+        return naming(**{"Dragon Fruit Each": "dragon fruit"})(schema, user)
 
     def call() -> NormalisedName:
         [result] = normalise(
@@ -456,10 +456,10 @@ def test_concurrent_calls_that_pick_different_matches_for_one_name_agree_on_the_
 
 def test_a_naming_that_loses_an_alias_race_reuses_the_winner(store: InMemoryCatalogueStore) -> None:
     class RacingRouter(FakeRouter):
-        def invoke(self, feature: object, schema: type, messages: object, **kwargs: object) -> object:
+        def invoke(self, feature: object, schema: type, *, system: str, user: object, **kwargs: object) -> object:
             # Another request attaches the raw name to basil while this one is still naming it "coriander".
             store.upsert_alias("basil", "Fresh basil coriander mix")
-            return super().invoke(feature, schema, messages, **kwargs)
+            return super().invoke(feature, schema, system=system, user=user, **kwargs)
 
     router = RacingRouter(script=naming(**{"Fresh basil coriander mix": "coriander"}))
 

@@ -23,15 +23,13 @@ class _FakeLLMRouter:
         self.response = response
         self.feature: Feature | None = None
         self.schema: type[object] | None = None
-        self.messages: list[object] = []
 
     def model_id_for(self, feature: Feature) -> str:
         return "test/model"
 
-    def invoke(self, feature: Feature, schema: type[object], messages: list[object], **_: object) -> object:
+    def invoke(self, feature: Feature, schema: type[object], **_: object) -> object:
         self.feature = feature
         self.schema = schema
-        self.messages = messages
         return ShoppingBatchParseResponse.model_validate(
             {
                 "units": [

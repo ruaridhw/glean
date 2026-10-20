@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import TypeAdapter
 
 from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
@@ -287,15 +286,15 @@ def _parse_batch(
 ) -> dict[int, tuple[list[ShoppingProposalItem], list[str]]]:
     """Parse every phrase in one structured call; returns what came back, by phrase number (from 1)."""
     listing = "\n".join(f"{number}. [{unit.treatment}] {unit.phrase}" for number, unit in enumerate(units, start=1))
-    messages = [
-        SystemMessage(content=BATCH_PARSE_SYSTEM_PROMPT),
-        HumanMessage(content=f"Parse these numbered shopping list phrases:\n{listing}"),
-    ]
     timeout_ms = _timeout_ms(until)
 
     def call() -> ShoppingBatchParseResponse:
         return llm_router.invoke(
-            Feature.SHOPPING_LIST_DESCRIPTION, ShoppingBatchParseResponse, messages, request_timeout=timeout_ms
+            Feature.SHOPPING_LIST_DESCRIPTION,
+            ShoppingBatchParseResponse,
+            system=BATCH_PARSE_SYSTEM_PROMPT,
+            user=f"Parse these numbered shopping list phrases:\n{listing}",
+            timeout_ms=timeout_ms,
         )
 
     future = pool.submit(call)
@@ -320,11 +319,9 @@ def _parse_single(llm_router: LLMRouter, text: str, until: float) -> ShoppingPar
     return llm_router.invoke(
         Feature.SHOPPING_LIST_DESCRIPTION,
         ShoppingParseResponse,
-        [
-            SystemMessage(content=SHOPPING_PARSE_SYSTEM_PROMPT),
-            HumanMessage(content=f"Parse this shopping list description: {text}"),
-        ],
-        request_timeout=_timeout_ms(until),
+        system=SHOPPING_PARSE_SYSTEM_PROMPT,
+        user=f"Parse this shopping list description: {text}",
+        timeout_ms=_timeout_ms(until),
     )
 
 

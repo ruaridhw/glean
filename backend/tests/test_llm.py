@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import base64
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from glean.config import Settings
 from glean.llm import (
     DEFAULT_LLM_MODEL_POLICY,
     Feature,
+    ImagePart,
     LLMModelPolicy,
     LLMRouter,
     ModelPurpose,
@@ -17,10 +21,28 @@ from glean.llm import (
     validate_model,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
 
 class _StructuredTestResponse(BaseModel):
     name: str
     values: list[str]
+
+
+def _invoke_and_capture(router: LLMRouter, **invoke_kwargs: Any) -> tuple[MagicMock, list[Any]]:
+    """Invoke *router* against a patched ChatOpenRouter; return the patched class and the messages the model got."""
+    with patch("glean.llm.ChatOpenRouter") as chat_open_router:
+        structured = chat_open_router.return_value.with_structured_output.return_value
+        structured.invoke.return_value = _StructuredTestResponse(name="Pantry", values=["milk"])
+        router.invoke(Feature.RECEIPT_SCAN, _StructuredTestResponse, **invoke_kwargs)
+    (messages,), _ = structured.invoke.call_args
+    return chat_open_router, messages
+
+
+def _without_ids(blocks: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """LangChain stamps each content block with a random id; compare everything else."""
+    return [{key: value for key, value in block.items() if key != "id"} for block in blocks]
 
 
 class TestCreateChatModel:
@@ -102,7 +124,8 @@ class TestLLMRouter:
             response = router.invoke(
                 Feature.RECIPE_IMPORT,
                 _StructuredTestResponse,
-                ["message"],
+                system="Extract the recipe.",
+                user="<html></html>",
                 purpose=ModelPurpose.EVAL,
             )
 
@@ -122,15 +145,44 @@ class TestLLMRouter:
             mock_cls.return_value.with_structured_output.return_value.invoke.return_value = _StructuredTestResponse(
                 name="Pantry", values=["milk"]
             )
-            router.invoke(Feature.SHOPPING_LIST_DESCRIPTION, _StructuredTestResponse, ["message"])
+            router.invoke(
+                Feature.SHOPPING_LIST_DESCRIPTION, _StructuredTestResponse, system="Parse the list.", user="2 apples"
+            )
 
         mock_cls.return_value.with_structured_output.assert_called_once_with(
             _StructuredTestResponse, method="json_schema"
         )
         mock_cls.return_value.with_structured_output.return_value.invoke.assert_called_once_with(
-            ["message"],
+            [SystemMessage(content="Parse the list."), HumanMessage(content="2 apples")],
             config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
         )
+
+    def test_invoke_sends_text_and_image_parts_as_one_user_message(self) -> None:
+        _, messages = _invoke_and_capture(
+            LLMRouter(api_key=SecretStr("test-key")),
+            system="Scan the receipt.",
+            user=["Extract the items.", ImagePart(data=b"\xff\xd8receipt", mime_type="image/jpeg")],
+        )
+
+        [system, user] = messages
+        assert system == SystemMessage(content="Scan the receipt.")
+        assert isinstance(user, HumanMessage)
+        assert _without_ids(user.content_blocks) == [
+            {"type": "text", "text": "Extract the items."},
+            {"type": "image", "base64": base64.b64encode(b"\xff\xd8receipt").decode(), "mime_type": "image/jpeg"},
+        ]
+
+    def test_invoke_bounds_the_call_by_timeout_ms(self) -> None:
+        chat_open_router, _ = _invoke_and_capture(
+            LLMRouter(api_key=SecretStr("test-key")), system="s", user="u", timeout_ms=2_500
+        )
+
+        assert chat_open_router.call_args.kwargs["request_timeout"] == 2_500
+
+    def test_invoke_without_timeout_ms_keeps_the_default_timeout(self) -> None:
+        chat_open_router, _ = _invoke_and_capture(LLMRouter(api_key=SecretStr("test-key")), system="s", user="u")
+
+        assert chat_open_router.call_args.kwargs["request_timeout"] == 10_000
 
     def test_from_settings_applies_feature_policy_overrides(self) -> None:
         settings = Settings(
