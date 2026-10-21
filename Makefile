@@ -13,6 +13,7 @@
 #   make start-android     — Flutter on a running Android emulator
 #   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
 #   make e2e-tokens        — Cognito test-user tokens for the e2e entrypoint (see app/README.md)
+#   make aws-profile       — AWS CLI profile whose key is read from 1Password
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -55,6 +56,12 @@ WEB_HEADLESS      ?=
 E2E_USERNAME      ?=
 E2E_PASSWORD      ?=
 _E2E_DEFINES = $(if $(E2E_USERNAME),$(shell scripts/e2e_tokens.sh --dart-defines),)
+
+# The IAM user the AWS CLI signs in as, kept in 1Password rather than in
+# ~/.aws/credentials. Set OP_AWS_ITEM (an op://<vault>/<item> reference) in
+# .env.local; `make aws-profile` points AWS_OP_PROFILE at it.
+OP_AWS_ITEM       ?=
+AWS_OP_PROFILE    ?= glean
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -179,6 +186,13 @@ reload-web:  ## Hot-reload the running `make start-web` (for agents without its 
 .PHONY: e2e-tokens
 e2e-tokens:  ## Print the Cognito test user's tokens as shell exports (needs E2E_USERNAME/E2E_PASSWORD in .env.local)
 	@scripts/e2e_tokens.sh --exports
+
+# ── AWS ───────────────────────────────────────────────────────────────────────
+
+.PHONY: aws-profile
+aws-profile:  ## Point the AWS CLI's glean profile at the IAM user's key in 1Password (OP_AWS_ITEM in .env.local)
+	@scripts/aws_op_profile.sh "$(OP_AWS_ITEM)" "$(AWS_OP_PROFILE)"
+	aws sts get-caller-identity --profile "$(AWS_OP_PROFILE)"
 
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
 # Worktrees live in .worktrees/ which is already in .gitignore.
