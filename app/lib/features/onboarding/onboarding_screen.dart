@@ -126,8 +126,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               Row(
                 children: <Widget>[
                   const GleanMark(size: 32),
-                  const Spacer(),
-                  Text('About a minute', style: theme.textTheme.bodySmall),
+                  SizedBox(width: tokens.spacing.sm),
+                  Expanded(
+                    child: Text(
+                      'About a minute',
+                      textAlign: TextAlign.end,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
                 ],
               ),
               SizedBox(height: tokens.spacing.md),

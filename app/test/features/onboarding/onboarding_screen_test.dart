@@ -50,8 +50,14 @@ void main() {
   setUp(() => db = createTestDatabase());
   tearDown(() => db.close());
 
-  Future<void> pumpOnboarding(WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(420, 1200));
+  Future<void> pumpOnboarding(
+    WidgetTester tester, {
+    Size size = const Size(420, 1200),
+    double textScale = 1,
+  }) async {
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(_buildApp(db: db));
     await tester.pumpAndSettle();
@@ -250,6 +256,54 @@ void main() {
       semantics.dispose();
     },
   );
+
+  for (final double scale in <double>[1.3, 2]) {
+    testWidgets(
+      'both pages fit a 320-wide phone at ${scale}x text, with the chips open',
+      (WidgetTester tester) async {
+        await pumpOnboarding(
+          tester,
+          size: const Size(320, 844),
+          textScale: scale,
+        );
+        expect(tester.takeException(), isNull, reason: 'the basics page');
+
+        await tester.ensureVisible(find.text('Dietary preferences'));
+        await tester.tap(find.text('Dietary preferences'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'the basics page with the chips open',
+        );
+        await tester.ensureVisible(find.text('Paleo'));
+        expect(find.text('Paleo'), findsOneWidget);
+
+        await tester.ensureVisible(find.text('Continue'));
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'the pantry page');
+
+        expect(find.text('Stock your pantry'), findsOneWidget);
+        await tester.ensureVisible(find.text('Scan a receipt'));
+        expect(find.text('Scan a receipt'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('the pantry page keeps its content centred while it fits', (
+    WidgetTester tester,
+  ) async {
+    await pumpOnboarding(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    final Rect body = tester.getRect(find.byType(SingleChildScrollView));
+    final Rect heading = tester.getRect(find.text('Stock your pantry'));
+    final Rect icon = tester.getRect(find.byIcon(Icons.receipt_long_rounded));
+
+    expect((heading.top + icon.bottom) / 2, closeTo(body.center.dy, 2));
+  });
 
   testWidgets(
     'a screen reader can expand and collapse the dietary disclosure',
