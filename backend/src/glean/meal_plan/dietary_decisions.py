@@ -31,7 +31,7 @@ from glean.recipes.answers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from glean.decisions import DecisionClient
     from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
@@ -51,6 +51,7 @@ __all__ = [
     "DietaryDecisionStore",
     "DietaryDecisions",
     "content_fingerprint",
+    "dietary_answers",
     "dietary_questions",
     "produce_missing_decisions",
     "question_hash",
@@ -177,7 +178,12 @@ class DietaryDecisionStore:
         return [decision for decision in decisions if decision is not None]
 
     def save(self, decisions: list[DietaryDecision]) -> None:
-        self._corpus.save_answers([_answer_from_decision(decision) for decision in decisions])
+        self._corpus.save_answers(dietary_answers(decisions))
+
+
+def dietary_answers(decisions: Iterable[DietaryDecision]) -> list[RecipeAnswer]:
+    """The stored answers that carry these decisions, for a producer writing them as corpus data."""
+    return [_answer_from_decision(decision) for decision in decisions]
 
 
 def _answer_from_decision(decision: DietaryDecision) -> RecipeAnswer:
