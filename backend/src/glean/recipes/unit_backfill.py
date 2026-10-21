@@ -34,7 +34,8 @@ def backfill_unit_words(
     Dry run unless told otherwise, and local filesystem corpora only: a remote (S3) store is refused before
     anything is read unless the caller opts in with `allow_remote_store`.
     """
-    if not allow_remote_store and not isinstance(corpus.store, FilesystemBlobStore):
+    blobs = getattr(corpus.store, "blobs", None)  # the blob adapter's own store; the dynamo one has none
+    if not allow_remote_store and not isinstance(blobs, FilesystemBlobStore):
         raise ValueError("unit backfill only runs against a filesystem corpus; pass allow_remote_store to override")
     scanned = changed_recipes = changed_ingredients = 0
     for recipe in corpus.all_recipes():
