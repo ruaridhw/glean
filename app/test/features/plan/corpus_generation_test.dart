@@ -141,6 +141,64 @@ void main() {
   );
 
   test(
+    'sends the last twelve weeks of cooked meals, and nothing else',
+    () async {
+      final recipes = harness.container.read(recipesRepositoryProvider);
+      final plan = harness.container.read(planRepositoryProvider);
+      final now = DateTime.now();
+      Future<void> planned(
+        String externalId,
+        String title, {
+        DateTime? cookedAt,
+      }) async {
+        final recipeId = await recipes.save(
+          userId: harness.userId,
+          externalId: externalId,
+          title: title,
+          ingredients: const [],
+        );
+        final entryId = await plan.addEntry(
+          userId: harness.userId,
+          recipeId: recipeId,
+          recipeTitle: title,
+          servings: 2,
+          plannedDate: cookedAt ?? now,
+        );
+        if (cookedAt != null) {
+          await plan.markCooked(
+            entryId: entryId,
+            userId: harness.userId,
+            now: cookedAt,
+          );
+        }
+      }
+
+      final recentCook = now.subtract(const Duration(days: 10));
+      await planned('rec_recent', 'Recent stew', cookedAt: recentCook);
+      await planned(
+        'rec_stale',
+        'Stale pie',
+        cookedAt: now.subtract(const Duration(days: 90)),
+      );
+      await planned('rec_uncooked', 'Never cooked');
+      Map<String, dynamic>? body;
+      suggest(['rec_new'], capture: (value) => body = value);
+      detail('rec_new');
+
+      await harness.container
+          .read(generateWeekControllerProvider.notifier)
+          .generate(weekStart: week, slots: 3, servings: 2);
+
+      final history = (body!['cooked_history'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(history, hasLength(1));
+      expect(history.single['recipe_id'], 'rec_recent');
+      expect(history.single['title'], 'Recent stew');
+      expect(DateTime.parse(history.single['cooked_at'] as String), recentCook);
+    },
+  );
+
+  test(
     'pending spans detail fetch and duplicate picks never overfill',
     () async {
       suggest(['rec_new', 'rec_new']);

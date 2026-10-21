@@ -37,6 +37,24 @@ class PlanRepository {
     required DateTime weekStart,
   }) async => _mapEntries(await _weekQuery(userId, weekStart).get());
 
+  /// Meals cooked on or after [since], newest first: the corpus plan avoids repeating them.
+  ///
+  /// `cookedAt` is stored as an ISO string, so the window is applied to the parsed date rather than compared as
+  /// text — a local offset and a `Z` do not sort together.
+  Future<List<MealPlanEntryView>> cookedSince({
+    required String userId,
+    required DateTime since,
+  }) async {
+    final rows = await (_db.select(
+      _db.mealPlanEntries,
+    )..where((t) => t.userId.equals(userId) & t.cookedAt.isNotNull())).get();
+    final cooked = _mapEntries(
+      rows,
+    ).where((entry) => !entry.cookedAt!.isBefore(since)).toList();
+    cooked.sort((a, b) => b.cookedAt!.compareTo(a.cookedAt!));
+    return cooked;
+  }
+
   SimpleSelectStatement<$MealPlanEntriesTable, MealPlanEntry> _weekQuery(
     String userId,
     DateTime weekStart,

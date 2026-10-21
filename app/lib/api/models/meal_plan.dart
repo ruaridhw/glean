@@ -46,6 +46,25 @@ class RecipeHistoryItem {
   Map<String, dynamic> toJson() => _$RecipeHistoryItemToJson(this);
 }
 
+/// One meal the household actually cooked, sent to `POST /meal-plan` so corpus generation can leave it out of
+/// the week while it is too recent to repeat. The wire shape of the backend's `CookedHistoryItem`.
+@JsonSerializable(fieldRename: FieldRename.snake, createFactory: false)
+class CookedHistoryItem {
+  const CookedHistoryItem({
+    required this.title,
+    required this.cookedAt,
+    this.recipeId,
+  });
+
+  /// Corpus recipe id, kept on the plan entry as `externalIdSnapshot`; null for a meal cooked before the app
+  /// stored that snapshot, so the title is all the backend can match on.
+  final String? recipeId;
+  final String title;
+  final DateTime cookedAt;
+
+  Map<String, dynamic> toJson() => _$CookedHistoryItemToJson(this);
+}
+
 /// Request body for `POST /meal-plan`. [foodGroupCoverage] (meals cooked this week per food group) is not
 /// defaulted to empty: the caller must compute it.
 @JsonSerializable(
@@ -64,6 +83,7 @@ class MealPlanRequest {
     this.maxActiveTimeMins,
     this.source = 'saved',
     this.excludeExternalIds = const [],
+    this.cookedHistory = const [],
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -89,6 +109,9 @@ class MealPlanRequest {
 
   final String source;
   final List<String> excludeExternalIds;
+
+  /// Meals cooked in the last twelve weeks, so the plan can avoid repeating them.
+  final List<CookedHistoryItem> cookedHistory;
 
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
 }

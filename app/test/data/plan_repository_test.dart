@@ -231,6 +231,61 @@ void main() {
       });
     });
 
+    group('cookedSince', () {
+      test(
+        'returns cooked entries in the window newest first, whatever ISO form they were stored in',
+        () async {
+          final week = startOfWeek(DateTime(2026, 1, 5));
+          final recent = await createRecipe('Recent');
+          final older = await createRecipe('Older');
+          final stale = await createRecipe('Stale');
+          final uncooked = await createRecipe('Uncooked');
+          Future<int> planned(int recipeId, String title) =>
+              repository.addEntry(
+                userId: userId,
+                recipeId: recipeId,
+                recipeTitle: title,
+                servings: 1,
+                plannedDate: week,
+              );
+          final recentId = await planned(recent, 'Recent');
+          final olderId = await planned(older, 'Older');
+          final staleId = await planned(stale, 'Stale');
+          await planned(uncooked, 'Uncooked');
+          await repository.markCooked(
+            entryId: recentId,
+            userId: userId,
+            now: DateTime(2026, 2, 20, 18),
+          );
+          await repository.markCooked(
+            entryId: olderId,
+            userId: userId,
+            now: DateTime(2026, 1, 20, 18),
+          );
+          await repository.markCooked(
+            entryId: staleId,
+            userId: userId,
+            now: DateTime(2025, 11, 1, 18),
+          );
+          // A backup restore can bring a UTC-stamped row in beside the app's local ones.
+          await db.customStatement(
+            "UPDATE meal_plan_entries SET cooked_at = '2026-02-10T18:00:00.000Z' WHERE id = ?",
+            [olderId],
+          );
+
+          final cookedOut = await repository.cookedSince(
+            userId: userId,
+            since: DateTime(2026, 1, 5),
+          );
+
+          expect(cookedOut.map((entry) => entry.recipeTitle), [
+            'Recent',
+            'Older',
+          ]);
+        },
+      );
+    });
+
     group('rollover', () {
       test('moves uncooked entries into the current week', () async {
         final oldWeek = startOfWeek(DateTime(2025, 12, 1));
