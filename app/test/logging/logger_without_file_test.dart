@@ -30,4 +30,28 @@ void main() {
     expect(kept.length, lessThanOrEqualTo(60));
     expect(kept, startsWith('line '));
   });
+
+  test(
+    'a line that leaves the log exactly at the cap is kept, not trimmed away',
+    () {
+      final RotatingLogFile log = RotatingLogFile.memory(maxBytes: 8);
+
+      log.append('aaaaaaa');
+      log.append('bbbbbbb');
+
+      // 'bbbbbbb\n' is exactly 8 bytes: the newline ending the dropped line sits one byte before the window.
+      expect(log.readAll(), 'bbbbbbb\n');
+    },
+  );
+
+  test(
+    'a single line longer than the cap is kept whole, as the file sink writes it',
+    () {
+      final RotatingLogFile log = RotatingLogFile.memory(maxBytes: 8);
+
+      log.append('x' * 20);
+
+      expect(log.readAll(), '${'x' * 20}\n');
+    },
+  );
 }

@@ -43,14 +43,22 @@ class RotatingLogFile {
     ].where((f) => f.existsSync()).map((f) => f.readAsStringSync()).join();
   }
 
-  /// Drops the oldest whole lines until what is left fits [maxBytes].
+  /// Drops the oldest whole lines until what is left fits [maxBytes]. The newest line is always kept, even when
+  /// that line alone is longer than the cap, because the file sink writes such a line whole too.
   void _trimToCap() {
     final StringBuffer memory = _memory!;
     if (memory.length <= maxBytes) return;
     final String text = memory.toString();
-    final int firstKept = text.indexOf('\n', text.length - maxBytes);
+    // A retained suffix of exactly [maxBytes] puts the newline ending the dropped line one character before the
+    // window, so search from there: searching from `length - maxBytes` would skip that newline and drop a line.
+    final int from = text.length - maxBytes - 1;
+    int boundary = text.indexOf('\n', from < 0 ? 0 : from);
+    if (boundary == text.length - 1) {
+      // Only the newest line is left and it does not fit: keep it whole rather than keep nothing.
+      boundary = text.lastIndexOf('\n', text.length - 2);
+    }
     memory
       ..clear()
-      ..write(firstKept == -1 ? text : text.substring(firstKept + 1));
+      ..write(text.substring(boundary + 1));
   }
 }
