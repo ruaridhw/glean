@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from scripts.corpus_store import open_corpus
+from glean.recipes.corpus import open_corpus
 
 
 def main() -> int:

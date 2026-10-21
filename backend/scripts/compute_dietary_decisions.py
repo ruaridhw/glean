@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 
 from pydantic import SecretStr
-from scripts.corpus_store import open_corpus
 
 from glean.decisions import DecisionClient
 from glean.meal_plan.dietary_decisions import (
@@ -25,6 +24,7 @@ from glean.meal_plan.dietary_decisions import (
     CorpusUnavailableError,
     produce_missing_decisions,
 )
+from glean.recipes.corpus import open_corpus
 
 
 def main(argv: list[str] | None = None, *, client: DecisionClient | None = None) -> int:

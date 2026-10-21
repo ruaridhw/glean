@@ -222,6 +222,22 @@ def test_the_migration_refuses_a_prod_table_without_the_owner_flag(
     assert "--i-am-the-owner" in capsys.readouterr().out
 
 
+def test_a_dry_run_may_look_at_a_prod_table_because_it_writes_nothing(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+) -> None:
+    code = migrate_recipe_corpus.main(
+        ["--table", "glean-recipes-prod", "--local", str(tmp_path), "--dry-run"],
+        backend=backend,
+        corpus_source=source,
+        projection_store=projections,
+    )
+
+    assert code == 0
+
+
 def test_the_owner_flag_lets_a_prod_table_through(
     tmp_path: Path,
     backend: DynamoCorpusBackend,
