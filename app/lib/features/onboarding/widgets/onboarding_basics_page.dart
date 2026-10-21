@@ -182,6 +182,9 @@ class _DietaryDisclosureState extends State<_DietaryDisclosure> {
     final AppTokens tokens = context.tokens;
     final ThemeData theme = Theme.of(context);
     final int count = widget.selected.length;
+    // At large text the title and its count cannot share a line on a narrow
+    // phone, so the count moves under the title rather than overflowing.
+    final bool stackCount = MediaQuery.textScalerOf(context).scale(14) > 20;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -212,12 +215,29 @@ class _DietaryDisclosureState extends State<_DietaryDisclosure> {
                       ),
                       SizedBox(width: tokens.spacing.sm),
                       Expanded(
-                        child: Text(
-                          'Dietary preferences',
-                          style: theme.textTheme.titleMedium,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              'Dietary preferences',
+                              style: theme.textTheme.titleMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (stackCount)
+                              Text(
+                                '$count selected',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                          ],
                         ),
                       ),
-                      Text('$count selected', style: theme.textTheme.bodySmall),
+                      if (!stackCount)
+                        Text(
+                          '$count selected',
+                          style: theme.textTheme.bodySmall,
+                        ),
                     ],
                   ),
                 ),
