@@ -208,7 +208,15 @@ void main() {
       final plan = harness.container.read(planRepositoryProvider);
       // A cook recorded in local time: the plan entry stores it with no offset. Read as UTC by the
       // server, a 41d23h-old cook in a UTC-7 zone looked fresh, so the request must state the zone.
-      final localCook = DateTime(2026, 10, 5, 18, 30);
+      // Ten days back, because Generate sends a live twelve-week window.
+      final today = DateTime.now();
+      final localCook = DateTime(
+        today.year,
+        today.month,
+        today.day,
+        18,
+        30,
+      ).subtract(const Duration(days: 10));
       final recipeId = await recipes.save(
         userId: harness.userId,
         externalId: 'rec_local',
