@@ -605,6 +605,112 @@ def test_corpus_mode_dates_an_item_by_the_server_date_when_the_phone_sends_none(
     assert "goes off Thu" in result.suggestions[0].reason
 
 
+def test_a_reason_that_names_the_item_without_when_it_goes_off_gains_the_day(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(external_id="rec_herby", title="Coriander Chicken", reason="Uses up your coriander.")
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    reason = result.suggestions[0].reason
+    assert "goes off Thu" in reason
+    assert reason.casefold().count("coriander") == 1, reason
+
+
+def test_a_reason_that_only_shares_a_word_with_the_item_is_repaired(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(external_id="rec_onion", title="Red Onion Tart", reason="A red pepper dinner.")
+        ]
+    )
+    corpus = _corpus_with(tmp_path, {"rec_onion": ("Red Onion Tart", ["red onion"])})
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander(name="red onion")]),
+        llm_router=llm_router,
+        corpus=corpus,
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert "Uses up your red onion (goes off Thu)." in result.suggestions[0].reason
+
+
+def test_a_reason_with_the_wrong_day_is_repaired(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_herby",
+                title="Coriander Chicken",
+                reason="Uses up your coriander (goes off Fri).",
+            )
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert "goes off Thu" in result.suggestions[0].reason
+
+
+def test_a_second_urgent_item_is_not_added_when_one_is_already_named(tmp_path) -> None:
+    llm_router = MagicMock()
+    reason = "Uses up your lime (goes off Wed) with the coriander."
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[CorpusMealPlanRecipe(external_id="rec_both", title="Coriander Lime Chicken", reason=reason)]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander(), _coriander(name="lime", expires_in_days=1)]),
+        llm_router=llm_router,
+        corpus=_two_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert result.suggestions[0].reason == reason
+
+
+def test_one_clause_is_added_when_no_urgent_item_is_named(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[CorpusMealPlanRecipe(external_id="rec_both", title="Coriander Lime Chicken", reason="Dinner.")]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander(), _coriander(name="lime", expires_in_days=1)]),
+        llm_router=llm_router,
+        corpus=_two_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    reason = result.suggestions[0].reason
+    assert reason.count("Uses up your") == 1, reason
+    assert "lime" in reason, reason
+    assert "goes off Wed" in reason, reason
+
+
+def _two_urgent_corpus(tmp_path) -> RecipeCorpusStore:
+    return _corpus_with(tmp_path, {"rec_both": ("Coriander Lime Chicken", ["chicken", "coriander", "lime"])})
+
+
 def _coriander(**overrides: object) -> dict[str, object]:
     return {
         "id": 4,

@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import random
-import re
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from glean.llm import Feature
-from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
+from glean.meal_plan.candidates import PantryItem, mentions_item, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanRecipe,
@@ -59,8 +58,6 @@ Rules:
   fine; do not pad the list with weaker choices to reach the limit."""
 
 _MAX_CANDIDATE_INGREDIENTS = 12
-_WORD_RE = re.compile(r"\w+")
-_MIN_WORD_LENGTH = 3
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
@@ -237,25 +234,40 @@ def _name_urgent_items(
     """Make each reason that uses an urgent item name it and when it goes off.
 
     The prompt asks the model for this, but a reason that quietly omits it would hide the one thing the
-    household most needs to know, so the clause is appended when the model leaves it out.
+    household most needs to know. One urgent item per reason is enough, and a reason is only left alone
+    when it names that item in full *and* states the right day; anything less gets the missing part
+    appended, without naming the item a second time.
     """
     named: list[CorpusMealPlanRecipe] = []
     for suggestion in chosen:
-        missing = [
-            item for item in urgent_uses.get(suggestion.external_id, ()) if not _mentions(suggestion.reason, item)
-        ]
-        if missing:
-            # The soonest to go off is the one worth naming if the model named none of them.
-            item = min(missing, key=lambda urgent_item: urgent_item.expires_in_days or 0)
-            clause = f"Uses up your {item.name} ({_goes_off_phrase(item, reference_date=reference_date)})."
-            suggestion = suggestion.model_copy(update={"reason": f"{suggestion.reason.rstrip()} {clause}".lstrip()})
+        items = urgent_uses.get(suggestion.external_id, ())
+        if not any(_states_when_it_goes_off(suggestion.reason, item, reference_date=reference_date) for item in items):
+            reason = suggestion.reason.rstrip()
+            if items:
+                # The soonest to go off is the one worth naming if the model named none of them.
+                item = min(items, key=lambda urgent_item: urgent_item.expires_in_days or 0)
+                reason = _repaired_reason(reason, item, reference_date=reference_date)
+            suggestion = suggestion.model_copy(update={"reason": reason})
         named.append(suggestion)
     return named
 
 
-def _mentions(reason: str, item: PantryItem) -> bool:
-    words = {word for word in _WORD_RE.findall(reason.casefold()) if len(word) >= _MIN_WORD_LENGTH}
-    return any(word in words for word in _WORD_RE.findall(item.name.casefold()) if len(word) >= _MIN_WORD_LENGTH)
+def _states_when_it_goes_off(reason: str, item: PantryItem, *, reference_date: date) -> bool:
+    """Whether the reason names the whole item and the day it actually goes off."""
+    return mentions_item(reason, item.name) and _states_day(reason, item, reference_date=reference_date)
+
+
+def _states_day(reason: str, item: PantryItem, *, reference_date: date) -> bool:
+    day = reference_date + timedelta(days=item.expires_in_days or 0)
+    words = {word.casefold() for word in reason.replace("(", " ").replace(")", " ").replace(",", " ").split()}
+    return day.strftime("%a").casefold() in words or day.strftime("%A").casefold() in words
+
+
+def _repaired_reason(reason: str, item: PantryItem, *, reference_date: date) -> str:
+    """The reason with what it lacks appended: the item when unnamed, otherwise just the day."""
+    phrase = _goes_off_phrase(item, reference_date=reference_date)
+    clause = f"Uses up your {item.name} ({phrase})." if not mentions_item(reason, item.name) else f"It {phrase}."
+    return f"{reason} {clause}".strip()
 
 
 def _goes_off_day(item: PantryItem, *, reference_date: date) -> str:
