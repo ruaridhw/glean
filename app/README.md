@@ -243,7 +243,9 @@ pid file `flutter run` writes. That is how an agent that started the server
 in the background reloads it. On a laptop the window opens in front of you;
 resize it to a phone shape (or use the DevTools device toolbar at 390×844).
 The in-browser database persists across restarts and reloads, so onboarding
-and seeded data survive.
+and seeded data survive. Nothing native-only is compiled in: backup restore is
+disabled in Developer settings here, because it works by swapping the SQLite
+file the app keeps on the device, which the web build does not have.
 
 On a headless or remote box, put these in an untracked `.env.local` at the
 repo root; the Makefile includes it when present:
