@@ -27,6 +27,7 @@ PARAMETER_ENV_VARS = {
     "LangSmithTracing": "LANGSMITH_TRACING",
     "LangSmithEndpoint": "LANGSMITH_ENDPOINT",
     "GitSha": "GIT_SHA",
+    "RateLimitPerHour": "RATE_LIMIT_PER_HOUR",
 }
 
 

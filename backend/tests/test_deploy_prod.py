@@ -84,12 +84,14 @@ class Sandbox:
                 "CognitoDomainPrefix": "glean-auth-040396448697",
                 "LangSmithTracing": "true",
                 "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
+                "RateLimitPerHour": "60",
                 "GitSha": stamp,
             },
             lambda_env={
                 "ENVIRONMENT": "prod",
                 "LANGSMITH_TRACING": "true",
                 "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
+                "RATE_LIMIT_PER_HOUR": "60",
                 "GIT_SHA": stamp,
             },
             tags={"commit": stamp},
@@ -378,3 +380,31 @@ def test_deploy_reports_a_missing_lambda_env_var(sandbox: Sandbox) -> None:
 
     assert result.returncode != 0
     assert "LANGSMITH_ENDPOINT" in result.stderr
+
+
+def test_deploy_reports_a_live_rate_limit_that_drifted_from_the_stack_parameter(sandbox: Sandbox) -> None:
+    """RateLimitPerHour is not in samconfig, so the stack's resolved default is the expectation."""
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live(
+        parameters={
+            "Environment": "prod",
+            "CognitoDomainPrefix": "glean-auth-040396448697",
+            "LangSmithTracing": "true",
+            "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
+            "RateLimitPerHour": "60",
+            "GitSha": sha,
+        },
+        lambda_env={
+            "ENVIRONMENT": "prod",
+            "LANGSMITH_TRACING": "true",
+            "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
+            "RATE_LIMIT_PER_HOUR": "20",
+            "GIT_SHA": sha,
+        },
+        tags={"commit": sha},
+    )
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "RATE_LIMIT_PER_HOUR" in result.stderr
