@@ -468,6 +468,113 @@ def _iso(*, days_ago: float) -> str:
     return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
 
 
+def test_corpus_mode_names_an_urgent_pantry_item_in_the_reason(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_herby",
+                title="Coriander Chicken",
+                reason="Uses pantry items well.",
+            )
+        ]
+    )
+    request = _corpus_request(pantry=[_coriander()])
+
+    result = generate_meal_plan(
+        request,
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert "coriander" in result.suggestions[0].reason
+    assert "goes off Thu" in result.suggestions[0].reason
+
+
+def test_corpus_mode_leaves_a_reason_that_already_names_the_urgent_item(tmp_path) -> None:
+    llm_router = MagicMock()
+    reason = "Uses up your coriander (goes off Thu) with the chicken."
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[CorpusMealPlanRecipe(external_id="rec_herby", title="Coriander Chicken", reason=reason)]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert result.suggestions[0].reason == reason
+
+
+def test_corpus_mode_tells_the_model_which_urgent_items_each_candidate_uses(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(suggestions=[])
+
+    generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    offered = {
+        candidate["external_id"]: candidate
+        for candidate in json.loads(llm_router.invoke.call_args.kwargs["user"])["candidates"]
+    }
+    assert offered["rec_herby"]["urgent_pantry_items"] == [
+        {"name": "coriander", "expires_in_days": 2, "goes_off": "Thu"}
+    ]
+    assert offered["rec_other"]["urgent_pantry_items"] == []
+
+
+def test_corpus_mode_does_not_name_a_pantry_item_that_is_not_about_to_go_off(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(external_id="rec_herby", title="Coriander Chicken", reason="Uses pantry items.")
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander(expires_in_days=9)]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert result.suggestions[0].reason == "Uses pantry items."
+
+
+def _coriander(**overrides: object) -> dict[str, object]:
+    return {
+        "id": 4,
+        "name": "coriander",
+        "quantity": 50,
+        "unit": "g",
+        "food_group": "herbs",
+        "urgency_score": 150.0,
+        "expires_in_days": 2,
+        **overrides,
+    }
+
+
+def _urgent_corpus(tmp_path) -> RecipeCorpusStore:
+    return _corpus_with(
+        tmp_path,
+        {
+            "rec_herby": ("Coriander Chicken", ["chicken", "coriander"]),
+            "rec_other": ("Rice Bowl", ["rice"]),
+        },
+    )
+
+
 def _corpus_with(tmp_path, recipes: dict[str, tuple[str, list[str]]]) -> RecipeCorpusStore:
     corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
     for external_id, (title, ingredients) in recipes.items():
