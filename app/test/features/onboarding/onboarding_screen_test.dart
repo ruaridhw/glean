@@ -252,6 +252,47 @@ void main() {
   );
 
   testWidgets(
+    'a screen reader can expand and collapse the dietary disclosure',
+    (WidgetTester tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      await pumpOnboarding(tester);
+
+      SemanticsNode disclosure() => find.semantics
+          .byLabel('Dietary preferences, 0 selected')
+          .evaluate()
+          .single;
+
+      expect(
+        disclosure().getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'a semantic button with no tap action cannot be activated',
+      );
+
+      tester.semantics.tap(
+        find.semantics.byLabel('Dietary preferences, 0 selected'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Vegan'), findsOneWidget);
+      expect(
+        disclosure()
+            .getSemanticsData()
+            .flagsCollection
+            .isExpanded
+            .toBoolOrNull(),
+        isTrue,
+      );
+
+      tester.semantics.tap(
+        find.semantics.byLabel('Dietary preferences, 0 selected'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Vegan'), findsNothing);
+
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
     'shows the same bounds as Settings, opens on the defaults, and calls the '
     'servings control Servings on first run',
     (WidgetTester tester) async {

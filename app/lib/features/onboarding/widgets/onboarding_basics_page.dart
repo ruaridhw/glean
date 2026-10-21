@@ -175,6 +175,8 @@ class _DietaryDisclosure extends StatefulWidget {
 class _DietaryDisclosureState extends State<_DietaryDisclosure> {
   bool _open = false;
 
+  void _toggle() => setState(() => _open = !_open);
+
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
@@ -190,9 +192,13 @@ class _DietaryDisclosureState extends State<_DietaryDisclosure> {
             button: true,
             expanded: _open,
             label: 'Dietary preferences, $count selected',
+            // The InkWell's own semantics are excluded, so this node has to
+            // carry the action itself: a button a screen reader can focus but
+            // not activate is useless.
+            onTap: _toggle,
             child: ExcludeSemantics(
               child: InkWell(
-                onTap: () => setState(() => _open = !_open),
+                onTap: _toggle,
                 child: Padding(
                   padding: EdgeInsets.all(tokens.spacing.md),
                   child: Row(
