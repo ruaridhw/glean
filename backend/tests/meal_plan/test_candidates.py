@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import random
+from datetime import UTC, datetime, timedelta
 
 from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.eligibility import CookedMeal
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
@@ -146,6 +148,10 @@ def test_flags_without_a_decision_question_leave_candidates_to_the_model(tmp_pat
     assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Keto", "Paleo"])] == ["rec_pasta"]
 
 
+def _cooked_meal(recipe_id: str, title: str, *, days_ago: float) -> CookedMeal:
+    return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=datetime.now(UTC) - timedelta(days=days_ago))
+
+
 def _sample(corpus: RecipeCorpusStore, *, pantry: list[str], dietary_flags: list[str]) -> list:
     return sample_corpus_candidates(
         corpus,
@@ -170,3 +176,111 @@ def _corpus(tmp_path, recipes: list[tuple[str, str, list[str], int | None]]) -> 
             )
         )
     return corpus
+
+
+def test_recipes_cooked_in_the_last_six_weeks_are_not_offered(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_bolognese", "Beef Bolognese", ["beef mince"], 30),
+            ("rec_chilli", "Chilli Con Carne", ["beef mince", "kidney beans"], 40),
+            ("rec_tacos", "Beef Tacos", ["beef mince", "tortilla"], 20),
+            ("rec_stir_fry", "Beef Stir Fry", ["beef mince", "noodles"], 20),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry_names=["mince"],
+        dietary_flags=[],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        cooked=[_cooked_meal("rec_chilli", "Chilli Con Carne", days_ago=10)],
+        slots=1,
+    )
+
+    ids = {candidate.external_id for candidate in candidates}
+    assert "rec_chilli" not in ids
+    assert ids == {"rec_bolognese", "rec_tacos", "rec_stir_fry"}
+
+
+def test_the_floor_relaxes_rather_than_leave_the_week_unfillable(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_bolognese", "Beef Bolognese", ["beef mince"], 30),
+            ("rec_chilli", "Chilli Con Carne", ["beef mince", "kidney beans"], 40),
+            ("rec_tacos", "Beef Tacos", ["beef mince", "tortilla"], 20),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry_names=["mince"],
+        dietary_flags=[],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        cooked=[_cooked_meal("rec_chilli", "Chilli Con Carne", days_ago=10)],
+        slots=1,
+    )
+
+    assert {candidate.external_id for candidate in candidates} == {"rec_bolognese", "rec_chilli", "rec_tacos"}
+
+
+def test_relaxing_the_floor_never_brings_back_a_recipe_a_hard_constraint_ruled_out(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_bolognese", "Beef Bolognese", ["beef mince"], 30),
+            ("rec_planned", "Beef Pie", ["beef mince", "pastry"], 60),
+            ("rec_chilli", "Chilli Con Carne", ["beef mince", "kidney beans"], 40),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry_names=["mince"],
+        dietary_flags=[],
+        max_total_time_mins=45,
+        exclude_external_ids=["rec_planned"],
+        rng=random.Random(0),
+        cooked=[
+            _cooked_meal("rec_chilli", "Chilli Con Carne", days_ago=10),
+            _cooked_meal("rec_planned", "Beef Pie", days_ago=10),
+        ],
+        slots=1,
+    )
+
+    assert {candidate.external_id for candidate in candidates} == {"rec_bolognese", "rec_chilli"}
+
+
+def test_relaxed_recipes_fill_the_candidates_only_after_the_fresh_ones(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_bolognese", "Beef Bolognese", ["beef mince"], 30),
+            ("rec_tacos", "Beef Tacos", ["beef mince", "tortilla"], 20),
+            ("rec_chilli", "Chilli Con Carne", ["beef mince", "kidney beans"], 40),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry_names=["mince"],
+        dietary_flags=[],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        cooked=[_cooked_meal("rec_chilli", "Chilli Con Carne", days_ago=10)],
+        slots=1,
+        pool_size=2,
+        sample_size=2,
+    )
+
+    assert {candidate.external_id for candidate in candidates} == {"rec_bolognese", "rec_tacos"}
+
+
+def _cooked_meal(recipe_id: str, title: str, *, days_ago: float) -> CookedMeal:
+    return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=datetime.now(UTC) - timedelta(days=days_ago))

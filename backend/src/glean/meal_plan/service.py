@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from glean.llm import Feature
 from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanResponse,
     MealPlanRequest,
@@ -43,6 +44,8 @@ Rules:
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
+- Prefer the dishes this household has not cooked recently; a recent repeat is a candidate only because
+  nothing else fit, so choose the others first.
 - Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
   fine; do not pad the list with weaker choices to reach the limit."""
 
@@ -127,6 +130,11 @@ def _generate_from_corpus(
         max_total_time_mins=request.max_active_time_mins,
         exclude_external_ids=request.exclude_external_ids,
         rng=rng,
+        cooked=[
+            CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at)
+            for meal in request.cooked_history
+        ],
+        slots=request.meals_per_week,
     )
     logger.info(
         "generating corpus meal plan",

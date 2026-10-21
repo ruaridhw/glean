@@ -3,6 +3,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Twelve weeks of dinners, with room for a household that cooks twice a day.
+MAX_COOKED_HISTORY_ITEMS = 200
+
 
 class CompressedPantryItem(BaseModel):
     id: int
@@ -26,6 +29,21 @@ class RecipeHistoryItem(BaseModel):
     food_groups: list[str] = Field(description="Food groups this recipe covers (e.g. ['protein', 'veg'])")
 
 
+class CookedHistoryItem(BaseModel):
+    """One meal the household actually cooked, from the last 12 weeks.
+
+    `recipe_id` is the corpus recipe id, which the app keeps as the plan entry's
+    `externalIdSnapshot`. It is null for meals cooked before the app stored that
+    snapshot, so `title` is the fallback identity.
+    """
+
+    recipe_id: str | None = Field(
+        default=None, description="Corpus recipe id; the same id corpus suggestions carry as external_id"
+    )
+    title: str
+    cooked_at: datetime = Field(description="ISO datetime the meal was cooked")
+
+
 class MealPlanRequest(BaseModel):
     source: Literal["saved", "corpus"] = Field(
         default="saved",
@@ -36,6 +54,11 @@ class MealPlanRequest(BaseModel):
     )
     recipe_history: list[RecipeHistoryItem] = Field(
         default_factory=list, description="All saved recipes with their last_cooked_at timestamps"
+    )
+    cooked_history: list[CookedHistoryItem] = Field(
+        default_factory=list,
+        max_length=MAX_COOKED_HISTORY_ITEMS,
+        description="Meals cooked in the last 12 weeks, newest-idle first is not required; the plan avoids repeats",
     )
     exclude_external_ids: list[str] = Field(
         default_factory=list, description="Corpus recipe IDs already in the plan, never offered again"
