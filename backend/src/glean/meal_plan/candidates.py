@@ -410,22 +410,24 @@ def _ingredient_urgent_uses(
 def mentions_item(text: str, item_name: str) -> bool:
     """Whether `text` names the whole item, in order: "red onion" is not "red pepper" or "onion soup".
 
-    Ingredient lines and reason text both go through this, so a claim about a recipe and the check
-    that the claim was made cannot disagree. Word boundaries matter ("lime" never matches "slime") and
-    a leading modifier is part of the identity ("ground coriander" needs "ground").
+    Ingredient lines and reason text both go through this, so a claim about a recipe and the check that
+    the claim was made cannot disagree. Word boundaries matter ("lime" never matches "slime"), a leading
+    modifier is part of the identity ("ground coriander" needs "ground"), and every word is compared as
+    a set of plausible singulars, so "chillies" and "chilli" meet however the plural was formed.
     """
     words = _item_words(text)
     wanted = _item_words(item_name)
     if not wanted:
         return False
-    return any(words[index : index + len(wanted)] == wanted for index in range(len(words) - len(wanted) + 1))
+    runs = range(len(words) - len(wanted) + 1)
+    return any(all(words[start + offset] & word for offset, word in enumerate(wanted)) for start in runs)
 
 
-def _item_words(text: str) -> list[str]:
-    return [_singular(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
+def _item_words(text: str) -> list[frozenset[str]]:
+    return [_singular_forms(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
 
 
-# Plurals that a suffix rule gets wrong. "-ves" is listed rather than ruled on: "cloves" is "clove".
+# Plurals no suffix rule gets right. "-ves" is listed rather than ruled on: "cloves" is "clove".
 _IRREGULAR_SINGULARS = {
     "leaves": "leaf",
     "loaves": "loaf",
@@ -440,23 +442,24 @@ _IRREGULAR_SINGULARS = {
 }
 
 
-def _singular(word: str) -> str:
-    """One item word, singularised the same way on both sides of a comparison.
+def _singular_forms(word: str) -> frozenset[str]:
+    """The word plus every singular an English plural of it could have come from.
 
-    Ingredient identity, not a search prefix: "limes" and "lime" must meet in the middle, which the
-    prefix trimming `_search_prefix` does for FTS ("limes" → "lim") never could.
+    A single rule cannot know whether "chillies" came from "chilli" or "chilly", or whether "cookies"
+    is "cookie", so the candidates are kept and two words match when their sets intersect. Ingredient
+    identity, not a search prefix: the prefix trimming `_search_prefix` does for FTS ("limes" → "lim")
+    never could meet "lime".
     """
+    forms = {word, word.removesuffix("s")} if len(word) > 3 else {word}
     if word in _IRREGULAR_SINGULARS:
-        return _IRREGULAR_SINGULARS[word]
+        forms.add(_IRREGULAR_SINGULARS[word])
     if word.endswith("ies") and len(word) > 4:
-        return f"{word[:-3]}y"
+        forms.update({f"{word[:-3]}y", f"{word[:-3]}i", f"{word[:-3]}ie"})
     if word.endswith(("ches", "shes", "sses", "xes", "zes")) and len(word) > 4:
-        return word[:-2]
+        forms.add(word[:-2])
     if word.endswith("oes") and len(word) > 4:
-        return word[:-2]
-    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
-        return word[:-1]
-    return word
+        forms.add(word[:-2])
+    return frozenset(forms)
 
 
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:

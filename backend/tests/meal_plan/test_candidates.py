@@ -774,13 +774,25 @@ def test_urgent_matching_respects_word_boundaries_and_extra_name_words(tmp_path)
 @pytest.mark.parametrize(
     ("ingredient", "pantry_name"),
     [
+        ("chilli", "chillies"),
+        ("red chilli", "red chillies"),
+        ("cookie", "cookies"),
+        ("brownie", "brownies"),
+        ("berry", "berries"),
+        ("pea", "peas"),
+        ("chickpea", "chickpeas"),
+        ("leaf", "leaves"),
+        ("potato", "potatoes"),
+        ("anchovy", "anchovies"),
+        ("tomato", "tomatoes"),
         ("lime", "limes"),
         ("orange", "oranges"),
         ("clove", "cloves"),
-        ("leaf", "leaves"),
-        ("tomato", "tomatoes"),
-        ("berry", "berries"),
         ("red onion", "red onions"),
+        ("hummus", "hummus"),
+        ("couscous", "couscous"),
+        ("asparagus", "asparagus"),
+        ("molasses", "molasses"),
     ],
 )
 def test_a_plural_pantry_name_matches_its_singular_ingredient(tmp_path, ingredient: str, pantry_name: str) -> None:
@@ -788,6 +800,25 @@ def test_a_plural_pantry_name_matches_its_singular_ingredient(tmp_path, ingredie
     item = PantryItem(name=pantry_name, urgency_score=120.0, expires_in_days=1)
 
     assert set(urgent_pantry_uses(corpus, [item], ["rec_dish"])) == {"rec_dish"}
+
+
+@pytest.mark.parametrize(
+    ("ingredient", "pantry_name"),
+    [
+        ("slime", "lime"),
+        ("boiled egg", "oil"),
+        ("red pepper", "red onion"),
+        ("peach", "pea"),
+        ("gas", "grass"),
+        ("coriander", "ground coriander"),
+        ("lime", "red onion"),
+    ],
+)
+def test_a_different_ingredient_is_not_matched(tmp_path, ingredient: str, pantry_name: str) -> None:
+    corpus = _corpus(tmp_path, [("rec_dish", "Dish", [ingredient], 20)])
+    item = PantryItem(name=pantry_name, urgency_score=120.0, expires_in_days=1)
+
+    assert urgent_pantry_uses(corpus, [item], ["rec_dish"]) == {}
 
 
 def test_a_plural_urgent_item_still_reaches_the_candidate_list(tmp_path) -> None:
@@ -813,6 +844,32 @@ def test_a_plural_urgent_item_still_reaches_the_candidate_list(tmp_path) -> None
             rng=random.Random(seed),
         )
         assert "rec_lime" in {candidate.external_id for candidate in candidates}, f"seed {seed}"
+
+
+def test_a_plural_urgent_item_ending_in_ies_reaches_its_recipe(tmp_path) -> None:
+    # "chillies" pluralises to "chilli", not "chilly"; the recipe must still be guaranteed.
+    corpus = _corpus(
+        tmp_path,
+        [
+            *[(f"rec_rice_{i}", f"Rice Dish {i}", ["rice", f"spice {i}"], 20) for i in range(60)],
+            ("rec_chilli", "Chilli Chicken", ["chicken", "chilli"], 20),
+        ],
+    )
+    pantry = [
+        PantryItem(name="chillies", urgency_score=110.0, expires_in_days=2),
+        PantryItem(name="rice", urgency_score=2000.0),
+    ]
+
+    for seed in range(40):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry=pantry,
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+        )
+        assert "rec_chilli" in {candidate.external_id for candidate in candidates}, f"seed {seed}"
 
 
 def test_a_modifier_stays_part_of_the_item_identity(tmp_path) -> None:
