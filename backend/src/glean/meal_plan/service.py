@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import random
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from glean.llm import Feature
@@ -141,6 +141,8 @@ def _generate_from_corpus(
     now: datetime | None,
 ) -> MealPlanResult:
     request_now = now or datetime.now(UTC)
+    # The phone measured `expires_in_days` from its own local date; without it, fall back to the server's.
+    reference_date = request.local_date or request_now.date()
     pantry = [
         PantryItem(
             name=item.name,
@@ -187,7 +189,8 @@ def _generate_from_corpus(
                 # Null for a recipe the household has not cooked recently; a number marks a fallback.
                 "cooked_days_ago": None if candidate.cooked_days_ago is None else round(candidate.cooked_days_ago),
                 "urgent_pantry_items": [
-                    _urgent_item_payload(item, now=request_now) for item in urgent_uses.get(candidate.external_id, ())
+                    _urgent_item_payload(item, reference_date=reference_date)
+                    for item in urgent_uses.get(candidate.external_id, ())
                 ],
             }
             for candidate in candidates
@@ -210,22 +213,26 @@ def _generate_from_corpus(
             "corpus meal plan chose recipes that were not offered; dropping",
             extra={"external_ids": [s.external_id for s in response.suggestions if s.external_id not in offered]},
         )
-    chosen = _name_urgent_items(chosen[: request.meals_per_week], urgent_uses, now=request_now)
+    chosen = _name_urgent_items(chosen[: request.meals_per_week], urgent_uses, reference_date=reference_date)
 
     logger.info("meal plan generated", extra={"count": len(chosen)})
     return MealPlanResult(suggestions=[MealPlanSuggestion(**suggestion.model_dump()) for suggestion in chosen])
 
 
-def _urgent_item_payload(item: PantryItem, *, now: datetime) -> dict[str, object]:
+def _urgent_item_payload(item: PantryItem, *, reference_date: date) -> dict[str, object]:
     """What the model needs to say when an item goes off: its name and the day, not just a day count."""
-    return {"name": item.name, "expires_in_days": item.expires_in_days, "goes_off": _goes_off_day(item, now=now)}
+    return {
+        "name": item.name,
+        "expires_in_days": item.expires_in_days,
+        "goes_off": _goes_off_day(item, reference_date=reference_date),
+    }
 
 
 def _name_urgent_items(
     chosen: Sequence[CorpusMealPlanRecipe],
     urgent_uses: Mapping[str, Sequence[PantryItem]],
     *,
-    now: datetime,
+    reference_date: date,
 ) -> list[CorpusMealPlanRecipe]:
     """Make each reason that uses an urgent item name it and when it goes off.
 
@@ -240,7 +247,7 @@ def _name_urgent_items(
         if missing:
             # The soonest to go off is the one worth naming if the model named none of them.
             item = min(missing, key=lambda urgent_item: urgent_item.expires_in_days or 0)
-            clause = f"Uses up your {item.name} ({_goes_off_phrase(item, now=now)})."
+            clause = f"Uses up your {item.name} ({_goes_off_phrase(item, reference_date=reference_date)})."
             suggestion = suggestion.model_copy(update={"reason": f"{suggestion.reason.rstrip()} {clause}".lstrip()})
         named.append(suggestion)
     return named
@@ -251,11 +258,10 @@ def _mentions(reason: str, item: PantryItem) -> bool:
     return any(word in words for word in _WORD_RE.findall(item.name.casefold()) if len(word) >= _MIN_WORD_LENGTH)
 
 
-def _goes_off_day(item: PantryItem, *, now: datetime) -> str:
-    days = item.expires_in_days or 0
-    return (now + timedelta(days=days)).strftime("%a")
+def _goes_off_day(item: PantryItem, *, reference_date: date) -> str:
+    return (reference_date + timedelta(days=item.expires_in_days or 0)).strftime("%a")
 
 
-def _goes_off_phrase(item: PantryItem, *, now: datetime) -> str:
+def _goes_off_phrase(item: PantryItem, *, reference_date: date) -> str:
     when = "went off" if item.expires_in_days is not None and item.expires_in_days < 0 else "goes off"
-    return f"{when} {_goes_off_day(item, now=now)}"
+    return f"{when} {_goes_off_day(item, reference_date=reference_date)}"

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -93,6 +93,14 @@ class MealPlanRequest(BaseModel):
         ge=1,
         le=7,
         description="Number of meal-plan slots to fill (may be less than full week if plan is partially filled)",
+    )
+    local_date: date | None = Field(
+        default=None,
+        description=(
+            "The phone's local calendar date, the one `expires_in_days` was measured from. The plan dates "
+            "a going-off item by the household's calendar, so it cannot use the server's UTC date. Null "
+            "from an app build that does not send it."
+        ),
     )
     dietary_flags: list[str] = Field(description="User dietary preferences to respect (e.g. ['vegan', 'gluten-free'])")
     max_active_time_mins: int | None = Field(
