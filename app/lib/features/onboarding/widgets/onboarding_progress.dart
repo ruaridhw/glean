@@ -76,10 +76,7 @@ class _StepSlot extends StatelessWidget {
         : colors.onSurfaceVariant;
 
     final Widget pill = Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: tokens.spacing.sm,
-        vertical: 6,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: tokens.spacing.sm, vertical: 6),
       decoration: isReserved
           ? null
           : BoxDecoration(
@@ -101,7 +98,9 @@ class _StepSlot extends StatelessWidget {
               border: isCurrent
                   ? null
                   : Border.all(
-                      color: isReserved ? colors.outlineVariant : colors.outline,
+                      color: isReserved
+                          ? colors.outlineVariant
+                          : colors.outline,
                     ),
             ),
             child: Text(
