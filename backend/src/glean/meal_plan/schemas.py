@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
 MAX_COOKED_HISTORY_ITEMS = 200
@@ -41,7 +41,17 @@ class CookedHistoryItem(BaseModel):
         default=None, description="Corpus recipe id; the same id corpus suggestions carry as external_id"
     )
     title: str
-    cooked_at: datetime = Field(description="ISO datetime the meal was cooked")
+    cooked_at: datetime = Field(description="ISO datetime the meal was cooked, with an offset (the app sends UTC)")
+
+    @field_validator("cooked_at")
+    @classmethod
+    def _read_a_missing_offset_as_utc(cls, value: datetime) -> datetime:
+        """State the timezone instead of guessing it at the age arithmetic.
+
+        The app sends `toUtc().toIso8601String()`, so this only catches an older build's local wall
+        clock: reading it as UTC is explicit here, rather than silently assumed 30 lines away.
+        """
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 class MealPlanRequest(BaseModel):
