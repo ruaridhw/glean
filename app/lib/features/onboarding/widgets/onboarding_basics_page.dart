@@ -138,6 +138,9 @@ class _NumberTile extends StatelessWidget {
                 fontSize: 40,
                 height: 1,
                 letterSpacing: -1.5,
+                // The chosen value is the one thing the old one-question
+                // screens got right: it is the loudest object on the page.
+                color: theme.colorScheme.primary,
               ),
             ),
             Text(unit, style: theme.textTheme.bodySmall),
@@ -183,6 +186,7 @@ class _DietaryDisclosureState extends State<_DietaryDisclosure> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Semantics(
+            container: true,
             button: true,
             expanded: _open,
             label: 'Dietary preferences, $count selected',
