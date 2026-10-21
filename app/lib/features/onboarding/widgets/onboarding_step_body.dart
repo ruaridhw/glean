@@ -40,15 +40,14 @@ class OnboardingStepBody extends StatelessWidget {
           onDietaryFlagToggled: onDietaryFlagToggled,
         );
       case OnboardingPage.pantry:
-        // Centred, as this page was before the flow gained a progress header.
-        return const Center(
-          child: OnboardingStepScaffold(
-            question: 'Stock your pantry',
-            subtitle:
-                'Scan a shop receipt and Glean adds what you bought, so meal '
-                'plans start from what you already have.',
-            child: Center(child: Icon(Icons.receipt_long_rounded, size: 72)),
-          ),
+        // The scaffold centres itself while it fits and scrolls when it does
+        // not, which is what keeps this page usable at large text sizes.
+        return const OnboardingStepScaffold(
+          question: 'Stock your pantry',
+          subtitle:
+              'Scan a shop receipt and Glean adds what you bought, so meal '
+              'plans start from what you already have.',
+          child: Center(child: Icon(Icons.receipt_long_rounded, size: 72)),
         );
     }
   }
