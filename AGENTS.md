@@ -53,6 +53,7 @@ make start-android    # Flutter on a running Android emulator
 make start-web        # Flutter in a Chrome it launches, hot reload (no toolchain needed; see app/README.md)
 make e2e-tokens       # Cognito test-user tokens so the e2e entrypoint can call a local backend
 make test-e2e         # Flutter integration_test suite (needs a booted simulator/emulator)
+make aws-profile      # AWS CLI `glean` profile whose IAM key is read from 1Password (OP_AWS_ITEM in .env.local)
 ```
 
 `start-ios`/`start-android`/`test-e2e` need `COGNITO_DOMAIN=... COGNITO_CLIENT_ID=...`

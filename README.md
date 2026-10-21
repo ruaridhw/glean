@@ -64,6 +64,17 @@ cp backend/.env.example backend/.env
 
 Fill in real API keys in `backend/.env` when using endpoints that call external services.
 
+For AWS CLI access (deploys, `infra/` scripts), keep the IAM user's access key
+in a 1Password item with fields `access key id` and `secret access key`, set
+`OP_AWS_ITEM=op://<vault>/<item>` in `.env.local`, and run:
+
+```bash
+make aws-profile   # then: export AWS_PROFILE=glean
+```
+
+The `glean` profile reads the key through `op` on every call, so it is never
+written to `~/.aws/credentials`.
+
 ## Run Locally
 
 Start the backend without Docker:
