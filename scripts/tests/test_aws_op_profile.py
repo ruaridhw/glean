@@ -15,14 +15,18 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "aws_op_profile.sh"
 
-# op read REF -> a value derived from the field name; records every reference read.
+# op inject: fills {{ REF }} with a value derived from the field name; records the template.
 FAKE_OP = """#!/bin/sh
-echo "$2" >> "$STATE/op.reads"
-case "$2" in
-  */"access key id") printf 'AKIAFAKE' ;;
-  */"secret access key") printf 'fake/secret+key' ;;
-  *) exit 1 ;;
-esac
+[ "$1" = inject ] || exit 1
+tee -a "$STATE/op.templates" \\
+  | sed -e 's#{{ [^}]*/access key id }}#AKIAFAKE#' -e 's#{{ [^}]*/secret access key }}#fake/secret+key#'
+"""
+
+# ssh [-o OPT]... HOST CMD: records the host, then runs CMD here, as the remote shell would.
+FAKE_SSH = """#!/bin/sh
+while [ "$1" = -o ]; do shift 2; done
+echo "$1" >> "$STATE/ssh.hosts"
+exec sh -c "$2"
 """
 
 
@@ -34,9 +38,10 @@ class TestAwsOpProfile(unittest.TestCase):
         tmp = Path(self._tmp.name)
         bin_dir = tmp / "bin"
         bin_dir.mkdir()
-        op = bin_dir / "op"
-        op.write_text(FAKE_OP)
-        op.chmod(op.stat().st_mode | stat.S_IEXEC)
+        for name, body in (("op", FAKE_OP), ("ssh", FAKE_SSH)):
+            tool = bin_dir / name
+            tool.write_text(body)
+            tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
         self.state = tmp / "state"
         self.state.mkdir()
         self.config = tmp / "aws" / "config"
@@ -70,11 +75,21 @@ class TestAwsOpProfile(unittest.TestCase):
         creds = self.export_credentials("glean")
         self.assertEqual(creds["AccessKeyId"], "AKIAFAKE")
         self.assertEqual(creds["SecretAccessKey"], "fake/secret+key")
-        self.assertEqual(
-            (self.state / "op.reads").read_text().splitlines(),
-            ["op://My Vault/glean-cli/access key id", "op://My Vault/glean-cli/secret access key"],
-        )
+        template = (self.state / "op.templates").read_text()
+        self.assertIn("{{ op://My Vault/glean-cli/access key id }}", template)
+        self.assertIn("{{ op://My Vault/glean-cli/secret access key }}", template)
+        self.assertFalse((self.state / "ssh.hosts").exists())
         self.assertIn("region = eu-west-2", self.config.read_text())
+
+    def test_ssh_host_runs_op_on_that_machine(self) -> None:
+        result = self.run_script("op://v/i", "glean", "me@mac")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        creds = self.export_credentials("glean")
+
+        self.assertEqual(creds["AccessKeyId"], "AKIAFAKE")
+        self.assertEqual(creds["SecretAccessKey"], "fake/secret+key")
+        self.assertEqual((self.state / "ssh.hosts").read_text().splitlines(), ["me@mac"])
 
     def test_helper_lives_beside_the_aws_config_not_in_the_checkout(self) -> None:
         self.run_script("op://v/i")
