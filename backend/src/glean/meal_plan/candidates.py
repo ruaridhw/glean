@@ -289,9 +289,23 @@ def _guaranteed_recipe_ids(
 
     The cap is a prompt and variety bound, so it can be smaller than the number of recipes using urgent
     items: spending it on the highest urgency scores alone lets one well-stocked urgent item take every
-    slot and starve the lone coriander recipe. One recipe per urgent item comes first, most urgent item
-    first (soonest to go off), then the rest by urgency-weighted fit.
+    slot and starve the lone coriander recipe. So every urgent item is covered first, most urgent item
+    first (soonest to go off), with one recipe counting once however many of them it uses; only then is
+    what is left of the bound spent on the strongest remaining urgent matches.
     """
+    by_item = _recipes_by_urgent_item(urgent_uses, eligible_ids=eligible_ids, fit=fit, tie_breaks=tie_breaks)
+    guaranteed = _cover_urgent_items(by_item, urgent_uses, limit=limit)
+    return _with_extra_urgent_recipes(guaranteed, by_item, fit=fit, tie_breaks=tie_breaks, limit=limit)
+
+
+def _recipes_by_urgent_item(
+    urgent_uses: Mapping[str, Sequence[PantryItem]],
+    *,
+    eligible_ids: Collection[str],
+    fit: Mapping[str, float],
+    tie_breaks: Mapping[str, float],
+) -> dict[PantryItem, list[str]]:
+    """Each urgent item's eligible recipes, best fit first."""
     by_item: dict[PantryItem, list[str]] = {}
     for recipe_id, items in urgent_uses.items():
         if recipe_id not in eligible_ids:
@@ -300,18 +314,45 @@ def _guaranteed_recipe_ids(
             by_item.setdefault(item, []).append(recipe_id)
     for recipe_ids in by_item.values():
         recipe_ids.sort(key=lambda recipe_id: (-fit.get(recipe_id, 0.0), tie_breaks.get(recipe_id, 0.0)))
+    return by_item
 
+
+def _cover_urgent_items(
+    by_item: Mapping[PantryItem, Sequence[str]],
+    urgent_uses: Mapping[str, Sequence[PantryItem]],
+    *,
+    limit: int,
+) -> list[str]:
+    """One recipe per urgent item, most urgent item first, skipping items a reserved recipe covers."""
     most_urgent_first = sorted(
         by_item, key=lambda urgent_item: (urgent_item.expires_in_days or 0, urgent_item.name.casefold())
     )
     guaranteed: list[str] = []
+    covered: set[PantryItem] = set()
     for item in most_urgent_first:
+        if item in covered:
+            # A recipe already reserved uses this item too; reserving another would waste the bound.
+            continue
         if len(guaranteed) >= limit:
-            return guaranteed
-        guaranteed.append(by_item[item][0])
-    # Coverage is in; spend what is left of the bound on the strongest remaining urgent matches.
+            break
+        recipe_id = next((recipe_id for recipe_id in by_item[item] if recipe_id not in guaranteed), None)
+        if recipe_id is not None:
+            guaranteed.append(recipe_id)
+            covered.update(urgent_uses[recipe_id])
+    return guaranteed
+
+
+def _with_extra_urgent_recipes(
+    guaranteed: list[str],
+    by_item: Mapping[PantryItem, Sequence[str]],
+    *,
+    fit: Mapping[str, float],
+    tie_breaks: Mapping[str, float],
+    limit: int,
+) -> list[str]:
+    """Spend what is left of the bound on the strongest remaining urgent matches."""
     rest = sorted(
-        (recipe_id for recipe_ids in by_item.values() for recipe_id in recipe_ids[1:]),
+        (recipe_id for recipe_ids in by_item.values() for recipe_id in recipe_ids[1:] if recipe_id not in guaranteed),
         key=lambda recipe_id: (-fit.get(recipe_id, 0.0), tie_breaks.get(recipe_id, 0.0)),
     )
     for recipe_id in rest:

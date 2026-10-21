@@ -551,6 +551,38 @@ def test_every_urgent_item_gets_a_guaranteed_recipe_before_one_gets_a_second(tmp
         assert len(ids) == 25
 
 
+def test_a_recipe_covering_several_urgent_items_counts_once_against_the_bound(tmp_path) -> None:
+    # One ten-herb recipe covers ten urgent items. Counting it once per item would spend the whole
+    # guarantee allowance on a single recipe and leave the one coriander recipe unsampled.
+    herbs = ["basil", "mint", "sage", "thyme", "oregano", "parsley", "rosemary", "chives", "dill", "tarragon"]
+    corpus = _corpus(
+        tmp_path,
+        [
+            *[(f"rec_rice_{i}", f"Rice Dish {i}", ["rice", f"spice {i}"], 20) for i in range(60)],
+            ("rec_herbs", "Ten Herb Roast", herbs, 20),
+            ("rec_coriander", "Herb Chicken", ["chicken", "coriander"], 20),
+        ],
+    )
+    pantry = [
+        *(PantryItem(name=herb, urgency_score=120.0, expires_in_days=1) for herb in herbs),
+        PantryItem(name="coriander", urgency_score=110.0, expires_in_days=2),
+        PantryItem(name="rice", urgency_score=2000.0),
+    ]
+
+    for seed in range(40):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry=pantry,
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+        )
+        ids = [candidate.external_id for candidate in candidates]
+        assert "rec_coriander" in ids, f"seed {seed}"
+        assert len(ids) == 25
+
+
 def test_a_diet_excluded_recipe_using_the_most_urgent_item_is_never_offered(tmp_path) -> None:
     corpus = _corpus(
         tmp_path,
