@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from glean.llm import Feature
-from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates
+from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
+    CorpusMealPlanRecipe,
     CorpusMealPlanResponse,
     MealPlanRequest,
     MealPlanResponse,
@@ -19,6 +21,8 @@ from glean.observability import logger, tracer
 from glean.recipes.corpus import RecipeCorpusStore
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from glean.llm import LLMRouter
 
 MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
@@ -42,6 +46,9 @@ Rules:
 - Only choose from candidates, and copy each chosen recipe's external_id and title exactly.
   Never invent recipes or IDs.
 - Prioritise candidates that use pantry items, especially those with high urgency scores
+- When a candidate lists urgent_pantry_items, say in its reason that the meal uses one up, naming the
+  item and when it goes off, using the goes_off day given, e.g. "uses up your coriander (goes off Thu)".
+  Those items go off within days, so they need cooking this week.
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
@@ -52,6 +59,8 @@ Rules:
   fine; do not pad the list with weaker choices to reach the limit."""
 
 _MAX_CANDIDATE_INGREDIENTS = 12
+_WORD_RE = re.compile(r"\w+")
+_MIN_WORD_LENGTH = 3
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
@@ -154,9 +163,14 @@ def _generate_from_corpus(
         slots=request.meals_per_week,
         now=request_now,
     )
+    urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
     logger.info(
         "generating corpus meal plan",
-        extra={"pantry_items": len(request.pantry), "candidates": len(candidates)},
+        extra={
+            "pantry_items": len(request.pantry),
+            "candidates": len(candidates),
+            "urgent_pantry_items": len({item.name for items in urgent_uses.values() for item in items}),
+        },
     )
     if not candidates:
         return MealPlanResult(suggestions=[])
@@ -172,6 +186,9 @@ def _generate_from_corpus(
                 "ingredients": candidate.summary.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
                 # Null for a recipe the household has not cooked recently; a number marks a fallback.
                 "cooked_days_ago": None if candidate.cooked_days_ago is None else round(candidate.cooked_days_ago),
+                "urgent_pantry_items": [
+                    _urgent_item_payload(item, now=request_now) for item in urgent_uses.get(candidate.external_id, ())
+                ],
             }
             for candidate in candidates
         ],
@@ -193,7 +210,52 @@ def _generate_from_corpus(
             "corpus meal plan chose recipes that were not offered; dropping",
             extra={"external_ids": [s.external_id for s in response.suggestions if s.external_id not in offered]},
         )
-    chosen = chosen[: request.meals_per_week]
+    chosen = _name_urgent_items(chosen[: request.meals_per_week], urgent_uses, now=request_now)
 
     logger.info("meal plan generated", extra={"count": len(chosen)})
     return MealPlanResult(suggestions=[MealPlanSuggestion(**suggestion.model_dump()) for suggestion in chosen])
+
+
+def _urgent_item_payload(item: PantryItem, *, now: datetime) -> dict[str, object]:
+    """What the model needs to say when an item goes off: its name and the day, not just a day count."""
+    return {"name": item.name, "expires_in_days": item.expires_in_days, "goes_off": _goes_off_day(item, now=now)}
+
+
+def _name_urgent_items(
+    chosen: Sequence[CorpusMealPlanRecipe],
+    urgent_uses: Mapping[str, Sequence[PantryItem]],
+    *,
+    now: datetime,
+) -> list[CorpusMealPlanRecipe]:
+    """Make each reason that uses an urgent item name it and when it goes off.
+
+    The prompt asks the model for this, but a reason that quietly omits it would hide the one thing the
+    household most needs to know, so the clause is appended when the model leaves it out.
+    """
+    named: list[CorpusMealPlanRecipe] = []
+    for suggestion in chosen:
+        missing = [
+            item for item in urgent_uses.get(suggestion.external_id, ()) if not _mentions(suggestion.reason, item)
+        ]
+        if missing:
+            # The soonest to go off is the one worth naming if the model named none of them.
+            item = min(missing, key=lambda urgent_item: urgent_item.expires_in_days or 0)
+            clause = f"Uses up your {item.name} ({_goes_off_phrase(item, now=now)})."
+            suggestion = suggestion.model_copy(update={"reason": f"{suggestion.reason.rstrip()} {clause}".lstrip()})
+        named.append(suggestion)
+    return named
+
+
+def _mentions(reason: str, item: PantryItem) -> bool:
+    words = {word for word in _WORD_RE.findall(reason.casefold()) if len(word) >= _MIN_WORD_LENGTH}
+    return any(word in words for word in _WORD_RE.findall(item.name.casefold()) if len(word) >= _MIN_WORD_LENGTH)
+
+
+def _goes_off_day(item: PantryItem, *, now: datetime) -> str:
+    days = item.expires_in_days or 0
+    return (now + timedelta(days=days)).strftime("%a")
+
+
+def _goes_off_phrase(item: PantryItem, *, now: datetime) -> str:
+    when = "went off" if item.expires_in_days is not None and item.expires_in_days < 0 else "goes off"
+    return f"{when} {_goes_off_day(item, now=now)}"

@@ -234,6 +234,21 @@ def _pantry_fit(
     }
 
 
+def urgent_pantry_uses(
+    corpus: RecipeCorpusStore, pantry: Sequence[PantryItem], recipe_ids: Collection[str]
+) -> dict[str, tuple[PantryItem, ...]]:
+    """Which urgent pantry items each of `recipe_ids` uses, for naming them in its reason.
+
+    Same matching as the guarantee, so a recipe promised into the candidate list because it uses the
+    coriander is the recipe whose reason can say so.
+    """
+    return {
+        external_id: entry.urgent
+        for external_id, entry in _pantry_fit(corpus, pantry, set(recipe_ids)).items()
+        if entry.urgent
+    }
+
+
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:
     """Append recipes in order until `limit`, skipping near-duplicates of ones already picked."""
     for summary in shuffled:
