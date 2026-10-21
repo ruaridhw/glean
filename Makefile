@@ -59,8 +59,11 @@ _E2E_DEFINES = $(if $(E2E_USERNAME),$(shell scripts/e2e_tokens.sh --dart-defines
 
 # The IAM user the AWS CLI signs in as, kept in 1Password rather than in
 # ~/.aws/credentials. Set OP_AWS_ITEM (an op://<vault>/<item> reference) in
-# .env.local; `make aws-profile` points AWS_OP_PROFILE at it.
+# .env.local; `make aws-profile` points AWS_OP_PROFILE at it. On a box with
+# no 1Password sign-in, set OP_SSH_HOST to a machine with the 1Password app
+# and `op` runs there over SSH (unlocking with Touch ID on that machine).
 OP_AWS_ITEM       ?=
+OP_SSH_HOST       ?=
 AWS_OP_PROFILE    ?= glean
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -191,7 +194,7 @@ e2e-tokens:  ## Print the Cognito test user's tokens as shell exports (needs E2E
 
 .PHONY: aws-profile
 aws-profile:  ## Point the AWS CLI's glean profile at the IAM user's key in 1Password (OP_AWS_ITEM in .env.local)
-	@scripts/aws_op_profile.sh "$(OP_AWS_ITEM)" "$(AWS_OP_PROFILE)"
+	@scripts/aws_op_profile.sh "$(OP_AWS_ITEM)" "$(AWS_OP_PROFILE)" "$(OP_SSH_HOST)"
 	aws sts get-caller-identity --profile "$(AWS_OP_PROFILE)"
 
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
