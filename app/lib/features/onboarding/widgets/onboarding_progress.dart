@@ -10,7 +10,12 @@ import 'package:glean/design_system/design_system.dart';
 /// is linear and skippable, so jumping to a page directly is not a thing the
 /// user can do.
 class OnboardingProgress extends StatelessWidget {
-  const OnboardingProgress({required this.currentSlot, super.key});
+  const OnboardingProgress({
+    required this.currentSlot,
+    this.completedSlots = const <int>{},
+    this.skippedSlots = const <int>{},
+    super.key,
+  });
 
   static const int basicsSlot = 0;
   static const int interviewSlot = 1;
@@ -18,6 +23,12 @@ class OnboardingProgress extends StatelessWidget {
   static const List<String> labels = <String>['Basics', 'Taste', 'Pantry'];
 
   final int currentSlot;
+
+  /// Slots the household has moved past by answering them, and by skipping
+  /// them. Kept apart so the indicator never claims an answer that was not
+  /// given.
+  final Set<int> completedSlots;
+  final Set<int> skippedSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +46,8 @@ class OnboardingProgress extends StatelessWidget {
                 label: labels[slot],
                 isCurrent: slot == currentSlot,
                 isReserved: slot == interviewSlot,
+                isCompleted: completedSlots.contains(slot),
+                isSkipped: skippedSlots.contains(slot),
               ),
             ),
           ],
@@ -50,12 +63,16 @@ class _StepSlot extends StatelessWidget {
     required this.label,
     required this.isCurrent,
     required this.isReserved,
+    required this.isCompleted,
+    required this.isSkipped,
   });
 
   final int slot;
   final String label;
   final bool isCurrent;
   final bool isReserved;
+  final bool isCompleted;
+  final bool isSkipped;
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +85,28 @@ class _StepSlot extends StatelessWidget {
               ? colors.onPrimaryContainer
               : colors.onSurfaceVariant,
         );
-    final Color numberBackground = isCurrent
+    final Color numberBackground = isCurrent || isCompleted
         ? colors.primary
         : colors.surfaceContainerHighest;
-    final Color numberForeground = isCurrent
+    final Color numberForeground = isCurrent || isCompleted
         ? colors.onPrimary
         : colors.onSurfaceVariant;
+    final Widget mark = switch ((isCompleted, isSkipped)) {
+      (true, _) => Icon(Icons.check_rounded, size: 12, color: colors.onPrimary),
+      (_, true) => Icon(
+        Icons.remove_rounded,
+        size: 12,
+        color: colors.onSurfaceVariant,
+      ),
+      _ => Text(
+        '${slot + 1}',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10,
+          letterSpacing: 0,
+          color: numberForeground,
+        ),
+      ),
+    };
 
     final Widget pill = Container(
       padding: EdgeInsets.symmetric(horizontal: tokens.spacing.sm, vertical: 6),
@@ -95,7 +128,7 @@ class _StepSlot extends StatelessWidget {
             decoration: BoxDecoration(
               color: numberBackground,
               shape: BoxShape.circle,
-              border: isCurrent
+              border: isCurrent || isCompleted
                   ? null
                   : Border.all(
                       color: isReserved
@@ -103,14 +136,7 @@ class _StepSlot extends StatelessWidget {
                           : colors.outline,
                     ),
             ),
-            child: Text(
-              '${slot + 1}',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 10,
-                letterSpacing: 0,
-                color: numberForeground,
-              ),
-            ),
+            child: mark,
           ),
           SizedBox(width: tokens.spacing.xs + 2),
           Flexible(
@@ -125,9 +151,16 @@ class _StepSlot extends StatelessWidget {
       ),
     );
 
+    final String passedState = isCompleted
+        ? ', completed'
+        : isSkipped
+        ? ', skipped'
+        : isReserved
+        ? ', coming later'
+        : '';
     final String semanticsLabel =
-        'Step ${slot + 1} of ${OnboardingProgress.labels.length}: $label'
-        '${isReserved ? ', coming later' : ''}';
+        'Step ${slot + 1} of ${OnboardingProgress.labels.length}: '
+        '$label$passedState';
 
     return Semantics(
       key: ValueKey<String>('onboarding.step.$slot'),

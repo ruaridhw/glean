@@ -114,6 +114,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final ThemeData theme = Theme.of(context);
+    final bool basicsPassed = _page == OnboardingPage.pantry;
+    final bool basicsAnswered = _answers != null;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -143,6 +145,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 currentSlot: _page == OnboardingPage.basics
                     ? OnboardingProgress.basicsSlot
                     : OnboardingProgress.pantrySlot,
+                completedSlots: basicsPassed && basicsAnswered
+                    ? const <int>{OnboardingProgress.basicsSlot}
+                    : const <int>{},
+                skippedSlots: basicsPassed && !basicsAnswered
+                    ? const <int>{OnboardingProgress.basicsSlot}
+                    : const <int>{},
               ),
               SizedBox(height: tokens.spacing.sm),
               Expanded(
