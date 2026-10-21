@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -58,6 +59,12 @@ Rules:
   fine; do not pad the list with weaker choices to reach the limit."""
 
 _MAX_CANDIDATE_INGREDIENTS = 12
+_WEEKDAY_WORD = r"(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*"
+# A model-written expiry claim, with the punctuation that usually hugs it.
+_EXPIRY_CLAIM_RE = re.compile(
+    rf"\s*(?:[,;(]\s*)?(?:which\s+|and\s+|it\s+)?(?:goes|went)\s+off\s+(?:on\s+)?(?P<day>{_WEEKDAY_WORD})\s*[).]?",
+    re.IGNORECASE,
+)
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
@@ -253,21 +260,43 @@ def _name_urgent_items(
 
 
 def _states_when_it_goes_off(reason: str, item: PantryItem, *, reference_date: date) -> bool:
-    """Whether the reason names the whole item and the day it actually goes off."""
-    return mentions_item(reason, item.name) and _states_day(reason, item, reference_date=reference_date)
+    """Whether the reason names the whole item and claims the day it actually goes off.
+
+    A weekday elsewhere in the prose is not a claim about this item: "For Thu dinner, uses coriander
+    (goes off Fri)" says nothing true about the coriander.
+    """
+    return mentions_item(reason, item.name) and _day_claimed(reason, item, reference_date=reference_date)
 
 
-def _states_day(reason: str, item: PantryItem, *, reference_date: date) -> bool:
+def _day_claimed(reason: str, item: PantryItem, *, reference_date: date) -> bool:
     day = reference_date + timedelta(days=item.expires_in_days or 0)
-    words = {word.casefold() for word in reason.replace("(", " ").replace(")", " ").replace(",", " ").split()}
-    return day.strftime("%a").casefold() in words or day.strftime("%A").casefold() in words
+    claimed = {match.group("day").casefold() for match in _EXPIRY_CLAIM_RE.finditer(reason)}
+    return day.strftime("%a").casefold() in claimed or day.strftime("%A").casefold() in claimed
 
 
 def _repaired_reason(reason: str, item: PantryItem, *, reference_date: date) -> str:
-    """The reason with what it lacks appended: the item when unnamed, otherwise just the day."""
+    """The reason with one correct expiry clause at the end: the model's own day claims are dropped.
+
+    Leaving a model-written day in place would put two contradictory dates in front of the household, so
+    the claim is removed rather than contradicted. Other prose (a weekday that describes the dinner, say)
+    is left alone.
+    """
+    without_claims = _strip_expiry_claims(reason)
     phrase = _goes_off_phrase(item, reference_date=reference_date)
-    clause = f"Uses up your {item.name} ({phrase})." if not mentions_item(reason, item.name) else f"It {phrase}."
-    return f"{reason} {clause}".strip()
+    names_item = mentions_item(without_claims, item.name)
+    clause = f"It {phrase}." if names_item else f"Uses up your {item.name} ({phrase})."
+    return " ".join(part for part in (without_claims, clause) if part)
+
+
+def _strip_expiry_claims(reason: str) -> str:
+    """The reason without any "goes off <day>" claim, tidied into a sentence."""
+    stripped = re.sub(r"\s+([.,;])", r"\1", _EXPIRY_CLAIM_RE.sub("", reason))
+    stripped = re.sub(r"[,;(]\s*$", "", stripped)
+    stripped = re.sub(r"\s?,\s*$", "", stripped)
+    stripped = re.sub(r"\s{2,}", " ", stripped).strip()
+    if stripped and stripped[-1] not in ".!?":
+        stripped = f"{stripped}."
+    return stripped
 
 
 def _goes_off_day(item: PantryItem, *, reference_date: date) -> str:

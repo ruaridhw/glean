@@ -666,7 +666,79 @@ def test_a_reason_with_the_wrong_day_is_repaired(tmp_path) -> None:
         now=datetime(2026, 4, 7, 12, tzinfo=UTC),
     )
 
+    reason = result.suggestions[0].reason
+    assert "goes off Thu" in reason
+    assert "Fri" not in reason
+
+
+def test_an_unrelated_weekday_does_not_count_as_an_expiry_claim(tmp_path) -> None:
+    # "Thu dinner" is about the meal, not a claim that the coriander goes off; the wrong Friday claim
+    # must still be replaced, and the dinner wording left alone.
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_herby",
+                title="Coriander Chicken",
+                reason="For Thu dinner, uses coriander (goes off Fri).",
+            )
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    reason = result.suggestions[0].reason
+    assert "goes off Thu" in reason
+    assert "Fri" not in reason
+    assert "For Thu dinner" in reason
+
+
+def test_a_reason_naming_the_item_without_an_expiry_claim_gains_one(tmp_path) -> None:
+    # A weekday in the prose is not an expiry claim, so this reason is not compliant.
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_herby",
+                title="Coriander Chicken",
+                reason="Coriander is lovely for Thursday dinner.",
+            )
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
     assert "goes off Thu" in result.suggestions[0].reason
+
+
+def test_a_correct_full_weekday_claim_is_left_alone(tmp_path) -> None:
+    llm_router = MagicMock()
+    reason = "Uses up your coriander, which goes off Thursday."
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[CorpusMealPlanRecipe(external_id="rec_herby", title="Coriander Chicken", reason=reason)]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander()]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 12, tzinfo=UTC),
+    )
+
+    assert result.suggestions[0].reason == reason
 
 
 def test_a_second_urgent_item_is_not_added_when_one_is_already_named(tmp_path) -> None:
