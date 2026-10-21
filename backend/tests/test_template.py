@@ -12,15 +12,18 @@ def _load() -> dict[str, Any]:
     class Loader(yaml.SafeLoader):
         pass
 
-    # CloudFormation short-form tags (!Ref, !Sub, !GetAtt ...) load as their plain value.
-    def passthrough(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> Any:
+    # CloudFormation short-form tags (!Ref, !Sub, !GetAtt ...) keep their intrinsic name, so a
+    # literal string can never stand in for a real reference.
+    def intrinsic(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> Any:
         if isinstance(node, yaml.ScalarNode):
-            return loader.construct_scalar(node)
-        if isinstance(node, yaml.SequenceNode):
-            return loader.construct_sequence(node)
-        return loader.construct_mapping(node)
+            value: Any = loader.construct_scalar(node)
+        elif isinstance(node, yaml.SequenceNode):
+            value = loader.construct_sequence(node, deep=True)
+        else:
+            value = loader.construct_mapping(node, deep=True)
+        return {"Ref" if suffix == "Ref" else f"Fn::{suffix}": value}
 
-    Loader.add_multi_constructor("!", passthrough)
+    Loader.add_multi_constructor("!", intrinsic)
     return yaml.load(TEMPLATE.read_text(), Loader=Loader)  # noqa: S506
 
 
@@ -46,7 +49,7 @@ def test_api_gateway_access_logs_go_to_a_log_group_the_template_creates() -> Non
     template = _load()
     settings = template["Globals"]["HttpApi"]["AccessLogSettings"]
 
-    log_group = settings["DestinationArn"].split(".")[0]  # !GetAtt <logical id>.Arn
+    log_group = settings["DestinationArn"]["Fn::GetAtt"].split(".")[0]  # !GetAtt <logical id>.Arn
     assert template["Resources"][log_group]["Type"] == "AWS::Logs::LogGroup"
     assert template["Resources"][log_group]["Properties"]["RetentionInDays"] > 0
 
@@ -69,7 +72,7 @@ def test_the_api_lambda_reads_its_paid_model_rate_limit_from_a_template_paramete
     assert parameter["Description"]
 
     variables = template["Resources"]["GleanFunction"]["Properties"]["Environment"]["Variables"]
-    assert variables["RATE_LIMIT_PER_HOUR"] == "RateLimitPerHour"
+    assert variables["RATE_LIMIT_PER_HOUR"] == {"Ref": "RateLimitPerHour"}
 
 
 def test_only_the_api_lambda_receives_the_rate_limit() -> None:
