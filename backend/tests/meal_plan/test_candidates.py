@@ -522,6 +522,35 @@ def test_an_urgent_fresh_recipe_is_offered_before_any_recently_cooked_one(tmp_pa
         assert all(recipe_id.startswith("rec_old_") for recipe_id in ids[4:]), f"seed {seed}: {ids}"
 
 
+def test_every_urgent_item_gets_a_guaranteed_recipe_before_one_gets_a_second(tmp_path) -> None:
+    # Sixty rice dishes are all urgent and all outrank the one coriander dish, so a guarantee spent on
+    # the highest urgency scores would spend itself entirely on rice and never offer the coriander.
+    corpus = _corpus(
+        tmp_path,
+        [
+            *[(f"rec_rice_{i}", f"Rice Dish {i}", ["rice", f"spice {i}"], 20) for i in range(60)],
+            ("rec_coriander", "Herb Chicken", ["chicken", "coriander"], 20),
+        ],
+    )
+    pantry = [
+        PantryItem(name="rice", urgency_score=200.0, expires_in_days=1),
+        PantryItem(name="coriander", urgency_score=110.0, expires_in_days=2),
+    ]
+
+    for seed in range(40):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry=pantry,
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+        )
+        ids = [candidate.external_id for candidate in candidates]
+        assert "rec_coriander" in ids, f"seed {seed}"
+        assert len(ids) == 25
+
+
 def test_a_diet_excluded_recipe_using_the_most_urgent_item_is_never_offered(tmp_path) -> None:
     corpus = _corpus(
         tmp_path,

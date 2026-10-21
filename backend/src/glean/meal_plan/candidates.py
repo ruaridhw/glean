@@ -171,9 +171,14 @@ def sample_corpus_candidates(
     # floor and can never undo it, so a recipe the household cooked recently is never forced back in --
     # even in a week where the floor had to relax, where it is sampled alongside every other relaxed
     # recipe and can only take a slot the fresh ones left empty.
-    urgent = [recipe_id for recipe_id in urgent_uses if recipe_id in fresh]
-    urgent.sort(key=lambda recipe_id: (-fit[recipe_id], tie_breaks[recipe_id]))
-    _take_distinct(picked, [eligible[recipe_id] for recipe_id in urgent], guarantee_limit)
+    guaranteed = _guaranteed_recipe_ids(
+        urgent_uses,
+        eligible_ids=fresh,
+        fit=fit,
+        tie_breaks=tie_breaks,
+        limit=guarantee_limit,
+    )
+    _take_distinct(picked, [eligible[recipe_id] for recipe_id in guaranteed], guarantee_limit)
 
     for group, pantry_ranked in ((floor.fresh, fresh_ranked), (floor.relaxed, relaxed_ranked)):
         _fill_from(picked, pantry_ranked[:pool_size], eligible=eligible, rng=rng, sample_size=sample_size)
@@ -207,6 +212,51 @@ def _fill_from(
     if not remaining or len(picked) >= sample_size:
         return
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
+
+
+def _guaranteed_recipe_ids(
+    urgent_uses: Mapping[str, Sequence[PantryItem]],
+    *,
+    eligible_ids: Collection[str],
+    fit: Mapping[str, float],
+    tie_breaks: Mapping[str, float],
+    limit: int,
+) -> list[str]:
+    """Recipes to guarantee, covering every urgent item before any item gets a second recipe.
+
+    The cap is a prompt and variety bound, so it can be smaller than the number of recipes using urgent
+    items: spending it on the highest urgency scores alone lets one well-stocked urgent item take every
+    slot and starve the lone coriander recipe. One recipe per urgent item comes first, most urgent item
+    first (soonest to go off), then the rest by urgency-weighted fit.
+    """
+    by_item: dict[PantryItem, list[str]] = {}
+    for recipe_id, items in urgent_uses.items():
+        if recipe_id not in eligible_ids:
+            continue
+        for item in items:
+            by_item.setdefault(item, []).append(recipe_id)
+    for recipe_ids in by_item.values():
+        recipe_ids.sort(key=lambda recipe_id: (-fit.get(recipe_id, 0.0), tie_breaks.get(recipe_id, 0.0)))
+
+    most_urgent_first = sorted(
+        by_item, key=lambda urgent_item: (urgent_item.expires_in_days or 0, urgent_item.name.casefold())
+    )
+    guaranteed: list[str] = []
+    for item in most_urgent_first:
+        if len(guaranteed) >= limit:
+            return guaranteed
+        guaranteed.append(by_item[item][0])
+    # Coverage is in; spend what is left of the bound on the strongest remaining urgent matches.
+    rest = sorted(
+        (recipe_id for recipe_ids in by_item.values() for recipe_id in recipe_ids[1:]),
+        key=lambda recipe_id: (-fit.get(recipe_id, 0.0), tie_breaks.get(recipe_id, 0.0)),
+    )
+    for recipe_id in rest:
+        if len(guaranteed) >= limit:
+            break
+        if recipe_id not in guaranteed:
+            guaranteed.append(recipe_id)
+    return guaranteed
 
 
 def _pantry_fit(
