@@ -603,46 +603,92 @@ def test_the_guarantee_cannot_revive_a_recipe_the_six_week_floor_dropped(tmp_pat
         assert "rec_coriander" not in {candidate.external_id for candidate in candidates}, f"seed {seed}"
 
 
-def test_the_guarantee_does_not_force_a_repeat_when_the_floor_has_relaxed(tmp_path) -> None:
-    # A starved week: two fresh recipes and a set cooked recently, so the floor gives way. The one
-    # dish using the urgent coriander was cooked recently too, so it is sampled along with the rest
-    # rather than guaranteed -- using the coriander is not worth overriding "no repeats" (V2).
+def _relaxed_week(tmp_path) -> tuple[RecipeCorpusStore, set[str], list[CookedMeal]]:
+    """A valid seven-slot week the floor cannot fill: twenty fresh recipes and sixty-one cooked ten days ago."""
+    fresh = [(f"rec_fresh_{index}", f"Fresh Dish {index}", [f"fresh thing {index}"], 20) for index in range(20)]
+    relaxed = [(f"rec_rice_{index}", f"Rice Dish {index}", ["rice", f"spice {index}"], 20) for index in range(60)]
+    relaxed.append(("rec_coriander", "Coriander Chicken", ["chicken", "coriander"], 20))
+    corpus = _corpus(tmp_path, [*fresh, *relaxed])
+    cooked = [_cooked_meal(recipe_id, title, days_ago=10) for recipe_id, title, _, _ in relaxed]
+    return corpus, {recipe[0] for recipe in fresh}, cooked
+
+
+def test_a_relaxed_recipe_covers_an_urgent_item_no_fresh_recipe_uses(tmp_path) -> None:
+    # The floor relaxed, so these recipes are eligible (spec §6.2 step 2) and step 4 guarantees urgent
+    # uses over what is eligible. Nothing fresh uses the coriander, so a relaxed slot must carry it.
+    corpus, fresh_ids, cooked = _relaxed_week(tmp_path)
+    pantry = [
+        PantryItem(name="rice", urgency_score=200.0, expires_in_days=1),
+        PantryItem(name="coriander", urgency_score=110.0, expires_in_days=2),
+    ]
+
+    for seed in range(40):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry=pantry,
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+            cooked=cooked,
+            slots=7,
+            now=datetime.now(UTC),
+        )
+        ids = [candidate.external_id for candidate in candidates]
+        coriander = [candidate for candidate in candidates if candidate.external_id == "rec_coriander"]
+
+        assert coriander, f"seed {seed}"
+        assert set(ids[:20]) == fresh_ids, f"seed {seed}: a relaxed recipe was offered before a fresh one"
+        # A repeat is still a fallback: the offer carries how long ago it was cooked.
+        assert coriander[0].cooked_days_ago is not None
+
+
+def test_a_fresh_recipe_takes_the_urgent_slot_before_a_relaxed_one(tmp_path) -> None:
+    # The coriander has a fresh recipe and relaxed ones, and the rice only relaxed ones. Coverage must
+    # spend the relaxed guarantee on the rice (nothing fresh can cover it), not on another coriander.
+    fresh_coriander = ("rec_herby", "Coriander Chicken", ["chicken", "coriander"], 20)
     corpus = _corpus(
         tmp_path,
         [
-            *[(f"rec_rice_{i}", f"Rice Dish {i}", ["rice", f"spice {i}"], 20) for i in range(40)],
-            *[(f"rec_old_{i}", f"Old Dish {i}", [f"oldspice {i}"], 20) for i in range(30)],
-            ("rec_coriander", "Coriander Chicken", ["chicken", "coriander"], 20),
+            *[(f"rec_fresh_{index}", f"Fresh Dish {index}", [f"fresh thing {index}"], 20) for index in range(12)],
+            fresh_coriander,
+            *[(f"rec_rice_{index}", f"Rice Dish {index}", ["rice", f"spice {index}"], 20) for index in range(30)],
+            *[
+                (
+                    f"rec_old_herby_{index}",
+                    f"Old Coriander Chicken {index}",
+                    ["chicken", "coriander", f"old spice {index}", f"old herb {index}"],
+                    20,
+                )
+                for index in range(10)
+            ],
         ],
     )
-    # Rice is well stocked this week, so the coriander dish is one rather than the only candidate.
+    cooked = [_cooked_meal(f"rec_rice_{index}", f"Rice Dish {index}", days_ago=10) for index in range(30)] + [
+        _cooked_meal(f"rec_old_herby_{index}", f"Old Coriander Chicken {index}", days_ago=10) for index in range(10)
+    ]
     pantry = [
-        PantryItem(name="rice", urgency_score=200.0),
         PantryItem(name="coriander", urgency_score=150.0, expires_in_days=1),
-    ]
-    cooked = [_cooked_meal(f"rec_old_{i}", f"Old Dish {i}", days_ago=10) for i in range(30)]
-    cooked.append(_cooked_meal("rec_coriander", "Coriander Chicken", days_ago=10))
-
-    offered = [
-        {
-            candidate.external_id
-            for candidate in sample_corpus_candidates(
-                corpus,
-                pantry=pantry,
-                dietary_flags=[],
-                max_total_time_mins=None,
-                exclude_external_ids=[],
-                rng=random.Random(seed),
-                cooked=cooked,
-                slots=20,
-                now=datetime.now(UTC),
-                sample_size=1,
-            )
-        }
-        for seed in range(20)
+        PantryItem(name="rice", urgency_score=200.0, expires_in_days=2),
     ]
 
-    assert any("rec_coriander" not in ids for ids in offered)
+    for seed in range(10):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry=pantry,
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+            cooked=cooked,
+            slots=7,
+            now=datetime.now(UTC),
+            guarantee_max=1,
+        )
+        # 13 fresh recipes, so the first relaxed slot is index 13: the guaranteed rice, not the old herby.
+        ids = [candidate.external_id for candidate in candidates]
+        assert ids[0] == "rec_herby", ids
+        assert ids[13].startswith("rec_rice_"), f"seed {seed}: a relaxed coriander recipe took the slot"
 
 
 def test_urgent_uses_come_from_the_ingredient_lines_not_a_shared_word(tmp_path) -> None:
