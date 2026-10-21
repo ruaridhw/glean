@@ -18,6 +18,13 @@ class CompressedPantryItem(BaseModel):
     urgency_score: float = Field(
         description="Higher score = more urgent to use (expiring soon, long unused, low quantity)"
     )
+    expires_in_days: int | None = Field(
+        default=None,
+        description=(
+            "Whole days until the item goes off; null when its expiry date is unknown. Optional so an "
+            "older app build that does not send it still works."
+        ),
+    )
 
 
 class RecipeHistoryItem(BaseModel):
