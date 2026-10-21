@@ -96,3 +96,9 @@ def test_ci_deploy_checks_out_full_history_so_the_pushed_check_can_compare_ances
         s for s in workflow["jobs"]["deploy-prod"]["steps"] if s.get("uses", "").startswith("actions/checkout")
     )
     assert checkout.get("with", {}).get("fetch-depth") == 0
+
+
+def test_both_samconfig_envs_pin_the_deployed_rate_limit() -> None:
+    """ADR 0009: a non-secret parameter is set once in samconfig, which the deploy script re-passes."""
+    for env in ("prod", "dev"):
+        assert _config_env(env)["RateLimitPerHour"] == "60", env

@@ -408,3 +408,30 @@ def test_deploy_reports_a_live_rate_limit_that_drifted_from_the_stack_parameter(
 
     assert result.returncode != 0
     assert "RATE_LIMIT_PER_HOUR" in result.stderr
+
+
+def test_deploy_reports_a_rate_limit_whose_stack_value_differs_from_samconfig(sandbox: Sandbox) -> None:
+    sha = sandbox.git("rev-parse", "HEAD")
+    sandbox.set_live(
+        parameters={
+            "Environment": "prod",
+            "CognitoDomainPrefix": "glean-auth-040396448697",
+            "LangSmithTracing": "true",
+            "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
+            "RateLimitPerHour": "20",
+            "GitSha": sha,
+        },
+        lambda_env={
+            "ENVIRONMENT": "prod",
+            "LANGSMITH_TRACING": "true",
+            "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
+            "RATE_LIMIT_PER_HOUR": "60",
+            "GIT_SHA": sha,
+        },
+        tags={"commit": sha},
+    )
+
+    result = sandbox.run()
+
+    assert result.returncode != 0
+    assert "RateLimitPerHour" in result.stderr
