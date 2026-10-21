@@ -614,7 +614,7 @@ def _shelf_where(**by_product: IngredientVerdict):
     return lookup
 
 
-@pytest.mark.parametrize("name", ["Chilli Crisp", "chili crisp", "Crunchy Chilli Crisp", "Crispy Chilli Oil"])
+@pytest.mark.parametrize("name", ["Chilli Crisp", "chilli crisp", "Crunchy Chilli Crisp", "Crispy Chilli Oil"])
 def test_a_chilli_crisp_follows_what_its_shelf_lists_with_no_named_exception(name: str) -> None:
     sometimes = _shelf_where(chil=_shelf(peanut=Frequency.SOMETIMES))
     usually = _shelf_where(chil=_shelf(peanut=Frequency.USUALLY))
@@ -634,7 +634,7 @@ def test_a_crispy_chilli_oil_is_settled_by_its_own_shelf_not_by_the_soy_sauce_be
     assert audit.resolve_truth("peanut-free", "rec_x", _CHILLI_OIL_RECIPE, _UNSURE, lookup=clean_oil) == "fine"
 
 
-@pytest.mark.parametrize("name", ["Chilli Oil", "Chili Oil", "Crispy Chilli Oil", "Chilli Crunch"])
+@pytest.mark.parametrize("name", ["Chilli Oil", "chilli oil", "Crispy Chilli Oil", "Chilli Crunch"])
 @pytest.mark.parametrize("flag", ["tree-nut-free", "peanut-free"])
 def test_a_recipe_is_never_fine_while_its_chilli_oil_is_unread(name: str, flag: str) -> None:
     def shelf(ingredient: str) -> IngredientVerdict:

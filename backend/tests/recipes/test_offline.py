@@ -231,7 +231,7 @@ class _Corpus:
 def _recipe(*, external_id: str, source_url: str) -> StoredRecipe:
     return StoredRecipe(
         external_id=external_id,
-        title="Chicken Enchiladas with Creamy Green Chile Sauce",
+        title="Chicken Enchiladas with Creamy Green Chilli Sauce",
         source_url=source_url,
         ingredients=[
             StoredIngredient(
