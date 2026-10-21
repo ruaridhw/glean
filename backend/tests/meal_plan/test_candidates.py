@@ -148,6 +148,65 @@ def test_flags_without_a_decision_question_leave_candidates_to_the_model(tmp_pat
     assert [c.external_id for c in _sample(corpus, pantry=[], dietary_flags=["Keto", "Paleo"])] == ["rec_pasta"]
 
 
+def test_relaxed_recipes_fill_only_the_candidates_fresh_recipes_cannot(tmp_path) -> None:
+    corpus, fresh_ids, relaxed_ids = _mixed_corpus(tmp_path)
+    cooked = [_cooked_meal(f"rec_relaxed_{index}", f"Relaxed Dish {index}", days_ago=10) for index in range(10)]
+
+    for seed in range(5):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry_names=["spice"],
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+            cooked=cooked,
+            slots=7,
+        )
+        ids = [candidate.external_id for candidate in candidates]
+
+        assert len(ids) == 25, f"seed {seed}: {len(ids)} candidates"
+        assert set(ids[: len(fresh_ids)]) == fresh_ids, f"seed {seed}: relaxed recipe offered before a fresh one"
+        assert set(ids[len(fresh_ids) :]) <= relaxed_ids, f"seed {seed}: {set(ids) - fresh_ids - relaxed_ids}"
+
+
+def test_relaxed_recipes_fill_last_when_nothing_matches_the_pantry_either(tmp_path) -> None:
+    corpus, fresh_ids, relaxed_ids = _mixed_corpus(tmp_path)
+    cooked = [_cooked_meal(f"rec_relaxed_{index}", f"Relaxed Dish {index}", days_ago=10) for index in range(10)]
+
+    for seed in range(5):
+        candidates = sample_corpus_candidates(
+            corpus,
+            pantry_names=[],
+            dietary_flags=[],
+            max_total_time_mins=None,
+            exclude_external_ids=[],
+            rng=random.Random(seed),
+            cooked=cooked,
+            slots=7,
+        )
+        ids = [candidate.external_id for candidate in candidates]
+
+        assert set(ids[: len(fresh_ids)]) == fresh_ids, f"seed {seed}: relaxed recipe offered before a fresh one"
+        assert set(ids[len(fresh_ids) :]) <= relaxed_ids, f"seed {seed}: unexpected ids"
+
+
+def _mixed_corpus(tmp_path) -> tuple[RecipeCorpusStore, set[str], set[str]]:
+    """Twenty never-cooked recipes and ten cooked ten days ago: too few fresh ones for a seven-meal week."""
+    fresh = [
+        (f"rec_fresh_{index}", f"Fresh Dish {index}", ["spice", f"fresh thing {index}"], 30) for index in range(20)
+    ]
+    relaxed = [
+        (f"rec_relaxed_{index}", f"Relaxed Dish {index}", ["spice", f"relaxed thing {index}"], 30)
+        for index in range(10)
+    ]
+    return (
+        _corpus(tmp_path, [*fresh, *relaxed]),
+        {recipe[0] for recipe in fresh},
+        {recipe[0] for recipe in relaxed},
+    )
+
+
 def _cooked_meal(recipe_id: str, title: str, *, days_ago: float) -> CookedMeal:
     return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=datetime.now(UTC) - timedelta(days=days_ago))
 
@@ -280,7 +339,3 @@ def test_relaxed_recipes_fill_the_candidates_only_after_the_fresh_ones(tmp_path)
     )
 
     assert {candidate.external_id for candidate in candidates} == {"rec_bolognese", "rec_tacos"}
-
-
-def _cooked_meal(recipe_id: str, title: str, *, days_ago: float) -> CookedMeal:
-    return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=datetime.now(UTC) - timedelta(days=days_ago))

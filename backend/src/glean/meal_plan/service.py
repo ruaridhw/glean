@@ -44,8 +44,8 @@ Rules:
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
-- Prefer the dishes this household has not cooked recently; a recent repeat is a candidate only because
-  nothing else fit, so choose the others first.
+- A candidate carrying cooked_days_ago was cooked that many days ago and is only offered because nothing
+  fresh was left. Choose a candidate without it whenever one fits.
 - Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
   fine; do not pad the list with weaker choices to reach the limit."""
 
@@ -149,9 +149,11 @@ def _generate_from_corpus(
             {
                 "external_id": candidate.external_id,
                 "title": candidate.title,
-                "cuisine": candidate.cuisine,
-                "total_time_mins": candidate.total_time_mins,
-                "ingredients": candidate.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
+                "cuisine": candidate.summary.cuisine,
+                "total_time_mins": candidate.summary.total_time_mins,
+                "ingredients": candidate.summary.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
+                # Null for a recipe the household has not cooked recently; a number marks a fallback.
+                "cooked_days_ago": None if candidate.cooked_days_ago is None else round(candidate.cooked_days_ago),
             }
             for candidate in candidates
         ],

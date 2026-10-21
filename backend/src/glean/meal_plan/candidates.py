@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -29,7 +30,7 @@ from glean.observability import logger
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Collection, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from glean.meal_plan.eligibility import CookedMeal
     from glean.recipes.corpus import RecipeCorpusStore
@@ -42,6 +43,27 @@ _EVERYTHING = 1_000_000
 _TOKEN_RE = re.compile(r"\w+")
 _MIN_TOKEN_LENGTH = 3
 _NEAR_DUPLICATE_OVERLAP = 0.7
+
+
+@dataclass(frozen=True)
+class OfferedRecipe:
+    """One corpus recipe handed to the meal-plan model.
+
+    `cooked_days_ago` is set only for a recipe the recency floor relaxed back in: it was cooked that
+    recently and is offered as a fallback, which the prompt tells the model to prefer against. The
+    scorer will read the same age to apply `eligibility.recency_penalty`.
+    """
+
+    summary: RecipeSummary
+    cooked_days_ago: float | None = None
+
+    @property
+    def external_id(self) -> str:
+        return self.summary.external_id
+
+    @property
+    def title(self) -> str:
+        return self.summary.title
 
 
 def sample_corpus_candidates(
@@ -57,7 +79,7 @@ def sample_corpus_candidates(
     now: datetime | None = None,
     sample_size: int = SAMPLE_SIZE,
     pool_size: int = PANTRY_POOL_SIZE,
-) -> list[RecipeSummary]:
+) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
     `cooked` is the household's history window and `slots` the number of meals this request plans;
@@ -97,20 +119,45 @@ def sample_corpus_candidates(
     # Most pantry items used first; random order within a tier so ties don't favour any recipe.
     tie_breaks = {external_id: rng.random() for external_id in sorted(pantry_matches)}
     ranked = sorted(pantry_matches, key=lambda external_id: (-pantry_matches[external_id], tie_breaks[external_id]))
-    # Recipes that came back when the floor relaxed are the least preferred, so they trail the fresh
-    # ones. The scorer will instead subtract recency_penalty from their fit (spec §6.2).
+    # Recipes that came back when the floor relaxed are the least preferred: they trail the fresh ones
+    # and never displace one, so a week with enough fresh recipes never offers a recent repeat. The
+    # scorer will instead subtract recency_penalty from their fit (spec §6.2).
     fresh = set(floor.fresh)
-    preferred = [recipe_id for recipe_id in ranked if recipe_id in fresh]
-    preferred += [recipe_id for recipe_id in ranked if recipe_id not in fresh]
-    pool = preferred[:pool_size]
+    fresh_ranked = [recipe_id for recipe_id in ranked if recipe_id in fresh]
+    relaxed_ranked = [recipe_id for recipe_id in ranked if recipe_id not in fresh]
     picked: list[RecipeSummary] = []
-    _take_distinct(picked, [eligible[external_id] for external_id in rng.sample(pool, len(pool))], sample_size)
+    for group, pantry_ranked in ((floor.fresh, fresh_ranked), (floor.relaxed, relaxed_ranked)):
+        _fill_from(picked, pantry_ranked[:pool_size], eligible=eligible, rng=rng, sample_size=sample_size)
+        _fill_from(
+            picked,
+            set(group) - set(pantry_ranked[:pool_size]),
+            eligible=eligible,
+            rng=rng,
+            sample_size=sample_size,
+        )
+    relaxed = set(floor.relaxed)
+    return [
+        OfferedRecipe(
+            summary=summary,
+            cooked_days_ago=(floor.days_since_cooked[summary.external_id] if summary.external_id in relaxed else None),
+        )
+        for summary in picked
+    ]
 
-    if len(picked) < sample_size:
-        for group in (floor.fresh, floor.relaxed):
-            rest = sorted(set(group) - {summary.external_id for summary in picked})
-            _take_distinct(picked, [eligible[external_id] for external_id in rng.sample(rest, len(rest))], sample_size)
-    return picked
+
+def _fill_from(
+    picked: list[RecipeSummary],
+    recipe_ids: Iterable[str],
+    *,
+    eligible: Mapping[str, RecipeSummary],
+    rng: random.Random,
+    sample_size: int,
+) -> None:
+    """Append shuffled `recipe_ids` to `picked` until `sample_size`, skipping near-duplicates."""
+    remaining = sorted(set(recipe_ids) - {summary.external_id for summary in picked})
+    if not remaining or len(picked) >= sample_size:
+        return
+    _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
 
 
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:

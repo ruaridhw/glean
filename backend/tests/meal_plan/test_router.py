@@ -239,9 +239,11 @@ class _ModelThatSuggestsEveryCorpusRecipe:
     def __init__(self, *also: str) -> None:
         self._also = also
         self.offered: list[str] = []
+        self.candidates: list[dict[str, object]] = []
 
     def invoke(self, _feature, _schema, *, user: str, **_kwargs) -> CorpusMealPlanResponse:
-        offered = [candidate["external_id"] for candidate in json.loads(user)["candidates"]]
+        self.candidates = json.loads(user)["candidates"]
+        offered = [candidate["external_id"] for candidate in self.candidates]
         self.offered = offered
         return CorpusMealPlanResponse(
             suggestions=[
@@ -391,6 +393,33 @@ def test_a_vegetarian_household_is_never_offered_a_meat_recipe_even_when_the_flo
         "rec_chickpea_curry",
         "rec_tofu_noodles",
     }
+
+
+def test_the_model_is_told_which_candidates_are_cooked_recently_and_that_fresh_ones_come_first(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    _corpus_with(
+        tmp_path,
+        {
+            "rec_bolognese": ("Beef Bolognese", ["beef mince"]),
+            "rec_tacos": ("Beef Tacos", ["beef mince", "tortilla"]),
+            "rec_meatballs": ("Beef Meatballs", ["beef mince", "breadcrumbs"]),
+        },
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        meals_per_week=2,  # six fresh recipes needed, so the floor relaxes
+        cooked_history=[_cooked("rec_bolognese", "Beef Bolognese", days_ago=10)],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    ages = {candidate["external_id"]: candidate["cooked_days_ago"] for candidate in model.candidates}
+    assert ages == {"rec_bolognese": 10, "rec_tacos": None, "rec_meatballs": None}
+    assert [candidate["external_id"] for candidate in model.candidates][-1] == "rec_bolognese"
 
 
 def test_cooked_history_is_a_bounded_list(client: TestClient, auth_headers: dict[str, str]) -> None:
