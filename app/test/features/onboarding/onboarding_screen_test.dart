@@ -220,9 +220,16 @@ void main() {
       final SemanticsHandle semantics = tester.ensureSemantics();
       await pumpOnboarding(tester);
 
-      bool isCurrent(String slot) => tester
-          .getSemantics(find.byKey(ValueKey<String>('onboarding.step.$slot')))
-          .hasFlag(SemanticsFlag.isSelected);
+      bool isCurrent(String slot) =>
+          tester
+              .getSemantics(
+                find.byKey(ValueKey<String>('onboarding.step.$slot')),
+              )
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected
+              .toBoolOrNull() ??
+          false;
 
       expect(isCurrent('0'), isTrue);
       expect(isCurrent('1'), isFalse);

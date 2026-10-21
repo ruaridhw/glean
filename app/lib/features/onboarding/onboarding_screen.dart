@@ -143,14 +143,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   // Pages fill the body and start at its top; the pantry page
                   // centres itself, the basics page scrolls from the heading.
                   layoutBuilder:
-                      (Widget? current, List<Widget> previousChildren) =>
-                          Stack(
-                            fit: StackFit.expand,
-                            children: <Widget>[
-                              ...previousChildren,
-                              if (current != null) current,
-                            ],
-                          ),
+                      (Widget? current, List<Widget> previousChildren) => Stack(
+                        fit: StackFit.expand,
+                        children: <Widget>[...previousChildren, ?current],
+                      ),
                   child: OnboardingStepBody(
                     key: ValueKey<OnboardingPage>(_page),
                     page: _page,
