@@ -384,7 +384,7 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     <script type="application/ld+json">
     {
       "@type": "Recipe",
-      "name": "Chicken Enchiladas with Creamy Green Chile Sauce",
+      "name": "Chicken Enchiladas with Creamy Green Chilli Sauce",
       "recipeIngredient": ["12 corn tortillas", "3 chicken breasts"],
       "recipeInstructions": [
         {"@type": "HowToStep", "text": "Fill the tortillas."},
@@ -412,7 +412,7 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["title"] == "Chicken Enchiladas with Creamy Green Chile Sauce"
+    assert data["title"] == "Chicken Enchiladas with Creamy Green Chilli Sauce"
     assert (
         data["source_url"]
         == "https://www.allrecipes.com/recipe/125658/chicken-enchiladas-with-creamy-green-chile-sauce/"

@@ -16,7 +16,7 @@ def test_read_jobs_file_supports_name_and_url(tmp_path: Path) -> None:
     jobs_file = tmp_path / "jobs.csv"
     jobs_file.write_text(
         "name,url\n"
-        "Chicken Enchiladas with Creamy Green Chile Sauce,"
+        "Chicken Enchiladas with Creamy Green Chilli Sauce,"
         "https://www.allrecipes.com/recipe/125658/chicken-enchiladas-with-creamy-green-chile-sauce/\n"
         "Noodle Soup,https://recipes.example.test/recipes/noodle-soup-abc123\n"
     )
@@ -25,7 +25,7 @@ def test_read_jobs_file_supports_name_and_url(tmp_path: Path) -> None:
 
     assert [(job.name, job.url) for job in jobs] == [
         (
-            "Chicken Enchiladas with Creamy Green Chile Sauce",
+            "Chicken Enchiladas with Creamy Green Chilli Sauce",
             "https://www.allrecipes.com/recipe/125658/chicken-enchiladas-with-creamy-green-chile-sauce/",
         ),
         ("Noodle Soup", "https://recipes.example.test/recipes/noodle-soup-abc123"),

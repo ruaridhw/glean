@@ -35,7 +35,7 @@ def test_backfill_reparses_pcs_ingredients_that_start_with_a_unit_word(tmp_path:
             _leaked("Stick butter", 1),
             _leaked("Knob butter", 1),
             _leaked("X 400g tin chopped tomatoes", 1),
-            _leaked("(4 ounce) can chopped green chiles", 1),
+            _leaked("(4 ounce) can chopped green chillies", 1),
         )
     )
 
@@ -48,7 +48,7 @@ def test_backfill_reparses_pcs_ingredients_that_start_with_a_unit_word(tmp_path:
         ("Butter", 113.0, "g", None),
         ("Butter", 1.0, "knob", None),
         ("Chopped tomatoes", 400.0, "g", "1 tin"),
-        ("Chopped green chiles", 113.4, "g", "1 can"),
+        ("Chopped green chillies", 113.4, "g", "1 can"),
     ]
     assert (result.recipes_scanned, result.recipes_changed, result.ingredients_changed) == (1, 1, 6)
 

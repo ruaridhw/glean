@@ -150,7 +150,7 @@ def test_parse_ingredient_text_converts_cups_by_density_then_to_ml_else_keeps_th
     [
         ("1 x 400g tin chopped tomatoes", "Chopped tomatoes", 400, "g", "1 tin"),
         ("2 x 400g tins chickpeas", "Chickpeas", 800, "g", "2 tins"),
-        ("1 (4 ounce) can chopped green chiles", "Chopped green chiles", 113.4, "g", "1 can"),
+        ("1 (4 ounce) can chopped green chillies", "Chopped green chillies", 113.4, "g", "1 can"),
         ("2 (14 ounce) cans coconut milk", "Coconut milk", 793.8, "g", "2 cans"),
     ],
 )
