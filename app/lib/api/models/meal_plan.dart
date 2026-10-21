@@ -126,6 +126,28 @@ class MealPlanRequest {
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
 }
 
+/// One urgent pantry item a planned meal uses up. The server writes this alongside the reason so a later
+/// screen can render the expiry without parsing prose.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class UsedUpPantryItem {
+  const UsedUpPantryItem({
+    required this.name,
+    this.expiresInDays,
+    this.goesOff,
+  });
+
+  factory UsedUpPantryItem.fromJson(Map<String, dynamic> json) =>
+      _$UsedUpPantryItemFromJson(json);
+
+  final String name;
+
+  /// Whole days until the item goes off; null when the server did not know.
+  final int? expiresInDays;
+
+  /// Weekday the item goes off in the household's calendar, e.g. `Thu`; null when unknown.
+  final String? goesOff;
+}
+
 /// A single LLM-suggested recipe returned by `POST /meal-plan`: an ephemeral proposal, persisted only when the
 /// user commits it.
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
@@ -136,6 +158,7 @@ class MealPlanRecipe {
     required this.title,
     required this.reason,
     this.missingIngredients = const [],
+    this.usesUp = const [],
   });
 
   factory MealPlanRecipe.fromJson(Map<String, dynamic> json) =>
@@ -147,6 +170,11 @@ class MealPlanRecipe {
   final String reason;
   @JsonKey(defaultValue: <String>[])
   final List<String> missingIngredients;
+
+  /// Urgent pantry items this meal uses up, soonest to go off first. Parsed now, shown once the proposal
+  /// screen exists.
+  @JsonKey(defaultValue: <UsedUpPantryItem>[])
+  final List<UsedUpPantryItem> usesUp;
 }
 
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
