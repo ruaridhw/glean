@@ -282,8 +282,8 @@ as obscured; click with `{force: true}`.
 colour for the maskable pair), so a Chrome tab shows the Glean mark. The
 scaffold's `manifest.json` would make a `flutter build web` output
 installable as a PWA, but nothing builds web for release: `make start-web`
-serves a debug build with no service worker, and no Makefile target or
-workflow runs `flutter build web`.
+serves a debug build with no service worker, and the only `flutter build web`
+here is `make check-web`'s compile, whose output nothing ships.
 
 ### What web does and doesn't cover
 
@@ -293,9 +293,11 @@ workflow runs `flutter build web`.
   backend. `defaultTargetPlatform` is the host OS on web, but the design
   system is Material-everywhere with no platform branching, so this is moot.
 - **Doesn't cover:** camera (receipt scan), real Cognito sign-in, secure
-  storage, haptics, connectivity. Those stay on a real device: the Codemagic
-  build on the owner's phone, and the emulator/simulator `integration_test`
-  jobs in CI, remain the pre-merge visual check for anything they touch.
+  storage, haptics, connectivity, backup restore (it swaps the app's own
+  SQLite file, so Developer settings disables it here). Those stay on a real
+  device: the Codemagic build on the owner's phone, and the
+  emulator/simulator `integration_test` jobs in CI, remain the pre-merge
+  visual check for anything they touch.
 - `flutter test --platform chrome` is **not** part of this loop; Flutter marks
   it deprecated/internal.
 
