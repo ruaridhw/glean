@@ -58,3 +58,25 @@ def test_api_gateway_access_log_format_never_records_credentials() -> None:
     assert "$context.status" in fmt
     assert "authorization" not in fmt
     assert "$request" not in fmt  # no request headers/body variables
+
+
+def test_the_api_lambda_reads_its_paid_model_rate_limit_from_a_template_parameter() -> None:
+    """Deployments raise the limit through CloudFormation, so no code change and no redeploy script edit is needed."""
+    template = _load()
+    parameter = template["Parameters"]["RateLimitPerHour"]
+    assert parameter["Type"] == "Number"
+    assert parameter["Default"] == 60
+    assert parameter["Description"]
+
+    variables = template["Resources"]["GleanFunction"]["Properties"]["Environment"]["Variables"]
+    assert variables["RATE_LIMIT_PER_HOUR"] == "RateLimitPerHour"
+
+
+def test_only_the_api_lambda_receives_the_rate_limit() -> None:
+    template = _load()
+    for name, resource in template["Resources"].items():
+        if resource["Type"] != "AWS::Serverless::Function":
+            continue
+        variables = resource["Properties"].get("Environment", {}).get("Variables", {})
+        if name != "GleanFunction":
+            assert "RATE_LIMIT_PER_HOUR" not in variables, f"{name} does not pay for model calls"
