@@ -234,6 +234,7 @@ assets in `web/`: `sqlite3.wasm` and `drift_worker.js`.
 
 ```bash
 make start-web        # from the repo root
+make check-web        # compile that same target without launching Chrome; CI runs it on every app change
 ```
 
 Flutter launches and drives its own Chrome, so hot reload reaches the page
