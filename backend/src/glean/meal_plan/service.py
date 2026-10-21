@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from glean.llm import Feature
-from glean.meal_plan.candidates import PantryItem, mentions_item, sample_corpus_candidates, urgent_pantry_uses
+from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanRecipe,
@@ -16,6 +16,7 @@ from glean.meal_plan.schemas import (
     MealPlanResponse,
     MealPlanResult,
     MealPlanSuggestion,
+    UsedUpPantryItem,
 )
 from glean.observability import logger, tracer
 from glean.recipes.corpus import RecipeCorpusStore
@@ -46,9 +47,9 @@ Rules:
 - Only choose from candidates, and copy each chosen recipe's external_id and title exactly.
   Never invent recipes or IDs.
 - Prioritise candidates that use pantry items, especially those with high urgency scores
-- When a candidate lists urgent_pantry_items, say in its reason that the meal uses one up, naming the
-  item and when it goes off, using the goes_off day given, e.g. "uses up your coriander (goes off Thu)".
-  Those items go off within days, so they need cooking this week.
+- When a candidate lists urgent_pantry_items, you may say the meal uses one up, naming the item (for
+  example "uses the coriander"). Never state an expiry day, a weekday, or a "goes off" timing: the app
+  adds the date itself, so any day you write will be wrong.
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
@@ -59,12 +60,11 @@ Rules:
   fine; do not pad the list with weaker choices to reach the limit."""
 
 _MAX_CANDIDATE_INGREDIENTS = 12
-_WEEKDAY_WORD = r"(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*"
-# A model-written expiry claim, with the punctuation that usually hugs it.
-_EXPIRY_CLAIM_RE = re.compile(
-    rf"\s*(?:[,;(]\s*)?(?:which\s+|and\s+|it\s+)?(?:goes|went)\s+off\s+(?:on\s+)?(?P<day>{_WEEKDAY_WORD})\s*[).]?",
-    re.IGNORECASE,
-)
+# How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
+_MAX_NAMED_URGENT_ITEMS = 3
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+# Any sentence saying when something goes off is the app's job, not the model's.
+_EXPIRY_PHRASES = ("goes off", "go off", "went off", "gone off", "expires", "expire", "use by", "use-by", "best before")
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
@@ -217,10 +217,10 @@ def _generate_from_corpus(
             "corpus meal plan chose recipes that were not offered; dropping",
             extra={"external_ids": [s.external_id for s in response.suggestions if s.external_id not in offered]},
         )
-    chosen = _name_urgent_items(chosen[: request.meals_per_week], urgent_uses, reference_date=reference_date)
+    chosen = _reconciled(chosen[: request.meals_per_week], urgent_uses, reference_date=reference_date)
 
     logger.info("meal plan generated", extra={"count": len(chosen)})
-    return MealPlanResult(suggestions=[MealPlanSuggestion(**suggestion.model_dump()) for suggestion in chosen])
+    return MealPlanResult(suggestions=chosen)
 
 
 def _urgent_item_payload(item: PantryItem, *, reference_date: date) -> dict[str, object]:
@@ -232,71 +232,70 @@ def _urgent_item_payload(item: PantryItem, *, reference_date: date) -> dict[str,
     }
 
 
-def _name_urgent_items(
+def _reconciled(
     chosen: Sequence[CorpusMealPlanRecipe],
     urgent_uses: Mapping[str, Sequence[PantryItem]],
     *,
     reference_date: date,
-) -> list[CorpusMealPlanRecipe]:
-    """Make each reason that uses an urgent item name it and when it goes off.
+) -> list[MealPlanSuggestion]:
+    """Each chosen meal as a proposal: a reason with one canonical expiry sentence, plus `uses_up`.
 
-    The prompt asks the model for this, but a reason that quietly omits it would hide the one thing the
-    household most needs to know. One urgent item per reason is enough, and a reason is only left alone
-    when it names that item in full *and* states the right day; anything less gets the missing part
-    appended, without naming the item a second time.
+    The prompt tells the model not to date anything, but a model that dates anyway would put a wrong or
+    contradictory day in front of the household. Rather than edit inside its prose, any whole sentence
+    that claims an expiry is dropped and one sentence the server wrote is appended -- so the reason
+    always carries exactly one expiry statement, naming every urgent item the recipe uses.
     """
-    named: list[CorpusMealPlanRecipe] = []
+    suggestions: list[MealPlanSuggestion] = []
     for suggestion in chosen:
-        items = urgent_uses.get(suggestion.external_id, ())
-        if not any(_states_when_it_goes_off(suggestion.reason, item, reference_date=reference_date) for item in items):
-            reason = suggestion.reason.rstrip()
-            if items:
-                # The soonest to go off is the one worth naming if the model named none of them.
-                item = min(items, key=lambda urgent_item: urgent_item.expires_in_days or 0)
-                reason = _repaired_reason(reason, item, reference_date=reference_date)
-            suggestion = suggestion.model_copy(update={"reason": reason})
-        named.append(suggestion)
-    return named
+        items = sorted(
+            urgent_uses.get(suggestion.external_id, ()),
+            key=lambda urgent_item: (urgent_item.expires_in_days or 0, urgent_item.name.casefold()),
+        )
+        reason = suggestion.reason
+        if items:
+            reason = _canonical_reason(reason, items, reference_date=reference_date)
+        suggestions.append(
+            MealPlanSuggestion(
+                external_id=suggestion.external_id,
+                title=suggestion.title,
+                reason=reason,
+                uses_up=[_used_up(item, reference_date=reference_date) for item in items],
+            )
+        )
+    return suggestions
 
 
-def _states_when_it_goes_off(reason: str, item: PantryItem, *, reference_date: date) -> bool:
-    """Whether the reason names the whole item and claims the day it actually goes off.
-
-    A weekday elsewhere in the prose is not a claim about this item: "For Thu dinner, uses coriander
-    (goes off Fri)" says nothing true about the coriander.
-    """
-    return mentions_item(reason, item.name) and _day_claimed(reason, item, reference_date=reference_date)
+def _canonical_reason(reason: str, items: Sequence[PantryItem], *, reference_date: date) -> str:
+    """The model's reason without any sentence that dates something, then the canonical sentence."""
+    kept = [sentence for sentence in _sentences(reason) if not _claims_expiry(sentence)]
+    canonical = _canonical_sentence(items, reference_date=reference_date)
+    return " ".join([*kept, canonical])
 
 
-def _day_claimed(reason: str, item: PantryItem, *, reference_date: date) -> bool:
-    day = reference_date + timedelta(days=item.expires_in_days or 0)
-    claimed = {match.group("day").casefold() for match in _EXPIRY_CLAIM_RE.finditer(reason)}
-    return day.strftime("%a").casefold() in claimed or day.strftime("%A").casefold() in claimed
+def _sentences(reason: str) -> list[str]:
+    return [sentence.strip() for sentence in _SENTENCE_SPLIT_RE.split(reason.strip()) if sentence.strip()]
 
 
-def _repaired_reason(reason: str, item: PantryItem, *, reference_date: date) -> str:
-    """The reason with one correct expiry clause at the end: the model's own day claims are dropped.
-
-    Leaving a model-written day in place would put two contradictory dates in front of the household, so
-    the claim is removed rather than contradicted. Other prose (a weekday that describes the dinner, say)
-    is left alone.
-    """
-    without_claims = _strip_expiry_claims(reason)
-    phrase = _goes_off_phrase(item, reference_date=reference_date)
-    names_item = mentions_item(without_claims, item.name)
-    clause = f"It {phrase}." if names_item else f"Uses up your {item.name} ({phrase})."
-    return " ".join(part for part in (without_claims, clause) if part)
+def _claims_expiry(sentence: str) -> bool:
+    words = sentence.casefold()
+    return any(phrase in words for phrase in _EXPIRY_PHRASES)
 
 
-def _strip_expiry_claims(reason: str) -> str:
-    """The reason without any "goes off <day>" claim, tidied into a sentence."""
-    stripped = re.sub(r"\s+([.,;])", r"\1", _EXPIRY_CLAIM_RE.sub("", reason))
-    stripped = re.sub(r"[,;(]\s*$", "", stripped)
-    stripped = re.sub(r"\s?,\s*$", "", stripped)
-    stripped = re.sub(r"\s{2,}", " ", stripped).strip()
-    if stripped and stripped[-1] not in ".!?":
-        stripped = f"{stripped}."
-    return stripped
+def _canonical_sentence(items: Sequence[PantryItem], *, reference_date: date) -> str:
+    named = [
+        f"{item.name} ({_goes_off_phrase(item, reference_date=reference_date)})"
+        for item in items[:_MAX_NAMED_URGENT_ITEMS]
+    ]
+    body = named[0] if len(named) == 1 else f"{', '.join(named[:-1])} and {named[-1]}"
+    return f"Uses up your {body}."
+
+
+def _used_up(item: PantryItem, *, reference_date: date) -> UsedUpPantryItem:
+    return UsedUpPantryItem(
+        name=item.name,
+        expires_in_days=item.expires_in_days,
+        goes_off=_goes_off_day(item, reference_date=reference_date),
+    )
 
 
 def _goes_off_day(item: PantryItem, *, reference_date: date) -> str:

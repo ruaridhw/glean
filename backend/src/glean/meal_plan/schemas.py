@@ -149,6 +149,19 @@ class CorpusMealPlanResponse(BaseModel):
     suggestions: list[CorpusMealPlanRecipe] = Field(description="Ranked candidates that satisfy the constraints.")
 
 
+class UsedUpPantryItem(BaseModel):
+    """One urgent pantry item a planned meal uses up, so the app need not read it out of the reason."""
+
+    name: str
+    expires_in_days: int | None = Field(
+        default=None, description="Whole days until the item goes off; null when unknown"
+    )
+    goes_off: str | None = Field(
+        default=None,
+        description="Weekday the item goes off in the household's calendar (e.g. 'Thu'); null when unknown",
+    )
+
+
 class MealPlanSuggestion(BaseModel):
     """One planned meal: a saved recipe (recipe_id) or a corpus recipe (external_id)."""
 
@@ -158,6 +171,8 @@ class MealPlanSuggestion(BaseModel):
     reason: str
     # Filled only by saved-mode plans; the app derives shopping gaps from the recipe itself.
     missing_ingredients: list[str] = Field(default_factory=list)
+    # Urgent pantry items this meal uses, soonest to go off first. A proposal field the app shows later.
+    uses_up: list[UsedUpPantryItem] = Field(default_factory=list)
 
 
 class MealPlanResult(BaseModel):
