@@ -48,6 +48,27 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
       'local_date': instance.localDate,
     };
 
+UsedUpPantryItem _$UsedUpPantryItemFromJson(Map<String, dynamic> json) =>
+    $checkedCreate(
+      'UsedUpPantryItem',
+      json,
+      ($checkedConvert) {
+        final val = UsedUpPantryItem(
+          name: $checkedConvert('name', (v) => v as String),
+          expiresInDays: $checkedConvert(
+            'expires_in_days',
+            (v) => (v as num?)?.toInt(),
+          ),
+          goesOff: $checkedConvert('goes_off', (v) => v as String?),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'expiresInDays': 'expires_in_days',
+        'goesOff': 'goes_off',
+      },
+    );
+
 MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
     $checkedCreate(
       'MealPlanRecipe',
@@ -63,6 +84,17 @@ MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
             (v) =>
                 (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
           ),
+          usesUp: $checkedConvert(
+            'uses_up',
+            (v) =>
+                (v as List<dynamic>?)
+                    ?.map(
+                      (e) =>
+                          UsedUpPantryItem.fromJson(e as Map<String, dynamic>),
+                    )
+                    .toList() ??
+                [],
+          ),
         );
         return val;
       },
@@ -70,6 +102,7 @@ MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
         'recipeId': 'recipe_id',
         'externalId': 'external_id',
         'missingIngredients': 'missing_ingredients',
+        'usesUp': 'uses_up',
       },
     );
 
