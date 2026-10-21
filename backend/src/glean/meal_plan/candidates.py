@@ -58,6 +58,12 @@ def sample_corpus_candidates(
     sample_size: int = SAMPLE_SIZE,
     pool_size: int = PANTRY_POOL_SIZE,
 ) -> list[RecipeSummary]:
+    """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
+
+    `cooked` is the household's history window and `slots` the number of meals this request plans;
+    together they drive `eligibility.apply_recency_floor`. Recipes it relaxed back in are offered last,
+    so they reach the candidate list only after every fresh recipe.
+    """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
     flags = [flag.strip().casefold() for flag in dietary_flags]
@@ -94,7 +100,7 @@ def sample_corpus_candidates(
     # Recipes that came back when the floor relaxed are the least preferred, so they trail the fresh
     # ones. The scorer will instead subtract recency_penalty from their fit (spec §6.2).
     fresh = set(floor.fresh)
-    preferred = [*(recipe_id for recipe_id in ranked if recipe_id in fresh)]
+    preferred = [recipe_id for recipe_id in ranked if recipe_id in fresh]
     preferred += [recipe_id for recipe_id in ranked if recipe_id not in fresh]
     pool = preferred[:pool_size]
     picked: list[RecipeSummary] = []
