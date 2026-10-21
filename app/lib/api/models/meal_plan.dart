@@ -13,6 +13,7 @@ class CompressedPantryItem {
     required this.unit,
     required this.foodGroup,
     required this.urgencyScore,
+    this.expiresInDays,
   });
 
   final int id;
@@ -21,6 +22,10 @@ class CompressedPantryItem {
   final String unit;
   final String foodGroup;
   final double urgencyScore;
+
+  /// Whole calendar days until [expiryDate], or null when the item has no expiry date. The backend
+  /// cannot recover this from [urgencyScore], and it uses it to name the item in a meal's reason.
+  final int? expiresInDays;
 
   Map<String, dynamic> toJson() => _$CompressedPantryItemToJson(this);
 }
