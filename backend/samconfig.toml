@@ -5,11 +5,11 @@ stack_name = "glean-api-prod"
 s3_bucket = "glean-sam-artefacts-prod-040396448697"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"prod\" CognitoDomainPrefix=\"glean-auth-040396448697\" LangSmithTracing=\"true\" RateLimitPerHour=\"60\""
+parameter_overrides = "Environment=\"prod\" CognitoDomainPrefix=\"glean-auth-040396448697\" LangSmithTracing=\"true\" RateLimitPerHour=\"60\" RecipeStore=\"blobs\""
 
 [dev.deploy.parameters]
 stack_name = "glean-api-dev"
 s3_bucket = "glean-sam-artefacts-dev-040396448697"
 region = "eu-west-2"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"dev\" CognitoDomainPrefix=\"glean-auth-040396448697\" RateLimitPerHour=\"60\""
+parameter_overrides = "Environment=\"dev\" CognitoDomainPrefix=\"glean-auth-040396448697\" RateLimitPerHour=\"60\" RecipeStore=\"blobs\""

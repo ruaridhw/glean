@@ -86,6 +86,7 @@ class Sandbox:
                 "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
                 "RateLimitPerHour": "60",
                 "GitSha": stamp,
+                "RecipeStore": "blobs",
             },
             lambda_env={
                 "ENVIRONMENT": "prod",
@@ -93,6 +94,7 @@ class Sandbox:
                 "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
                 "RATE_LIMIT_PER_HOUR": "60",
                 "GIT_SHA": stamp,
+                "RECIPE_STORE": "blobs",
             },
             tags={"commit": stamp},
         )
