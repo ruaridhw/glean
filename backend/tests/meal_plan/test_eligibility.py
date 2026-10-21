@@ -255,3 +255,28 @@ def test_a_naive_cooked_at_is_read_as_utc() -> None:
 
 def _cooked_at(recipe_id: str, title: str, cooked_at: datetime) -> CookedMeal:
     return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=cooked_at)
+
+
+def test_repeated_cooks_mixing_naive_and_aware_datetimes_age_by_their_instants() -> None:
+    # A restored backup can bring UTC-stamped rows in beside the app's own local ones, so one recipe's
+    # cooks can arrive in either order with either kind of datetime.
+    aware = NOW - timedelta(days=5)
+    naive = (NOW - timedelta(days=9)).replace(tzinfo=None)
+
+    for rows in ((aware, naive), (naive, aware)):
+        result = _result(
+            ["rec_a", "rec_b", "rec_c", "rec_d"],
+            [_cooked_at("rec_a", "A", rows[0]), _cooked_at("rec_a", "A", rows[1])],
+        )
+
+        assert result.days_since_cooked["rec_a"] == pytest.approx(5)
+
+
+def test_a_naive_title_only_cook_is_compared_with_an_aware_id_matched_one() -> None:
+    aware_recent = _cooked_at("rec_a", "A", NOW - timedelta(days=5))
+    naive_older = _cooked_at(None, "A", (NOW - timedelta(days=9)).replace(tzinfo=None))
+
+    for rows in ((aware_recent, naive_older), (naive_older, aware_recent)):
+        result = _result(["rec_a", "rec_b", "rec_c", "rec_d"], list(rows))
+
+        assert result.days_since_cooked["rec_a"] == pytest.approx(5)

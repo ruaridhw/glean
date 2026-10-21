@@ -129,10 +129,13 @@ def _last_cooked_days(cooked: Iterable[CookedMeal], *, now: datetime) -> dict[st
     """Key every cook by recipe id, or by title when the row has none, keeping the most recent."""
     latest: dict[str, datetime] = {}
     for meal in cooked:
+        # Normalise before comparing: one recipe's rows can mix a UTC-stamped backup row with a local
+        # one, and naive and aware datetimes do not order against each other.
+        cooked_at = _as_aware_utc(meal.cooked_at)
         keys = [f"id:{meal.recipe_id}"] if meal.recipe_id else [f"title:{_normalise_title(meal.title)}"]
         for key in keys:
-            if key not in latest or meal.cooked_at > latest[key]:
-                latest[key] = meal.cooked_at
+            if key not in latest or cooked_at > latest[key]:
+                latest[key] = cooked_at
     return {key: _days_between(cooked_at, now) for key, cooked_at in latest.items()}
 
 
