@@ -30,10 +30,11 @@ from glean.recipes.dynamo_corpus import (
     retry_throttled,
     source_pk,
 )
-from glean.recipes.projection import PROJECTION_TTL_SECONDS, InMemoryProjectionStore, loads
+from glean.recipes.projection import PROJECTION_TTL_SECONDS, loads
 from glean.recipes.stored import StoredInstruction
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.corpus_fixtures import synthetic_corpus, synthetic_recipe
+from tests.recipes.fake_projection import InMemoryProjectionStore
 
 if TYPE_CHECKING:
     from pathlib import Path

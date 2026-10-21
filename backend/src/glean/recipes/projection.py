@@ -114,19 +114,6 @@ class FilesystemProjectionStore:
         self._path.write_bytes(data)
 
 
-class InMemoryProjectionStore:
-    def __init__(self, data: bytes | None = None) -> None:
-        self.data = data
-        self.writes = 0
-
-    def read(self) -> bytes | None:
-        return self.data
-
-    def write(self, data: bytes) -> None:
-        self.data = data
-        self.writes += 1
-
-
 @lru_cache(maxsize=1)
 def get_projection_store() -> ProjectionStore:
     from glean.config import get_settings  # noqa: PLC0415 - avoid a circular import at module load

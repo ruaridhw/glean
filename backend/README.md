@@ -26,6 +26,29 @@ The server starts at `http://localhost:8000` with hot reload.
 
 When `ENVIRONMENT=dev` (set in `.env`) and the server runs locally, Cognito JWT validation is bypassed and all requests authenticate as `local-dev-user`. This lets you hit the API without a real Cognito token. A deployed function always verifies tokens, whatever its `ENVIRONMENT`.
 
+### Recipe corpus store
+
+The recipe corpus (bodies, search index, stored dietary decisions) sits behind `RecipeCorpusStore`, and
+`RECIPE_STORE` picks the store the process opens:
+
+- `blobs` (default) — the S3 `corpus/` prefix, or `.cache/glean_recipe_cache/corpus` locally.
+- `dynamo` — the `glean-recipes-<env>` table (`RECIPES_TABLE`) plus a gzipped S3 projection at
+  `projection/recipes-v1.json.gz` in the recipe-cache bucket, which search and meal planning read instead of
+  scanning the table. Lambdas trust the projection for 5 minutes.
+
+Both behave identically; nothing else in the backend changes with the setting. The owner-run migration that
+fills the table is idempotent, resumable and paced to the table's 5 WCU, and refuses a `prod` table without
+`--i-am-the-owner`:
+
+```bash
+uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-dev --bucket glean-recipe-cache-dev-<account> --dry-run
+uv run python scripts/build_recipe_index.py --table glean-recipes-dev --bucket glean-recipe-cache-dev-<account>  # rebuild the projection
+```
+
+The corpus scripts (`import_recipe_corpus.py`, `compute_dietary_decisions.py`, `build_recipe_index.py`) take
+the same `--table` switch; `--bucket` / `--cache-dir` says where the blobs (or, with `--table`, the projection)
+live.
+
 ### LangSmith Tracing
 
 LangChain calls can be traced to LangSmith by setting these values in `.env`:
