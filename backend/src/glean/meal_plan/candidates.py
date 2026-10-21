@@ -423,7 +423,41 @@ def mentions_item(text: str, item_name: str) -> bool:
 
 
 def _item_words(text: str) -> list[str]:
-    return [_singular_prefix(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
+    return [_singular(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
+
+
+# Plurals that a suffix rule gets wrong. "-ves" is listed rather than ruled on: "cloves" is "clove".
+_IRREGULAR_SINGULARS = {
+    "leaves": "leaf",
+    "loaves": "loaf",
+    "halves": "half",
+    "knives": "knife",
+    "wives": "wife",
+    "shelves": "shelf",
+    "calves": "calf",
+    "elves": "elf",
+    "scarves": "scarf",
+    "thieves": "thief",
+}
+
+
+def _singular(word: str) -> str:
+    """One item word, singularised the same way on both sides of a comparison.
+
+    Ingredient identity, not a search prefix: "limes" and "lime" must meet in the middle, which the
+    prefix trimming `_search_prefix` does for FTS ("limes" → "lim") never could.
+    """
+    if word in _IRREGULAR_SINGULARS:
+        return _IRREGULAR_SINGULARS[word]
+    if word.endswith("ies") and len(word) > 4:
+        return f"{word[:-3]}y"
+    if word.endswith(("ches", "shes", "sses", "xes", "zes")) and len(word) > 4:
+        return word[:-2]
+    if word.endswith("oes") and len(word) > 4:
+        return word[:-2]
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        return word[:-1]
+    return word
 
 
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:
@@ -454,12 +488,12 @@ def _recipes_using(corpus: RecipeCorpusStore, pantry_name: str) -> set[str]:
     for token in _TOKEN_RE.findall(pantry_name.casefold()):
         if len(token) < _MIN_TOKEN_LENGTH:
             continue
-        hits, _ = corpus.search(q=_singular_prefix(token), per_page=_EVERYTHING)
+        hits, _ = corpus.search(q=_search_prefix(token), per_page=_EVERYTHING)
         matched.update(hit.external_id for hit in hits)
     return matched
 
 
-def _singular_prefix(token: str) -> str:
+def _search_prefix(token: str) -> str:
     # Search matches word prefixes, so trimming a plural suffix also matches the singular.
     if token.endswith("es") and len(token) > 4:
         return token[:-2]
