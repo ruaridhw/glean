@@ -109,7 +109,10 @@ class _StepSlot extends StatelessWidget {
     };
 
     final Widget pill = Container(
-      padding: EdgeInsets.symmetric(horizontal: tokens.spacing.sm, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.spacing.sm,
+        vertical: tokens.spacing.xs,
+      ),
       decoration: isReserved
           ? null
           : BoxDecoration(
@@ -138,7 +141,7 @@ class _StepSlot extends StatelessWidget {
             ),
             child: mark,
           ),
-          SizedBox(width: tokens.spacing.xs + 2),
+          SizedBox(width: tokens.spacing.sm),
           Flexible(
             child: Text(
               label,
