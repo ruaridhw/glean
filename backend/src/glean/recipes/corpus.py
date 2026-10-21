@@ -33,8 +33,10 @@ from glean.recipes.stored import StoredRecipe
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
+    from pathlib import Path
 
     from glean.recipe_api.blob_store import BlobStore
+    from glean.recipes.projection import ProjectionStore
 
 __all__ = [
     "DIETARY_DECISIONS_KEY",
@@ -43,6 +45,8 @@ __all__ = [
     "CorpusStoreError",
     "RecipeCorpusStore",
     "get_corpus_backend",
+    "open_corpus",
+    "projection_store_for",
     "recipe_blob_key",
     "recipe_payload",
 ]
@@ -300,3 +304,50 @@ def _recipe_store() -> str:
 
 def _answer_order(answer: RecipeAnswer) -> tuple[str, str]:
     return (answer.recipe_id, answer.question)
+
+
+def projection_store_for(
+    *, bucket: str | None = None, cache_dir: Path | None = None, region: str = "eu-west-2"
+) -> ProjectionStore:
+    """Where the projection document lives: the recipe-cache bucket, or a local cache root."""
+    from glean.recipe_api.blob_store import DEFAULT_CACHE_DIR  # noqa: PLC0415
+    from glean.recipes.projection import FilesystemProjectionStore, S3ProjectionStore  # noqa: PLC0415 - cycle
+
+    if bucket:
+        return S3ProjectionStore(bucket, region=region)
+    return FilesystemProjectionStore(cache_dir or DEFAULT_CACHE_DIR)
+
+
+def open_corpus(
+    *,
+    table: str | None = None,
+    bucket: str | None = None,
+    cache_dir: Path | None = None,
+    region: str = "eu-west-2",
+    corpus_dir: Path | None = None,
+) -> RecipeCorpusStore:
+    """The store the corpus scripts should use: `--table` selects DynamoDB, otherwise the blob corpus.
+
+    `--bucket` / `--cache-dir` says where the data lives: the `corpus/` prefix in blob mode, the projection
+    document in dynamo mode. Scripts without `--table` therefore keep working exactly as before.
+    """
+    if table:
+        from glean.recipes.dynamo_corpus import DynamoCorpusBackend  # noqa: PLC0415 - boto3 only when used
+
+        projection = projection_store_for(bucket=bucket, cache_dir=cache_dir, region=region)
+        return RecipeCorpusStore(DynamoCorpusBackend(table, projection=projection, region=region))
+    if bucket:
+        from glean.recipe_api.blob_store import S3BlobStore  # noqa: PLC0415
+
+        return RecipeCorpusStore(BlobCorpusBackend(S3BlobStore(bucket, region=region, prefix="corpus/")))
+    from glean.recipe_api.blob_store import FilesystemBlobStore  # noqa: PLC0415
+
+    return RecipeCorpusStore(
+        BlobCorpusBackend(FilesystemBlobStore(corpus_dir or (cache_dir or default_cache_dir()) / "corpus"))
+    )
+
+
+def default_cache_dir() -> Path:
+    from glean.recipe_api.blob_store import DEFAULT_CACHE_DIR  # noqa: PLC0415
+
+    return DEFAULT_CACHE_DIR

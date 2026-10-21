@@ -6,10 +6,9 @@ import csv
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from scripts.corpus_store import open_corpus
-
 from glean.config import get_settings
 from glean.llm import LLMRouter
+from glean.recipes.corpus import open_corpus
 from glean.recipes.offline import OfflineRecipeImportJob, OfflineRecipeImportResult, import_offline_recipes
 
 if TYPE_CHECKING:

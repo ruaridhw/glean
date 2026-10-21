@@ -33,10 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scripts.corpus_store import open_corpus, projection_store_for
-
 from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answers
-from glean.recipes.corpus import RecipeCorpusStore, recipe_payload
+from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for, recipe_payload
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend
 from glean.recipes.projection import ProjectionStore, RecipeProjection, build_projection
 
@@ -180,7 +178,7 @@ def main(
 ) -> int:
     args = _parse_args(argv)
     try:
-        _refuse_prod(args.table, i_am_the_owner=args.i_am_the_owner)
+        _refuse_prod(args.table, i_am_the_owner=args.i_am_the_owner, writes=not args.dry_run)
     except OwnerApprovalError as error:
         print(f"Refusing to run: {error}")
         return 2
@@ -264,8 +262,9 @@ def _plan(source: RecipeCorpusStore) -> MigrationPlan:
     return MigrationPlan(recipes=recipes, answers=answers)
 
 
-def _refuse_prod(table: str, *, i_am_the_owner: bool) -> None:
-    if "prod" in table.casefold() and not i_am_the_owner:
+def _refuse_prod(table: str, *, i_am_the_owner: bool, writes: bool = True) -> None:
+    """A prod table is off limits unless the owner says so. A dry run writes nothing, so it may look."""
+    if writes and "prod" in table.casefold() and not i_am_the_owner:
         raise OwnerApprovalError(
             f"{table!r} looks like a prod table; pass --i-am-the-owner once you have the owner's approval"
         )
