@@ -171,11 +171,10 @@ def sample_corpus_candidates(
     relaxed_ranked = [recipe_id for recipe_id in ranked if recipe_id not in fresh]
     picked: list[RecipeSummary] = []
     urgent_uses = _ingredient_urgent_uses(eligible.values(), pantry)
-    # Guaranteed first, so neither the random sample nor a relaxed recipe can crowd an urgent fresh
-    # recipe out of the list. Only the fresh partition: the guarantee is applied after the six-week
-    # floor and can never undo it, so a recipe the household cooked recently is never forced back in --
-    # even in a week where the floor had to relax, where it is sampled alongside every other relaxed
-    # recipe and can only take a slot the fresh ones left empty.
+    # Fresh coverage is guaranteed first, so neither the random sample nor a relaxed recipe can crowd an
+    # urgent fresh recipe out of the list. A floor that held is never undone here: those recipes are not
+    # in `fresh` at all. When the floor relaxed, its relaxed recipes get their own coverage below, after
+    # every fresh recipe, and only for an urgent item no fresh recipe uses.
     guaranteed = _guaranteed_recipe_ids(
         urgent_uses,
         eligible_ids=fresh,
