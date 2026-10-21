@@ -1,6 +1,6 @@
 import json
 import random
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -550,6 +550,59 @@ def test_corpus_mode_does_not_name_a_pantry_item_that_is_not_about_to_go_off(tmp
     )
 
     assert result.suggestions[0].reason == "Uses pantry items."
+
+
+def test_corpus_mode_dates_a_going_off_item_by_the_phones_local_date(tmp_path) -> None:
+    # The server is still on Tuesday 23:30 UTC while the household is already on Wednesday, so two
+    # calendar days left locally means Friday -- not the server's Thursday.
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_herby",
+                title="Coriander Chicken",
+                reason="Uses pantry items.",
+            )
+        ]
+    )
+    request = _corpus_request(pantry=[_coriander(expires_in_days=2)], local_date=date(2026, 4, 8))
+
+    result = generate_meal_plan(
+        request,
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 23, 30, tzinfo=UTC),
+    )
+
+    assert "goes off Fri" in result.suggestions[0].reason
+    offered = {
+        candidate["external_id"]: candidate
+        for candidate in json.loads(llm_router.invoke.call_args.kwargs["user"])["candidates"]
+    }
+    assert offered["rec_herby"]["urgent_pantry_items"] == [
+        {"name": "coriander", "expires_in_days": 2, "goes_off": "Fri"}
+    ]
+
+
+def test_corpus_mode_dates_an_item_by_the_server_date_when_the_phone_sends_none(tmp_path) -> None:
+    # An app build that predates the local date still gets a weekday, from the server's own date.
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        suggestions=[
+            CorpusMealPlanRecipe(external_id="rec_herby", title="Coriander Chicken", reason="Uses pantry items.")
+        ]
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(pantry=[_coriander(expires_in_days=2)]),
+        llm_router=llm_router,
+        corpus=_urgent_corpus(tmp_path),
+        rng=random.Random(0),
+        now=datetime(2026, 4, 7, 23, 30, tzinfo=UTC),
+    )
+
+    assert "goes off Thu" in result.suggestions[0].reason
 
 
 def _coriander(**overrides: object) -> dict[str, object]:
