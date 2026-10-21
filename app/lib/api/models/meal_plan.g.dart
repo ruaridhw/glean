@@ -15,6 +15,7 @@ Map<String, dynamic> _$CompressedPantryItemToJson(
   'unit': instance.unit,
   'food_group': instance.foodGroup,
   'urgency_score': instance.urgencyScore,
+  'expires_in_days': instance.expiresInDays,
 };
 
 Map<String, dynamic> _$RecipeHistoryItemToJson(RecipeHistoryItem instance) =>
