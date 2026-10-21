@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import random
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from glean.llm import Feature
-from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanResponse,
@@ -61,10 +62,11 @@ def generate_meal_plan(
     llm_router: LLMRouter,
     corpus: RecipeCorpusStore | None = None,
     rng: random.Random | None = None,
+    now: datetime | None = None,
 ) -> MealPlanResult:
     if request.source == "corpus":
         return _generate_from_corpus(
-            request, llm_router=llm_router, corpus=corpus or RecipeCorpusStore(), rng=rng or _rng
+            request, llm_router=llm_router, corpus=corpus or RecipeCorpusStore(), rng=rng or _rng, now=now
         )
     return _generate_from_saved(request, llm_router=llm_router)
 
@@ -122,11 +124,25 @@ def _generate_from_saved(request: MealPlanRequest, *, llm_router: LLMRouter) -> 
 
 
 def _generate_from_corpus(
-    request: MealPlanRequest, *, llm_router: LLMRouter, corpus: RecipeCorpusStore, rng: random.Random
+    request: MealPlanRequest,
+    *,
+    llm_router: LLMRouter,
+    corpus: RecipeCorpusStore,
+    rng: random.Random,
+    now: datetime | None,
 ) -> MealPlanResult:
+    request_now = now or datetime.now(UTC)
+    pantry = [
+        PantryItem(
+            name=item.name,
+            urgency_score=item.urgency_score,
+            expires_in_days=item.expires_in_days,
+        )
+        for item in request.pantry
+    ]
     candidates = sample_corpus_candidates(
         corpus,
-        pantry_names=[item.name for item in request.pantry],
+        pantry=pantry,
         dietary_flags=request.dietary_flags,
         max_total_time_mins=request.max_active_time_mins,
         exclude_external_ids=request.exclude_external_ids,
@@ -136,6 +152,7 @@ def _generate_from_corpus(
             for meal in request.cooked_history
         ],
         slots=request.meals_per_week,
+        now=request_now,
     )
     logger.info(
         "generating corpus meal plan",
