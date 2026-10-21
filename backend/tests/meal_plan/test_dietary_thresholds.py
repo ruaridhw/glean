@@ -132,7 +132,7 @@ def _offered(root: Path, rows: list[dict]) -> dict[str, set[str]]:
             candidate.external_id
             for candidate in sample_corpus_candidates(
                 corpus,
-                pantry_names=[],
+                pantry=[],
                 dietary_flags=[flag],
                 max_total_time_mins=None,
                 exclude_external_ids=[],

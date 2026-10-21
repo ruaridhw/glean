@@ -217,7 +217,7 @@ def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> Non
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
-        pantry_names=[],
+        pantry=[],
         dietary_flags=flags,
         max_total_time_mins=None,
         exclude_external_ids=[],

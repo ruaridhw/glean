@@ -238,7 +238,7 @@ def test_a_recipe_the_model_couldnt_answer_stays_uncovered_while_the_others_are_
 def _nut_free_ids(corpus: RecipeCorpusStore) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
-        pantry_names=[],
+        pantry=[],
         dietary_flags=["tree-nut-free", "peanut-free"],
         max_total_time_mins=None,
         exclude_external_ids=[],

@@ -1,25 +1,31 @@
 """Choose which corpus recipes to offer the meal-plan model.
 
-The model never sees the whole corpus. Recipes are ranked by how many pantry
-items they use (via the corpus search index), a random sample of the best
-matches becomes the candidate list, and random other recipes top it up when the
-pantry matches too few. Randomness keeps repeated Generate taps varied.
+The model never sees the whole corpus. Recipes are ranked by the urgency-weighted fit of
+the pantry items they use (via the corpus search index), a random sample of the best
+matches becomes the candidate list, and random other recipes top it up when the pantry
+matches too few. Randomness keeps repeated Generate taps varied.
 
-Dietary flags are applied here, before sampling, because the corpus carries no
-dietary metadata of its own: a recipe is excluded when the stored decision for
-(recipe, flag) says it probably breaks the flag, or when there is no current
-decision. Flags the decision model isn't asked about (Keto, Paleo) are left to
-the meal-plan model.
+Two rules stop a perishable going off unused. A recipe using an item that expires within
+`URGENT_EXPIRY_DAYS` is always in the candidate list, whatever the sampling picks (bounded
+by `GUARANTEE_MAX`, which only changes *which* recipes are offered, never how many). And
+every pantry match counts for as much as the item's urgency score, not as a flat one, so a
+recipe using the most urgent item outranks one using several unfussy staples.
+
+Dietary flags are applied here, before sampling, because the corpus carries no dietary
+metadata of its own: a recipe is excluded when the stored decision for (recipe, flag) says
+it probably breaks the flag, or when there is no current decision. Flags the decision
+model isn't asked about (Keto, Paleo) are left to the meal-plan model.
 
 Those flags, the household's time cap and the meals already planned are hard
-constraints: `meal_plan.eligibility` applies the six-week recency floor on top of
-them and never relaxes one to satisfy the other.
+constraints: `meal_plan.eligibility` applies the six-week recency floor on top of them and
+never relaxes one to satisfy the other. The guarantee is narrower than either: it draws only
+from the fresh recipes the floor left, so it never revives a recipe a hard constraint or the
+six-week floor dropped, and relaxed recipes still only fill what the fresh ones leave.
 """
 
 from __future__ import annotations
 
 import re
-from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -38,6 +44,11 @@ if TYPE_CHECKING:
 
 SAMPLE_SIZE = 25
 PANTRY_POOL_SIZE = 60
+# An item expiring within this many days must reach the model, whatever the sampling picks.
+URGENT_EXPIRY_DAYS = 3
+# Cap on guaranteed inclusions: 10 of a 25-recipe sample leaves the rest of the list free to vary
+# between Generate taps, and keeps the prompt the same size it was before the guarantee existed.
+GUARANTEE_MAX = 10
 
 _EVERYTHING = 1_000_000
 _TOKEN_RE = re.compile(r"\w+")
@@ -66,10 +77,35 @@ class OfferedRecipe:
         return self.summary.title
 
 
+@dataclass(frozen=True)
+class PantryItem:
+    """One item of the pantry slice the request carries.
+
+    `urgency_score` is the app's urgency for the item; an item the caller knows only by name weighs 1,
+    which is how every pantry match counted before urgency weighting. `expires_in_days` is the whole
+    number of days until the item goes off, or None when the expiry date is unknown -- the server
+    cannot recover it from `urgency_score`.
+    """
+
+    name: str
+    urgency_score: float | None = None
+    expires_in_days: int | None = None
+
+    @property
+    def is_urgent(self) -> bool:
+        """Whether this item goes off soon enough that a recipe using it must be offered."""
+        return self.expires_in_days is not None and self.expires_in_days <= URGENT_EXPIRY_DAYS
+
+    @property
+    def weight(self) -> float:
+        """How much one recipe using this item counts towards that recipe's pantry fit."""
+        return 1.0 if self.urgency_score is None else self.urgency_score
+
+
 def sample_corpus_candidates(
     corpus: RecipeCorpusStore,
     *,
-    pantry_names: Sequence[str],
+    pantry: Sequence[PantryItem],
     dietary_flags: Sequence[str],
     max_total_time_mins: int | None,
     exclude_external_ids: Collection[str],
@@ -79,12 +115,15 @@ def sample_corpus_candidates(
     now: datetime | None = None,
     sample_size: int = SAMPLE_SIZE,
     pool_size: int = PANTRY_POOL_SIZE,
+    guarantee_max: int = GUARANTEE_MAX,
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
-    `cooked` is the household's history window and `slots` the number of meals this request plans;
-    together they drive `eligibility.apply_recency_floor`. Recipes it relaxed back in are offered last,
-    so they reach the candidate list only after every fresh recipe.
+    Recipes using a pantry item that goes off within `URGENT_EXPIRY_DAYS` are always included (up to
+    `guarantee_max` of them) and lead the list. `cooked` is the household's history window and `slots`
+    the number of meals this request plans; together they drive `eligibility.apply_recency_floor`.
+    Recipes it relaxed back in are offered last, so they reach the candidate list only after every
+    fresh recipe, and they are never guaranteed: the floor comes first.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
@@ -112,20 +151,29 @@ def sample_corpus_candidates(
         # so eval runs and logs can tell "no repeats" from "no repeats because the floor never relaxed".
         logger.info("recency floor relaxed", extra={"recently_cooked": len(floor.relaxed), "slots": slots})
 
-    pantry_matches: Counter[str] = Counter()
-    for name in pantry_names:
-        pantry_matches.update(_recipes_using(corpus, name) & floor_ids)
+    fit = _pantry_fit(corpus, pantry, floor_ids)
+    fresh = set(floor.fresh)
+    # Random order within a tier so ties don't favour any recipe, drawn in id order so one seed is enough.
+    tie_breaks = {external_id: rng.random() for external_id in sorted(fit)}
+    guarantee_limit = min(guarantee_max, sample_size)
 
-    # Most pantry items used first; random order within a tier so ties don't favour any recipe.
-    tie_breaks = {external_id: rng.random() for external_id in sorted(pantry_matches)}
-    ranked = sorted(pantry_matches, key=lambda external_id: (-pantry_matches[external_id], tie_breaks[external_id]))
+    # Most pantry fit first; random order within a tier so ties don't favour any recipe.
+    ranked = sorted(fit, key=lambda external_id: (-fit[external_id].weight, tie_breaks[external_id]))
     # Recipes that came back when the floor relaxed are the least preferred: they trail the fresh ones
     # and never displace one, so a week with enough fresh recipes never offers a recent repeat. The
     # scorer will instead subtract recency_penalty from their fit (spec §6.2).
-    fresh = set(floor.fresh)
     fresh_ranked = [recipe_id for recipe_id in ranked if recipe_id in fresh]
     relaxed_ranked = [recipe_id for recipe_id in ranked if recipe_id not in fresh]
     picked: list[RecipeSummary] = []
+    # Guaranteed first, so neither the random sample nor a relaxed recipe can crowd an urgent fresh
+    # recipe out of the list. Only the fresh partition: the guarantee is applied after the six-week
+    # floor and can never undo it, so a recipe the household cooked recently is never forced back in --
+    # even in a week where the floor had to relax, where it is sampled alongside every other relaxed
+    # recipe and can only take a slot the fresh ones left empty.
+    urgent = [recipe_id for recipe_id, entry in fit.items() if entry.urgent and recipe_id in fresh]
+    urgent.sort(key=lambda recipe_id: (-fit[recipe_id].weight, tie_breaks[recipe_id]))
+    _take_distinct(picked, [eligible[recipe_id] for recipe_id in urgent], guarantee_limit)
+
     for group, pantry_ranked in ((floor.fresh, fresh_ranked), (floor.relaxed, relaxed_ranked)):
         _fill_from(picked, pantry_ranked[:pool_size], eligible=eligible, rng=rng, sample_size=sample_size)
         _fill_from(
@@ -158,6 +206,32 @@ def _fill_from(
     if not remaining or len(picked) >= sample_size:
         return
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
+
+
+@dataclass(frozen=True)
+class _PantryFit:
+    """How one recipe fits the pantry: the urgency-weighted sum and the urgent items it uses."""
+
+    weight: float
+    urgent: tuple[PantryItem, ...]
+
+
+def _pantry_fit(
+    corpus: RecipeCorpusStore, pantry: Sequence[PantryItem], recipe_ids: Collection[str]
+) -> dict[str, _PantryFit]:
+    """Urgency-weighted pantry fit per recipe, for the recipes in `recipe_ids`."""
+    wanted = set(recipe_ids)
+    total: dict[str, float] = {}
+    urgent: dict[str, list[PantryItem]] = {}
+    for item in pantry:
+        for external_id in _recipes_using(corpus, item.name) & wanted:
+            total[external_id] = total.get(external_id, 0.0) + item.weight
+            if item.is_urgent:
+                urgent.setdefault(external_id, []).append(item)
+    return {
+        external_id: _PantryFit(weight=weight, urgent=tuple(urgent.get(external_id, ())))
+        for external_id, weight in total.items()
+    }
 
 
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:
