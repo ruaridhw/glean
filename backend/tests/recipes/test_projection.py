@@ -13,7 +13,6 @@ from glean.recipes.corpus import recipe_blob_key
 from glean.recipes.projection import (
     PROJECTION_KEY,
     FilesystemProjectionStore,
-    InMemoryProjectionStore,
     ProjectedRecipe,
     ProjectionError,
     RecipeProjection,
@@ -23,6 +22,7 @@ from glean.recipes.projection import (
 )
 from glean.recipes.search_index import RecipeSummary
 from tests.recipes.corpus_fixtures import synthetic_corpus, synthetic_recipe
+from tests.recipes.fake_projection import InMemoryProjectionStore
 
 COMPUTED_AT = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 

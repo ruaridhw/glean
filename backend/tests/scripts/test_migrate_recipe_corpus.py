@@ -9,6 +9,7 @@ import pytest
 from scripts import migrate_recipe_corpus
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.corpus_fixtures import synthetic_corpus
+from tests.recipes.fake_projection import InMemoryProjectionStore
 
 from glean.decisions import DECISION_MODEL
 from glean.meal_plan.dietary_decisions import (
@@ -21,7 +22,7 @@ from glean.meal_plan.dietary_decisions import (
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend
-from glean.recipes.projection import InMemoryProjectionStore, loads
+from glean.recipes.projection import loads
 
 if TYPE_CHECKING:
     from pathlib import Path

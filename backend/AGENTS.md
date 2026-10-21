@@ -13,6 +13,8 @@ below for targeted runs within this directory:
 uv run pytest tests/test_health.py -v  # single file
 uv run pytest -k "test_name"           # single test by name
 uv run python scripts/seed_catalogue.py --table glean-catalogue-<env>  # idempotent catalogue seed; prod runs are the owner's
+# idempotent, resumable, paced; refuses a prod table without --i-am-the-owner. Owner-run against prod.
+uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-<env> --bucket <recipe-cache-bucket> --dry-run
 ```
 
 ## Architecture
@@ -23,7 +25,23 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
 - **Rate limiting:** every paid-model route enforces `settings.rate_limit_per_hour` (default 20; deployments raise it to 60 via the template's `RateLimitPerHour` parameter) requests per hour per Cognito sub, and answers 429 past it. Counters live in memory, so the limit is **per Lambda container**, not global: a user spread across several warm containers can exceed it. Shared storage (e.g. DynamoDB) is the follow-up if that matters.
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
-- **Recipe data:** External recipe-api.com integration plus a durable recipe corpus. Both the HTTP response cache (24h search TTL; detail cached indefinitely) and the corpus are stored via `recipe_api.blob_store`: an S3 bucket (`s3_recipe_cache_bucket`) in deployed environments, or the `.cache/glean_recipe_cache` filesystem tree locally and in tests.
+- **Recipe data:** External recipe-api.com integration plus a durable recipe corpus. The HTTP response cache
+  (24h search TTL; detail cached indefinitely) is stored via `recipe_api.blob_store`: an S3 bucket
+  (`s3_recipe_cache_bucket`) in deployed environments, or the `.cache/glean_recipe_cache` filesystem tree
+  locally and in tests.
+- **The corpus is behind one seam.** `recipes/corpus.py`'s `RecipeCorpusStore` is what every caller uses
+  (API, meal planner, scripts); behind it sits a `CorpusBackend`, chosen once per process by `RECIPE_STORE`
+  (F1/#162):
+  - `blobs` (default) — the S3 `corpus/` prefix: one JSON blob per recipe, a JSONL search index and the
+    `_decisions/dietary.jsonl` answers, all through `recipe_api.blob_store`.
+  - `dynamo` — the `glean-recipes-<env>` table (`RECIPES_TABLE`) plus a gzipped S3 projection
+    (`projection/recipes-v1.json.gz` in the recipe-cache bucket) that search, summaries and planning's
+    dietary decisions read, cached 5 minutes per Lambda. See `recipes/dynamo_corpus.py` for the item schema
+    (`RECIPE#<id>`/`RECIPE`, `RECIPE#<id>`/`ANSWER#<question>#<criteria_hash>`, `SOURCE#<url sha>`/`RECIPE`).
+  - Answers are named `dietary:<flag>` for the dietary enricher; F2's enrichers add their own question names
+    to the same item shape/projection entry (`attributes`).
+  - Behaviour is identical across the seam: search results, dietary exclusions and the store's interface do
+    not change with the setting, which is why the API and the planner never branch on it.
 
 ### Module layout
 
@@ -49,6 +67,10 @@ src/glean/
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
+│                     # corpus.py: RecipeCorpusStore + the CorpusBackend seam (blob adapter)
+│                     # dynamo_corpus.py: the glean-recipes table + projection maintenance (F1/#162)
+│                     # projection.py: the gzipped S3 projection planning reads
+│                     # answers.py: one decision answer (dietary now, F2's attributes later)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation
 ```
