@@ -62,37 +62,14 @@ Rules:
 _MAX_CANDIDATE_INGREDIENTS = 12
 # How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
 _MAX_NAMED_URGENT_ITEMS = 3
-# Sentence ends, with any closing quotes or brackets that belong to the sentence before the space.
-_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?][\"')\]]*\s+")
-# A period after one of these ends an abbreviation, not a sentence ("e.g. coriander", "1.5 tbsp. of oil").
-_ABBREVIATIONS = frozenset(
-    {
-        "e.g",
-        "i.e",
-        "approx",
-        "tbsp",
-        "tsp",
-        "etc",
-        "vs",
-        "fig",
-        "oz",
-        "lb",
-        "kg",
-        "ml",
-        "min",
-        "mins",
-        "hr",
-        "hrs",
-        "no",
-        "dr",
-        "mr",
-        "mrs",
-        "ms",
-        "st",
-        "inc",
-        "est",
-    }
-)
+# Sentence ends: the punctuation with any closing quotes or brackets that belong to it, then the space
+# that follows. Group 1 is the end of the sentence itself, so its punctuation is never sliced off.
+_SENTENCE_BOUNDARY_RE = re.compile(r"([.!?][\"')\]]*)(\s+)")
+# A period after one of these never ends a sentence ("e.g. coriander").
+_INLINE_ABBREVIATIONS = frozenset({"e.g", "i.e", "approx", "etc", "vs", "fig", "no", "dr", "mr", "mrs", "ms", "st"})
+# Units that read as abbreviations mid-sentence ("1.5 tbsp. of oil") but end a real sentence when the
+# next word starts a new one ("Ready in 20 min. Serves 2").
+_MEASURE_ABBREVIATIONS = frozenset({"tbsp", "tsp", "oz", "lb", "lbs", "kg", "ml", "min", "mins", "hr", "hrs"})
 _WEEKDAY = r"(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*"
 _MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
 _DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?"
@@ -322,9 +299,9 @@ def _sentences(reason: str) -> list[str]:
     sentences: list[str] = []
     start = 0
     for boundary in _SENTENCE_BOUNDARY_RE.finditer(reason):
-        if _ends_with_abbreviation(reason[: boundary.start() + 1]):
+        if _continues_sentence(reason, boundary):
             continue
-        sentence = reason[start : boundary.start()].strip()
+        sentence = reason[start : boundary.end(1)].strip()
         if sentence:
             sentences.append(sentence)
         start = boundary.end()
@@ -334,9 +311,16 @@ def _sentences(reason: str) -> list[str]:
     return sentences
 
 
-def _ends_with_abbreviation(before_boundary: str) -> bool:
-    token = before_boundary.rstrip(".!?").split()[-1].casefold() if before_boundary.strip() else ""
-    return token in _ABBREVIATIONS or len(token) == 1
+def _continues_sentence(reason: str, boundary: re.Match[str]) -> bool:
+    """Whether this period closes an abbreviation and the sentence carries on after it."""
+    before = reason[: boundary.start()]
+    token = before.split()[-1].casefold() if before.strip() else ""
+    if token in _INLINE_ABBREVIATIONS or len(token) == 1:
+        return True
+    following = reason[boundary.end() :]
+    if token not in _MEASURE_ABBREVIATIONS or not following:
+        return False
+    return following[0].islower() or following[0].isdigit()
 
 
 def _claims_expiry(sentence: str) -> bool:

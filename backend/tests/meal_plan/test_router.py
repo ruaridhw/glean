@@ -692,6 +692,34 @@ def test_prose_that_is_not_an_expiry_claim_survives(tmp_path, reason: str) -> No
     assert result.suggestions[0].reason == f"{reason} Uses up your coriander (goes off Thu)."
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "A bright weeknight curry. Uses rice you have.",
+        "Quick and fresh! Great with naan?",
+        'He said "lovely." Uses coriander.',
+        "Fresh herbs, e.g. coriander, lift it. Ready in 20 min. Serves 2.",
+        "Great with rice, i.e. the basmati. Ready in 20 min. Serves 2.",
+    ],
+)
+def test_kept_prose_keeps_its_own_punctuation(tmp_path, reason: str) -> None:
+    # Every sentence that is not an expiry claim survives byte for byte, terminal punctuation and
+    # closing quotes included; only the canonical sentence is added after it.
+    result = _chosen(tmp_path, reason=reason, pantry=[_coriander()])
+
+    assert result.suggestions[0].reason == f"{reason} Uses up your coriander (goes off Thu)."
+
+
+def test_a_claim_sentence_is_the_only_thing_removed(tmp_path) -> None:
+    result = _chosen(
+        tmp_path,
+        reason="A bright curry. Uses coriander (goes off Fri). Ready in 20 min.",
+        pantry=[_coriander()],
+    )
+
+    assert result.suggestions[0].reason == "A bright curry. Ready in 20 min. Uses up your coriander (goes off Thu)."
+
+
 def test_an_abbreviation_does_not_split_a_claim_away_from_its_sentence(tmp_path) -> None:
     # Splitting at "e.g." would strand the wrong day on its own and leave it in the reason.
     result = _chosen(tmp_path, reason="Coriander expires e.g. Fri.", pantry=[_coriander()])
