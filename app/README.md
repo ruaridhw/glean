@@ -246,7 +246,9 @@ resize it to a phone shape (or use the DevTools device toolbar at 390×844).
 The in-browser database persists across restarts and reloads, so onboarding
 and seeded data survive. Nothing native-only is compiled in: backup restore is
 disabled in Developer settings here, because it works by swapping the SQLite
-file the app keeps on the device, which the web build does not have.
+file the app keeps on the device, which the web build does not have. There is
+no filesystem either, so the log goes to the browser console and an in-memory
+buffer, not the rotating log file native builds write.
 
 On a headless or remote box, put these in an untracked `.env.local` at the
 repo root; the Makefile includes it when present:

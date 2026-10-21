@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'redaction.dart';
 import 'rotating_log_file.dart';
 
-/// Where log lines go besides the file: the platform log (Android logcat).
+/// Sends lines to the platform log (Android logcat).
 abstract interface class PlatformLogSink {
   Future<void> write({
     required String level,
@@ -40,6 +40,19 @@ class MethodChannelLogSink implements PlatformLogSink {
       // No native handler registered: the file sink still has the line.
     }
   }
+}
+
+/// Sends lines to [debugPrint], which the web build routes to the browser console. Used where there is neither
+/// a native log channel nor a log file.
+class ConsoleLogSink implements PlatformLogSink {
+  const ConsoleLogSink();
+
+  @override
+  Future<void> write({
+    required String level,
+    required String tag,
+    required String message,
+  }) async => debugPrint('$tag: $level $message');
 }
 
 /// The platform log tag every Glean line carries, so `adb logcat -s glean` shows exactly the app's own trail.
