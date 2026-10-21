@@ -158,20 +158,21 @@ def sample_corpus_candidates(
     guarantee_limit = min(guarantee_max, sample_size)
 
     # Most pantry fit first; random order within a tier so ties don't favour any recipe.
-    ranked = sorted(fit, key=lambda external_id: (-fit[external_id].weight, tie_breaks[external_id]))
+    ranked = sorted(fit, key=lambda external_id: (-fit[external_id], tie_breaks[external_id]))
     # Recipes that came back when the floor relaxed are the least preferred: they trail the fresh ones
     # and never displace one, so a week with enough fresh recipes never offers a recent repeat. The
     # scorer will instead subtract recency_penalty from their fit (spec §6.2).
     fresh_ranked = [recipe_id for recipe_id in ranked if recipe_id in fresh]
     relaxed_ranked = [recipe_id for recipe_id in ranked if recipe_id not in fresh]
     picked: list[RecipeSummary] = []
+    urgent_uses = _ingredient_urgent_uses(eligible.values(), pantry)
     # Guaranteed first, so neither the random sample nor a relaxed recipe can crowd an urgent fresh
     # recipe out of the list. Only the fresh partition: the guarantee is applied after the six-week
     # floor and can never undo it, so a recipe the household cooked recently is never forced back in --
     # even in a week where the floor had to relax, where it is sampled alongside every other relaxed
     # recipe and can only take a slot the fresh ones left empty.
-    urgent = [recipe_id for recipe_id, entry in fit.items() if entry.urgent and recipe_id in fresh]
-    urgent.sort(key=lambda recipe_id: (-fit[recipe_id].weight, tie_breaks[recipe_id]))
+    urgent = [recipe_id for recipe_id in urgent_uses if recipe_id in fresh]
+    urgent.sort(key=lambda recipe_id: (-fit[recipe_id], tie_breaks[recipe_id]))
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in urgent], guarantee_limit)
 
     for group, pantry_ranked in ((floor.fresh, fresh_ranked), (floor.relaxed, relaxed_ranked)):
@@ -208,30 +209,21 @@ def _fill_from(
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
 
 
-@dataclass(frozen=True)
-class _PantryFit:
-    """How one recipe fits the pantry: the urgency-weighted sum and the urgent items it uses."""
-
-    weight: float
-    urgent: tuple[PantryItem, ...]
-
-
 def _pantry_fit(
     corpus: RecipeCorpusStore, pantry: Sequence[PantryItem], recipe_ids: Collection[str]
-) -> dict[str, _PantryFit]:
-    """Urgency-weighted pantry fit per recipe, for the recipes in `recipe_ids`."""
+) -> dict[str, float]:
+    """Urgency-weighted pantry fit per recipe, for the recipes in `recipe_ids`.
+
+    Uses the corpus search, so it is a discovery heuristic: it ranks what the model might like to see.
+    Anything the plan then *claims* about a recipe (that it uses up the coriander) comes from
+    `_ingredient_urgent_uses` instead, which reads the recipe's own ingredient lines.
+    """
     wanted = set(recipe_ids)
-    total: dict[str, float] = {}
-    urgent: dict[str, list[PantryItem]] = {}
+    fit: dict[str, float] = {}
     for item in pantry:
         for external_id in _recipes_using(corpus, item.name) & wanted:
-            total[external_id] = total.get(external_id, 0.0) + item.weight
-            if item.is_urgent:
-                urgent.setdefault(external_id, []).append(item)
-    return {
-        external_id: _PantryFit(weight=weight, urgent=tuple(urgent.get(external_id, ())))
-        for external_id, weight in total.items()
-    }
+            fit[external_id] = fit.get(external_id, 0.0) + item.weight
+    return fit
 
 
 def urgent_pantry_uses(
@@ -239,14 +231,45 @@ def urgent_pantry_uses(
 ) -> dict[str, tuple[PantryItem, ...]]:
     """Which urgent pantry items each of `recipe_ids` uses, for naming them in its reason.
 
-    Same matching as the guarantee, so a recipe promised into the candidate list because it uses the
+    Same evidence as the guarantee, so a recipe promised into the candidate list because it uses the
     coriander is the recipe whose reason can say so.
     """
-    return {
-        external_id: entry.urgent
-        for external_id, entry in _pantry_fit(corpus, pantry, set(recipe_ids)).items()
-        if entry.urgent
-    }
+    wanted = set(recipe_ids)
+    summaries = [summary for summary in corpus.search(per_page=_EVERYTHING)[0] if summary.external_id in wanted]
+    return _ingredient_urgent_uses(summaries, pantry)
+
+
+def _ingredient_urgent_uses(
+    recipes: Iterable[RecipeSummary], pantry: Sequence[PantryItem]
+) -> dict[str, tuple[PantryItem, ...]]:
+    """Which urgent pantry items each recipe's ingredient lines name, in the order the pantry carries them."""
+    urgent = [item for item in pantry if item.is_urgent]
+    uses: dict[str, tuple[PantryItem, ...]] = {}
+    for summary in recipes:
+        named = tuple(
+            item for item in urgent if any(mentions_item(name, item.name) for name in summary.ingredient_names)
+        )
+        if named:
+            uses[summary.external_id] = named
+    return uses
+
+
+def mentions_item(text: str, item_name: str) -> bool:
+    """Whether `text` names the whole item, in order: "red onion" is not "red pepper" or "onion soup".
+
+    Ingredient lines and reason text both go through this, so a claim about a recipe and the check
+    that the claim was made cannot disagree. Word boundaries matter ("lime" never matches "slime") and
+    a leading modifier is part of the identity ("ground coriander" needs "ground").
+    """
+    words = _item_words(text)
+    wanted = _item_words(item_name)
+    if not wanted:
+        return False
+    return any(words[index : index + len(wanted)] == wanted for index in range(len(words) - len(wanted) + 1))
+
+
+def _item_words(text: str) -> list[str]:
+    return [_singular_prefix(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
 
 
 def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary], limit: int) -> None:
