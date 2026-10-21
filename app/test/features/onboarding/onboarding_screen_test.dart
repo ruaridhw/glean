@@ -291,6 +291,57 @@ void main() {
     );
   }
 
+  testWidgets(
+    'a passed basics step looks and reads as done, and says how it was passed',
+    (WidgetTester tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      await pumpOnboarding(tester);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      final Finder basicsSlot = find.byKey(
+        const ValueKey<String>('onboarding.step.0'),
+      );
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics, completed'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: basicsSlot,
+          matching: find.byIcon(Icons.check_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics'),
+        findsOneWidget,
+        reason: 'back on the basics page it is current again, not done',
+      );
+
+      await tester.tap(find.text('Skip this page'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics, skipped'),
+        findsOneWidget,
+        reason: 'skipping is not the same as answering',
+      );
+      expect(
+        find.descendant(
+          of: basicsSlot,
+          matching: find.byIcon(Icons.remove_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      semantics.dispose();
+    },
+  );
+
   testWidgets('the pantry page keeps its content centred while it fits', (
     WidgetTester tester,
   ) async {
