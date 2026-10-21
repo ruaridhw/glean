@@ -228,6 +228,13 @@ class DynamoCorpusBackend:
         """The cached projection document, as planning sees it."""
         return self._load_projection().projection
 
+    def write_projection(self, projection: RecipeProjection) -> bool:
+        """Store a projection built from data written outside the table (the migration). True when written.
+
+        Goes through the backend so this process's cache is the document it just wrote, not a stale read.
+        """
+        return self._store_projection(projection)
+
     # -- projection cache ---------------------------------------------------------------------------
 
     def _load_projection(self) -> _LoadedProjection:
