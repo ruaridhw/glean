@@ -1,6 +1,6 @@
-// Widget tests for the first-run setup flow itself: stepping through
-// dinners/servings/dietary flags, persisting what was captured, being
-// skippable at any point, and ending on its own receipt-scan step.
+// Widget tests for the first-run flow: one basics page (the two numbers plus
+// the dietary disclosure) that hands its values forward to the pantry step,
+// which is the only step that writes them.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,8 +16,10 @@ import 'package:go_router/go_router.dart';
 import '../../data/fixture.dart';
 
 const String _userId = 'user-1';
-const String _scanStepQuestion = 'Stock your pantry';
-const Key _selectedValue = ValueKey<String>('onboarding.selectedValue');
+const Key _dinnersSlider = Key('onboarding.dinnersSlider');
+const Key _servingsSlider = Key('onboarding.servingsSlider');
+const Key _dinnersValue = ValueKey<String>('onboarding.dinnersValue');
+const Key _servingsValue = ValueKey<String>('onboarding.servingsValue');
 
 Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
   final GoRouter router = GoRouter(
@@ -47,55 +49,50 @@ void main() {
   setUp(() => db = createTestDatabase());
   tearDown(() => db.close());
 
+  Future<void> pumpOnboarding(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_buildApp(db: db));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> saveAndRead(WidgetTester tester) async {
+    await tester.tap(find.text('Scan a receipt'));
+    await tester.pumpAndSettle();
+    expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsOneWidget);
+  }
+
   testWidgets(
-    'steps through dinners, servings and dietary flags, persists them, '
-    'marks itself complete, and ends on receipt-scan',
+    'carries the chosen dinners, servings and dietary flags through to the '
+    'save that the pantry step performs',
     (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpOnboarding(tester);
 
-      await tester.pumpWidget(_buildApp(db: db));
+      expect(find.text('The basics'), findsOneWidget);
+
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(400, 0));
       await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(_dinnersValue)).data, '7');
 
-      expect(
-        find.text('How many dinners do you cook at home most weeks?'),
-        findsOneWidget,
-      );
-
-      final TestGesture gesture = await tester.startGesture(
-        tester.getCenter(find.byType(Slider)),
-      );
-      await gesture.moveBy(const Offset(80, 0));
-      await gesture.up();
-      await tester.pump();
-
-      await tester.tap(find.text('Next'));
+      await tester.drag(find.byKey(_servingsSlider), const Offset(400, 0));
       await tester.pumpAndSettle();
-      expect(
-        find.text('How many people are you usually cooking for?'),
-        findsOneWidget,
-      );
+      expect(tester.widget<Text>(find.byKey(_servingsValue)).data, '6');
 
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Dietary preferences'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Any dietary preferences we should know about?'),
-        findsOneWidget,
-      );
-
+      await tester.ensureVisible(find.text('Vegan'));
       await tester.tap(find.text('Vegan'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text(_scanStepQuestion), findsOneWidget);
+      expect(find.text('Stock your pantry'), findsOneWidget);
 
-      await tester.tap(find.text('Scan a receipt'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsOneWidget);
+      await saveAndRead(tester);
 
       final saved = await UserConfigRepository(db).get(_userId);
+      expect(saved.mealsPerWeek, 7);
+      expect(saved.preferredServings, 6);
       expect(saved.dietaryFlags, <String>['Vegan']);
       expect(
         (await (db.select(
@@ -103,121 +100,8 @@ void main() {
         )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
+      // The model still writes the same tolerance default it always has.
+      expect(saved.purchaseTolerance, UserConfigView.defaultPurchaseTolerance);
     },
   );
-
-  testWidgets(
-    'Skip is available immediately, discards captured input, and marks '
-    'setup complete without navigating to scan',
-    (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_buildApp(db: db));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Skip'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
-      expect(
-        (await (db.select(
-          db.userConfig,
-        )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
-        isTrue,
-      );
-
-      final saved = await UserConfigRepository(db).get(_userId);
-      expect(saved.dietaryFlags, isEmpty);
-    },
-  );
-
-  testWidgets(
-    '"I\'ll do this later" on the final step also persists captured input '
-    'without navigating to scan',
-    (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_buildApp(db: db));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Vegetarian'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text("I'll do this later"));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
-      final saved = await UserConfigRepository(db).get(_userId);
-      expect(saved.dietaryFlags, <String>['Vegetarian']);
-      expect(
-        (await (db.select(
-          db.userConfig,
-        )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
-        isTrue,
-      );
-    },
-  );
-
-  testWidgets(
-    'the dietary step asks only about diet; the scan offer has its own step',
-    (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_buildApp(db: db));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('Any dietary preferences we should know about?'),
-        findsOneWidget,
-      );
-      expect(find.text('Scan a receipt'), findsNothing);
-      expect(find.text('Back'), findsOneWidget);
-      expect(find.text('Next'), findsOneWidget);
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(find.text(_scanStepQuestion), findsOneWidget);
-      expect(find.text('Scan a receipt'), findsOneWidget);
-      expect(find.text("I'll do this later"), findsOneWidget);
-    },
-  );
-
-  testWidgets('each slider step shows the number currently chosen', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(420, 1000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(_buildApp(db: db));
-    await tester.pumpAndSettle();
-
-    String shown() => tester.widget<Text>(find.byKey(_selectedValue)).data!;
-
-    expect(shown(), '${UserConfigView.defaultMealsPerWeek}');
-    await tester.drag(find.byType(Slider), const Offset(400, 0));
-    await tester.pumpAndSettle();
-    expect(shown(), '7');
-
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(shown(), '${UserConfigView.defaultPreferredServings}');
-    await tester.drag(find.byType(Slider), const Offset(-400, 0));
-    await tester.pumpAndSettle();
-    expect(shown(), '1');
-  });
 }
