@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from glean.config import Settings, get_settings
@@ -655,6 +656,64 @@ def test_two_urgent_items_get_one_canonical_sentence_with_the_right_days(tmp_pat
     assert reason.count("goes off") == 2
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Coriander is expiring Fri.",
+        "Coriander expiry: Fri.",
+        "Coriander expires Fri.",
+        "Coriander has expired already, on Friday.",
+        "Coriander is best-before Fri.",
+        "Coriander is best before Friday.",
+        "Use by Fri.",
+        "Coriander, sell by Friday.",
+        "Coriander is good until Friday.",
+    ],
+)
+def test_any_expiry_wording_is_dropped_with_its_sentence(tmp_path, reason: str) -> None:
+    result = _chosen(tmp_path, reason=reason, pantry=[_coriander()])
+
+    assert result.suggestions[0].reason == "Uses up your coriander (goes off Thu)."
+    assert "Fri" not in result.suggestions[0].reason
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Easy to use by hand rather than a food processor.",
+        "Uses mango offcuts for brightness.",
+        "You can drop it off after work.",
+        "Uses 1.5 tbsp of oil for frying.",
+    ],
+)
+def test_prose_that_is_not_an_expiry_claim_survives(tmp_path, reason: str) -> None:
+    result = _chosen(tmp_path, reason=reason, pantry=[_coriander()])
+
+    assert result.suggestions[0].reason == f"{reason} Uses up your coriander (goes off Thu)."
+
+
+def test_an_abbreviation_does_not_split_a_claim_away_from_its_sentence(tmp_path) -> None:
+    # Splitting at "e.g." would strand the wrong day on its own and leave it in the reason.
+    result = _chosen(tmp_path, reason="Coriander expires e.g. Fri.", pantry=[_coriander()])
+
+    assert result.suggestions[0].reason == "Uses up your coriander (goes off Thu)."
+    assert "Fri" not in result.suggestions[0].reason
+
+
+def test_a_period_inside_a_bracket_still_ends_the_sentence(tmp_path) -> None:
+    result = _chosen(tmp_path, reason="Uses coriander (goes off Fri.) A bright dinner.", pantry=[_coriander()])
+
+    assert result.suggestions[0].reason == "A bright dinner. Uses up your coriander (goes off Thu)."
+
+
+def test_text_without_terminal_punctuation_gets_a_separator(tmp_path) -> None:
+    result = _chosen(tmp_path, reason="Uses coriander without much shopping", pantry=[_coriander()])
+
+    assert (
+        result.suggestions[0].reason == "Uses coriander without much shopping. Uses up your coriander (goes off Thu)."
+    )
+
+
 def test_a_second_contradictory_claim_cannot_survive(tmp_path) -> None:
     result = _chosen(
         tmp_path,
@@ -693,14 +752,15 @@ def test_at_most_three_urgent_items_are_named_in_the_sentence(tmp_path) -> None:
     result = _chosen(
         tmp_path,
         reason="Uses pantry items well.",
-        pantry=[_coriander(name=herb, expires_in_days=index + 1) for index, herb in enumerate(herbs)],
+        pantry=[_coriander(name=herb, expires_in_days=1) for herb in herbs],
         corpus=corpus,
     )
 
-    reason = result.suggestions[0].reason
-    assert reason.count("goes off") == 3
-    assert "basil" in reason
-    assert "mint (goes off" not in reason
+    suggestion = result.suggestions[0]
+    assert suggestion.reason.count("goes off") == 3
+    assert "mint" not in suggestion.reason
+    # The structured list is not capped: the app still learns about all four.
+    assert [item.name for item in suggestion.uses_up] == herbs
 
 
 def test_every_meal_carries_the_urgent_items_it_uses(tmp_path) -> None:

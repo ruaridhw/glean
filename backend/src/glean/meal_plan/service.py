@@ -62,9 +62,50 @@ Rules:
 _MAX_CANDIDATE_INGREDIENTS = 12
 # How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
 _MAX_NAMED_URGENT_ITEMS = 3
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-# Any sentence saying when something goes off is the app's job, not the model's.
-_EXPIRY_PHRASES = ("goes off", "go off", "went off", "gone off", "expires", "expire", "use by", "use-by", "best before")
+# Sentence ends, with any closing quotes or brackets that belong to the sentence before the space.
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?][\"')\]]*\s+")
+# A period after one of these ends an abbreviation, not a sentence ("e.g. coriander", "1.5 tbsp. of oil").
+_ABBREVIATIONS = frozenset(
+    {
+        "e.g",
+        "i.e",
+        "approx",
+        "tbsp",
+        "tsp",
+        "etc",
+        "vs",
+        "fig",
+        "oz",
+        "lb",
+        "kg",
+        "ml",
+        "min",
+        "mins",
+        "hr",
+        "hrs",
+        "no",
+        "dr",
+        "mr",
+        "mrs",
+        "ms",
+        "st",
+        "inc",
+        "est",
+    }
+)
+_WEEKDAY = r"(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*"
+_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
+_DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?"
+_DATE_CONTEXT = rf"(?:{_WEEKDAY}|{_MONTH}|{_DAY_NUMBER}|tomorrow|today|tonight|the|next|end)\b"
+# Saying when something goes off is the app's job, not the model's. Word boundaries keep "mango
+# offcuts" and "drop it off" out, and the date-shaped phrases only claim an expiry when a date follows
+# ("use by hand" is a method, "use by Friday" is a claim).
+_EXPIRY_CLAIM_RES = (
+    re.compile(r"\bexpir(?:y|ies|es|ed|ing|ation)\b", re.IGNORECASE),
+    re.compile(r"\b(?:go|goes|going|went|gone)\s+off\b", re.IGNORECASE),
+    re.compile(r"\bgood\s+until\b", re.IGNORECASE),
+    re.compile(rf"\b(?:use[-\s]by|sell[-\s]by|best[-\s]before)\s+(?:on\s+|by\s+)?{_DATE_CONTEXT}", re.IGNORECASE),
+)
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
@@ -243,7 +284,8 @@ def _reconciled(
     The prompt tells the model not to date anything, but a model that dates anyway would put a wrong or
     contradictory day in front of the household. Rather than edit inside its prose, any whole sentence
     that claims an expiry is dropped and one sentence the server wrote is appended -- so the reason
-    always carries exactly one expiry statement, naming every urgent item the recipe uses.
+    always carries exactly one expiry statement, naming up to `_MAX_NAMED_URGENT_ITEMS` of them, while
+    `uses_up` carries every urgent item the recipe uses.
     """
     suggestions: list[MealPlanSuggestion] = []
     for suggestion in chosen:
@@ -269,16 +311,36 @@ def _canonical_reason(reason: str, items: Sequence[PantryItem], *, reference_dat
     """The model's reason without any sentence that dates something, then the canonical sentence."""
     kept = [sentence for sentence in _sentences(reason) if not _claims_expiry(sentence)]
     canonical = _canonical_sentence(items, reference_date=reference_date)
-    return " ".join([*kept, canonical])
+    text = " ".join(kept)
+    if text and text[-1] not in ".!?":
+        text = f"{text}."
+    return f"{text} {canonical}".strip() if text else canonical
 
 
 def _sentences(reason: str) -> list[str]:
-    return [sentence.strip() for sentence in _SENTENCE_SPLIT_RE.split(reason.strip()) if sentence.strip()]
+    """The reason's sentences, keeping abbreviations such as "e.g." inside the one they belong to."""
+    sentences: list[str] = []
+    start = 0
+    for boundary in _SENTENCE_BOUNDARY_RE.finditer(reason):
+        if _ends_with_abbreviation(reason[: boundary.start() + 1]):
+            continue
+        sentence = reason[start : boundary.start()].strip()
+        if sentence:
+            sentences.append(sentence)
+        start = boundary.end()
+    tail = reason[start:].strip()
+    if tail:
+        sentences.append(tail)
+    return sentences
+
+
+def _ends_with_abbreviation(before_boundary: str) -> bool:
+    token = before_boundary.rstrip(".!?").split()[-1].casefold() if before_boundary.strip() else ""
+    return token in _ABBREVIATIONS or len(token) == 1
 
 
 def _claims_expiry(sentence: str) -> bool:
-    words = sentence.casefold()
-    return any(phrase in words for phrase in _EXPIRY_PHRASES)
+    return any(pattern.search(sentence) for pattern in _EXPIRY_CLAIM_RES)
 
 
 def _canonical_sentence(items: Sequence[PantryItem], *, reference_date: date) -> str:
