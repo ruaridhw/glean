@@ -4,7 +4,7 @@ import random
 from datetime import UTC, datetime, timedelta
 
 from glean.decisions import DECISION_MODEL
-from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates
+from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
     DietaryDecisionStore,
@@ -614,6 +614,93 @@ def test_the_guarantee_does_not_force_a_repeat_when_the_floor_has_relaxed(tmp_pa
     ]
 
     assert any("rec_coriander" not in ids for ids in offered)
+
+
+def test_urgent_uses_come_from_the_ingredient_lines_not_a_shared_word(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_pepper", "Red Pepper Traybake", ["red pepper"], 20),
+            ("rec_onion", "Red Onion Tart", ["red onion"], 20),
+        ],
+    )
+    onion = PantryItem(name="red onion", urgency_score=120.0, expires_in_days=1)
+
+    uses = urgent_pantry_uses(corpus, [onion], ["rec_pepper", "rec_onion"])
+
+    assert set(uses) == {"rec_onion"}
+    assert uses["rec_onion"] == (onion,)
+
+
+def test_a_title_mention_alone_is_not_a_recipe_using_the_item(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_free", "Coriander-free dinner", ["rice"], 20)])
+    coriander = PantryItem(name="coriander", urgency_score=120.0, expires_in_days=2)
+
+    assert urgent_pantry_uses(corpus, [coriander], ["rec_free"]) == {}
+
+
+def test_urgent_matching_respects_word_boundaries_and_extra_name_words(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_slime", "Dish A", ["slime"], 20),
+            ("rec_boiled", "Dish B", ["boiled egg"], 20),
+            ("rec_oil", "Dish C", ["oil"], 20),
+            ("rec_plain_coriander", "Dish D", ["coriander"], 20),
+        ],
+    )
+    ids = ["rec_slime", "rec_boiled", "rec_oil", "rec_plain_coriander"]
+    pantry = [
+        PantryItem(name="lime", urgency_score=120.0, expires_in_days=1),
+        PantryItem(name="oil", urgency_score=120.0, expires_in_days=1),
+        PantryItem(name="ground coriander", urgency_score=120.0, expires_in_days=1),
+    ]
+
+    uses = urgent_pantry_uses(corpus, pantry, ids)
+
+    assert set(uses) == {"rec_oil"}
+    assert [item.name for item in uses["rec_oil"]] == ["oil"]
+
+
+def test_a_plural_pantry_name_still_matches_the_singular_ingredient(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_tart", "Onion Tart", ["red onion"], 20)])
+    onions = PantryItem(name="red onions", urgency_score=120.0, expires_in_days=1)
+
+    assert set(urgent_pantry_uses(corpus, [onions], ["rec_tart"])) == {"rec_tart"}
+
+
+def test_a_recipe_that_only_names_an_urgent_item_in_its_title_is_not_guaranteed(tmp_path) -> None:
+    # The title still ranks it into the search (discovery), but the rice dishes outrank it out of the
+    # pool; only a guarantee could put it in the list, and a title is not evidence of the ingredient.
+    corpus = _corpus(
+        tmp_path,
+        [
+            *[(f"rec_rice_{i}", f"Rice Dish {i}", ["rice", f"spice {i}"], 20) for i in range(60)],
+            ("rec_free", "Coriander-free dinner", ["barley"], 20),
+        ],
+    )
+    pantry = [
+        PantryItem(name="rice", urgency_score=200.0),
+        PantryItem(name="coriander", urgency_score=120.0, expires_in_days=2),
+    ]
+
+    offered = [
+        {
+            candidate.external_id
+            for candidate in sample_corpus_candidates(
+                corpus,
+                pantry=pantry,
+                dietary_flags=[],
+                max_total_time_mins=None,
+                exclude_external_ids=[],
+                rng=random.Random(seed),
+                sample_size=5,
+            )
+        }
+        for seed in range(40)
+    ]
+
+    assert all("rec_free" not in ids for ids in offered)
 
 
 def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, str], float]) -> None:
