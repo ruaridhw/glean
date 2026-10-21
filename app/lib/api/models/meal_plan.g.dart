@@ -45,6 +45,7 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
       'source': instance.source,
       'exclude_external_ids': instance.excludeExternalIds,
       'cooked_history': instance.cookedHistory.map((e) => e.toJson()).toList(),
+      'local_date': instance.localDate,
     };
 
 MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>

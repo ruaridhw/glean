@@ -89,6 +89,7 @@ class MealPlanRequest {
     this.source = 'saved',
     this.excludeExternalIds = const [],
     this.cookedHistory = const [],
+    this.localDate,
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -117,6 +118,10 @@ class MealPlanRequest {
 
   /// Meals cooked in the last twelve weeks, so the plan can avoid repeating them.
   final List<CookedHistoryItem> cookedHistory;
+
+  /// The phone's local calendar date (`YYYY-MM-DD`), the date [pantry]'s `expiresInDays` was measured
+  /// from. The backend dates a going-off item in the household's calendar, not the server's UTC one.
+  final String? localDate;
 
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
 }

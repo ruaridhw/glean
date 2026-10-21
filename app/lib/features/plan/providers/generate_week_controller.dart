@@ -13,6 +13,7 @@ import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/recipe_proposal.dart';
+import 'package:glean/data/util/week.dart';
 
 import '../compression.dart';
 import '../food_groups.dart';
@@ -66,10 +67,13 @@ class GenerateWeekController extends AsyncNotifier<int> {
         if (plannedIds.contains(recipe.id) && recipe.externalId != null)
           recipe.externalId!,
     };
+    // One clock for the pantry slice and the date it was measured from: across local midnight they
+    // must not disagree about which day `expires_in_days` counts from.
+    final now = DateTime.now();
     final request = MealPlanRequest(
       source: 'corpus',
       excludeExternalIds: excluded.toList(),
-      pantry: compressPantry(pantry),
+      pantry: compressPantry(pantry, now: now),
       recipeHistory: [
         for (final recipe in saved)
           RecipeHistoryItem(
@@ -94,6 +98,7 @@ class GenerateWeekController extends AsyncNotifier<int> {
       mealsPerWeek: slots,
       dietaryFlags: config.dietaryFlags,
       maxActiveTimeMins: config.maxActiveTimeMins,
+      localDate: formatDate(now),
     );
     final MealPlanResponse response = await ref
         .read(apiClientProvider)
