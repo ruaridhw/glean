@@ -47,7 +47,9 @@ void main() {
       await tester.pump();
       expect(find.byType(OnboardingScreen), findsOneWidget);
 
-      await tester.tap(find.text('Skip'));
+      await tester.tap(find.text('Skip this page'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'll do this later"));
       await tester.pump();
       await tester.pump();
 
