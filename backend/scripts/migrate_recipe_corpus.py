@@ -33,17 +33,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scripts.corpus_store import open_corpus, projection_store_for
+
 from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answers
-from glean.recipe_api.blob_store import FilesystemBlobStore, S3BlobStore
 from glean.recipes.corpus import RecipeCorpusStore, recipe_payload
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend
-from glean.recipes.projection import (
-    FilesystemProjectionStore,
-    ProjectionStore,
-    RecipeProjection,
-    S3ProjectionStore,
-    build_projection,
-)
+from glean.recipes.projection import ProjectionStore, RecipeProjection, build_projection
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -286,17 +281,11 @@ def _checkpoint(args: argparse.Namespace) -> Checkpoint:
 
 
 def _open_source(args: argparse.Namespace) -> RecipeCorpusStore:
-    from glean.recipes.corpus import BlobCorpusBackend  # noqa: PLC0415 - keep the module import light
-
-    if args.bucket:
-        return RecipeCorpusStore(BlobCorpusBackend(S3BlobStore(args.bucket, region=args.region, prefix="corpus/")))
-    return RecipeCorpusStore(BlobCorpusBackend(FilesystemBlobStore(args.local / "corpus")))
+    return open_corpus(bucket=args.bucket, cache_dir=args.local, region=args.region)
 
 
 def _open_projection(args: argparse.Namespace) -> ProjectionStore:
-    if args.bucket:
-        return S3ProjectionStore(args.bucket, region=args.region)
-    return FilesystemProjectionStore(args.local)
+    return projection_store_for(bucket=args.bucket, cache_dir=args.local, region=args.region)
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
