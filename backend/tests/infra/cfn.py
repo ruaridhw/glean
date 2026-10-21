@@ -37,6 +37,10 @@ def catalogue_table_properties() -> dict[str, Any]:
     return load(TEMPLATE)["Resources"]["GleanCatalogueTable"]["Properties"]
 
 
+def recipes_table_properties() -> dict[str, Any]:
+    return load(TEMPLATE)["Resources"]["GleanRecipesTable"]["Properties"]
+
+
 def dynamo_table_properties() -> dict[str, dict[str, Any]]:
     """Every DynamoDB table in the stack, by logical id, as the template declares it."""
     return {
