@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:glean/design_system/design_system.dart';
 
 import '../onboarding_page.dart';
 import 'onboarding_basics_page.dart';
