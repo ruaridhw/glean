@@ -18,9 +18,13 @@ model isn't asked about (Keto, Paleo) are left to the meal-plan model.
 
 Those flags, the household's time cap and the meals already planned are hard
 constraints: `meal_plan.eligibility` applies the six-week recency floor on top of them and
-never relaxes one to satisfy the other. The guarantee is narrower than either: it draws only
-from the fresh recipes the floor left, so it never revives a recipe a hard constraint or the
-six-week floor dropped, and relaxed recipes still only fill what the fresh ones leave.
+never relaxes one to satisfy the other.
+
+The guarantee is narrower than either. It never revives a recipe a hard constraint dropped, and
+it never reaches past a floor that held. When the floor has relaxed it covers each urgent item
+from the fresh recipes first and falls back to a relaxed recipe only for an item no fresh recipe
+uses -- that recipe is eligible per spec §6.2 step 2 and still carries its age as a fallback.
+Relaxed recipes never take a slot a fresh recipe could have filled.
 """
 
 from __future__ import annotations
@@ -119,11 +123,12 @@ def sample_corpus_candidates(
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
-    Recipes using a pantry item that goes off within `URGENT_EXPIRY_DAYS` are always included (up to
-    `guarantee_max` of them) and lead the list. `cooked` is the household's history window and `slots`
-    the number of meals this request plans; together they drive `eligibility.apply_recency_floor`.
-    Recipes it relaxed back in are offered last, so they reach the candidate list only after every
-    fresh recipe, and they are never guaranteed: the floor comes first.
+    Every pantry item going off within `URGENT_EXPIRY_DAYS` gets a recipe using it (up to
+    `guarantee_max` recipes, one per item before any item gets a second), and those lead the list.
+    `cooked` is the household's history window and `slots` the number of meals this request plans;
+    together they drive `eligibility.apply_recency_floor`. Recipes it relaxed back in are offered last,
+    so they reach the candidate list only after every fresh recipe, and they carry `cooked_days_ago` so
+    the model sees them as the fallback they are.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
@@ -180,16 +185,38 @@ def sample_corpus_candidates(
     )
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in guaranteed], guarantee_limit)
 
-    for group, pantry_ranked in ((floor.fresh, fresh_ranked), (floor.relaxed, relaxed_ranked)):
-        _fill_from(picked, pantry_ranked[:pool_size], eligible=eligible, rng=rng, sample_size=sample_size)
-        _fill_from(
+    _fill_partition(
+        picked,
+        floor.fresh,
+        fresh_ranked,
+        eligible=eligible,
+        rng=rng,
+        sample_size=sample_size,
+        pool_size=pool_size,
+    )
+    relaxed = set(floor.relaxed)
+    if relaxed:
+        # Step 4 of spec §6.2 runs over what step 2 left eligible, and step 2 brought these back. An
+        # urgent item no fresh recipe uses is covered here, after every fresh recipe, so it takes only a
+        # slot the fresh ones left empty. Where a fresh recipe does use the item, fresh is preferred and
+        # the relaxed recipes are left to the ordinary sampling.
+        relaxed_guaranteed = _guaranteed_recipe_ids(
+            _urgent_uses_no_fresh_recipe_covers(urgent_uses, fresh=fresh),
+            eligible_ids=relaxed,
+            fit=fit,
+            tie_breaks=tie_breaks,
+            limit=guarantee_limit,
+        )
+        _take_distinct(picked, [eligible[recipe_id] for recipe_id in relaxed_guaranteed], sample_size)
+        _fill_partition(
             picked,
-            set(group) - set(pantry_ranked[:pool_size]),
+            floor.relaxed,
+            relaxed_ranked,
             eligible=eligible,
             rng=rng,
             sample_size=sample_size,
+            pool_size=pool_size,
         )
-    relaxed = set(floor.relaxed)
     return [
         OfferedRecipe(
             summary=summary,
@@ -212,6 +239,42 @@ def _fill_from(
     if not remaining or len(picked) >= sample_size:
         return
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
+
+
+def _fill_partition(
+    picked: list[RecipeSummary],
+    group: Sequence[str],
+    pantry_ranked: Sequence[str],
+    *,
+    eligible: Mapping[str, RecipeSummary],
+    rng: random.Random,
+    sample_size: int,
+    pool_size: int,
+) -> None:
+    """Fill from one partition: its pantry-ranked pool first, then the rest of the partition."""
+    _fill_from(picked, pantry_ranked[:pool_size], eligible=eligible, rng=rng, sample_size=sample_size)
+    _fill_from(
+        picked,
+        set(group) - set(pantry_ranked[:pool_size]),
+        eligible=eligible,
+        rng=rng,
+        sample_size=sample_size,
+    )
+
+
+def _urgent_uses_no_fresh_recipe_covers(
+    urgent_uses: Mapping[str, Sequence[PantryItem]], *, fresh: Collection[str]
+) -> dict[str, tuple[PantryItem, ...]]:
+    """The urgent uses of recipes the floor relaxed, for items no fresh recipe uses at all."""
+    covered_by_fresh = {item for recipe_id, items in urgent_uses.items() if recipe_id in fresh for item in items}
+    uncovered: dict[str, tuple[PantryItem, ...]] = {}
+    for recipe_id, items in urgent_uses.items():
+        if recipe_id in fresh:
+            continue
+        remaining = tuple(item for item in items if item not in covered_by_fresh)
+        if remaining:
+            uncovered[recipe_id] = remaining
+    return uncovered
 
 
 def _guaranteed_recipe_ids(
