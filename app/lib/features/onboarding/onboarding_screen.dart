@@ -140,6 +140,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
+                  // Pages fill the body and start at its top; the pantry page
+                  // centres itself, the basics page scrolls from the heading.
+                  layoutBuilder:
+                      (Widget? current, List<Widget> previousChildren) =>
+                          Stack(
+                            fit: StackFit.expand,
+                            children: <Widget>[
+                              ...previousChildren,
+                              if (current != null) current,
+                            ],
+                          ),
                   child: OnboardingStepBody(
                     key: ValueKey<OnboardingPage>(_page),
                     page: _page,
