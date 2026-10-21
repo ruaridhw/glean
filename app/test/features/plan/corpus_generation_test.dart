@@ -194,7 +194,53 @@ void main() {
       expect(history, hasLength(1));
       expect(history.single['recipe_id'], 'rec_recent');
       expect(history.single['title'], 'Recent stew');
-      expect(DateTime.parse(history.single['cooked_at'] as String), recentCook);
+      expect(
+        DateTime.parse(history.single['cooked_at'] as String),
+        recentCook.toUtc(),
+      );
+    },
+  );
+
+  test(
+    'sends cooked times as UTC instants, so a local wall clock keeps its age',
+    () async {
+      final recipes = harness.container.read(recipesRepositoryProvider);
+      final plan = harness.container.read(planRepositoryProvider);
+      // A cook recorded in local time: the plan entry stores it with no offset. Read as UTC by the
+      // server, a 41d23h-old cook in a UTC-7 zone looked fresh, so the request must state the zone.
+      final localCook = DateTime(2026, 10, 5, 18, 30);
+      final recipeId = await recipes.save(
+        userId: harness.userId,
+        externalId: 'rec_local',
+        title: 'Local stew',
+        ingredients: const [],
+      );
+      final entryId = await plan.addEntry(
+        userId: harness.userId,
+        recipeId: recipeId,
+        recipeTitle: 'Local stew',
+        servings: 2,
+        plannedDate: localCook,
+      );
+      await plan.markCooked(
+        entryId: entryId,
+        userId: harness.userId,
+        now: localCook,
+      );
+      Map<String, dynamic>? body;
+      suggest(['rec_new'], capture: (value) => body = value);
+      detail('rec_new');
+
+      await harness.container
+          .read(generateWeekControllerProvider.notifier)
+          .generate(weekStart: week, slots: 1, servings: 2);
+
+      final history = (body!['cooked_history'] as List)
+          .cast<Map<String, dynamic>>();
+      final sent = history.single['cooked_at'] as String;
+      expect(sent, endsWith('Z'));
+      expect(DateTime.parse(sent).isAtSameMomentAs(localCook), isTrue);
+      expect(DateTime.parse(sent), localCook.toUtc());
     },
   );
 

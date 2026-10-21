@@ -84,7 +84,9 @@ class GenerateWeekController extends AsyncNotifier<int> {
           CookedHistoryItem(
             recipeId: entry.externalIdSnapshot,
             title: entry.recipeTitle,
-            cookedAt: entry.cookedAt!,
+            // UTC, with the offset the wire format needs: a local wall clock read as UTC aged a
+            // 41d23h-old cook past the six-week floor in a UTC-7 zone.
+            cookedAt: entry.cookedAt!.toUtc(),
           ),
       ],
       foodGroupCoverage: foodGroupCoverageForWeek(entries, groups),
