@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,11 +55,16 @@ class EligibleRecipes:
 
     `fresh` is never cooked in the window. `relaxed` came back because the floor gave
     way; they are ordered least-preferred last, so a caller with no scorer ranks
-    candidates by appending `relaxed` after `fresh`.
+    candidates by appending `relaxed` after `fresh`. `days_since_cooked` is the age of
+    the most recent matching cook for every recipe the history mentions, so the caller
+    can rank with `recency_penalty` instead of the two lists.
     """
 
     fresh: tuple[str, ...]
     relaxed: tuple[str, ...]
+    # Days since the most recent matching cook, for every eligible recipe the history mentions (fresh
+    # recipes included, so the scorer can call recency_penalty on them). Unmatched recipes have no entry.
+    days_since_cooked: Mapping[str, float]
 
     @property
     def relaxed_floor(self) -> bool:
@@ -86,23 +92,21 @@ def apply_recency_floor(
     """
     ids = list(dict.fromkeys(eligible_ids))
     last_cooked = _last_cooked_days(cooked, now=now)
-    fresh: list[str] = []
-    recent: list[tuple[str, float]] = []
-    for recipe_id in ids:
-        days = _days_since_cooked(recipe_id, titles.get(recipe_id, ""), last_cooked)
-        if days is not None and days <= window_days:
-            recent.append((recipe_id, days))
-        else:
-            fresh.append(recipe_id)
+    ages = {
+        recipe_id: days for recipe_id in ids if (days := _days_since_cooked(recipe_id, titles, last_cooked)) is not None
+    }
+    fresh = [recipe_id for recipe_id in ids if recipe_id not in ages or ages[recipe_id] > window_days]
+    recent = [(recipe_id, ages[recipe_id]) for recipe_id in ids if recipe_id in ages and ages[recipe_id] <= window_days]
+    days_since_cooked = MappingProxyType(ages)
 
     if len(fresh) >= slots * min_per_slot:
-        return EligibleRecipes(fresh=tuple(fresh), relaxed=())
+        return EligibleRecipes(fresh=tuple(fresh), relaxed=(), days_since_cooked=days_since_cooked)
     # Least penalised first, so the most recently cooked of all lands last. Within one penalty
     # band the longer-ago cook is the less repetitive pick.
     relaxed = tuple(
         recipe_id for recipe_id, _ in sorted(recent, key=lambda item: (-recency_penalty(item[1]), -item[1], item[0]))
     )
-    return EligibleRecipes(fresh=tuple(fresh), relaxed=relaxed)
+    return EligibleRecipes(fresh=tuple(fresh), relaxed=relaxed, days_since_cooked=days_since_cooked)
 
 
 def recency_penalty(days_since_cooked: float | None) -> float:
@@ -125,24 +129,27 @@ def _last_cooked_days(cooked: Iterable[CookedMeal], *, now: datetime) -> dict[st
     """Key every cook by recipe id, or by title when the row has none, keeping the most recent."""
     latest: dict[str, datetime] = {}
     for meal in cooked:
-        days = _days_between(meal.cooked_at, now)
-        for key in _keys_for(meal):
-            if key not in latest or days < _days_between(latest[key], now):
+        keys = [f"id:{meal.recipe_id}"] if meal.recipe_id else [f"title:{_normalise_title(meal.title)}"]
+        for key in keys:
+            if key not in latest or meal.cooked_at > latest[key]:
                 latest[key] = meal.cooked_at
     return {key: _days_between(cooked_at, now) for key, cooked_at in latest.items()}
 
 
-def _keys_for(meal: CookedMeal) -> list[str]:
-    if meal.recipe_id:
-        return [f"id:{meal.recipe_id}"]
-    return [f"title:{_normalise_title(meal.title)}"]
+def _keys_for(recipe_id: str, title: str) -> list[str]:
+    # A title only matches rows that carried no id (older plan entries), and only for a recipe we know
+    # the title of; every cook row is additionally keyed by its own id when it has one.
+    return [f"id:{recipe_id}"] if not title else [f"id:{recipe_id}", f"title:{_normalise_title(title)}"]
 
 
-def _days_since_cooked(recipe_id: str, title: str, last_cooked: Mapping[str, float]) -> float | None:
-    days = last_cooked.get(f"id:{recipe_id}")
-    if days is None and title:
-        days = last_cooked.get(f"title:{_normalise_title(title)}")
-    return days
+def _days_since_cooked(recipe_id: str, titles: Mapping[str, str], last_cooked: Mapping[str, float]) -> float | None:
+    """The most recent cook of this recipe, however the history rows identify it.
+
+    A recipe is matched both by id and by title, because older plan entries carry no recipe id
+    snapshot. The newest match wins: an old id-matched cook must not hide yesterday's title-only one.
+    """
+    matches = [last_cooked[key] for key in _keys_for(recipe_id, titles.get(recipe_id, "")) if key in last_cooked]
+    return min(matches) if matches else None
 
 
 def _normalise_title(title: str) -> str:
@@ -154,5 +161,6 @@ def _days_between(earlier: datetime, later: datetime) -> float:
 
 
 def _as_aware_utc(value: datetime) -> datetime:
-    # The app sends ISO datetimes from local DateTime values, so they can arrive naive; they are stored as UTC.
+    # Requests are normalised at the schema boundary; this defends the arithmetic for other callers
+    # (the graph, the evals, the MCP server) whose datetimes may still arrive naive. UTC, never local.
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
