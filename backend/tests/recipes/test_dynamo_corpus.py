@@ -103,6 +103,18 @@ def test_the_recipe_and_its_source_pointer_are_one_item_each(backend: DynamoCorp
     assert {row["pk"] for row in rows} == {recipe_pk(recipe.external_id), source_pk(recipe.source_url)}
 
 
+def test_a_recipe_imported_without_a_url_gets_no_source_pointer(
+    backend: DynamoCorpusBackend, recipes_table: Any
+) -> None:
+    backend.save(synthetic_recipe("rec_one", title="One", ingredients=["rice"]))
+    backend.save(synthetic_recipe("rec_two", title="Two", ingredients=["peas"]))
+
+    assert [row["pk"] for row in recipes_table.scan()["Items"] if row["pk"].startswith("SOURCE#")] == []
+    assert backend.get_by_source_url("") is None
+    assert backend.get("rec_one") is not None
+    assert backend.get("rec_two") is not None
+
+
 def test_saving_an_unchanged_recipe_writes_nothing_the_second_time(backend: DynamoCorpusBackend) -> None:
     recipe = synthetic_corpus()[0]
 

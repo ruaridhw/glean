@@ -154,6 +154,8 @@ class DynamoCorpusBackend:
         return _stored_recipe(row) if row else None
 
     def get_by_source_url(self, source_url: str) -> StoredRecipe | None:
+        if not source_url:
+            return None  # a recipe imported without a URL has no pointer to find it by
         pointer = self._get(source_pk(source_url), RECIPE_SK)
         return self.get(str(pointer["recipe_id"])) if pointer else None
 
@@ -198,16 +200,16 @@ class DynamoCorpusBackend:
     def upsert(self, recipe: StoredRecipe) -> bool:
         """Write the recipe and its SOURCE pointer unless both are already stored. True when written."""
         body = _recipe_body(recipe)
-        pointer = self._source_item(recipe)
+        # Only a URL-imported recipe has a pointer; one without a URL would otherwise share a single
+        # `SOURCE#` row with every other such recipe.
+        pointer = self._source_item(recipe) if recipe.source_url else None
         stored = self._get(recipe_pk(recipe.external_id), RECIPE_SK)
-        if stored is not None and stored.get("body") == body and self._source_is_current(pointer):
+        if stored is not None and stored.get("body") == body and (pointer is None or self._source_is_current(pointer)):
             return False
-        self._transact(
-            [
-                {"Put": {"TableName": self._table, "Item": _recipe_item(recipe, body)}},
-                {"Put": {"TableName": self._table, "Item": pointer}},
-            ]
-        )
+        ops: list[dict[str, Any]] = [{"Put": {"TableName": self._table, "Item": _recipe_item(recipe, body)}}]
+        if pointer is not None:
+            ops.append({"Put": {"TableName": self._table, "Item": pointer}})
+        self._transact(ops)
         self._store_projection(self._load_projection().projection.with_recipe(self._projected(recipe)))
         return True
 
@@ -305,14 +307,12 @@ class DynamoCorpusBackend:
     # -- table access -------------------------------------------------------------------------------
 
     def _source_item(self, recipe: StoredRecipe) -> dict[str, Any]:
-        item: dict[str, Any] = {
-            "pk": source_pk(recipe.source_url or ""),
+        return {
+            "pk": source_pk(str(recipe.source_url)),
             "sk": RECIPE_SK,
             "recipe_id": recipe.external_id,
+            "source_url": str(recipe.source_url),
         }
-        if recipe.source_url:
-            item["source_url"] = recipe.source_url
-        return item
 
     def _source_is_current(self, pointer: dict[str, Any]) -> bool:
         stored = self._get(str(pointer["pk"]), RECIPE_SK)

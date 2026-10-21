@@ -285,10 +285,10 @@ def get_corpus_backend() -> CorpusBackend:
 
 
 def _recipe_store() -> str:
-    """`RECIPE_STORE` as configured, or `blobs` when this process has no deployment configuration.
+    """`RECIPE_STORE` as configured, or `blobs` when this process has no deployment configuration at all.
 
-    Scripts and tests that inject their own blob store never load settings, and must keep working: they
-    are on the blob path anyway.
+    A script or test with no settings to read is on the blob path already, so it must not start failing
+    because the choice of store is read through `Settings`.
     """
     from glean.config import get_settings  # noqa: PLC0415 - avoid a circular import at module load
 
