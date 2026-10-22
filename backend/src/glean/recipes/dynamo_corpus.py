@@ -103,6 +103,9 @@ _RETRYABLE_CANCELLATION_REASONS = {
 _MAX_ATTEMPTS = 6
 # Publishing the whole projection is a read-modify-write: bound the re-read/re-apply loop, then say so.
 _MAX_PUBLISH_ATTEMPTS = 4
+# A full rebuild re-scans the table after every lost race (correctness over speed: conflicts are rare), so it
+# gets fewer attempts than an incremental merge that only re-reads one small object.
+_MAX_REBUILD_ATTEMPTS = 3
 _REBUILD_COMMAND = "uv run python scripts/build_recipe_index.py --table <table> --bucket <recipe-cache-bucket>"
 
 
@@ -223,7 +226,10 @@ class DynamoCorpusBackend:
         for answer in changed:
             self._put(answer_item(answer))
         if changed and rebuild_projection:
-            self._publish(lambda projection: self._project_answers(projection, changed), what=f"{len(changed)} answers")
+            self._publish(
+                lambda projection, _refresh: self._project_answers(projection, changed),
+                what=f"{len(changed)} answers",
+            )
         elif changed:
             self._remember(snapshot, current)
         return len(changed)
@@ -250,25 +256,37 @@ class DynamoCorpusBackend:
             if pointer is not None:
                 ops.append({"Put": {"TableName": self._table, "Item": pointer}})
             self._transact(ops)
-        published = self._publish(
-            lambda projection: projection.with_recipe(self._projected(recipe, projection)),
+        published = self.publish(recipe)  # always: this is also the repair after an earlier failed publish
+        return wrote_table or published
+
+    def publish(self, recipe: StoredRecipe) -> bool:
+        """Make an already-stored recipe visible to search and planning. True when the projection changed.
+
+        Idempotent, and the repair path for a publish that failed earlier: a retried import deduped on its
+        source URL calls this instead of paying for another parse, and a retried `upsert` converges here too.
+        """
+        return self._publish(
+            lambda projection, _refresh: projection.with_recipe(self._projected(recipe, projection)),
             what=f"recipe {recipe.external_id}",
         )
-        return wrote_table or published
 
     def rebuild_projection(self) -> ProjectionWrite:
         """Rebuild the whole projection from the table. Owner-run, or F2's runner after a bulk change.
 
         A consistent scan: 632 recipe bodies is a few hundred read units, slow at 5 RCU but exact. Prefer
-        `save_answers` for an incremental change.
+        `save_answers` for an incremental change. A lost race re-scans and recomputes, because republishing
+        a document computed before the race would overwrite whatever the other writer just added.
         """
-        rows = self._scan()
-        # SOURCE pointers share `sk=RECIPE`; only a recipe row carries a body.
-        recipes = [_stored_recipe(row) for row in rows if row["sk"] == RECIPE_SK and "body" in row]
-        answers = [_answer_from_row(row) for row in rows if str(row["sk"]).startswith(ANSWER_PREFIX)]
-        projection = build_projection([recipe for recipe in recipes if recipe is not None], answers)
-        written = self._publish(lambda _current: projection, what="a full rebuild")
-        return ProjectionWrite(recipes=len(projection.recipes), written=written)
+        document: RecipeProjection | None = None
+
+        def build(_current: RecipeProjection, refresh: bool) -> RecipeProjection:
+            nonlocal document
+            if document is None or refresh:
+                document = self._projection_from_table()
+            return document
+
+        written = self._publish(build, what="a full rebuild", attempts=_MAX_REBUILD_ATTEMPTS)
+        return ProjectionWrite(recipes=len(document.recipes) if document else 0, written=written)
 
     def projection(self) -> RecipeProjection:
         """The cached projection document, as planning sees it."""
@@ -277,11 +295,25 @@ class DynamoCorpusBackend:
     def write_projection(self, projection: RecipeProjection) -> bool:
         """Publish a projection built from data written outside the table (the migration). True when written.
 
-        The document is complete, so it is published as-is, but still against the object version: a recipe
-        another writer published mid-run is retried over rather than silently dropped while it lasts (the
-        next import of it republishes its entry).
+        The document comes from the source corpus, so a lost race re-derives from the table instead of
+        republishing the snapshot: a recipe imported while the migration ran stays in the projection.
         """
-        return self._publish(lambda _current: projection, what="the migration")
+        document = {"current": projection}
+
+        def build(_current: RecipeProjection, refresh: bool) -> RecipeProjection:
+            if refresh:
+                document["current"] = self._projection_from_table()
+            return document["current"]
+
+        return self._publish(build, what="the migration", attempts=_MAX_REBUILD_ATTEMPTS)
+
+    def _projection_from_table(self) -> RecipeProjection:
+        """The whole projection, scanned back out of the table."""
+        rows = self._scan()
+        # SOURCE pointers share `sk=RECIPE`; only a recipe row carries a body.
+        recipes = [_stored_recipe(row) for row in rows if row["sk"] == RECIPE_SK and "body" in row]
+        answers = [_answer_from_row(row) for row in rows if str(row["sk"]).startswith(ANSWER_PREFIX)]
+        return build_projection([recipe for recipe in recipes if recipe is not None], answers)
 
     # -- projection cache ---------------------------------------------------------------------------
 
@@ -307,30 +339,38 @@ class DynamoCorpusBackend:
             return snapshot, RecipeProjection()
         return snapshot, loads(snapshot.data)
 
-    def _publish(self, derive: Callable[[RecipeProjection], RecipeProjection], *, what: str) -> bool:
-        """Merge `derive` into the freshest projection and publish it, or lose the version race and retry.
+    def _publish(
+        self,
+        build: Callable[[RecipeProjection, bool], RecipeProjection],
+        *,
+        what: str,
+        attempts: int = _MAX_PUBLISH_ATTEMPTS,
+    ) -> bool:
+        """Publish the document `build` returns for the object's current state, or lose the race and retry.
 
-        `derive` is applied again on every attempt, against whatever the object holds by then, so no other
-        writer's entry is dropped. Returns False when the document already says what `derive` would write.
+        `build(current, refresh)` is called on every attempt: `refresh` is False on the first try and True
+        after a lost race, so a merge re-applies itself to the fresh document, and a full rebuild recomputes
+        from the table instead of republishing a snapshot taken before the other writer's change.
+        Returns False when the object already says what `build` would write.
         """
         last_error: Exception | None = None
-        for attempt in range(_MAX_PUBLISH_ATTEMPTS):
+        for attempt in range(attempts):
             snapshot, current = self._fresh_projection()
-            merged = derive(current)
-            data = dumps(merged)
+            document = build(current, attempt > 0)
+            data = dumps(document)
             if data == snapshot.data:
-                self._remember(snapshot, merged)
+                self._remember(snapshot, document)
                 return False
             try:
                 if self._projections.store(data, etag=snapshot.etag):
-                    self._remember(ProjectionSnapshot(data=data, etag=None), merged)
+                    self._remember(ProjectionSnapshot(data=data, etag=None), document)
                     return True
             except ClientError as error:
-                if not _is_throttle(error):
+                if not _is_publish_retryable(error):
                     last_error = error
                     break
                 last_error = error
-            if attempt < _MAX_PUBLISH_ATTEMPTS - 1:
+            if attempt < attempts - 1:
                 time.sleep(random.uniform(0.02, min(0.02 * 2**attempt, 0.5)))  # noqa: S311 - backoff jitter
         logger.error(
             "recipe projection publish failed; the table has the change and planning will not see it until the"
@@ -338,7 +378,7 @@ class DynamoCorpusBackend:
             extra={"table": self._table, "change": what, "error": repr(last_error)},
         )
         raise ProjectionPublishError(
-            f"could not publish the recipe projection ({what}) after {_MAX_PUBLISH_ATTEMPTS} attempts. "
+            f"could not publish the recipe projection ({what}) after {attempts} attempts. "
             f"The table holds the change; rebuild the projection with: {_REBUILD_COMMAND}"
         ) from last_error
 
@@ -466,8 +506,10 @@ def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
 def item_write_units(item: dict[str, Any]) -> int:
     """What DynamoDB charges to write one item: 1 unit per KiB of attribute names and values, rounded up.
 
-    Counted from the item itself so a caller pacing writes (the migration) charges exactly what the write
-    it is about to make will cost, not an estimate from the recipe body alone.
+    Sized the way DynamoDB sizes an item, not the way JSON encodes it: a string attribute costs its UTF-8
+    bytes (no quotes or escapes), a number its significant digits, a set its elements, and a list or map a
+    small container overhead. Counted from the item the write will send, so a caller pacing writes charges
+    what the write costs rather than a guess from the recipe body.
     """
     return max(1, math.ceil(_item_size_bytes(item) / 1024))
 
@@ -483,10 +525,24 @@ def answer_write_units(answer: RecipeAnswer) -> int:
 
 
 def _item_size_bytes(item: dict[str, Any]) -> int:
-    return sum(
-        len(str(name).encode("utf-8")) + len(json.dumps(value, default=str).encode("utf-8"))
-        for name, value in item.items()
-    )
+    return sum(len(str(name).encode("utf-8")) + _value_size_bytes(value) for name, value in item.items())
+
+
+def _value_size_bytes(value: Any) -> int:
+    """The bytes DynamoDB stores for one attribute value."""
+    if isinstance(value, str):
+        return len(value.encode("utf-8"))
+    if isinstance(value, bool):
+        return 1
+    if isinstance(value, (int, float, Decimal)):
+        return len(str(value).encode("utf-8"))  # DynamoDB charges a number by its significant digits
+    if isinstance(value, bytes | bytearray):
+        return len(value)
+    if isinstance(value, list | tuple):
+        return 3 + sum(_value_size_bytes(element) for element in value)
+    if isinstance(value, dict):
+        return 3 + sum(len(str(key).encode("utf-8")) + _value_size_bytes(element) for key, element in value.items())
+    return len(str(value).encode("utf-8"))
 
 
 def _recipe_body(recipe: StoredRecipe) -> str:
@@ -497,6 +553,14 @@ def _recipe_body(recipe: StoredRecipe) -> str:
             f"recipe {recipe.external_id!r} is {size} bytes, over the corpus's {MAX_RECIPE_BYTES} byte budget"
         )
     return body
+
+
+_TRANSIENT_S3_CODES = {"SlowDown", "RequestTimeout", "InternalError", "ServiceUnavailable", "RequestLimitExceeded"}
+
+
+def _is_publish_retryable(error: ClientError) -> bool:
+    """Whether a publication error is worth backing off and retrying: Dynamo throttling or an S3 blip."""
+    return _is_throttle(error) or error.response.get("Error", {}).get("Code") in _TRANSIENT_S3_CODES
 
 
 def _is_throttle(error: ClientError) -> bool:

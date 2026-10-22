@@ -65,3 +65,8 @@ class InMemoryProjectionStore:
             return False
         self._object.put(data)
         return True
+
+    def delete(self) -> None:
+        """Model an object deleted by someone else between a writer's read and its conditional write."""
+        self._object.data = None
+        self._object.version = -1

@@ -70,19 +70,18 @@ class RecipeAnswer(BaseModel):
 
 
 def latest_per_question(answers: Any) -> list[RecipeAnswer]:
-    """One answer per (recipe, question): the most recently computed one.
+    """One answer per (recipe, question, criteria hash): the most recently computed for that wording.
 
-    A question keeps every answer it has ever had, keyed by criteria hash, so a reworded question leaves the
-    previous wording's answer beside the new one. The producer only asks what is missing or stale, so the
-    newest answer is the one the current wording produced; keeping both would let an old criteria hash win.
+    A reworded question leaves the previous wording's answer beside the new one, and only the reader knows
+    which wording is current (that lives with the questions, not in the store). Collapsing to one answer per
+    question here would throw the current answer away whenever an older wording was computed later or tied on
+    the timestamp, so each version is kept and the current-wording choice is left to `DietaryDecisions`
+    (and F2's runner).
     """
-    latest: dict[tuple[str, str], RecipeAnswer] = {}
+    latest: dict[tuple[str, str, str], RecipeAnswer] = {}
     for answer in answers:
-        key = (answer.recipe_id, answer.question)
+        key = (answer.recipe_id, answer.question, answer.criteria_hash)
         incumbent = latest.get(key)
-        if incumbent is None or (answer.computed_at, answer.criteria_hash) > (
-            incumbent.computed_at,
-            incumbent.criteria_hash,
-        ):
+        if incumbent is None or answer.computed_at > incumbent.computed_at:
             latest[key] = answer
-    return sorted(latest.values(), key=lambda answer: (answer.recipe_id, answer.question))
+    return sorted(latest.values(), key=lambda answer: (answer.recipe_id, answer.question, answer.criteria_hash))
