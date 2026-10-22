@@ -1,27 +1,29 @@
-"""dietary decisions: stored beside the corpus, read when candidates are chosen.
+"""Dietary decisions: stored beside the corpus, read when candidates are chosen.
 
-Generate never calls the decision model. A producer computes one probability per (recipe, flag), stores
-them as decision answers in the corpus store, and candidate selection reads them back. The decision is
-the only dietary rule: there are no ingredient word lists behind it.
+Generate never calls the decision model. A producer — now the enrichment runner (`recipes/enrichment/`)
+rather than a script of its own — computes one probability per (recipe, flag), stores them as decision
+answers in the corpus store, and candidate selection reads them back. The decision is the only dietary
+rule: there are no ingredient word lists behind it.
 
-An answer is stored under the stable question name `dietary:<flag>` (see `recipes.answers`), so it lands
-in the DynamoDB ANSWER item or the pre-F1 JSONL line without the two stores needing different shapes.
+This module is the **read side**. The questions, their wording and their thresholds live with the enricher
+that asks them (`recipes.enrichment.dietary`, ADR 0025) and are re-exported here so the audit script, the
+tests and callers keep one obvious place to look.
+
+An answer is stored under the stable question name `dietary:<flag>` (see `recipes.answers`), so it lands in
+the DynamoDB ANSWER item or the pre-F1 JSONL line without the two stores needing different shapes.
 """
 
 from __future__ import annotations
 
-import hashlib
 import math
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime  # noqa: TC003 - pydantic resolves the field type at runtime
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from glean.decisions import DEFAULT_MODEL, DecisionError, DecisionModel, NoulCriteria, NoulQuestion
-from glean.observability import logger
+from glean.decisions import DEFAULT_MODEL, DecisionModel
 from glean.recipes.answers import (
     DIETARY_DECISIONS_KEY,
     RecipeAnswer,
@@ -29,12 +31,24 @@ from glean.recipes.answers import (
     dietary_flag,
     dietary_question,
 )
+from glean.recipes.enrichment.dietary import (
+    DIETARY_FLAGS,
+    PEANUT_FREE,
+    PEANUT_FREE_THRESHOLD,
+    PREFERENCE_THRESHOLD,
+    THRESHOLDS,
+    TREE_NUT_FREE,
+    TREE_NUT_FREE_THRESHOLD,
+    dietary_enrichment_question,
+    dietary_questions,
+)
+from glean.recipes.enrichment.enricher import question_hash
+from glean.recipes.enrichment.runner import CorpusUnavailableError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from glean.decisions import DecisionClient
-    from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
+    from glean.recipes.corpus import CorpusBackend
     from glean.recipes.search_index import RecipeSummary
 
 __all__ = [
@@ -43,9 +57,12 @@ __all__ = [
     "DIETARY_FLAGS",
     "LEGACY_NUT_FREE",
     "PEANUT_FREE",
+    "PEANUT_FREE_THRESHOLD",
+    "PREFERENCE_THRESHOLD",
+    "THRESHOLDS",
     "TREE_NUT_FREE",
+    "TREE_NUT_FREE_THRESHOLD",
     "CorpusUnavailableError",
-    "CoverageReport",
     "DietaryCalibration",
     "DietaryDecision",
     "DietaryDecisionStore",
@@ -54,19 +71,11 @@ __all__ = [
     "content_fingerprint",
     "dietary_answers",
     "dietary_questions",
-    "produce_missing_decisions",
     "question_hash",
 ]
 
-_EVERYTHING = 1_000_000
-_CHECKPOINT_EVERY = 25
-
-TREE_NUT_FREE = "tree-nut-free"
-PEANUT_FREE = "peanut-free"
 # Spelled by older app builds, which had one nut flag. It stands for both allergies.
 LEGACY_NUT_FREE = "nut-free"
-# Flags the decision model is asked about. Others (Keto, Paleo) are left to the meal-plan model.
-DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", TREE_NUT_FREE, PEANUT_FREE)
 
 # Thresholds, model identity and their provenance live together: a flag's cutoff is only meaningful for the
 # model it was measured against, so the two are one reviewed value rather than separate constants.
@@ -134,18 +143,10 @@ class DietaryCalibration:
 CALIBRATED_DIETARY = DietaryCalibration(
     model=DEFAULT_MODEL,
     # Exclude when the probability that the recipe breaks the flag reaches the threshold.
-    thresholds=MappingProxyType({TREE_NUT_FREE: 0.3, PEANUT_FREE: 0.3}),
-    default_threshold=0.5,
+    thresholds=MappingProxyType(dict(THRESHOLDS)),
+    default_threshold=PREFERENCE_THRESHOLD,
     evidence=_CALIBRATION_EVIDENCE,
 )
-TREE_NUT_FREE_THRESHOLD = CALIBRATED_DIETARY.threshold_for(TREE_NUT_FREE)
-PEANUT_FREE_THRESHOLD = CALIBRATED_DIETARY.threshold_for(PEANUT_FREE)
-PREFERENCE_THRESHOLD = CALIBRATED_DIETARY.default_threshold
-THRESHOLDS = CALIBRATED_DIETARY.thresholds
-
-
-class CorpusUnavailableError(Exception):
-    """Candidate selection can't see any corpus recipe, so there is nothing coverage could be measured against."""
 
 
 class DietaryDecision(BaseModel):
@@ -162,11 +163,6 @@ class DietaryDecision(BaseModel):
     computed_at: datetime = Field(description="When the decision was computed.")
 
 
-def question_hash(question: NoulQuestion) -> str:
-    """Identifies the question a decision answered, so rewording a flag's criteria voids its old decisions."""
-    return hashlib.sha256(question.model_dump_json().encode()).hexdigest()
-
-
 class DietaryDecisionStore:
     """Dietary decisions as corpus answers: one per (recipe, flag), through whichever backend is open."""
 
@@ -174,8 +170,21 @@ class DietaryDecisionStore:
         self._corpus = corpus
 
     def load(self) -> list[DietaryDecision]:
-        decisions = (_decision_from_answer(answer) for answer in self._corpus.answers())
-        return [decision for decision in decisions if decision is not None]
+        """Every stored dietary decision, one per (recipe, flag).
+
+        A reworded question leaves its old answer beside the new one — a second item in dynamo mode, a
+        second line in the blob corpus — so the answer that replied to the question as it now reads wins.
+        When none did, the choice is arbitrary but stable rather than dependent on storage order.
+        """
+        chosen: dict[tuple[str, str], RecipeAnswer] = {}
+        for answer in self._corpus.answers():
+            flag = dietary_flag(answer.question)
+            if flag is None:
+                continue
+            key = (answer.recipe_id, flag)
+            if key not in chosen or _rank(answer, flag) > _rank(chosen[key], flag):
+                chosen[key] = answer
+        return [_decision_from_answer(answer) for answer in chosen.values()]
 
     def save(self, decisions: list[DietaryDecision]) -> None:
         self._corpus.save_answers(dietary_answers(decisions))
@@ -198,11 +207,10 @@ def _answer_from_decision(decision: DietaryDecision) -> RecipeAnswer:
     )
 
 
-def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision | None:
-    """The dietary decision a stored answer carries, or None when another enricher owns the question."""
+def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision:
+    """The dietary decision a stored answer carries. Only called for answers naming a dietary question."""
     flag = dietary_flag(answer.question)
-    if flag is None:
-        return None
+    assert flag is not None  # noqa: S101 - the caller filtered on exactly this
     return DietaryDecision(
         recipe_id=answer.recipe_id,
         flag=flag,
@@ -214,14 +222,19 @@ def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision | None:
     )
 
 
+def _rank(answer: RecipeAnswer, flag: str) -> tuple[bool, str]:
+    """Order answers for one (recipe, flag): the one that answered the current wording first."""
+    question = dietary_enrichment_question(flag)
+    return (question is not None and answer.criteria_hash == question.criteria_hash, answer.criteria_hash)
+
+
 class DietaryDecisions:
-    """Stored decisions, looked up by (recipe id, flag), read under one calibration.
+    """Stored decisions, looked up by (recipe id, flag).
 
     A (recipe, flag) can have several stored answers: the table keys them by criteria hash, and a reworded
     question leaves the old wording's answer beside the new one. Keep the one that speaks for what is asked
-    now under this calibration's model — an older wording or another model can never shadow it — and among
-    equals the latest computation wins. The corpus answers, the blob JSONL and a projection rebuilt from the
-    table all go through this.
+    now — an older wording can never shadow it — and among equals the latest computation wins. The corpus
+    answers, the blob JSONL and a projection rebuilt from the table all go through this.
     """
 
     def __init__(self, decisions: list[DietaryDecision], *, calibration: DietaryCalibration) -> None:
@@ -258,10 +271,10 @@ def _preferred(candidate: DietaryDecision, incumbent: DietaryDecision, calibrati
 
 
 def _answers_current_question(decision: DietaryDecision, calibration: DietaryCalibration) -> bool:
-    question = _QUESTIONS.get(decision.flag)
+    question = dietary_enrichment_question(decision.flag)
     return (
         question is not None
-        and decision.criteria_hash == question_hash(question)
+        and decision.criteria_hash == question.criteria_hash
         and calibration.model.accepts(decision.model)
     )
 
@@ -270,217 +283,10 @@ def _is_current(decision: DietaryDecision, summary: RecipeSummary, calibration: 
     # Thresholds are calibrated to one model identity (`model` is the endpoint's dated snapshot of it) and to the
     # criteria text; a decision only speaks for the title and ingredients it was asked about.
     # A flag that is no longer asked about (the old nut-free) can't be current, whatever it was computed under.
+    question = dietary_enrichment_question(decision.flag)
     return (
-        decision.flag in _QUESTIONS
+        question is not None
         and calibration.model.accepts(decision.model)
         and decision.content_hash == content_fingerprint(summary.title, summary.ingredient_names)
-        and decision.criteria_hash == question_hash(_QUESTIONS[decision.flag])
+        and decision.criteria_hash == question.criteria_hash
     )
-
-
-# What each question asks, and the household's ingredient policy, given to the model as criteria.
-_QUESTIONS: dict[str, NoulQuestion] = {
-    "vegetarian": NoulQuestion(
-        instructions=(
-            "Does this recipe contain meat, poultry, fish, shellfish or another animal-slaughter product? "
-            "Caesar dressing (anchovies), Thai curry paste (shrimp paste), fish and oyster sauce and meat stock "
-            "all count, as do Worcestershire sauce (anchovies), lard, suet and gelatine. "
-            "Parmesan and pesto do not count. Meat-free, vegan and plant-based substitutes are not meat."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains meat, fish, shellfish, gelatine, anchovy or shrimp paste.",
-            false="No ingredient is or contains meat, fish or shellfish. Parmesan and pesto are allowed.",
-        ),
-    ),
-    "vegan": NoulQuestion(
-        instructions=(
-            "Does this recipe contain any animal product? "
-            "Naan bread (usually made with yoghurt or milk), pesto (made with cheese), mayonnaise (eggs), honey "
-            "and Worcestershire sauce (anchovies) count. Meat-free, vegan and plant-based substitutes, cocoa butter, "
-            "peanut and nut butters are not animal products."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains meat, fish, dairy, eggs or honey.",
-            false="No ingredient is or contains an animal product. Coconut milk and plant milks are fine.",
-        ),
-    ),
-    "dairy-free": NoulQuestion(
-        instructions=(
-            "Does this recipe contain dairy? "
-            "Whey, buttermilk, ghee, naan bread (usually made with yoghurt or milk) and pesto (made with cheese) "
-            "count. "
-            "Dairy-free and plant-based substitutes, oat and coconut cream, cocoa butter, peanut and nut butters "
-            "are not dairy."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains milk, cheese, butter, cream, yoghurt, whey or buttermilk.",
-            false="No ingredient is or contains dairy. Coconut milk and plant milks are fine.",
-        ),
-    ),
-    "gluten-free": NoulQuestion(
-        instructions=(
-            "Does this recipe contain gluten? Oats count as gluten unless the recipe says gluten-free oats. "
-            "Malt vinegar, soy sauce, couscous, barley and rye count, as do gnocchi, wraps, flour tortillas, "
-            "noodles and pasta unless labelled gluten-free, and hoisin, teriyaki and kecap manis (made with soy "
-            "sauce). Rice, corn (corn tortillas), gram, chickpea, buckwheat, tapioca, potato, coconut and almond "
-            "flours are not gluten."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains wheat, barley, rye, malt or oats that aren't gluten-free.",
-            false="No ingredient is or contains gluten. Gluten-free oats, rice and cornflour are fine.",
-        ),
-    ),
-    TREE_NUT_FREE: NoulQuestion(
-        instructions=(
-            "Does this recipe contain tree nuts or anything made from them? "
-            "Almonds, cashews, hazelnuts, walnuts, pecans, pistachios, macadamias, Brazil nuts and pine nuts count, "
-            "so pesto counts. Marzipan, frangipane, Nutella and other hazelnut spreads, dukkah, romesco, praline "
-            "and almond milk count, as does an unspecified nut or nut butter, which may be a tree nut. "
-            "A curry paste, seasoning or sauce is not a tree nut unless the name says it has one: assume none is "
-            "hidden inside. Peanuts, peanut butter and satay are not tree nuts. "
-            "Coconut, coconut milk, nutmeg and seeds are not nuts, and an ingredient labelled nut-free is not a nut."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains a tree nut or pine nut, or a product made from them.",
-            false="No ingredient is or contains a tree nut. Peanuts, coconut and nutmeg are not tree nuts.",
-        ),
-    ),
-    PEANUT_FREE: NoulQuestion(
-        instructions=(
-            "Does this recipe contain peanuts or anything made from them? "
-            "Peanut butter, groundnut oil, satay and satay sauce count, as does an unspecified nut "
-            "or nut butter, which may be peanut. Tree nuts such as almonds, cashews, walnuts and pine nuts "
-            "are not peanuts. Coconut, coconut milk, nutmeg and seeds are not peanuts, and an ingredient "
-            "labelled nut-free or peanut-free is not a peanut."
-        ),
-        criteria=NoulCriteria(
-            true="At least one ingredient is or contains peanut or groundnut, or a product made from them.",
-            false="No ingredient is or contains peanut. Tree nuts, coconut, coconut milk and nutmeg are not peanuts.",
-        ),
-    ),
-}
-
-
-def dietary_questions(flags: tuple[str, ...] = DIETARY_FLAGS) -> dict[str, NoulQuestion]:
-    return {flag: _QUESTIONS[flag] for flag in flags}
-
-
-@dataclass
-class CoverageReport:
-    """What a producer run found and did. Coverage counts (recipe, flag) pairs with a current decision."""
-
-    recipes: int
-    flags: int
-    covered: int = 0
-    computed: int = 0
-    failures: int = 0
-    uncovered: list[str] = field(default_factory=list)  # recipe ids still missing a decision
-
-    @property
-    def expected(self) -> int:
-        return self.recipes * self.flags
-
-    @property
-    def coverage(self) -> float:
-        return self.covered / self.expected if self.expected else 1.0
-
-    def render(self) -> str:
-        lines = [
-            f"Recipes: {self.recipes}",
-            f"Decisions computed this run: {self.computed}",
-            f"Coverage: {self.covered}/{self.expected} ({self.coverage:.1%})",
-        ]
-        if self.uncovered:
-            lines.append(f"Recipes without full coverage ({len(self.uncovered)}): {', '.join(self.uncovered)}")
-        return "\n".join(lines)
-
-
-def _contract(model: DecisionModel) -> str:
-    return " or ".join(repr(base) for base in (model.request, *model.served))
-
-
-def produce_missing_decisions(
-    corpus: RecipeCorpusStore,
-    client: DecisionClient,
-    *,
-    calibration: DietaryCalibration = CALIBRATED_DIETARY,
-    flags: tuple[str, ...] = DIETARY_FLAGS,
-    max_workers: int = 8,
-) -> CoverageReport:
-    """Ask the decision model about each (recipe, flag) lacking a current decision, and store the answers.
-
-    One request per recipe carries all its missing flags. A recipe the model can't answer is
-    left uncovered (and so excluded under every flag) and retried on the next run. A client asking a
-    model the calibration doesn't cover is refused before any request or write.
-    """
-    # The whole contract, not just the request id: a client that also accepts another model's answers would
-    # store rows the calibrated reader then rejects while still reporting full coverage.
-    if client.model != calibration.model:
-        raise UncalibratedModelError(
-            f"The dietary calibration covers {_contract(calibration.model)}, not {_contract(client.model)}: "
-            "measure the new model's cutoffs before it decides anything"
-        )
-    store = DietaryDecisionStore(corpus.store)
-    # The recipes Generate can select: sample_corpus_candidates searches the same index.
-    summaries, _ = corpus.search(per_page=_EVERYTHING)
-    if not summaries:
-        raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
-    by_id = {summary.external_id: summary for summary in summaries}
-    decisions = {
-        (d.recipe_id, d.flag): d
-        for d in store.load()
-        if d.recipe_id in by_id and _is_current(d, by_id[d.recipe_id], calibration)
-    }
-    report = CoverageReport(recipes=len(summaries), flags=len(flags))
-
-    work = [
-        (summary, missing)
-        for summary in summaries
-        if (missing := tuple(flag for flag in flags if (summary.external_id, flag) not in decisions))
-    ]
-    done = 0
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_ask, client, summary, missing, calibration): summary for summary, missing in work}
-        for future in as_completed(futures):
-            summary = futures[future]
-            try:
-                answered = future.result()
-            except DecisionError as exc:
-                report.failures += 1
-                logger.warning("dietary decision failed", extra={"recipe_id": summary.external_id, "error": str(exc)})
-                continue
-            for decision in answered:
-                decisions[(decision.recipe_id, decision.flag)] = decision
-            report.computed += len(answered)
-            done += 1
-            if done % _CHECKPOINT_EVERY == 0:
-                store.save(list(decisions.values()))
-    store.save(list(decisions.values()))
-
-    report.covered = sum(1 for summary in summaries for flag in flags if (summary.external_id, flag) in decisions)
-    report.uncovered = sorted(
-        summary.external_id
-        for summary in summaries
-        if any((summary.external_id, flag) not in decisions for flag in flags)
-    )
-    return report
-
-
-def _ask(
-    client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...], calibration: DietaryCalibration
-) -> list[DietaryDecision]:
-    state = {"recipe_title": summary.title, "ingredients": summary.ingredient_names}
-    answer = client.decide(state, dietary_questions(flags))
-    computed_at = datetime.now(UTC)
-    return [
-        DietaryDecision(
-            recipe_id=summary.external_id,
-            flag=flag,
-            probability=answer.noul(flag).noul,
-            model=calibration.served_identity(answer.model),
-            content_hash=content_fingerprint(summary.title, summary.ingredient_names),
-            criteria_hash=question_hash(_QUESTIONS[flag]),
-            computed_at=computed_at,
-        )
-        for flag in flags
-    ]
