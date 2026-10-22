@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import time
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 from urllib.parse import quote
 from weakref import WeakKeyDictionary
 
@@ -70,6 +70,14 @@ class CorpusBackend(Protocol):
 
     def save(self, recipe: StoredRecipe) -> None:
         """Write the recipe and keep the summaries current."""
+        ...
+
+    def publish(self, recipe: StoredRecipe) -> bool:
+        """Make an already-stored recipe visible to search and planning, without rewriting it.
+
+        Idempotent, and the repair path for a summary/projection publish that failed earlier. Returns
+        whether anything changed.
+        """
         ...
 
     def get(self, recipe_id: str) -> StoredRecipe | None: ...
@@ -124,6 +132,14 @@ class BlobCorpusBackend:
         key = recipe_blob_key(recipe.external_id)
         self.blobs.write(key, content)
         self._upsert_summary(RecipeSummary.from_recipe(recipe, key=key))
+
+    def publish(self, recipe: StoredRecipe) -> bool:
+        summary = RecipeSummary.from_recipe(recipe, key=recipe_blob_key(recipe.external_id))
+        index = self.index()
+        if index is not None and index.by_id(recipe.external_id) == summary:
+            return False
+        self._upsert_summary(summary)
+        return True
 
     def get(self, recipe_id: str) -> StoredRecipe | None:
         index = self.index()
@@ -223,18 +239,15 @@ class RecipeCorpusStore:
     """The corpus as callers see it: one interface over whichever backend is configured."""
 
     def __init__(self, store: BlobStore | CorpusBackend | None = None) -> None:
-        # `store` is the backend seam. A bare BlobStore is the local/S3 blob adapter, which is what every
-        # caller and test passes; `None` opens the one `RECIPE_STORE` selects.
-        if store is None:
-            self.store: CorpusBackend = get_corpus_backend()
-        elif isinstance(store, CorpusBackend):
-            self.store = store
-        else:
-            self.store = BlobCorpusBackend(store)
+        # `store` is the backend seam; `None` opens the one `RECIPE_STORE` selects.
+        self.store: CorpusBackend = get_corpus_backend() if store is None else _as_backend(store)
 
     def save(self, recipe: StoredRecipe) -> StoredRecipe:
         self.store.save(recipe)
         return recipe
+
+    def publish(self, recipe: StoredRecipe) -> bool:
+        return self.store.publish(recipe)
 
     def get(self, recipe_id: str) -> StoredRecipe | None:
         return self.store.get(recipe_id)
@@ -300,6 +313,17 @@ def _recipe_store() -> str:
         return get_settings().recipe_store
     except ValidationError:
         return "blobs"
+
+
+def _as_backend(store: BlobStore | CorpusBackend) -> CorpusBackend:
+    """The corpus backend for `store`: a bare BlobStore (every existing caller passes one) is the blob adapter.
+
+    Discriminated on the corpus methods rather than `isinstance`, which would reject a backend that does not
+    yet implement a newly added seam method.
+    """
+    if hasattr(store, "answers") or hasattr(store, "index"):
+        return cast("CorpusBackend", store)
+    return BlobCorpusBackend(store)
 
 
 def _answer_order(answer: RecipeAnswer) -> tuple[str, str]:

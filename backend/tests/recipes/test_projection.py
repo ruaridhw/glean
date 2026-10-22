@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from moto import mock_aws
 
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
@@ -97,19 +98,40 @@ def test_projection_drops_an_answer_whose_recipe_has_changed_since_it_was_asked(
     assert projection.by_id("rec_gone") is None
 
 
-def test_the_projection_keeps_only_the_latest_answer_for_each_question() -> None:
+@pytest.mark.parametrize("stale_is_newer", [True, False])
+@pytest.mark.parametrize("stale_hash", ["f" * 64, "0" * 64])
+def test_the_projection_keeps_every_criteria_version_so_the_reader_can_pick(
+    stale_is_newer: bool, stale_hash: str
+) -> None:
+    # Collapsing to one answer here would throw the current-wording answer away whenever an older one was
+    # computed later or ties on the timestamp; the reader (DietaryDecisions) decides which wording is current.
     stale = _answer("rec_tomato_pasta", "vegan", 0.9).model_copy(
-        update={"criteria_hash": "f" * 64, "computed_at": datetime(2026, 9, 1, tzinfo=UTC)}
+        update={"criteria_hash": stale_hash, "computed_at": datetime(2026, 10, 22, tzinfo=UTC)}
     )
     current = _answer("rec_tomato_pasta", "vegan", 0.02).model_copy(
-        update={"computed_at": datetime(2026, 10, 22, tzinfo=UTC)}
+        update={"computed_at": datetime(2026, 9, 1, tzinfo=UTC)}
     )
 
     projection = build_projection(synthetic_corpus(), [stale, current])
 
     answered = projection.by_id("rec_tomato_pasta")
     assert answered is not None
-    assert [(answer.question, answer.probability) for answer in answered.answers] == [("dietary:vegan", 0.02)]
+    assert sorted(answer.criteria_hash for answer in answered.answers) == sorted([stale_hash, current.criteria_hash])
+
+
+def test_the_projection_keeps_only_the_latest_answer_for_one_wording_of_a_question() -> None:
+    older = _answer("rec_tomato_pasta", "vegan", 0.9).model_copy(
+        update={"computed_at": datetime(2026, 9, 1, tzinfo=UTC)}
+    )
+    newer = _answer("rec_tomato_pasta", "vegan", 0.02).model_copy(
+        update={"computed_at": datetime(2026, 10, 22, tzinfo=UTC)}
+    )
+
+    projection = build_projection(synthetic_corpus(), [older, newer])
+
+    answered = projection.by_id("rec_tomato_pasta")
+    assert answered is not None
+    assert [(answer.criteria_hash, answer.probability) for answer in answered.answers] == [(older.criteria_hash, 0.02)]
 
 
 def test_a_projection_with_one_recipe_replaced_keeps_the_others_and_stays_sorted() -> None:
@@ -194,6 +216,33 @@ def test_the_s3_projection_store_creates_once_and_rejects_a_stale_writer() -> No
         assert store.store(b"three", etag=current.etag) is True
         assert store.store(b"four", etag=current.etag) is False  # the etag it read is now stale
         assert store.read() == b"three"
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["ConditionalRequestConflict", "PreconditionFailed", "NoSuchKey", "SlowDown", "RequestTimeout", "InternalError"],
+)
+def test_the_s3_projection_store_reports_a_race_or_a_blip_as_retryable(code: str) -> None:
+    client = _FailingS3Client(code)
+
+    assert S3ProjectionStore("bucket", region="eu-west-2", client=client).store(b"{}", etag='"1"') is False
+
+
+def test_the_s3_projection_store_still_raises_a_real_refusal() -> None:
+    store = S3ProjectionStore("bucket", region="eu-west-2", client=_FailingS3Client("AccessDenied"))
+
+    with pytest.raises(ClientError):
+        store.store(b"{}", etag='"1"')
+
+
+class _FailingS3Client:
+    """An S3 client whose PutObject fails with one error code."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+
+    def put_object(self, **kwargs: object) -> None:
+        raise ClientError({"Error": {"Code": self.code}}, "PutObject")
 
 
 def test_a_stale_writer_cannot_overwrite_the_document_it_did_not_read(tmp_path) -> None:

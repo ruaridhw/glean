@@ -102,13 +102,36 @@ class ProjectionStore(Protocol):
         ...
 
 
-class S3ProjectionStore:
-    def __init__(self, bucket: str, *, region: str, key: str = PROJECTION_KEY) -> None:
-        import boto3  # noqa: PLC0415 - match the inline-boto3 pattern used elsewhere in the codebase
+# S3 answers a lost conditional write in more than one way: a stale ETag, a conditional-request conflict
+# between two conditional writes, or the object disappearing under an If-Match. Transient blips are the same
+# answer as far as a publisher is concerned: read again and retry. Everything else is a real refusal.
+_RETRYABLE_S3_CODES = {
+    "PreconditionFailed",
+    "412",
+    "ConditionalRequestConflict",
+    "409",
+    "NoSuchKey",
+    "404",
+    "OperationAborted",
+    "SlowDown",
+    "RequestTimeout",
+    "InternalError",
+    "ServiceUnavailable",
+    "RequestLimitExceeded",
+}
+# The subset worth re-raising to the publisher, which backs off before trying again.
+_TRANSIENT_S3_CODES = {"SlowDown", "RequestTimeout", "InternalError", "ServiceUnavailable", "RequestLimitExceeded"}
 
+
+class S3ProjectionStore:
+    def __init__(self, bucket: str, *, region: str, key: str = PROJECTION_KEY, client: Any | None = None) -> None:
+        if client is None:
+            import boto3  # noqa: PLC0415 - match the inline-boto3 pattern used elsewhere in the codebase
+
+            client = boto3.client("s3", region_name=region)
         self._bucket = bucket
         self._key = key
-        self._client = boto3.client("s3", region_name=region)
+        self._client = client
 
     def read(self) -> bytes | None:
         return self.load().data
@@ -120,6 +143,8 @@ class S3ProjectionStore:
             response = self._client.get_object(Bucket=self._bucket, Key=self._key)
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code")
+            if code in _TRANSIENT_S3_CODES:
+                raise  # let the publisher back off rather than treat a blip as "no projection"
             if code not in {"NoSuchKey", "404", "NoSuchBucket"}:
                 logger.warning("recipe projection read failed", extra={"key": self._key, "code": code})
             return ProjectionSnapshot(data=None, etag=None)
@@ -142,8 +167,8 @@ class S3ProjectionStore:
         try:
             self._client.put_object(**kwargs)
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {"PreconditionFailed", "412"}:
-                return False
+            if exc.response.get("Error", {}).get("Code") in _RETRYABLE_S3_CODES:
+                return False  # read the object again: the ETag, the conditional race, or the object changed
             raise
         return True
 

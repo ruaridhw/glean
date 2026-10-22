@@ -13,6 +13,7 @@ from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
+    DietaryDecisions,
     DietaryDecisionStore,
     content_fingerprint,
     dietary_questions,
@@ -31,7 +32,8 @@ from glean.recipes.dynamo_corpus import (
     retry_throttled,
     source_pk,
 )
-from glean.recipes.projection import PROJECTION_TTL_SECONDS, loads
+from glean.recipes.projection import PROJECTION_TTL_SECONDS, build_projection, loads
+from glean.recipes.search_index import RecipeSummary
 from glean.recipes.stored import StoredInstruction
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.corpus_fixtures import synthetic_corpus, synthetic_recipe
@@ -65,8 +67,28 @@ class _AlwaysConflictingStore:
         return False
 
 
-class _FailingOnceStore:
-    """An S3 blip on the first publish; the object never moved."""
+class _RefusingStore:
+    """A permanent refusal on the first publish; the object never moved."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.failures = 1
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        if self.failures:
+            self.failures -= 1
+            raise ClientError({"Error": {"Code": "AccessDenied"}}, "PutObject")
+        return self.inner.store(data, etag=etag)
+
+
+class _SlowDownOnceStore:
+    """S3's SlowDown on the first publish: the same object, worth retrying."""
 
     def __init__(self, inner: InMemoryProjectionStore) -> None:
         self.inner = inner
@@ -230,6 +252,41 @@ def test_an_answer_lands_in_the_table_and_in_the_projection(
     assert backend.save_answers([answer]) == 0
 
 
+@pytest.mark.parametrize("stale_is_newer", [True, False])
+@pytest.mark.parametrize("stale_hash", ["f" * 64, "0" * 64])
+def test_the_store_and_a_rebuild_keep_the_current_wording_even_when_the_stale_answer_is_newer(
+    recipes_table: Any, stale_is_newer: bool, stale_hash: str
+) -> None:
+    recipe = next(r for r in synthetic_corpus() if r.external_id == "rec_tomato_pasta")
+    projections = InMemoryProjectionStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=projections)
+    backend.save(recipe)
+    current = _answer("rec_tomato_pasta", "vegan", 0.02)
+    stale = current.model_copy(
+        update={
+            "criteria_hash": stale_hash,
+            "probability": 0.9,
+            "computed_at": current.computed_at if stale_is_newer else datetime(2026, 9, 1, tzinfo=UTC),
+        }
+    )
+    if stale_is_newer:
+        current = current.model_copy(update={"computed_at": datetime(2026, 9, 1, tzinfo=UTC)})
+
+    backend.save_answers([stale, current])
+    backend.rebuild_projection()
+
+    for projection in (backend.projection(), loads(projections.data)):
+        answered = projection.by_id("rec_tomato_pasta")
+        assert answered is not None
+        assert {answer.criteria_hash for answer in answered.answers} == {stale_hash, current.criteria_hash}
+    assert (
+        DietaryDecisions(DietaryDecisionStore(backend).load()).excludes(
+            RecipeSummary.from_recipe(recipe, key="k"), "vegan"
+        )
+        is False
+    )
+
+
 def test_an_answer_for_superseded_recipe_content_is_kept_out_of_the_projection(
     backend: DynamoCorpusBackend, projections: _CountingProjectionStore
 ) -> None:
@@ -352,6 +409,14 @@ def test_answers_from_two_writers_are_all_kept(recipes_table: Any) -> None:
     }
 
 
+def test_a_transient_publish_error_is_retried_within_the_bound(recipes_table: Any) -> None:
+    object_store = InMemoryProjectionStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=_SlowDownOnceStore(object_store))
+
+    assert backend.upsert(synthetic_corpus()[0]) is True
+    assert [recipe.summary.external_id for recipe in _projection(object_store).recipes] == ["rec_tomato_pasta"]
+
+
 def test_a_publish_that_keeps_losing_the_race_is_reported_with_the_repair_command(
     recipes_table: Any, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -370,7 +435,7 @@ def test_a_retry_after_a_failed_publish_repairs_the_projection_without_rewriting
     recipes_table: Any,
 ) -> None:
     object_store = InMemoryProjectionStore()
-    published = _FailingOnceStore(object_store)
+    published = _RefusingStore(object_store)
     backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published)
     recipe = synthetic_corpus()[0]
 
@@ -382,6 +447,120 @@ def test_a_retry_after_a_failed_publish_repairs_the_projection_without_rewriting
 
     assert retried.upsert(recipe) is True  # nothing new to store: only the projection was missing
     assert [entry.summary.external_id for entry in _projection(object_store).recipes] == [recipe.external_id]
+
+
+# -- a full publication must re-read the table, not republish a snapshot -------------------------
+
+
+class _InterleavingStore:
+    """A projection object that lets another writer run before the first conditional publish."""
+
+    def __init__(self, inner: InMemoryProjectionStore, *, before_first_store: Any) -> None:
+        self.inner = inner
+        self.before_first_store = before_first_store
+        self.stores = 0
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        self.stores += 1
+        if self.stores == 1 and self.before_first_store is not None:
+            self.before_first_store()
+        return self.inner.store(data, etag=etag)
+
+
+def test_a_full_rebuild_rescans_the_table_after_losing_the_race(recipes_table: Any) -> None:
+    """The reviewer's reproduction: a rebuild's precomputed document must not overwrite a concurrent save."""
+    first, second = synthetic_corpus()[:2]
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore()).save(first)
+
+    raced = InMemoryProjectionStore()  # the projection is missing: the documented rebuild case
+
+    def other_writer_saves_second() -> None:
+        DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=raced.view()).save(second)
+
+    interleaved = _InterleavingStore(raced.view(), before_first_store=other_writer_saves_second)
+    rebuilt = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=interleaved).rebuild_projection()
+
+    assert interleaved.stores == 2
+    assert rebuilt.recipes == 2
+    assert sorted(recipe.summary.external_id for recipe in _projection(raced).recipes) == sorted(
+        [first.external_id, second.external_id]
+    )
+
+
+def test_the_migrations_publication_rescans_instead_of_republishing_its_snapshot(recipes_table: Any) -> None:
+    """The migration's document comes from the blobs; on a conflict the table is the authority."""
+    first, second = synthetic_corpus()[:2]
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore()).save(first)
+    raced = InMemoryProjectionStore()
+    from_migration = build_projection([first], [])
+
+    def other_writer_saves_second() -> None:
+        DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=raced.view()).save(second)
+
+    interleaved = _InterleavingStore(raced.view(), before_first_store=other_writer_saves_second)
+    target = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=interleaved)
+
+    assert target.write_projection(from_migration) is True
+
+    assert sorted(recipe.summary.external_id for recipe in _projection(raced).recipes) == sorted(
+        [first.external_id, second.external_id]
+    )
+
+
+class _VanishingStore:
+    """The projection object is deleted by someone else between a writer's read and its write."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.vanished = False
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        if etag is not None and not self.vanished:
+            self.vanished = True
+            self.inner.delete()
+            return False
+        return self.inner.store(data, etag=etag)
+
+
+def test_a_publish_survives_the_projection_object_being_deleted_between_read_and_write(
+    recipes_table: Any,
+) -> None:
+    racing = _VanishingStore(InMemoryProjectionStore())
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=racing)
+    first, second = synthetic_corpus()[:2]
+
+    backend.save(first)
+    backend.save(second)
+
+    # The object was deleted by a third party, so the recreated document holds what this writer knows about;
+    # the point is that the publish retried and succeeded rather than failing on NoSuchKey.
+    assert racing.vanished is True
+    assert [recipe.summary.external_id for recipe in _projection(racing.inner).recipes] == [second.external_id]
+
+
+def test_a_rebuild_that_keeps_losing_the_race_gives_up_with_the_repair_command(
+    recipes_table: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    first = synthetic_corpus()[0]
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore()).save(first)
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=_AlwaysConflictingStore(InMemoryProjectionStore()))
+
+    with pytest.raises(ProjectionPublishError, match="build_recipe_index"):
+        backend.rebuild_projection()
+
+    assert any("full rebuild" in record.getMessage() for record in caplog.records)
 
 
 # -- retry policy --------------------------------------------------------------------------------

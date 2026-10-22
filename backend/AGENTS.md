@@ -44,9 +44,13 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
     not change with the setting, which is why the API and the planner never branch on it.
   - The projection is one S3 object published by every writer, so publication is a conditional write
     (`If-Match` on the object ETag, `If-None-Match: *` to create): a writer that loses the version race
-    re-reads and re-applies its change. If publication still fails it raises `ProjectionPublishError` and
-    logs `scripts/build_recipe_index.py --table … --bucket …`; the table keeps the change, so the rebuild
-    heals it. Readers stay on their 5-minute cache.
+    re-reads and re-applies its change, and a full rebuild re-scans the table and recomputes rather than
+    republishing a stale snapshot. If publication still fails it raises `ProjectionPublishError` and logs
+    `scripts/build_recipe_index.py --table … --bucket …`; the table keeps the change, so the rebuild heals
+    it. Readers stay on their 5-minute cache.
+  - `publish(recipe)` on the store makes an already-stored recipe visible again without rewriting it. That is
+    the repair path: a retried import deduped on its source URL calls it, so a 500 from a failed publish is
+    healed by the retry rather than silently returning a recipe planning cannot see.
 
 ### Rolling back to blobs
 
