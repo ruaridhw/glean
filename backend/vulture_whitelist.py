@@ -123,5 +123,5 @@ sync_catalogue  # GET /catalogue route
 # recipes/ (F1/#162): the corpus behind one backend seam
 _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSONL lines)
 
-# recipes/enrichment/ (F2/#163): enrichers declare questions, the runner asks and stores them
+# recipes/enrichment/ (F2): enrichers declare questions, the runner asks and stores them
 HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe side, per ADR 0025

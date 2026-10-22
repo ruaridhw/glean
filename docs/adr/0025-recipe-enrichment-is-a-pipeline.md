@@ -5,7 +5,7 @@ date: 2026-10-22
 
 # Recipe enrichment is a pipeline of declarative enrichers behind one runner
 
-Everything the planner needs to know about a recipe beyond its own text — whether it breaks a dietary flag, its main protein, its active time — costs a decision-model call. Enrichment is therefore a first-class backend package, `recipes/enrichment/` (spec 6.1, F2/#163), not a script per derived fact:
+Everything the planner needs to know about a recipe beyond its own text — whether it breaks a dietary flag, its main protein, its active time — costs a decision-model call. Enrichment is therefore a first-class backend package, `recipes/enrichment/` (spec 6.1, F2), not a script per derived fact:
 
 - **Enrichers declare questions.** An enricher is one family of questions ("dietary", "attributes", "active time"). Each question carries the wording handed to the decision model, its criteria, its confidence bar and the rule that turns a raw answer into a stored value. An enricher never asks, batches or stores anything itself.
 - **The runner asks once per recipe.** For each recipe it collects every question that is missing or stale *across all enrichers* and sends them in one `DecisionClient.decide` request. A recipe with nothing to ask makes no request.
