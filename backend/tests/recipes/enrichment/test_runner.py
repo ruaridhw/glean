@@ -95,6 +95,27 @@ def test_a_reworded_question_re_asks_only_that_question(tmp_path) -> None:
     assert report.question(DINNER).current == 2
 
 
+def test_answers_to_another_wording_live_beside_the_new_one_in_the_table(recipes_table, projections) -> None:
+    """A reworded question is a second ANSWER item, so resume must read both and count the current one."""
+    corpus = _dynamo_corpus(projections)
+    _seed(corpus)
+    other_flags = tuple(flag for flag in DIETARY_FLAGS if flag != "vegan")
+    _seed_answers(corpus, ["rec_pesto", "rec_tomato"], flags=("vegan",), stale_criteria=True)
+    _seed_answers(corpus, ["rec_pesto", "rec_tomato"], flags=other_flags)
+    before = {answer.question for answer in corpus.store.answers_for("rec_pesto") if answer.question == "dietary:vegan"}
+    assert before == {"dietary:vegan"}
+
+    asked = FakeDecisionApi()
+    report = run_enrichment(corpus, asked.client())
+
+    # Only vegan was stale, so the other five answers per recipe were not re-asked.
+    assert {frozenset(request["questions"]) for request in asked.requests} == {frozenset({"dietary:vegan"})}
+    vegan = [answer for answer in corpus.store.answers_for("rec_pesto") if answer.question == "dietary:vegan"]
+    versions = {answer.criteria_hash for answer in vegan}
+    assert len(versions) == 2  # the superseded wording's item is kept beside the new one, by item key design
+    assert report.question("dietary:vegan").current == 2
+
+
 def test_a_changed_recipe_re_asks_all_of_its_questions(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
     run_enrichment(corpus, FakeDecisionApi().client(), enrichers=BOTH_ENRICHERS)
