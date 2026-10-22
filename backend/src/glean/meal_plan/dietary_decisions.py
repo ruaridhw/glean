@@ -170,21 +170,17 @@ class DietaryDecisionStore:
         self._corpus = corpus
 
     def load(self) -> list[DietaryDecision]:
-        """Every stored dietary decision, one per (recipe, flag).
+        """Every stored dietary decision, in whatever order the store returns the answers.
 
-        A reworded question leaves its old answer beside the new one — a second item in dynamo mode, a
-        second line in the blob corpus — so the answer that replied to the question as it now reads wins.
-        When none did, the choice is arbitrary but stable rather than dependent on storage order.
+        A (recipe, flag) can carry more than one — a reworded question leaves its old answer beside the new
+        one — and `DietaryDecisions` is what decides which of them speaks for the recipe. That selection
+        lives there and only there, so the blob JSONL, the table and a rebuilt projection all agree.
         """
-        chosen: dict[tuple[str, str], RecipeAnswer] = {}
-        for answer in self._corpus.answers():
-            flag = dietary_flag(answer.question)
-            if flag is None:
-                continue
-            key = (answer.recipe_id, flag)
-            if key not in chosen or _rank(answer, flag) > _rank(chosen[key], flag):
-                chosen[key] = answer
-        return [_decision_from_answer(answer) for answer in chosen.values()]
+        return [
+            _decision_from_answer(answer)
+            for answer in self._corpus.answers()
+            if dietary_flag(answer.question) is not None
+        ]
 
     def save(self, decisions: list[DietaryDecision]) -> None:
         self._corpus.save_answers(dietary_answers(decisions))
@@ -220,12 +216,6 @@ def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision:
         criteria_hash=answer.criteria_hash,
         computed_at=answer.computed_at,
     )
-
-
-def _rank(answer: RecipeAnswer, flag: str) -> tuple[bool, str]:
-    """Order answers for one (recipe, flag): the one that answered the current wording first."""
-    question = dietary_enrichment_question(flag)
-    return (question is not None and answer.criteria_hash == question.criteria_hash, answer.criteria_hash)
 
 
 class DietaryDecisions:
