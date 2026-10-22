@@ -175,28 +175,23 @@ class _Run:
 class _KnownAnswers:
     """The answers the store has already persisted, per recipe, plus what this run produced.
 
-    Where the backend can read the answers it holds from its own authoritative side — dynamo queries the
-    table's ANSWER items for one recipe — the run asks it, per recipe, and never consults the projection.
-    The projection is published when a run finishes, so a run that died after writing answers (or whose
-    final rebuild failed) would otherwise re-ask, and re-pay for, work it already has.
-
-    A backend without that read (blobs) keeps every answer in one JSONL, so the run reads that once and
-    rewrites it whole; `batch()` is what tells the two apart at write time.
+    Both stores answer `answers_for(recipe_id)` from their authoritative side — a consistent Query on the
+    table's ANSWER items in dynamo mode, the answers JSONL in blob mode — so the runner asks that, per
+    recipe, and never the projection. The projection is only published when a run finishes, so a run that
+    died after writing answers (or whose final rebuild failed) would otherwise re-ask, and re-pay for,
+    work it already has.
     """
 
     def __init__(self, store: CorpusBackend) -> None:
-        self._read = _per_recipe_reader(store)
+        self._store = store
         self._answers: dict[str, list[RecipeAnswer]] = {}
         self._pending: dict[tuple[str, str, str], RecipeAnswer] = {}
-        if self._read is None:
-            for answer in store.answers():
-                self._answers.setdefault(answer.recipe_id, []).append(answer)
 
     def stored(self, recipe_id: str) -> list[RecipeAnswer]:
         """Every answer the store holds for this recipe, published or not."""
-        if recipe_id not in self._answers and self._read is not None:
-            self._answers[recipe_id] = list(self._read(recipe_id))
-        return self._answers.get(recipe_id, [])
+        if recipe_id not in self._answers:
+            self._answers[recipe_id] = list(self._store.answers_for(recipe_id))
+        return self._answers[recipe_id]
 
     def by_question(self, recipe_id: str) -> dict[str, list[RecipeAnswer]]:
         """The same answers grouped by question name, which is how staleness is asked."""
@@ -221,12 +216,6 @@ class _KnownAnswers:
         """What this run produced and has not written yet."""
         return list(self._pending.values())
 
-    def batch(self) -> list[RecipeAnswer]:
-        """What `save_answers` must be handed: this run's delta, or every answer when the store rewrites all."""
-        if self._read is not None:
-            return self.pending()
-        return [answer for answers in self._answers.values() for answer in answers]
-
     def flushed(self) -> None:
         self._pending.clear()
 
@@ -237,17 +226,26 @@ def _flush(corpus: RecipeCorpusStore, known: _KnownAnswers) -> None:
     Dynamo takes the delta with `rebuild_projection=False` (F1's bulk path, the one the migration uses) and
     is rebuilt once at the end: handing it the whole run's answers again would re-put every earlier answer
     at every checkpoint, because the projection it compares against is deliberately not updated until then.
-    The blob store has no projection and rewrites its JSONL in full, so it gets everything.
+
+    The blob store has no such parameter: its `save_answers` rewrites one JSONL, so the flush merges this
+    checkpoint into the file as it stands rather than handing it a batch that would drop the recipes this
+    run never looked at (a `--limit` or `--enricher` run).
     """
-    if not known.pending():
+    pending = known.pending()
+    if not pending:
         return
-    batch = known.batch()
     save_answers = cast("Callable[..., int]", corpus.store.save_answers)
     if "rebuild_projection" in inspect.signature(save_answers).parameters:
-        save_answers(batch, rebuild_projection=False)
+        save_answers(pending, rebuild_projection=False)
     else:
-        save_answers(batch)
+        merged = {_answer_key(answer): answer for answer in corpus.store.answers()}
+        merged.update({_answer_key(answer): answer for answer in pending})
+        save_answers(list(merged.values()))
     known.flushed()
+
+
+def _answer_key(answer: RecipeAnswer) -> tuple[str, str, str]:
+    return (answer.recipe_id, answer.question, answer.criteria_hash)
 
 
 def _report(
@@ -346,16 +344,94 @@ def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:
     return summaries
 
 
-def _per_recipe_reader(store: CorpusBackend) -> Callable[[str], Sequence[RecipeAnswer]] | None:
-    """The store's read of the answers it has *persisted* for one recipe, when it can do that.
+def _stated_active_time(corpus: RecipeCorpusStore) -> int:
+    """How many recipes state an active time (spec 6.1).
 
-    Dynamo can: its answers live as items under `RECIPE#<id>`, so one consistent query says what is
-    already there whatever the projection says. Blobs cannot — one JSONL holds the whole corpus — so they
-    are read once as a batch by `_KnownAnswers` instead. `answers_for` is the seam name this asks for; the
-    private one is F1's current name for the same read, which is what runs today.
+    Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
+    rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
     """
-    for name in ("answers_for", "_answers_for"):
-        reader = getattr(store, name, None)
-        if callable(reader):
-            return cast("Callable[[str], Sequence[RecipeAnswer]]", reader)
-    return None
+    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
+
+
+def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:
+    questions: list[EnrichmentQuestion] = []
+    names: set[str] = set()
+    for enricher in enrichers:
+        for question in enricher.questions():
+            if question.name in names:
+                raise EnrichmentError(f"{question.name!r} is declared by more than one enricher")
+            names.add(question.name)
+            questions.append(question)
+    if not questions:
+        raise EnrichmentError("no enricher declared a question, so there is nothing to ask")
+    return questions
+
+
+def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:
+    """The recipes Generate can select: the same summaries, from the same index or projection."""
+    summaries, _ = corpus.search(per_page=_EVERYTHING)
+    if not summaries:
+        raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
+    return summaries
+
+
+def _stated_active_time(corpus: RecipeCorpusStore) -> int:
+    """How many recipes state an active time (spec 6.1).
+
+    Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
+    rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
+    """
+    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
+
+
+def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:
+    questions: list[EnrichmentQuestion] = []
+    names: set[str] = set()
+    for enricher in enrichers:
+        for question in enricher.questions():
+            if question.name in names:
+                raise EnrichmentError(f"{question.name!r} is declared by more than one enricher")
+            names.add(question.name)
+            questions.append(question)
+    if not questions:
+        raise EnrichmentError("no enricher declared a question, so there is nothing to ask")
+    return questions
+
+
+def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:
+    """The recipes Generate can select: the same summaries, from the same index or projection."""
+    summaries, _ = corpus.search(per_page=_EVERYTHING)
+    if not summaries:
+        raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
+    return summaries
+
+
+def _stated_active_time(corpus: RecipeCorpusStore) -> int:
+    """How many recipes state an active time (spec 6.1).
+
+    Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
+    rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
+    """
+    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
+
+
+def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:
+    questions: list[EnrichmentQuestion] = []
+    names: set[str] = set()
+    for enricher in enrichers:
+        for question in enricher.questions():
+            if question.name in names:
+                raise EnrichmentError(f"{question.name!r} is declared by more than one enricher")
+            names.add(question.name)
+            questions.append(question)
+    if not questions:
+        raise EnrichmentError("no enricher declared a question, so there is nothing to ask")
+    return questions
+
+
+def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:
+    """The recipes Generate can select: the same summaries, from the same index or projection."""
+    summaries, _ = corpus.search(per_page=_EVERYTHING)
+    if not summaries:
+        raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
+    return summaries
