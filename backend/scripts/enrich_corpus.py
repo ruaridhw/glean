@@ -12,6 +12,8 @@ the local corpus only, and a table or bucket whose name contains "prod" is refus
 
     # what would be asked, without calling the model (no API key needed)
     uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --dry-run
+    # the local-only form `make enrich-corpus` runs: refuse any remote store outright
+    uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --local-only
     # fill the local/dev corpus
     uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache
     # the owner's prod run, from the recipe-cache bucket into the recipes table
@@ -54,7 +56,13 @@ def main(
 ) -> int:
     args = _parse_args(argv)
     try:
-        _refuse_prod(args.table, args.bucket, i_am_the_owner=args.i_am_the_owner, writes=not args.dry_run)
+        _refuse_remote(
+            args.table,
+            args.bucket,
+            i_am_the_owner=args.i_am_the_owner,
+            local_only=args.local_only,
+            writes=not args.dry_run,
+        )
         enrichers = _enrichers(args.enricher)
     except (OwnerApprovalError, EnrichmentError) as error:
         print(f"Refusing to run: {error}")
@@ -103,12 +111,30 @@ def _client(*, timeout_s: float) -> DecisionClient:
     return DecisionClient(api_key=SecretStr(api_key), timeout_s=timeout_s)
 
 
-def _refuse_prod(table: str | None, bucket: str | None, *, i_am_the_owner: bool, writes: bool = True) -> None:
-    """A prod table or bucket is off limits unless the owner says so. A dry run writes nothing, so it may look.
+def _refuse_remote(
+    table: str | None,
+    bucket: str | None,
+    *,
+    i_am_the_owner: bool,
+    local_only: bool = False,
+    writes: bool = True,
+) -> None:
+    """Refuse a remote store this invocation is not allowed to touch.
 
-    Both are checked: in blob mode the run rewrites the answers JSONL in the corpus prefix, so a prod
-    bucket is as much a write as a prod table.
+    `--local-only` is what the dev wrapper passes, and it is absolute: no table, no bucket and no owner flag,
+    not even for a read-only dry run, so a command line built elsewhere can never reach a remote store through
+    it. Without it, a prod table or bucket is off limits unless the owner says so — a dry run writes nothing,
+    so it may look. Both are checked, because in blob mode the run rewrites the answers JSONL in the corpus
+    prefix, so a prod bucket is as much a write as a prod table.
     """
+    if local_only:
+        named = [name for name in (table, bucket) if name]
+        if named or i_am_the_owner:
+            raise OwnerApprovalError(
+                f"--local-only refuses {', '.join([*named, *(['--i-am-the-owner'] if i_am_the_owner else [])])}; "
+                "run the CLI directly for a remote store"
+            )
+        return
     if not writes or i_am_the_owner:
         return
     named = [name for name in (table, bucket) if name and "prod" in name.casefold()]
@@ -119,7 +145,11 @@ def _refuse_prod(table: str | None, bucket: str | None, *, i_am_the_owner: bool,
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ask the decision model everything the corpus is missing.")
+    # No abbreviations: `--tab` must not quietly become `--table`, or a wrapper that refuses `--table` by name
+    # can be walked past with a prefix of it.
+    parser = argparse.ArgumentParser(
+        description="Ask the decision model everything the corpus is missing.", allow_abbrev=False
+    )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--bucket", help="S3 recipe-cache bucket: the corpus/ prefix, or the projection with --table.")
     source.add_argument("--local", type=Path, help="Local cache root holding corpus/: the local/dev corpus.")
@@ -136,6 +166,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help=f"Only this enricher (repeatable). This build has: {', '.join(sorted(ENRICHERS))}.",
     )
     parser.add_argument("--timeout", type=float, default=30.0, help="Seconds to wait for each answer.")
+    parser.add_argument(
+        "--local-only",
+        action="store_true",
+        help="Refuse any table or bucket, and the owner flag: only a local corpus. `make enrich-corpus` passes it.",
+    )
     parser.add_argument(
         "--i-am-the-owner",
         action="store_true",

@@ -68,6 +68,10 @@ make enrich-corpus                         # fill the local corpus; exit 1 unles
 uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --workers 8
 ```
 
+`make enrich-corpus` always passes `--local-only`, which makes the CLI refuse a `--table`, `--bucket` or
+`--i-am-the-owner` outright — not just the prod ones, and not even for a dry run — so the dev target cannot
+be walked towards a remote store. The CLI also rejects abbreviated flags, so `--tab` is not `--table`.
+
 The owner runs it against prod by hand after a corpus import, a question rewording or a model bump. The
 script refuses a table or bucket whose name contains `prod` unless `--i-am-the-owner` is passed, and exits
 non-zero unless every recipe has a current answer to every question — an unasked question excludes the
