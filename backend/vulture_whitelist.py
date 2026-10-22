@@ -122,5 +122,4 @@ groups  # CatalogueSyncResponse field
 sync_catalogue  # GET /catalogue route
 
 # recipes/ (F1/#162): the corpus behind one backend seam
-write_projection  # DynamoCorpusBackend.write_projection, called by scripts/migrate_recipe_corpus.py
 _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSONL lines)
