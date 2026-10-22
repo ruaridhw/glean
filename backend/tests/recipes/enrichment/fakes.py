@@ -129,6 +129,7 @@ class CountingBackend(BlobCorpusBackend):
         super().__init__(blobs)
         self.rebuilds = 0
         self.answer_writes = 0
+        self.batches: list[int] = []
 
     def rebuild_index(self) -> int:
         self.rebuilds += 1
@@ -136,4 +137,5 @@ class CountingBackend(BlobCorpusBackend):
 
     def save_answers(self, answers: Sequence[RecipeAnswer]) -> int:
         self.answer_writes += 1
+        self.batches.append(len(answers))
         return super().save_answers(answers)
