@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from scripts import migrate_recipe_corpus
 from tests.conftest import RECIPES_TABLE_NAME
-from tests.recipes.corpus_fixtures import synthetic_corpus
+from tests.recipes.corpus_fixtures import synthetic_corpus, synthetic_recipe
 from tests.recipes.fake_projection import InMemoryProjectionStore
 
 from glean.decisions import DECISION_MODEL
@@ -276,7 +276,10 @@ def test_the_pacer_is_charged_for_the_answers_as_well_as_the_recipes(
     assert elapsed[0] == pytest.approx(planned.wcu / 4)
     assert planned.wcu == sum(
         migrate_recipe_corpus.recipe_wcu(recipe)
-        + sum(migrate_recipe_corpus.answer_write_units(answer) for answer in planned.answers_for(recipe.external_id))
+        + sum(
+            migrate_recipe_corpus.answer_write_units(answer)
+            for answer in planned.answers_planned_for(recipe.external_id)
+        )
         for recipe in planned.recipes
     )
 
@@ -303,14 +306,15 @@ def test_the_estimate_counts_the_item_overhead_and_charges_answers(tmp_path: Pat
     recipe = planned.recipes[0]
 
     assert planned.wcu == sum(
-        migrate_recipe_corpus.recipe_wcu(item) + len(planned.answers_for(item.external_id)) for item in planned.recipes
+        migrate_recipe_corpus.recipe_wcu(item) + len(planned.answers_planned_for(item.external_id))
+        for item in planned.recipes
     )
     assert migrate_recipe_corpus.recipe_wcu(recipe) == 2 * (
         item_write_units(recipe_item(recipe)) + item_write_units(source_item(recipe))
     )
     assert migrate_recipe_corpus.answer_write_units(
-        planned.answers_for(recipe.external_id)[0]
-    ) == dynamo_corpus.item_write_units(dynamo_corpus.answer_item(planned.answers_for(recipe.external_id)[0]))
+        planned.answers_planned_for(recipe.external_id)[0]
+    ) == dynamo_corpus.item_write_units(dynamo_corpus.answer_item(planned.answers_planned_for(recipe.external_id)[0]))
     without_url = recipe.model_copy(update={"source_url": None})
     assert migrate_recipe_corpus.recipe_wcu(without_url) == 2 * item_write_units(recipe_item(without_url))
 
@@ -389,6 +393,47 @@ def test_the_summary_states_what_rolling_back_to_blobs_does_and_does_not_restore
     assert "as of this migration" in out
     assert "NOT in the blobs" in out
     assert "re-run scripts/compute_dietary_decisions.py" in out
+
+
+def test_the_final_projection_is_rebuilt_from_the_table_not_from_the_source(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The reviewer's reproduction: a recipe saved and projected while the migration ran must survive it."""
+    extra = synthetic_recipe("rec_imported_meanwhile", title="Imported Meanwhile", ingredients=["lentils"])
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=projections).save(extra)
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    ids = sorted(recipe.summary.external_id for recipe in _projection(projections).recipes)
+    assert ids == ["rec_bean_tacos", "rec_chicken_curry", "rec_imported_meanwhile", "rec_tomato_pasta"]
+    assert "Projection: 4 recipes, written=False" in capsys.readouterr().out
+
+
+def test_a_migration_over_a_table_that_already_holds_more_than_the_source_keeps_those_recipes(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+) -> None:
+    # The table row exists but was never projected: a source-built document would advertise only the source.
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=projections).save(
+        synthetic_recipe("rec_table_only", title="Table Only", ingredients=["barley"])
+    )
+    projections.delete()
+
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    assert sorted(recipe.summary.external_id for recipe in _projection(projections).recipes) == [
+        "rec_bean_tacos",
+        "rec_chicken_curry",
+        "rec_table_only",
+        "rec_tomato_pasta",
+    ]
 
 
 def test_a_limit_run_leaves_a_consistent_projection_of_what_it_migrated(

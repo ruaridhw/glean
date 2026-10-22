@@ -51,7 +51,9 @@ live.
 
 Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
 cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command
-(`scripts/build_recipe_index.py --table … --bucket …`); the table keeps the change.
+(`scripts/build_recipe_index.py --table … --bucket …`); the table keeps the change. The migration's last step
+is that same full rebuild — a scan of the table, not a document built from the blobs — so a recipe imported
+while it ran is kept; add a few minutes for the scan to the migration's estimate.
 
 **Rolling back to `blobs` is a snapshot rollback.** Nothing in dynamo mode writes the blobs or the dietary
 JSONL, so recipes imported and answers computed while `RECIPE_STORE=dynamo` are not in them. Re-import those

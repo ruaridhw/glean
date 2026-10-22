@@ -32,7 +32,7 @@ from glean.recipes.dynamo_corpus import (
     retry_throttled,
     source_pk,
 )
-from glean.recipes.projection import PROJECTION_TTL_SECONDS, build_projection, loads
+from glean.recipes.projection import PROJECTION_TTL_SECONDS, loads
 from glean.recipes.search_index import RecipeSummary
 from glean.recipes.stored import StoredInstruction
 from tests.conftest import RECIPES_TABLE_NAME
@@ -230,6 +230,42 @@ def test_a_summary_from_the_projection_carries_the_blob_key_that_recipe_would_ha
     assert summaries[0].key == recipe_blob_key("rec_plain")
 
 
+def test_answers_for_reads_only_that_recipes_answers_in_dynamo_mode(backend: DynamoCorpusBackend) -> None:
+    for recipe in synthetic_corpus():
+        backend.save(recipe)
+    answers = [
+        _answer("rec_tomato_pasta", "vegan", 0.02),
+        _answer("rec_tomato_pasta", "peanut-free", 0.02),
+        _answer("rec_bean_tacos", "vegan", 0.02),
+    ]
+    backend.save_answers(answers)
+
+    assert backend.answers_for("rec_tomato_pasta") == sorted(
+        answers[:2], key=lambda answer: (answer.question, answer.criteria_hash)
+    )
+    assert backend.answers_for("rec_missing") == []
+    assert RecipeCorpusStore(backend).answers_for("rec_bean_tacos") == [answers[2]]
+
+
+def test_answers_for_falls_back_to_the_table_even_when_the_projection_is_stale(
+    backend: DynamoCorpusBackend,
+) -> None:
+    recipe = synthetic_corpus()[0]
+    backend.save(recipe)
+    backend.save_answers([_answer(recipe.external_id, "vegan", 0.02)])
+    backend.projection()  # warm this process's read cache before the write another process would make
+
+    # A second process writes an answer; the first one's cache never sees it.
+    other = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=backend._projections)
+    other.save_answers([_answer(recipe.external_id, "peanut-free", 0.02)])
+    backend.projection()
+
+    assert [answer.question for answer in backend.answers_for(recipe.external_id)] == [
+        "dietary:peanut-free",
+        "dietary:vegan",
+    ]
+
+
 def test_an_answer_lands_in_the_table_and_in_the_projection(
     backend: DynamoCorpusBackend, recipes_table: Any, projections: _CountingProjectionStore
 ) -> None:
@@ -417,6 +453,78 @@ def test_a_transient_publish_error_is_retried_within_the_bound(recipes_table: An
     assert [recipe.summary.external_id for recipe in _projection(object_store).recipes] == ["rec_tomato_pasta"]
 
 
+class _SlowReadOnceStore:
+    """S3's SlowDown on the first GET of the projection, then healthy: a blip, not a failure."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.reads = 0
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        self.reads += 1
+        if self.reads == 1:
+            raise ClientError({"Error": {"Code": "SlowDown"}}, "GetObject")
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        return self.inner.store(data, etag=etag)
+
+
+class _BrokenReadStore:
+    """Every GET of the projection fails transiently."""
+
+    def __init__(self) -> None:
+        self.reads = 0
+
+    def read(self) -> bytes | None:
+        return None
+
+    def load(self) -> Any:
+        self.reads += 1
+        raise ClientError({"Error": {"Code": "InternalError"}}, "GetObject")
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        return True
+
+
+def test_a_transient_projection_read_is_retried_within_the_bound(recipes_table: Any) -> None:
+    published = _SlowReadOnceStore(InMemoryProjectionStore())
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published)
+    recipe = synthetic_corpus()[0]
+
+    assert backend.upsert(recipe) is True
+
+    assert published.reads >= 2
+    assert [entry.summary.external_id for entry in _projection(published.inner).recipes] == [recipe.external_id]
+
+
+def test_a_projection_read_that_never_recovers_is_reported_with_the_repair_command(
+    recipes_table: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    published = _BrokenReadStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published)
+    recipe = synthetic_corpus()[0]
+
+    with pytest.raises(ProjectionPublishError, match="build_recipe_index"):
+        backend.save(recipe)
+
+    assert published.reads == 4  # the same bounded attempts as a failed write
+    assert backend.get(recipe.external_id) == recipe
+    assert any("planning will not see it" in record.getMessage() for record in caplog.records)
+
+
+def test_a_transient_read_before_saving_answers_is_retried_too(recipes_table: Any) -> None:
+    object_store = InMemoryProjectionStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=_SlowReadOnceStore(object_store))
+    recipe = synthetic_corpus()[0]
+    backend.save(recipe)
+
+    assert backend.save_answers([_answer(recipe.external_id, "vegan", 0.02)]) == 1
+
+
 def test_a_publish_that_keeps_losing_the_race_is_reported_with_the_repair_command(
     recipes_table: Any, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -488,26 +596,6 @@ def test_a_full_rebuild_rescans_the_table_after_losing_the_race(recipes_table: A
 
     assert interleaved.stores == 2
     assert rebuilt.recipes == 2
-    assert sorted(recipe.summary.external_id for recipe in _projection(raced).recipes) == sorted(
-        [first.external_id, second.external_id]
-    )
-
-
-def test_the_migrations_publication_rescans_instead_of_republishing_its_snapshot(recipes_table: Any) -> None:
-    """The migration's document comes from the blobs; on a conflict the table is the authority."""
-    first, second = synthetic_corpus()[:2]
-    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore()).save(first)
-    raced = InMemoryProjectionStore()
-    from_migration = build_projection([first], [])
-
-    def other_writer_saves_second() -> None:
-        DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=raced.view()).save(second)
-
-    interleaved = _InterleavingStore(raced.view(), before_first_store=other_writer_saves_second)
-    target = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=interleaved)
-
-    assert target.write_projection(from_migration) is True
-
     assert sorted(recipe.summary.external_id for recipe in _projection(raced).recipes) == sorted(
         [first.external_id, second.external_id]
     )
