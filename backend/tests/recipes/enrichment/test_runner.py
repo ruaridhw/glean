@@ -238,6 +238,17 @@ def test_the_report_states_how_many_recipes_give_an_active_time(tmp_path) -> Non
     assert "Recipes with a stated active time: 1/3 (33.3%)" in report.render()
 
 
+def test_the_stated_active_time_count_is_read_from_the_recipes_themselves(recipes_table, projections) -> None:
+    """The projection's summaries are only as fresh as the last rebuild; this number has to be true anyway."""
+    corpus = _dynamo_corpus(projections)
+    _seed(corpus)
+    corpus.save(_recipe("rec_timed", "Ten Minute Noodles", ["noodles"], active_time_mins=10))
+
+    report = run_enrichment(corpus, FakeDecisionApi().client())
+
+    assert (report.stated_active_time, report.recipes) == (1, 3)
+
+
 def test_a_limit_asks_about_the_first_recipes_only(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
     api = FakeDecisionApi()
