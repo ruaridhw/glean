@@ -82,6 +82,12 @@ The run prints a per-question coverage table (current / stale / missing / failed
 many recipes state an active time), writes answers in checkpoints so an interrupted run resumes where it
 stopped, and rebuilds the projection once at the end. `--enricher dietary` narrows it to one enricher.
 
+The number of requests is the corpus times whatever is stale, not the corpus times the questions: a fresh
+migration answered under the current wording asks for nothing, an imported or edited recipe costs one
+request, a reworded question costs one request per recipe, and a model bump costs one request per recipe
+for every question. The final rebuild is a consistent scan of the table rather than another pay-per-call
+run, which is why it happens once at the end and not per recipe.
+
 Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
 cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command
 (`scripts/build_recipe_index.py --table … --bucket …`); the table keeps the change. The migration's last step
