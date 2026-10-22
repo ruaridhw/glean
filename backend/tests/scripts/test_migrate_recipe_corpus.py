@@ -281,6 +281,23 @@ def test_the_pacer_is_charged_for_the_answers_as_well_as_the_recipes(
     )
 
 
+def test_items_are_sized_by_dynamodb_string_bytes_not_json_encoding() -> None:
+    # pk 2 + sk 2 + body 4 attribute-name bytes; values 1 + 1 + 1010 = 1020 bytes, so one unit.
+    assert item_write_units({"pk": "x", "sk": "y", "body": "x" * 1010}) == 1
+    assert item_write_units({"pk": "x", "sk": "y", "body": "x" * 1015}) == 2
+    # A body of JSON text is stored as a plain string: its quotes are not escaped by DynamoDB.
+    assert item_write_units({"pk": "x", "sk": "y", "body": '{"a": "b"}' * 100}) == 1
+
+
+@pytest.mark.parametrize("index", [0, 1, 2])
+def test_each_synthetic_recipe_body_and_pointer_costs_one_write_unit(index: int) -> None:
+    recipe = synthetic_corpus()[index]
+
+    assert item_write_units(recipe_item(recipe)) == 1
+    assert item_write_units(source_item(recipe)) == 1
+    assert migrate_recipe_corpus.recipe_wcu(recipe) == 4
+
+
 def test_the_estimate_counts_the_item_overhead_and_charges_answers(tmp_path: Path, source: RecipeCorpusStore) -> None:
     planned = migrate_recipe_corpus._plan(source)
     recipe = planned.recipes[0]
@@ -322,6 +339,41 @@ def test_an_unreadable_checkpoint_shape_is_reported_and_the_run_starts_fresh(
     out = capsys.readouterr().out
     assert "Ignoring unreadable checkpoint" in out
     assert "Written this run: 3 recipes, 3 answers" in out
+
+
+def test_a_dry_run_with_reset_checkpoint_does_not_touch_the_checkpoint(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    _run(tmp_path, backend, source, projections, "--limit", "1")
+    checkpoint = tmp_path / "checkpoint.json"
+    saved = checkpoint.read_bytes()
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections, "--dry-run", "--reset-checkpoint") == 0
+
+    assert checkpoint.exists()
+    assert checkpoint.read_bytes() == saved
+
+
+def test_resetting_the_checkpoint_on_a_real_run_starts_from_the_beginning(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    _run(tmp_path, backend, source, projections, "--no-checkpoint")
+    checkpoint = tmp_path / "checkpoint.json"
+    checkpoint.write_text('{"owner": "glean-recipes-test|x", "migrated": ["rec_bean_tacos"]}')
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections, "--reset-checkpoint") == 0
+
+    assert "already migrated on an earlier run" not in capsys.readouterr().out
 
 
 def test_the_summary_states_what_rolling_back_to_blobs_does_and_does_not_restore(
