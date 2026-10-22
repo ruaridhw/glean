@@ -216,19 +216,18 @@ class DynamoCorpusBackend:
         return sorted(self._load_projection().projection.answers(), key=lambda a: (a.recipe_id, a.question))
 
     def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
-        """One recipe's stored answers, read from the table (a consistent Query: 1 RCU per 4 KB of answers).
+        """One recipe's stored answers, read from the table: a consistent, paged Query.
 
         The authoritative read: the projection carries the same answers, but a producer deciding what is
-        missing must not be told by a five-minute-old cache.
+        missing must not be told by a five-minute-old cache. DynamoDB pages a Query at 1 MB, and a recipe
+        keeps every historical criteria version, so this reads to the last page rather than the first.
+        Cost: 1 RCU per 4 KB of answers read, so one read unit for an ordinary recipe.
         """
-        rows = self._retry(
-            lambda: self._client.query(
-                TableName=self._table,
-                KeyConditionExpression="pk = :pk AND begins_with(sk, :answers)",
-                ExpressionAttributeValues={":pk": recipe_pk(recipe_id), ":answers": ANSWER_PREFIX},
-                ConsistentRead=True,
-            )
-        )["Items"]
+        rows = self._query(
+            "pk = :pk AND begins_with(sk, :answers)",
+            {":pk": recipe_pk(recipe_id), ":answers": ANSWER_PREFIX},
+            consistent=True,
+        )
         return sorted((_answer_from_row(row) for row in rows), key=lambda a: (a.question, a.criteria_hash))
 
     def save_answers(self, answers: Sequence[RecipeAnswer], *, rebuild_projection: bool = True) -> int:
@@ -468,14 +467,33 @@ class DynamoCorpusBackend:
         self._retry(lambda: self._client.transact_write_items(TransactItems=ops))
 
     def _scan(self) -> list[dict[str, Any]]:
+        """Every item in the table, page by page.
+
+        Every multi-item read in this module goes through `_scan` or `_query`: DynamoDB caps a page (1 MB)
+        and returns `LastEvaluatedKey`, so reading one page and stopping silently truncates.
+        """
+        return self._paged(self._client.scan, {"ConsistentRead": True})
+
+    def _query(self, key_condition: str, values: dict[str, Any], *, consistent: bool = False) -> list[dict[str, Any]]:
+        return self._paged(
+            self._client.query,
+            {
+                "KeyConditionExpression": key_condition,
+                "ExpressionAttributeValues": values,
+                "ConsistentRead": consistent,
+            },
+        )
+
+    def _paged(self, operation: Callable[..., dict[str, Any]], kwargs: dict[str, Any]) -> list[dict[str, Any]]:
+        """Run a `scan`/`query` until DynamoDB stops handing back a `LastEvaluatedKey`."""
         rows: list[dict[str, Any]] = []
-        kwargs: dict[str, Any] = {"TableName": self._table, "ConsistentRead": True}
+        request = {"TableName": self._table, **kwargs}
         while True:
-            page = self._retry(lambda: self._client.scan(**kwargs))
+            page = self._retry(lambda request=request: operation(**request))
             rows.extend(page["Items"])
             if "LastEvaluatedKey" not in page:
                 return rows
-            kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+            request = {**request, "ExclusiveStartKey": page["LastEvaluatedKey"]}
 
     def _retry[T](self, operation: Callable[[], T]) -> T:
         return retry_throttled(operation)

@@ -27,6 +27,7 @@ from glean.recipes.dynamo_corpus import (
     DynamoCorpusBackend,
     ProjectionPublishError,
     RecipeTooLargeError,
+    answer_item,
     answer_sk,
     recipe_pk,
     retry_throttled,
@@ -245,6 +246,98 @@ def test_answers_for_reads_only_that_recipes_answers_in_dynamo_mode(backend: Dyn
     )
     assert backend.answers_for("rec_missing") == []
     assert RecipeCorpusStore(backend).answers_for("rec_bean_tacos") == [answers[2]]
+
+
+class _PagingQueryClient:
+    """A DynamoDB client whose Query returns two pages, like a recipe with many historical answers."""
+
+    def __init__(self) -> None:
+        self.pages = [
+            {"Items": [{"recipe_id": "rec_a", "_page": 1}], "LastEvaluatedKey": {"pk": "a", "sk": "1"}},
+            {"Items": [{"recipe_id": "rec_a", "_page": 2}]},
+        ]
+        self.calls: list[dict[str, Any]] = []
+
+    def query(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(kwargs)
+        return self.pages[len(self.calls) - 1]
+
+
+def test_answers_for_reads_every_page_of_a_paged_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    backend = DynamoCorpusBackend.__new__(DynamoCorpusBackend)
+    client = _PagingQueryClient()
+    backend._client, backend._table = client, "glean-recipes-test"
+    rows: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        "glean.recipes.dynamo_corpus._answer_from_row", lambda row: rows.append(row) or _row_answer(row)
+    )
+
+    answers = backend.answers_for("rec_a")
+
+    assert len(client.calls) == 2
+    assert client.calls[1]["ExclusiveStartKey"] == {"pk": "a", "sk": "1"}
+    assert all(call["ConsistentRead"] is True for call in client.calls)
+    assert all(call["KeyConditionExpression"] == "pk = :pk AND begins_with(sk, :answers)" for call in client.calls)
+    assert [answer.question for answer in answers] == ["dietary:page-1", "dietary:page-2"]
+    assert [row["_page"] for row in rows] == [1, 2]
+
+
+def _row_answer(row: dict[str, Any]) -> RecipeAnswer:
+    return RecipeAnswer(
+        recipe_id="rec_a",
+        question=f"dietary:page-{row['_page']}",
+        probability=0.02,
+        model=CURRENT_MODEL,
+        content_hash="c" * 64,
+        criteria_hash=f"{row['_page']:064x}",
+        computed_at=COMPUTED_AT,
+    )
+
+
+def test_answers_for_returns_every_answer_of_a_recipe_that_spans_several_pages(
+    recipes_table: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The reviewer's 3,001-answer case: the current answer sits on the page a single Query never reads."""
+    recipe = next(r for r in synthetic_corpus() if r.external_id == "rec_tomato_pasta")
+    object_store = InMemoryProjectionStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=object_store)
+    backend.save(recipe)
+    fingerprint = content_fingerprint(recipe.title, [i.canonical_name for i in recipe.ingredients])
+    current = _answer(recipe.external_id, "vegan", 0.02).model_copy(
+        update={"content_hash": fingerprint, "criteria_hash": "f" * 64}
+    )
+    historical = [
+        current.model_copy(update={"criteria_hash": f"{number:064x}", "probability": 0.9}) for number in range(3_000)
+    ]
+    for start in range(0, len(historical), 500):
+        backend._client.batch_write_item(
+            RequestItems={
+                RECIPES_TABLE_NAME: [
+                    {"PutRequest": {"Item": answer_item(answer)}} for answer in historical[start : start + 500]
+                ]
+            }
+        )
+    backend._client.put_item(TableName=RECIPES_TABLE_NAME, Item=answer_item(current))
+    first_page = backend._client.query(
+        TableName=RECIPES_TABLE_NAME,
+        KeyConditionExpression="pk = :pk AND begins_with(sk, :answers)",
+        ExpressionAttributeValues={":pk": recipe_pk(recipe.external_id), ":answers": "ANSWER#"},
+        ConsistentRead=True,
+    )
+    assert "LastEvaluatedKey" in first_page
+    assert len(first_page["Items"]) < 3_001
+
+    answers = backend.answers_for(recipe.external_id)
+
+    assert len(answers) == 3_001
+    assert current in answers
+    # A publication right after a full rebuild must not truncate the recipe's answers back to one page.
+    backend.rebuild_projection()
+    backend.save(recipe)
+    projected = backend.projection().by_id(recipe.external_id)
+    assert projected is not None
+    assert len(projected.answers) == 3_001
+    assert current in projected.answers
 
 
 def test_answers_for_falls_back_to_the_table_even_when_the_projection_is_stale(
