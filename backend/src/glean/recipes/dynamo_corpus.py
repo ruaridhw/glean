@@ -16,12 +16,19 @@ Reading 632 summaries from this table would cost 45-90 read units per Generate (
 
 Every write here is compare-before-write, so a re-run of the migration writes nothing, and every call is
 retried with backoff on throttling: 5 WCU means roughly five small writes a second.
+
+The projection is one S3 object, so publishing it is a read-modify-write against the object version
+(ETag `If-Match`, `If-None-Match: *` on create). A writer re-reads and re-applies its change when the
+object moved on, instead of dropping the entry another Lambda just published. If publication still fails
+after the bounded retries, `ProjectionPublishError` is raised and logged with the rebuild command: the
+table has the change, and `rebuild_projection()` / `scripts/build_recipe_index.py --table` repairs it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 import time
 from dataclasses import dataclass
@@ -33,11 +40,12 @@ import boto3
 from botocore.exceptions import ClientError
 
 from glean.observability import logger
-from glean.recipes.answers import RecipeAnswer, content_fingerprint
+from glean.recipes.answers import RecipeAnswer, content_fingerprint, latest_per_question
 from glean.recipes.corpus import recipe_blob_key, recipe_payload
 from glean.recipes.projection import (
     PROJECTION_TTL_SECONDS,
     ProjectedRecipe,
+    ProjectionSnapshot,
     RecipeProjection,
     build_projection,
     dumps,
@@ -54,11 +62,18 @@ if TYPE_CHECKING:
 __all__ = [
     "MAX_RECIPE_BYTES",
     "DynamoCorpusBackend",
+    "ProjectionPublishError",
     "ProjectionWrite",
     "RecipeTooLargeError",
+    "answer_item",
     "answer_sk",
+    "answer_write_units",
+    "item_write_units",
+    "recipe_item",
     "recipe_pk",
+    "recipe_write_units",
     "retry_throttled",
+    "source_item",
     "source_pk",
 ]
 
@@ -73,12 +88,30 @@ _RETRYABLE = {
     "ThrottlingException",
     "RequestLimitExceeded",
     "TransactionConflictException",
+    "InternalServerError",
+    "ServiceUnavailable",
+}
+# A transaction reports its own throttling as cancellation reasons, one per item, not as the top-level code.
+_RETRYABLE_CANCELLATION_REASONS = {
+    "ProvisionedThroughputExceeded",
+    "ThrottlingError",
+    "TransactionConflict",
+    "RequestLimitExceeded",
+    "InternalServerError",
+    "ServiceUnavailable",
 }
 _MAX_ATTEMPTS = 6
+# Publishing the whole projection is a read-modify-write: bound the re-read/re-apply loop, then say so.
+_MAX_PUBLISH_ATTEMPTS = 4
+_REBUILD_COMMAND = "uv run python scripts/build_recipe_index.py --table <table> --bucket <recipe-cache-bucket>"
 
 
 class RecipeTooLargeError(Exception):
     """A recipe body is over the corpus's 10 KB budget, so it can't be stored as one item."""
+
+
+class ProjectionPublishError(Exception):
+    """The table has a change the projection could not publish, so planning would not see it."""
 
 
 @dataclass(frozen=True)
@@ -184,34 +217,44 @@ class DynamoCorpusBackend:
         `rebuild_projection=False` is the bulk path (the migration): the caller writes the projection once
         at the end from the data it migrated, instead of once per recipe.
         """
-        known = {
-            (answer.recipe_id, answer.question, answer.criteria_hash): answer
-            for answer in self._load_projection().projection.answers()
-        }
+        snapshot, current = self._fresh_projection()
+        known = {_answer_key(answer): answer for answer in current.answers()}
         changed = [answer for answer in answers if known.get(_answer_key(answer)) != answer]
         for answer in changed:
-            self._put(_answer_item(answer))
+            self._put(answer_item(answer))
         if changed and rebuild_projection:
-            self._store_projection(self._project_answers(changed))
+            self._publish(lambda projection: self._project_answers(projection, changed), what=f"{len(changed)} answers")
+        elif changed:
+            self._remember(snapshot, current)
         return len(changed)
 
     # -- the migration and F2's runner ---------------------------------------------------------------
 
     def upsert(self, recipe: StoredRecipe) -> bool:
-        """Write the recipe and its SOURCE pointer unless both are already stored. True when written."""
+        """Write the recipe and its SOURCE pointer, and make sure the projection carries it.
+
+        Returns whether anything durable was written: a recipe already in the table whose projection entry
+        is also current writes nothing, which is what makes the migration re-runnable. The projection step
+        always runs, so a retry after a failed publish repairs it without touching the table.
+        """
         body = _recipe_body(recipe)
         # Only a URL-imported recipe has a pointer; one without a URL would otherwise share a single
         # `SOURCE#` row with every other such recipe.
-        pointer = self._source_item(recipe) if recipe.source_url else None
+        pointer = source_item(recipe)
         stored = self._get(recipe_pk(recipe.external_id), RECIPE_SK)
-        if stored is not None and stored.get("body") == body and (pointer is None or self._source_is_current(pointer)):
-            return False
-        ops: list[dict[str, Any]] = [{"Put": {"TableName": self._table, "Item": _recipe_item(recipe, body)}}]
-        if pointer is not None:
-            ops.append({"Put": {"TableName": self._table, "Item": pointer}})
-        self._transact(ops)
-        self._store_projection(self._load_projection().projection.with_recipe(self._projected(recipe)))
-        return True
+        wrote_table = not (
+            stored is not None and stored.get("body") == body and (pointer is None or self._source_is_current(pointer))
+        )
+        if wrote_table:
+            ops: list[dict[str, Any]] = [{"Put": {"TableName": self._table, "Item": recipe_item(recipe)}}]
+            if pointer is not None:
+                ops.append({"Put": {"TableName": self._table, "Item": pointer}})
+            self._transact(ops)
+        published = self._publish(
+            lambda projection: projection.with_recipe(self._projected(recipe, projection)),
+            what=f"recipe {recipe.external_id}",
+        )
+        return wrote_table or published
 
     def rebuild_projection(self) -> ProjectionWrite:
         """Rebuild the whole projection from the table. Owner-run, or F2's runner after a bulk change.
@@ -224,18 +267,21 @@ class DynamoCorpusBackend:
         recipes = [_stored_recipe(row) for row in rows if row["sk"] == RECIPE_SK and "body" in row]
         answers = [_answer_from_row(row) for row in rows if str(row["sk"]).startswith(ANSWER_PREFIX)]
         projection = build_projection([recipe for recipe in recipes if recipe is not None], answers)
-        return ProjectionWrite(recipes=len(projection.recipes), written=self._store_projection(projection))
+        written = self._publish(lambda _current: projection, what="a full rebuild")
+        return ProjectionWrite(recipes=len(projection.recipes), written=written)
 
     def projection(self) -> RecipeProjection:
         """The cached projection document, as planning sees it."""
         return self._load_projection().projection
 
     def write_projection(self, projection: RecipeProjection) -> bool:
-        """Store a projection built from data written outside the table (the migration). True when written.
+        """Publish a projection built from data written outside the table (the migration). True when written.
 
-        Goes through the backend so this process's cache is the document it just wrote, not a stale read.
+        The document is complete, so it is published as-is, but still against the object version: a recipe
+        another writer published mid-run is retried over rather than silently dropped while it lasts (the
+        next import of it republishes its entry).
         """
-        return self._store_projection(projection)
+        return self._publish(lambda _current: projection, what="the migration")
 
     # -- projection cache ---------------------------------------------------------------------------
 
@@ -254,35 +300,72 @@ class DynamoCorpusBackend:
         _projection_cache[self._projections] = (now, loaded)
         return loaded
 
-    def _store_projection(self, projection: RecipeProjection) -> bool:
-        """Write the projection unless it is byte-identical to what is stored. True when written."""
-        data = dumps(projection)
-        cached = _projection_cache.get(self._projections)
-        if cached is not None and cached[1].raw == data and cached[1].index is not None:
-            return False
-        if cached is None or cached[1].raw != data:
-            self._projections.write(data)
+    def _fresh_projection(self) -> tuple[ProjectionSnapshot, RecipeProjection]:
+        """The projection as the object has it now, never from this process's cache: writers merge into it."""
+        snapshot = self._projections.load()
+        if snapshot.data is None:
+            return snapshot, RecipeProjection()
+        return snapshot, loads(snapshot.data)
+
+    def _publish(self, derive: Callable[[RecipeProjection], RecipeProjection], *, what: str) -> bool:
+        """Merge `derive` into the freshest projection and publish it, or lose the version race and retry.
+
+        `derive` is applied again on every attempt, against whatever the object holds by then, so no other
+        writer's entry is dropped. Returns False when the document already says what `derive` would write.
+        """
+        last_error: Exception | None = None
+        for attempt in range(_MAX_PUBLISH_ATTEMPTS):
+            snapshot, current = self._fresh_projection()
+            merged = derive(current)
+            data = dumps(merged)
+            if data == snapshot.data:
+                self._remember(snapshot, merged)
+                return False
+            try:
+                if self._projections.store(data, etag=snapshot.etag):
+                    self._remember(ProjectionSnapshot(data=data, etag=None), merged)
+                    return True
+            except ClientError as error:
+                if not _is_throttle(error):
+                    last_error = error
+                    break
+                last_error = error
+            if attempt < _MAX_PUBLISH_ATTEMPTS - 1:
+                time.sleep(random.uniform(0.02, min(0.02 * 2**attempt, 0.5)))  # noqa: S311 - backoff jitter
+        logger.error(
+            "recipe projection publish failed; the table has the change and planning will not see it until the"
+            f" projection is rebuilt ({what}): {_REBUILD_COMMAND}",
+            extra={"table": self._table, "change": what, "error": repr(last_error)},
+        )
+        raise ProjectionPublishError(
+            f"could not publish the recipe projection ({what}) after {_MAX_PUBLISH_ATTEMPTS} attempts. "
+            f"The table holds the change; rebuild the projection with: {_REBUILD_COMMAND}"
+        ) from last_error
+
+    def _remember(self, snapshot: ProjectionSnapshot, projection: RecipeProjection) -> None:
+        """Keep this process's read cache in step with the document it just read or wrote."""
+        index = RecipeSearchIndex(projection.summaries()) if snapshot.data is not None else None
         _projection_cache[self._projections] = (
             time.monotonic(),
-            _LoadedProjection(raw=data, projection=projection, index=RecipeSearchIndex(projection.summaries())),
+            _LoadedProjection(raw=snapshot.data, projection=projection, index=index),
         )
-        return cached is None or cached[1].raw != data
 
-    def _projected(self, recipe: StoredRecipe) -> ProjectedRecipe:
+    def _projected(self, recipe: StoredRecipe, projection: RecipeProjection) -> ProjectedRecipe:
         """The projection entry for a recipe just written: its summary and the answers that still apply."""
         fingerprint = _fingerprint(recipe)
-        known = self._load_projection().projection.by_id(recipe.external_id)
+        known = projection.by_id(recipe.external_id)
         key = known.summary.key if known is not None else recipe_blob_key(recipe.external_id)
-        answers = [answer for answer in self._answers_for(recipe.external_id) if answer.content_hash == fingerprint]
+        answers = latest_per_question(
+            answer for answer in self._answers_for(recipe.external_id) if answer.content_hash == fingerprint
+        )
         return ProjectedRecipe(
             summary=RecipeSummary.from_recipe(recipe, key=key),
-            answers=sorted(answers, key=_answer_sort_key),
+            answers=answers,
             attributes=known.attributes if known is not None else {},
         )
 
-    def _project_answers(self, changed: Sequence[RecipeAnswer]) -> RecipeProjection:
+    def _project_answers(self, projection: RecipeProjection, changed: Sequence[RecipeAnswer]) -> RecipeProjection:
         """The projection with the stored answers folded in, dropping answers for superseded content."""
-        projection = self._load_projection().projection
         by_recipe: dict[str, list[RecipeAnswer]] = {}
         for answer in changed:
             by_recipe.setdefault(answer.recipe_id, []).append(answer)
@@ -300,19 +383,11 @@ class DynamoCorpusBackend:
                 for answer in entry.answers
                 if answer.content_hash == fingerprint and _answer_key(answer) not in incoming
             ]
-            answers_for_entry = sorted([*kept, *incoming.values()], key=_answer_sort_key)
+            answers_for_entry = latest_per_question([*kept, *incoming.values()])
             projection = projection.with_recipe(entry.model_copy(update={"answers": answers_for_entry}))
         return projection
 
     # -- table access -------------------------------------------------------------------------------
-
-    def _source_item(self, recipe: StoredRecipe) -> dict[str, Any]:
-        return {
-            "pk": source_pk(str(recipe.source_url)),
-            "sk": RECIPE_SK,
-            "recipe_id": recipe.external_id,
-            "source_url": str(recipe.source_url),
-        }
 
     def _source_is_current(self, pointer: dict[str, Any]) -> bool:
         stored = self._get(str(pointer["pk"]), RECIPE_SK)
@@ -355,29 +430,25 @@ class DynamoCorpusBackend:
         return retry_throttled(operation)
 
 
-def _recipe_body(recipe: StoredRecipe) -> str:
-    body = json.dumps(recipe_payload(recipe), sort_keys=True, separators=(",", ":"))
-    size = len(body.encode("utf-8"))
-    if size > MAX_RECIPE_BYTES:
-        raise RecipeTooLargeError(
-            f"recipe {recipe.external_id!r} is {size} bytes, over the corpus's {MAX_RECIPE_BYTES} byte budget"
-        )
-    return body
+def recipe_item(recipe: StoredRecipe) -> dict[str, Any]:
+    """The RECIPE item for a recipe: the body with the fields the table indexes or compares on."""
+    return {"pk": recipe_pk(recipe.external_id), "sk": RECIPE_SK, "body": _recipe_body(recipe)}
 
 
-def _recipe_item(recipe: StoredRecipe, body: str) -> dict[str, Any]:
-    return {"pk": recipe_pk(recipe.external_id), "sk": RECIPE_SK, "body": body}
-
-
-def _stored_recipe(row: dict[str, Any]) -> StoredRecipe | None:
-    try:
-        return StoredRecipe.model_validate_json(row["body"])
-    except (KeyError, TypeError, ValueError):
-        logger.warning("stored recipe body is unreadable", extra={"pk": row.get("pk")})
+def source_item(recipe: StoredRecipe) -> dict[str, Any] | None:
+    """The SOURCE pointer for a URL-imported recipe, or None when there is no URL to dedupe on."""
+    if not recipe.source_url:
         return None
+    return {
+        "pk": source_pk(recipe.source_url),
+        "sk": RECIPE_SK,
+        "recipe_id": recipe.external_id,
+        "source_url": recipe.source_url,
+    }
 
 
-def _answer_item(answer: RecipeAnswer) -> dict[str, Any]:
+def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
+    """The ANSWER item: one per (recipe, question, criteria hash)."""
     # DynamoDB takes no floats: the probability is a Decimal on the wire and a float in the model.
     return {
         "pk": recipe_pk(answer.recipe_id),
@@ -390,6 +461,63 @@ def _answer_item(answer: RecipeAnswer) -> dict[str, Any]:
         "criteria_hash": answer.criteria_hash,
         "computed_at": answer.computed_at.isoformat(),
     }
+
+
+def item_write_units(item: dict[str, Any]) -> int:
+    """What DynamoDB charges to write one item: 1 unit per KiB of attribute names and values, rounded up.
+
+    Counted from the item itself so a caller pacing writes (the migration) charges exactly what the write
+    it is about to make will cost, not an estimate from the recipe body alone.
+    """
+    return max(1, math.ceil(_item_size_bytes(item) / 1024))
+
+
+def recipe_write_units(recipe: StoredRecipe) -> int:
+    """Write units for one recipe: its body and SOURCE pointer in one transaction, which bills double."""
+    items = [recipe_item(recipe), source_item(recipe)]
+    return 2 * sum(item_write_units(item) for item in items if item is not None)
+
+
+def answer_write_units(answer: RecipeAnswer) -> int:
+    return item_write_units(answer_item(answer))
+
+
+def _item_size_bytes(item: dict[str, Any]) -> int:
+    return sum(
+        len(str(name).encode("utf-8")) + len(json.dumps(value, default=str).encode("utf-8"))
+        for name, value in item.items()
+    )
+
+
+def _recipe_body(recipe: StoredRecipe) -> str:
+    body = json.dumps(recipe_payload(recipe), sort_keys=True, separators=(",", ":"))
+    size = len(body.encode("utf-8"))
+    if size > MAX_RECIPE_BYTES:
+        raise RecipeTooLargeError(
+            f"recipe {recipe.external_id!r} is {size} bytes, over the corpus's {MAX_RECIPE_BYTES} byte budget"
+        )
+    return body
+
+
+def _is_throttle(error: ClientError) -> bool:
+    """Whether DynamoDB asked us to back off, including the cancellation reasons a transaction reports."""
+    code = error.response["Error"]["Code"]
+    if code in _RETRYABLE:
+        return True
+    if code != "TransactionCanceledException":
+        return False
+    reasons = [reason.get("Code", "None") for reason in error.response.get("CancellationReasons") or []]
+    # `None` is a healthy item; a conditional failure is a real refusal, never something to retry.
+    retryable = [reason for reason in reasons if reason != "None"]
+    return bool(retryable) and all(reason in _RETRYABLE_CANCELLATION_REASONS for reason in retryable)
+
+
+def _stored_recipe(row: dict[str, Any]) -> StoredRecipe | None:
+    try:
+        return StoredRecipe.model_validate_json(row["body"])
+    except (KeyError, TypeError, ValueError):
+        logger.warning("stored recipe body is unreadable", extra={"pk": row.get("pk")})
+        return None
 
 
 def _answer_from_row(row: dict[str, Any]) -> RecipeAnswer:
@@ -408,13 +536,5 @@ def _answer_key(answer: RecipeAnswer) -> tuple[str, str, str]:
     return (answer.recipe_id, answer.question, answer.criteria_hash)
 
 
-def _answer_sort_key(answer: RecipeAnswer) -> tuple[str, str]:
-    return (answer.question, answer.criteria_hash)
-
-
 def _fingerprint(recipe: StoredRecipe) -> str:
     return content_fingerprint(recipe.title, [ingredient.canonical_name for ingredient in recipe.ingredients])
-
-
-def _is_throttle(error: ClientError) -> bool:
-    return error.response["Error"]["Code"] in _RETRYABLE

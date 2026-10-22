@@ -157,10 +157,21 @@ def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision | None:
 
 
 class DietaryDecisions:
-    """Stored decisions, looked up by (recipe id, flag)."""
+    """Stored decisions, looked up by (recipe id, flag).
+
+    A (recipe, flag) can have several stored answers: the table keys them by criteria hash, and a reworded
+    question leaves the old wording's answer beside the new one. Keep the one that speaks for what is asked
+    now — an older wording can never shadow it — and among equals the latest computation wins. The corpus
+    answers, the blob JSONL and a projection rebuilt from the table all go through this.
+    """
 
     def __init__(self, decisions: list[DietaryDecision]) -> None:
-        self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
+        self._by_key: dict[tuple[str, str], DietaryDecision] = {}
+        for decision in decisions:
+            key = (decision.recipe_id, decision.flag)
+            incumbent = self._by_key.get(key)
+            if incumbent is None or _preferred(decision, incumbent):
+                self._by_key[key] = decision
 
     def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
@@ -177,6 +188,22 @@ class DietaryDecisions:
         if decision is None or not _is_current(decision, summary):
             return True
         return decision.probability >= THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
+
+
+def _preferred(candidate: DietaryDecision, incumbent: DietaryDecision) -> bool:
+    """Whether `candidate` speaks for the current question better than `incumbent`."""
+    if _answers_current_question(candidate) != _answers_current_question(incumbent):
+        return _answers_current_question(candidate)
+    return (candidate.computed_at, candidate.criteria_hash) > (incumbent.computed_at, incumbent.criteria_hash)
+
+
+def _answers_current_question(decision: DietaryDecision) -> bool:
+    question = _QUESTIONS.get(decision.flag)
+    return (
+        question is not None
+        and decision.criteria_hash == question_hash(question)
+        and _CURRENT_MODEL.fullmatch(decision.model) is not None
+    )
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
