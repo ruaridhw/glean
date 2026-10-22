@@ -80,11 +80,52 @@ def test_a_prod_bucket_is_refused_too_because_blob_mode_writes_there(capsys: pyt
 
 
 def test_a_dry_run_may_look_at_a_prod_target_but_an_owner_flag_is_still_needed_to_write() -> None:
-    enrich_corpus._refuse_prod("glean-recipes-prod", None, i_am_the_owner=False, writes=False)
-    enrich_corpus._refuse_prod("glean-recipes-prod", None, i_am_the_owner=True)
+    enrich_corpus._refuse_remote("glean-recipes-prod", None, i_am_the_owner=False, writes=False)
+    enrich_corpus._refuse_remote("glean-recipes-prod", None, i_am_the_owner=True)
 
     with pytest.raises(enrich_corpus.OwnerApprovalError):
-        enrich_corpus._refuse_prod("glean-recipes-prod", None, i_am_the_owner=False)
+        enrich_corpus._refuse_remote("glean-recipes-prod", None, i_am_the_owner=False)
+
+
+@pytest.mark.parametrize("flag", ["--tab", "--i-am", "--loc"])
+def test_an_abbreviated_flag_is_rejected_instead_of_expanding(tmp_path: Path, flag: str) -> None:
+    """`--tab` must not quietly become `--table`: that is how a wrapper that refuses `--table` gets walked past."""
+    _corpus(tmp_path)
+
+    with pytest.raises(SystemExit) as exit_info:
+        enrich_corpus.main(["--local", str(tmp_path), "--local-only", flag, "x"])
+
+    assert exit_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--local", "{tmp}", "--table", "glean-recipes-dev"],
+        ["--bucket", "some-bucket"],
+        ["--local", "{tmp}", "--i-am-the-owner"],
+        ["--table", "glean-recipes-dev", "--bucket", "some-bucket"],
+    ],
+)
+def test_local_only_refuses_a_remote_store_outright(
+    tmp_path: Path, capsys: pytest.CaptureFixture, args: list[str]
+) -> None:
+    """What `make enrich-corpus` passes: no table, no bucket, no owner flag — not even for a dry run."""
+    _corpus(tmp_path)
+
+    code = enrich_corpus.main([arg.format(tmp=tmp_path) for arg in ["--local-only", "--dry-run", *args]])
+
+    assert code == 2
+    assert "Refusing to run: --local-only refuses" in capsys.readouterr().out
+
+
+def test_local_only_on_its_own_runs_the_local_corpus(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    _corpus(tmp_path)
+
+    code = enrich_corpus.main(["--local", str(tmp_path), "--local-only", "--dry-run"])
+
+    assert code == 0
+    assert "Dry run: 2 recipes would be asked" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -110,7 +151,7 @@ def test_the_make_target_still_passes_run_options_through() -> None:
     done = _make("-n", "enrich-corpus", "ENRICH_ARGS=--dry-run --limit 2")
 
     assert done.returncode == 0
-    assert "scripts/enrich_corpus.py --local .cache/glean_recipe_cache --dry-run --limit 2" in done.stdout
+    assert "scripts/enrich_corpus.py --local .cache/glean_recipe_cache --local-only --dry-run --limit 2" in done.stdout
 
 
 def _make(*args: str) -> subprocess.CompletedProcess[str]:
