@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 from scripts import enrich_corpus
@@ -11,9 +13,6 @@ from tests.recipes.enrichment.fakes import FakeDecisionApi
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
 from glean.recipes.search_index import INDEX_KEY
 from glean.recipes.stored import StoredIngredient, StoredRecipe
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_a_dry_run_prints_what_would_be_asked_and_needs_no_api_key(
@@ -86,6 +85,41 @@ def test_a_dry_run_may_look_at_a_prod_target_but_an_owner_flag_is_still_needed_t
 
     with pytest.raises(enrich_corpus.OwnerApprovalError):
         enrich_corpus._refuse_prod("glean-recipes-prod", None, i_am_the_owner=False)
+
+
+@pytest.mark.parametrize(
+    "args",
+    ["--table glean-recipes-dev", "--bucket some-bucket", "--i-am-the-owner", "--dry-run --table glean-recipes-prod"],
+)
+def test_the_make_target_refuses_to_be_pointed_anywhere_but_the_local_corpus(args: str) -> None:
+    """`make enrich-corpus` is the dev loop: no passthrough may select a remote table or bucket."""
+    if shutil.which("make") is None:
+        pytest.skip("make is not installed here")
+
+    done = _make("enrich-corpus", f"ENRICH_ARGS={args}")
+
+    assert done.returncode == 2
+    assert "fills the local corpus only" in done.stdout + done.stderr
+    assert "scripts/enrich_corpus.py --local" not in done.stdout  # it never got as far as running the CLI
+
+
+def test_the_make_target_still_passes_run_options_through() -> None:
+    if shutil.which("make") is None:
+        pytest.skip("make is not installed here")
+
+    done = _make("-n", "enrich-corpus", "ENRICH_ARGS=--dry-run --limit 2")
+
+    assert done.returncode == 0
+    assert "scripts/enrich_corpus.py --local .cache/glean_recipe_cache --dry-run --limit 2" in done.stdout
+
+
+def _make(*args: str) -> subprocess.CompletedProcess[str]:
+    root = Path(__file__).parents[3]  # the repo root, where the Makefile is
+    make = shutil.which("make")
+    assert make is not None  # the caller skipped when make is missing
+    return subprocess.run(  # noqa: S603 - a fixed argv, and the binary is resolved above
+        [make, "-C", str(root), *args], capture_output=True, text=True, check=False
+    )
 
 
 def test_an_unknown_enricher_is_refused_and_the_known_ones_are_named(

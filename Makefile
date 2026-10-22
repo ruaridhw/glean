@@ -123,10 +123,18 @@ pre-commit:  ## Run all pre-commit hooks across the repo
 # are the owner's, by hand (see backend/README.md, "Recipe enrichment"); scripts/enrich_corpus.py
 # refuses a prod table or bucket without --i-am-the-owner. Needs OPENROUTER_API_KEY in the
 # environment, and exits non-zero unless every recipe has a current answer to every question.
-# ENRICH_ARGS passes through, e.g. `make enrich-corpus ENRICH_ARGS=--dry-run`.
+# ENRICH_ARGS passes through run options only, e.g. `make enrich-corpus ENRICH_ARGS=--dry-run`; a
+# `--table`, `--bucket` or `--i-am-the-owner` in it is refused below, because this target is the local
+# dev loop and must not be able to reach a remote table however it is invoked.
 
 .PHONY: enrich-corpus
 enrich-corpus:  ## Fill what the local recipe corpus is missing (ENRICH_ARGS=--dry-run to preview, no key needed)
+	@case "$(ENRICH_ARGS)" in \
+		*--table*|*--bucket*|*--i-am-the-owner*) \
+			echo "enrich-corpus fills the local corpus only; a remote table or bucket is the owner's run, by hand:"; \
+			echo "  cd backend && uv run python scripts/enrich_corpus.py --table <table> --bucket <bucket>"; \
+			exit 2 ;; \
+	esac
 	cd backend && uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache $(ENRICH_ARGS)
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
