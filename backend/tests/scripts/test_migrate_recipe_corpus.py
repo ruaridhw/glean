@@ -134,6 +134,8 @@ def test_the_migration_writes_every_recipe_its_answers_and_the_projection(
         "rec_chicken_curry",
         "rec_tomato_pasta",
     ]
+    # Answers are written before their recipe, so even a partial projection carries the decisions.
+    assert len(_projection(projections).answers()) == 3
 
 
 def test_a_second_run_writes_nothing_and_leaves_the_same_items_and_projection(
@@ -352,6 +354,10 @@ def test_a_limit_run_leaves_a_consistent_projection_of_what_it_migrated(
         "rec_bean_tacos",
         "rec_chicken_curry",
     ]
+    assert {(answer.recipe_id, answer.question) for answer in _projection(projections).answers()} == {
+        ("rec_bean_tacos", "dietary:tree-nut-free"),
+        ("rec_chicken_curry", "dietary:tree-nut-free"),
+    }
 
 
 def test_a_checkpoint_naming_recipes_a_wiped_table_lost_is_reported(
