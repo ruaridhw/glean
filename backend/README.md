@@ -85,8 +85,15 @@ stopped, and rebuilds the projection once at the end. `--enricher dietary` narro
 The number of requests is the corpus times whatever is stale, not the corpus times the questions: a fresh
 migration answered under the current wording asks for nothing, an imported or edited recipe costs one
 request, a reworded question costs one request per recipe, and a model bump costs one request per recipe
-for every question. The final rebuild is a consistent scan of the table rather than another pay-per-call
-run, which is why it happens once at the end and not per recipe.
+for every question. A checkpoint writes only the answers that run has produced, not the whole run again,
+and the final rebuild is a consistent scan of the table rather than another pay-per-call run — which is why
+it happens once at the end and not per recipe.
+
+Answers are written to the table as the run goes, so **a run that dies, or whose final projection rebuild
+fails, has still paid for and kept everything it finished**: the next run reads the answers out of the
+store and asks only for the rest. If a rebuild failed, the projection planning reads is stale until it is
+repaired — `scripts/build_recipe_index.py --table glean-recipes-<env> --bucket <recipe-cache-bucket>` — and
+that repair needs no new model call.
 
 Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
 cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command

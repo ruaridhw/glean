@@ -11,8 +11,11 @@ Nothing here knows what a dietary flag or a cuisine is: it takes enrichers, whic
 (`enricher.py`). Adding V5's attributes joins the same per-recipe request without touching this module.
 
 **Resumable without a progress file.** The stored answers are the checkpoint: a run that stops partway has
-written the answers it got, so the next run finds them current and asks only what is left. Answers are
-written every `checkpoint_every` recipes, and again (with the rebuild) if the run is interrupted.
+written the answers it got, so the next run finds them current and asks only what is left. What it reads to
+find them is the store's own authoritative side — the table's ANSWER items per recipe — never the projection,
+which is only published once a run finishes; otherwise a run that died after writing (or whose final rebuild
+failed) would pay for the same answers twice. Answers are written every `checkpoint_every` recipes, and again
+(with the rebuild) if the run is interrupted.
 """
 
 from __future__ import annotations
@@ -30,10 +33,11 @@ from glean.recipes.enrichment.dietary import DIETARY_ENRICHER
 from glean.recipes.enrichment.enricher import AnswerState, answer_state, recipe_state
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
+    from concurrent.futures import Future
 
     from glean.decisions import DecisionClient
-    from glean.recipes.corpus import RecipeCorpusStore
+    from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
     from glean.recipes.enrichment.enricher import Enricher, EnrichmentQuestion
     from glean.recipes.search_index import RecipeSummary
 
@@ -47,8 +51,6 @@ __all__ = [
 # Recipes between answer writes. Small enough that an interrupted run loses only its last few requests.
 CHECKPOINT_EVERY = 25
 _EVERYTHING = 1_000_000
-
-type _QuestionKey = tuple[str, str]  # (recipe id, question name)
 
 
 class CorpusUnavailableError(Exception):
@@ -77,7 +79,7 @@ def run_enrichment(
     questions = _declared_questions(enrichers)
     summaries = sorted(_corpus_summaries(corpus), key=lambda summary: summary.external_id)
     selected = summaries[:limit] if limit is not None else summaries
-    known = _answers_by_question(corpus.answers())
+    known = _KnownAnswers(corpus.store)
     work = [(summary, missing) for summary in selected if (missing := _missing(questions, summary, known))]
     stated_active_time = _stated_active_time(corpus)
     if dry_run:
@@ -87,32 +89,15 @@ def run_enrichment(
     if client is None:
         raise EnrichmentError("a run needs a decision client unless it is a dry run")
 
-    requests, produced, failures = 0, 0, []
+    run = _Run(corpus, known)
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_ask, client, summary, missing): (summary, missing) for summary, missing in work}
             try:
                 for completed, future in enumerate(as_completed(futures), start=1):
-                    summary, missing = futures[future]
-                    requests += 1
-                    try:
-                        asked = future.result()
-                    except DecisionError as exc:
-                        # One recipe the model couldn't answer must not stop the run: it stays uncovered
-                        # and the next run asks again.
-                        failures.extend(
-                            AnswerFailure(summary.external_id, question.name, str(exc)) for question in missing
-                        )
-                        logger.warning(
-                            "enrichment request failed",
-                            extra={"recipe_id": summary.external_id, "error": str(exc)},
-                        )
-                        continue
-                    for answer in asked:
-                        _remember(known, answer)
-                    produced += len(asked)
+                    run.collect(future, *futures[future])
                     if completed % checkpoint_every == 0:
-                        _store_answers(corpus, known)
+                        run.flush()
             except BaseException:
                 # An aborted run must stop spending money on questions it will never read the answers to.
                 for future in futures:
@@ -120,18 +105,18 @@ def run_enrichment(
                 raise
     finally:
         # A run that got some answers publishes them even if it died: the stored answers are the checkpoint.
-        if produced:
-            _store_answers(corpus, known)
+        if run.produced:
+            run.flush()
             corpus.rebuild_index()
 
     return _report(
         summaries,
         questions,
         known,
-        requests=requests,
-        stored=produced,
+        requests=run.requests,
+        stored=run.produced,
         stated_active_time=stated_active_time,
-        failures=failures,
+        failures=run.failures,
     )
 
 
@@ -155,25 +140,120 @@ def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[Enr
     ]
 
 
-def _store_answers(corpus: RecipeCorpusStore, known: Mapping[_QuestionKey, Sequence[RecipeAnswer]]) -> None:
-    """Write every answer the run holds, through F1's seam.
+class _Run:
+    """One run's bookkeeping: what it asked, what came back, what failed, and what it has written."""
 
-    Dynamo's `rebuild_projection=False` is F1's bulk path (the one the migration uses): the run ends with
-    one authoritative rebuild instead of an S3 write per checkpoint. The blob adapter has no projection, so
-    it takes the whole batch — which it needs anyway, since its JSONL is rewritten in full.
+    def __init__(self, corpus: RecipeCorpusStore, known: _KnownAnswers) -> None:
+        self._corpus = corpus
+        self._known = known
+        self.requests = 0
+        self.produced = 0
+        self.failures: list[AnswerFailure] = []
+
+    def collect(
+        self, future: Future[list[RecipeAnswer]], summary: RecipeSummary, missing: Sequence[EnrichmentQuestion]
+    ) -> None:
+        """Take one finished request: store its answers, or record why the recipe is still uncovered."""
+        self.requests += 1
+        try:
+            asked = future.result()
+        except DecisionError as exc:
+            # One recipe the model couldn't answer must not stop the run: it stays uncovered and the next
+            # run asks again.
+            self.failures.extend(AnswerFailure(summary.external_id, question.name, str(exc)) for question in missing)
+            logger.warning("enrichment request failed", extra={"recipe_id": summary.external_id, "error": str(exc)})
+            return
+        for answer in asked:
+            self._known.remember(answer)
+        self.produced += len(asked)
+
+    def flush(self) -> None:
+        """Write this checkpoint's answers, so an interrupted run keeps what it paid for."""
+        _flush(self._corpus, self._known)
+
+
+class _KnownAnswers:
+    """The answers the store has already persisted, per recipe, plus what this run produced.
+
+    Where the backend can read the answers it holds from its own authoritative side — dynamo queries the
+    table's ANSWER items for one recipe — the run asks it, per recipe, and never consults the projection.
+    The projection is published when a run finishes, so a run that died after writing answers (or whose
+    final rebuild failed) would otherwise re-ask, and re-pay for, work it already has.
+
+    A backend without that read (blobs) keeps every answer in one JSONL, so the run reads that once and
+    rewrites it whole; `batch()` is what tells the two apart at write time.
     """
-    batch = [answer for answers in known.values() for answer in answers]
+
+    def __init__(self, store: CorpusBackend) -> None:
+        self._read = _per_recipe_reader(store)
+        self._answers: dict[str, list[RecipeAnswer]] = {}
+        self._pending: dict[tuple[str, str, str], RecipeAnswer] = {}
+        if self._read is None:
+            for answer in store.answers():
+                self._answers.setdefault(answer.recipe_id, []).append(answer)
+
+    def stored(self, recipe_id: str) -> list[RecipeAnswer]:
+        """Every answer the store holds for this recipe, published or not."""
+        if recipe_id not in self._answers and self._read is not None:
+            self._answers[recipe_id] = list(self._read(recipe_id))
+        return self._answers.get(recipe_id, [])
+
+    def by_question(self, recipe_id: str) -> dict[str, list[RecipeAnswer]]:
+        """The same answers grouped by question name, which is how staleness is asked."""
+        grouped: dict[str, list[RecipeAnswer]] = {}
+        for answer in self.stored(recipe_id):
+            grouped.setdefault(answer.question, []).append(answer)
+        return grouped
+
+    def remember(self, answer: RecipeAnswer) -> None:
+        """Hold an answer this run produced, to be written at the next checkpoint."""
+        question = (answer.question, answer.criteria_hash)
+        answers = self._answers.setdefault(answer.recipe_id, [])
+        for index, held in enumerate(answers):
+            if (held.question, held.criteria_hash) == question:
+                answers[index] = answer
+                break
+        else:
+            answers.append(answer)
+        self._pending[(answer.recipe_id, *question)] = answer
+
+    def pending(self) -> list[RecipeAnswer]:
+        """What this run produced and has not written yet."""
+        return list(self._pending.values())
+
+    def batch(self) -> list[RecipeAnswer]:
+        """What `save_answers` must be handed: this run's delta, or every answer when the store rewrites all."""
+        if self._read is not None:
+            return self.pending()
+        return [answer for answers in self._answers.values() for answer in answers]
+
+    def flushed(self) -> None:
+        self._pending.clear()
+
+
+def _flush(corpus: RecipeCorpusStore, known: _KnownAnswers) -> None:
+    """Write what this checkpoint produced, through F1's seam, and mark it written.
+
+    Dynamo takes the delta with `rebuild_projection=False` (F1's bulk path, the one the migration uses) and
+    is rebuilt once at the end: handing it the whole run's answers again would re-put every earlier answer
+    at every checkpoint, because the projection it compares against is deliberately not updated until then.
+    The blob store has no projection and rewrites its JSONL in full, so it gets everything.
+    """
+    if not known.pending():
+        return
+    batch = known.batch()
     save_answers = cast("Callable[..., int]", corpus.store.save_answers)
     if "rebuild_projection" in inspect.signature(save_answers).parameters:
         save_answers(batch, rebuild_projection=False)
     else:
         save_answers(batch)
+    known.flushed()
 
 
 def _report(
     summaries: Sequence[RecipeSummary],
     questions: Sequence[EnrichmentQuestion],
-    known: Mapping[_QuestionKey, Sequence[RecipeAnswer]],
+    known: _KnownAnswers,
     *,
     requests: int = 0,
     stored: int = 0,
@@ -196,7 +276,7 @@ def _report(
                 gap = True
                 continue
             state = answer_state(
-                question, known.get((summary.external_id, question.name), ()), content_hash=content_hash
+                question, known.by_question(summary.external_id).get(question.name, ()), content_hash=content_hash
             )
             if state is AnswerState.CURRENT:
                 counts.current += 1
@@ -223,17 +303,15 @@ def _report(
 
 
 def _missing(
-    questions: Sequence[EnrichmentQuestion],
-    summary: RecipeSummary,
-    known: Mapping[_QuestionKey, Sequence[RecipeAnswer]],
+    questions: Sequence[EnrichmentQuestion], summary: RecipeSummary, known: _KnownAnswers
 ) -> tuple[EnrichmentQuestion, ...]:
     """The questions this recipe has no current answer to, in enricher order."""
     content_hash = content_fingerprint(summary.title, summary.ingredient_names)
+    stored = known.by_question(summary.external_id)
     return tuple(
         question
         for question in questions
-        if answer_state(question, known.get((summary.external_id, question.name), ()), content_hash=content_hash)
-        is not AnswerState.CURRENT
+        if answer_state(question, stored.get(question.name, ()), content_hash=content_hash) is not AnswerState.CURRENT
     )
 
 
@@ -268,19 +346,16 @@ def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:
     return summaries
 
 
-def _answers_by_question(answers: Sequence[RecipeAnswer]) -> dict[_QuestionKey, list[RecipeAnswer]]:
-    """Every stored answer, grouped by (recipe, question). A reworded question keeps all its old answers here."""
-    known: dict[_QuestionKey, list[RecipeAnswer]] = {}
-    for answer in answers:
-        known.setdefault((answer.recipe_id, answer.question), []).append(answer)
-    return known
+def _per_recipe_reader(store: CorpusBackend) -> Callable[[str], Sequence[RecipeAnswer]] | None:
+    """The store's read of the answers it has *persisted* for one recipe, when it can do that.
 
-
-def _remember(known: dict[_QuestionKey, list[RecipeAnswer]], answer: RecipeAnswer) -> None:
-    """Hold `answer` beside whatever this recipe already stored for the question, replacing its own key."""
-    answers = known.setdefault((answer.recipe_id, answer.question), [])
-    for index, stored in enumerate(answers):
-        if stored.criteria_hash == answer.criteria_hash:
-            answers[index] = answer
-            return
-    answers.append(answer)
+    Dynamo can: its answers live as items under `RECIPE#<id>`, so one consistent query says what is
+    already there whatever the projection says. Blobs cannot — one JSONL holds the whole corpus — so they
+    are read once as a batch by `_KnownAnswers` instead. `answers_for` is the seam name this asks for; the
+    private one is F1's current name for the same read, which is what runs today.
+    """
+    for name in ("answers_for", "_answers_for"):
+        reader = getattr(store, name, None)
+        if callable(reader):
+            return cast("Callable[[str], Sequence[RecipeAnswer]]", reader)
+    return None

@@ -14,7 +14,7 @@ from glean.decisions import DECISION_MODEL
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
-from glean.recipes.dynamo_corpus import DynamoCorpusBackend
+from glean.recipes.dynamo_corpus import DynamoCorpusBackend, ProjectionPublishError
 from glean.recipes.enrichment import (
     DIETARY_ENRICHER,
     CorpusUnavailableError,
@@ -238,6 +238,75 @@ def test_the_report_states_how_many_recipes_give_an_active_time(tmp_path) -> Non
     assert "Recipes with a stated active time: 1/3 (33.3%)" in report.render()
 
 
+def test_answers_persisted_before_a_failed_publication_are_not_paid_for_again(recipes_table, projections) -> None:
+    """The projection is published at the end, so a run must resume from the table, not from it."""
+    published = _dynamo_corpus(projections)
+    _seed(published)
+    recipes_only = projections.read()  # the document a fresh process would load: recipes, no answers
+    blocked = RecipeCorpusStore(
+        DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=_UnpublishableProjectionStore(recipes_only))
+    )
+    assert blocked.answers() == []  # nothing was published, so the projection says nothing about answers
+
+    with pytest.raises(ProjectionPublishError):
+        run_enrichment(blocked, FakeDecisionApi().client())
+
+    resumed = FakeDecisionApi()
+    report = run_enrichment(
+        RecipeCorpusStore(DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore(recipes_only))),
+        resumed.client(),
+    )
+
+    assert resumed.requests == []  # the answers were in the table all along
+    assert (report.requests, report.answers_stored, report.coverage) == (0, 0, 1.0)
+
+
+def test_a_crash_after_a_checkpoint_is_resumed_from_the_table(recipes_table, projections) -> None:
+    """The first recipe's answers were flushed to the table; a process that never publishes them loses nothing."""
+    published = _dynamo_corpus(projections)
+    _seed(published)
+    recipes_only = projections.read()
+    blocked = RecipeCorpusStore(
+        DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=_UnpublishableProjectionStore(recipes_only))
+    )
+    crashing = FakeDecisionApi(crash_when=lambda body: body["state"]["recipe_title"] == "Tomato Pasta")
+
+    with pytest.raises(ProjectionPublishError):
+        run_enrichment(blocked, crashing.client(), max_workers=1, checkpoint_every=1)
+    assert blocked.answers() == []  # the checkpoint went to the table, and publication never happened
+
+    resumed = FakeDecisionApi()
+    report = run_enrichment(
+        RecipeCorpusStore(DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore(recipes_only))),
+        resumed.client(),
+        max_workers=1,
+    )
+
+    assert [request["state"]["recipe_title"] for request in resumed.requests] == ["Tomato Pasta"]
+    assert report.coverage == 1.0
+
+
+def test_the_dynamo_run_writes_each_answer_once_across_checkpoints(recipes_table, projections) -> None:
+    counting = _CountingAnswersBackend(RECIPES_TABLE_NAME, projection=projections)
+    corpus = RecipeCorpusStore(counting)
+    _seed(corpus)
+
+    run_enrichment(corpus, FakeDecisionApi().client(), checkpoint_every=1)
+
+    # A delta per checkpoint, not the whole run's answers again: six answers per recipe, written once each.
+    assert counting.batches == [6, 6]
+    assert sum(counting.batches) == len(counting.answers())
+
+
+def test_the_blob_run_still_rewrites_its_whole_jsonl_at_each_checkpoint(tmp_path) -> None:
+    corpus, counting = _counting_blob_corpus(tmp_path)
+
+    run_enrichment(corpus, FakeDecisionApi().client(), checkpoint_every=1)
+
+    # One JSONL, so every write carries everything the run holds — the fallback the dynamo path avoids.
+    assert counting.batches == [6, 12]
+
+
 def test_the_stated_active_time_count_is_read_from_the_recipes_themselves(recipes_table, projections) -> None:
     """The projection's summaries are only as fresh as the last rebuild; this number has to be true anyway."""
     corpus = _dynamo_corpus(projections)
@@ -334,6 +403,25 @@ def _counting_blob_corpus(tmp_path) -> tuple[RecipeCorpusStore, CountingBackend]
     _seed(corpus)
     counting.rebuilds = 0  # a fresh corpus builds its index as the seeds land; count what the run does
     return corpus, counting
+
+
+class _UnpublishableProjectionStore(InMemoryProjectionStore):
+    """A projection object that can be read but never published, like a failed conditional write."""
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        raise ProjectionPublishError("the projection could not be published")
+
+
+class _CountingAnswersBackend(DynamoCorpusBackend):
+    """The real dynamo backend, recording how many answers each `save_answers` call was handed."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.batches: list[int] = []
+
+    def save_answers(self, answers, *, rebuild_projection: bool = True) -> int:
+        self.batches.append(len(answers))
+        return super().save_answers(answers, rebuild_projection=rebuild_projection)
 
 
 def _dynamo_corpus(projections) -> RecipeCorpusStore:
