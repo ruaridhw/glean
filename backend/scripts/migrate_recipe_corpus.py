@@ -5,12 +5,13 @@ Reads every recipe blob and the dietary JSONL from a corpus source, writes each 
 pointer in one transaction, writes the dietary decisions as ANSWER items, then builds the S3 projection
 planning reads. Idempotent: a second run compares before writing and stores nothing.
 
-The table is provisioned at 5 WCU, so the run paces itself, charging every write it is about to make: a
-recipe is a transaction of two items (its body and its SOURCE pointer) billed at twice the item size in KiB
-units, and each answer item is its own write. On a 632-recipe corpus with six answers each that is roughly
-8,000-16,000 WCU depending on recipe size, so about 32-68 minutes at the default 4 WCU/s; the plan prints
-the exact figure for the corpus it is about to migrate. Throttles are retried with backoff, and
-`--wcu-per-second` trades time for headroom.
+The table is provisioned at 5 WCU, so the run paces itself, charging every write it is about to make from
+the item it will send: a recipe is a transaction of two items (its body and its SOURCE pointer) billed at
+twice the item size in KiB units, and each answer item is its own write. Item sizes use DynamoDB's own rule
+(UTF-8 bytes of attribute names and values, rounded up per KiB), so the figure is what the pacer will spend,
+not a guess. On a 632-recipe corpus with six answers each that is roughly 9,000-17,000 WCU depending on
+recipe size, so about 37-70 minutes at the default 4 WCU/s; the plan prints it for the corpus it is about to
+migrate. Throttles are retried with backoff, and `--wcu-per-second` trades time for headroom.
 
     # rehearse against a local corpus, writing nothing
     uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-dev \\
@@ -192,6 +193,13 @@ class Checkpoint:
             return set()
         return set(migrated)
 
+    def reset(self) -> None:
+        """Forget the recorded progress: delete the file on disk and start this run from the beginning."""
+        self.migrated.clear()
+        self._unsaved = 0
+        if self._path is not None:
+            self._path.unlink(missing_ok=True)
+
     def add(self, recipe_id: str) -> None:
         self.migrated.add(recipe_id)
         self._unsaved += 1
@@ -236,6 +244,7 @@ def main(
 
     source = corpus_source if corpus_source is not None else _open_source(args)
     projections = projection_store if projection_store is not None else _open_projection(args)
+    # Reading and validating the checkpoint is all a dry run may do: the reset below deletes a file.
     checkpoint = _checkpoint(args)
     for warning in checkpoint.warnings:
         print(warning)
@@ -251,6 +260,8 @@ def main(
         print(ROLLBACK_NOTE)
         return 0
 
+    if args.reset_checkpoint:
+        checkpoint.reset()
     target = (
         backend if backend is not None else DynamoCorpusBackend(args.table, projection=projections, region=args.region)
     )
@@ -342,8 +353,6 @@ def _checkpoint(args: argparse.Namespace) -> Checkpoint:
     owner = f"{args.table}|{args.bucket or args.local}"
     default = Path(tempfile.gettempdir()) / f"migrate-recipe-corpus-{args.table}.json"
     path = None if args.no_checkpoint else (args.checkpoint or default)
-    if args.reset_checkpoint and path is not None:
-        path.unlink(missing_ok=True)
     return Checkpoint(path, owner=owner)
 
 
