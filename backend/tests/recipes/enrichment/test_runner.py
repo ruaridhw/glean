@@ -277,11 +277,12 @@ def test_the_same_run_reaches_full_coverage_through_the_dynamo_store(recipes_tab
 def test_the_dynamo_run_writes_the_projection_once_not_once_per_checkpoint(recipes_table, projections) -> None:
     corpus = _dynamo_corpus(projections)
     _seed(corpus)
-    projections.writes = 0
+    writes_before = projections.writes
 
     run_enrichment(corpus, FakeDecisionApi().client(), enrichers=BOTH_ENRICHERS, checkpoint_every=1)
 
-    assert projections.writes == 1  # F1's bulk save path: one authoritative rebuild at the end
+    # F1's bulk save path: one authoritative rebuild at the end, not one projection write per checkpoint.
+    assert projections.writes - writes_before == 1
 
 
 def test_two_enrichers_declaring_one_question_is_refused(tmp_path) -> None:
