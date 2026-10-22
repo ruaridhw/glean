@@ -6,7 +6,9 @@ import gzip
 import json
 from datetime import UTC, datetime
 
+import boto3
 import pytest
+from moto import mock_aws
 
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
 from glean.recipes.corpus import recipe_blob_key
@@ -15,7 +17,9 @@ from glean.recipes.projection import (
     FilesystemProjectionStore,
     ProjectedRecipe,
     ProjectionError,
+    ProjectionSnapshot,
     RecipeProjection,
+    S3ProjectionStore,
     build_projection,
     dumps,
     loads,
@@ -93,6 +97,21 @@ def test_projection_drops_an_answer_whose_recipe_has_changed_since_it_was_asked(
     assert projection.by_id("rec_gone") is None
 
 
+def test_the_projection_keeps_only_the_latest_answer_for_each_question() -> None:
+    stale = _answer("rec_tomato_pasta", "vegan", 0.9).model_copy(
+        update={"criteria_hash": "f" * 64, "computed_at": datetime(2026, 9, 1, tzinfo=UTC)}
+    )
+    current = _answer("rec_tomato_pasta", "vegan", 0.02).model_copy(
+        update={"computed_at": datetime(2026, 10, 22, tzinfo=UTC)}
+    )
+
+    projection = build_projection(synthetic_corpus(), [stale, current])
+
+    answered = projection.by_id("rec_tomato_pasta")
+    assert answered is not None
+    assert [(answer.question, answer.probability) for answer in answered.answers] == [("dietary:vegan", 0.02)]
+
+
 def test_a_projection_with_one_recipe_replaced_keeps_the_others_and_stays_sorted() -> None:
     projection = build_projection(synthetic_corpus(), [])
     replacement = ProjectedRecipe(
@@ -139,22 +158,53 @@ def test_a_dumped_dietary_answer_still_carries_the_flag_a_pre_f1_reader_needs() 
 def test_the_filesystem_projection_store_reads_back_what_it_wrote(tmp_path) -> None:
     store = FilesystemProjectionStore(tmp_path)
 
-    assert store.read() is None
+    assert store.load() == ProjectionSnapshot(data=None, etag=None)
 
-    store.write(b"{}")
+    assert store.store(b"{}", etag=None) is True
 
     assert store.read() == b"{}"
     assert (tmp_path / PROJECTION_KEY).exists()
+    assert store.store(b"[]", etag=None) is False  # the object exists: create-only no longer applies
 
 
 def test_the_in_memory_projection_store_starts_empty() -> None:
     store = InMemoryProjectionStore()
 
-    assert store.read() is None
+    assert store.load() == ProjectionSnapshot(data=None, etag=None)
 
-    store.write(b"{}")
+    assert store.store(b"{}", etag=store.load().etag) is True
 
     assert store.read() == b"{}"
+
+
+def test_the_s3_projection_store_creates_once_and_rejects_a_stale_writer() -> None:
+    with mock_aws():
+        bucket = "glean-recipe-cache-test"
+        boto3.client("s3", region_name="eu-west-2").create_bucket(
+            Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
+        )
+        store = S3ProjectionStore(bucket, region="eu-west-2")
+        assert store.load() == ProjectionSnapshot(data=None, etag=None)
+
+        assert store.store(b"one", etag=None) is True
+        # A second creator that also read "no object" must not replace it.
+        assert store.store(b"two", etag=None) is False
+
+        current = store.load()
+        assert store.store(b"three", etag=current.etag) is True
+        assert store.store(b"four", etag=current.etag) is False  # the etag it read is now stale
+        assert store.read() == b"three"
+
+
+def test_a_stale_writer_cannot_overwrite_the_document_it_did_not_read(tmp_path) -> None:
+    store = FilesystemProjectionStore(tmp_path)
+    first = store.load()
+    second = store.load()
+
+    assert store.store(b"one", etag=first.etag) is True
+    assert store.store(b"two", etag=second.etag) is False
+
+    assert store.read() == b"one"
 
 
 def test_a_projection_loads_from_a_hand_built_document(tmp_path) -> None:

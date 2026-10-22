@@ -322,6 +322,42 @@ def _decision(
     )
 
 
+@pytest.mark.parametrize("stale_hash", ["f" * 64, "0" * 64])
+@pytest.mark.parametrize("stale_computed_last", [True, False])
+def test_a_stale_criteria_answer_can_never_shadow_the_current_one(
+    tmp_path, stale_hash: str, stale_computed_last: bool
+) -> None:
+    corpus = _corpus(tmp_path, [("rec_lentil", "Lentil Soup", ["lentils", "vegetable stock"])])
+    current_hash = question_hash(dietary_questions()[TREE_NUT_FREE])
+    assert current_hash not in {stale_hash, "0" * 64}
+    stale_at = datetime(2026, 10, 20, tzinfo=UTC) if stale_computed_last else datetime(2026, 10, 1, tzinfo=UTC)
+    current_at = datetime(2026, 10, 1, tzinfo=UTC) if stale_computed_last else datetime(2026, 10, 20, tzinfo=UTC)
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id="rec_lentil",
+                flag=TREE_NUT_FREE,
+                probability=0.9,
+                model=CURRENT_MODEL,
+                content_hash=_hash(corpus, "rec_lentil"),
+                criteria_hash=stale_hash,
+                computed_at=stale_at,
+            ),
+            DietaryDecision(
+                recipe_id="rec_lentil",
+                flag=TREE_NUT_FREE,
+                probability=0.02,
+                model=CURRENT_MODEL,
+                content_hash=_hash(corpus, "rec_lentil"),
+                criteria_hash=current_hash,
+                computed_at=current_at,
+            ),
+        ]
+    )
+
+    assert _ids(corpus, [TREE_NUT_FREE]) == {"rec_lentil"}
+
+
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,

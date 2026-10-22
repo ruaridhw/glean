@@ -5,8 +5,9 @@ Answers are derived data about a recipe, not part of its body: F1 stores the die
 
 The question name is the stable handle. Dietary questions are named `dietary:<flag>` so a flag keeps
 its answers when the question text is reworded (the criteria hash, not the name, says which wording an
-answer replied to). A pre-F1 dietary JSONL line carries `flag` and no `question`; it reads through here
-unchanged, and a dumped answer still carries `flag`, so rolling back to the blob corpus keeps working.
+answer replied to). A pre-F1 dietary JSONL line carries `flag` and no `question` and reads through here
+unchanged; a dumped answer still carries `flag` so the format stays legible either way. (Rolling back to
+the blobs does *not* pick up answers computed in dynamo mode — see `AGENTS.md`, "Rolling back to blobs".)
 """
 
 from __future__ import annotations
@@ -66,3 +67,22 @@ class RecipeAnswer(BaseModel):
     @property
     def flag(self) -> str | None:
         return dietary_flag(self.question)
+
+
+def latest_per_question(answers: Any) -> list[RecipeAnswer]:
+    """One answer per (recipe, question): the most recently computed one.
+
+    A question keeps every answer it has ever had, keyed by criteria hash, so a reworded question leaves the
+    previous wording's answer beside the new one. The producer only asks what is missing or stale, so the
+    newest answer is the one the current wording produced; keeping both would let an old criteria hash win.
+    """
+    latest: dict[tuple[str, str], RecipeAnswer] = {}
+    for answer in answers:
+        key = (answer.recipe_id, answer.question)
+        incumbent = latest.get(key)
+        if incumbent is None or (answer.computed_at, answer.criteria_hash) > (
+            incumbent.computed_at,
+            incumbent.criteria_hash,
+        ):
+            latest[key] = answer
+    return sorted(latest.values(), key=lambda answer: (answer.recipe_id, answer.question))

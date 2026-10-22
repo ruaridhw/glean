@@ -6,19 +6,28 @@ small document in the recipe-cache bucket after every change: each recipe's summ
 decision answers, and room for the attributes F2/V5 fill in. Lambdas cache it for five minutes.
 
 The document is deterministic — sorted by recipe id, no build timestamp, gzip with `mtime=0` — so an
-unchanged rebuild produces identical bytes and the writer can skip the S3 put.
+unchanged rebuild produces identical bytes, and the writer can skip the put.
+
+Every writer publishes the whole object, so publication is conditional on the object version it read
+(`store(..., etag=...)`, an S3 `If-Match`): two Lambdas importing different recipes at once would
+otherwise each publish their own snapshot and one of the two entries would disappear for good.
 """
 
 from __future__ import annotations
 
+import contextlib
 import gzip
+import hashlib
+import os
+import tempfile
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel, Field, ValidationError
 
 from glean.observability import logger
-from glean.recipes.answers import RecipeAnswer, content_fingerprint
+from glean.recipes.answers import RecipeAnswer, content_fingerprint, latest_per_question
 from glean.recipes.corpus import recipe_blob_key
 from glean.recipes.search_index import RecipeSummary
 
@@ -67,11 +76,30 @@ class RecipeProjection(BaseModel):
         return self.model_copy(update={"recipes": sorted([*others, recipe], key=_by_id)})
 
 
-class ProjectionStore(Protocol):
-    """Where the projection document lives: one opaque byte string, or None before the first build."""
+@dataclass(frozen=True)
+class ProjectionSnapshot:
+    """The document as read, with the version a conditional publish must present."""
 
-    def read(self) -> bytes | None: ...
-    def write(self, data: bytes) -> None: ...
+    data: bytes | None
+    etag: str | None
+
+
+class ProjectionStore(Protocol):
+    """Where the projection document lives, with the object version a writer has to publish against."""
+
+    def read(self) -> bytes | None:
+        """The current document, for verification and scripts (never for a read-modify-write)."""
+        ...
+
+    def load(self) -> ProjectionSnapshot: ...
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        """Publish `data` only if the object is still at `etag` (`None`: it must not exist yet).
+
+        Returns False when another writer got there first, so the caller re-reads and re-applies its
+        change instead of dropping the other writer's entry.
+        """
+        ...
 
 
 class S3ProjectionStore:
@@ -83,35 +111,78 @@ class S3ProjectionStore:
         self._client = boto3.client("s3", region_name=region)
 
     def read(self) -> bytes | None:
+        return self.load().data
+
+    def load(self) -> ProjectionSnapshot:
         from botocore.exceptions import ClientError  # noqa: PLC0415
 
         try:
-            return self._client.get_object(Bucket=self._bucket, Key=self._key)["Body"].read()
+            response = self._client.get_object(Bucket=self._bucket, Key=self._key)
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code")
             if code not in {"NoSuchKey", "404", "NoSuchBucket"}:
                 logger.warning("recipe projection read failed", extra={"key": self._key, "code": code})
-            return None
+            return ProjectionSnapshot(data=None, etag=None)
+        return ProjectionSnapshot(data=response["Body"].read(), etag=response.get("ETag"))
 
-    def write(self, data: bytes) -> None:
-        self._client.put_object(
-            Bucket=self._bucket, Key=self._key, Body=data, ContentType="application/json", ContentEncoding="gzip"
-        )
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        from botocore.exceptions import ClientError  # noqa: PLC0415
+
+        kwargs: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Key": self._key,
+            "Body": data,
+            "ContentType": "application/json",
+            "ContentEncoding": "gzip",
+        }
+        if etag is None:
+            kwargs["IfNoneMatch"] = "*"
+        else:
+            kwargs["IfMatch"] = etag
+        try:
+            self._client.put_object(**kwargs)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"PreconditionFailed", "412"}:
+                return False
+            raise
+        return True
 
 
 class FilesystemProjectionStore:
+    """A local projection file. The version is the content hash; compare-and-swap is best effort.
+
+    Local rehearsal only: two processes can still interleave between the read and the replace, which is
+    why the deployed writer is the S3 adapter with its `If-Match`.
+    """
+
     def __init__(self, root: Path, *, key: str = PROJECTION_KEY) -> None:
         self._path = root / key
 
     def read(self) -> bytes | None:
-        try:
-            return self._path.read_bytes()
-        except OSError:
-            return None
+        return self.load().data
 
-    def write(self, data: bytes) -> None:
+    def load(self) -> ProjectionSnapshot:
+        try:
+            data = self._path.read_bytes()
+        except OSError:
+            return ProjectionSnapshot(data=None, etag=None)
+        return ProjectionSnapshot(data=data, etag=_content_etag(data))
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        current = self.load()
+        if current.etag != etag:
+            return False
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_bytes(data)
+        handle, temp = tempfile.mkstemp(dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(handle, "wb") as file:
+                file.write(data)
+            os.replace(temp, self._path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                os.unlink(temp)
+            raise
+        return True
 
 
 @lru_cache(maxsize=1)
@@ -150,11 +221,13 @@ def build_projection(
         projected.append(
             ProjectedRecipe(
                 summary=RecipeSummary.from_recipe(recipe, key=key),
-                answers=[
+                # Only the answers about the recipe's current state, and for each question only the one
+                # the latest wording produced: an older criteria hash must never shadow the current answer.
+                answers=latest_per_question(
                     answer
                     for answer in answers_by_recipe.get(recipe.external_id, [])
                     if answer.content_hash == fingerprint
-                ],
+                ),
             )
         )
     return RecipeProjection(recipes=sorted(projected, key=_by_id))
@@ -178,3 +251,7 @@ def loads(raw: bytes) -> RecipeProjection:
 
 def _by_id(projected: ProjectedRecipe) -> str:
     return projected.summary.external_id
+
+
+def _content_etag(data: bytes) -> str:
+    return f'"{hashlib.sha256(data).hexdigest()}"'

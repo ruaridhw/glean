@@ -38,24 +38,24 @@ if TYPE_CHECKING:
     from glean.recipes.search_index import RecipeSummary
 
 __all__ = [
+    "CALIBRATED_DIETARY",
     "DIETARY_DECISIONS_KEY",
     "DIETARY_FLAGS",
     "LEGACY_NUT_FREE",
     "PEANUT_FREE",
     "TREE_NUT_FREE",
-    "CALIBRATED_DIETARY",
     "CorpusUnavailableError",
     "CoverageReport",
     "DietaryCalibration",
     "DietaryDecision",
     "DietaryDecisionStore",
     "DietaryDecisions",
+    "UncalibratedModelError",
     "content_fingerprint",
     "dietary_answers",
     "dietary_questions",
     "produce_missing_decisions",
     "question_hash",
-    "UncalibratedModelError",
 ]
 
 _EVERYTHING = 1_000_000
@@ -215,11 +215,23 @@ def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision | None:
 
 
 class DietaryDecisions:
-    """Stored decisions, looked up by (recipe id, flag), read under one calibration."""
+    """Stored decisions, looked up by (recipe id, flag), read under one calibration.
+
+    A (recipe, flag) can have several stored answers: the table keys them by criteria hash, and a reworded
+    question leaves the old wording's answer beside the new one. Keep the one that speaks for what is asked
+    now under this calibration's model — an older wording or another model can never shadow it — and among
+    equals the latest computation wins. The corpus answers, the blob JSONL and a projection rebuilt from the
+    table all go through this.
+    """
 
     def __init__(self, decisions: list[DietaryDecision], *, calibration: DietaryCalibration) -> None:
-        self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
         self._calibration = calibration
+        self._by_key: dict[tuple[str, str], DietaryDecision] = {}
+        for decision in decisions:
+            key = (decision.recipe_id, decision.flag)
+            incumbent = self._by_key.get(key)
+            if incumbent is None or _preferred(decision, incumbent, calibration):
+                self._by_key[key] = decision
 
     def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
@@ -236,6 +248,22 @@ class DietaryDecisions:
         if decision is None or not _is_current(decision, summary, self._calibration):
             return True
         return decision.probability >= self._calibration.threshold_for(flag)
+
+
+def _preferred(candidate: DietaryDecision, incumbent: DietaryDecision, calibration: DietaryCalibration) -> bool:
+    """Whether `candidate` speaks for the current question better than `incumbent`."""
+    if _answers_current_question(candidate, calibration) != _answers_current_question(incumbent, calibration):
+        return _answers_current_question(candidate, calibration)
+    return (candidate.computed_at, candidate.criteria_hash) > (incumbent.computed_at, incumbent.criteria_hash)
+
+
+def _answers_current_question(decision: DietaryDecision, calibration: DietaryCalibration) -> bool:
+    question = _QUESTIONS.get(decision.flag)
+    return (
+        question is not None
+        and decision.criteria_hash == question_hash(question)
+        and calibration.model.accepts(decision.model)
+    )
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary, calibration: DietaryCalibration) -> bool:

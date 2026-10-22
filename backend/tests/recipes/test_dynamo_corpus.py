@@ -24,6 +24,7 @@ from glean.recipes.answers import RecipeAnswer, dietary_question
 from glean.recipes.corpus import RecipeCorpusStore, recipe_blob_key
 from glean.recipes.dynamo_corpus import (
     DynamoCorpusBackend,
+    ProjectionPublishError,
     RecipeTooLargeError,
     answer_sk,
     recipe_pk,
@@ -44,6 +45,44 @@ if TYPE_CHECKING:
 COMPUTED_AT = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 CURRENT_MODEL = f"{DECISION_MODEL}-20261014"
 TREE_NUT_FREE = "tree-nut-free"
+
+
+class _AlwaysConflictingStore:
+    """A publisher that always loses the version race."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.reads = 0
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        self.reads += 1
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        return False
+
+
+class _FailingOnceStore:
+    """An S3 blip on the first publish; the object never moved."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.failures = 1
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        if self.failures:
+            self.failures -= 1
+            raise ClientError({"Error": {"Code": "SlowDown"}}, "PutObject")
+        return self.inner.store(data, etag=etag)
 
 
 class _CountingProjectionStore(InMemoryProjectionStore):
@@ -253,6 +292,98 @@ def test_planning_applies_the_same_dietary_decisions_in_both_modes(
     assert offered[blobs] == offered[dynamo] == {"rec_tomato_pasta"}
 
 
+# -- concurrent writers must not lose each other's projection entries ----------------------------
+# The projection is one S3 object published by every writer, so a writer that publishes its own cached
+# snapshot silently drops entries another process saved. These tests use two views of one object, which
+# reproduces it without threads.
+
+
+def test_two_writers_do_not_lose_each_others_projection_entries(recipes_table: Any) -> None:
+    published = InMemoryProjectionStore()
+    first = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    second = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    first.index()  # both writers warm their own 5-minute cache on the empty document
+    second.index()
+    recipes = synthetic_corpus()
+
+    first.save(recipes[0])
+    second.save(recipes[1])
+    first.save(recipes[2])
+
+    assert sorted(recipe.summary.external_id for recipe in _projection(published).recipes) == [
+        "rec_bean_tacos",
+        "rec_chicken_curry",
+        "rec_tomato_pasta",
+    ]
+    assert RecipeCorpusStore(second).search(q="tomato")[1] == 1
+
+
+def test_a_writer_that_saved_nothing_else_still_publishes_over_the_fresh_document(recipes_table: Any) -> None:
+    published = InMemoryProjectionStore()
+    stale = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    other = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    recipes = synthetic_corpus()
+    stale.index()
+    other.save(recipes[0])
+
+    stale.save(recipes[1])
+
+    assert {recipe.summary.external_id for recipe in _projection(published).recipes} == {
+        recipes[0].external_id,
+        recipes[1].external_id,
+    }
+
+
+def test_answers_from_two_writers_are_all_kept(recipes_table: Any) -> None:
+    published = InMemoryProjectionStore()
+    first = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    second = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published.view())
+    for recipe in synthetic_corpus():
+        first.save(recipe)
+    first.index()
+    second.index()
+
+    first.save_answers([_answer("rec_tomato_pasta", "vegan", 0.02)])
+    second.save_answers([_answer("rec_bean_tacos", "vegan", 0.02)])
+
+    assert {(answer.recipe_id, answer.question) for answer in _projection(published).answers()} == {
+        ("rec_tomato_pasta", "dietary:vegan"),
+        ("rec_bean_tacos", "dietary:vegan"),
+    }
+
+
+def test_a_publish_that_keeps_losing_the_race_is_reported_with_the_repair_command(
+    recipes_table: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    published = _AlwaysConflictingStore(InMemoryProjectionStore())
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published)
+    recipe = synthetic_corpus()[0]
+
+    with pytest.raises(ProjectionPublishError, match="build_recipe_index"):
+        backend.save(recipe)
+
+    assert any(recipe.external_id in record.getMessage() for record in caplog.records)
+    assert backend.get(recipe.external_id) == recipe
+
+
+def test_a_retry_after_a_failed_publish_repairs_the_projection_without_rewriting_the_recipe(
+    recipes_table: Any,
+) -> None:
+    object_store = InMemoryProjectionStore()
+    published = _FailingOnceStore(object_store)
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=published)
+    recipe = synthetic_corpus()[0]
+
+    with pytest.raises(ProjectionPublishError):
+        backend.save(recipe)
+
+    published.failures = 0
+    retried = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=object_store.view())
+
+    assert retried.upsert(recipe) is True  # nothing new to store: only the projection was missing
+    assert [entry.summary.external_id for entry in _projection(object_store).recipes] == [recipe.external_id]
+
+
 # -- retry policy --------------------------------------------------------------------------------
 
 
@@ -287,6 +418,72 @@ def test_a_throttle_that_never_recovers_raises_after_the_last_attempt() -> None:
         retry_throttled(operation, attempts=3, sleep=lambda _: None)
 
     assert len(calls) == 3
+
+
+def _cancelled(*reasons: str) -> ClientError:
+    return ClientError(
+        {
+            "Error": {"Code": "TransactionCanceledException", "Message": "Transaction cancelled"},
+            "CancellationReasons": [
+                {"Code": reason, "Message": reason, "Item": {"Key": {"pk": {"S": "RECIPE#x"}}}} for reason in reasons
+            ],
+        },
+        "TransactWriteItems",
+    )
+
+
+def test_a_transaction_cancelled_for_throughput_is_retried() -> None:
+    sleeps: list[float] = []
+    calls: list[int] = []
+
+    def operation() -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            raise _cancelled("ProvisionedThroughputExceeded")
+        return "written"
+
+    assert retry_throttled(operation, sleep=sleeps.append) == "written"
+    assert len(calls) == 2
+    assert len(sleeps) == 1
+
+
+def test_a_transaction_conflict_is_retried() -> None:
+    calls: list[int] = []
+
+    def operation() -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            raise _cancelled("TransactionConflict")
+        return "written"
+
+    assert retry_throttled(operation, sleep=lambda _: None) == "written"
+    assert len(calls) == 2
+
+
+def test_a_transaction_cancelled_by_a_failed_condition_is_not_retried() -> None:
+    calls: list[int] = []
+
+    def operation() -> None:
+        calls.append(1)
+        raise _cancelled("ConditionalCheckFailed", "None")
+
+    with pytest.raises(ClientError):
+        retry_throttled(operation, sleep=lambda _: None)
+
+    assert len(calls) == 1
+
+
+def test_a_mixed_cancellation_is_not_retried() -> None:
+    calls: list[int] = []
+
+    def operation() -> None:
+        calls.append(1)
+        raise _cancelled("ProvisionedThroughputExceeded", "ConditionalCheckFailed")
+
+    with pytest.raises(ClientError):
+        retry_throttled(operation, sleep=lambda _: None)
+
+    assert len(calls) == 1
 
 
 def test_a_real_error_is_not_retried() -> None:
