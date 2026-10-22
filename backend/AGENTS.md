@@ -42,6 +42,20 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
     to the same item shape/projection entry (`attributes`).
   - Behaviour is identical across the seam: search results, dietary exclusions and the store's interface do
     not change with the setting, which is why the API and the planner never branch on it.
+  - The projection is one S3 object published by every writer, so publication is a conditional write
+    (`If-Match` on the object ETag, `If-None-Match: *` to create): a writer that loses the version race
+    re-reads and re-applies its change. If publication still fails it raises `ProjectionPublishError` and
+    logs `scripts/build_recipe_index.py --table … --bucket …`; the table keeps the change, so the rebuild
+    heals it. Readers stay on their 5-minute cache.
+
+### Rolling back to blobs
+
+`RECIPE_STORE=blobs` restores the corpus **as of the migration that filled the table**. Nothing in dynamo
+mode writes the blobs or `_decisions/dietary.jsonl` — not an import, not a decision run — so recipes
+imported and answers computed while the setting was `dynamo` are only in DynamoDB and the projection. That
+is a snapshot rollback, not a two-way mirror: before flipping back, export or re-create anything that must
+survive (re-import the affected URLs, re-run `scripts/compute_dietary_decisions.py`), or read straight from
+the table. The migration prints the same warning at the end of every run.
 
 ### Module layout
 
