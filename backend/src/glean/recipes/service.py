@@ -6,6 +6,7 @@ from glean.observability import logger
 from glean.recipe_api.client import RecipeApiClient, _iso_to_mins
 from glean.recipes import providers as recipe_providers
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.dynamo_corpus import RecipeTooLargeError
 from glean.recipes.schemas import (
     ImportUrlRequest,
     RecipeOut,
@@ -120,5 +121,9 @@ def import_recipe_from_url(request: ImportUrlRequest, *, llm_router: LLMRouter) 
             "parser": result.parser,
         },
     )
-    corpus_store.save(result.recipe)
+    try:
+        corpus_store.save(result.recipe)
+    except RecipeTooLargeError as exc:
+        # A permanent input rejection: the app should say the recipe is too big, not retry a 500.
+        raise ValueError(f"Recipe is too large to save: {exc}") from exc
     return stored_to_recipe_out(result.recipe)
