@@ -19,8 +19,16 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 from glean.recipes import service
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.dynamo_corpus import RecipeTooLargeError
 from glean.recipes.schemas import ImportUrlRequest
-from glean.recipes.stored import RecipeLlmResponse, RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
+from glean.recipes.stored import (
+    RecipeLlmResponse,
+    RecipeParseResult,
+    RecipeProvenance,
+    StoredIngredient,
+    StoredInstruction,
+    StoredRecipe,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -421,6 +429,32 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     assert len(data["instructions"]) == 2
     llm_router.invoke.assert_not_called()
     import_url_to_canonical.assert_not_called()
+
+
+def test_import_url_rejects_a_recipe_the_corpus_cannot_store(client: TestClient) -> None:
+    corpus_store = _empty_corpus_store()
+    corpus_store.save.side_effect = RecipeTooLargeError(
+        "recipe 'import:huge' is 12000 bytes, over the corpus's 10000 byte budget"
+    )
+    app.dependency_overrides[get_llm_router] = lambda: MagicMock()
+
+    with (
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=corpus_store),
+        patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
+        patch(
+            "glean.recipes.service.recipe_providers.import_url_to_canonical",
+            return_value=RecipeParseResult(
+                recipe=_stored_recipe("import:huge", title="Huge", source_url="https://example.com/huge"),
+                parser="schema_org",
+                source_url="https://example.com/huge",
+            ),
+        ),
+    ):
+        resp = client.post("/recipes/import-url", json={"url": "https://example.com/huge"})
+
+    assert resp.status_code == 422
+    assert "too large" in resp.json()["detail"].lower()
+    assert "10000 byte budget" in resp.json()["detail"]
 
 
 def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pipeline() -> None:
