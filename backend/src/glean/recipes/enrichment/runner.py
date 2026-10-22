@@ -79,8 +79,11 @@ def run_enrichment(
     selected = summaries[:limit] if limit is not None else summaries
     known = _answers_by_question(corpus.answers())
     work = [(summary, missing) for summary in selected if (missing := _missing(questions, summary, known))]
+    stated_active_time = _stated_active_time(corpus)
     if dry_run:
-        return _report(summaries, questions, known, planned=len(work), dry_run=True)
+        return _report(
+            summaries, questions, known, stated_active_time=stated_active_time, planned=len(work), dry_run=True
+        )
     if client is None:
         raise EnrichmentError("a run needs a decision client unless it is a dry run")
 
@@ -121,7 +124,15 @@ def run_enrichment(
             _store_answers(corpus, known)
             corpus.rebuild_index()
 
-    return _report(summaries, questions, known, requests=requests, stored=produced, failures=failures)
+    return _report(
+        summaries,
+        questions,
+        known,
+        requests=requests,
+        stored=produced,
+        stated_active_time=stated_active_time,
+        failures=failures,
+    )
 
 
 def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[EnrichmentQuestion]) -> list[RecipeAnswer]:
@@ -166,6 +177,7 @@ def _report(
     *,
     requests: int = 0,
     stored: int = 0,
+    stated_active_time: int = 0,
     planned: int = 0,
     dry_run: bool = False,
     failures: Sequence[AnswerFailure] = (),
@@ -201,7 +213,7 @@ def _report(
         questions=[coverage[question.name] for question in questions],
         requests=requests,
         answers_stored=stored,
-        stated_active_time=sum(1 for summary in summaries if summary.active_time_mins is not None),
+        stated_active_time=stated_active_time,
         rebuilt=stored > 0,
         dry_run=dry_run,
         planned_requests=planned,
@@ -223,6 +235,15 @@ def _missing(
         if answer_state(question, known.get((summary.external_id, question.name), ()), content_hash=content_hash)
         is not AnswerState.CURRENT
     )
+
+
+def _stated_active_time(corpus: RecipeCorpusStore) -> int:
+    """How many recipes state an active time (spec 6.1).
+
+    Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
+    rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
+    """
+    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
 
 
 def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:
