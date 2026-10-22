@@ -14,6 +14,7 @@
 #   make start-android     — Flutter on a running Android emulator
 #   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
 #   make e2e-tokens        — Cognito test-user tokens for the e2e entrypoint (see app/README.md)
+#   make enrich-corpus     — fill the local recipe corpus's decision answers (paid API; local only)
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -116,6 +117,18 @@ lint-app:  ## dart format (writes fixes) + flutter analyze
 .PHONY: pre-commit
 pre-commit:  ## Run all pre-commit hooks across the repo
 	pre-commit run --all-files
+
+# ── Corpus ────────────────────────────────────────────────────────────────────
+# Recipe enrichment asks the pinned decision model about every recipe, which is a paid external
+# service, so this target only ever runs against the local corpus under backend/.cache/. Prod runs
+# are the owner's, by hand (see backend/README.md, "Recipe enrichment"); scripts/enrich_corpus.py
+# refuses a prod table or bucket without --i-am-the-owner. Needs OPENROUTER_API_KEY in the
+# environment, and exits non-zero unless every recipe has a current answer to every question.
+# ENRICH_ARGS passes through, e.g. `make enrich-corpus ENRICH_ARGS=--dry-run`.
+
+.PHONY: enrich-corpus
+enrich-corpus:  ## Fill what the local recipe corpus is missing (ENRICH_ARGS=--dry-run to preview, no key needed)
+	cd backend && uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache $(ENRICH_ARGS)
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
