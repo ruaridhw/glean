@@ -44,9 +44,9 @@ from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answ
 from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for
 from glean.recipes.dynamo_corpus import (
     DynamoCorpusBackend,
-    _item_size_bytes,
     answer_item,
     answer_write_units,
+    item_size_bytes,
     recipe_item,
     recipe_write_units,
     source_item,
@@ -104,9 +104,9 @@ class MigrationPlan:
     def scan_units(self) -> int:
         """Read units the final projection rebuild spends: one consistent unit per 4 KB of every item."""
         bytes_read = sum(
-            _item_size_bytes(recipe_item(recipe))
-            + (_item_size_bytes(source_item(recipe)) if source_item(recipe) is not None else 0)
-            + sum(_item_size_bytes(answer_item(answer)) for answer in self.answers_planned_for(recipe.external_id))
+            item_size_bytes(recipe_item(recipe))
+            + (item_size_bytes(source_item(recipe)) if source_item(recipe) is not None else 0)
+            + sum(item_size_bytes(answer_item(answer)) for answer in self.answers_planned_for(recipe.external_id))
             for recipe in self.recipes
         )
         return math.ceil(bytes_read / 4096)
