@@ -49,6 +49,15 @@ The corpus scripts (`import_recipe_corpus.py`, `compute_dietary_decisions.py`, `
 the same `--table` switch; `--bucket` / `--cache-dir` says where the blobs (or, with `--table`, the projection)
 live.
 
+Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
+cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command
+(`scripts/build_recipe_index.py --table … --bucket …`); the table keeps the change.
+
+**Rolling back to `blobs` is a snapshot rollback.** Nothing in dynamo mode writes the blobs or the dietary
+JSONL, so recipes imported and answers computed while `RECIPE_STORE=dynamo` are not in them. Re-import those
+recipes and re-run `compute_dietary_decisions.py` before flipping back if they must survive; the migration
+prints the same warning.
+
 ### LangSmith Tracing
 
 LangChain calls can be traced to LangSmith by setting these values in `.env`:
