@@ -40,6 +40,9 @@ class RecipeSummary(BaseModel):
     source_url: str | None = None
     cuisine: str | None = None
     difficulty: str | None = None
+    # The time the recipe itself states, not an estimate: the coverage report counts how many recipes have
+    # one (spec 6.1), which puts a number on how often planning has to fall back to total time.
+    active_time_mins: int | None = None
     total_time_mins: int | None = None
     dietary_flags: list[str] = Field(default_factory=list)
     ingredient_names: list[str] = Field(default_factory=list)
@@ -53,6 +56,7 @@ class RecipeSummary(BaseModel):
             source_url=recipe.source_url,
             cuisine=recipe.cuisine,
             difficulty=recipe.difficulty,
+            active_time_mins=recipe.active_time_mins,
             total_time_mins=recipe.total_time_mins,
             dietary_flags=recipe.dietary_flags,
             ingredient_names=[ingredient.canonical_name for ingredient in recipe.ingredients],
