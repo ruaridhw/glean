@@ -98,6 +98,11 @@ class CorpusBackend(Protocol):
         """Every stored decision answer (dietary now, F2's enrichers later)."""
         ...
 
+    def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
+        """One recipe's answers, straight from the authoritative store (what an enricher asks to decide
+        what is missing), not from a possibly stale projection."""
+        ...
+
     def save_answers(self, answers: Sequence[RecipeAnswer]) -> int:
         """Store the answers that changed, returning how many were written."""
         ...
@@ -134,12 +139,25 @@ class BlobCorpusBackend:
         self._upsert_summary(RecipeSummary.from_recipe(recipe, key=key))
 
     def publish(self, recipe: StoredRecipe) -> bool:
-        summary = RecipeSummary.from_recipe(recipe, key=recipe_blob_key(recipe.external_id))
+        """Make a stored recipe searchable again, keeping the key its body is actually stored under."""
         index = self.index()
-        if index is not None and index.by_id(recipe.external_id) == summary:
-            return False
-        self._upsert_summary(summary)
+        known = index.by_id(recipe.external_id) if index is not None else None
+        if known is not None:
+            summary = RecipeSummary.from_recipe(recipe, key=known.key)
+            if known == summary:
+                return False
+            self._upsert_summary(summary)
+            return True
+        # No summary yet: the body may sit at a legacy flat key or another layout, so let the blobs say
+        # where it is instead of advertising a key nothing is stored under.
+        if self._load(recipe_blob_key(recipe.external_id)) is not None:
+            self._upsert_summary(RecipeSummary.from_recipe(recipe, key=recipe_blob_key(recipe.external_id)))
+            return True
+        self.rebuild_index()
         return True
+
+    def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
+        return [answer for answer in self.answers() if answer.recipe_id == recipe_id]
 
     def get(self, recipe_id: str) -> StoredRecipe | None:
         index = self.index()
@@ -276,6 +294,9 @@ class RecipeCorpusStore:
 
     def answers(self) -> list[RecipeAnswer]:
         return self.store.answers()
+
+    def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
+        return self.store.answers_for(recipe_id)
 
     def save_answers(self, answers: Sequence[RecipeAnswer]) -> int:
         return self.store.save_answers(answers)

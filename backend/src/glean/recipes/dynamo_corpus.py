@@ -214,13 +214,29 @@ class DynamoCorpusBackend:
     def answers(self) -> list[RecipeAnswer]:
         return sorted(self._load_projection().projection.answers(), key=lambda a: (a.recipe_id, a.question))
 
+    def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
+        """One recipe's stored answers, read from the table (a consistent Query: 1 RCU per 4 KB of answers).
+
+        The authoritative read: the projection carries the same answers, but a producer deciding what is
+        missing must not be told by a five-minute-old cache.
+        """
+        rows = self._retry(
+            lambda: self._client.query(
+                TableName=self._table,
+                KeyConditionExpression="pk = :pk AND begins_with(sk, :answers)",
+                ExpressionAttributeValues={":pk": recipe_pk(recipe_id), ":answers": ANSWER_PREFIX},
+                ConsistentRead=True,
+            )
+        )["Items"]
+        return sorted((_answer_from_row(row) for row in rows), key=lambda a: (a.question, a.criteria_hash))
+
     def save_answers(self, answers: Sequence[RecipeAnswer], *, rebuild_projection: bool = True) -> int:
         """Store the answers that changed, returning how many items were written.
 
         `rebuild_projection=False` is the bulk path (the migration): the caller writes the projection once
         at the end from the data it migrated, instead of once per recipe.
         """
-        snapshot, current = self._fresh_projection()
+        snapshot, current = self._fresh_projection_with_retry(what=f"the answers of {len(answers)} recipes")
         known = {_answer_key(answer): answer for answer in current.answers()}
         changed = [answer for answer in answers if known.get(_answer_key(answer)) != answer]
         for answer in changed:
@@ -292,21 +308,6 @@ class DynamoCorpusBackend:
         """The cached projection document, as planning sees it."""
         return self._load_projection().projection
 
-    def write_projection(self, projection: RecipeProjection) -> bool:
-        """Publish a projection built from data written outside the table (the migration). True when written.
-
-        The document comes from the source corpus, so a lost race re-derives from the table instead of
-        republishing the snapshot: a recipe imported while the migration ran stays in the projection.
-        """
-        document = {"current": projection}
-
-        def build(_current: RecipeProjection, refresh: bool) -> RecipeProjection:
-            if refresh:
-                document["current"] = self._projection_from_table()
-            return document["current"]
-
-        return self._publish(build, what="the migration", attempts=_MAX_REBUILD_ATTEMPTS)
-
     def _projection_from_table(self) -> RecipeProjection:
         """The whole projection, scanned back out of the table."""
         rows = self._scan()
@@ -332,6 +333,25 @@ class DynamoCorpusBackend:
         _projection_cache[self._projections] = (now, loaded)
         return loaded
 
+    def _fresh_projection_with_retry(self, *, what: str) -> tuple[ProjectionSnapshot, RecipeProjection]:
+        """A read outside the publication loop (deciding what changed), with the same bounded backoff."""
+        for attempt in range(_MAX_PUBLISH_ATTEMPTS):
+            try:
+                return self._fresh_projection()
+            except ClientError as error:
+                if not _is_publish_retryable(error) or attempt == _MAX_PUBLISH_ATTEMPTS - 1:
+                    logger.error(
+                        "recipe projection read failed; retry, and if it persists rebuild it:"
+                        f" {_REBUILD_COMMAND} ({what})",
+                        extra={"table": self._table, "change": what, "error": repr(error)},
+                    )
+                    raise ProjectionPublishError(
+                        f"could not read the recipe projection ({what}) after {_MAX_PUBLISH_ATTEMPTS} attempts; "
+                        f"retry, and if it persists rebuild with: {_REBUILD_COMMAND}"
+                    ) from error
+                time.sleep(random.uniform(0.02, min(0.02 * 2**attempt, 0.5)))  # noqa: S311 - backoff jitter
+        raise AssertionError("unreachable: the last attempt returns or raises")
+
     def _fresh_projection(self) -> tuple[ProjectionSnapshot, RecipeProjection]:
         """The projection as the object has it now, never from this process's cache: writers merge into it."""
         snapshot = self._projections.load()
@@ -355,21 +375,21 @@ class DynamoCorpusBackend:
         """
         last_error: Exception | None = None
         for attempt in range(attempts):
-            snapshot, current = self._fresh_projection()
-            document = build(current, attempt > 0)
-            data = dumps(document)
-            if data == snapshot.data:
-                self._remember(snapshot, document)
-                return False
             try:
+                # The read is inside the attempt: a transient S3 blip on GET must back off like a lost race.
+                snapshot, current = self._fresh_projection()
+                document = build(current, attempt > 0)
+                data = dumps(document)
+                if data == snapshot.data:
+                    self._remember(snapshot, document)
+                    return False
                 if self._projections.store(data, etag=snapshot.etag):
                     self._remember(ProjectionSnapshot(data=data, etag=None), document)
                     return True
             except ClientError as error:
-                if not _is_publish_retryable(error):
-                    last_error = error
-                    break
                 last_error = error
+                if not _is_publish_retryable(error):
+                    break
             if attempt < attempts - 1:
                 time.sleep(random.uniform(0.02, min(0.02 * 2**attempt, 0.5)))  # noqa: S311 - backoff jitter
         logger.error(
@@ -379,7 +399,8 @@ class DynamoCorpusBackend:
         )
         raise ProjectionPublishError(
             f"could not publish the recipe projection ({what}) after {attempts} attempts. "
-            f"The table holds the change; rebuild the projection with: {_REBUILD_COMMAND}"
+            f"The table may hold changes planning cannot see; retry, and if it persists rebuild with: "
+            f"{_REBUILD_COMMAND}"
         ) from last_error
 
     def _remember(self, snapshot: ProjectionSnapshot, projection: RecipeProjection) -> None:
@@ -396,7 +417,7 @@ class DynamoCorpusBackend:
         known = projection.by_id(recipe.external_id)
         key = known.summary.key if known is not None else recipe_blob_key(recipe.external_id)
         answers = latest_per_question(
-            answer for answer in self._answers_for(recipe.external_id) if answer.content_hash == fingerprint
+            answer for answer in self.answers_for(recipe.external_id) if answer.content_hash == fingerprint
         )
         return ProjectedRecipe(
             summary=RecipeSummary.from_recipe(recipe, key=key),
@@ -432,17 +453,6 @@ class DynamoCorpusBackend:
     def _source_is_current(self, pointer: dict[str, Any]) -> bool:
         stored = self._get(str(pointer["pk"]), RECIPE_SK)
         return stored is not None and stored.get("recipe_id") == pointer["recipe_id"]
-
-    def _answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
-        rows = self._retry(
-            lambda: self._client.query(
-                TableName=self._table,
-                KeyConditionExpression="pk = :pk AND begins_with(sk, :answers)",
-                ExpressionAttributeValues={":pk": recipe_pk(recipe_id), ":answers": ANSWER_PREFIX},
-                ConsistentRead=True,
-            )
-        )["Items"]
-        return [_answer_from_row(row) for row in rows]
 
     def _get(self, pk: str, sk: str) -> dict[str, Any] | None:
         response = self._retry(

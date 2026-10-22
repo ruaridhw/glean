@@ -10,8 +10,10 @@ the item it will send: a recipe is a transaction of two items (its body and its 
 twice the item size in KiB units, and each answer item is its own write. Item sizes use DynamoDB's own rule
 (UTF-8 bytes of attribute names and values, rounded up per KiB), so the figure is what the pacer will spend,
 not a guess. On a 632-recipe corpus with six answers each that is roughly 9,000-17,000 WCU depending on
-recipe size, so about 37-70 minutes at the default 4 WCU/s; the plan prints it for the corpus it is about to
-migrate. Throttles are retried with backoff, and `--wcu-per-second` trades time for headroom.
+recipe size, so about 37-70 minutes at the default 4 WCU/s, and the plan prints it for the corpus it is about
+to migrate. The last step is a full projection rebuild, which scans the table (a few more minutes of read
+capacity, also printed): the table is the authority, so a recipe imported while the run was going is kept.
+Throttles are retried with backoff, and `--wcu-per-second` trades time for headroom.
 
     # rehearse against a local corpus, writing nothing
     uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-dev \\
@@ -30,6 +32,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import math
 import os
 import tempfile
 import time
@@ -39,17 +42,28 @@ from typing import TYPE_CHECKING
 
 from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answers
 from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for
-from glean.recipes.dynamo_corpus import DynamoCorpusBackend, answer_write_units, recipe_write_units
-from glean.recipes.projection import ProjectionStore, RecipeProjection, build_projection
+from glean.recipes.dynamo_corpus import (
+    DynamoCorpusBackend,
+    _item_size_bytes,
+    answer_item,
+    answer_write_units,
+    recipe_item,
+    recipe_write_units,
+    source_item,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from glean.recipes.answers import RecipeAnswer
+    from glean.recipes.dynamo_corpus import ProjectionWrite
+    from glean.recipes.projection import ProjectionStore
     from glean.recipes.stored import StoredRecipe
 
 CHECKPOINT_EVERY = 25
 DEFAULT_WCU_PER_SECOND = 4.0  # under the table's 5 WCU, leaving room for the API's own reads and writes
+# The table's read capacity, which the final rebuild's consistent scan may use in full (the writes are done).
+_READ_UNITS_PER_SECOND = 5.0
 
 
 ROLLBACK_NOTE = (
@@ -76,14 +90,29 @@ class MigrationPlan:
         return sum(self.write_units(recipe) for recipe in self.recipes)
 
     def write_units(self, recipe: StoredRecipe) -> int:
-        answers = self.answers_for(recipe.external_id)
+        answers = self.answers_planned_for(recipe.external_id)
         return recipe_write_units(recipe) + sum(answer_write_units(answer) for answer in answers)
 
-    def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
+    def answers_planned_for(self, recipe_id: str) -> list[RecipeAnswer]:
+        """The answers this migration will write for a recipe (the table's answers are read for the projection)."""
         return self.answers.get(recipe_id, [])
 
     def duration_seconds(self, wcu_per_second: float) -> float:
         return self.wcu / wcu_per_second if wcu_per_second > 0 else 0.0
+
+    @property
+    def scan_units(self) -> int:
+        """Read units the final projection rebuild spends: one consistent unit per 4 KB of every item."""
+        bytes_read = sum(
+            _item_size_bytes(recipe_item(recipe))
+            + (_item_size_bytes(source_item(recipe)) if source_item(recipe) is not None else 0)
+            + sum(_item_size_bytes(answer_item(answer)) for answer in self.answers_planned_for(recipe.external_id))
+            for recipe in self.recipes
+        )
+        return math.ceil(bytes_read / 4096)
+
+    def scan_seconds(self) -> float:
+        return self.scan_units / _READ_UNITS_PER_SECOND
 
 
 @dataclass
@@ -252,8 +281,9 @@ def main(
     print(
         f"Migration plan: {len(plan.recipes)} recipes, "
         f"{sum(len(answers) for answers in plan.answers.values())} answers, "
-        f"{plan.wcu} write units, about {plan.duration_seconds(args.wcu_per_second) / 60:.0f} min "
-        f"at {args.wcu_per_second:g} WCU/s"
+        f"{plan.wcu} write units, about {plan.duration_seconds(args.wcu_per_second) / 60:.1f} min "
+        f"at {args.wcu_per_second:g} WCU/s, plus a {plan.scan_seconds() / 60:.1f} min scan "
+        f"({plan.scan_units} read units) to rebuild the projection from the table"
     )
     if args.dry_run:
         print("Dry run: wrote nothing.")
@@ -266,8 +296,9 @@ def main(
         backend if backend is not None else DynamoCorpusBackend(args.table, projection=projections, region=args.region)
     )
     summary = migrate(plan, target, checkpoint=checkpoint, wcu_per_second=args.wcu_per_second, limit=args.limit)
-    projection = _write_projection(plan, summary, target)
-    summary.projection_recipes = len(projection.recipes) if projection is not None else 0
+    projection = _write_projection(summary, target)
+    summary.projection_recipes = projection.recipes if projection is not None else 0
+    summary.projection_written = projection.written if projection is not None else False
     summary.projection_skipped = projection is None
     print(summary.render())
     # A full run that could not verify the whole corpus has not finished the cutover; --limit is a smoke run.
@@ -301,7 +332,7 @@ def migrate(
             else:
                 summary.processed += 1
             continue
-        answers = plan.answers_for(recipe.external_id)
+        answers = plan.answers_planned_for(recipe.external_id)
         # Answers first, so the entry the recipe write publishes already carries its decisions.
         for answer in answers:
             pacer.spend(answer_write_units(answer))
@@ -315,20 +346,17 @@ def migrate(
     return summary
 
 
-def _write_projection(
-    plan: MigrationPlan, summary: MigrationSummary, backend: DynamoCorpusBackend
-) -> RecipeProjection | None:
-    """Build the projection from the source corpus, once the whole corpus is in the table.
+def _write_projection(summary: MigrationSummary, backend: DynamoCorpusBackend) -> ProjectionWrite | None:
+    """Publish the projection from the table, once the whole corpus is in it.
 
-    Built from what was just migrated rather than scanned back out of the table: at 5 RCU a consistent
-    scan of 632 bodies is minutes of throttling for data the run already holds.
+    The table is the single authority: the migration used to publish a document it built from the source
+    blobs, which quietly dropped a recipe imported (and projected) while it ran. So the final step is the
+    same `rebuild_projection()` F2 and the repair path use: scan the table, then publish conditionally,
+    re-scanning if another writer got there first. It costs a few minutes of the table's read capacity.
     """
     if not summary.complete:
         return None
-    answers = [answer for answers in plan.answers.values() for answer in answers]
-    projection = build_projection(plan.recipes, answers)
-    summary.projection_written = backend.write_projection(projection)
-    return projection
+    return backend.rebuild_projection()
 
 
 def _plan(source: RecipeCorpusStore) -> MigrationPlan:

@@ -51,6 +51,12 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
   - `publish(recipe)` on the store makes an already-stored recipe visible again without rewriting it. That is
     the repair path: a retried import deduped on its source URL calls it, so a 500 from a failed publish is
     healed by the retry rather than silently returning a recipe planning cannot see.
+  - `answers_for(recipe_id)` is the authoritative per-recipe answer read: a consistent Query on
+    `pk=RECIPE#<id>` in dynamo mode (1 RCU per 4 KB of answers, one query per recipe), a JSONL filter in blob
+    mode. Enrichers use it to decide what is missing; the projection must never be their source of truth.
+  - The table is the only authority for a full projection. `rebuild_projection()` (and the migration's last
+    step, and `scripts/build_recipe_index.py --table`) scans it and publishes conditionally, re-scanning if
+    another writer got there first; nothing publishes a document built from anywhere else.
 
 ### Rolling back to blobs
 
