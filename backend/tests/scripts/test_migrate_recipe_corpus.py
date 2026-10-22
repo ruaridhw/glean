@@ -20,8 +20,9 @@ from glean.meal_plan.dietary_decisions import (
     question_hash,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes import dynamo_corpus
 from glean.recipes.corpus import RecipeCorpusStore
-from glean.recipes.dynamo_corpus import DynamoCorpusBackend
+from glean.recipes.dynamo_corpus import DynamoCorpusBackend, item_write_units, recipe_item, source_item
 from glean.recipes.projection import loads
 
 if TYPE_CHECKING:
@@ -117,7 +118,9 @@ def test_the_migration_writes_every_recipe_its_answers_and_the_projection(
 
     out = capsys.readouterr().out
     assert "Written this run: 3 recipes, 3 answers" in out
-    assert "Projection: 3 recipes, written=True" in out
+    assert "Verified in the table: 3/3 recipes (the corpus is complete)" in out
+    assert "Projection: 3 recipes" in out
+    assert "not rebuilt" not in out
     for recipe in synthetic_corpus():
         assert backend.get(recipe.external_id) == recipe
         assert backend.get_by_source_url(recipe.source_url) == recipe
@@ -171,12 +174,167 @@ def test_a_resumed_run_skips_the_recipes_the_checkpoint_names(
 
     out = capsys.readouterr().out
     assert "2 recipes, 2 answers (1 already migrated on an earlier run)" in out
-    assert "missing" not in out
+    assert "Verified in the table: 3/3 recipes (the corpus is complete)" in out
+    assert "MISSING" not in out
     assert [recipe.summary.external_id for recipe in _projection(projections).recipes] == [
         "rec_bean_tacos",
         "rec_chicken_curry",
         "rec_tomato_pasta",
     ]
+
+
+def test_a_retry_without_a_checkpoint_still_publishes_the_projection(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The interruption case: every row is in the table, but the run that wrote them never checkpointed."""
+    _run(tmp_path, backend, source, projections, "--no-checkpoint")
+    (tmp_path / "checkpoint.json").unlink(missing_ok=True)
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections, "--no-checkpoint") == 0
+
+    out = capsys.readouterr().out
+    assert "Written this run: 0 recipes, 0 answers" in out
+    assert "Verified in the table: 3/3 recipes (the corpus is complete)" in out
+    assert "Projection: 3 recipes" in out
+    assert "not rebuilt" not in out
+    assert len(_projection(projections).recipes) == 3
+
+
+def test_a_checkpoint_lost_after_an_interruption_still_finishes_the_projection(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    # One recipe migrated and committed, then the process died before the checkpoint was flushed.
+    _run(tmp_path, backend, source, projections, "--limit", "1", "--no-checkpoint")
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections, "--no-checkpoint") == 0
+
+    out = capsys.readouterr().out
+    assert "Verified in the table: 3/3 recipes (the corpus is complete)" in out
+    assert "not rebuilt" not in out
+    assert [recipe.summary.external_id for recipe in _projection(projections).recipes] == [
+        "rec_bean_tacos",
+        "rec_chicken_curry",
+        "rec_tomato_pasta",
+    ]
+
+
+def test_a_full_run_that_leaves_a_recipe_unverified_exits_non_zero(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    recipes_table: Any,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    _run(tmp_path, backend, source, projections)
+    recipes_table.delete_item(Key={"pk": "RECIPE#rec_bean_tacos", "sk": "RECIPE"})
+    capsys.readouterr()
+
+    assert _run(tmp_path, backend, source, projections) == 1
+
+    out = capsys.readouterr().out
+    assert "Verified in the table: 2/3 recipes (INCOMPLETE)" in out
+    assert "MISSING from the table: 1 recipes" in out
+
+
+def test_the_pacer_is_charged_for_the_answers_as_well_as_the_recipes(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    elapsed = [0.0]
+    original = migrate_recipe_corpus.Pacer.__init__
+
+    def paced(self, rate, *, clock=None, sleep=None):
+        original(
+            self,
+            rate,
+            clock=lambda: elapsed[0],
+            sleep=lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds),
+        )
+
+    monkeypatch.setattr(migrate_recipe_corpus.Pacer, "__init__", paced)
+
+    _run(tmp_path, backend, source, projections, "--wcu-per-second", "4")
+
+    planned = migrate_recipe_corpus._plan(source)
+    # Every write (answer items included) is paced, so wall clock is the accounted units over the rate.
+    assert elapsed[0] == pytest.approx(planned.wcu / 4)
+    assert planned.wcu == sum(
+        migrate_recipe_corpus.recipe_wcu(recipe)
+        + sum(migrate_recipe_corpus.answer_write_units(answer) for answer in planned.answers_for(recipe.external_id))
+        for recipe in planned.recipes
+    )
+
+
+def test_the_estimate_counts_the_item_overhead_and_charges_answers(tmp_path: Path, source: RecipeCorpusStore) -> None:
+    planned = migrate_recipe_corpus._plan(source)
+    recipe = planned.recipes[0]
+
+    assert planned.wcu == sum(
+        migrate_recipe_corpus.recipe_wcu(item) + len(planned.answers_for(item.external_id)) for item in planned.recipes
+    )
+    assert migrate_recipe_corpus.recipe_wcu(recipe) == 2 * (
+        item_write_units(recipe_item(recipe)) + item_write_units(source_item(recipe))
+    )
+    assert migrate_recipe_corpus.answer_write_units(
+        planned.answers_for(recipe.external_id)[0]
+    ) == dynamo_corpus.item_write_units(dynamo_corpus.answer_item(planned.answers_for(recipe.external_id)[0]))
+    without_url = recipe.model_copy(update={"source_url": None})
+    assert migrate_recipe_corpus.recipe_wcu(without_url) == 2 * item_write_units(recipe_item(without_url))
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        "[]",
+        '{"owner": "x", "migrated": {"a": 1}}',
+        '{"owner": "x", "migrated": [1, 2]}',
+        '{"owner": "x"}',
+    ],
+)
+def test_an_unreadable_checkpoint_shape_is_reported_and_the_run_starts_fresh(
+    document: str,
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    (tmp_path / "checkpoint.json").write_text(document)
+
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    out = capsys.readouterr().out
+    assert "Ignoring unreadable checkpoint" in out
+    assert "Written this run: 3 recipes, 3 answers" in out
+
+
+def test_the_summary_states_what_rolling_back_to_blobs_does_and_does_not_restore(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    _run(tmp_path, backend, source, projections)
+
+    out = capsys.readouterr().out
+    assert "as of this migration" in out
+    assert "NOT in the blobs" in out
+    assert "re-run scripts/compute_dietary_decisions.py" in out
 
 
 def test_a_limit_run_leaves_a_consistent_projection_of_what_it_migrated(
@@ -270,14 +428,6 @@ def test_the_pacer_holds_the_run_to_the_configured_write_rate() -> None:
     # 15 write units at 5 WCU/s must take three seconds of wall clock, however fast the writes land.
     assert slept == [pytest.approx(1.0), pytest.approx(2.0)]
     assert clock[0] == pytest.approx(3.0)
-
-
-def test_one_recipe_costs_its_body_at_transactional_rates() -> None:
-    recipe = synthetic_corpus()[0]
-
-    body_kb = len(recipe.model_dump_json().encode()) // 1024
-
-    assert migrate_recipe_corpus.recipe_wcu(recipe) == 2 * (body_kb + 1) + 2
 
 
 def _items(table: Any) -> list[dict[str, Any]]:

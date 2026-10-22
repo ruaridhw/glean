@@ -5,10 +5,12 @@ Reads every recipe blob and the dietary JSONL from a corpus source, writes each 
 pointer in one transaction, writes the dietary decisions as ANSWER items, then builds the S3 projection
 planning reads. Idempotent: a second run compares before writing and stores nothing.
 
-The table is provisioned at 5 WCU, so the run paces itself. A recipe write is a transaction of two items,
-which DynamoDB charges at twice the item size's write units (a 4 KB body is 8 WCU, the pointer 2), and each
-answer is a 1 WCU write; on a 632-recipe corpus that is roughly 10,000 WCU, about 42 minutes at 4 WCU/s.
-Throttles are retried with backoff, and `--wcu-per-second` trades time for headroom.
+The table is provisioned at 5 WCU, so the run paces itself, charging every write it is about to make: a
+recipe is a transaction of two items (its body and its SOURCE pointer) billed at twice the item size in KiB
+units, and each answer item is its own write. On a 632-recipe corpus with six answers each that is roughly
+8,000-16,000 WCU depending on recipe size, so about 32-68 minutes at the default 4 WCU/s; the plan prints
+the exact figure for the corpus it is about to migrate. Throttles are retried with backoff, and
+`--wcu-per-second` trades time for headroom.
 
     # rehearse against a local corpus, writing nothing
     uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-dev \\
@@ -25,8 +27,9 @@ prints a recipe's content.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
-import math
+import os
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -34,8 +37,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answers
-from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for, recipe_payload
-from glean.recipes.dynamo_corpus import DynamoCorpusBackend
+from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for
+from glean.recipes.dynamo_corpus import DynamoCorpusBackend, answer_write_units, recipe_write_units
 from glean.recipes.projection import ProjectionStore, RecipeProjection, build_projection
 
 if TYPE_CHECKING:
@@ -46,6 +49,13 @@ if TYPE_CHECKING:
 
 CHECKPOINT_EVERY = 25
 DEFAULT_WCU_PER_SECOND = 4.0  # under the table's 5 WCU, leaving room for the API's own reads and writes
+
+
+ROLLBACK_NOTE = (
+    "Rollback note: flipping RECIPE_STORE back to blobs restores the corpus and dietary decisions as of this "
+    "migration. Recipes imported and answers computed while in dynamo mode are NOT in the blobs; re-import them "
+    "and re-run scripts/compute_dietary_decisions.py (or export them) before rolling back if they must survive."
+)
 
 
 class OwnerApprovalError(Exception):
@@ -61,7 +71,12 @@ class MigrationPlan:
 
     @property
     def wcu(self) -> int:
-        return sum(recipe_wcu(recipe) + len(self.answers.get(recipe.external_id, ())) for recipe in self.recipes)
+        """Write units the run will spend: every recipe transaction plus every answer item, as sized for real."""
+        return sum(self.write_units(recipe) for recipe in self.recipes)
+
+    def write_units(self, recipe: StoredRecipe) -> int:
+        answers = self.answers_for(recipe.external_id)
+        return recipe_write_units(recipe) + sum(answer_write_units(answer) for answer in answers)
 
     def answers_for(self, recipe_id: str) -> list[RecipeAnswer]:
         return self.answers.get(recipe_id, [])
@@ -73,6 +88,8 @@ class MigrationPlan:
 @dataclass
 class MigrationSummary:
     recipes: int
+    planned: int = 0
+    processed: int = 0
     recipes_written: int = 0
     answers_written: int = 0
     resumed: int = 0
@@ -82,11 +99,22 @@ class MigrationSummary:
     missing: list[str] = field(default_factory=list)
     estimated_seconds: float = 0.0
 
+    @property
+    def complete(self) -> bool:
+        """Every recipe in the corpus is verified present in the table, whatever this run had to write.
+
+        A `--limit` run is never complete: it is a smoke test, and publishing a projection that advertises
+        recipes the table does not hold yet would make search offer recipes `get` can't serve.
+        """
+        return self.recipes > 0 and self.processed == self.recipes and not self.missing
+
     def render(self) -> str:
         lines = [
             f"Recipes in the corpus: {self.recipes}",
             f"Written this run: {self.recipes_written} recipes, {self.answers_written} answers"
             + (f" ({self.resumed} already migrated on an earlier run)" if self.resumed else ""),
+            f"Verified in the table: {self.processed}/{self.recipes} recipes"
+            + (" (the corpus is complete)" if self.complete else " (INCOMPLETE)"),
             f"Estimated cost: {self.estimated_seconds / 60:.0f} min of the table's write capacity",
         ]
         if self.projection_skipped:
@@ -98,6 +126,7 @@ class MigrationSummary:
                 f"MISSING from the table: {len(self.missing)} recipes ({', '.join(self.missing[:5])}...). "
                 "Re-run with --reset-checkpoint."
             )
+        lines.append(ROLLBACK_NOTE)
         return "\n".join(lines)
 
 
@@ -132,6 +161,7 @@ class Checkpoint:
     def __init__(self, path: Path | None, *, owner: str) -> None:
         self._path = path
         self._owner = owner
+        self.warnings: list[str] = []
         self.migrated: set[str] = self._load()
         self._unsaved = 0
 
@@ -141,10 +171,26 @@ class Checkpoint:
         try:
             document = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            self.warnings.append(f"Ignoring unreadable checkpoint {self._path}: not JSON; starting from the beginning.")
             return set()
-        if document.get("owner") != self._owner:
-            return set()  # a checkpoint from another table or corpus says nothing about this one
-        return set(document.get("migrated", []))
+        if not isinstance(document, dict) or document.get("owner") != self._owner:
+            # A checkpoint from another table or corpus says nothing about this one; a corrupt one says
+            # nothing about anything, and the per-recipe verification below makes starting fresh safe.
+            reason = (
+                "it was written for a different table or corpus"
+                if isinstance(document, dict)
+                else "not a checkpoint document"
+            )
+            self.warnings.append(f"Ignoring unreadable checkpoint {self._path}: {reason}; starting from the beginning.")
+            return set()
+        migrated = document.get("migrated", [])
+        if not isinstance(migrated, list) or not all(isinstance(recipe_id, str) for recipe_id in migrated):
+            self.warnings.append(
+                f"Ignoring unreadable checkpoint {self._path}: 'migrated' must be a list of recipe ids; "
+                "starting from the beginning."
+            )
+            return set()
+        return set(migrated)
 
     def add(self, recipe_id: str) -> None:
         self.migrated.add(recipe_id)
@@ -153,20 +199,25 @@ class Checkpoint:
             self.save()
 
     def save(self) -> None:
+        """Write atomically: a half-written checkpoint must never look like a resumable one."""
         if self._path is None:
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"owner": self._owner, "migrated": sorted(self.migrated)}, indent=0),
-            encoding="utf-8",
-        )
+        handle, temp = tempfile.mkstemp(dir=self._path.parent, prefix=f".{self._path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as file:
+                file.write(json.dumps({"owner": self._owner, "migrated": sorted(self.migrated)}, indent=0))
+            os.replace(temp, self._path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                os.unlink(temp)
+            raise
         self._unsaved = 0
 
 
 def recipe_wcu(recipe: StoredRecipe) -> int:
-    """Write units for one recipe's transaction: the body item plus the SOURCE pointer, billed twice."""
-    body_bytes = len(json.dumps(recipe_payload(recipe), sort_keys=True, separators=(",", ":")).encode("utf-8"))
-    return 2 * max(1, math.ceil(body_bytes / 1024)) + 2
+    """Write units for one recipe: the body and SOURCE items in one transaction, exactly as they will be built."""
+    return recipe_write_units(recipe)
 
 
 def main(
@@ -185,6 +236,9 @@ def main(
 
     source = corpus_source if corpus_source is not None else _open_source(args)
     projections = projection_store if projection_store is not None else _open_projection(args)
+    checkpoint = _checkpoint(args)
+    for warning in checkpoint.warnings:
+        print(warning)
     plan = _plan(source)
     print(
         f"Migration plan: {len(plan.recipes)} recipes, "
@@ -194,17 +248,19 @@ def main(
     )
     if args.dry_run:
         print("Dry run: wrote nothing.")
+        print(ROLLBACK_NOTE)
         return 0
 
     target = (
         backend if backend is not None else DynamoCorpusBackend(args.table, projection=projections, region=args.region)
     )
-    summary = migrate(plan, target, checkpoint=_checkpoint(args), wcu_per_second=args.wcu_per_second, limit=args.limit)
+    summary = migrate(plan, target, checkpoint=checkpoint, wcu_per_second=args.wcu_per_second, limit=args.limit)
     projection = _write_projection(plan, summary, target)
     summary.projection_recipes = len(projection.recipes) if projection is not None else 0
     summary.projection_skipped = projection is None
     print(summary.render())
-    return 1 if summary.missing else 0
+    # A full run that could not verify the whole corpus has not finished the cutover; --limit is a smoke run.
+    return 0 if summary.complete or args.limit is not None else 1
 
 
 def migrate(
@@ -215,24 +271,36 @@ def migrate(
     wcu_per_second: float = DEFAULT_WCU_PER_SECOND,
     limit: int | None = None,
 ) -> MigrationSummary:
-    """Write every planned recipe and its answers, paced, resuming from the checkpoint."""
+    """Write every planned recipe and its answers, paced, resuming from the checkpoint.
+
+    Completion is counted from what is verified in the table, not from what this run happened to write: a
+    resumed or re-run recipe that was already there still counts, so an interrupted run that lost its
+    checkpoint can finish and publish the projection instead of quietly stopping one recipe short.
+    """
     pacer = Pacer(wcu_per_second)
-    summary = MigrationSummary(recipes=len(plan.recipes), estimated_seconds=plan.duration_seconds(wcu_per_second))
-    resumed: list[str] = []
-    for recipe in plan.recipes[: limit if limit is not None else len(plan.recipes)]:
+    planned = plan.recipes[: limit if limit is not None else len(plan.recipes)]
+    summary = MigrationSummary(
+        recipes=len(plan.recipes), planned=len(planned), estimated_seconds=plan.duration_seconds(wcu_per_second)
+    )
+    for recipe in planned:
         if recipe.external_id in checkpoint.migrated:
             summary.resumed += 1
-            resumed.append(recipe.external_id)
+            if backend.get(recipe.external_id) is None:
+                summary.missing.append(recipe.external_id)  # a checkpoint naming rows the table no longer has
+            else:
+                summary.processed += 1
             continue
-        pacer.spend(recipe_wcu(recipe))
-        summary.recipes_written += bool(backend.upsert(recipe))
         answers = plan.answers_for(recipe.external_id)
+        # Answers first, so the entry the recipe write publishes already carries its decisions.
+        for answer in answers:
+            pacer.spend(answer_write_units(answer))
         if answers:
             summary.answers_written += backend.save_answers(answers, rebuild_projection=False)
+        pacer.spend(recipe_wcu(recipe))
+        summary.recipes_written += bool(backend.upsert(recipe))
+        summary.processed += 1
         checkpoint.add(recipe.external_id)
     checkpoint.save()
-    # A checkpoint from an older run can name recipes a wiped table no longer has: say so rather than skip.
-    summary.missing = [recipe_id for recipe_id in resumed if backend.get(recipe_id) is None]
     return summary
 
 
@@ -244,7 +312,7 @@ def _write_projection(
     Built from what was just migrated rather than scanned back out of the table: at 5 RCU a consistent
     scan of 632 bodies is minutes of throttling for data the run already holds.
     """
-    if summary.missing or summary.resumed + summary.recipes_written < summary.recipes:
+    if not summary.complete:
         return None
     answers = [answer for answers in plan.answers.values() for answer in answers]
     projection = build_projection(plan.recipes, answers)
