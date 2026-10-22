@@ -23,6 +23,6 @@ Everything the planner needs to know about a recipe beyond its own text — whet
 ## Consequences
 
 - **The stored answers are the checkpoint.** A run that stops partway has written what it got, so the next run asks only what is left; no progress file can drift from the store.
-- **V5's attributes join the same request.** Declaring protein, carb, dish type, cuisine, whole-food and active-time questions adds them to the per-recipe request without touching the runner.
-- **Adding an enricher is a coverage question, not a schema one.** The coverage report is per question (current / stale / missing / failed) plus the count of recipes that state an active time.
+- **V5's attributes need a stored value, not just a declared question.** The question union (`noul`, `choice`, `score`), the acceptance hook and the per-recipe batching carry over unchanged, but today's answer item is a probability and nothing else. V5 has to widen `RecipeAnswer` with the value (`unsure`, a cuisine, an active-time bucket), have the runner write it, have planning start reading the projection's `attributes` slot, and have the acceptance rule return a value below the bar instead of `None` — `None` means "nothing stored, ask again", which is not `unsure`.
+- **Adding an enricher therefore costs coverage work and, for a non-probability answer, that answer-shape change.** Its questions join the same request and the same coverage report (current / stale / missing / failed, plus the count of recipes that state an active time); it is not a declaration alone.
 - **The corpus is never trusted to be complete.** With no ingredient rules to fall back on, a recipe missing a current dietary answer is excluded under that flag; running enrichment is part of shipping a corpus change.

@@ -56,7 +56,9 @@ _CURRENT_MODEL = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")
 # else; V5's attribute enrichers widen this to a value (`unsure`, a cuisine) on the same item.
 type StoredValue = float
 # Given the whole decision, return the value to store, or None when the answer doesn't clear the bar and
-# the enricher would rather the question stayed open than stored a guess.
+# the enricher would rather the question stayed open than stored a guess. None means "ask again next run",
+# not "store unsure": a stored below-the-bar value (`unsure`) needs a value on the answer item, which V5
+# adds with the attribute questions (ADR 0025).
 type Acceptance = Callable[[Decision], StoredValue | None]
 
 
