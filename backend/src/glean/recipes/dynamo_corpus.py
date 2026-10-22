@@ -68,6 +68,7 @@ __all__ = [
     "answer_item",
     "answer_sk",
     "answer_write_units",
+    "item_size_bytes",
     "item_write_units",
     "recipe_item",
     "recipe_pk",
@@ -521,7 +522,7 @@ def item_write_units(item: dict[str, Any]) -> int:
     small container overhead. Counted from the item the write will send, so a caller pacing writes charges
     what the write costs rather than a guess from the recipe body.
     """
-    return max(1, math.ceil(_item_size_bytes(item) / 1024))
+    return max(1, math.ceil(item_size_bytes(item) / 1024))
 
 
 def recipe_write_units(recipe: StoredRecipe) -> int:
@@ -534,7 +535,8 @@ def answer_write_units(answer: RecipeAnswer) -> int:
     return item_write_units(answer_item(answer))
 
 
-def _item_size_bytes(item: dict[str, Any]) -> int:
+def item_size_bytes(item: dict[str, Any]) -> int:
+    """The bytes DynamoDB stores for one item: attribute names plus values, by their stored types."""
     return sum(len(str(name).encode("utf-8")) + _value_size_bytes(value) for name, value in item.items())
 
 
