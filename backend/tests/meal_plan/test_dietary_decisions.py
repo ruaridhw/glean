@@ -163,6 +163,35 @@ def test_the_criteria_hash_changes_with_either_criterion_or_the_instructions() -
     assert len({question_hash(question), *(question_hash(variant) for variant in variants)}) == 4
 
 
+def test_the_answer_to_a_reworded_question_wins_whatever_order_the_store_returns_them_in(tmp_path) -> None:
+    """Both answers can sit side by side: dynamo keeps the old item, the blob JSONL keeps the old line."""
+    corpus = _corpus(tmp_path, [("rec_rice", "Plain Rice", ["rice"])])
+    current = question_hash(dietary_questions()["vegetarian"])
+    answers = [
+        DietaryDecision(
+            recipe_id="rec_rice",
+            flag="vegetarian",
+            probability=0.01,
+            model=CURRENT_MODEL,
+            content_hash=_hash(corpus, "rec_rice"),
+            criteria_hash=current,
+            computed_at=datetime(2026, 10, 21, tzinfo=UTC),
+        ),
+        DietaryDecision(
+            recipe_id="rec_rice",
+            flag="vegetarian",
+            probability=0.9,
+            model=CURRENT_MODEL,
+            content_hash=_hash(corpus, "rec_rice"),
+            criteria_hash="0" * 64,
+            computed_at=datetime(2026, 10, 20, tzinfo=UTC),
+        ),
+    ]
+    DietaryDecisionStore(corpus.store).save(answers)  # the superseded answer last, where a naive read takes it
+
+    assert _ids(corpus, ["vegetarian"]) == {"rec_rice"}
+
+
 @pytest.mark.parametrize("flag", DIETARY_FLAGS)
 def test_every_flag_excludes_a_recipe_whose_stored_decision_is_unreadable(tmp_path, flag: str) -> None:
     corpus = _corpus(tmp_path, [("rec_tomato", "Tomato Pasta", ["spaghetti", "tomato"])])
