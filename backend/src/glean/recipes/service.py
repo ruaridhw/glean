@@ -96,6 +96,9 @@ def import_recipe_from_url(request: ImportUrlRequest, *, llm_router: LLMRouter) 
 
     corpus_store = RecipeCorpusStore()
     if corpus_recipe := corpus_store.get_by_source_url(request.url):
+        # The recipe is already stored, so a retried import costs no parse — but its summary/projection may be
+        # missing because an earlier publish failed, so this is also the repair point.
+        corpus_store.publish(corpus_recipe)
         return stored_to_recipe_out(corpus_recipe)
 
     try:
