@@ -109,15 +109,21 @@ def test_a_changed_recipe_re_asks_all_of_its_questions(tmp_path) -> None:
 
 
 def test_an_answer_from_another_model_is_asked_again(tmp_path) -> None:
+    # The client refuses any snapshot but the pinned one, so the stale answer is seeded directly.
     corpus = _blob_corpus(tmp_path)
-    run_enrichment(corpus, FakeDecisionApi(snapshot="typesafe/jev-1.13-20260917").client())
-    api = FakeDecisionApi()
+    _seed_answers(corpus, ["rec_pesto", "rec_tomato"], model="typesafe/jev-1.13-20260917")
+    assert {answer.model for answer in corpus.answers()} == {"typesafe/jev-1.13-20260917"}
 
+    dry = run_enrichment(corpus, None, dry_run=True)
+
+    assert (dry.question("dietary:vegan").stale, dry.question("dietary:vegan").missing) == (2, 0)
+
+    api = FakeDecisionApi()
     report = run_enrichment(corpus, api.client())
 
     assert len(api.requests) == 2
     assert (report.answers_stored, report.coverage) == (12, 1.0)
-    assert {answer.model for answer in corpus.answers() if answer.model} == {SNAPSHOT}
+    assert SNAPSHOT in {answer.model for answer in corpus.answers()}
 
 
 def test_a_run_reports_only_the_enrichers_it_was_given(tmp_path) -> None:
@@ -203,7 +209,7 @@ def test_a_dry_run_reports_what_would_be_asked_and_touches_nothing(tmp_path) -> 
 
 def test_a_dry_run_counts_what_is_current_stale_and_missing_without_asking(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    _store_stale_answers(corpus, "rec_tomato", flags=("vegan",))
+    _seed_answers(corpus, ["rec_tomato"], flags=("vegan",), stale_criteria=True)
 
     report = run_enrichment(corpus, None, dry_run=True)
 
@@ -215,7 +221,7 @@ def test_a_dry_run_counts_what_is_current_stale_and_missing_without_asking(tmp_p
 
 def test_the_report_counts_every_recipe_against_every_question(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    _store_stale_answers(corpus, "rec_tomato", flags=("vegan",))
+    _seed_answers(corpus, ["rec_tomato"], flags=("vegan",), stale_criteria=True)
     api = FakeDecisionApi(fail_when=lambda body: body["state"]["recipe_title"] == "Tomato Pasta")
 
     report = run_enrichment(corpus, api.client())
@@ -446,9 +452,16 @@ def _recipe(external_id: str, title: str, ingredients: list[str], **extra) -> St
     )
 
 
-def _store_stale_answers(corpus: RecipeCorpusStore, recipe_id: str, *, flags: tuple[str, ...]) -> None:
-    """Answers that replied to other criteria text, for the flags named."""
-    summary = next(summary for summary in corpus.search(per_page=1000)[0] if summary.external_id == recipe_id)
+def _seed_answers(
+    corpus: RecipeCorpusStore,
+    recipe_ids: list[str],
+    *,
+    flags: tuple[str, ...] = DIETARY_FLAGS,
+    model: str = SNAPSHOT,
+    stale_criteria: bool = False,
+) -> None:
+    """Store answers for the flags named, stale by criteria text or by model, in one write."""
+    summaries = {summary.external_id: summary for summary in corpus.search(per_page=1000)[0]}
     questions = dietary_enrichment_questions()
     corpus.save_answers(
         [
@@ -456,11 +469,12 @@ def _store_stale_answers(corpus: RecipeCorpusStore, recipe_id: str, *, flags: tu
                 recipe_id=recipe_id,
                 question=questions[flag].name,
                 probability=0.01,
-                model=SNAPSHOT,
-                content_hash=content_fingerprint(summary.title, summary.ingredient_names),
-                criteria_hash="0" * 64,
+                model=model,
+                content_hash=content_fingerprint(summaries[recipe_id].title, summaries[recipe_id].ingredient_names),
+                criteria_hash="0" * 64 if stale_criteria else questions[flag].criteria_hash,
                 computed_at=datetime(2026, 10, 20, tzinfo=UTC),
             )
+            for recipe_id in recipe_ids
             for flag in flags
         ]
     )
