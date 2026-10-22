@@ -166,5 +166,4 @@ THRESHOLDS  # read by scripts/audit_dietary_corpus.py and tests
 load_labelled_samples  # used by scripts/evaluate_dietary_model.py and the live sample test
 evaluate_dietary_model  # used by scripts/evaluate_dietary_model.py and the live sample test
 # recipes/ (F1/#162): the corpus behind one backend seam
-write_projection  # DynamoCorpusBackend.write_projection, called by scripts/migrate_recipe_corpus.py
 _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSONL lines)
