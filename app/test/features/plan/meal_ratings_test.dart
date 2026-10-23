@@ -2,6 +2,7 @@
 // thumb clears the rating, tapping the other switches it, and a long-press saves an optional note with it.
 // Real router, real SQLite; the first-tap explainer is the only modal.
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/meal_thumb.dart';
@@ -161,6 +162,30 @@ void main() {
     final entry = await readEntry(tester, entryId);
     expect(entry.rating, MealThumb.up);
     expect(entry.note, 'a keeper');
+  });
+
+  gleanWidgetTest('each thumb is its own labelled button for a screen reader', (
+    tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    await plannedMeal('Lentil Dal', cooked: true);
+    await openPlan(tester);
+
+    expect(find.bySemanticsLabel('Thumbs up'), findsOneWidget);
+    expect(find.bySemanticsLabel('Thumbs down'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const Key('rating.up'))),
+      matchesSemantics(
+        label: 'Thumbs up',
+        isButton: true,
+        hasSelectedState: true,
+        isFocusable: true,
+        hasTapAction: true,
+        hasLongPressAction: true,
+        hasFocusAction: true,
+      ),
+    );
+    semantics.dispose();
   });
 
   gleanWidgetTest('the explainer is shown on the first thumb ever tapped and '
