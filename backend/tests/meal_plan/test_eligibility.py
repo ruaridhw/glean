@@ -388,3 +388,26 @@ def test_a_thumbs_down_older_than_the_window_still_keeps_the_recipe_out() -> Non
     assert "rec_a" not in result.recipe_ids
     assert "rec_a" not in result.days_since_cooked
     assert result.disliked == ("rec_a",)
+
+
+def test_a_later_thumbs_up_cancels_an_older_thumbs_down() -> None:
+    # "Latest rating" (CONTEXT.md) is the thumb on the most recent rated cook, whichever way it points, so a
+    # household that changed its mind is offered the recipe again once the newer cook is the only input.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=200, rating="down"), _rated("rec_a", "A", days_ago=100, rating="up")],
+    )
+
+    assert "rec_a" not in result.disliked
+    assert result.latest_rating == {"rec_a": "up"}
+
+
+def test_a_later_title_only_thumbs_up_cancels_an_older_id_matched_thumbs_down() -> None:
+    # The same recipe, identified by id on the old cook and only by title on the new one, as the app can send
+    # after a plan entry loses its corpus id snapshot.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=200, rating="down"), _rated(None, "  a ", days_ago=100, rating="up")],
+    )
+
+    assert "rec_a" not in result.disliked

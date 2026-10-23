@@ -60,6 +60,14 @@ _Avoid_: list entry, to-buy
 One ingredient and amount a recipe calls for, e.g. "1 × 400 g tin chickpeas". Where an ingredient comes in more than one form, the recipe line names the form it means.
 _Avoid_: recipe ingredient, ingredient row
 
+**Rating**:
+A thumb on a meal the household cooked: up or down, with an optional note. Only a cooked meal can be rated.
+_Avoid_: score, review, feedback
+
+**Latest rating**:
+The thumb on a recipe's most recent *rated* cook, whichever way it points: a later thumbs up cancels an older thumbs down and vice versa, cooking the recipe again without rating it leaves the verdict alone, and clearing the thumb removes it. A cook belongs to its recipe by corpus recipe id, or, for a cook recorded before the app kept one, by its title with whitespace collapsed and case folded. The app sends the cook that carries this verdict so a thumbs down outlives the twelve-week history window, and the backend reads the same rule when it decides what may be offered.
+_Avoid_: last rating, current rating, score
+
 ### Rules a catalogue item carries
 
 **Tracking mode**:

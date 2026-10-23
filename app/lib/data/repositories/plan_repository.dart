@@ -59,13 +59,15 @@ class PlanRepository {
     since: (now ?? DateTime.now()).subtract(cookedHistoryWindow),
   );
 
-  /// The cooked history Generate sends: the twelve-week window, plus the latest rated cook of every recipe
-  /// whose latest rating is thumbs down even when that cook is older than the window. A dislike does not age
-  /// out of a recipe, but a cook outside the window would otherwise stop travelling, and the recipe would
-  /// quietly come back.
+  /// The cooked history Generate sends: the twelve-week window, plus the cook that carries the latest
+  /// rating of every recipe whose verdict is thumbs down, even when that cook is older than the window. A
+  /// dislike does not age out of a recipe, but a cook outside the window would otherwise stop travelling,
+  /// and the recipe would quietly come back.
   ///
-  /// Deduped by plan entry (a disliked cook inside the window is sent once), window rows first, and at most
-  /// [maxDislikedHistoryItems] of the older dislikes.
+  /// "Latest rating" is CONTEXT.md's term: see [verdictCooks], which resolves it across thumbs up and down
+  /// exactly as the backend's `eligibility` does. Window rows come first and every entry is sent once; the
+  /// supplements are newest first and only rows the window does not already carry count against
+  /// [maxDislikedHistoryItems], so 200 recent dislikes cannot crowd out one old one.
   Future<List<MealPlanEntryView>> plannerHistory({
     required String userId,
     DateTime? now,
@@ -75,18 +77,75 @@ class PlanRepository {
       userId: userId,
       now: now,
     );
-    final List<MealPlanEntryView> disliked = await _latestDislikedCooks(
-      userId: userId,
-      limit: dislikedLimit,
-    );
     final Set<int> sent = <int>{
       for (final MealPlanEntryView entry in window) entry.id,
     };
-    return <MealPlanEntryView>[
-      ...window,
-      for (final MealPlanEntryView entry in disliked)
-        if (sent.add(entry.id)) entry,
-    ];
+    final List<MealPlanEntryView> supplements = <MealPlanEntryView>[];
+    for (final MealPlanEntryView entry in await verdictCooks(userId: userId)) {
+      if (supplements.length >= dislikedLimit) break;
+      if (sent.add(entry.id)) supplements.add(entry);
+    }
+    return <MealPlanEntryView>[...window, ...supplements];
+  }
+
+  /// The cook that carries each recipe's "latest rating" when that verdict is a thumbs down, newest first.
+  ///
+  /// A recipe's latest rating is the thumb on its most recent *rated* cook, whichever way it points, so a
+  /// later thumbs up cancels an older down and a later down cancels an older up. Only rated cooks count:
+  /// cooking a recipe again without rating it leaves the verdict standing, and clearing the thumb removes
+  /// it. Cooks are matched by corpus recipe id, and title-only cooks (made before the app kept an id) by
+  /// their title with whitespace collapsed and case folded — the same two keys `eligibility._latest_rating`
+  /// reads, so both sides resolve the same verdict from the same rows.
+  ///
+  /// Every rated cook is read, up and down, because the down-rated rows alone cannot tell whether a later
+  /// thumbs up superseded one.
+  Future<List<MealPlanEntryView>> verdictCooks({required String userId}) async {
+    final query = _entriesWithRatings()
+      ..where(
+        _db.mealPlanEntries.userId.equals(userId) &
+            _db.mealPlanEntries.cookedAt.isNotNull() &
+            _db.mealRatings.rating.isNotNull(),
+      );
+    final Map<String, MealPlanEntryView> latestById =
+        <String, MealPlanEntryView>{};
+    final Map<String, MealPlanEntryView> latestByTitle =
+        <String, MealPlanEntryView>{};
+    for (final MealPlanEntryView entry in _mapEntries(await query.get())) {
+      final String? id = _corpusId(entry);
+      if (id != null) {
+        _keepNewest(latestById, id, entry);
+      } else {
+        _keepNewest(latestByTitle, _normalisedTitle(entry.recipeTitle), entry);
+      }
+    }
+
+    final Map<int, MealPlanEntryView> verdicts = <int, MealPlanEntryView>{};
+    final Set<String> titlesResolvedById = <String>{};
+    for (final MapEntry<String, MealPlanEntryView> byId in latestById.entries) {
+      final String title = _normalisedTitle(byId.value.recipeTitle);
+      titlesResolvedById.add(title);
+      final MealPlanEntryView? byTitle = latestByTitle[title];
+      final MealPlanEntryView verdict =
+          byTitle != null && byTitle.cookedAt!.isAfter(byId.value.cookedAt!)
+          ? byTitle
+          : byId.value;
+      verdicts[verdict.id] = verdict;
+    }
+    for (final MapEntry<String, MealPlanEntryView> byTitle
+        in latestByTitle.entries) {
+      // A title-only cook of a recipe also known by id was already weighed against the id's cooks above;
+      // a title no id claims stands on its own.
+      if (titlesResolvedById.contains(byTitle.key)) continue;
+      verdicts[byTitle.value.id] = byTitle.value;
+    }
+
+    return verdicts.values
+        .where((MealPlanEntryView entry) => entry.rating == MealThumb.down)
+        .toList()
+      ..sort(
+        (MealPlanEntryView a, MealPlanEntryView b) =>
+            b.cookedAt!.compareTo(a.cookedAt!),
+      );
   }
 
   /// Meals cooked on or after [since], newest first: the corpus plan avoids repeating them.
@@ -242,42 +301,30 @@ class PlanRepository {
           ))
           .go();
 
-  /// The most recent *rated* cook of each recipe whose latest rating is thumbs down, newest first. Reads only
-  /// the down-rated rows, so a long history costs nothing; identity is the recipe id, or the normalised title
-  /// for entries cooked before the app kept one, exactly as the planner matches them.
-  Future<List<MealPlanEntryView>> _latestDislikedCooks({
-    required String userId,
-    required int limit,
-  }) async {
-    final query = _entriesWithRatings()
-      ..where(
-        _db.mealPlanEntries.userId.equals(userId) &
-            _db.mealPlanEntries.cookedAt.isNotNull() &
-            _db.mealRatings.rating.equals(MealThumb.down.dbValue),
-      );
-    final Map<String, MealPlanEntryView> latest = <String, MealPlanEntryView>{};
-    for (final MealPlanEntryView entry in _mapEntries(await query.get())) {
-      final String key = _historyIdentity(entry);
-      final MealPlanEntryView? held = latest[key];
-      if (held == null || entry.cookedAt!.isAfter(held.cookedAt!)) {
-        latest[key] = entry;
-      }
+  void _keepNewest(
+    Map<String, MealPlanEntryView> byKey,
+    String key,
+    MealPlanEntryView entry,
+  ) {
+    final MealPlanEntryView? held = byKey[key];
+    if (held == null || entry.cookedAt!.isAfter(held.cookedAt!)) {
+      byKey[key] = entry;
     }
-    final List<MealPlanEntryView> ordered = latest.values.toList()
-      ..sort(
-        (MealPlanEntryView a, MealPlanEntryView b) =>
-            b.cookedAt!.compareTo(a.cookedAt!),
-      );
-    return ordered.take(limit).toList();
   }
 
-  /// How the planner tells one recipe's cooks apart: its corpus id, else its title with whitespace collapsed
-  /// and case folded (the rule the backend applies to history rows that carry no id).
-  String _historyIdentity(MealPlanEntryView entry) {
+  /// The corpus recipe id this cook was stored with, or null for one cooked before the app kept a snapshot.
+  String? _corpusId(MealPlanEntryView entry) {
     final String? externalId = entry.externalIdSnapshot?.trim();
-    if (externalId != null && externalId.isNotEmpty) return 'id:$externalId';
-    return 'title:${entry.recipeTitle.toLowerCase().split(RegExp(r'\s+')).where((String word) => word.isNotEmpty).join(' ')}';
+    return externalId == null || externalId.isEmpty ? null : externalId;
   }
+
+  /// A recipe title as the planner matches it: whitespace collapsed and case folded, the rule the backend
+  /// applies to history rows that carry no recipe id.
+  String _normalisedTitle(String title) => title
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .where((String word) => word.isNotEmpty)
+      .join(' ');
 
   Future<MealRating?> _ratingRow(int entryId, String userId) =>
       (_db.select(_db.mealRatings)..where(
