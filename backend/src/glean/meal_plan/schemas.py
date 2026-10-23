@@ -5,6 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
 MAX_COOKED_HISTORY_ITEMS = 200
+# A rating is a thumb on a cooked meal. The values are the wire vocabulary the app stores in `meal_ratings`.
+Rating = Literal["up", "down"]
+# Long enough for "too sweet for the kids, and the sauce split", short enough that the history window
+# cannot be used as a free-text channel.
+MAX_COOKED_NOTE_LENGTH = 500
 
 
 class CompressedPantryItem(BaseModel):
@@ -42,6 +47,11 @@ class CookedHistoryItem(BaseModel):
     `recipe_id` is the corpus recipe id, which the app keeps as the plan entry's
     `externalIdSnapshot`. It is null for meals cooked before the app stored that
     snapshot, so `title` is the fallback identity.
+
+    `rating` is the household's thumb on this cook, which selects the recipe in and out of planning
+    (`meal_plan.eligibility`): the most recent rated cook decides. `note` is the comment they attached
+    to it. Notes are accepted and validated here but are deliberately never handed to a model -- see
+    `meal_plan.service` for the seam the screened-feedback screen plugs into.
     """
 
     recipe_id: str | None = Field(
@@ -49,6 +59,18 @@ class CookedHistoryItem(BaseModel):
     )
     title: str
     cooked_at: datetime = Field(description="ISO datetime the meal was cooked, with an offset (the app sends UTC)")
+    rating: Rating | None = Field(
+        default=None,
+        description="The household's thumb on this cook; null when the meal was not rated",
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=MAX_COOKED_NOTE_LENGTH,
+        description=(
+            "The comment attached to the rating; null when there is none. Stored and validated, but not "
+            "read by planning until the feedback screen screens notes for prompt injection."
+        ),
+    )
 
     @field_validator("cooked_at")
     @classmethod
