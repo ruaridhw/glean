@@ -2,6 +2,8 @@
 // per-week rather than lifetime capacity, idempotent rollover, honoured
 // `servings`, and undoable "Cooked".
 import 'package:glean/data/database.dart';
+import 'package:glean/data/models/meal_plan_entry_view.dart';
+import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/repositories/ingredients_repository.dart';
 import 'package:glean/data/repositories/pantry_repository.dart';
@@ -661,6 +663,230 @@ void main() {
           expect(pantry.lastUsedAt, isNull);
         },
       );
+    });
+
+    group('ratings', () {
+      final week = startOfWeek(DateTime(2026, 1, 5));
+
+      Future<int> cookedEntry({String title = 'Curry'}) async {
+        final recipeId = await createRecipe(title);
+        final entryId = await repository.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: title,
+          servings: 2,
+          plannedDate: week,
+        );
+        await repository.markCooked(
+          entryId: entryId,
+          userId: userId,
+          now: DateTime(2026, 1, 6, 18),
+        );
+        return entryId;
+      }
+
+      Future<int> ratingRows() async {
+        final rows = await db.select(db.mealRatings).get();
+        return rows.length;
+      }
+
+      Future<MealPlanEntryView> readEntry(int entryId) async {
+        final entries = await repository.getWeek(
+          userId: userId,
+          weekStart: week,
+        );
+        return entries.singleWhere((entry) => entry.id == entryId);
+      }
+
+      test(
+        'a cooked meal can be rated either way, and the read carries it',
+        () async {
+          final entryId = await cookedEntry();
+
+          await repository.rate(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.up,
+          );
+
+          expect((await readEntry(entryId)).rating, MealThumb.up);
+          await repository.rate(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.down,
+          );
+          expect((await readEntry(entryId)).rating, MealThumb.down);
+          expect(await ratingRows(), 1, reason: 'one rating per entry');
+        },
+      );
+
+      test('switching the thumb drops the note that described the old one, '
+          'and keeping it leaves the note alone', () async {
+        final entryId = await cookedEntry();
+        await repository.rateWithNote(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.down,
+          note: 'too sweet',
+        );
+        expect((await readEntry(entryId)).note, 'too sweet');
+
+        await repository.rate(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.down,
+        );
+        expect((await readEntry(entryId)).note, 'too sweet');
+
+        await repository.rate(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.up,
+        );
+        expect((await readEntry(entryId)).note, isNull);
+        expect((await readEntry(entryId)).rating, MealThumb.up);
+      });
+
+      test('a note is trimmed, and an empty one clears it', () async {
+        final entryId = await cookedEntry();
+        await repository.rateWithNote(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.up,
+          note: '  kids loved it  ',
+        );
+        expect((await readEntry(entryId)).note, 'kids loved it');
+
+        await repository.rateWithNote(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.up,
+          note: '   ',
+        );
+        expect((await readEntry(entryId)).note, isNull);
+      });
+
+      test(
+        'clearing the thumb deletes the row, so the recipe is not avoided',
+        () async {
+          final entryId = await cookedEntry();
+          await repository.rate(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.down,
+          );
+
+          await repository.clearRating(entryId: entryId, userId: userId);
+
+          expect((await readEntry(entryId)).rating, isNull);
+          expect(await ratingRows(), 0);
+        },
+      );
+
+      test('an uncooked meal cannot be rated', () async {
+        final recipeId = await createRecipe('Not yet');
+        final entryId = await repository.addEntry(
+          userId: userId,
+          recipeId: recipeId,
+          recipeTitle: 'Not yet',
+          servings: 2,
+          plannedDate: week,
+        );
+
+        await expectLater(
+          repository.rate(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.up,
+          ),
+          throwsStateError,
+        );
+        expect(await ratingRows(), 0);
+      });
+
+      test('another user cannot rate this entry', () async {
+        final entryId = await cookedEntry();
+
+        await expectLater(
+          repository.rate(
+            entryId: entryId,
+            userId: 'someone-else',
+            rating: MealThumb.down,
+          ),
+          throwsStateError,
+        );
+        expect(await ratingRows(), 0);
+      });
+
+      test('undoing the cook clears the thumb too', () async {
+        final entryId = await cookedEntry();
+        await repository.rate(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.down,
+        );
+
+        await repository.undoCooked(
+          entryId: entryId,
+          userId: userId,
+          now: DateTime(2026, 1, 7),
+        );
+
+        expect((await readEntry(entryId)).rating, isNull);
+        expect(await ratingRows(), 0);
+      });
+
+      test(
+        'deleting and undoing a rated meal restores the rating exactly',
+        () async {
+          final entryId = await cookedEntry();
+          await repository.rateWithNote(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.down,
+            note: 'too sweet',
+          );
+
+          final snapshot = await repository.deleteWithSnapshot(
+            id: entryId,
+            userId: userId,
+          );
+          expect(
+            await ratingRows(),
+            0,
+            reason: 'the delete cascades the rating',
+          );
+
+          await repository.restoreDeleted(snapshot: snapshot, userId: userId);
+
+          final restored = (await repository.getWeek(
+            userId: userId,
+            weekStart: week,
+          )).single;
+          expect(restored.id, entryId);
+          expect(restored.rating, MealThumb.down);
+          expect(restored.note, 'too sweet');
+        },
+      );
+
+      test('the history window carries each cook\'s rating and note', () async {
+        final entryId = await cookedEntry();
+        await repository.rateWithNote(
+          entryId: entryId,
+          userId: userId,
+          rating: MealThumb.down,
+          note: 'not again',
+        );
+
+        final history = await repository.cookedHistory(
+          userId: userId,
+          now: DateTime(2026, 1, 7),
+        );
+
+        expect(history.single.id, entryId);
+        expect(history.single.rating, MealThumb.down);
+        expect(history.single.note, 'not again');
+      });
     });
   });
 }

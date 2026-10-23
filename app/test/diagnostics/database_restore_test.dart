@@ -58,6 +58,39 @@ void main() {
     },
   );
 
+  test('a backup carries the household ratings a restore must bring back', () async {
+    final GleanDatabase before = open(File('${dir.path}/before.sqlite'));
+    await before.customStatement(
+      'INSERT INTO meal_plan_entries (user_id, recipe_title, planned_date, cooked_at, servings) '
+      "VALUES ('user-1', 'Curry', '2026-10-05', '2026-10-06T18:30:00.000', 2)",
+    );
+    await before.customStatement(
+      'INSERT INTO meal_ratings (user_id, meal_plan_entry_id, rating, note, created_at) '
+      "VALUES ('user-1', 1, 'down', 'too sweet', '2026-10-06T19:00:00.000Z')",
+    );
+    final File backup = await snapshotDatabase(before, dir);
+    await before.close();
+    final GleanDatabase freshInstall = open(liveFile);
+    await freshInstall.customStatement('SELECT 1');
+
+    await restoreDatabase(
+      backup: backup,
+      live: freshInstall,
+      liveFile: liveFile,
+    );
+
+    final GleanDatabase restored = open(liveFile);
+    addTearDown(restored.close);
+    final row = await restored
+        .customSelect(
+          'SELECT rating, note FROM meal_ratings WHERE user_id = ?',
+          variables: <Variable>[const Variable<String>('user-1')],
+        )
+        .getSingle();
+    expect(row.read<String>('rating'), 'down');
+    expect(row.read<String>('note'), 'too sweet');
+  });
+
   /// A database file as the oldest shipped build wrote it (frozen schema_v1 fixture).
   File versionOneBackup() {
     final File file = File('${dir.path}/v1-backup.sqlite');
