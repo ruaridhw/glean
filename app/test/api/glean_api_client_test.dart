@@ -165,67 +165,6 @@ void main() {
       maxActiveTimeMins: 45,
     );
 
-    test(
-      'generateMealPlan sends non-empty food_groups/food_group_coverage',
-      () async {
-        when(
-          () => httpClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
-          ),
-        ).thenAnswer((_) async => jsonResponse({'suggestions': <Object?>[]}));
-
-        final request = MealPlanRequest(
-          pantry: const [
-            CompressedPantryItem(
-              id: 1,
-              name: 'Chicken thighs',
-              quantity: 500,
-              unit: 'g',
-              foodGroup: 'protein',
-              urgencyScore: 42.5,
-            ),
-          ],
-          recipeHistory: [
-            RecipeHistoryItem(
-              recipeId: 7,
-              title: 'Curry',
-              lastCookedAt: DateTime.utc(2026, 1, 1),
-              foodGroups: const ['protein', 'veg'],
-            ),
-          ],
-          foodGroupCoverage: const {'protein': 2, 'veg': 1},
-          purchaseTolerance: 0.5,
-          mealsPerWeek: 3,
-          dietaryFlags: const ['vegetarian'],
-          maxActiveTimeMins: 45,
-        );
-
-        final response = await client.generateMealPlan(request);
-
-        final sentBody =
-            verify(
-                  () => httpClient.post(
-                    any(),
-                    headers: any(named: 'headers'),
-                    body: captureAny(named: 'body'),
-                  ),
-                ).captured.single
-                as String;
-        final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
-
-        // The RN client hardcoded these empty, permanently
-        // disabling the backend's food-group-balancing prompt rule.
-        expect(decoded['food_group_coverage'], {'protein': 2, 'veg': 1});
-        final historyItem =
-            (decoded['recipe_history'] as List<dynamic>).single
-                as Map<String, dynamic>;
-        expect(historyItem['food_groups'], ['protein', 'veg']);
-        expect(response.suggestions, isEmpty);
-      },
-    );
-
     test('createMealPlanSession posts the plan body and reads the '
         'session id', () async {
       when(
@@ -666,7 +605,7 @@ void main() {
       );
 
       await expectLater(
-        client.generateMealPlan(
+        client.createMealPlanSession(
           const MealPlanRequest(
             pantry: [],
             recipeHistory: [],
