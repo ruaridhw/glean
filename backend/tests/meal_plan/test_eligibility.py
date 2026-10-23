@@ -375,3 +375,16 @@ def test_a_thumbs_down_recipe_can_still_be_named_by_title_when_the_new_cook_has_
     )
 
     assert "rec_a" not in result.recipe_ids
+
+
+def test_a_thumbs_down_older_than_the_window_still_keeps_the_recipe_out() -> None:
+    # The verdict does not age with the cook: twenty weeks on, the recipe is still not offered. The app sends
+    # that old cook on its own for exactly this reason.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=140, rating="down")],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+    assert "rec_a" not in result.days_since_cooked
+    assert result.disliked == ("rec_a",)

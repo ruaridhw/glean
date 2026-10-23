@@ -4,11 +4,17 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
-MAX_COOKED_HISTORY_ITEMS = 200
+COOKED_HISTORY_WINDOW_ITEMS = 200
+# A thumbs down does not expire, so the app sends the cook that carries one however old it is, on top of the
+# window. It sends at most this many of those too-old cooks too, which keeps the request bounded at
+# COOKED_HISTORY_WINDOW_ITEMS + DISLIKED_HISTORY_ITEMS rows however many years of dislikes a household has.
+DISLIKED_HISTORY_ITEMS = 200
+MAX_COOKED_HISTORY_ITEMS = COOKED_HISTORY_WINDOW_ITEMS + DISLIKED_HISTORY_ITEMS
 # A rating is a thumb on a cooked meal. The values are the wire vocabulary the app stores in `meal_ratings`.
 Rating = Literal["up", "down"]
 # Long enough for "too sweet for the kids, and the sauce split", short enough that the history window
-# cannot be used as a free-text channel.
+# cannot be used as a free-text channel. Counted in Unicode code points, which is what Pydantic's
+# `max_length` and the app's note sheet both count -- not grapheme clusters.
 MAX_COOKED_NOTE_LENGTH = 500
 
 
@@ -97,7 +103,11 @@ class MealPlanRequest(BaseModel):
     cooked_history: list[CookedHistoryItem] = Field(
         default_factory=list,
         max_length=MAX_COOKED_HISTORY_ITEMS,
-        description="Meals cooked in the last 12 weeks, newest-idle first is not required; the plan avoids repeats",
+        description=(
+            "Meals cooked in the last 12 weeks (newest-idle first is not required; the plan avoids repeats), "
+            "plus the cook carrying a recipe's latest thumbs down even when it is older than the window. "
+            "The plan never offers a recipe whose latest rating here is thumbs down."
+        ),
     )
     exclude_external_ids: list[str] = Field(
         default_factory=list, description="Corpus recipe IDs already in the plan, never offered again"

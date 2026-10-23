@@ -22,6 +22,12 @@ import 'pantry_repository.dart';
 /// in the last six of them, relaxing only when the corpus cannot otherwise fill the week.
 const Duration cookedHistoryWindow = Duration(days: 84);
 
+/// How many too-old dislikes travel with the window. A thumbs down does not expire, so the cook that carries
+/// one is sent however old it is; this bounds how many of those rows go at once. 200 matches the size of the
+/// window itself and is far beyond any household's set of disliked recipes, and the backend's bound is the
+/// two added together.
+const int maxDislikedHistoryItems = 200;
+
 class PlanRepository {
   PlanRepository(this._db, this._pantry);
 
@@ -52,6 +58,36 @@ class PlanRepository {
     userId: userId,
     since: (now ?? DateTime.now()).subtract(cookedHistoryWindow),
   );
+
+  /// The cooked history Generate sends: the twelve-week window, plus the latest rated cook of every recipe
+  /// whose latest rating is thumbs down even when that cook is older than the window. A dislike does not age
+  /// out of a recipe, but a cook outside the window would otherwise stop travelling, and the recipe would
+  /// quietly come back.
+  ///
+  /// Deduped by plan entry (a disliked cook inside the window is sent once), window rows first, and at most
+  /// [maxDislikedHistoryItems] of the older dislikes.
+  Future<List<MealPlanEntryView>> plannerHistory({
+    required String userId,
+    DateTime? now,
+    int dislikedLimit = maxDislikedHistoryItems,
+  }) async {
+    final List<MealPlanEntryView> window = await cookedHistory(
+      userId: userId,
+      now: now,
+    );
+    final List<MealPlanEntryView> disliked = await _latestDislikedCooks(
+      userId: userId,
+      limit: dislikedLimit,
+    );
+    final Set<int> sent = <int>{
+      for (final MealPlanEntryView entry in window) entry.id,
+    };
+    return <MealPlanEntryView>[
+      ...window,
+      for (final MealPlanEntryView entry in disliked)
+        if (sent.add(entry.id)) entry,
+    ];
+  }
 
   /// Meals cooked on or after [since], newest first: the corpus plan avoids repeating them.
   ///
@@ -155,6 +191,9 @@ class PlanRepository {
 
   /// Saves a note with [rating] as one write, for the long-press sheet: the thumb and the reason it was
   /// given land together, and a blank note clears an earlier one.
+  ///
+  /// A note longer than `maxRatingNoteLength` code points is refused here rather than stored: it would pass
+  /// the sheet and then fail the backend's validation on every Generate request carrying this cook.
   Future<void> rateWithNote({
     required int entryId,
     required String userId,
@@ -165,6 +204,13 @@ class PlanRepository {
     await _requireCookedEntry(entryId, userId);
     final existing = await _ratingRow(entryId, userId);
     final text = (note ?? '').trim();
+    if (ratingNoteLength(text) > maxRatingNoteLength) {
+      throw ArgumentError.value(
+        ratingNoteLength(text),
+        'note',
+        'A rating note is at most $maxRatingNoteLength code points',
+      );
+    }
     if (existing == null) {
       await _db
           .into(_db.mealRatings)
@@ -195,6 +241,43 @@ class PlanRepository {
             (t) => t.mealPlanEntryId.equals(entryId) & t.userId.equals(userId),
           ))
           .go();
+
+  /// The most recent *rated* cook of each recipe whose latest rating is thumbs down, newest first. Reads only
+  /// the down-rated rows, so a long history costs nothing; identity is the recipe id, or the normalised title
+  /// for entries cooked before the app kept one, exactly as the planner matches them.
+  Future<List<MealPlanEntryView>> _latestDislikedCooks({
+    required String userId,
+    required int limit,
+  }) async {
+    final query = _entriesWithRatings()
+      ..where(
+        _db.mealPlanEntries.userId.equals(userId) &
+            _db.mealPlanEntries.cookedAt.isNotNull() &
+            _db.mealRatings.rating.equals(MealThumb.down.dbValue),
+      );
+    final Map<String, MealPlanEntryView> latest = <String, MealPlanEntryView>{};
+    for (final MealPlanEntryView entry in _mapEntries(await query.get())) {
+      final String key = _historyIdentity(entry);
+      final MealPlanEntryView? held = latest[key];
+      if (held == null || entry.cookedAt!.isAfter(held.cookedAt!)) {
+        latest[key] = entry;
+      }
+    }
+    final List<MealPlanEntryView> ordered = latest.values.toList()
+      ..sort(
+        (MealPlanEntryView a, MealPlanEntryView b) =>
+            b.cookedAt!.compareTo(a.cookedAt!),
+      );
+    return ordered.take(limit).toList();
+  }
+
+  /// How the planner tells one recipe's cooks apart: its corpus id, else its title with whitespace collapsed
+  /// and case folded (the rule the backend applies to history rows that carry no id).
+  String _historyIdentity(MealPlanEntryView entry) {
+    final String? externalId = entry.externalIdSnapshot?.trim();
+    if (externalId != null && externalId.isNotEmpty) return 'id:$externalId';
+    return 'title:${entry.recipeTitle.toLowerCase().split(RegExp(r'\s+')).where((String word) => word.isNotEmpty).join(' ')}';
+  }
 
   Future<MealRating?> _ratingRow(int entryId, String userId) =>
       (_db.select(_db.mealRatings)..where(
