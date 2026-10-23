@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/features/plan/providers/generate_week_controller.dart';
@@ -250,6 +251,78 @@ void main() {
       expect(sent, endsWith('Z'));
       expect(DateTime.parse(sent).isAtSameMomentAs(localCook), isTrue);
       expect(DateTime.parse(sent), localCook.toUtc());
+    },
+  );
+
+  test(
+    'sends each cook\'s rating and note, and a cleared rating as null',
+    () async {
+      final recipes = harness.container.read(recipesRepositoryProvider);
+      final plan = harness.container.read(planRepositoryProvider);
+      final now = DateTime.now();
+      Future<int> cooked(String externalId, String title) async {
+        final recipeId = await recipes.save(
+          userId: harness.userId,
+          externalId: externalId,
+          title: title,
+          ingredients: const [],
+        );
+        final entryId = await plan.addEntry(
+          userId: harness.userId,
+          recipeId: recipeId,
+          recipeTitle: title,
+          servings: 2,
+          plannedDate: now.subtract(const Duration(days: 10)),
+        );
+        await plan.markCooked(
+          entryId: entryId,
+          userId: harness.userId,
+          now: now.subtract(const Duration(days: 10)),
+        );
+        return entryId;
+      }
+
+      final disliked = await cooked('rec_down', 'Disliked stew');
+      await plan.rateWithNote(
+        entryId: disliked,
+        userId: harness.userId,
+        rating: MealThumb.down,
+        note: 'too sweet for the kids',
+      );
+      final liked = await cooked('rec_up', 'Liked pie');
+      await plan.rate(
+        entryId: liked,
+        userId: harness.userId,
+        rating: MealThumb.up,
+      );
+      // Cooked, once rated, then cleared: the entry stays in the history window unrated.
+      final cleared = await cooked('rec_cleared', 'Cleared soup');
+      await plan.rate(
+        entryId: cleared,
+        userId: harness.userId,
+        rating: MealThumb.down,
+      );
+      await plan.clearRating(entryId: cleared, userId: harness.userId);
+
+      Map<String, dynamic>? body;
+      suggest(['rec_new'], capture: (value) => body = value);
+      detail('rec_new');
+
+      await harness.container
+          .read(generateWeekControllerProvider.notifier)
+          .generate(weekStart: week, slots: 1, servings: 2);
+
+      final history = <String, Map<String, dynamic>>{
+        for (final item
+            in (body!['cooked_history'] as List).cast<Map<String, dynamic>>())
+          item['recipe_id'] as String: item,
+      };
+      expect(history['rec_down']!['rating'], 'down');
+      expect(history['rec_down']!['note'], 'too sweet for the kids');
+      expect(history['rec_up']!['rating'], 'up');
+      expect(history['rec_up']!['note'], isNull);
+      expect(history['rec_cleared']!['rating'], isNull);
+      expect(history['rec_cleared']!['note'], isNull);
     },
   );
 

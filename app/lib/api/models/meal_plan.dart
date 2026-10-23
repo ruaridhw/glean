@@ -51,14 +51,21 @@ class RecipeHistoryItem {
   Map<String, dynamic> toJson() => _$RecipeHistoryItemToJson(this);
 }
 
+/// The longest rating note the backend accepts (`MAX_COOKED_NOTE_LENGTH`). The note sheet caps its input at
+/// this, so a long comment is stopped at the keyboard rather than failing the whole plan request.
+const int maxRatingNoteLength = 500;
+
 /// One meal the household actually cooked, sent to `POST /meal-plan` so corpus generation can leave it out of
-/// the week while it is too recent to repeat. The wire shape of the backend's `CookedHistoryItem`.
+/// the week while it is too recent to repeat, and never offer a recipe they gave a thumbs down. The wire shape
+/// of the backend's `CookedHistoryItem`.
 @JsonSerializable(fieldRename: FieldRename.snake, createFactory: false)
 class CookedHistoryItem {
   const CookedHistoryItem({
     required this.title,
     required this.cookedAt,
     this.recipeId,
+    this.rating,
+    this.note,
   });
 
   /// Corpus recipe id, kept on the plan entry as `externalIdSnapshot`; null for a meal cooked before the app
@@ -66,6 +73,14 @@ class CookedHistoryItem {
   final String? recipeId;
   final String title;
   final DateTime cookedAt;
+
+  /// 'up' or 'down' (`MealThumb.dbValue`), or null when the meal was not rated. The app writes the thumb;
+  /// the backend reads only the latest one per recipe.
+  final String? rating;
+
+  /// The comment saved with [rating]. The backend validates it and does not put it in any prompt yet: that
+  /// is the feedback screen's job, and it does not exist.
+  final String? note;
 
   Map<String, dynamic> toJson() => _$CookedHistoryItemToJson(this);
 }
