@@ -44,6 +44,17 @@ sets `LANGSMITH_API_KEY` in-process before LangChain calls are created.
 
 ### Deploying to prod
 
+**If the change touches `infra/bootstrap.yaml`, re-apply the bootstrap stack first.** The deploy role's
+permissions live there, and CloudFormation creates the tables, queues and Lambdas with that role's
+credentials, so a release that adds a resource fails until the role can manage it:
+
+```bash
+ALERT_EMAIL=<the same address as last time> infra/bootstrap.sh
+```
+
+That re-applies `glean-bootstrap` (the GitHub OIDC provider, `GleanDeployPolicyProd` and the DynamoDB budget).
+Pass the same `AlertEmail` as before, or the budget alert gains a second subscriber.
+
 Prod is deployed from CI on every push to `main` that touches `backend/`. For a manual deploy:
 
 ```bash
