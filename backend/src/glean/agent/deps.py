@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from langgraph.checkpoint.base import BaseCheckpointSaver
+    from langgraph.checkpoint.base import BaseCheckpointSaver  # noqa: TID251
 
     from glean.config import Settings
     from glean.sessions.queue import SessionQueue

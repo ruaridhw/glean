@@ -5,19 +5,19 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.messages.content import create_image_block, create_text_block
-from langchain_openrouter import ChatOpenRouter
-from openrouter import OpenRouter
+from langchain_core.messages import HumanMessage, SystemMessage  # noqa: TID251 - this module owns LangChain
+from langchain_core.messages.content import create_image_block, create_text_block  # noqa: TID251
+from langchain_openrouter import ChatOpenRouter  # noqa: TID251 - this module owns LangChain
+from openrouter import OpenRouter  # noqa: TID251 - this module owns the SDK
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from langchain_core.language_models import BaseChatModel, LanguageModelInput
-    from langchain_core.messages import BaseMessage
-    from langchain_core.messages.content import ContentBlock
-    from langchain_core.runnables import RunnableConfig
+    from langchain_core.language_models import BaseChatModel, LanguageModelInput  # noqa: TID251
+    from langchain_core.messages import BaseMessage  # noqa: TID251
+    from langchain_core.messages.content import ContentBlock  # noqa: TID251
+    from langchain_core.runnables import RunnableConfig  # noqa: TID251
     from pydantic import SecretStr
 
 

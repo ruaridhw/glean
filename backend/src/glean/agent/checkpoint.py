@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from langgraph.checkpoint.base import BaseCheckpointSaver
+    from langgraph.checkpoint.base import BaseCheckpointSaver  # noqa: TID251
 
     from glean.config import Settings
 
@@ -24,13 +24,13 @@ def build_checkpointer(settings: Settings) -> BaseCheckpointSaver:
 
 def in_memory_checkpointer() -> BaseCheckpointSaver:
     """A process-local saver. Checkpoints die with the process, which is all unit tests and evals need."""
-    from langgraph.checkpoint.memory import InMemorySaver  # noqa: PLC0415 - only the agent module may import this
+    from langgraph.checkpoint.memory import InMemorySaver  # noqa: PLC0415, TID251 - this module owns the checkpointer
 
     return InMemorySaver()
 
 
 def dynamo_checkpointer(settings: Settings) -> BaseCheckpointSaver:
-    from langgraph_checkpoint_aws.checkpoint.dynamodb import DynamoDBSaver  # noqa: PLC0415 - agent module only
+    from langgraph_checkpoint_aws.checkpoint.dynamodb import DynamoDBSaver  # noqa: PLC0415, TID251
 
     return DynamoDBSaver(
         settings.agent_checkpoints_table,
