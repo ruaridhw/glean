@@ -23,6 +23,7 @@ from glean.meal_plan.schemas import (
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
+from glean.sessions.models import MAX_ITEM_BYTES, RESULT_RESERVE_BYTES, item_bytes, stored_input_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -355,3 +356,68 @@ def test_an_alternative_must_be_eligible_not_merely_named(tmp_path: Path) -> Non
     alternatives = [suggestion.alternative for suggestion in result.suggestions]
     assert all(alternative is not None for alternative in alternatives)
     assert SLOW not in {alternative.external_id for alternative in alternatives if alternative}
+
+
+def _wide_corpus(tmp_path: Path, count: int) -> RecipeCorpusStore:
+    """*count* recipes that share no ingredients, so none suppresses another as a near-duplicate."""
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for index in range(count):
+        corpus.save(
+            StoredRecipe(
+                external_id=f"rec_wide_{index:02d}",
+                title=f"Wide Dish {index}",
+                ingredients=[
+                    StoredIngredient(canonical_name=f"ingredient {index} alpha", quantity=1, unit="each"),
+                    StoredIngredient(canonical_name=f"ingredient {index} beta", quantity=1, unit="each"),
+                ],
+                total_time_mins=20,
+            )
+        )
+    return corpus
+
+
+def test_the_largest_proposal_fits_the_result_reserve(tmp_path: Path) -> None:
+    """V1 reserves 64 KB of the session item for the plan (`RESULT_RESERVE_BYTES`), sized for V3.
+
+    The biggest proposal V3 can produce: seven meals, an alternative per card, an alternative per
+    planned meal, and long prose in every reason. It must fit, or an accepted request would end
+    `failed / model_error` on the write instead of showing the week.
+    """
+    planned_ids = [f"rec_wide_{index:02d}" for index in range(7)]
+    prepared = pipeline.prepare(
+        _request(meals_per_week=7, exclude_external_ids=planned_ids),
+        corpus=_wide_corpus(tmp_path, count=28),
+        rng=random.Random(0),
+        now=NOW,
+    )
+    assert len(prepared.offered_ids) == 21
+    prose = ("A long but plausible sentence about the week, the pantry and what is going off soon. " * 16)[:1200]
+    picks = [
+        _pick(prepared, index, reason=prose, alternative=_alternative(prepared, 7 + index, reason=prose))
+        for index in range(7)
+    ]
+    planned = [
+        CorpusPlannedAlternative(
+            planned_external_id=external_id, alternative=_alternative(prepared, 14 + index, reason=prose)
+        )
+        for index, external_id in enumerate(planned_ids)
+    ]
+
+    result = pipeline.finalise(prepared, _draft(prepared, summary=prose[:400], suggestions=picks, planned=planned))
+
+    assert len(result.suggestions) == 7
+    assert all(suggestion.alternative is not None for suggestion in result.suggestions)
+    assert len(result.planned_alternatives) == 7
+    payload = result.model_dump_json()
+    # A genuinely large proposal: 21 reasons of 1,200 characters each.
+    assert len(payload.encode()) > 20_000
+    assert len(payload.encode()) < RESULT_RESERVE_BYTES
+    # And the whole item still fits, with the request's stored inputs and three progress lines.
+    assert (
+        item_bytes(
+            inputs=stored_input_bytes(_request(meals_per_week=7, exclude_external_ids=planned_ids)),
+            progress=[prose[:200]] * 3,
+            result=payload,
+        )
+        < MAX_ITEM_BYTES
+    )
