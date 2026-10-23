@@ -42,6 +42,10 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
   /// Back and Cancel both discard and cancel; one in flight is enough.
   bool _leaving = false;
 
+  /// Set synchronously before Add's first await, so a double-tap in the same frame cannot start a second save
+  /// (and cannot let the refused second request close the review before the real one reports its Undo).
+  bool _savingSave = false;
+
   GenerateWeekController get _controller =>
       ref.read(generateWeekControllerProvider.notifier);
 
@@ -63,30 +67,33 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
   }
 
   Future<void> _addToPlan() async {
+    if (_savingSave || _leaving) return;
+    _savingSave = true;
     final GenerateWeekController controller = _controller;
-    final int count = await controller.addToPlan();
+    final GenerateSaveOutcome outcome = await controller.addToPlan();
+    _savingSave = false;
     if (!mounted || _leaving) return;
-    // A failed save keeps the failed face and its copy on screen: nothing was added.
-    if (ref.read(generateWeekControllerProvider).phase ==
-        GenerateProposalPhase.failed) {
-      return;
+    // Only a real save closes the review and shows the snackbar. Ignored, cancelled and failed requests keep
+    // the review (the failed face carries its own copy).
+    if (outcome is GenerateSaveSaved) {
+      await _leaveAfterSave(outcome.inserted, outcome.commit, controller);
     }
-    await _leaveAfterSave(count, controller.lastCommit, controller);
   }
 
   /// Retry on a failed save stays on the review and re-runs the transaction; a successful one closes it like
   /// Add to plan does. Retry on a failed run stays on the working face, so there is nothing to close.
   Future<void> _retry() async {
+    if (_savingSave || _leaving) return;
     final GenerateWeekController controller = _controller;
     final bool wasSave =
         ref.read(generateWeekControllerProvider).result != null;
-    final int count = await controller.retry();
-    if (!mounted || _leaving || !wasSave) return;
-    if (ref.read(generateWeekControllerProvider).phase ==
-        GenerateProposalPhase.failed) {
+    _savingSave = true;
+    final GenerateSaveOutcome outcome = await controller.retry();
+    _savingSave = false;
+    if (!mounted || _leaving || !wasSave || outcome is! GenerateSaveSaved) {
       return;
     }
-    await _leaveAfterSave(count, controller.lastCommit, controller);
+    await _leaveAfterSave(outcome.inserted, outcome.commit, controller);
   }
 
   String _addedMessage(int count) => count == 0
@@ -99,17 +106,12 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
   /// (the new entries are removed; a swapped planned meal gets its recipe, shopping rows and rating back).
   Future<void> _leaveAfterSave(
     int count,
-    GeneratedWeekCommit? commit,
+    GeneratedWeekCommit commit,
     GenerateWeekController controller,
   ) async {
     if (!mounted || _leaving) return;
     _leaving = true;
     ref.read(hapticsProvider).mediumImpact();
-    if (commit == null) {
-      GleanSnackBar.show(context, _addedMessage(count));
-      if (mounted) context.pop();
-      return;
-    }
     await GleanSnackBar.runUndoable<GeneratedWeekCommit>(
       context,
       perform: () async => commit,

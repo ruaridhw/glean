@@ -163,11 +163,12 @@ void main() {
         reason: 'nothing is saved before Add to plan',
       );
 
-      final int added = await h.container
+      final GenerateSaveOutcome outcome = await h.container
           .read(generateWeekControllerProvider.notifier)
           .addToPlan();
 
-      expect(added, 2);
+      expect(outcome, isA<GenerateSaveSaved>());
+      expect((outcome as GenerateSaveSaved).inserted, 2);
       final entries = await h.container
           .read(planRepositoryProvider)
           .getWeek(userId: h.userId, weekStart: week);

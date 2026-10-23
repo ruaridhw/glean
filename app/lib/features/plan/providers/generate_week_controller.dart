@@ -57,6 +57,37 @@ final generateSessionPollerProvider = Provider<GenerateSessionPoller>(
 /// Which face the proposal screen is showing. The question step is V11: `waiting_for_user` stays [working].
 enum GenerateProposalPhase { idle, working, proposal, failed }
 
+/// What one Add to plan request did. The screen acts only on [GenerateSaveSaved]: a request refused because a
+/// save is already in flight, or one whose review was discarded, must not close the review or show a snackbar.
+sealed class GenerateSaveOutcome {
+  const GenerateSaveOutcome();
+}
+
+/// A real save. [commit] is what Undo restores; [inserted] is how many new meals were added.
+final class GenerateSaveSaved extends GenerateSaveOutcome {
+  const GenerateSaveSaved({required this.inserted, required this.commit});
+
+  final int inserted;
+  final GeneratedWeekCommit commit;
+}
+
+/// The controller already had a save in flight, so this request changed nothing.
+final class GenerateSaveIgnored extends GenerateSaveOutcome {
+  const GenerateSaveIgnored();
+}
+
+/// The review was discarded while the save was still resolving, before its transaction started.
+final class GenerateSaveCancelled extends GenerateSaveOutcome {
+  const GenerateSaveCancelled();
+}
+
+/// The save failed; the review's failed face shows the catalogue copy.
+final class GenerateSaveFailed extends GenerateSaveOutcome {
+  const GenerateSaveFailed(this.failure);
+
+  final GenerateFailure failure;
+}
+
 /// Everything one Generate attempt holds: its arguments, its progress, its proposal, and the local swaps the
 /// user has made but not saved. A swap is a suggestion, not a write; [swaps] and [plannedSwaps] stay in memory
 /// until Add to plan commits them.
@@ -151,9 +182,6 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// must not touch the state it no longer owns.
   int _attempt = 0;
 
-  /// The last successful Add to plan, kept only long enough for the screen to hand it to the Undo snackbar.
-  GeneratedWeekCommit? _lastCommit;
-
   @override
   GenerateProposalState build() => const GenerateProposalState();
 
@@ -169,7 +197,6 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   }) async {
     if (state.phase == GenerateProposalPhase.working) return;
     if (slots <= 0) return;
-    _lastCommit = null;
     final int attempt = ++_attempt;
     state = GenerateProposalState(
       phase: GenerateProposalPhase.working,
@@ -182,19 +209,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
 
   /// Repeats whatever failed: a lost session is planned again; a failed save retries the save from the
   /// proposal already on screen, since resolving and committing are the only work left there. Returns how many
-  /// new meals a retried save inserted, so the screen can report it exactly as Add to plan would.
-  Future<int> retry() async {
+  /// outcome, so the screen reports a retried save exactly as Add to plan would. A retried run has no save
+  /// outcome to act on.
+  Future<GenerateSaveOutcome> retry() async {
     final GenerateProposalState failed = state;
-    if (failed.failure == null) return 0;
+    if (failed.failure == null) return const GenerateSaveIgnored();
     if (failed.result != null) return addToPlan();
     final DateTime? weekStart = failed.weekStart;
-    if (weekStart == null) return 0;
+    if (weekStart == null) return const GenerateSaveIgnored();
     await generate(
       weekStart: weekStart,
       slots: failed.slots,
       servings: failed.servings,
     );
-    return 0;
+    return const GenerateSaveIgnored();
   }
 
   /// Cancel and Back: stop watching the session, discard everything, and ask the server to cancel it. A
@@ -202,7 +230,6 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   Future<void> cancel() async {
     final String? session = state.sessionId;
     _attempt++;
-    _lastCommit = null;
     state = const GenerateProposalState();
     if (session != null) await _cancelSession(session);
   }
@@ -247,14 +274,15 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   ///
   /// Returns how many new meals were inserted. Recipe details are fetched before the transaction opens, so no
   /// network call runs inside it.
-  Future<int> addToPlan() async {
+  Future<GenerateSaveOutcome> addToPlan() async {
     final GenerateProposalState attempt = state;
     final MealPlanResponse? result = attempt.result;
     final DateTime? weekStart = attempt.weekStart;
-    if (result == null || weekStart == null || attempt.saving) return 0;
+    if (result == null || weekStart == null || attempt.saving) {
+      return const GenerateSaveIgnored();
+    }
     // A save that Back discards while it is still resolving must never reach the transaction.
     final int saveAttempt = _attempt;
-    _lastCommit = null;
     state = attempt._copy(saving: true);
     try {
       final String userId = ref.read(currentUserIdProvider);
@@ -294,7 +322,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         throw const GenerateFailure(GenerateFailureKind.unknown);
       }
       // Back aborts a save that is still resolving, so re-check the attempt before the transaction starts.
-      if (saveAttempt != _attempt) return 0;
+      if (saveAttempt != _attempt) return const GenerateSaveCancelled();
       state = state._copy(committing: true);
 
       final ({int inserted, GeneratedWeekCommit commit})
@@ -370,20 +398,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       });
       // The review was discarded while the transaction ran? The screen blocks that, but never report a save
       // to a state that no longer owns it.
-      if (saveAttempt != _attempt) return 0;
-      _lastCommit = saved.commit;
+      if (saveAttempt != _attempt) return const GenerateSaveCancelled();
       _attempt++;
       state = const GenerateProposalState();
-      return saved.inserted;
+      return GenerateSaveSaved(inserted: saved.inserted, commit: saved.commit);
     } catch (error) {
+      final GenerateFailure failure = GenerateFailure.from(error);
       if (saveAttempt == _attempt) {
         state = attempt._copy(
           phase: GenerateProposalPhase.failed,
           saving: false,
-          failure: GenerateFailure.from(error),
+          failure: failure,
         );
       }
-      return 0;
+      return GenerateSaveFailed(failure);
     }
   }
 
@@ -395,9 +423,6 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         userId: ref.read(currentUserIdProvider),
         commit: commit,
       );
-
-  /// The commit the last successful Add to plan produced, or null when there is nothing to undo.
-  GeneratedWeekCommit? get lastCommit => _lastCommit;
 
   Future<void> _run(
     int attempt, {
