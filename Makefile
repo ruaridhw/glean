@@ -8,7 +8,8 @@
 #   make test             — run all tests
 #   make lint             — lint + format everything
 #   make start-backend    — FastAPI dev server on :8000
-#   make start-backend-docker — Dockerized FastAPI server on :8000
+#   make start-backend-docker — the whole backend in Docker: FastAPI on :8000 plus the async
+#                              stack (DynamoDB Local, ElasticMQ, the session worker)
 #   make start-ios         — Flutter on iOS Simulator (macOS only)
 #   make start-android     — Flutter on a running Android emulator
 #   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
@@ -129,8 +130,8 @@ start-backend:  ## Start FastAPI dev server on :8000 (hot reload)
 	cd backend && uv run fastapi dev src/glean/main.py
 
 .PHONY: start-backend-docker
-start-backend-docker:  ## Start Dockerized FastAPI server on :8000
-	docker compose up --build backend
+start-backend-docker:  ## The whole backend in Docker: FastAPI on :8000 plus the async stack
+	docker compose up --build
 
 .PHONY: start-ios
 start-ios:  ## Start Flutter on iOS Simulator (macOS only; needs COGNITO_DOMAIN/COGNITO_CLIENT_ID)
