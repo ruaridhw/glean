@@ -123,7 +123,9 @@ the model call gets only what is left of it. Never add a state machine or a sche
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
   and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
   `create` refuses (422) a request whose item would not leave room for the outcome: V8's 400-row
-  history with 500-character notes is a real input, and one item is 400 KB.
+  history with 500-character notes is a real input, and one item is 400 KB. The plan is measured
+  before it is written too (64 KB is reserved for it): a plan that would overflow the item fails the
+  session `model_error` instead of raising into SQS.
 - **`AGENT_RUNNER=inline`** (unit tests, evals, `make start-backend` on the host) runs the agent in
   the request against the in-memory store and saver. Deployed and Compose run `queue`.
   `make start-backend-docker` brings up DynamoDB Local, ElasticMQ, the worker and a bootstrap that

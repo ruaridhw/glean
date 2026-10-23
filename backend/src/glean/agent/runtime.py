@@ -28,6 +28,7 @@ from glean.agent.errors import AgentError
 from glean.agent.graph import build_graph, result_of
 from glean.observability import logger, metrics
 from glean.sessions.models import ClaimResult, SessionError, SessionErrorCode
+from glean.sessions.store import SessionTooLargeError
 
 if TYPE_CHECKING:
     from glean.agent.deps import AgentDeps
@@ -77,7 +78,16 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
         logger.exception("meal plan session failed unexpectedly", extra={"session_id": session.session_id})
         _failed(deps, session, SessionError(code=SessionErrorCode.WORKER_FAILED), owner=owner)
     else:
-        _completed(deps, session, result, owner=owner)
+        try:
+            _completed(deps, session, result, owner=owner)
+        except SessionTooLargeError:
+            # The plan is real but the item cannot hold it, and there is nowhere else to put it: fail the
+            # session with a code the app can act on instead of raising into SQS.
+            logger.error(
+                "the plan would not fit the session item; failing the session",
+                extra={"session_id": session.session_id},
+            )
+            _failed(deps, session, SessionError(code=SessionErrorCode.MODEL_ERROR), owner=owner)
     finally:
         # Every attempt that started reports its wall time, so provider and worker failures are in the
         # latency distribution too, not only the runs that worked.
