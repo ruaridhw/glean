@@ -413,6 +413,10 @@ class PlanRepository {
   /// its id, date and servings, so the week's shape does not move; [recipeTitle] and the corpus snapshot come
   /// from the replacement recipe, exactly as [addEntry] records them. Its derived shopping rows are cleared by
   /// `ShoppingRepository.clearGapsForEntry` and re-added from the new recipe in the same transaction.
+  ///
+  /// Any rating goes with the old recipe: a thumb and its note are a verdict on the meal that was cooked, so
+  /// keeping them on a different recipe would teach the planner the wrong thing. A planned meal normally has
+  /// none, and this also clears a stale one from a delivered build that rated it before the swap.
   Future<void> replaceEntryRecipe({
     required int entryId,
     required String userId,
@@ -423,6 +427,10 @@ class PlanRepository {
         await (_db.select(_db.recipes)
               ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
             .getSingle();
+    await (_db.delete(_db.mealRatings)..where(
+          (t) => t.mealPlanEntryId.equals(entryId) & t.userId.equals(userId),
+        ))
+        .go();
     await (_db.update(
       _db.mealPlanEntries,
     )..where((t) => t.id.equals(entryId) & t.userId.equals(userId))).write(
