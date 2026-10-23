@@ -45,8 +45,16 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
 
   /// Discard whatever is on screen and ask the server to cancel the session. The screen closes after the
   /// DELETE is sent, as the wireframe's Cancel dictates.
+  ///
+  /// While Add to plan is resolving recipe details this aborts it: the controller drops the save before its
+  /// transaction starts. Once the transaction has started Back is ignored, so a discarded review can never
+  /// commit underneath the user.
   Future<void> _close() async {
     if (_leaving) return;
+    final GenerateProposalState state = ref.read(
+      generateWeekControllerProvider,
+    );
+    if (state.saving && state.committing) return;
     _leaving = true;
     await _controller.cancel();
     if (mounted) context.pop();
@@ -54,7 +62,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
 
   Future<void> _addToPlan() async {
     final int count = await _controller.addToPlan();
-    if (!mounted) return;
+    if (!mounted || _leaving) return;
     // A failed save keeps the failed face and its copy on screen: nothing was added.
     if (ref.read(generateWeekControllerProvider).phase ==
         GenerateProposalPhase.failed) {
@@ -69,7 +77,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
     final bool wasSave =
         ref.read(generateWeekControllerProvider).result != null;
     final int count = await _controller.retry();
-    if (!mounted || !wasSave) return;
+    if (!mounted || _leaving || !wasSave) return;
     if (ref.read(generateWeekControllerProvider).phase ==
         GenerateProposalPhase.failed) {
       return;
@@ -78,6 +86,8 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
   }
 
   void _leaveAfterSave(int count) {
+    if (!mounted || _leaving) return;
+    _leaving = true;
     ref.read(hapticsProvider).mediumImpact();
     GleanSnackBar.show(
       context,
