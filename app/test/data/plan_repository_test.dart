@@ -1249,5 +1249,111 @@ void main() {
         expect(history.single.note, 'not again');
       });
     });
+
+    group('Add to plan Undo', () {
+      final week = startOfWeek(DateTime(2026, 1, 5));
+
+      /// A planned original swapped to an alternative, snapshotted the way the save transaction does it.
+      Future<GeneratedWeekCommit> savedSwap() async {
+        final int original = await createRecipe('Original');
+        final int replacement = await createRecipe('Alternative');
+        final int entryId = await repository.addEntry(
+          userId: userId,
+          recipeId: original,
+          recipeTitle: 'Original',
+          servings: 2,
+          plannedDate: week,
+        );
+        return db.transaction(() async {
+          final PlanEntryState before = await repository.snapshotEntryState(
+            entryId: entryId,
+            userId: userId,
+          );
+          await repository.replaceEntryRecipe(
+            entryId: entryId,
+            userId: userId,
+            recipeId: replacement,
+            recipeTitle: 'Alternative',
+          );
+          final PlanEntryState after = await repository.snapshotEntryState(
+            entryId: entryId,
+            userId: userId,
+          );
+          return GeneratedWeekCommit(
+            addedEntries: <PlanEntryState>[],
+            swappedEntries: <SwappedEntrySnapshot>[
+              SwappedEntrySnapshot(before: before, after: after),
+            ],
+          );
+        });
+      }
+
+      Future<List<Map<String, dynamic>>> rows(String table) async =>
+          (await db.customSelect('SELECT * FROM $table ORDER BY id').get())
+              .map((row) => row.data)
+              .toList();
+
+      test(
+        'undo is refused, changing nothing, after the swapped-in meal was cooked and rated',
+        () async {
+          final GeneratedWeekCommit commit = await savedSwap();
+          final int entryId = commit.swappedEntries.single.after.entry.id;
+          await repository.markCooked(
+            entryId: entryId,
+            userId: userId,
+            now: DateTime(2026, 1, 6, 18),
+          );
+          await repository.rateWithNote(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.up,
+            note: 'Loved the alternative',
+          );
+          final List<Map<String, dynamic>> shoppingBefore = await rows(
+            'shopping_list_items',
+          );
+          final List<Map<String, dynamic>> ratingsBefore = await rows(
+            'meal_ratings',
+          );
+
+          await expectLater(
+            repository.undoGeneratedWeek(userId: userId, commit: commit),
+            throwsA(isA<PlanChangedSinceSaveException>()),
+          );
+
+          final MealPlanEntryView entry = (await repository.getWeek(
+            userId: userId,
+            weekStart: week,
+          )).single;
+          expect(
+            entry.recipeId,
+            commit.swappedEntries.single.after.entry.recipeId,
+            reason: 'the newer cooked meal keeps its swapped-in recipe',
+          );
+          expect(entry.isCooked, isTrue);
+          expect(entry.rating, MealThumb.up);
+          expect(entry.note, 'Loved the alternative');
+          expect(await rows('shopping_list_items'), shoppingBefore);
+          expect(await rows('meal_ratings'), ratingsBefore);
+        },
+      );
+
+      test('an untouched swap is restored exactly', () async {
+        final GeneratedWeekCommit commit = await savedSwap();
+
+        await repository.undoGeneratedWeek(userId: userId, commit: commit);
+
+        final MealPlanEntryView entry = (await repository.getWeek(
+          userId: userId,
+          weekStart: week,
+        )).single;
+        final MealPlanEntry before = commit.swappedEntries.single.before.entry;
+        expect(entry.recipeId, before.recipeId);
+        expect(entry.recipeTitle, 'Original');
+        expect(entry.externalIdSnapshot, before.externalIdSnapshot);
+        expect(entry.isCooked, isFalse);
+        expect(entry.rating, isNull);
+      });
+    });
   });
 }

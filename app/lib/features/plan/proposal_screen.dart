@@ -119,7 +119,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
           controller.undoAddToPlan(snapshot),
       message: _addedMessage(count),
       failureMessage: 'Could not add your week. Try again.',
-      undoFailureMessage: 'Could not undo. Try again.',
+      undoFailureMessage: "Couldn't undo: the plan has changed since.",
     );
     if (mounted) context.pop();
   }
