@@ -19,7 +19,7 @@ import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/recipe_proposal.dart';
 import 'package:glean/data/repositories/plan_repository.dart'
-    show GeneratedWeekCommit, SwappedEntrySnapshot;
+    show GeneratedWeekCommit, PlanEntryState, SwappedEntrySnapshot;
 import 'package:glean/data/util/week.dart';
 
 import '../compression.dart';
@@ -342,9 +342,9 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         final Set<int?> currentIds = current
             .map((MealPlanEntryView entry) => entry.recipeId)
             .toSet();
-        final List<int> addedEntryIds = <int>[];
+        final List<PlanEntryState> addedEntries = <PlanEntryState>[];
         for (final RecipeView recipe in resolved) {
-          if (addedEntryIds.length >= remaining) break;
+          if (addedEntries.length >= remaining) break;
           if (currentIds.contains(recipe.id)) continue;
           final int entryId = await plan.addEntry(
             userId: userId,
@@ -359,17 +359,17 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
             servings: attempt.servings,
             sourceMealPlanEntryId: entryId,
           );
-          addedEntryIds.add(entryId);
+          addedEntries.add(
+            await plan.snapshotEntryState(entryId: entryId, userId: userId),
+          );
         }
         final List<SwappedEntrySnapshot> swappedEntries =
             <SwappedEntrySnapshot>[];
         for (final ({int entryId, RecipeView recipe, int servings}) update
             in plannedUpdates) {
-          swappedEntries.add(
-            await plan.snapshotEntrySwap(
-              entryId: update.entryId,
-              userId: userId,
-            ),
+          final PlanEntryState before = await plan.snapshotEntryState(
+            entryId: update.entryId,
+            userId: userId,
           );
           await plan.replaceEntryRecipe(
             entryId: update.entryId,
@@ -387,11 +387,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
             servings: update.servings,
             sourceMealPlanEntryId: update.entryId,
           );
+          swappedEntries.add(
+            SwappedEntrySnapshot(
+              before: before,
+              after: await plan.snapshotEntryState(
+                entryId: update.entryId,
+                userId: userId,
+              ),
+            ),
+          );
         }
         return (
-          inserted: addedEntryIds.length,
+          inserted: addedEntries.length,
           commit: GeneratedWeekCommit(
-            addedEntryIds: addedEntryIds,
+            addedEntries: addedEntries,
             swappedEntries: swappedEntries,
           ),
         );
