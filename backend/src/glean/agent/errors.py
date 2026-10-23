@@ -31,3 +31,12 @@ def model_error_for(exception: Exception) -> SessionError:
     except (TypeError, ValueError):
         return SessionError(code=SessionErrorCode.RATE_LIMITED)
     return SessionError(code=SessionErrorCode.RATE_LIMITED, retry_after_minutes=max(1, -(-seconds // 60)))
+
+
+def budget_spent() -> SessionError:
+    """The 90 s budget ran out before the plan was finished.
+
+    The spec's degraded fallback (the scorer's best plan with template reasons) needs the scorer, which
+    V6 adds; until then the honest outcome is the retryable model error rather than a half-made week.
+    """
+    return SessionError(code=SessionErrorCode.MODEL_ERROR)

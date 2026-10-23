@@ -8,8 +8,8 @@
 - **Recovering.** A delivery that takes over a session resumes from its LangGraph checkpoint (the same
   thread, invoked with no new input), so the crash costs the step it died in and nothing before it.
   With no checkpoint it starts fresh.
-- **Ending.** Every run leaves `done` or `failed`: a typed refusal, a model failure or a bug each
-  write a code. A run that lost its lease writes nothing, because another attempt owns it now.
+- **Ending.** Every run leaves `done` or `failed`: a typed refusal, a model failure, a spent budget or a
+  bug each write a code. A run that lost its lease writes nothing, because another attempt owns it now.
 """
 
 from __future__ import annotations
