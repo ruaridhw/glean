@@ -1015,6 +1015,188 @@ void main() {
         },
       );
 
+      test(
+        'a later thumbs up cancels an older thumbs down outside the window',
+        () async {
+          // Both cooks are older than the window, so the supplement is the only thing that could send either.
+          final DateTime reference = DateTime(2026, 7, 1);
+          final int recipeId = await recipesRepository.save(
+            userId: userId,
+            externalId: 'rec_curry',
+            title: 'Curry',
+            ingredients: const <SaveRecipeIngredient>[],
+          );
+          Future<void> ratedCook(DateTime cookedAt, MealThumb rating) async {
+            final int entryId = await repository.addEntry(
+              userId: userId,
+              recipeId: recipeId,
+              recipeTitle: 'Curry',
+              servings: 2,
+              plannedDate: week,
+            );
+            await repository.markCooked(
+              entryId: entryId,
+              userId: userId,
+              now: cookedAt,
+            );
+            await repository.rate(
+              entryId: entryId,
+              userId: userId,
+              rating: rating,
+            );
+          }
+
+          await ratedCook(
+            reference.subtract(const Duration(days: 200)),
+            MealThumb.down,
+          );
+          await ratedCook(
+            reference.subtract(const Duration(days: 100)),
+            MealThumb.up,
+          );
+
+          expect(
+            await repository.plannerHistory(userId: userId, now: reference),
+            isEmpty,
+            reason: 'the latest rated verdict is the thumbs up',
+          );
+        },
+      );
+
+      test(
+        'a later title-only thumbs up cancels an older id-bearing thumbs down',
+        () async {
+          // The two cooks identify the recipe differently: the down kept a corpus id, the later up lost its
+          // snapshot and only carries a title. The backend matches those two rows to one recipe, so the app
+          // must resolve the verdict the same way.
+          final DateTime reference = DateTime(2026, 7, 1);
+          final int withId = await recipesRepository.save(
+            userId: userId,
+            externalId: 'rec_curry',
+            title: 'Curry',
+            ingredients: const <SaveRecipeIngredient>[],
+          );
+          final int withoutId = await recipesRepository.save(
+            userId: userId,
+            title: 'Curry',
+            ingredients: const <SaveRecipeIngredient>[],
+          );
+          Future<void> ratedCook(
+            int recipeId,
+            String title,
+            DateTime cookedAt,
+            MealThumb rating,
+          ) async {
+            final int entryId = await repository.addEntry(
+              userId: userId,
+              recipeId: recipeId,
+              recipeTitle: title,
+              servings: 2,
+              plannedDate: week,
+            );
+            await repository.markCooked(
+              entryId: entryId,
+              userId: userId,
+              now: cookedAt,
+            );
+            await repository.rate(
+              entryId: entryId,
+              userId: userId,
+              rating: rating,
+            );
+          }
+
+          await ratedCook(
+            withId,
+            'Curry',
+            reference.subtract(const Duration(days: 200)),
+            MealThumb.down,
+          );
+          // The later cook lost its external id snapshot and only carries the title, in different case and
+          // spacing, which the planner folds together.
+          await ratedCook(
+            withoutId,
+            '  CURRY ',
+            reference.subtract(const Duration(days: 100)),
+            MealThumb.up,
+          );
+
+          expect(
+            await repository.plannerHistory(userId: userId, now: reference),
+            isEmpty,
+          );
+        },
+      );
+
+      test(
+        'two hundred recent dislikes do not crowd out one older dislike',
+        () async {
+          // Window rows are already in the request, so they must not consume the supplement's bound.
+          final DateTime reference = DateTime(2026, 7, 1);
+          Future<int> recentDislike(int index) async {
+            final int recipeId = await recipesRepository.save(
+              userId: userId,
+              externalId: 'rec_recent_$index',
+              title: 'Recent $index',
+              ingredients: const <SaveRecipeIngredient>[],
+            );
+            final int entryId = await repository.addEntry(
+              userId: userId,
+              recipeId: recipeId,
+              recipeTitle: 'Recent $index',
+              servings: 2,
+              plannedDate: week,
+            );
+            await repository.markCooked(
+              entryId: entryId,
+              userId: userId,
+              now: reference.subtract(const Duration(days: 1)),
+            );
+            await repository.rate(
+              entryId: entryId,
+              userId: userId,
+              rating: MealThumb.down,
+            );
+            return entryId;
+          }
+
+          for (int index = 0; index < maxDislikedHistoryItems; index++) {
+            await recentDislike(index);
+          }
+          final int oldRecipe = await recipesRepository.save(
+            userId: userId,
+            externalId: 'rec_old',
+            title: 'Old dislike',
+            ingredients: const <SaveRecipeIngredient>[],
+          );
+          final int old = await repository.addEntry(
+            userId: userId,
+            recipeId: oldRecipe,
+            recipeTitle: 'Old dislike',
+            servings: 2,
+            plannedDate: week,
+          );
+          await repository.markCooked(
+            entryId: old,
+            userId: userId,
+            now: reference.subtract(const Duration(days: 140)),
+          );
+          await repository.rate(
+            entryId: old,
+            userId: userId,
+            rating: MealThumb.down,
+          );
+
+          final List<MealPlanEntryView> history = await repository
+              .plannerHistory(userId: userId, now: reference);
+          expect(history, hasLength(maxDislikedHistoryItems + 1));
+          expect(
+            history.map((MealPlanEntryView entry) => entry.id),
+            contains(old),
+          );
+        },
+      );
+
       test('the history window carries each cook\'s rating and note', () async {
         final entryId = await cookedEntry();
         await repository.rateWithNote(

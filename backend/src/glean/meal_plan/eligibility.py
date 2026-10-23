@@ -10,9 +10,13 @@ exists.
 
 A thumbs-down rating joins the hard constraints: a recipe whose latest rating is
 thumbs down is left out here and never comes back through the floor, so "not
-that again" sticks until the household clears or flips the thumb. Only the most
-recent rated cook decides, and cooking a recipe again without rating it does not
-silently undo the verdict.
+that again" sticks until the household clears or flips the thumb. "Latest rating"
+is CONTEXT.md's term: the thumb on the most recent *rated* cook, whichever way it
+points, so a later thumbs up cancels an older thumbs down. Cooking a recipe again
+without rating it does not silently undo the verdict. The app sends the cook that
+carries this verdict when it is older than the history window, and resolves it by
+the same id-then-title rule this module uses, so both sides read one recipe's
+cooks the same way.
 
 Deliberately store-free and framework-free: the planner graph, the evals and the
 MCP server all call this with plain values, and it unit-tests on synthetic
