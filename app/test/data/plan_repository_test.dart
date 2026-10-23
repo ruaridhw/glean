@@ -767,6 +767,28 @@ void main() {
       });
 
       test(
+        'a note longer than the wire bound is refused, and nothing is written',
+        () async {
+          final entryId = await cookedEntry();
+          final String tooLong =
+              'e\u0301' * 300; // 600 code points for 300 visible characters
+
+          await expectLater(
+            repository.rateWithNote(
+              entryId: entryId,
+              userId: userId,
+              rating: MealThumb.down,
+              note: tooLong,
+            ),
+            throwsArgumentError,
+          );
+
+          expect(await ratingRows(), 0);
+          expect((await readEntry(entryId)).rating, isNull);
+        },
+      );
+
+      test(
         'clearing the thumb deletes the row, so the recipe is not avoided',
         () async {
           final entryId = await cookedEntry();
@@ -866,6 +888,130 @@ void main() {
           expect(restored.id, entryId);
           expect(restored.rating, MealThumb.down);
           expect(restored.note, 'too sweet');
+        },
+      );
+
+      test(
+        'a thumbs down older than the window still travels, so it does not expire',
+        () async {
+          // One clock for the window and the ages in it: the helper cooks on 6 Jan, so the reference is the
+          // day after, and the dislike is twenty weeks before that.
+          final DateTime reference = DateTime(2026, 1, 7);
+          final int old = await cookedEntry(title: 'Old dislike');
+          await db.customStatement(
+            'UPDATE meal_plan_entries SET cooked_at = ? WHERE id = ?',
+            <Object?>[
+              reference
+                  .subtract(const Duration(days: 140))
+                  .toUtc()
+                  .toIso8601String(),
+              old,
+            ],
+          );
+          await repository.rateWithNote(
+            entryId: old,
+            userId: userId,
+            rating: MealThumb.down,
+            note: 'not again',
+          );
+          final int recent = await cookedEntry(title: 'Recent');
+          await repository.rate(
+            entryId: recent,
+            userId: userId,
+            rating: MealThumb.up,
+          );
+
+          final List<MealPlanEntryView> window = await repository.cookedHistory(
+            userId: userId,
+            now: reference,
+          );
+          expect(window.map((MealPlanEntryView entry) => entry.id), <int>[
+            recent,
+          ]);
+
+          final List<MealPlanEntryView> history = await repository
+              .plannerHistory(userId: userId, now: reference);
+          expect(
+            history.map((MealPlanEntryView entry) => entry.id).toSet(),
+            <int>{old, recent},
+          );
+          final MealPlanEntryView sent = history.singleWhere(
+            (MealPlanEntryView entry) => entry.id == old,
+          );
+          expect(sent.rating, MealThumb.down);
+          expect(sent.note, 'not again');
+          expect(
+            sent.cookedAt!.isBefore(
+              reference.subtract(const Duration(days: 100)),
+            ),
+            isTrue,
+          );
+        },
+      );
+
+      test(
+        'a disliked cook inside the window is sent once, and clearing it removes '
+        'the row',
+        () async {
+          final int entryId = await cookedEntry();
+          await repository.rate(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.down,
+          );
+
+          final List<MealPlanEntryView> inside = await repository
+              .plannerHistory(userId: userId);
+          expect(inside.map((MealPlanEntryView entry) => entry.id), <int>[
+            entryId,
+          ]);
+
+          await repository.clearRating(entryId: entryId, userId: userId);
+          expect(await repository.plannerHistory(userId: userId), isEmpty);
+        },
+      );
+
+      test(
+        'the latest disliked cook per recipe travels, and the list is bounded',
+        () async {
+          Future<int> agedDislike(String title, int daysAgo) async {
+            final int entryId = await cookedEntry(title: title);
+            await repository.rate(
+              entryId: entryId,
+              userId: userId,
+              rating: MealThumb.down,
+            );
+            await db.customStatement(
+              'UPDATE meal_plan_entries SET cooked_at = ? WHERE id = ?',
+              <Object?>[
+                DateTime.now()
+                    .subtract(Duration(days: daysAgo))
+                    .toUtc()
+                    .toIso8601String(),
+                entryId,
+              ],
+            );
+            return entryId;
+          }
+
+          await agedDislike('Disliked twice', 300);
+          final int second = await agedDislike('Disliked twice', 200);
+          final int other = await agedDislike('Another dislike', 250);
+
+          final List<MealPlanEntryView> all = await repository.plannerHistory(
+            userId: userId,
+          );
+          expect(
+            all.map((MealPlanEntryView entry) => entry.id).toSet(),
+            <int>{second, other},
+            reason: 'one row per recipe, its most recent rated cook',
+          );
+
+          final List<MealPlanEntryView> bounded = await repository
+              .plannerHistory(userId: userId, dislikedLimit: 1);
+          expect(bounded.map((MealPlanEntryView entry) => entry.id), <int>[
+            second,
+          ]);
         },
       );
 

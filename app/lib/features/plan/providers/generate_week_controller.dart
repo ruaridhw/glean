@@ -46,7 +46,8 @@ class GenerateWeekController extends AsyncNotifier<int> {
     final pantry = await ref.read(pantryRepositoryProvider).getAll(userId);
     final saved = await recipes.getSaved(userId);
     final entries = await plan.getWeek(userId: userId, weekStart: weekStart);
-    final cooked = await plan.cookedHistory(userId: userId);
+    // The window plus any older cook that still carries a thumbs down: a dislike does not expire.
+    final cooked = await plan.plannerHistory(userId: userId);
     final config = await ref.read(userConfigRepositoryProvider).get(userId);
     final groups = <int, List<String>>{};
     for (final recipe in saved) {
