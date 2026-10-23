@@ -15,9 +15,11 @@ import pytest
 from moto import mock_aws
 
 from glean.meal_plan.schemas import (
+    MealPlanAlternative,
     MealPlanRequest,
     MealPlanResult,
     MealPlanSuggestion,
+    PlannedMealAlternative,
 )
 from glean.sessions.dynamo import DynamoSessionStore
 from glean.sessions.models import (
@@ -667,3 +669,41 @@ def test_the_dead_letter_handler_leaves_a_cancelled_session_alone(store: tuple[S
     assert record is not None
     assert record.status is SessionStatus.CANCELLED
     assert record.error is None
+
+
+def test_a_full_proposal_with_alternatives_fits_the_item(store: tuple[SessionStore, Clock]) -> None:
+    """V3's biggest plan, at the sizes a model really writes: the reserve has to hold it (S2's arithmetic).
+
+    Seven meals, an alternative per card and an alternative per planned meal, each reason 1,200
+    characters. If this raised `SessionTooLargeError` an accepted request would end `failed` on its last
+    write instead of showing the week.
+    """
+    sessions, clock = store
+    sessions.create(_session(meals_per_week=7), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    prose = ("A long but plausible sentence about the week, the pantry and what is going off soon. " * 16)[:1200]
+
+    def suggestion(external_id: str, alternative: MealPlanAlternative | None) -> MealPlanSuggestion:
+        return MealPlanSuggestion(
+            external_id=external_id, title=f"Dish {external_id}", reason=prose, alternative=alternative
+        )
+
+    def alternative(external_id: str) -> MealPlanAlternative:
+        return MealPlanAlternative(external_id=external_id, title=f"Dish {external_id}", reason=prose)
+
+    plan = MealPlanResult(
+        week_summary=prose[:400],
+        suggestions=[suggestion(f"rec_{n}", alternative(f"alt_{n}")) for n in range(7)],
+        planned_alternatives=[
+            PlannedMealAlternative(external_id=f"planned_{n}", alternative=suggestion(f"swap_{n}", None))
+            for n in range(7)
+        ],
+        degraded=False,
+    )
+
+    assert sessions.complete("user-a", "sess-1", plan, owner="attempt-1") is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result == plan

@@ -967,6 +967,22 @@ def test_a_dead_letter_for_a_finished_session_leaves_it_done(sessions_table: Dyn
     assert record.error is None
 
 
+def test_a_dead_letter_for_a_cancelled_session_leaves_it_cancelled(
+    sessions_table: DynamoSessionStore,
+) -> None:
+    """A cancelled session is terminal, so the dead letter is acknowledged and nothing is rewritten."""
+    sessions_table.create(_queued(), now=datetime.now(UTC))
+    sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC), lease_seconds=MAX_LEASE_SECONDS)
+    sessions_table.cancel("user-a", "sess-1")
+
+    dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
+
+    record = sessions_table.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.error is None
+
+
 def test_the_worker_handler_walks_every_record(monkeypatch: pytest.MonkeyPatch) -> None:
     handled: list[str] = []
 
