@@ -31,6 +31,8 @@ Map<String, dynamic> _$CookedHistoryItemToJson(CookedHistoryItem instance) =>
       'recipe_id': instance.recipeId,
       'title': instance.title,
       'cooked_at': instance.cookedAt.toIso8601String(),
+      'rating': instance.rating,
+      'note': instance.note,
     };
 
 Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
