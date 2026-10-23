@@ -71,6 +71,7 @@ class GenerateProposalState {
     this.swaps = const <int, MealPlanRecipe>{},
     this.plannedSwaps = const <int, MealPlanRecipe>{},
     this.saving = false,
+    this.committing = false,
   });
 
   final GenerateProposalPhase phase;
@@ -99,6 +100,11 @@ class GenerateProposalState {
   /// transaction twice.
   final bool saving;
 
+  /// True once Add to plan has passed its abort point and the transaction is running. Back may abort a save
+  /// while it is resolving details, but not once the transaction has started: by then the review must not be
+  /// discarded underneath a commit.
+  final bool committing;
+
   /// The meal a card shows: the chosen alternative when there is one, else the server's suggestion.
   MealPlanRecipe suggestionAt(int index) =>
       swaps[index] ?? result!.suggestions[index];
@@ -121,6 +127,7 @@ class GenerateProposalState {
     Map<int, MealPlanRecipe>? swaps,
     Map<int, MealPlanRecipe>? plannedSwaps,
     bool? saving,
+    bool? committing,
   }) => GenerateProposalState(
     phase: phase ?? this.phase,
     weekStart: weekStart,
@@ -133,6 +140,7 @@ class GenerateProposalState {
     swaps: swaps ?? this.swaps,
     plannedSwaps: plannedSwaps ?? this.plannedSwaps,
     saving: saving ?? this.saving,
+    committing: committing ?? this.committing,
   );
 }
 
@@ -237,6 +245,8 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     final MealPlanResponse? result = attempt.result;
     final DateTime? weekStart = attempt.weekStart;
     if (result == null || weekStart == null || attempt.saving) return 0;
+    // A save that Back discards while it is still resolving must never reach the transaction.
+    final int saveAttempt = _attempt;
     state = attempt._copy(saving: true);
     try {
       final String userId = ref.read(currentUserIdProvider);
@@ -275,6 +285,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         // The review had meals, so saving none of them is a failure to show, not a quiet no-op.
         throw const GenerateFailure(GenerateFailureKind.unknown);
       }
+
+      // Back aborts a save that is still resolving, so re-check the attempt before the transaction starts.
+      if (saveAttempt != _attempt) return 0;
+      state = state._copy(committing: true);
 
       final int
       inserted = await ref.read(gleanDatabaseProvider).transaction(() async {
@@ -333,15 +347,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         }
         return count;
       });
+      // The review was discarded while the transaction ran? The screen blocks that, but never report a save
+      // to a state that no longer owns it.
+      if (saveAttempt != _attempt) return 0;
       _attempt++;
       state = const GenerateProposalState();
       return inserted;
     } catch (error) {
-      state = attempt._copy(
-        phase: GenerateProposalPhase.failed,
-        saving: false,
-        failure: GenerateFailure.from(error),
-      );
+      if (saveAttempt == _attempt) {
+        state = attempt._copy(
+          phase: GenerateProposalPhase.failed,
+          saving: false,
+          failure: GenerateFailure.from(error),
+        );
+      }
       return 0;
     }
   }

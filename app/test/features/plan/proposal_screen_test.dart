@@ -64,6 +64,7 @@ http.Client proposalBackend({
   required Map<String, dynamic> result,
   void Function(http.Request request)? capture,
   Future<http.Response> Function()? holdPoll,
+  Future<http.Response> Function()? holdDetail,
 }) => MockClient((http.Request request) async {
   capture?.call(request);
   if (request.method == 'DELETE') return http.Response('', 204);
@@ -74,6 +75,7 @@ http.Client proposalBackend({
     if (holdPoll != null) return holdPoll();
     return sessionDone(result);
   }
+  if (holdDetail != null) return holdDetail();
   return recipeDetail(request.url.pathSegments.last);
 });
 
@@ -536,6 +538,62 @@ void main() {
       isEmpty,
     );
   });
+
+  gleanWidgetTest(
+    'Back while Add resolves details aborts the save, with no second pop',
+    (tester) async {
+      final Completer<http.Response> heldDetail = Completer<http.Response>();
+      var detailStarted = false;
+      final h = AppTestHarness(
+        httpClient: proposalBackend(
+          result: <String, dynamic>{
+            'suggestions': <Map<String, dynamic>>[
+              suggestion('rec_a', title: 'Dinner A', reason: 'Fits.'),
+            ],
+            'week_summary': 'One dinner.',
+          },
+          holdDetail: () {
+            detailStarted = true;
+            return heldDetail.future;
+          },
+        ),
+      );
+      addTearDown(h.dispose);
+
+      await openProposal(tester, h);
+      await tester.tap(find.text('Add 1 dinner to plan'));
+      await pumpUntil(
+        tester,
+        () => detailStarted,
+        description: 'the save resolving a recipe detail',
+      );
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        find.widgetWithText(FilledButton, 'Generate'),
+        findsOneWidget,
+        reason: 'Back closes the review while the save is still resolving',
+      );
+
+      heldDetail.complete(recipeDetail('rec_a'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'a stale save completion must not pop a second time',
+      );
+      expect(
+        await tester.runAsync(
+          () => h.container
+              .read(planRepositoryProvider)
+              .getWeek(userId: h.userId, weekStart: week),
+        ),
+        isEmpty,
+        reason: 'the discarded review never reaches its transaction',
+      );
+    },
+  );
 
   for (final double scale in <double>[1.3, 2.0]) {
     gleanWidgetTest(
