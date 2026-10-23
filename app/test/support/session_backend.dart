@@ -16,7 +16,9 @@ http.Response sessionDone(Map<String, dynamic> result) => http.Response(
   jsonEncode({
     'status': 'done',
     'progress': <String>[],
-    'cursor': 1,
+    'next_cursor': 1,
+    'session_id': 'session-1',
+    'updated_at': '2026-10-23T09:13:29.669974Z',
     'result': result,
     'error': null,
   }),

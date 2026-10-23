@@ -208,7 +208,9 @@ void main() {
         (_) async => jsonResponse({
           'status': 'running',
           'progress': ['Picking recipes'],
-          'cursor': 3,
+          'session_id': 'sess-7',
+          'next_cursor': 3,
+          'updated_at': '2026-10-23T09:13:29.669974Z',
           'result': null,
           'error': null,
         }),
@@ -227,7 +229,9 @@ void main() {
       expect(uri.path, '/meal-plan/sessions/sess-7');
       expect(uri.queryParameters['after'], '2');
       expect(update.status, MealPlanSessionStatus.running);
-      expect(update.cursor, 3);
+      expect(update.nextCursor, 3);
+      expect(update.sessionId, 'sess-7');
+      expect(update.updatedAt, DateTime.utc(2026, 10, 23, 9, 13, 29, 669, 974));
       expect(update.progress, ['Picking recipes']);
       expect(update.isTerminal, isFalse);
     });
@@ -239,7 +243,7 @@ void main() {
         (_) async => jsonResponse({
           'status': 'done',
           'progress': <String>[],
-          'cursor': 4,
+          'next_cursor': 4,
           'result': {
             'suggestions': [
               {
@@ -271,7 +275,7 @@ void main() {
         (_) async => jsonResponse({
           'status': 'failed',
           'progress': <String>[],
-          'cursor': 5,
+          'next_cursor': 5,
           'result': null,
           'error': {'code': 'rate_limited', 'retry_after_minutes': 12},
         }),
@@ -292,7 +296,7 @@ void main() {
         (_) async => jsonResponse({
           'status': 'needs_a_restart',
           'progress': <String>[],
-          'cursor': 1,
+          'next_cursor': 1,
         }),
       );
 

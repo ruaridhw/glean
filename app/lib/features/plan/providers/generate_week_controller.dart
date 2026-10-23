@@ -258,7 +258,7 @@ class GenerateWeekController extends AsyncNotifier<int> {
           session.sessionId,
           after: cursor,
         );
-        cursor = update.cursor;
+        cursor = update.nextCursor;
         switch (update.status) {
           case MealPlanSessionStatus.done:
             final MealPlanResponse? result = update.result;
