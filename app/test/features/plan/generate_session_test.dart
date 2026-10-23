@@ -42,7 +42,7 @@ void main() {
     jsonEncode({
       'status': status,
       'progress': <String>[],
-      'cursor': cursor,
+      'next_cursor': cursor,
       'result': result,
       'error': error,
     }),
@@ -183,6 +183,41 @@ void main() {
       clock.now,
       DateTime(2026, 10, 5, 9),
       reason: 'a terminal poll never waits again',
+    );
+  });
+
+  test('each poll sends the cursor the previous response gave', () async {
+    final clock = FakeClock();
+    final afters = <String?>[];
+    final h = harnessWith(
+      clock,
+      backend(
+        capture: (request) {
+          if (request.url.path.startsWith('/meal-plan/sessions/')) {
+            afters.add(request.url.queryParameters['after']);
+          }
+        },
+        polls: [
+          () => session(status: 'queued', cursor: 3),
+          () => session(
+            status: 'done',
+            cursor: 7,
+            result: {'suggestions': <Object?>[]},
+          ),
+        ],
+      ),
+    );
+    addTearDown(h.dispose);
+
+    await h.container
+        .read(generateWeekControllerProvider.notifier)
+        .generate(weekStart: week, slots: 1, servings: 1);
+
+    expect(
+      afters,
+      [null, '3'],
+      reason:
+          'the first poll asks from 0, the next from the next_cursor it was given',
     );
   });
 

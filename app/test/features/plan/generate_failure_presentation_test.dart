@@ -39,7 +39,7 @@ void main() {
             jsonEncode({
               'status': body['status'],
               'progress': body['progress'] ?? <String>[],
-              'cursor': index,
+              'next_cursor': index,
               'result': null,
               'error': body['error'],
             }),
@@ -93,7 +93,7 @@ void main() {
               jsonEncode({
                 'status': 'running',
                 'progress': ['Ranking recipes'],
-                'cursor': polls,
+                'next_cursor': polls,
                 'result': null,
                 'error': null,
               }),

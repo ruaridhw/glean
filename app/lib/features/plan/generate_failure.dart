@@ -50,8 +50,8 @@ class GenerateFailure implements Exception {
     };
   }
 
-  /// A failure before the session exists: a 429 has its own copy, and everything else (signed out, no network,
-  /// a rejected request) gets the generic message and a retry.
+  /// A failure before the session exists: a 429 has its own copy, and everything else (signed out, no network, a
+  /// rejected request, a 503 because the queue would not take the run) gets the generic message and a retry.
   factory GenerateFailure.fromApi(ApiException error) {
     if (error is ApiRateLimitException) {
       return GenerateFailure(

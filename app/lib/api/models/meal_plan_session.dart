@@ -50,16 +50,18 @@ class MealPlanSessionError {
 }
 
 /// One poll of `GET /meal-plan/sessions/{id}?after=<cursor>`. [progress] holds the lines written since the
-/// cursor that was sent; [cursor] is what the next poll sends back. [result] is today's meal plan on [done], and
-/// [error] is the typed failure on [failed]; both are null while the session runs.
+/// cursor that was sent; [nextCursor] is what the next poll sends back. [result] is today's meal plan on [done],
+/// and [error] is the typed failure on [failed]; both are null while the session runs.
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class MealPlanSessionUpdate {
   const MealPlanSessionUpdate({
     required this.status,
     this.progress = const <String>[],
-    this.cursor = 0,
+    this.nextCursor = 0,
     this.result,
     this.error,
+    this.sessionId,
+    this.updatedAt,
   });
 
   factory MealPlanSessionUpdate.fromJson(Map<String, dynamic> json) =>
@@ -68,9 +70,18 @@ class MealPlanSessionUpdate {
   @JsonKey(unknownEnumValue: MealPlanSessionStatus.unknown)
   final MealPlanSessionStatus status;
   final List<String> progress;
-  final int cursor;
+
+  /// The cursor the next poll sends as `after`, so progress lines are not repeated.
+  final int nextCursor;
   final MealPlanResponse? result;
   final MealPlanSessionError? error;
+
+  /// Echoed by the backend for logs; the app already knows the id it is polling.
+  final String? sessionId;
+
+  /// When the session last changed. Observability only: V1 renders whatever status comes back and has no
+  /// staleness logic.
+  final DateTime? updatedAt;
 
   /// `done` and `failed` are the only outcomes that end a Generate attempt; everything else keeps polling.
   bool get isTerminal =>
