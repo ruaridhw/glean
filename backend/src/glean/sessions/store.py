@@ -14,6 +14,7 @@ The store owns three rules so no caller can break them:
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Protocol
 
@@ -35,20 +36,34 @@ if TYPE_CHECKING:
 
     from glean.meal_plan.schemas import MealPlanResult
 
-# The worker's function timeout and the queue's visibility timeout, which `template.yaml` must match
-# (tests/infra/test_template_async_stack.py checks all three numbers against these).
+# The numbers the queue and the worker must agree on. `template.yaml` declares them, and
+# tests/infra/test_template_async_stack.py checks the template against these constants.
 WORKER_TIMEOUT_SECONDS = 120
-QUEUE_VISIBILITY_SECONDS = 130
+# A Lambda can spend up to this long on init before the handler runs, so a message's visibility has to
+# cover it as well as the handler.
+LAMBDA_INIT_SECONDS = 10
+# Recovery is only as fast as the queue: the message must reappear after a run has died, with margin.
+QUEUE_VISIBILITY_MARGIN_SECONDS = 15
+# Declared in template.yaml. It must stay above timeout + init + margin (145 s here), and it is what the
+# app's five-minute cap is measured against: a crash comes back within about 2.5 minutes.
+QUEUE_VISIBILITY_SECONDS = 150
 
-# The lease an attempt takes at claim, and never extends. Two rules pick it:
-#   * below the visibility timeout, so every redelivered copy of the message finds it lapsed — a
-#     refreshed lease could outlive the visibility, and then the redelivered message would be acked as
-#     "owned elsewhere" with nothing left to recover the run;
-#   * above the function timeout plus a small margin, so a live run's own delivery can never be taken
-#     over while it is still inside the Lambda, and a duplicate copy delivered alongside it is dropped.
-# A Lambda can never outlive its timeout, so 125 s after the claim the attempt is provably gone.
-LEASE_MARGIN_SECONDS = 5
-LEASE_SECONDS = WORKER_TIMEOUT_SECONDS + LEASE_MARGIN_SECONDS
+# The lease an attempt takes at claim, and never extends. It is anchored to the invocation's own
+# deadline, not to a constant: `now + remaining time + grace`, where the remaining time comes from the
+# Lambda (`context.get_remaining_time_in_millis`). That is the moment this attempt is certainly dead, so
+# the lease can never outlive its worker — which a constant measured from claim time could, because
+# claim happens after init and the first reads, and the queue's clock starts at the receive.
+LEASE_GRACE_SECONDS = 2
+
+
+def lease_seconds_for(remaining_seconds: float) -> int:
+    """How long this attempt may hold the session: until just after its own invocation must have ended."""
+    return math.ceil(remaining_seconds) + LEASE_GRACE_SECONDS
+
+
+# The longest any attempt can hold a session (a claim at the first instant of a full invocation). The
+# template test checks the visibility timeout covers it.
+MAX_LEASE_SECONDS = WORKER_TIMEOUT_SECONDS + LEASE_GRACE_SECONDS
 
 
 def utcnow() -> datetime:
@@ -59,7 +74,7 @@ def ttl_from(now: datetime, ttl_hours: int = SESSION_TTL_HOURS) -> int:
     return int((now + timedelta(hours=ttl_hours)).timestamp())
 
 
-def lease_from(now: datetime, lease_seconds: int = LEASE_SECONDS) -> int:
+def lease_from(now: datetime, lease_seconds: int) -> int:
     return int(now.timestamp()) + lease_seconds
 
 
@@ -78,8 +93,12 @@ class SessionStore(Protocol):
         """The session, or None when this user has no session with that id. Never writes."""
         ...
 
-    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
-        """Try to become the attempt that runs this session, taking a lease until `LEASE_SECONDS` from *now*."""
+    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime, lease_seconds: int) -> ClaimResult:
+        """Try to become the attempt that runs this session, holding it for *lease_seconds* from *now*.
+
+        *lease_seconds* is the caller's own remaining invocation time plus a grace (see
+        `lease_seconds_for`), so the lease ends when the worker certainly has.
+        """
         ...
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
@@ -115,6 +134,15 @@ class UnknownSessionError(KeyError):
     """No session with that id for this user."""
 
 
+class SessionBusyError(RuntimeError):
+    """Another attempt owns this nonterminal session right now.
+
+    Raised instead of a plain "nothing to do", because a queue consumer's successful return acknowledges
+    the message: acknowledging work that is not finished throws away the only trigger that would recover
+    it if the live attempt then died. The delivery must fail (and come back) instead.
+    """
+
+
 class InMemorySessionStore:
     """The session table in a dict, for `AGENT_RUNNER=inline` (unit tests and evals) only."""
 
@@ -147,7 +175,7 @@ class InMemorySessionStore:
     def get(self, user_sub: str, session_id: str) -> SessionRecord | None:
         return self._records.get((user_sub, session_id))
 
-    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
+    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime, lease_seconds: int) -> ClaimResult:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
@@ -157,7 +185,13 @@ class InMemorySessionStore:
             return ClaimResult.OWNED_ELSEWHERE
         resumed = record.status is SessionStatus.RUNNING
         self._write(
-            record.model_copy(update={"status": SessionStatus.RUNNING, "owner": owner, "lease_until": lease_from(now)})
+            record.model_copy(
+                update={
+                    "status": SessionStatus.RUNNING,
+                    "owner": owner,
+                    "lease_until": lease_from(now, lease_seconds),
+                }
+            )
         )
         return ClaimResult.RESUMED if resumed else ClaimResult.STARTED
 
@@ -187,6 +221,9 @@ class InMemorySessionStore:
         if record is None or record.status.terminal:
             return False
         if owner is not None and record.owner != owner:
+            return False
+        if owner is None and not self._lease_lapsed(record, self._clock()):
+            # No owner token means the dead-letter handler: a live run finishes itself, so leave it.
             return False
         self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))
         return True

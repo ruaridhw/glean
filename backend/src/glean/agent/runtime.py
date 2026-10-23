@@ -3,8 +3,11 @@
 `start` is the whole interface the worker and the inline runner share.
 
 - **Claiming.** The store hands out an owner token and a lease in the same conditional write that
-  moves the session to `running`, or that takes over a run whose lease has lapsed. A duplicate delivery
-  of a live run is told so and drops; a delivery for a finished session drops too.
+  moves the session to `running`, or that takes over a run whose lease has lapsed. The lease is anchored
+  to this invocation's own deadline, so it can never outlive its worker. A delivery for a finished
+  session drops; a delivery that finds a live run raises `SessionBusyError` instead of dropping,
+  because a successful return would acknowledge the message and throw away the only trigger that
+  recovers the run if that live attempt then dies.
 - **Recovering.** A delivery that takes over a session resumes from its LangGraph checkpoint (the same
   thread, invoked with no new input), so the crash costs the step it died in and nothing before it. If
   the checkpoint shows the graph had already finished, its saved result is published instead of run
@@ -28,7 +31,7 @@ from glean.agent.errors import AgentError
 from glean.agent.graph import build_graph, result_of
 from glean.observability import logger, metrics
 from glean.sessions.models import ClaimResult, SessionError, SessionErrorCode
-from glean.sessions.store import SessionTooLargeError
+from glean.sessions.store import SessionBusyError, SessionTooLargeError, lease_seconds_for
 
 if TYPE_CHECKING:
     from glean.agent.deps import AgentDeps
@@ -49,12 +52,18 @@ WALL_TIME = "SessionWallTime"
 def start(session: AgentSession, deps: AgentDeps) -> bool:
     """Run *session* to a terminal status. False when this delivery has nothing to do."""
     owner = uuid4().hex
-    outcome = deps.sessions.claim(session.user_sub, session.session_id, owner=owner, now=deps.clock())
+    outcome = deps.sessions.claim(
+        session.user_sub,
+        session.session_id,
+        owner=owner,
+        now=deps.clock(),
+        lease_seconds=lease_seconds_for(deps.remaining_seconds()),
+    )
     if outcome is ClaimResult.OWNED_ELSEWHERE:
-        logger.info(
-            "another attempt owns this session; dropping this delivery", extra={"session_id": session.session_id}
-        )
-        return False
+        # Nonterminal work another attempt owns. Fail the delivery rather than acknowledging it: by the
+        # time the message returns, that attempt has either finished (a later delivery reads FINISHED and
+        # drops) or died (its lease has lapsed, and this one takes over).
+        raise SessionBusyError(session.session_id)
     if outcome is ClaimResult.FINISHED:
         logger.info("session has already finished; dropping this delivery", extra={"session_id": session.session_id})
         return False

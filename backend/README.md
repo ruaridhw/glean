@@ -104,10 +104,12 @@ Set `AGENT_LLM_STUB=0` on the worker to use the real model instead, which needs 
 in `backend/.env`.
 
 A run that dies mid-graph is recoverable: the attempt that owns a session takes a lease at claim and
-never extends it (125 s, inside the queue's 130 s visibility timeout), the queue hands the message out
-again about two minutes after a crash, and the new attempt takes the lapsed lease over and resumes from
-the LangGraph checkpoint. That is well inside the app's
-five-minute cap, which is why the app shows `stalled` only when the network, not the worker, gave up.
+never extends it, measured against its own invocation deadline rather than a constant, and the queue
+(150 s visibility) hands the message out again about 2.5 minutes after a crash. The new attempt takes
+the lapsed lease over and resumes from the LangGraph checkpoint. That is inside the app's five-minute
+cap, which is why the app shows `stalled` only when the network, not the worker, gave up. A delivery
+that finds another attempt still running fails rather than returning, so the message it was holding is
+never deleted unfinished.
 
 Only the containers can reach `dynamodb-local` and `elasticmq`. `make start-backend` runs on the
 host, so it cannot enqueue: set `AGENT_RUNNER=inline` in `backend/.env` to run sessions in the

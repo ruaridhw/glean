@@ -14,7 +14,7 @@ from glean.agent.checkpoint import build_checkpointer
 from glean.llm import LLMRouter
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.sessions.dynamo import DynamoSessionStore
-from glean.sessions.store import utcnow
+from glean.sessions.store import WORKER_TIMEOUT_SECONDS, utcnow
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,17 +38,22 @@ class AgentDeps:
     # its lease renewals. Tests replace both.
     clock: Callable[[], datetime] = field(default=utcnow)
     monotonic: Callable[[], float] = field(default=time.monotonic)
+    # How long this attempt still has, taken from the Lambda context in a deployed run. The claim's lease
+    # is anchored to it, so the lease always ends when this worker certainly has.
+    remaining_seconds: Callable[[], float] = field(default=lambda: float(WORKER_TIMEOUT_SECONDS))
 
 
 def build_deps(
     settings: Settings,
     *,
     llm_router: LLMRouter | None = None,
+    remaining_seconds: Callable[[], float] | None = None,
 ) -> AgentDeps:
     """The deps a deployed run uses: the DynamoDB session table, the DynamoDB checkpointer, the corpus.
 
     *llm_router* is the seam the local queue consumer uses to run without model credits; deployed
-    runs leave it None and get the router built from settings.
+    runs leave it None and get the router built from settings. *remaining_seconds* is the Lambda
+    context's own clock, which the claim's lease is anchored to.
     """
     return AgentDeps(
         sessions=DynamoSessionStore(
@@ -59,4 +64,5 @@ def build_deps(
         ),
         checkpointer=build_checkpointer(settings),
         llm_router=llm_router or LLMRouter.from_settings(settings),
+        remaining_seconds=remaining_seconds or (lambda: float(WORKER_TIMEOUT_SECONDS)),
     )

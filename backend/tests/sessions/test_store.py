@@ -33,13 +33,15 @@ from glean.sessions.models import (
     stored_input_bytes,
 )
 from glean.sessions.store import (
-    LEASE_MARGIN_SECONDS,
-    LEASE_SECONDS,
+    LAMBDA_INIT_SECONDS,
+    MAX_LEASE_SECONDS,
+    QUEUE_VISIBILITY_MARGIN_SECONDS,
     QUEUE_VISIBILITY_SECONDS,
     WORKER_TIMEOUT_SECONDS,
     InMemorySessionStore,
     SessionTooLargeError,
     UnknownSessionError,
+    lease_seconds_for,
 )
 from tests.infra.cfn import sessions_table_properties
 
@@ -50,6 +52,8 @@ if TYPE_CHECKING:
 
 TABLE_NAME = "glean-agent-sessions-test"
 REGION = "eu-west-2"
+# The lease a claim at the first instant of a full invocation takes: its remaining time plus the grace.
+FULL_INVOCATION_LEASE = lease_seconds_for(WORKER_TIMEOUT_SECONDS)
 # CloudFormation-only properties that create_table does not take; the TTL is applied separately.
 _CFN_ONLY = {"TableName", "TableClass", "PointInTimeRecoverySpecification", "TimeToLiveSpecification"}
 START = datetime(2026, 10, 22, 12, tzinfo=UTC)
@@ -146,7 +150,7 @@ def test_a_session_expires_a_day_after_its_last_update(store: tuple[SessionStore
     sessions.create(_session(), now=clock.now)
     first = sessions.get("user-a", "sess-1")
     clock.advance(hours=6)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     second = sessions.get("user-a", "sess-1")
 
     assert first is not None
@@ -182,7 +186,7 @@ def test_another_users_session_is_unreachable_by_key(store: tuple[SessionStore, 
 
     assert sessions.get("user-b", "sess-1") is None
     with pytest.raises(UnknownSessionError):
-        sessions.claim("user-b", "sess-1", owner="attempt-1", now=clock.now)
+        sessions.claim("user-b", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     assert sessions.get("user-a", "sess-1").status is SessionStatus.QUEUED
 
 
@@ -192,23 +196,25 @@ def test_claiming_a_queued_session_wins_once_and_a_live_duplicate_is_told_so(
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
 
-    first = sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    duplicate = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+    first = sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    duplicate = sessions.claim(
+        "user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE
+    )
 
     assert (first, duplicate) == (ClaimResult.STARTED, ClaimResult.OWNED_ELSEWHERE)
     record = sessions.get("user-a", "sess-1")
     assert record is not None
     assert (record.status, record.owner) == (SessionStatus.RUNNING, "attempt-1")
-    assert record.lease_until == int(clock.now.timestamp()) + LEASE_SECONDS
+    assert record.lease_until == int(clock.now.timestamp()) + FULL_INVOCATION_LEASE
 
 
 def test_a_claim_after_the_lease_lapsed_takes_the_session_over(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    clock.advance(seconds=LEASE_SECONDS + 1)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
 
-    takeover = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+    takeover = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
 
     assert takeover is ClaimResult.RESUMED
     record = sessions.get("user-a", "sess-1")
@@ -219,42 +225,52 @@ def test_a_claim_after_the_lease_lapsed_takes_the_session_over(store: tuple[Sess
 def test_a_finished_session_cannot_be_claimed_again(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
-    assert sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now) is ClaimResult.FINISHED
+    assert (
+        sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+        is ClaimResult.FINISHED
+    )
     record = sessions.get("user-a", "sess-1")
     assert record.status is SessionStatus.DONE
     assert record.result == _result()
 
 
 def test_the_lease_is_taken_once_and_never_extended(store: tuple[SessionStore, Clock]) -> None:
-    """A refreshed lease could outlive the queue's visibility; this one is fixed, so it cannot."""
+    """The lease is anchored to the attempt's deadline and never extended."""
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     claimed_at = int(clock.now.timestamp())
 
-    clock.advance(seconds=LEASE_SECONDS // 2)
+    clock.advance(seconds=FULL_INVOCATION_LEASE // 2)
     sessions.append_progress("user-a", "sess-1", ["working"], owner="attempt-1")
     sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
     record = sessions.get("user-a", "sess-1")
-    assert record.lease_until == claimed_at + LEASE_SECONDS
+    assert record.lease_until == claimed_at + FULL_INVOCATION_LEASE
 
 
-def test_the_lease_ends_before_the_queue_can_redeliver_and_after_the_lambda_can_run() -> None:
-    """Both numbers come from one place, and the template's queue and worker must match them."""
-    assert LEASE_SECONDS == WORKER_TIMEOUT_SECONDS + LEASE_MARGIN_SECONDS
-    assert LEASE_SECONDS < QUEUE_VISIBILITY_SECONDS
+def test_the_lease_ends_just_after_the_invocation_it_belongs_to() -> None:
+    """The lease is the caller's remaining time plus a grace, so it ends when its own worker certainly has."""
+    assert lease_seconds_for(120) == 122
+    assert lease_seconds_for(0.4) == 3  # ceiled, never rounded down
+    assert lease_seconds_for(WORKER_TIMEOUT_SECONDS) == MAX_LEASE_SECONDS
+
+
+def test_the_visibility_timeout_covers_every_invocation_that_can_claim() -> None:
+    """A message must stay invisible past any run's lease, including one that claimed late after init."""
+    assert LAMBDA_INIT_SECONDS + MAX_LEASE_SECONDS < QUEUE_VISIBILITY_SECONDS
+    assert QUEUE_VISIBILITY_SECONDS > WORKER_TIMEOUT_SECONDS + LAMBDA_INIT_SECONDS + QUEUE_VISIBILITY_MARGIN_SECONDS
 
 
 def test_an_attempt_that_lost_the_lease_cannot_write_the_outcome(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    clock.advance(seconds=LEASE_SECONDS + 1)
-    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
 
     stale_progress = sessions.append_progress("user-a", "sess-1", ["late"], owner="attempt-1")
     stale_complete = sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
@@ -270,7 +286,7 @@ def test_an_attempt_that_lost_the_lease_cannot_write_the_outcome(store: tuple[Se
 def test_progress_lines_are_returned_from_a_cursor(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     sessions.append_progress("user-a", "sess-1", ["Preparing", "Planning", "Finishing"], owner="attempt-1")
 
     record = sessions.get("user-a", "sess-1")
@@ -283,7 +299,7 @@ def test_progress_lines_are_returned_from_a_cursor(store: tuple[SessionStore, Cl
 def test_the_progress_list_is_bounded_and_older_lines_drop_out(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     sessions.append_progress(
         "user-a", "sess-1", [f"line {index}" for index in range(MAX_PROGRESS_LINES + 5)], owner="attempt-1"
     )
@@ -300,7 +316,7 @@ def test_the_progress_list_is_bounded_and_older_lines_drop_out(store: tuple[Sess
 def test_failing_a_session_records_the_typed_code(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
 
     moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.MODEL_ERROR), owner="attempt-1")
 
@@ -314,7 +330,7 @@ def test_failing_a_session_records_the_typed_code(store: tuple[SessionStore, Clo
 def test_a_rate_limited_failure_carries_its_wait(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
 
     sessions.fail(
         "user-a",
@@ -328,10 +344,13 @@ def test_a_rate_limited_failure_carries_its_wait(store: tuple[SessionStore, Cloc
     )
 
 
-def test_the_dead_letter_handler_fails_a_session_without_owning_it(store: tuple[SessionStore, Clock]) -> None:
+def test_the_dead_letter_handler_fails_a_session_whose_attempt_has_gone(
+    store: tuple[SessionStore, Clock],
+) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
 
     moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 
@@ -339,10 +358,26 @@ def test_the_dead_letter_handler_fails_a_session_without_owning_it(store: tuple[
     assert sessions.get("user-a", "sess-1").status is SessionStatus.FAILED
 
 
+def test_an_ownerless_failure_leaves_a_live_run_alone(store: tuple[SessionStore, Clock]) -> None:
+    """The dead-letter handler may only fail a session whose attempt is gone; a live one finishes itself."""
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    while_live = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+    after_the_lease = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    assert while_live is False
+    assert after_the_lease is True
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.FAILED
+
+
 def test_a_finished_session_is_never_failed_afterwards(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
     moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
@@ -416,7 +451,7 @@ def test_complete_refuses_a_plan_that_would_not_fit_the_item(store: tuple[Sessio
     stored = stored_input_bytes(near_bound)
     assert MAX_STORED_INPUT_BYTES - 10_000 < stored <= MAX_STORED_INPUT_BYTES
     sessions.create(AgentSession(session_id="sess-big-result", user_sub="user-a", request=near_bound), now=clock.now)
-    sessions.claim("user-a", "sess-big-result", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-big-result", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     oversized = MealPlanResult(
         suggestions=[MealPlanSuggestion(external_id="rec_1", title="Lentil Bake", reason="r" * 90_000)]
     )
@@ -438,7 +473,7 @@ def test_complete_stores_a_plan_inside_the_reserve(store: tuple[SessionStore, Cl
         ]
     )
     sessions.create(AgentSession(session_id="sess-ok-result", user_sub="user-a", request=near_bound), now=clock.now)
-    sessions.claim("user-a", "sess-ok-result", owner="attempt-1", now=clock.now)
+    sessions.claim("user-a", "sess-ok-result", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     fitting = MealPlanResult(
         suggestions=[MealPlanSuggestion(external_id="rec_1", title="Lentil Bake", reason="r" * 40_000)]
     )

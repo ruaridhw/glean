@@ -45,9 +45,15 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     while not stopping:
         for message in queue.receive(wait_seconds=POLL_SECONDS):
-            handle_record({"body": message.body, "receiptHandle": message.receipt_handle}, deps)
-            # Either the run finished or it failed with a typed code: the message is done either way.
-            queue.delete(message.receipt_handle)
+            record = {"body": message.body, "receiptHandle": message.receipt_handle}
+            try:
+                handle_record(record, deps)
+            except Exception:
+                # Lambda fails the delivery too: the message comes back after the visibility timeout.
+                logger.exception("session delivery failed; leaving it on the queue")
+            else:
+                # The run finished, or it failed with a typed code: the message is done either way.
+                queue.delete(message.receipt_handle)
     metrics.flush_metrics()
     logger.info("local session worker stopped")
     return 0

@@ -104,16 +104,23 @@ another user's session is a 404 rather than a 403. `POST` refuses `source: "save
 V1's graph wraps the corpus pipeline only.
 
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
-conditional `queued -> running` (a duplicate delivery finds it running and drops), runs
-`agent.start`, and writes `done` or `failed`. Liveness is the session's own lease, not the message's
-visibility: the attempt that starts a run takes an owner token and a lease at claim (125 s = the 120 s
-worker timeout + 5 s, never extended), every later write is conditioned on that token, and a delivery
-may take over a `running` session whose lease has lapsed —
-resuming it from its LangGraph checkpoint. A crashed run therefore comes back within about two minutes,
-inside the app's five-minute cap; the queue's 130 s visibility timeout stays above the worker's 120 s
-timeout (cfn-lint E3505 is enforced, not suppressed), and the dead-letter queue's handler marks a
-session `worker_failed` once SQS gives up. One run also has a 90 s budget, checked between steps, and
-the model call gets only what is left of it. Never add a state machine or a scheduler on top (ADR 0026).
+conditional `queued -> running`, runs `agent.start`, and writes `done` or `failed`. Liveness is the
+session's own lease, not the message's visibility: the attempt that starts a run takes an owner token
+and a lease, taken once at claim and never extended, anchored to its own invocation deadline
+(`now + context.get_remaining_time_in_millis() + 2 s`, see `sessions/store.py`). Every later write is
+conditioned on that token, and a delivery may take over a `running` session whose lease has lapsed —
+resuming it from its LangGraph checkpoint, or publishing the plan a finished checkpoint holds.
+
+A delivery that finds a **live** owner must **raise**, never return: Lambda acknowledges a message whose
+handler returns, and acknowledging nonterminal work deletes the only trigger that recovers the run if
+the live attempt then dies. Only a terminal session and a run this invocation completed are
+acknowledged. The queue allows three receives for that reason (one may be spent failing a duplicate),
+and its 150 s visibility timeout covers the 120 s worker timeout plus up to 10 s of init
+(cfn-lint E3505 is enforced, not suppressed). A crashed run therefore comes back within about 2.5
+minutes, inside the app's five-minute cap. The dead-letter handler only fails a session that is
+nonterminal *and* whose lease has lapsed, so a live run is left alone. One run also has a 90 s budget,
+checked between steps, and the model call gets only what is left of it. Never add a state machine or a
+scheduler on top (ADR 0026).
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
   `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a

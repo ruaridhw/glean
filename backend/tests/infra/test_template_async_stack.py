@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from glean.sessions.store import LEASE_SECONDS, QUEUE_VISIBILITY_SECONDS, WORKER_TIMEOUT_SECONDS
+from glean.sessions.store import (
+    LAMBDA_INIT_SECONDS,
+    MAX_LEASE_SECONDS,
+    QUEUE_VISIBILITY_MARGIN_SECONDS,
+    QUEUE_VISIBILITY_SECONDS,
+    WORKER_TIMEOUT_SECONDS,
+)
 from tests.infra.cfn import (
     TEMPLATE,
     checkpoints_table_properties,
@@ -46,14 +52,16 @@ def test_the_checkpoints_table_is_3_3_with_the_savers_own_key_names() -> None:
     assert "GlobalSecondaryIndexes" not in props
 
 
-def test_the_queue_gives_up_on_a_message_after_two_attempts() -> None:
+def test_the_queue_gives_up_after_three_receives() -> None:
     queue = queue_properties("GleanAgentQueue")
     dead_letter = queue_properties("GleanAgentDeadLetterQueue")
 
-    assert queue["VisibilityTimeout"] == 130
+    assert queue["VisibilityTimeout"] == QUEUE_VISIBILITY_SECONDS
     assert queue["RedrivePolicy"] == {
         "deadLetterTargetArn": {"GetAtt": "GleanAgentDeadLetterQueue.Arn"},
-        "maxReceiveCount": 2,
+        # One receive may be spent failing a delivery on purpose (a live duplicate), so three leaves two
+        # genuine attempts before the dead-letter queue.
+        "maxReceiveCount": 3,
     }
     assert dead_letter["MessageRetentionPeriod"] == 1209600
 
@@ -77,7 +85,10 @@ def test_the_lease_sits_between_the_function_timeout_and_the_visibility_timeout(
 
     assert worker["Timeout"] == WORKER_TIMEOUT_SECONDS
     assert queue["VisibilityTimeout"] == QUEUE_VISIBILITY_SECONDS
-    assert worker["Timeout"] < LEASE_SECONDS < queue["VisibilityTimeout"]
+    # The visibility has to cover the handler, the longest init a Lambda can spend before it, and margin;
+    # the longest lease any attempt can take ends before that.
+    assert queue["VisibilityTimeout"] > worker["Timeout"] + LAMBDA_INIT_SECONDS + QUEUE_VISIBILITY_MARGIN_SECONDS
+    assert queue["VisibilityTimeout"] > MAX_LEASE_SECONDS
 
 
 def test_the_template_suppresses_no_lint_rule() -> None:

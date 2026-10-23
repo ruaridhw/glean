@@ -36,7 +36,13 @@ from glean.recipes import corpus as corpus_module
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from glean.sessions.models import SESSION_TTL_HOURS, AgentSession, SessionErrorCode, SessionStatus
-from glean.sessions.store import InMemorySessionStore, ttl_from, utcnow
+from glean.sessions.store import (
+    WORKER_TIMEOUT_SECONDS,
+    InMemorySessionStore,
+    lease_seconds_for,
+    ttl_from,
+    utcnow,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -253,7 +259,13 @@ def test_polling_returns_only_the_progress_lines_after_the_cursor(
 
     def hold(session: AgentSession) -> None:
         # Stands in for a worker that has started the run and is still working.
-        assert sessions.claim(session.user_sub, session.session_id, owner="attempt-1", now=utcnow())
+        assert sessions.claim(
+            session.user_sub,
+            session.session_id,
+            owner="attempt-1",
+            now=utcnow(),
+            lease_seconds=lease_seconds_for(WORKER_TIMEOUT_SECONDS),
+        )
         sessions.append_progress(
             session.user_sub, session.session_id, ["Reading", "Choosing", "Checking"], owner="attempt-1"
         )
