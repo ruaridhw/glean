@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/api/api_client.dart';
 import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/meal_plan.dart';
+import 'package:glean/api/models/meal_plan_session.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/text_input.dart';
 import 'package:http/http.dart' as http;
@@ -138,6 +139,32 @@ void main() {
   });
 
   group('meal plan', () {
+    MealPlanRequest request() => MealPlanRequest(
+      pantry: const [
+        CompressedPantryItem(
+          id: 1,
+          name: 'Chicken thighs',
+          quantity: 500,
+          unit: 'g',
+          foodGroup: 'protein',
+          urgencyScore: 42.5,
+        ),
+      ],
+      recipeHistory: [
+        RecipeHistoryItem(
+          recipeId: 7,
+          title: 'Curry',
+          lastCookedAt: DateTime.utc(2026, 1, 1),
+          foodGroups: const ['protein', 'veg'],
+        ),
+      ],
+      foodGroupCoverage: const {'protein': 2, 'veg': 1},
+      purchaseTolerance: 0.5,
+      mealsPerWeek: 3,
+      dietaryFlags: const ['vegetarian'],
+      maxActiveTimeMins: 45,
+    );
+
     test(
       'generateMealPlan sends non-empty food_groups/food_group_coverage',
       () async {
@@ -198,6 +225,143 @@ void main() {
         expect(response.suggestions, isEmpty);
       },
     );
+
+    test('createMealPlanSession posts the plan body and reads the '
+        'session id', () async {
+      when(
+        () => httpClient.post(
+          any(),
+          headers: any(named: 'headers'),
+          body: any(named: 'body'),
+        ),
+      ).thenAnswer(
+        (_) async => jsonResponse({'session_id': 'sess-7'}, statusCode: 202),
+      );
+
+      final created = await client.createMealPlanSession(request());
+
+      final sentBody =
+          verify(
+                () => httpClient.post(
+                  any(),
+                  headers: any(named: 'headers'),
+                  body: captureAny(named: 'body'),
+                ),
+              ).captured.single
+              as String;
+      final decoded = jsonDecode(sentBody) as Map<String, dynamic>;
+
+      // The RN client hardcoded these empty, permanently
+      // disabling the backend's food-group-balancing prompt rule.
+      expect(decoded['food_group_coverage'], {'protein': 2, 'veg': 1});
+      final historyItem =
+          (decoded['recipe_history'] as List<dynamic>).single
+              as Map<String, dynamic>;
+      expect(historyItem['food_groups'], ['protein', 'veg']);
+      expect(created.sessionId, 'sess-7');
+    });
+
+    test('getMealPlanSession sends the cursor and parses a running '
+        'status', () async {
+      when(
+        () => httpClient.get(any(), headers: any(named: 'headers')),
+      ).thenAnswer(
+        (_) async => jsonResponse({
+          'status': 'running',
+          'progress': ['Picking recipes'],
+          'cursor': 3,
+          'result': null,
+          'error': null,
+        }),
+      );
+
+      final update = await client.getMealPlanSession('sess-7', after: 2);
+
+      final uri =
+          verify(
+                () => httpClient.get(
+                  captureAny(),
+                  headers: any(named: 'headers'),
+                ),
+              ).captured.single
+              as Uri;
+      expect(uri.path, '/meal-plan/sessions/sess-7');
+      expect(uri.queryParameters['after'], '2');
+      expect(update.status, MealPlanSessionStatus.running);
+      expect(update.cursor, 3);
+      expect(update.progress, ['Picking recipes']);
+      expect(update.isTerminal, isFalse);
+    });
+
+    test('a done session parses the plan it carries', () async {
+      when(
+        () => httpClient.get(any(), headers: any(named: 'headers')),
+      ).thenAnswer(
+        (_) async => jsonResponse({
+          'status': 'done',
+          'progress': <String>[],
+          'cursor': 4,
+          'result': {
+            'suggestions': [
+              {
+                'recipe_id': null,
+                'external_id': 'rec_a',
+                'title': 'Beans',
+                'reason': 'Uses the spinach',
+                'uses_up': [
+                  {'name': 'spinach', 'expires_in_days': 1, 'goes_off': 'Tue'},
+                ],
+              },
+            ],
+          },
+          'error': null,
+        }),
+      );
+
+      final update = await client.getMealPlanSession('sess-7');
+
+      expect(update.isTerminal, isTrue);
+      expect(update.result!.suggestions.single.title, 'Beans');
+      expect(update.result!.suggestions.single.usesUp.single.name, 'spinach');
+    });
+
+    test('a failed session carries its typed error code', () async {
+      when(
+        () => httpClient.get(any(), headers: any(named: 'headers')),
+      ).thenAnswer(
+        (_) async => jsonResponse({
+          'status': 'failed',
+          'progress': <String>[],
+          'cursor': 5,
+          'result': null,
+          'error': {'code': 'rate_limited', 'retry_after_minutes': 12},
+        }),
+      );
+
+      final update = await client.getMealPlanSession('sess-7');
+
+      expect(update.status, MealPlanSessionStatus.failed);
+      expect(update.error!.code, 'rate_limited');
+      expect(update.error!.retryAfterMinutes, 12);
+    });
+
+    test('a status this build does not know parses as unknown, never as a '
+        'terminal one', () async {
+      when(
+        () => httpClient.get(any(), headers: any(named: 'headers')),
+      ).thenAnswer(
+        (_) async => jsonResponse({
+          'status': 'needs_a_restart',
+          'progress': <String>[],
+          'cursor': 1,
+        }),
+      );
+
+      final update = await client.getMealPlanSession('sess-7');
+
+      expect(update.status, MealPlanSessionStatus.unknown);
+      expect(update.isTerminal, isFalse);
+    });
   });
 
   group('receipts', () {
