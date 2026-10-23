@@ -166,3 +166,13 @@ that review checks. `flutter analyze` and `dart format` cover style.
 `lib/main_e2e.dart` is the only file besides `lib/auth/auth_bypass.dart`
 allowed to import it; `test/standards/house_rules_test.dart` enforces this.
 Never loosen it.
+
+## Meal ratings
+
+`meal_ratings` holds one thumb per cooked plan entry: `rating` ('up'/'down'), an optional `note` from the
+long-press sheet, and `created_at`. Every plan read (the week and the history window Generate sends)
+left-joins it, so a row draws its own state without a second query. Only a cooked entry can be rated
+(`PlanRepository.rate` refuses an uncooked one), tapping the same thumb clears the row, and undoing a cook
+clears it too. Undo after a delete restores the rating with the entry, because `DeletedPlanEntry` snapshots
+it. The history window the backend receives carries each cook's rating and note: the planner keeps a
+thumbs-down recipe out of every plan, and a note reaches no model until the feedback screen screens notes.
