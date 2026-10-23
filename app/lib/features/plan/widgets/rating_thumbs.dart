@@ -67,6 +67,9 @@ class _ThumbButton extends StatelessWidget {
         : (selected ? Icons.thumb_down_alt : Icons.thumb_down_alt_outlined);
 
     return Semantics(
+      // A container of its own: the row is a tappable InkWell, and without this each thumb's label and
+      // action are merged into the row's single semantics node, leaving the buttons unreachable.
+      container: true,
       button: true,
       selected: selected,
       label: up ? 'Thumbs up' : 'Thumbs down',
