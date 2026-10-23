@@ -223,10 +223,7 @@ void main() {
 
       await plannedMeal('Lentil Dal', cooked: true);
       await openPlan(tester);
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('rating.up')),
-        200,
-      );
+      await tester.scrollUntilVisible(find.byKey(const Key('rating.up')), 200);
       await tester.ensureVisible(find.byKey(const Key('rating.up')));
       await tester.pumpAndSettle();
       await tester.longPress(find.byKey(const Key('rating.up')));
@@ -262,7 +259,10 @@ void main() {
         .controller!
         .text;
     expect(ratingNoteLength(shown), lessThanOrEqualTo(maxRatingNoteLength));
-    expect(find.text('${ratingNoteLength(shown)}/$maxRatingNoteLength'), findsOneWidget);
+    expect(
+      find.text('${ratingNoteLength(shown)}/$maxRatingNoteLength'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Save note'));
     await tester.pumpAndSettle();
@@ -295,24 +295,30 @@ void main() {
     );
   });
 
-  gleanWidgetTest('a long title wraps to two lines and never shrinks the thumbs',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    const String title = 'Lemon and herb salmon traybake with crushed potatoes';
-    await plannedMeal(title, cooked: true);
-    await openPlan(tester);
-    await tester.scrollUntilVisible(find.text(title), 200);
+  gleanWidgetTest(
+    'a long title wraps to two lines and never shrinks the thumbs',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const String title =
+          'Lemon and herb salmon traybake with crushed potatoes';
+      await plannedMeal(title, cooked: true);
+      await openPlan(tester);
+      await tester.scrollUntilVisible(find.text(title), 200);
 
-    expect(tester.takeException(), isNull);
-    expect(tester.widget<Text>(find.text(title)).maxLines, 2);
-    expect(tester.getSize(find.byKey(const Key('rating.up'))), const Size(44, 44));
-    expect(
-      tester.getSize(find.byKey(const Key('rating.down'))),
-      const Size(44, 44),
-    );
-  });
+      expect(tester.takeException(), isNull);
+      expect(tester.widget<Text>(find.text(title)).maxLines, 2);
+      expect(
+        tester.getSize(find.byKey(const Key('rating.up'))),
+        const Size(44, 44),
+      );
+      expect(
+        tester.getSize(find.byKey(const Key('rating.down'))),
+        const Size(44, 44),
+      );
+    },
+  );
 
   gleanWidgetTest('each thumb is its own labelled button for a screen reader', (
     tester,

@@ -99,9 +99,7 @@ def test_the_history_bound_leaves_room_for_too_old_dislikes() -> None:
             meals_per_week=1,
             max_active_time_mins=None,
             dietary_flags=[],
-            cooked_history=[
-                {"title": f"Meal {index}", "cooked_at": "2026-10-05T18:30:00Z"} for index in range(count)
-            ],
+            cooked_history=[{"title": f"Meal {index}", "cooked_at": "2026-10-05T18:30:00Z"} for index in range(count)],
         )
 
     assert len(request_with(MAX_COOKED_HISTORY_ITEMS).cooked_history) == MAX_COOKED_HISTORY_ITEMS

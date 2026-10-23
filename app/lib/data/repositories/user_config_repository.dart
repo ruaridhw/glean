@@ -78,13 +78,16 @@ class UserConfigRepository {
   ///
   /// The claim is a compare-and-set inside one transaction: two taps that overlap cannot both read "unseen"
   /// and both show the explainer. Only the transaction that flipped the flag from false reports `true`.
-  Future<bool> claimRatingsExplainer(String userId) => _db.transaction(() async {
+  Future<bool> claimRatingsExplainer(
+    String userId,
+  ) => _db.transaction(() async {
     final int flipped =
         await (_db.update(_db.userConfig)..where(
-              (t) =>
-                  t.id.equals(userId) & t.ratingsExplainerSeen.equals(false),
+              (t) => t.id.equals(userId) & t.ratingsExplainerSeen.equals(false),
             ))
-            .write(const UserConfigCompanion(ratingsExplainerSeen: Value(true)));
+            .write(
+              const UserConfigCompanion(ratingsExplainerSeen: Value(true)),
+            );
     if (flipped > 0) return true;
     final row = await (_db.select(
       _db.userConfig,
