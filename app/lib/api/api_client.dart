@@ -86,19 +86,6 @@ class GleanApiClient {
 
   // --- Meal plan ---
 
-  Future<MealPlanResponse> generateMealPlan(MealPlanRequest request) {
-    final uri = _uri('/meal-plan');
-    return _send(
-      uri,
-      () async => httpClient.post(
-        uri,
-        headers: await _jsonHeaders(),
-        body: jsonEncode(request.toJson()),
-      ),
-      (dynamic json) => MealPlanResponse.fromJson(json as Map<String, dynamic>),
-    );
-  }
-
   /// Starts a Generate run. The backend queues it and returns at once with the id to poll (202), so the call is
   /// bounded by the request timeout rather than by how long planning takes.
   Future<MealPlanSessionCreated> createMealPlanSession(

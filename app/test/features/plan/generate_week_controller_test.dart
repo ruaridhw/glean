@@ -7,8 +7,8 @@ import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import '../../support/harness.dart';
+import '../../support/session_backend.dart';
 
 Map<String, Object?> pick(String id) => {
   'recipe_id': null,
@@ -35,7 +35,7 @@ void main() {
     (tester) async {
       Map<String, dynamic>? body;
       final h = AppTestHarness(
-        httpClient: MockClient((request) async {
+        httpClient: sessionRoutes((request) async {
           if (request.method == 'POST') {
             body = jsonDecode(request.body) as Map<String, dynamic>;
             return proposal([
@@ -119,7 +119,7 @@ void main() {
     (tester) async {
       var fail = true;
       final h = AppTestHarness(
-        httpClient: MockClient(
+        httpClient: sessionRoutes(
           (request) async => request.method == 'POST'
               ? proposal([pick('rec_a')])
               : fail

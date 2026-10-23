@@ -12,6 +12,7 @@ import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import '../../support/harness.dart';
+import '../../support/session_backend.dart';
 
 Map<String, Object?> pick(String id) => {
   'recipe_id': null,
@@ -42,7 +43,7 @@ void main() {
       (tester) async {
         var bad = true;
         final h = AppTestHarness(
-          httpClient: MockClient((request) async {
+          httpClient: sessionRoutes((request) async {
             if (request.method == 'POST') {
               return proposal(bad ? [malformed] : [pick('rec_ok')]);
             }
@@ -55,7 +56,10 @@ void main() {
         await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
         await tester.pumpAndSettle();
         expect(
-          find.text('Could not generate meal plan.').evaluate().isNotEmpty ||
+          find
+                  .text('Something went wrong planning your week.')
+                  .evaluate()
+                  .isNotEmpty ||
               find
                   .text('No recipes fit right now. Try again.')
                   .evaluate()
@@ -108,15 +112,19 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('hourly limit'), findsOneWidget);
-      expect(find.text('Could not generate meal plan.'), findsNothing);
+      expect(
+        find.text("You've used too many AI credits. Try again in 60 minutes."),
+        findsOneWidget,
+      );
+      // rate_limited offers nothing: retrying straight away fails the same way.
+      expect(find.byType(SnackBarAction), findsNothing);
     },
   );
   gleanWidgetTest(
     'detail persistence failure leaves no plan/gaps and retry safely reuses already saved details',
     (tester) async {
       final h = AppTestHarness(
-        httpClient: MockClient(
+        httpClient: sessionRoutes(
           (request) async => request.method == 'POST'
               ? proposal([pick('rec_a'), pick('rec_b')])
               : detail(request.url.pathSegments.last),
@@ -130,7 +138,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
       await tester.pumpAndSettle();
-      expect(find.text('Could not generate meal plan.'), findsOneWidget);
+      expect(
+        find.text('Something went wrong planning your week.'),
+        findsOneWidget,
+      );
       final plan = h.container.read(planRepositoryProvider);
       final week = startOfWeek(DateTime.now());
       expect(
@@ -179,7 +190,7 @@ void main() {
       final seen = Completer<void>();
       final response = Completer<http.Response>();
       final h = AppTestHarness(
-        httpClient: MockClient((request) {
+        httpClient: sessionRoutes((request) {
           if (request.method == 'POST') {
             seen.complete();
             return response.future;
