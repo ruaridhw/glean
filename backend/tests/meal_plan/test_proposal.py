@@ -38,7 +38,12 @@ RECIPES = {
     "rec_chickpea_curry": ("Chickpea Curry", ["chickpeas", "coconut milk"]),
     "rec_fish_pie": ("Fish Pie", ["haddock", "potato"]),
     "rec_bean_chilli": ("Bean Chilli", ["kidney beans", "rice"]),
+    "rec_slow_roast": ("Slow Roast", ["beef shin", "carrot"]),
 }
+# One recipe is too slow for a 30-minute cap, so it is eligible only when the cap allows it.
+SLOW = "rec_slow_roast"
+TIME_CAP_MINS = 30
+SLOW_TOTAL_MINS = 90
 
 
 def _corpus(tmp_path: Path) -> RecipeCorpusStore:
@@ -49,6 +54,7 @@ def _corpus(tmp_path: Path) -> RecipeCorpusStore:
                 external_id=external_id,
                 title=title,
                 ingredients=[StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in ingredients],
+                total_time_mins=SLOW_TOTAL_MINS if external_id == SLOW else 20,
             )
         )
     return corpus
@@ -221,7 +227,13 @@ def test_a_slot_with_no_spare_candidate_has_no_alternative(tmp_path: Path) -> No
     # Only two recipes are eligible, so both fill the week and nothing is left to offer as a swap.
     prepared = _prepared(
         tmp_path,
-        exclude_external_ids=["rec_coriander_chicken", "rec_tofu_noodles", "rec_chickpea_curry", "rec_fish_pie"],
+        exclude_external_ids=[
+            "rec_coriander_chicken",
+            "rec_tofu_noodles",
+            "rec_chickpea_curry",
+            "rec_fish_pie",
+            "rec_bean_chilli",
+        ],
     )
     assert len(prepared.offered_ids) == MEALS
     picks = [_pick(prepared, 0, alternative=None), _pick(prepared, 1, alternative=None)]
@@ -329,3 +341,17 @@ def test_the_degraded_fallback_still_names_the_urgent_item_it_uses(tmp_path: Pat
     assert herby.reason_kind is ReasonKind.URGENT_ITEM
     assert "Uses up your coriander (goes off Fri)." in herby.reason
     assert [item.name for item in herby.uses_up] == ["coriander"]
+
+
+def test_an_alternative_must_be_eligible_not_merely_named(tmp_path: Path) -> None:
+    # The time cap kept the slow roast out of the candidates, so nothing may offer it as a swap.
+    prepared = _prepared(tmp_path, max_active_time_mins=TIME_CAP_MINS)
+    assert SLOW not in prepared.offered_ids
+    named = CorpusMealPlanAlternative(external_id=SLOW, title="Slow Roast", reason="Roast it.")
+    picks = [_pick(prepared, 0, alternative=named), _pick(prepared, 1)]
+
+    result = pipeline.finalise(prepared, _draft(prepared, suggestions=picks))
+
+    alternatives = [suggestion.alternative for suggestion in result.suggestions]
+    assert all(alternative is not None for alternative in alternatives)
+    assert SLOW not in {alternative.external_id for alternative in alternatives if alternative}
