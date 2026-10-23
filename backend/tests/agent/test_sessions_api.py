@@ -491,3 +491,85 @@ class _Throttled(Exception):
 
 def _throttled(*, retry_after: str | None) -> Exception:
     return _Throttled(retry_after)
+
+
+def _queued_only(api: TestClient) -> list[AgentSession]:
+    """A dispatcher that leaves the session queued, so a DELETE has something to cancel."""
+    handed_over: list[AgentSession] = []
+    api.app.dependency_overrides[get_session_dispatcher] = lambda: lambda session: handed_over.append(session)
+    return handed_over
+
+
+def test_deleting_a_session_cancels_it(api: TestClient, sessions: InMemorySessionStore) -> None:
+    handed_over = _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", json=_body()).json()["session_id"]
+
+    deleted = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    record = sessions.get("user-a", session_id)
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.session_id == handed_over[0].session_id
+    polled = api.get(f"/meal-plan/sessions/{session_id}").json()
+    assert polled["status"] == "cancelled"
+    assert polled["result"] is None
+    assert polled["error"] is None
+
+
+def test_deleting_is_idempotent(api: TestClient, sessions: InMemorySessionStore) -> None:
+    _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", json=_body()).json()["session_id"]
+
+    first = api.delete(f"/meal-plan/sessions/{session_id}")
+    writes = sessions.writes
+    second = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert (first.status_code, second.status_code) == (204, 204)
+    assert sessions.writes == writes
+    assert sessions.get("user-a", session_id).status is SessionStatus.CANCELLED
+
+
+def test_deleting_a_finished_session_leaves_it_done(api: TestClient, sessions: InMemorySessionStore) -> None:
+    view = _plan_to_completion(api, _body())
+    session_id = view["session_id"]
+
+    deleted = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert deleted.status_code == 204
+    record = sessions.get("user-a", session_id)
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result is not None
+    assert record.result.suggestions
+
+
+def test_another_users_session_cannot_be_deleted(api: TestClient, sessions: InMemorySessionStore) -> None:
+    _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", headers={"x-test-user": "user-a"}, json=_body()).json()["session_id"]
+
+    theirs = api.delete(f"/meal-plan/sessions/{session_id}", headers={"x-test-user": "user-b"})
+
+    assert theirs.status_code == 404
+    assert sessions.get("user-a", session_id).status is SessionStatus.QUEUED
+
+
+def test_deleting_an_unknown_session_is_not_found(api: TestClient) -> None:
+    assert api.delete("/meal-plan/sessions/does-not-exist").status_code == 404
+
+
+def test_the_delete_is_free_and_the_create_is_not(api: TestClient, test_settings: Settings) -> None:
+    app.dependency_overrides[get_settings] = lambda: test_settings.model_copy(update={"rate_limit_per_hour": 1})
+    try:
+        client = TestClient(app)
+        hand_over: list[AgentSession] = []
+        app.dependency_overrides[get_session_dispatcher] = lambda: lambda session: hand_over.append(session)
+        session_ids = [client.post("/meal-plan/sessions", json=_body()).json()["session_id"] for _ in range(1)]
+        refused = client.post("/meal-plan/sessions", json=_body())
+        deletes = [client.delete(f"/meal-plan/sessions/{session_ids[0]}") for _ in range(3)]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert refused.status_code == 429
+    assert [deleted.status_code for deleted in deletes] == [204, 204, 204]

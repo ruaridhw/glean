@@ -485,3 +485,185 @@ def test_complete_stores_a_plan_inside_the_reserve(store: tuple[SessionStore, Cl
     assert record is not None
     assert record.status is SessionStatus.DONE
     assert record.result == fitting
+
+
+def test_a_queued_session_is_cancelled(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    clock.advance(seconds=30)
+
+    assert sessions.cancel("user-a", "sess-1") is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.result is None
+    assert record.error is None
+    assert record.updated_at == clock.now
+
+
+def test_a_running_session_is_cancelled_and_keeps_its_lease(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    assert sessions.cancel("user-a", "sess-1") is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    # Cancel is a status write and nothing else: clearing the lease would let a delivery claim it again.
+    assert record.owner == "attempt-1"
+    assert record.lease_until is not None
+
+
+def test_cancelling_twice_changes_nothing_the_second_time(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.cancel("user-a", "sess-1")
+    cancelled_at = clock.now
+    clock.advance(seconds=5)
+
+    assert sessions.cancel("user-a", "sess-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.updated_at == cancelled_at
+
+
+def test_cancelling_a_finished_session_leaves_it_done(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
+
+    assert sessions.cancel("user-a", "sess-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result == _result()
+
+
+def test_cancelling_a_failed_session_leaves_it_failed(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.MODEL_ERROR), owner="attempt-1")
+
+    assert sessions.cancel("user-a", "sess-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.FAILED
+    assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
+
+
+def test_another_users_session_cannot_be_cancelled(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+
+    assert sessions.cancel("user-b", "sess-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.QUEUED
+
+
+def test_cancelling_an_unknown_session_writes_nothing(store: tuple[SessionStore, Clock]) -> None:
+    sessions, _clock = store
+
+    assert sessions.cancel("user-a", "never-existed") is False
+    assert sessions.get("user-a", "never-existed") is None
+
+
+def test_claim_reports_a_cancelled_session_as_finished(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.cancel("user-a", "sess-1")
+
+    outcome = sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    record = sessions.get("user-a", "sess-1")
+    assert outcome is ClaimResult.FINISHED
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.owner is None
+
+
+def test_cancelling_a_running_session_stops_a_takeover_resurrecting_it(store: tuple[SessionStore, Clock]) -> None:
+    """A delivery that takes over a crashed run must not restart one the household cancelled."""
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.cancel("user-a", "sess-1")
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+
+    outcome = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    record = sessions.get("user-a", "sess-1")
+    assert outcome is ClaimResult.FINISHED
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.owner == "attempt-1"
+
+
+def test_a_cancelled_session_never_becomes_done(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.cancel("user-a", "sess-1")
+
+    assert sessions.complete("user-a", "sess-1", _result(), owner="attempt-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.result is None
+
+
+def test_a_cancelled_session_is_never_failed_afterwards(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.cancel("user-a", "sess-1")
+
+    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED), owner="attempt-1")
+
+    record = sessions.get("user-a", "sess-1")
+    assert moved is False
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.error is None
+
+
+def test_progress_written_after_a_cancel_is_refused(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.append_progress("user-a", "sess-1", ["Preparing"], owner="attempt-1")
+    sessions.cancel("user-a", "sess-1")
+
+    assert sessions.append_progress("user-a", "sess-1", ["Planning anyway"], owner="attempt-1") is False
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.progress == ["Preparing"]
+
+
+def test_the_dead_letter_handler_leaves_a_cancelled_session_alone(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.cancel("user-a", "sess-1")
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+
+    outcome = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    record = sessions.get("user-a", "sess-1")
+    assert outcome is AbandonResult.FINISHED
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.error is None

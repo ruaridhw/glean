@@ -266,9 +266,7 @@ def _planned_corpus_meals(corpus: RecipeCorpusStore, excluded_ids: Sequence[str]
     ]
 
 
-def choose(
-    prepared: PreparedPlan, *, llm_router: LLMRouter, timeout_ms: int | None = None
-) -> CorpusMealPlanResponse:
+def choose(prepared: PreparedPlan, *, llm_router: LLMRouter, timeout_ms: int | None = None) -> CorpusMealPlanResponse:
     """Ask the model for the week: its picks, their alternatives and the one-line summary.
 
     Its answer is unvalidated; `finalise` judges every id in it. *timeout_ms* bounds the call: the agent
