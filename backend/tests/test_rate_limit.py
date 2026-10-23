@@ -137,6 +137,13 @@ def _recipe_page_boundaries(tmp_path: Path) -> Iterator[None]:
 
 
 @contextmanager
+def _no_recipes(tmp_path: Path) -> Iterator[None]:
+    """An empty corpus: the session answers `no_eligible_recipes` without spending a model call."""
+    with patch("glean.recipes.corpus.get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path)):
+        yield
+
+
+@contextmanager
 def _catalogue_boundaries(tmp_path: Path) -> Iterator[None]:
     """The DynamoDB table is the boundary: the seed in memory stands in for it. A known name needs no model call."""
     catalogue = InMemoryCatalogueStore(load_seed().items)
@@ -153,6 +160,8 @@ class AiRoute:
     path: str
     boundaries: Callable[[Path], AbstractContextManager[None]] = _no_external_boundaries
     request_kwargs: dict[str, Any] = field(default_factory=dict)
+    # A session is accepted (202), not answered (200): it runs out of process.
+    success_status: int = 200
 
 
 AI_ROUTES = [
@@ -170,6 +179,22 @@ AI_ROUTES = [
                 "max_active_time_mins": None,
             }
         },
+    ),
+    AiRoute(
+        name="meal plan session",
+        path="/meal-plan/sessions",
+        boundaries=_no_recipes,
+        request_kwargs={
+            "json": {
+                "source": "corpus",
+                "pantry": [],
+                "purchase_tolerance": 0.3,
+                "meals_per_week": 5,
+                "dietary_flags": [],
+                "max_active_time_mins": None,
+            }
+        },
+        success_status=202,
     ),
     AiRoute(
         name="receipt scan",
@@ -250,7 +275,7 @@ def test_request_over_the_hourly_limit_is_rejected(limited_client: TestClient, r
         statuses = [_post(limited_client, route).status_code for _ in range(HOURLY_LIMIT + 1)]
         over_limit = _post(limited_client, route)
 
-    assert statuses[:HOURLY_LIMIT] == [200] * HOURLY_LIMIT
+    assert statuses[:HOURLY_LIMIT] == [route.success_status] * HOURLY_LIMIT
     assert statuses[HOURLY_LIMIT] == 429
     assert "limit" in over_limit.json()["detail"].lower()
 
@@ -261,12 +286,12 @@ def test_one_user_hitting_the_limit_does_not_block_another_user(
 ) -> None:
     with route.boundaries(tmp_path):
         for _ in range(HOURLY_LIMIT):
-            assert _post(limited_client, route, "user-a").status_code == 200
+            assert _post(limited_client, route, "user-a").status_code == route.success_status
         user_a = _post(limited_client, route, "user-a")
         user_b = _post(limited_client, route, "user-b")
 
     assert user_a.status_code == 429
-    assert user_b.status_code == 200
+    assert user_b.status_code == route.success_status
 
 
 def test_the_hourly_limit_is_the_configured_setting(test_settings: Settings) -> None:
