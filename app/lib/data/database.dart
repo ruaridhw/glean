@@ -29,6 +29,7 @@ String catalogueNameKey(String name) => name
     RecipeDietaryFlags,
     RecipeIngredients,
     MealPlanEntries,
+    MealRatings,
     CookedAdjustments,
     ShoppingListItems,
     UserConfig,
@@ -44,7 +45,7 @@ class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -95,6 +96,9 @@ class GleanDatabase extends _$GleanDatabase {
           }
           if (from < 6) {
             await _moveIngredientsToGroups(m);
+          }
+          if (from < 7) {
+            await _addMealRatings(m);
           }
         });
       },
@@ -314,6 +318,26 @@ class GleanDatabase extends _$GleanDatabase {
       )..where((t) => t.formerId.equals(current))).getSingleOrNull();
       if (redirect == null || !seen.add(redirect.itemId)) return current;
       current = redirect.itemId;
+    }
+  }
+
+  // Ratings and the flag for their one-off explainer, additive only. A file upgrading from v6 keeps every
+  // plan entry and gains an empty `meal_ratings` table; the flag defaults false, so the explainer is shown
+  // once on the first thumb after the upgrade. Self-contained so it can be renumbered by changing only the
+  // `from <` guard that calls it.
+  //
+  // Each part is guarded by what the file already holds, so replaying the step over an upgraded database
+  // changes nothing rather than failing on a table or column that is already there.
+  Future<void> _addMealRatings(Migrator m) async {
+    final ratings = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meal_ratings'",
+    ).get();
+    if (ratings.isEmpty) await m.createTable(mealRatings);
+    final columns = await customSelect('PRAGMA table_info(user_config)').get();
+    if (!columns.any(
+      (c) => c.read<String>('name') == 'ratings_explainer_seen',
+    )) {
+      await m.addColumn(userConfig, userConfig.ratingsExplainerSeen);
     }
   }
 

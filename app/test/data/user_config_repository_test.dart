@@ -252,5 +252,26 @@ void main() {
       final other = await repository.get('user-b');
       expect(other.preferredServings, UserConfigView.defaultPreferredServings);
     });
+
+    test('the ratings explainer is claimed once per user, and a settings save '
+        'neither resets nor is reset by it', () async {
+      expect(await repository.claimRatingsExplainer(userId), isTrue);
+      expect(await repository.claimRatingsExplainer(userId), isFalse);
+      expect(await repository.claimRatingsExplainer('user-b'), isTrue);
+
+      await repository.save(
+        const UserConfigView(
+          id: userId,
+          purchaseTolerance: UserConfigView.defaultPurchaseTolerance,
+          preferredServings: 3,
+          mealsPerWeek: UserConfigView.defaultMealsPerWeek,
+          dietaryFlags: [],
+          maxActiveTimeMins: null,
+        ),
+      );
+
+      expect(await repository.claimRatingsExplainer(userId), isFalse);
+      expect((await repository.get(userId)).preferredServings, 3);
+    });
   });
 }
