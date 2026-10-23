@@ -75,21 +75,32 @@ class UserConfigRepository {
   /// Whether this is the first thumb this user has tapped, marking the one-off ratings explainer seen in
   /// the same pass. `true` at most once per user, so the explainer is shown on the first tap and never
   /// again; a user with no `user_config` row yet reads as unseen.
-  Future<bool> claimRatingsExplainer(String userId) async {
+  ///
+  /// The claim is a compare-and-set inside one transaction: two taps that overlap cannot both read "unseen"
+  /// and both show the explainer. Only the transaction that flipped the flag from false reports `true`.
+  Future<bool> claimRatingsExplainer(String userId) => _db.transaction(() async {
+    final int flipped =
+        await (_db.update(_db.userConfig)..where(
+              (t) =>
+                  t.id.equals(userId) & t.ratingsExplainerSeen.equals(false),
+            ))
+            .write(const UserConfigCompanion(ratingsExplainerSeen: Value(true)));
+    if (flipped > 0) return true;
     final row = await (_db.select(
       _db.userConfig,
     )..where((t) => t.id.equals(userId))).getSingleOrNull();
-    if (row?.ratingsExplainerSeen ?? false) return false;
+    if (row != null) return false;
+    // No settings row yet: create it already claimed, so a concurrent second claim finds it and stops.
     await _db
         .into(_db.userConfig)
-        .insertOnConflictUpdate(
+        .insert(
           UserConfigCompanion.insert(
             id: userId,
             ratingsExplainerSeen: const Value(true),
           ),
         );
     return true;
-  }
+  });
 
   Future<void> save(UserConfigView config) {
     return _db

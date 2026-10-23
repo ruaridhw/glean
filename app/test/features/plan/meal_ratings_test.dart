@@ -164,6 +164,156 @@ void main() {
     expect(entry.note, 'a keeper');
   });
 
+  gleanWidgetTest(
+    'the note sheet fits a 320px phone at 2x text with the keyboard up',
+    (tester) async {
+      // 320x640, doubled text and a 300px keyboard: the layout the sheet overflowed by 156px across and
+      // 270px down before it scrolled.
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final int entryId = await plannedMeal('Lentil Dal', cooked: true);
+      await openPlan(tester);
+      // Large text pushes the first row below the fold, so scroll to it as a person would.
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('rating.down')),
+        200,
+      );
+      await tester.ensureVisible(find.byKey(const Key('rating.down')));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const Key('rating.down')));
+      await tester.pumpAndSettle();
+      // The keyboard the field's autofocus brings up, which pushes the sheet into the space that is left.
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Save note'), findsOneWidget);
+      expect(
+        tester.getRect(find.text('Save note')).bottom,
+        lessThanOrEqualTo(640 - 300),
+        reason: 'the actions stay above the keyboard, not scrolled away',
+      );
+
+      await tester.enterText(find.byKey(const Key('rating.note')), 'too sweet');
+      await tester.tap(find.text('Save note'));
+      await tester.pumpAndSettle();
+      if (find.text('How ratings work').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Got it'));
+        await tester.pumpAndSettle();
+      }
+
+      final MealPlanEntryView entry = await readEntry(tester, entryId);
+      expect(entry.rating, MealThumb.down);
+      expect(entry.note, 'too sweet');
+    },
+  );
+
+  gleanWidgetTest(
+    'the note sheet fits a 320px phone at 1.3x text without a keyboard',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await plannedMeal('Lentil Dal', cooked: true);
+      await openPlan(tester);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('rating.up')),
+        200,
+      );
+      await tester.ensureVisible(find.byKey(const Key('rating.up')));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const Key('rating.up')));
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Save note'), findsOneWidget);
+      expect(find.text('Skip'), findsOneWidget);
+      expect(
+        tester.getRect(find.text('Save note')).bottom,
+        lessThanOrEqualTo(340),
+      );
+    },
+  );
+
+  gleanWidgetTest('the note field counts code points, so a combining note that '
+      'saves still passes the backend bound', (tester) async {
+    final int entryId = await plannedMeal('Lentil Dal', cooked: true);
+    await openPlan(tester);
+    await tester.longPress(find.byKey(const Key('rating.down')));
+    await tester.pumpAndSettle();
+
+    // 300 visible characters written as e + combining acute: 600 code points, which Flutter's own
+    // grapheme-based maxLength would have let through and the backend would have refused.
+    final String combining = 'e\u0301' * 300;
+    await tester.enterText(find.byKey(const Key('rating.note')), combining);
+    await tester.pumpAndSettle();
+
+    final String shown = tester
+        .widget<TextField>(find.byKey(const Key('rating.note')))
+        .controller!
+        .text;
+    expect(ratingNoteLength(shown), lessThanOrEqualTo(maxRatingNoteLength));
+    expect(find.text('${ratingNoteLength(shown)}/$maxRatingNoteLength'), findsOneWidget);
+
+    await tester.tap(find.text('Save note'));
+    await tester.pumpAndSettle();
+    if (find.text('How ratings work').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+    }
+
+    final String? saved = (await readEntry(tester, entryId)).note;
+    expect(saved, isNotNull);
+    expect(ratingNoteLength(saved!), lessThanOrEqualTo(maxRatingNoteLength));
+    // Nothing half-written: the kept text is a whole number of e + combining-acute clusters.
+    expect(saved.characters.every((String c) => c == 'e\u0301'), isTrue);
+  });
+
+  gleanWidgetTest('two thumbs tapped in the same frame open one explainer, and '
+      'one note sheet at a time', (tester) async {
+    await plannedMeal('Lentil Dal', cooked: true);
+    await openPlan(tester);
+
+    // No settle between the taps: both first-tap paths run before either has answered its claim.
+    await tester.tap(find.byKey(const Key('rating.up')));
+    await tester.tap(find.byKey(const Key('rating.down')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('How ratings work', skipOffstage: false),
+      findsOneWidget,
+      reason: 'a second copy must not be stacked under the first',
+    );
+  });
+
+  gleanWidgetTest('a long title wraps to two lines and never shrinks the thumbs',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const String title = 'Lemon and herb salmon traybake with crushed potatoes';
+    await plannedMeal(title, cooked: true);
+    await openPlan(tester);
+    await tester.scrollUntilVisible(find.text(title), 200);
+
+    expect(tester.takeException(), isNull);
+    expect(tester.widget<Text>(find.text(title)).maxLines, 2);
+    expect(tester.getSize(find.byKey(const Key('rating.up'))), const Size(44, 44));
+    expect(
+      tester.getSize(find.byKey(const Key('rating.down'))),
+      const Size(44, 44),
+    );
+  });
+
   gleanWidgetTest('each thumb is its own labelled button for a screen reader', (
     tester,
   ) async {

@@ -51,6 +51,9 @@ dependencies:
   json_annotation: ^4.12.0
   flutter_animate: ^4.5.2
   package_info_plus: ^10.2.2
+  # Counts grapheme clusters, so a truncated rating note never ends mid-character. Already a Flutter
+  # dependency; named here because the app imports it directly.
+  characters: ^1.3.0
 
 dev_dependencies:
   flutter_test:

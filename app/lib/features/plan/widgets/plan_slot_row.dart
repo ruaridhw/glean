@@ -155,6 +155,9 @@ class _FilledSlotRow extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       entry.recipeTitle,
+                      // Two lines: the thumbs take the width a longer title used to have, and a name cut to
+                      // one line stops identifying the meal ("Lemon and herb sal...").
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: cooked
                           ? textTheme.titleMedium?.copyWith(
