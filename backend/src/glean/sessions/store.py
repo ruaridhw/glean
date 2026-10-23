@@ -18,12 +18,14 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Protocol
 
 from glean.sessions.models import (
+    MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
     AgentSession,
     ClaimResult,
     SessionError,
     SessionRecord,
     SessionStatus,
+    stored_input_bytes,
 )
 
 if TYPE_CHECKING:
@@ -53,7 +55,11 @@ class SessionStore(Protocol):
     """What the routes, the agent module and the worker need from the session table."""
 
     def create(self, session: AgentSession, *, now: datetime) -> SessionRecord:
-        """Write the session as `queued`. Raises `SessionExistsError` if the id is taken."""
+        """Write the session as `queued`.
+
+        Raises `SessionExistsError` if the id is taken, and `SessionTooLargeError` when the stored
+        inputs plus the reserved room for the outcome would not fit one DynamoDB item.
+        """
         ...
 
     def get(self, user_sub: str, session_id: str) -> SessionRecord | None:
@@ -89,6 +95,10 @@ class SessionExistsError(ValueError):
     """That session id is already in the table."""
 
 
+class SessionTooLargeError(ValueError):
+    """The stored inputs plus the room reserved for the outcome would not fit one item."""
+
+
 class UnknownSessionError(KeyError):
     """No session with that id for this user."""
 
@@ -107,6 +117,8 @@ class InMemorySessionStore:
         key = (session.user_sub, session.session_id)
         if key in self._records:
             raise SessionExistsError(session.session_id)
+        if stored_input_bytes(session.request) > MAX_STORED_INPUT_BYTES:
+            raise SessionTooLargeError(session.session_id)
         record = SessionRecord(
             session_id=session.session_id,
             user_sub=session.user_sub,

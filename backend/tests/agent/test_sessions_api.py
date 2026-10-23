@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import random
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -318,6 +319,46 @@ def test_the_post_is_rate_limited_and_the_poll_is_not(api: TestClient, test_sett
     assert first.status_code == 202
     assert refused.status_code == 429
     assert polled == [200, 200, 200]
+
+
+def test_a_request_whose_stored_session_would_not_fit_is_refused_at_create(api: TestClient) -> None:
+    """S2: a body inside the schema can still be too big for one item, and the app must hear about it."""
+    absurd = _body(
+        recipe_history=[
+            {
+                "recipe_id": 1,
+                "title": secrets.token_hex(400_000),  # ~800 KB of incompressible text
+                "last_cooked_at": None,
+                "food_groups": [],
+            }
+        ]
+    )
+
+    response = api.post("/meal-plan/sessions", json=absurd)
+
+    assert response.status_code == 422
+    assert "too large" in response.json()["detail"]
+
+
+def test_a_large_but_realistic_history_is_planned(api: TestClient, sessions: InMemorySessionStore) -> None:
+    """The review's case (2,500 saved recipes) is stored gzipped, so it plans like any other request."""
+    view = _plan_to_completion(
+        api,
+        _body(
+            recipe_history=[
+                {
+                    "recipe_id": index,
+                    "title": (f"Slow-cooked beef ragu with tagliatelle, a Sunday sauce for the family {index}"),
+                    "last_cooked_at": None,
+                    "food_groups": ["protein", "veg"],
+                }
+                for index in range(2500)
+            ]
+        ),
+    )
+
+    assert view["status"] == "done"
+    assert len(view["result"]["suggestions"]) == MEALS
 
 
 def test_a_saved_mode_request_is_refused_by_the_session_route(api: TestClient) -> None:

@@ -1,8 +1,10 @@
 """The session table in DynamoDB (`agent_sessions`, spec §6.3).
 
-One item per session: `pk` is the Cognito sub, `sk` the session id. `inputs`, `result` and `error`
-are stored as JSON strings, so nothing in a request (a float such as `purchase_tolerance` or an
-urgency score) has to be converted to DynamoDB's `Decimal` on the way in and back on the way out.
+One item per session: `pk` is the Cognito sub, `sk` the session id. The request is stored gzipped
+(`inputs`, a binary attribute), because V8's history window alone can reach a few hundred kilobytes and
+an item that does not fit is a failed write; `create` refuses anything that would not leave room for the
+progress lines and the result. `result` and `error` are JSON strings, so nothing in a plan has to be
+converted to DynamoDB's `Decimal` on the way in and back on the way out.
 
 The queue owns liveness's trigger; this module owns its record: `claim` writes an owner token and a
 lease in the same conditional update that moves `queued -> running`, or that takes over a `running`
@@ -12,6 +14,7 @@ taken over cannot finish someone else's run.
 
 from __future__ import annotations
 
+import gzip
 import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -21,15 +24,18 @@ from botocore.exceptions import ClientError
 
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.sessions.models import (
+    MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
     AgentSession,
     ClaimResult,
     SessionError,
     SessionRecord,
     SessionStatus,
+    stored_inputs,
 )
 from glean.sessions.store import (
     SessionExistsError,
+    SessionTooLargeError,
     UnknownSessionError,
     lease_from,
     ttl_from,
@@ -86,11 +92,14 @@ class DynamoSessionStore:
         )
 
     def create(self, session: AgentSession, *, now: datetime) -> SessionRecord:
+        inputs = stored_inputs(session.request)
+        if len(inputs) > MAX_STORED_INPUT_BYTES:
+            raise SessionTooLargeError(session.session_id)
         item = {
             "pk": session.user_sub,
             "sk": session.session_id,
             "status": SessionStatus.QUEUED.value,
-            "inputs": session.request.model_dump_json(),
+            "inputs": inputs,
             "progress": [],
             "progress_start": 0,
             "created_at": now.isoformat(),
@@ -252,6 +261,11 @@ def _lease_lapsed(record: SessionRecord, now: datetime) -> bool:
     return record.lease_until is None or record.lease_until < int(now.timestamp())
 
 
+def _blob(value: Any) -> bytes:
+    """The bytes of a binary attribute, whether botocore handed back a `Binary` or plain bytes."""
+    return bytes(value.value) if hasattr(value, "value") else bytes(value)
+
+
 def _record(item: dict[str, Any]) -> SessionRecord:
     result = item.get("result")
     error = item.get("error")
@@ -260,7 +274,7 @@ def _record(item: dict[str, Any]) -> SessionRecord:
         session_id=item["sk"],
         user_sub=item["pk"],
         status=SessionStatus(item["status"]),
-        request=MealPlanRequest.model_validate_json(item["inputs"]),
+        request=MealPlanRequest.model_validate_json(gzip.decompress(_blob(item["inputs"]))),
         owner=item.get("owner"),
         lease_until=None if lease is None else int(lease),
         progress=list(item.get("progress", [])),
