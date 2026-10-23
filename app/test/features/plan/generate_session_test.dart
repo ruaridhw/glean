@@ -221,6 +221,39 @@ void main() {
     );
   });
 
+  test('a 503 on create, because the queue would not take the run, is the '
+      'generic copy with Retry', () async {
+    final clock = FakeClock();
+    var polls = 0;
+    final h = harnessWith(
+      clock,
+      backend(
+        create: () => http.Response('{"detail":"Could not queue"}', 503),
+        capture: (request) {
+          if (request.url.path.startsWith('/meal-plan/sessions/')) polls++;
+        },
+        polls: [running],
+      ),
+    );
+    addTearDown(h.dispose);
+
+    await h.container
+        .read(generateWeekControllerProvider.notifier)
+        .generate(weekStart: week, slots: 2, servings: 2);
+
+    final GenerateFailure failure =
+        h.container.read(generateWeekControllerProvider).error!
+            as GenerateFailure;
+    expect(failure.kind, GenerateFailureKind.unknown);
+    expect(failure.message, 'Something went wrong planning your week.');
+    expect(failure.actionLabel, 'Retry');
+    expect(
+      polls,
+      0,
+      reason: 'a run that never got a session has nothing to poll',
+    );
+  });
+
   for (final (
         String code,
         GenerateFailureKind kind,
