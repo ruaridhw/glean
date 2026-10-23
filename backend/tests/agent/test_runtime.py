@@ -142,6 +142,16 @@ class _CancelOnComplete(InMemorySessionStore):
         return super().complete(user_sub, session_id, result, owner=owner)
 
 
+class InventsRecipes(PicksOneCandidate):
+    """The model answers with ids nobody offered, so `finalise` keeps nothing and the graph degrades."""
+
+    def invoke(self, _feature: object, _schema: type, *, user: str, **_kwargs: object) -> CorpusMealPlanResponse:
+        self.calls += 1
+        return CorpusMealPlanResponse(
+            suggestions=[CorpusMealPlanRecipe(external_id="rec_invented", title="Invented", reason="Made up.")]
+        )
+
+
 def _corpus(tmp_path: Any) -> RecipeCorpusStore:
     corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
     for external_id, title in [("rec_a", "Lentil Bake"), ("rec_b", "Tofu Noodles")]:
@@ -993,8 +1003,23 @@ def test_a_cancel_mid_run_stops_the_worker_between_steps(tmp_path: Any, monkeypa
     # The cancel landed while the model was choosing, so `finalise`'s progress write was refused: the run
     # stopped at the next step and wrote nothing more.
     assert len(record.progress) == 2
-    assert "SessionsCancelled" in recorder.names
-    assert "SessionsCompleted" not in recorder.names
+    # Counted as cancelled, and never as completed. Its wall time is reported in the run's `finally`.
+    assert recorder.names == ["SessionsStarted", "SessionsCancelled", "SessionWallTime"]
+
+
+def test_a_degraded_run_is_counted_in_cloudwatch(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = MetricsRecorder()
+    monkeypatch.setattr(runtime, "metrics", recorder)
+    sessions = _queued_store()
+
+    handle_record(_record("sess-1"), _deps(sessions, tmp_path, InventsRecipes()))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result is not None
+    assert record.result.degraded is True
+    assert recorder.names == ["SessionsStarted", "SessionsCompleted", "SessionsDegraded", "SessionWallTime"]
 
 
 def test_a_message_for_a_cancelled_session_is_acknowledged_and_runs_nothing(tmp_path: Any) -> None:
