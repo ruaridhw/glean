@@ -8,8 +8,10 @@ converted to DynamoDB's `Decimal` on the way in and back on the way out.
 
 The queue owns liveness's trigger; this module owns its record: `claim` writes an owner token and a
 lease in the same conditional update that moves `queued -> running`, or that takes over a `running`
-item whose lease has lapsed. Every later write is conditioned on that token, so a worker that has been
-taken over cannot finish someone else's run.
+item whose lease has lapsed. The lease is never extended (see `sessions.store.LEASE_SECONDS`), so a
+redelivered message always finds a dead attempt's lease lapsed while a live run's own lease holds.
+Every later write is conditioned on the token, so a worker that has been taken over cannot finish
+someone else's run.
 """
 
 from __future__ import annotations
@@ -156,15 +158,6 @@ class DynamoSessionStore:
         if latest is None:
             raise UnknownSessionError(session_id)
         return ClaimResult.FINISHED if latest.status.terminal else ClaimResult.OWNED_ELSEWHERE
-
-    def refresh_lease(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> bool:
-        return self._update(
-            user_sub,
-            session_id,
-            update="SET #lease = :lease, updated_at = :now, #ttl = :ttl",
-            condition="#status = :running AND #owner = :owner",
-            values={":running": SessionStatus.RUNNING.value, ":owner": owner, ":lease": lease_from(now)},
-        )
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
         record = self.get(user_sub, session_id)

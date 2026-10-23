@@ -28,7 +28,8 @@ would change this package and nothing else.
 130 s and the worker's timeout is 120 s, the pairing AWS requires of an SQS event source (cfn-lint
 E3505) — a message therefore stays invisible for at least as long as any run it can deliver. What
 makes a crashed run recoverable is written on the session item instead: the attempt that starts a run
-takes an owner token and a lease (120 s, renewed as the graph moves), and every later write is
+takes an owner token and a lease taken **once**, at claim, never extended — 125 s, which is the worker's
+120 s timeout plus a 5 s margin, and therefore shorter than the 130 s visibility. Every later write is
 conditioned on that token. A delivery may claim a session that is `queued`, or `running` with a lapsed
 lease; a live duplicate is told it is owned elsewhere and drops; a redelivery after a crash takes over
 and **resumes from the LangGraph checkpoint** rather than starting again. So a crashed run comes back
@@ -49,6 +50,11 @@ until V6's scorer exists to supply the degraded plan.
 - **A 60 s visibility timeout renewed by the worker every 20 s.** Rejected by the platform: an SQS
   event source requires the visibility timeout to be at least the function timeout, so the pair was
   undeployable. Renewal could not fix that, and with the queue outliving the function it earns nothing.
+- **A sliding lease, refreshed as the graph moves.** Rejected: a refreshed lease (claim + 45 s prepare
+  + 120 s) outlives the 130 s visibility, so the redelivered message would find a live owner, be
+  acknowledged, and leave the session `running` for ever with nothing left to recover it. A fixed
+  lease cannot: 125 s after the claim the attempt is provably gone (a Lambda cannot outlive its
+  timeout), while a duplicate copy delivered alongside a live run still finds it live and is dropped.
 - **A visibility timeout below the function timeout, with the suppression of E3505.** Rejected: the
   suppression hid an integration constraint, and the deploy would fail on the event-source mapping.
 - **Push (WebSocket/AppSync) instead of polling.** Deferred: polling every second costs one read and
@@ -59,9 +65,11 @@ until V6's scorer exists to supply the degraded plan.
 - **Capacity.** `agent_sessions` at 2/2 and `agent_checkpoints` at 3/3 join the catalogue's 10/10. F1
   (#162) adds the recipe store at 5/5, making the account 20/20 against the free tier's 25/25
   (ADR 0001); `tests/infra/test_template_free_tier.py` sums them and reserves F1's share.
-- **The queue's timeout and the function's timeout move together.** The visibility timeout must stay
-  above the worker's timeout (E3505 is enforced, not suppressed), and the lease must stay below the
-  visibility timeout, or a redelivery would find a lease that has not lapsed and drop the work.
+- **The queue's timeout, the function's timeout and the lease move together.** The visibility timeout
+  must stay above the worker's timeout (E3505 is enforced, not suppressed), and the lease must sit
+  between them: above the function timeout so a live run is never taken over inside its own
+  invocation, below the visibility timeout so every redelivery finds it lapsed. The three numbers live
+  in `sessions/store.py` and the template test checks `template.yaml` against them.
 - **The item's size is bounded on the way in.** Inputs are stored gzipped and `create` refuses a
   request whose item would not leave room for the progress lines and the plan, so a large but valid
   request is a 422 rather than a failed write.

@@ -33,7 +33,10 @@ from glean.sessions.models import (
     stored_input_bytes,
 )
 from glean.sessions.store import (
+    LEASE_MARGIN_SECONDS,
     LEASE_SECONDS,
+    QUEUE_VISIBILITY_SECONDS,
+    WORKER_TIMEOUT_SECONDS,
     InMemorySessionStore,
     SessionTooLargeError,
     UnknownSessionError,
@@ -225,18 +228,25 @@ def test_a_finished_session_cannot_be_claimed_again(store: tuple[SessionStore, C
     assert record.result == _result()
 
 
-def test_a_running_attempt_renews_its_own_lease_only(store: tuple[SessionStore, Clock]) -> None:
+def test_the_lease_is_taken_once_and_never_extended(store: tuple[SessionStore, Clock]) -> None:
+    """A refreshed lease could outlive the queue's visibility; this one is fixed, so it cannot."""
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
     sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    clock.advance(seconds=LEASE_SECONDS // 2)
+    claimed_at = int(clock.now.timestamp())
 
-    mine = sessions.refresh_lease("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    theirs = sessions.refresh_lease("user-a", "sess-1", owner="attempt-2", now=clock.now)
+    clock.advance(seconds=LEASE_SECONDS // 2)
+    sessions.append_progress("user-a", "sess-1", ["working"], owner="attempt-1")
+    sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
     record = sessions.get("user-a", "sess-1")
-    assert (mine, theirs) == (True, False)
-    assert record.lease_until == int(clock.now.timestamp()) + LEASE_SECONDS
+    assert record.lease_until == claimed_at + LEASE_SECONDS
+
+
+def test_the_lease_ends_before_the_queue_can_redeliver_and_after_the_lambda_can_run() -> None:
+    """Both numbers come from one place, and the template's queue and worker must match them."""
+    assert LEASE_SECONDS == WORKER_TIMEOUT_SECONDS + LEASE_MARGIN_SECONDS
+    assert LEASE_SECONDS < QUEUE_VISIBILITY_SECONDS
 
 
 def test_an_attempt_that_lost_the_lease_cannot_write_the_outcome(store: tuple[SessionStore, Clock]) -> None:
