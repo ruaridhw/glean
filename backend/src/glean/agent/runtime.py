@@ -6,8 +6,10 @@
   moves the session to `running`, or that takes over a run whose lease has lapsed. A duplicate delivery
   of a live run is told so and drops; a delivery for a finished session drops too.
 - **Recovering.** A delivery that takes over a session resumes from its LangGraph checkpoint (the same
-  thread, invoked with no new input), so the crash costs the step it died in and nothing before it.
-  With no checkpoint it starts fresh.
+  thread, invoked with no new input), so the crash costs the step it died in and nothing before it. If
+  the checkpoint shows the graph had already finished, its saved result is published instead of run
+  again — a crash between the last node and the session write must not buy a second model call. With
+  no usable checkpoint it starts fresh.
 - **Ending.** Every run leaves `done` or `failed`: a typed refusal, a model failure, a spent budget or a
   bug each write a code. A run that lost its lease writes nothing, because another attempt owns it now.
 """
@@ -92,17 +94,24 @@ def _run(session: AgentSession, deps: AgentDeps, *, guard: RunGuard, resume: boo
         # One LangSmith trace per session: the metadata lands on the graph's run and its children.
         "metadata": {"session_id": session.session_id},
     }
-    if resume and graph.get_state(config).next:  # ty: ignore[invalid-argument-type]
-        # Continue the interrupted run: no new input means the pending nodes carry on from the
-        # checkpoint, so the steps that already ran are not paid for twice.
+    # What the previous attempt left behind decides how this one starts:
+    #   * pending nodes -> continue them (no new input), so completed steps are not paid for twice;
+    #   * a finished graph with a saved result -> publish that result, because the run was done and only
+    #     the session write was lost (a crash there must not buy a second model call);
+    #   * nothing usable -> start fresh.
+    snapshot = graph.get_state(config)  # ty: ignore[invalid-argument-type]
+    if resume and snapshot.next:
         logger.info("resuming a session from its checkpoint", extra={"session_id": session.session_id})
-        state = graph.invoke(None, config=config)  # ty: ignore[invalid-argument-type]
-    else:
-        state = graph.invoke(
+        return result_of(graph.invoke(None, config=config))  # ty: ignore[invalid-argument-type]
+    if snapshot.values.get("result"):
+        logger.info("publishing the plan a crashed attempt had already made", extra={"session_id": session.session_id})
+        return result_of(snapshot.values)
+    return result_of(
+        graph.invoke(
             {"session_id": session.session_id, "request": session.request.model_dump(mode="json")},
             config=config,  # ty: ignore[invalid-argument-type]
         )
-    return result_of(state)
+    )
 
 
 def _completed(deps: AgentDeps, session: AgentSession, result: MealPlanResult, *, owner: str) -> None:
