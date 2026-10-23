@@ -19,11 +19,16 @@ from glean.sessions.models import (
     MAX_PROGRESS_LINES,
     SESSION_TTL_HOURS,
     AgentSession,
+    ClaimResult,
     SessionError,
     SessionErrorCode,
     SessionStatus,
 )
-from glean.sessions.store import InMemorySessionStore
+from glean.sessions.store import (
+    LEASE_SECONDS,
+    InMemorySessionStore,
+    UnknownSessionError,
+)
 from tests.infra.cfn import sessions_table_properties
 
 if TYPE_CHECKING:
@@ -96,6 +101,8 @@ def test_a_new_session_is_queued_and_holds_its_inputs(store: tuple[SessionStore,
     assert record.progress == []
     assert record.result is None
     assert record.error is None
+    assert record.owner is None
+    assert record.lease_until is None
     assert record.created_at == START
     assert record.updated_at == START
 
@@ -106,7 +113,7 @@ def test_a_session_expires_a_day_after_its_last_update(store: tuple[SessionStore
     sessions.create(_session(), now=clock.now)
     first = sessions.get("user-a", "sess-1")
     clock.advance(hours=6)
-    sessions.claim("user-a", "sess-1")
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
     second = sessions.get("user-a", "sess-1")
 
     assert first is not None
@@ -141,37 +148,90 @@ def test_another_users_session_is_unreachable_by_key(store: tuple[SessionStore, 
     sessions.create(_session(), now=clock.now)
 
     assert sessions.get("user-b", "sess-1") is None
-    assert sessions.claim("user-b", "sess-1") is False
-    assert sessions.get("user-a", "sess-1") is not None
+    with pytest.raises(UnknownSessionError):
+        sessions.claim("user-b", "sess-1", owner="attempt-1", now=clock.now)
     assert sessions.get("user-a", "sess-1").status is SessionStatus.QUEUED
 
 
-def test_claiming_a_queued_session_succeeds_once_and_drops_a_duplicate(store: tuple[SessionStore, Clock]) -> None:
+def test_claiming_a_queued_session_wins_once_and_a_live_duplicate_is_told_so(
+    store: tuple[SessionStore, Clock],
+) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
 
-    assert sessions.claim("user-a", "sess-1") is True
-    assert sessions.claim("user-a", "sess-1") is False
-    assert sessions.get("user-a", "sess-1").status is SessionStatus.RUNNING
+    first = sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    duplicate = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+
+    assert (first, duplicate) == (ClaimResult.STARTED, ClaimResult.OWNED_ELSEWHERE)
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert (record.status, record.owner) == (SessionStatus.RUNNING, "attempt-1")
+    assert record.lease_until == int(clock.now.timestamp()) + LEASE_SECONDS
+
+
+def test_a_claim_after_the_lease_lapsed_takes_the_session_over(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    clock.advance(seconds=LEASE_SECONDS + 1)
+
+    takeover = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+
+    assert takeover is ClaimResult.RESUMED
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.owner == "attempt-2"
 
 
 def test_a_finished_session_cannot_be_claimed_again(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
-    sessions.complete("user-a", "sess-1", _result())
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
-    assert sessions.claim("user-a", "sess-1") is False
+    assert sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now) is ClaimResult.FINISHED
     record = sessions.get("user-a", "sess-1")
     assert record.status is SessionStatus.DONE
     assert record.result == _result()
 
 
+def test_a_running_attempt_renews_its_own_lease_only(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    clock.advance(seconds=LEASE_SECONDS // 2)
+
+    mine = sessions.refresh_lease("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    theirs = sessions.refresh_lease("user-a", "sess-1", owner="attempt-2", now=clock.now)
+
+    record = sessions.get("user-a", "sess-1")
+    assert (mine, theirs) == (True, False)
+    assert record.lease_until == int(clock.now.timestamp()) + LEASE_SECONDS
+
+
+def test_an_attempt_that_lost_the_lease_cannot_write_the_outcome(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    clock.advance(seconds=LEASE_SECONDS + 1)
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now)
+
+    stale_progress = sessions.append_progress("user-a", "sess-1", ["late"], owner="attempt-1")
+    stale_complete = sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
+    stale_fail = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED), owner="attempt-1")
+
+    record = sessions.get("user-a", "sess-1")
+    assert (stale_progress, stale_complete, stale_fail) == (False, False, False)
+    assert record.status is SessionStatus.RUNNING
+    assert record.result is None
+    assert record.progress == []
+
+
 def test_progress_lines_are_returned_from_a_cursor(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
-    sessions.append_progress("user-a", "sess-1", ["Preparing", "Planning", "Finishing"])
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.append_progress("user-a", "sess-1", ["Preparing", "Planning", "Finishing"], owner="attempt-1")
 
     record = sessions.get("user-a", "sess-1")
     assert record.next_cursor == 3
@@ -183,8 +243,10 @@ def test_progress_lines_are_returned_from_a_cursor(store: tuple[SessionStore, Cl
 def test_the_progress_list_is_bounded_and_older_lines_drop_out(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
-    sessions.append_progress("user-a", "sess-1", [f"line {index}" for index in range(MAX_PROGRESS_LINES + 5)])
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.append_progress(
+        "user-a", "sess-1", [f"line {index}" for index in range(MAX_PROGRESS_LINES + 5)], owner="attempt-1"
+    )
 
     record = sessions.get("user-a", "sess-1")
     assert len(record.progress) == MAX_PROGRESS_LINES
@@ -198,9 +260,9 @@ def test_the_progress_list_is_bounded_and_older_lines_drop_out(store: tuple[Sess
 def test_failing_a_session_records_the_typed_code(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
 
-    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.MODEL_ERROR))
+    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.MODEL_ERROR), owner="attempt-1")
 
     record = sessions.get("user-a", "sess-1")
     assert moved is True
@@ -212,20 +274,36 @@ def test_failing_a_session_records_the_typed_code(store: tuple[SessionStore, Clo
 def test_a_rate_limited_failure_carries_its_wait(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
 
-    sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.RATE_LIMITED, retry_after_minutes=12))
+    sessions.fail(
+        "user-a",
+        "sess-1",
+        SessionError(code=SessionErrorCode.RATE_LIMITED, retry_after_minutes=12),
+        owner="attempt-1",
+    )
 
     assert sessions.get("user-a", "sess-1").error == SessionError(
         code=SessionErrorCode.RATE_LIMITED, retry_after_minutes=12
     )
 
 
+def test_the_dead_letter_handler_fails_a_session_without_owning_it(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+
+    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    assert moved is True
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.FAILED
+
+
 def test_a_finished_session_is_never_failed_afterwards(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     sessions.create(_session(), now=clock.now)
-    sessions.claim("user-a", "sess-1")
-    sessions.complete("user-a", "sess-1", _result())
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
+    sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
     moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 

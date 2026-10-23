@@ -6,6 +6,7 @@ whole object, so nothing below ever reaches AWS.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver  # noqa: TID251
 
     from glean.config import Settings
-    from glean.sessions.queue import SessionQueue
     from glean.sessions.store import SessionStore
 
 
@@ -34,15 +34,15 @@ class AgentDeps:
     checkpointer: BaseCheckpointSaver
     llm_router: LLMRouter
     corpus_factory: Callable[[], RecipeCorpusStore] = field(default=RecipeCorpusStore)
+    # Two clocks: wall time for the session item and its TTL, monotonic seconds for lease renewals.
+    # Tests replace both.
     clock: Callable[[], datetime] = field(default=utcnow)
-    # Set by the worker, which renews the running message's visibility; the inline runner has no queue.
-    queue: SessionQueue | None = None
+    monotonic: Callable[[], float] = field(default=time.monotonic)
 
 
 def build_deps(
     settings: Settings,
     *,
-    queue: SessionQueue | None = None,
     llm_router: LLMRouter | None = None,
 ) -> AgentDeps:
     """The deps a deployed run uses: the DynamoDB session table, the DynamoDB checkpointer, the corpus.
@@ -59,5 +59,4 @@ def build_deps(
         ),
         checkpointer=build_checkpointer(settings),
         llm_router=llm_router or LLMRouter.from_settings(settings),
-        queue=queue,
     )

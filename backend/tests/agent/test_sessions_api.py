@@ -35,7 +35,7 @@ from glean.recipes import corpus as corpus_module
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from glean.sessions.models import SESSION_TTL_HOURS, AgentSession, SessionErrorCode, SessionStatus
-from glean.sessions.store import InMemorySessionStore, ttl_from
+from glean.sessions.store import InMemorySessionStore, ttl_from, utcnow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -248,14 +248,28 @@ def test_an_unknown_session_is_not_found(api: TestClient) -> None:
 def test_polling_returns_only_the_progress_lines_after_the_cursor(
     api: TestClient, sessions: InMemorySessionStore
 ) -> None:
-    created = api.post("/meal-plan/sessions", json=_body())
-    session_id = created.json()["session_id"]
-    # The run wrote three lines; a poll that has read those three sees only what came after them.
-    sessions.append_progress("user-a", session_id, ["finishing"])
+    """A run in progress: the app has read two lines and asks for the rest."""
 
-    polled = api.get(f"/meal-plan/sessions/{session_id}", params={"after": 3}).json()
-    assert polled["progress"] == ["finishing"]
-    assert polled["next_cursor"] == 4
+    def hold(session: AgentSession) -> None:
+        # Stands in for a worker that has started the run and is still working.
+        assert sessions.claim(session.user_sub, session.session_id, owner="attempt-1", now=utcnow())
+        sessions.append_progress(
+            session.user_sub, session.session_id, ["Reading", "Choosing", "Checking"], owner="attempt-1"
+        )
+
+    app.dependency_overrides[get_session_dispatcher] = lambda: hold
+    created = api.post("/meal-plan/sessions", json=_body())
+    app.dependency_overrides.pop(get_session_dispatcher, None)
+    session_id = created.json()["session_id"]
+
+    polled = api.get(f"/meal-plan/sessions/{session_id}", params={"after": 2}).json()
+    caught_up = api.get(f"/meal-plan/sessions/{session_id}", params={"after": 3}).json()
+
+    assert polled["status"] == "running"
+    assert polled["progress"] == ["Checking"]
+    assert polled["next_cursor"] == 3
+    assert caught_up["progress"] == []
+    assert caught_up["next_cursor"] == 3
 
 
 def test_a_poll_carries_every_line_once_for_a_client_that_starts_at_zero(api: TestClient) -> None:

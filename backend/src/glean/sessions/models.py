@@ -37,6 +37,19 @@ class SessionStatus(StrEnum):
         return self in {SessionStatus.DONE, SessionStatus.FAILED}
 
 
+class ClaimResult(StrEnum):
+    """What one queue delivery won, which decides whether it runs the graph and how.
+
+    A message can be delivered more than once: SQS retries it, and a run that died leaves its item
+    `running`. The lease on the item is what tells those apart from a live run.
+    """
+
+    STARTED = "started"
+    RESUMED = "resumed"
+    OWNED_ELSEWHERE = "owned_elsewhere"
+    FINISHED = "finished"
+
+
 class SessionErrorCode(StrEnum):
     """The error catalogue (spec §6.3). The app falls back to a generic message for an unknown code."""
 
@@ -90,6 +103,10 @@ class SessionRecord(BaseModel):
     user_sub: str
     status: SessionStatus
     request: MealPlanRequest
+    # Which attempt owns a running session, and until when. A takeover needs the lease to have lapsed, and
+    # a worker that lost its lease can no longer write the outcome.
+    owner: str | None = None
+    lease_until: int | None = Field(default=None, description="Epoch seconds the current owner may run until.")
     progress: list[str] = Field(default_factory=list)
     progress_start: int = 0
     result: MealPlanResult | None = None
