@@ -5,10 +5,14 @@ session's outcome; the dead-letter handler marks a session `worker_failed` once 
 Neither imports LangGraph, and neither knows how a plan is made.
 
 Deployed event source mappings (template.yaml): the worker takes one message at a time, and the
-queue's visibility timeout (130 s) is longer than the function's (120 s), which AWS requires and which
-means Lambda holds the message for as long as the run can last. Liveness lives on the session item: a
-lease the run renews, and an owner token that only one attempt holds. A run that dies has its lease
-lapse, and the redelivery picks it up from its checkpoint.
+queue's visibility timeout (150 s) covers the function's 120 s timeout plus up to 10 s of init, which
+AWS requires and which means Lambda holds the message for as long as the run can last. Liveness lives on
+the session item: a lease anchored to this invocation's deadline, and an owner token that only one
+attempt holds. A run that dies has its lease lapse, and the redelivery picks it up from its checkpoint.
+
+A delivery that finds another attempt owning a nonterminal session raises instead of returning: Lambda
+acknowledges a message whose handler returns, and acknowledging work that is not finished would discard
+the only trigger that recovers it.
 """
 
 from __future__ import annotations
@@ -30,10 +34,10 @@ if TYPE_CHECKING:
 
 @tracer.capture_lambda_handler
 @logger.inject_lambda_context
-def handler(event: dict[str, Any], _context: object = None) -> None:
+def handler(event: dict[str, Any], context: Any) -> None:
     """The SQS session worker: one unit of work per message, batch size 1."""
     settings = get_settings()
-    deps = build_deps(settings)
+    deps = build_deps(settings, remaining_seconds=lambda: context.get_remaining_time_in_millis() / 1000)
     try:
         for record in event.get("Records", ()):
             handle_record(record, deps)
@@ -46,9 +50,9 @@ def handle_record(record: dict[str, Any], deps: AgentDeps) -> bool:
 
     A body this queue did not write, or a session the table no longer holds (expired, or never
     written), is logged and dropped: there is no run to start, and redelivering it would only reach
-    the dead-letter queue again. Anything else the store or the run raises propagates, so Lambda fails
-    the delivery: SQS retries it, and the dead-letter queue's handler ends the session after the last
-    attempt.
+    the dead-letter queue again. Everything else that raises -- a live owner, or anything the store or
+    the run raised -- propagates, so Lambda fails the delivery and the message comes back rather than
+    being acknowledged unfinished.
     """
     try:
         message = SessionMessage.parse(record["body"])
@@ -68,7 +72,12 @@ def handle_record(record: dict[str, Any], deps: AgentDeps) -> bool:
 @tracer.capture_lambda_handler
 @logger.inject_lambda_context
 def dlq_handler(event: dict[str, Any], _context: object = None) -> None:
-    """The dead-letter handler: SQS ran out of attempts, so the session is `worker_failed`."""
+    """The dead-letter handler: SQS ran out of attempts, so an abandoned session becomes `worker_failed`.
+
+    It only fails a session whose lease has lapsed. A live run is left alone: it is still working, and
+    will write its own outcome. That is why the queue allows three receives -- a duplicate delivery that
+    was failed on purpose costs one of them.
+    """
     sessions = DynamoSessionStore.from_environment()
     try:
         for record in event.get("Records", ()):
@@ -88,6 +97,6 @@ def _fail_dead_letter(record: dict[str, Any], sessions: DynamoSessionStore) -> N
         logger.warning("session failed after its message was dead-lettered", extra={"session_id": message.session_id})
     else:
         logger.info(
-            "dead-lettered session had already finished; leaving it alone",
+            "dead-lettered session is finished or still owned by a live run; leaving it alone",
             extra={"session_id": message.session_id},
         )

@@ -8,10 +8,13 @@ converted to DynamoDB's `Decimal` on the way in and back on the way out.
 
 The queue owns liveness's trigger; this module owns its record: `claim` writes an owner token and a
 lease in the same conditional update that moves `queued -> running`, or that takes over a `running`
-item whose lease has lapsed. The lease is never extended (see `sessions.store.LEASE_SECONDS`), so a
-redelivered message always finds a dead attempt's lease lapsed while a live run's own lease holds.
-Every later write is conditioned on the token, so a worker that has been taken over cannot finish
-someone else's run.
+item whose lease has lapsed. The lease is never extended, and it is anchored to the caller's own
+invocation deadline (`sessions.store.lease_seconds_for`), so it always ends when that attempt's worker
+certainly has. Every later write is conditioned on the token, so a worker that has been taken over
+cannot finish someone else's run.
+
+The dead-letter handler fails a session without an owner token, so its update also requires the lease
+to have lapsed: a live run is left alone, because it will finish on its own.
 """
 
 from __future__ import annotations
@@ -127,7 +130,7 @@ class DynamoSessionStore:
         item = response.get("Item")
         return _record(item) if item else None
 
-    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
+    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime, lease_seconds: int) -> ClaimResult:
         # Read first: the conditional write says whether this attempt won, and the item says whether the
         # run it won is fresh or one it is taking over.
         record = self.get(user_sub, session_id)
@@ -148,7 +151,7 @@ class DynamoSessionStore:
                 ":running": SessionStatus.RUNNING.value,
                 ":queued": SessionStatus.QUEUED.value,
                 ":owner": owner,
-                ":lease": lease_from(now),
+                ":lease": lease_from(now, lease_seconds),
                 ":now_epoch": int(now.timestamp()),
             },
         )
@@ -216,6 +219,11 @@ class DynamoSessionStore:
         if owner is not None:
             condition = f"{condition} AND #owner = :owner"
             values[":owner"] = owner
+        else:
+            # No owner token means the dead-letter handler: it may only fail a session whose attempt is
+            # gone, which the lease is now the only evidence of. A live run is left to finish.
+            condition = f"{condition} AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
+            values[":now_epoch"] = int(self._clock().timestamp())
         return self._update(
             user_sub,
             session_id,

@@ -25,17 +25,27 @@ exactly as only `glean/llm.py` may import LangChain. Ripping LangGraph out for a
 would change this package and nothing else.
 
 **Liveness is the session's own lease, not a second orchestrator.** The queue's visibility timeout is
-130 s and the worker's timeout is 120 s, the pairing AWS requires of an SQS event source (cfn-lint
-E3505) — a message therefore stays invisible for at least as long as any run it can deliver. What
-makes a crashed run recoverable is written on the session item instead: the attempt that starts a run
-takes an owner token and a lease taken **once**, at claim, never extended — 125 s, which is the worker's
-120 s timeout plus a 5 s margin, and therefore shorter than the 130 s visibility. Every later write is
-conditioned on that token. A delivery may claim a session that is `queued`, or `running` with a lapsed
-lease; a live duplicate is told it is owned elsewhere and drops; a redelivery after a crash takes over
-and **resumes from the LangGraph checkpoint** rather than starting again. So a crashed run comes back
-within about two minutes and still lands inside the app's five-minute cap, and a worker that was taken
-over can no longer write the outcome. After two failed attempts the message reaches the dead-letter
-queue, whose handler marks the session `failed / worker_failed`, with no owner needed.
+150 s: the worker's 120 s timeout, plus up to 10 s of Lambda init before the handler runs, plus margin —
+the pairing AWS requires of an SQS event source (cfn-lint E3505) and enough for a message to stay
+invisible past any run it can deliver. What makes a crashed run recoverable is written on the session
+item instead: the attempt that starts a run takes an owner token and a lease, taken **once**, at claim,
+never extended, and **anchored to its own invocation deadline** — `now + remaining time + 2 s`, where
+the remaining time comes from the Lambda context. A constant measured from claim time could outlive the
+visibility, because the claim happens after init and the first reads while the queue's clock started at
+the receive; the invocation's deadline cannot, because a Lambda is certainly gone then.
+
+Every later write is conditioned on the owner token. A delivery may claim a session that is `queued`, or
+`running` with a lapsed lease, and a takeover **resumes from the LangGraph checkpoint** rather than
+starting again — or publishes the plan the finished checkpoint already holds. A delivery that finds a
+**live** owner does not drop: it **fails**, so the message is not acknowledged and comes back after the
+visibility timeout. Acknowledging it would delete the logical message — the only trigger that recovers
+the run — while the other copy is still working, and if that copy then died nothing would be left to
+pick the session up. Acknowledging is reserved for a terminal session (nothing left to do) and for runs
+this invocation completed. The queue therefore allows three receives rather than two: one may be spent
+failing a live duplicate, and two genuine attempts still fail a session before its message is
+dead-lettered. The dead-letter handler marks a session `failed / worker_failed` only when it is
+nonterminal *and* its lease has lapsed, so a live run is left to finish. A crashed run comes back within
+about 2.5 minutes, inside the app's five-minute cap.
 
 One run also has a budget: 90 s (§6.2). It is checked before every graph step, the one blocking call
 (the model) gets only what is left of it, and spending it ends the session `failed / model_error`
@@ -51,10 +61,13 @@ until V6's scorer exists to supply the degraded plan.
   event source requires the visibility timeout to be at least the function timeout, so the pair was
   undeployable. Renewal could not fix that, and with the queue outliving the function it earns nothing.
 - **A sliding lease, refreshed as the graph moves.** Rejected: a refreshed lease (claim + 45 s prepare
-  + 120 s) outlives the 130 s visibility, so the redelivered message would find a live owner, be
-  acknowledged, and leave the session `running` for ever with nothing left to recover it. A fixed
-  lease cannot: 125 s after the claim the attempt is provably gone (a Lambda cannot outlive its
-  timeout), while a duplicate copy delivered alongside a live run still finds it live and is dropped.
+  + 120 s) outlives the visibility, so the redelivered message would find a live owner, be
+  acknowledged, and leave the session `running` for ever with nothing left to recover it.
+- **A fixed lease measured from claim time, and a plain "nothing to do" for a live duplicate.**
+  Rejected twice over: the claim happens seconds into the invocation (init, settings, the first reads),
+  so a constant can expire after the message has already reappeared; and returning success for
+  nonterminal work acknowledges (deletes) the message the live run depends on. The lease follows the
+  invocation's deadline, and a live duplicate fails its delivery instead.
 - **A visibility timeout below the function timeout, with the suppression of E3505.** Rejected: the
   suppression hid an integration constraint, and the deploy would fail on the event-source mapping.
 - **Push (WebSocket/AppSync) instead of polling.** Deferred: polling every second costs one read and
@@ -65,11 +78,12 @@ until V6's scorer exists to supply the degraded plan.
 - **Capacity.** `agent_sessions` at 2/2 and `agent_checkpoints` at 3/3 join the catalogue's 10/10. F1
   (#162) adds the recipe store at 5/5, making the account 20/20 against the free tier's 25/25
   (ADR 0001); `tests/infra/test_template_free_tier.py` sums them and reserves F1's share.
-- **The queue's timeout, the function's timeout and the lease move together.** The visibility timeout
-  must stay above the worker's timeout (E3505 is enforced, not suppressed), and the lease must sit
-  between them: above the function timeout so a live run is never taken over inside its own
-  invocation, below the visibility timeout so every redelivery finds it lapsed. The three numbers live
-  in `sessions/store.py` and the template test checks `template.yaml` against them.
+- **The queue's timeout, the function's timeout, init and the lease move together.** The visibility
+  timeout must stay above the worker's timeout plus the longest init (E3505 is enforced, not
+  suppressed), and the longest lease any attempt can take must end before it. A lease taken at the
+  very start of a full invocation ends 2 s after the function timeout; a late claim ends earlier,
+  because it is the remaining time that is measured. The numbers live in `sessions/store.py` and the
+  template test checks `template.yaml` against them.
 - **The item's size is bounded at both ends.** Inputs are stored gzipped and `create` refuses a request
   whose item would not leave room for the progress lines and the plan (422), so a large but valid
   request is refused rather than failing at the first write. The plan is measured too: 64 KB is

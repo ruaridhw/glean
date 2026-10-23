@@ -252,10 +252,11 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: false
 
-  # Longer than the worker's 120 s timeout, which AWS requires of an SQS event source (cfn-lint E3505)
-  # and which is what makes the message outlive any run it can deliver: Lambda holds it while the run
-  # works. Recovery is the session's own lease, not the message: a run that dies has its lease lapse,
-  # and the redelivery resumes it from its checkpoint about two minutes later (ADR 0026).
+  # 120 s function timeout + up to 10 s of Lambda init + 20 s of margin, so the message outlives any
+  # run it can deliver (AWS requires at least the function timeout: cfn-lint E3505). Recovery is the
+  # session's own lease, not the message: the lease is anchored to the invocation's deadline, so a run
+  # that dies has it lapse and the redelivery resumes it from its checkpoint about 2.5 minutes later
+  # (ADR 0026).
   GleanAgentDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -266,11 +267,13 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "glean-agent-sessions-${Environment}"
-      # 10 s of margin over AgentWorkerFunction's Timeout: 120.
-      VisibilityTimeout: 130
+      VisibilityTimeout: 150
       RedrivePolicy:
+        # Three receives, not two: a delivery that finds another attempt still running is failed on
+        # purpose so the message survives, and that uses one. Two further attempts still fail a session
+        # before its message is dead-lettered.
         deadLetterTargetArn: !GetAtt GleanAgentDeadLetterQueue.Arn
-        maxReceiveCount: 2
+        maxReceiveCount: 3
 
   GleanFunction:
     Type: AWS::Serverless::Function

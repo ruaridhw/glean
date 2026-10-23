@@ -20,9 +20,10 @@ from glean.agent.runtime import start
 from glean.config import Settings, get_settings
 from glean.dependencies import get_llm_router
 from glean.llm import LLMRouter
+from glean.observability import logger
 from glean.sessions.factories import session_queue, session_store
 from glean.sessions.models import AgentSession
-from glean.sessions.store import SessionStore, utcnow
+from glean.sessions.store import SessionBusyError, SessionStore, utcnow
 
 
 def get_session_store(settings: Annotated[Settings, Depends(get_settings)]) -> SessionStore:
@@ -50,7 +51,14 @@ def get_session_dispatcher(
         )
 
         def run_inline(session: AgentSession) -> None:
-            start(session, deps)
+            try:
+                start(session, deps)
+            except SessionBusyError:
+                # Inline there is no queue to send the work back to, and another attempt owns the run:
+                # leave it alone rather than failing a session that is still being planned.
+                logger.warning(
+                    "session already running under another attempt", extra={"session_id": session.session_id}
+                )
 
         return run_inline
     queue = session_queue(settings)

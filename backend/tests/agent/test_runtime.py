@@ -36,7 +36,14 @@ from glean.sessions.models import (
     stored_input_bytes,
 )
 from glean.sessions.queue import SessionMessage
-from glean.sessions.store import LEASE_SECONDS, QUEUE_VISIBILITY_SECONDS, InMemorySessionStore
+from glean.sessions.store import (
+    MAX_LEASE_SECONDS,
+    QUEUE_VISIBILITY_SECONDS,
+    WORKER_TIMEOUT_SECONDS,
+    InMemorySessionStore,
+    SessionBusyError,
+    lease_seconds_for,
+)
 from glean.worker import dlq_handler, handle_record, handler
 from tests.infra.cfn import sessions_table_properties
 
@@ -130,6 +137,8 @@ def _deps(
     tmp_path: Any,
     router: PicksOneCandidate | None = None,
     clock: FakeClock | None = None,
+    *,
+    remaining_seconds: float = WORKER_TIMEOUT_SECONDS,
 ) -> AgentDeps:
     clock = clock or FakeClock()
     return AgentDeps(
@@ -139,6 +148,26 @@ def _deps(
         corpus_factory=lambda: _corpus(tmp_path),
         clock=clock.wall,
         monotonic=clock.monotonic,
+        remaining_seconds=lambda: remaining_seconds,
+    )
+
+
+def _with(
+    deps: AgentDeps,
+    *,
+    checkpointer: Any = None,
+    corpus_factory: Any = None,
+    remaining_seconds: float | None = None,
+) -> AgentDeps:
+    """The same deps with one field replaced (the dataclass is frozen)."""
+    return AgentDeps(
+        sessions=deps.sessions,
+        checkpointer=checkpointer or deps.checkpointer,
+        llm_router=deps.llm_router,
+        corpus_factory=corpus_factory or deps.corpus_factory,
+        clock=deps.clock,
+        monotonic=deps.monotonic,
+        remaining_seconds=(lambda: remaining_seconds) if remaining_seconds is not None else deps.remaining_seconds,
     )
 
 
@@ -196,7 +225,7 @@ def test_a_run_is_handed_over_once_and_the_session_ends_done(tmp_path: Any) -> N
     assert record.owner is not None
 
 
-def test_a_live_duplicate_is_dropped_before_the_plan_runs(tmp_path: Any) -> None:
+def test_a_live_duplicate_is_failed_not_acknowledged(tmp_path: Any) -> None:
     clock = FakeClock()
     sessions = _queued_store(clock=clock)
     router = PicksOneCandidate()
@@ -204,10 +233,19 @@ def test_a_live_duplicate_is_dropped_before_the_plan_runs(tmp_path: Any) -> None
     # A live attempt already owns the session: the same delivery arriving twice must not run it twice.
     assert start(_queued("sess-1"), _deps(sessions, tmp_path, router, clock)) is True
     sessions.create(_queued("sess-held"), now=clock.now)
-    assert sessions.claim("user-a", "sess-held", owner="other-attempt", now=clock.now)
-    assert handle_record(_record("sess-held"), deps) is False
+    sessions.claim(
+        "user-a",
+        "sess-held",
+        owner="other-attempt",
+        now=clock.now,
+        lease_seconds=lease_seconds_for(WORKER_TIMEOUT_SECONDS),
+    )
+
+    with pytest.raises(SessionBusyError):
+        handle_record(_record("sess-held"), deps)
 
     assert router.calls == 1
+    assert sessions.get("user-a", "sess-held").status is SessionStatus.RUNNING
 
 
 def test_a_crashed_run_is_resumed_from_its_checkpoint(tmp_path: Any) -> None:
@@ -228,7 +266,7 @@ def test_a_crashed_run_is_resumed_from_its_checkpoint(tmp_path: Any) -> None:
     assert crashed.status is SessionStatus.RUNNING
 
     # The queue hands the message out again after the visibility timeout; by then the lease has lapsed.
-    clock.advance(seconds=LEASE_SECONDS + 10)
+    clock.advance(seconds=MAX_LEASE_SECONDS + 10)
     recovered_router = PicksOneCandidate()
     # A deployed worker reads the checkpoint from DynamoDB, so a new attempt sees the crashed one's
     # progress. Inline, that shared state is the one saver, which is why a new attempt must reuse it.
@@ -268,7 +306,7 @@ def test_a_run_that_crashes_late_is_taken_over_at_the_visibility_boundary(tmp_pa
     clock = FakeClock()
     sessions = _queued_store(clock=clock)
     dead = _deps(sessions, tmp_path, PicksOneCandidate(fails_with=ProcessDied()), clock)
-    claimed_lease = int(clock.now.timestamp()) + LEASE_SECONDS
+    claimed_lease = int(clock.now.timestamp()) + lease_seconds_for(WORKER_TIMEOUT_SECONDS)
 
     def slow_prepare() -> RecipeCorpusStore:
         corpora = _corpus(tmp_path)
@@ -339,7 +377,7 @@ def test_a_run_writes_no_lease_beyond_the_claim(tmp_path: Any) -> None:
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
-    assert record.lease_until == claimed_at + LEASE_SECONDS
+    assert record.lease_until == claimed_at + lease_seconds_for(WORKER_TIMEOUT_SECONDS)
     # claim + three progress writes + complete; no lease refresh anywhere in between.
     assert sessions.writes - writes_after_create == 5
 
@@ -405,8 +443,10 @@ def test_a_crash_before_the_session_write_publishes_the_saved_plan(tmp_path: Any
 def test_a_takeover_with_no_checkpoint_starts_the_run_fresh(tmp_path: Any) -> None:
     clock = FakeClock()
     sessions = _queued_store(clock=clock)
-    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now)
-    clock.advance(seconds=LEASE_SECONDS + 1)
+    sessions.claim(
+        "user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=lease_seconds_for(WORKER_TIMEOUT_SECONDS)
+    )
+    clock.advance(seconds=MAX_LEASE_SECONDS + 1)
     router = PicksOneCandidate()
 
     assert handle_record(_record("sess-1"), _deps(sessions, tmp_path, router, clock)) is True
@@ -556,6 +596,93 @@ def test_a_plan_that_just_fits_is_written(tmp_path: Any) -> None:
     assert len(record.result.suggestions[0].reason) == 40_000
 
 
+def test_a_late_claim_still_lets_the_redelivery_take_over(tmp_path: Any) -> None:
+    """Round 3's path A: the claim happens seconds after the receive, so the lease must follow the deadline.
+
+    Claiming 10 s into the invocation leaves 110 s, so the lease ends at claim + 112 — before the message
+    reappears at receive + 150. A lease measured as a constant from claim time would still have been live.
+    """
+
+    class ProcessDied(BaseException):
+        """A killed Lambda: not an Exception, so nothing catches it."""
+
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    # 10 s of init, imports and the first reads before the claim.
+    slow_deps = _deps(
+        sessions,
+        tmp_path,
+        PicksOneCandidate(fails_with=ProcessDied()),
+        clock,
+        remaining_seconds=WORKER_TIMEOUT_SECONDS - 10,
+    )
+
+    received_at = int(clock.now.timestamp())
+    with pytest.raises(ProcessDied):
+        start(_queued("sess-1"), slow_deps)
+
+    crashed = sessions.get("user-a", "sess-1")
+    assert crashed is not None
+    assert crashed.lease_until == received_at + lease_seconds_for(WORKER_TIMEOUT_SECONDS - 10)
+    assert crashed.lease_until < received_at + QUEUE_VISIBILITY_SECONDS
+
+    # The queue hands the message out again once the visibility lapses, after the lease has.
+    clock.advance(seconds=QUEUE_VISIBILITY_SECONDS)
+    recovered_router = PicksOneCandidate()
+    recovered = _with(_deps(sessions, tmp_path, recovered_router, clock), checkpointer=slow_deps.checkpointer)
+
+    assert handle_record(_record("sess-1"), recovered) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.progress.count("Reading your pantry and the recipes we know") == 1
+
+
+def test_a_live_duplicate_is_failed_so_the_message_survives_then_recovers(tmp_path: Any) -> None:
+    """Round 3's path B: acknowledging a duplicate would delete the logical message the live run needs.
+
+    Here the duplicate's delivery is failed (no ack), the live run then dies, and the message that is still
+    on the queue is what recovers the session.
+    """
+
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    live_lease = lease_seconds_for(WORKER_TIMEOUT_SECONDS)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=live_lease)
+    duplicate = _deps(sessions, tmp_path, PicksOneCandidate(), clock)
+
+    # The duplicate delivery is refused: raising is what makes Lambda keep (not delete) the message.
+    with pytest.raises(SessionBusyError):
+        handle_record(_record("sess-1"), duplicate)
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.RUNNING
+
+    # The live attempt dies without writing anything. Its message comes back after the visibility timeout.
+    clock.advance(seconds=QUEUE_VISIBILITY_SECONDS)
+    recovered_router = PicksOneCandidate()
+    recovered = _deps(sessions, tmp_path, recovered_router, clock)
+
+    assert handle_record(_record("sess-1"), recovered) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert recovered_router.calls == 1
+
+
+def test_the_dead_letter_handler_leaves_a_live_run_alone(sessions_table: DynamoSessionStore) -> None:
+    """A dead letter can arrive while the run it names is still working: it must not be failed."""
+    sessions_table.create(_queued(), now=datetime.now(UTC))
+    sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC), lease_seconds=MAX_LEASE_SECONDS)
+
+    dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
+
+    record = sessions_table.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.RUNNING
+    assert record.error is None
+
+
 def test_a_poison_message_is_dropped() -> None:
     assert handle_record({"body": "not a session message", "receiptHandle": "r"}, None) is False  # type: ignore[arg-type]
 
@@ -662,7 +789,7 @@ def test_the_dead_letter_handler_marks_the_session_worker_failed(sessions_table:
 
 def test_a_dead_letter_for_a_finished_session_leaves_it_done(sessions_table: DynamoSessionStore) -> None:
     sessions_table.create(_queued(), now=datetime.now(UTC))
-    sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC))
+    sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC), lease_seconds=MAX_LEASE_SECONDS)
     sessions_table.complete("user-a", "sess-1", MealPlanResult(suggestions=[]), owner="attempt-1")
 
     dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
@@ -681,7 +808,9 @@ def test_the_worker_handler_walks_every_record(monkeypatch: pytest.MonkeyPatch) 
         return True
 
     monkeypatch.setattr("glean.worker.handle_record", record_it)
-    monkeypatch.setattr("glean.worker.build_deps", lambda _settings, *, llm_router=None: object())
+    monkeypatch.setattr(
+        "glean.worker.build_deps", lambda _settings, *, llm_router=None, remaining_seconds=None: object()
+    )
     monkeypatch.setattr(
         "glean.worker.get_settings",
         lambda: type("Settings", (), {"agent_runner": "queue", "aws_region": REGION})(),
