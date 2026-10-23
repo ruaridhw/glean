@@ -109,7 +109,8 @@ never extends it, measured against its own invocation deadline rather than a con
 the lapsed lease over and resumes from the LangGraph checkpoint. That is inside the app's five-minute
 cap, which is why the app shows `stalled` only when the network, not the worker, gave up. A delivery
 that finds another attempt still running fails rather than returning, so the message it was holding is
-never deleted unfinished.
+never deleted unfinished — on the dead-letter queue too, where the handler raises while a live run owns
+the session and retries every 60 s until it can fail it.
 
 Only the containers can reach `dynamodb-local` and `elasticmq`. `make start-backend` runs on the
 host, so it cannot enqueue: set `AGENT_RUNNER=inline` in `backend/.env` to run sessions in the

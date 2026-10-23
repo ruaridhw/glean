@@ -37,6 +37,7 @@ from glean.sessions.models import (
 )
 from glean.sessions.queue import SessionMessage
 from glean.sessions.store import (
+    DEAD_LETTER_VISIBILITY_SECONDS,
     MAX_LEASE_SECONDS,
     QUEUE_VISIBILITY_SECONDS,
     WORKER_TIMEOUT_SECONDS,
@@ -52,6 +53,8 @@ if TYPE_CHECKING:
 
 REGION = "eu-west-2"
 TABLE_NAME = "glean-agent-sessions-test"
+SOURCE_QUEUE_NAME = "glean-agent-sessions-test"
+DLE_QUEUE_NAME = "glean-agent-sessions-dlq-test"
 _CFN_ONLY = {"TableName", "TableClass", "PointInTimeRecoverySpecification", "TimeToLiveSpecification"}
 
 
@@ -209,6 +212,10 @@ class LambdaContext:
     aws_request_id = "test-request"
     invoked_function_arn = f"arn:aws:lambda:{REGION}:000000000000:function:glean-agent-worker"
     function_version = "$LATEST"
+
+    def get_remaining_time_in_millis(self) -> int:
+        """What the worker anchors its lease to: a full invocation's worth."""
+        return WORKER_TIMEOUT_SECONDS * 1000
 
 
 def test_a_run_is_handed_over_once_and_the_session_ends_done(tmp_path: Any) -> None:
@@ -670,17 +677,146 @@ def test_a_live_duplicate_is_failed_so_the_message_survives_then_recovers(tmp_pa
     assert recovered_router.calls == 1
 
 
-def test_the_dead_letter_handler_leaves_a_live_run_alone(sessions_table: DynamoSessionStore) -> None:
-    """A dead letter can arrive while the run it names is still working: it must not be failed."""
+def test_the_dead_letter_handler_keeps_a_dead_letter_for_a_live_run(sessions_table: DynamoSessionStore) -> None:
+    """A dead letter that finds its run still working must be kept, not acknowledged.
+
+    Returning success would delete the last recovery trigger: if the live owner then died, nothing
+    would be left to fail or resume the session. So the handler raises, the dead-letter queue's own
+    visibility timeout brings it back, and by then the run is finished or its lease has lapsed.
+    """
     sessions_table.create(_queued(), now=datetime.now(UTC))
     sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC), lease_seconds=MAX_LEASE_SECONDS)
 
-    dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
+    with pytest.raises(SessionBusyError):
+        dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
 
     record = sessions_table.get("user-a", "sess-1")
     assert record is not None
     assert record.status is SessionStatus.RUNNING
     assert record.error is None
+
+
+def test_the_dead_letter_handler_fails_the_session_once_its_lease_has_lapsed(
+    sessions_table: DynamoSessionStore,
+) -> None:
+    """The retry after the live owner died: now the session is abandoned and becomes worker_failed."""
+    sessions_table.create(_queued(), now=datetime.now(UTC))
+    sessions_table.claim(
+        "user-a",
+        "sess-1",
+        owner="attempt-1",
+        now=datetime.now(UTC) - timedelta(seconds=MAX_LEASE_SECONDS + 1),
+        lease_seconds=MAX_LEASE_SECONDS,
+    )
+
+    dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
+
+    record = sessions_table.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.FAILED
+    assert record.error == SessionError(code=SessionErrorCode.WORKER_FAILED)
+
+
+def test_a_dead_letter_kept_for_a_live_run_is_failed_when_that_run_dies(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round 4's reproduction, with the real queues, redrive and both Lambda entry points.
+
+    Duplicate deliveries of one message each fail on purpose (a live owner), which spends the source
+    queue's receive budget and redrives the logical message to the dead-letter queue. The dead-letter
+    handler finds that owner still live, so it raises rather than acknowledge — returning would delete
+    the last trigger that can recover the session. The owner then dies, and the next dead-letter
+    delivery, after the lease lapses, marks the session `worker_failed`.
+    """
+    clock = FakeClock()
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name=REGION)
+        dynamodb.create_table(
+            TableName=TABLE_NAME,
+            **{key: value for key, value in sessions_table_properties().items() if key not in _CFN_ONLY},
+        )
+        sessions = DynamoSessionStore(TABLE_NAME, region=REGION, clock=clock.wall)
+        sqs = boto3.client("sqs", region_name=REGION)
+        dead_letter_url = sqs.create_queue(
+            QueueName=DLE_QUEUE_NAME,
+            Attributes={"VisibilityTimeout": str(DEAD_LETTER_VISIBILITY_SECONDS), "MessageRetentionPeriod": "1209600"},
+        )["QueueUrl"]
+        dead_letter_arn = sqs.get_queue_attributes(QueueUrl=dead_letter_url, AttributeNames=["QueueArn"])["Attributes"][
+            "QueueArn"
+        ]
+        source_url = sqs.create_queue(
+            QueueName=SOURCE_QUEUE_NAME,
+            Attributes={
+                "VisibilityTimeout": str(QUEUE_VISIBILITY_SECONDS),
+                "RedrivePolicy": json.dumps({"deadLetterTargetArn": dead_letter_arn, "maxReceiveCount": "3"}),
+            },
+        )["QueueUrl"]
+
+        worker_deps = AgentDeps(
+            sessions=sessions,
+            checkpointer=in_memory_checkpointer(),
+            llm_router=PicksOneCandidate(),
+            corpus_factory=lambda: _corpus(tmp_path),
+            clock=clock.wall,
+            monotonic=clock.monotonic,
+            remaining_seconds=lambda: WORKER_TIMEOUT_SECONDS,
+        )
+        monkeypatch.setattr("glean.worker.get_settings", lambda: type("Settings", (), {})())
+        monkeypatch.setattr("glean.worker.build_deps", lambda _settings, *, remaining_seconds=None: worker_deps)
+        # The DLQ handler builds its own store from the environment; give it the moto table and this clock.
+        monkeypatch.setattr("glean.worker.DynamoSessionStore.from_environment", lambda: sessions)
+
+        sessions.create(_queued(), now=clock.now)
+        sqs.send_message(
+            QueueUrl=source_url,
+            MessageBody=SessionMessage(session_id="sess-1", user_sub="user-a").model_dump_json(),
+        )
+
+        # Delivery 1 starts the owner, whose lease covers its whole invocation.
+        first = sqs.receive_message(QueueUrl=source_url, MaxNumberOfMessages=1, WaitTimeSeconds=0)["Messages"][0]
+        sessions.claim("user-a", "sess-1", owner="owner-a", now=clock.now, lease_seconds=MAX_LEASE_SECONDS)
+
+        # Deliveries 2 and 3 are duplicates that arrive while the owner is alive. Each fails, so neither
+        # is acknowledged, and together they use up the source queue's receive budget.
+        receipt = first["ReceiptHandle"]
+        for _ in range(2):
+            sqs.change_message_visibility(QueueUrl=source_url, ReceiptHandle=receipt, VisibilityTimeout=0)
+            duplicate = sqs.receive_message(QueueUrl=source_url, MaxNumberOfMessages=1, WaitTimeSeconds=0)["Messages"][
+                0
+            ]
+            with pytest.raises(SessionBusyError):
+                handler(
+                    {"Records": [{"body": duplicate["Body"], "receiptHandle": duplicate["ReceiptHandle"]}]},
+                    LambdaContext(),
+                )
+            receipt = duplicate["ReceiptHandle"]
+
+        # The budget is spent, so the source queue redrives the logical message to the dead-letter queue.
+        sqs.change_message_visibility(QueueUrl=source_url, ReceiptHandle=receipt, VisibilityTimeout=0)
+        assert "Messages" not in sqs.receive_message(QueueUrl=source_url, MaxNumberOfMessages=1, WaitTimeSeconds=0)
+        dead = sqs.receive_message(QueueUrl=dead_letter_url, MaxNumberOfMessages=1, WaitTimeSeconds=0)["Messages"][0]
+
+        # The owner is still working, so the dead letter is kept: raising is what stops Lambda deleting it.
+        with pytest.raises(SessionBusyError):
+            dlq_handler({"Records": [{"body": dead["Body"], "receiptHandle": dead["ReceiptHandle"]}]}, LambdaContext())
+        running = sessions.get("user-a", "sess-1")
+        assert running is not None
+        assert running.status is SessionStatus.RUNNING
+
+        # The owner dies without writing anything; once its lease has lapsed the retried dead letter fails it.
+        clock.advance(seconds=MAX_LEASE_SECONDS + 1)
+        sqs.change_message_visibility(
+            QueueUrl=dead_letter_url, ReceiptHandle=dead["ReceiptHandle"], VisibilityTimeout=0
+        )
+        retried = sqs.receive_message(QueueUrl=dead_letter_url, MaxNumberOfMessages=1, WaitTimeSeconds=0)["Messages"][0]
+        dlq_handler(
+            {"Records": [{"body": retried["Body"], "receiptHandle": retried["ReceiptHandle"]}]}, LambdaContext()
+        )
+
+        record = sessions.get("user-a", "sess-1")
+        assert record is not None
+        assert record.status is SessionStatus.FAILED
+        assert record.error == SessionError(code=SessionErrorCode.WORKER_FAILED)
 
 
 def test_a_poison_message_is_dropped() -> None:
@@ -792,6 +928,7 @@ def test_a_dead_letter_for_a_finished_session_leaves_it_done(sessions_table: Dyn
     sessions_table.claim("user-a", "sess-1", owner="attempt-1", now=datetime.now(UTC), lease_seconds=MAX_LEASE_SECONDS)
     sessions_table.complete("user-a", "sess-1", MealPlanResult(suggestions=[]), owner="attempt-1")
 
+    # A finished session needs nothing, so its dead letter is acknowledged and leaves it alone.
     dlq_handler({"Records": [_record("sess-1")]}, LambdaContext())
 
     record = sessions_table.get("user-a", "sess-1")

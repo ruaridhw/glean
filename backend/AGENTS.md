@@ -117,9 +117,12 @@ the live attempt then dies. Only a terminal session and a run this invocation co
 acknowledged. The queue allows three receives for that reason (one may be spent failing a duplicate),
 and its 150 s visibility timeout covers the 120 s worker timeout plus up to 10 s of init
 (cfn-lint E3505 is enforced, not suppressed). A crashed run therefore comes back within about 2.5
-minutes, inside the app's five-minute cap. The dead-letter handler only fails a session that is
-nonterminal *and* whose lease has lapsed, so a live run is left alone. One run also has a 90 s budget,
-checked between steps, and the model call gets only what is left of it. Never add a state machine or a
+minutes, inside the app's five-minute cap. The dead-letter handler is a retry loop: it fails a session
+only when it is nonterminal *and* its lease has lapsed, and **raises** when a live run still owns it, so
+the dead letter is kept and retried on the dead-letter queue's own 60 s visibility timeout — a session
+is failed within about a minute of its lease lapsing, at most ~3 minutes after a crash. It acknowledges
+only a session that is missing, terminal, or newly failed. One run also has a 90 s budget, checked
+between steps, and the model call gets only what is left of it. Never add a state machine or a
 scheduler on top (ADR 0026).
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for

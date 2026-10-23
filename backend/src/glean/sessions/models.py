@@ -99,6 +99,20 @@ class ClaimResult(StrEnum):
     FINISHED = "finished"
 
 
+class AbandonResult(StrEnum):
+    """What one ownerless failure attempt achieved, which decides whether its message may be acknowledged.
+
+    The dead-letter handler is the only caller. A successful return from a queue consumer deletes the
+    message, so "still live" must be reported rather than folded into a plain False: acknowledging it
+    would leave a live run with no trigger to recover it if that run then died.
+    """
+
+    FAILED = "failed"
+    FINISHED = "finished"
+    MISSING = "missing"
+    STILL_LIVE = "still_live"
+
+
 class SessionErrorCode(StrEnum):
     """The error catalogue (spec §6.3). The app falls back to a generic message for an unknown code."""
 

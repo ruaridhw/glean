@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from glean.sessions.store import (
+    DEAD_LETTER_VISIBILITY_SECONDS,
     LAMBDA_INIT_SECONDS,
     MAX_LEASE_SECONDS,
     QUEUE_VISIBILITY_MARGIN_SECONDS,
@@ -64,6 +65,17 @@ def test_the_queue_gives_up_after_three_receives() -> None:
         "maxReceiveCount": 3,
     }
     assert dead_letter["MessageRetentionPeriod"] == 1209600
+
+
+def test_the_dead_letter_queue_retries_on_a_cadence_that_beats_the_lease() -> None:
+    """A dead letter kept for a live run must come back soon after that run's lease lapses."""
+    dead_letter = queue_properties("GleanAgentDeadLetterQueue")
+    handler = functions()["AgentDeadLetterFunction"]
+
+    assert dead_letter["VisibilityTimeout"] >= handler["Timeout"]
+    # Lapsed lease -> failed session within about a minute, so a crash is resolved ~3 minutes after it.
+    assert dead_letter["VisibilityTimeout"] <= 60
+    assert DEAD_LETTER_VISIBILITY_SECONDS + MAX_LEASE_SECONDS + LAMBDA_INIT_SECONDS < 300
 
 
 def test_the_queue_outlives_the_worker_as_aws_requires() -> None:

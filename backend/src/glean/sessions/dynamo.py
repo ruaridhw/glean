@@ -13,8 +13,9 @@ invocation deadline (`sessions.store.lease_seconds_for`), so it always ends when
 certainly has. Every later write is conditioned on the token, so a worker that has been taken over
 cannot finish someone else's run.
 
-The dead-letter handler fails a session without an owner token, so its update also requires the lease
-to have lapsed: a live run is left alone, because it will finish on its own.
+The dead-letter handler goes through `fail_if_abandoned`, whose update also requires the lease to have
+lapsed, and which reports `STILL_LIVE` rather than a plain False so the handler can keep its message
+instead of acknowledging a run that is still working.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from glean.sessions.models import (
     MAX_ITEM_BYTES,
     MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
+    AbandonResult,
     AgentSession,
     ClaimResult,
     SessionError,
@@ -209,28 +211,50 @@ class DynamoSessionStore:
             },
         )
 
-    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
-        condition = "#status <> :done AND #status <> :failed"
-        values: dict[str, Any] = {
-            ":failed": SessionStatus.FAILED.value,
-            ":done": SessionStatus.DONE.value,
-            ":error": error.model_dump_json(),
-        }
-        if owner is not None:
-            condition = f"{condition} AND #owner = :owner"
-            values[":owner"] = owner
-        else:
-            # No owner token means the dead-letter handler: it may only fail a session whose attempt is
-            # gone, which the lease is now the only evidence of. A live run is left to finish.
-            condition = f"{condition} AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
-            values[":now_epoch"] = int(self._clock().timestamp())
+    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str) -> bool:
         return self._update(
             user_sub,
             session_id,
             update="SET #status = :failed, #error = :error, updated_at = :now, #ttl = :ttl",
-            condition=condition,
-            values=values,
+            condition="#status = :running AND #owner = :owner",
+            values={
+                ":failed": SessionStatus.FAILED.value,
+                ":running": SessionStatus.RUNNING.value,
+                ":owner": owner,
+                ":error": error.model_dump_json(),
+            },
         )
+
+    def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
+        record = self.get(user_sub, session_id)
+        if record is None:
+            return AbandonResult.MISSING
+        if record.status.terminal:
+            return AbandonResult.FINISHED
+        if not _lease_lapsed(record, self._clock()):
+            return AbandonResult.STILL_LIVE
+        moved = self._update(
+            user_sub,
+            session_id,
+            update="SET #status = :failed, #error = :error, updated_at = :now, #ttl = :ttl",
+            condition=(
+                "#status <> :done AND #status <> :failed AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
+            ),
+            values={
+                ":failed": SessionStatus.FAILED.value,
+                ":done": SessionStatus.DONE.value,
+                ":error": error.model_dump_json(),
+                ":now_epoch": int(self._clock().timestamp()),
+            },
+        )
+        if moved:
+            return AbandonResult.FAILED
+        # Lost the race: either it finished, or a new attempt took the lease over between the read and
+        # the write. Both mean this delivery must not claim the session is abandoned.
+        latest = self.get(user_sub, session_id)
+        if latest is None:
+            return AbandonResult.MISSING
+        return AbandonResult.FINISHED if latest.status.terminal else AbandonResult.STILL_LIVE
 
     @staticmethod
     def _lease_lapsed(record: SessionRecord, now: datetime) -> bool:
