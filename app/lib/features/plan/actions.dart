@@ -136,21 +136,43 @@ Future<void> _explainRatingsOnce(
       .read(userConfigRepositoryProvider)
       .claimRatingsExplainer(userId);
   if (!first || !context.mounted) return;
-  await showDialog<void>(
+  final AppTokens tokens = context.tokens;
+  await showModalBottomSheet<void>(
     context: context,
-    builder: (BuildContext dialogContext) => AlertDialog(
-      title: const Text('How ratings work'),
-      content: const Text(
-        'Thumbs down stops the planner offering that recipe.\n\n'
-        'Thumbs up favours it once six weeks have passed.\n\n'
-        'Long-press a thumb to add a comment for the planner.',
-      ),
-      actions: <Widget>[
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Got it'),
+    showDragHandle: true,
+    builder: (BuildContext sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          tokens.spacing.lg,
+          0,
+          tokens.spacing.lg,
+          tokens.spacing.lg,
         ),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'How ratings work',
+              style: Theme.of(sheetContext).textTheme.titleMedium,
+            ),
+            SizedBox(height: tokens.spacing.md),
+            const Text(
+              'Thumbs down stops the planner offering that recipe.\n\n'
+              'Thumbs up favours it once six weeks have passed.\n\n'
+              'Long-press a thumb to add a comment for the planner.',
+            ),
+            SizedBox(height: tokens.spacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                child: const Text('Got it'),
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
