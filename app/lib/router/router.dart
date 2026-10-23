@@ -20,6 +20,7 @@ import '../features/meals/meals_screen.dart';
 import '../features/onboarding/onboarding_gate.dart';
 import '../features/pantry/pantry_screen.dart';
 import '../features/plan/plan_screen.dart';
+import '../features/plan/proposal_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/shop/shop_screen.dart';
 import 'app_routes.dart';
@@ -202,6 +203,12 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                 builder: (BuildContext context, GoRouterState state) =>
                     const PlanScreen(),
                 routes: <RouteBase>[
+                  GoRoute(
+                    path: 'proposal',
+                    name: AppRoutes.planProposal.name,
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const ProposalScreen(),
+                  ),
                   GoRoute(
                     path: 'recipe/:id',
                     name: AppRoutes.planRecipe.name,

@@ -28,6 +28,11 @@ abstract final class AppRoutes {
   static const RouteSpec mealsDetail = RouteSpec('/meals/:id', 'meals-detail');
 
   static const RouteSpec plan = RouteSpec('/plan', 'plan');
+  // Generate's review: a full-screen task pushed inside the Plan tab, so Back returns to Plan.
+  static const RouteSpec planProposal = RouteSpec(
+    '/plan/proposal',
+    'plan-proposal',
+  );
   // A planned meal's saved recipe, pushed inside the Plan tab so Back returns to Plan.
   static const RouteSpec planRecipe = RouteSpec(
     '/plan/recipe/:id',

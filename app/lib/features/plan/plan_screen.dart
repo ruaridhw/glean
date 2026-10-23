@@ -19,15 +19,9 @@ import 'package:glean/data/providers/viewed_plan_week.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/design_system/design_system.dart';
-import 'package:glean/diagnostics/diagnostics.dart';
-import 'package:glean/logging/logging.dart';
-import 'package:glean/router/app_routes.dart';
-import 'package:go_router/go_router.dart';
 
 import 'actions.dart';
-import 'generate_failure.dart';
 import 'presentation.dart';
-import 'providers/generate_week_controller.dart';
 import 'widgets/generate_button.dart';
 import 'widgets/plan_expiry_banner.dart';
 import 'widgets/plan_progress_card.dart';
@@ -126,58 +120,6 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
     }
   }
 
-  /// Renders a failed Generate attempt from the approved catalogue: the message verbatim, and the action the
-  /// catalogue pairs with it. Internal codes never reach the screen.
-  void _showGenerateFailure(Object error) {
-    final GenerateFailure failure = GenerateFailure.from(error);
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(failure.message),
-          action: switch (failure.action) {
-            GenerateFailureAction.openSettings => SnackBarAction(
-              label: failure.actionLabel!,
-              onPressed: () {
-                if (mounted) context.goNamed(AppRoutes.settings.name);
-              },
-            ),
-            GenerateFailureAction.retry => SnackBarAction(
-              label: failure.actionLabel!,
-              onPressed: () {
-                if (!mounted) return;
-                unawaited(
-                  ref.read(generateWeekControllerProvider.notifier).retry(),
-                );
-              },
-            ),
-            GenerateFailureAction.report => SnackBarAction(
-              label: failure.actionLabel!,
-              onPressed: () => unawaited(_reportGenerateFailure(messenger)),
-            ),
-            null => null,
-          },
-        ),
-      );
-  }
-
-  /// `invalid_request`'s Report: the same export Settings offers, so a planner bug travels with the app's own
-  /// record of what happened.
-  Future<void> _reportGenerateFailure(ScaffoldMessengerState messenger) async {
-    final GleanLogger? logger = ref.read(gleanLoggerProvider);
-    try {
-      final String prefix = await ref.read(diagnosticsExportProvider)();
-      GleanSnackBar.showOn(messenger, 'Diagnostics exported to $prefix');
-    } catch (error) {
-      await logger?.error('export diagnostics failed: ${describeError(error)}');
-      GleanSnackBar.showOn(
-        messenger,
-        'Could not export diagnostics. Try again.',
-      );
-    }
-  }
-
   void _goToPreviousWeek() {
     ref
         .read(viewedPlanWeekProvider.notifier)
@@ -206,31 +148,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
       pantryItemsProvider,
     );
 
-    // Surfaces generation's outcome exactly once per attempt, guarded by `wasPending` so it doesn't fire on the
-    // controller's initial, never-pending `build()` state. A failure (a guarded, aborted half-write) always
-    // surfaces here too.
-    ref.listen<AsyncValue<int>>(generateWeekControllerProvider, (
-      AsyncValue<int>? previous,
-      AsyncValue<int> next,
-    ) {
-      final bool wasPending = previous?.isLoading ?? false;
-      if (!wasPending) return;
-      next.when(
-        data: (count) {
-          ref.read(hapticsProvider).mediumImpact();
-          GleanSnackBar.show(
-            context,
-            count == 0
-                ? 'No recipes fit right now. Try again.'
-                : 'Week generated · any missing ingredients were added to your shopping list',
-          );
-        },
-        error: (Object error, StackTrace stackTrace) {
-          _showGenerateFailure(error);
-        },
-        loading: () {},
-      );
-    });
+    // The screen that owns the review surfaces its own failures; the Plan tab has no Generate feedback left.
 
     final bool loading = !entriesAsync.hasValue || !configAsync.hasValue;
     final List<MealPlanEntryView> entries =
