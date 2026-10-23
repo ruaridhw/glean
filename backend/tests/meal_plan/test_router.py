@@ -19,6 +19,7 @@ from glean.meal_plan.dietary_decisions import (
     dietary_questions,
     question_hash,
 )
+from glean.meal_plan.pipeline import NO_MEALS_WEEK_SUMMARY
 from glean.meal_plan.schemas import (
     MAX_COOKED_HISTORY_ITEMS,
     CorpusMealPlanRecipe,
@@ -26,6 +27,7 @@ from glean.meal_plan.schemas import (
     MealPlanRecipe,
     MealPlanRequest,
     MealPlanResponse,
+    ReasonKind,
 )
 from glean.meal_plan.service import generate_meal_plan
 from glean.recipe_api.blob_store import FilesystemBlobStore
@@ -208,6 +210,42 @@ def test_corpus_mode_drops_recipes_that_were_not_offered(tmp_path) -> None:
     assert [s.external_id for s in result.suggestions] == ["rec_salmon"]
 
 
+def test_corpus_mode_returns_the_proposal_additively(tmp_path) -> None:
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = CorpusMealPlanResponse(
+        week_summary="Two easy dinners.",
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id="rec_bolognese",
+                title="Beef Bolognese",
+                reason="Uses the mince.",
+                reason_kind=ReasonKind.URGENT_ITEM,
+            )
+        ],
+    )
+
+    result = generate_meal_plan(
+        _corpus_request(), llm_router=llm_router, corpus=_corpus(tmp_path), rng=random.Random(0)
+    ).model_dump(mode="json")
+
+    assert set(result) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
+    assert result["week_summary"] == "Two easy dinners."
+    assert result["degraded"] is False
+    assert result["planned_alternatives"] == []
+    suggestion = result["suggestions"][0]
+    # The V1 fields are untouched; the proposal's own fields are added beside them.
+    assert {key: suggestion[key] for key in ("recipe_id", "external_id", "title", "reason")} == {
+        "recipe_id": None,
+        "external_id": "rec_bolognese",
+        "title": "Beef Bolognese",
+        "reason": "Uses the mince.",
+    }
+    assert suggestion["missing_ingredients"] == []
+    assert suggestion["uses_up"] == []
+    assert suggestion["reason_kind"] == "urgent_item"
+    assert suggestion["alternative"]["external_id"] == "rec_salmon"
+
+
 def test_corpus_mode_skips_the_model_when_nothing_is_eligible(tmp_path) -> None:
     llm_router = MagicMock()
     request = _corpus_request(exclude_external_ids=["rec_bolognese", "rec_salmon"])
@@ -231,7 +269,13 @@ def test_meal_plan_endpoint_accepts_corpus_requests_without_recipe_history(
         response = client.post("/meal-plan", headers=auth_headers, json=body)
 
     assert response.status_code == 200
-    assert response.json() == {"suggestions": []}
+    # Additive: the sync route's own behaviour is unchanged and a plan that keeps nothing stays empty.
+    assert response.json() == {
+        "suggestions": [],
+        "week_summary": NO_MEALS_WEEK_SUMMARY,
+        "planned_alternatives": [],
+        "degraded": False,
+    }
 
 
 class _ModelThatSuggestsEveryCorpusRecipe:
