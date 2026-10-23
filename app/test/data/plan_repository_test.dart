@@ -892,6 +892,39 @@ void main() {
       );
 
       test(
+        'replacing the entry\'s recipe clears the old recipe\'s rating and note',
+        () async {
+          final int entryId = await cookedEntry();
+          await repository.rateWithNote(
+            entryId: entryId,
+            userId: userId,
+            rating: MealThumb.down,
+            note: 'too sweet',
+          );
+          final int replacement = await createRecipe('Replacement');
+
+          await repository.replaceEntryRecipe(
+            entryId: entryId,
+            userId: userId,
+            recipeId: replacement,
+            recipeTitle: 'Replacement',
+          );
+
+          expect(
+            await ratingRows(),
+            0,
+            reason:
+                'a verdict belongs to the meal that was cooked, not the new recipe',
+          );
+          final MealPlanEntryView swapped = await readEntry(entryId);
+          expect(swapped.recipeId, replacement);
+          expect(swapped.recipeTitle, 'Replacement');
+          expect(swapped.rating, isNull);
+          expect(swapped.note, isNull);
+        },
+      );
+
+      test(
         'a thumbs down older than the window still travels, so it does not expire',
         () async {
           // One clock for the window and the ages in it: the helper cooks on 6 Jan, so the reference is the
