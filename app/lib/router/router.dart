@@ -124,6 +124,15 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
         },
       ),
 
+      // --- Generate's review: a full-screen task outside every tab branch, like intake. Back returns to
+      // whichever tab pushed it, and the tab bar is not in the way of the review's own action bar. ---
+      GoRoute(
+        path: AppRoutes.planProposal.path,
+        name: AppRoutes.planProposal.name,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ProposalScreen(),
+      ),
+
       GoRoute(
         path: AppRoutes.error.path,
         name: AppRoutes.error.name,
@@ -203,12 +212,6 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                 builder: (BuildContext context, GoRouterState state) =>
                     const PlanScreen(),
                 routes: <RouteBase>[
-                  GoRoute(
-                    path: 'proposal',
-                    name: AppRoutes.planProposal.name,
-                    builder: (BuildContext context, GoRouterState state) =>
-                        const ProposalScreen(),
-                  ),
                   GoRoute(
                     path: 'recipe/:id',
                     name: AppRoutes.planRecipe.name,
