@@ -537,6 +537,47 @@ void main() {
     );
   });
 
+  for (final double scale in <double>[1.3, 2.0]) {
+    gleanWidgetTest(
+      'the review fits a 320 px screen at ${scale}x text, proposal and swap',
+      (tester) async {
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        tester.view.physicalSize = const Size(320, 844);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+
+        final h = AppTestHarness(
+          httpClient: proposalBackend(result: sampleResult()),
+        );
+        addTearDown(h.dispose);
+
+        await openProposal(tester, h);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'the bottom action bar must wrap, not overflow',
+        );
+        expect(find.text('Add 2 dinners to plan'), findsOneWidget);
+
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const ValueKey<String>('suggestion-0')),
+            matching: find.text('Swap'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Use alternative'), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'the swap panel action must wrap inside the card too',
+        );
+      },
+    );
+  }
+
   gleanWidgetTest(
     'an older backend result shows no summary and no swap, and still adds',
     (tester) async {
