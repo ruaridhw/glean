@@ -49,7 +49,7 @@ def test_the_queue_gives_up_on_a_message_after_two_attempts() -> None:
     queue = queue_properties("GleanAgentQueue")
     dead_letter = queue_properties("GleanAgentDeadLetterQueue")
 
-    assert queue["VisibilityTimeout"] == 60
+    assert queue["VisibilityTimeout"] == 130
     assert queue["RedrivePolicy"] == {
         "deadLetterTargetArn": {"GetAtt": "GleanAgentDeadLetterQueue.Arn"},
         "maxReceiveCount": 2,
@@ -57,7 +57,21 @@ def test_the_queue_gives_up_on_a_message_after_two_attempts() -> None:
     assert dead_letter["MessageRetentionPeriod"] == 1209600
 
 
-def test_the_worker_takes_one_message_at_a_time_and_renews_the_lease() -> None:
+def test_the_queue_outlives_the_worker_as_aws_requires() -> None:
+    """cfn-lint E3505: the visibility timeout must be at least the function timeout (ADR 0026)."""
+    worker = functions()["AgentWorkerFunction"]
+
+    assert queue_properties("GleanAgentQueue")["VisibilityTimeout"] > worker["Timeout"]
+
+
+def test_the_template_suppresses_no_lint_rule() -> None:
+    """A suppressed rule hides a deployment constraint; the queue/worker pairing has to satisfy it."""
+    template = load(TEMPLATE)
+
+    assert "Metadata" not in template or "cfn-lint" not in template.get("Metadata", {})
+
+
+def test_the_worker_takes_one_message_at_a_time() -> None:
     worker = functions()["AgentWorkerFunction"]
     events = [event for event in worker["Events"].values() if event["Type"] == "SQS"]
 

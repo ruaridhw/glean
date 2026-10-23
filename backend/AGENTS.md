@@ -36,7 +36,7 @@ src/glean/
 │                     #   checkpointer, the graph nodes and the progress lines. The ONLY place that may
 │                     #   import LangGraph (ruff TID251, like glean/llm.py for LangChain)
 ├── sessions/         # agent sessions: the agent_sessions item models, the in-memory and DynamoDB
-│                     #   stores, the SQS queue + visibility lease, and the local factories
+│                     #   stores (owner token + lease, gzipped inputs), the SQS queue, the factories
 ├── dev/              # local-only helpers: the queue consumer for Docker Compose, a stub meal-plan
 │                     #   model, and the dev router
 ├── rate_limit.py     # enforce_ai_rate_limit: the per-user limit dependency for paid-model routes
@@ -105,9 +105,14 @@ V1's graph wraps the corpus pipeline only.
 
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
 conditional `queued -> running` (a duplicate delivery finds it running and drops), runs
-`agent.start`, and writes `done` or `failed`. Liveness is the queue lease: a 60 s visibility timeout
-renewed every 20 s, and the dead-letter queue's handler marks a session `worker_failed` once SQS gives
-up. Never add a state machine or a scheduler on top (ADR 0026).
+`agent.start`, and writes `done` or `failed`. Liveness is the session's own lease, not the message's
+visibility: the attempt that starts a run takes an owner token and a 120 s lease, every later write is
+conditioned on that token, and a delivery may take over a `running` session whose lease has lapsed —
+resuming it from its LangGraph checkpoint. A crashed run therefore comes back within about two minutes,
+inside the app's five-minute cap; the queue's 130 s visibility timeout stays above the worker's 120 s
+timeout (cfn-lint E3505 is enforced, not suppressed), and the dead-letter queue's handler marks a
+session `worker_failed` once SQS gives up. One run also has a 90 s budget, checked between steps, and
+the model call gets only what is left of it. Never add a state machine or a scheduler on top (ADR 0026).
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
   `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a
@@ -115,7 +120,9 @@ up. Never add a state machine or a scheduler on top (ADR 0026).
   seeds the sampler). A wider graph (`plan <-> act`, questions, cancel) changes this module only.
 - **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
-  and the cursor is an absolute index, so a poll is idempotent.
+  and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
+  `create` refuses (422) a request whose item would not leave room for the outcome: V8's 400-row
+  history with 500-character notes is a real input, and one item is 400 KB.
 - **`AGENT_RUNNER=inline`** (unit tests, evals, `make start-backend` on the host) runs the agent in
   the request against the in-memory store and saver. Deployed and Compose run `queue`.
   `make start-backend-docker` brings up DynamoDB Local, ElasticMQ, the worker and a bootstrap that

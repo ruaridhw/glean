@@ -103,6 +103,11 @@ curl -s localhost:8000/meal-plan/sessions -H 'content-type: application/json' -d
 Set `AGENT_LLM_STUB=0` on the worker to use the real model instead, which needs `OPENROUTER_API_KEY`
 in `backend/.env`.
 
+A run that dies mid-graph is recoverable: the worker that owns a session renews its lease as the graph
+moves, and the queue hands the message out again about two minutes after a crash, when a new attempt
+takes the lease over and resumes from the LangGraph checkpoint. That is well inside the app's
+five-minute cap, which is why the app shows `stalled` only when the network, not the worker, gave up.
+
 Only the containers can reach `dynamodb-local` and `elasticmq`. `make start-backend` runs on the
 host, so it cannot enqueue: set `AGENT_RUNNER=inline` in `backend/.env` to run sessions in the
 request instead of on a worker. That mode is also what unit tests and evals use, and it keeps
