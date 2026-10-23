@@ -409,6 +409,31 @@ class PlanRepository {
         );
   }
 
+  /// Points an existing entry at a different recipe, a swap the user accepted on the proposal. The entry keeps
+  /// its id, date and servings, so the week's shape does not move; [recipeTitle] and the corpus snapshot come
+  /// from the replacement recipe, exactly as [addEntry] records them. Its derived shopping rows are cleared by
+  /// `ShoppingRepository.clearGapsForEntry` and re-added from the new recipe in the same transaction.
+  Future<void> replaceEntryRecipe({
+    required int entryId,
+    required String userId,
+    required int recipeId,
+    required String recipeTitle,
+  }) async {
+    final recipe =
+        await (_db.select(_db.recipes)
+              ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
+            .getSingle();
+    await (_db.update(
+      _db.mealPlanEntries,
+    )..where((t) => t.id.equals(entryId) & t.userId.equals(userId))).write(
+      MealPlanEntriesCompanion(
+        recipeId: Value(recipeId),
+        recipeTitle: Value(recipeTitle),
+        externalIdSnapshot: Value(recipe.externalId),
+      ),
+    );
+  }
+
   /// Deletes the entry; its plan-derived shopping rows cascade away via `onDelete: cascade`.
   Future<DeletedPlanEntry> deleteWithSnapshot({
     required int id,
