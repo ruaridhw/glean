@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MEALS = 3
+_REASON_KINDS = {"urgent_item", "profile", "feedback", "balance", "history", "answer"}
 
 
 def _body(**overrides: Any) -> dict[str, Any]:
@@ -108,6 +109,22 @@ def _corpus(tmp_path) -> RecipeCorpusStore:
     return corpus
 
 
+class _InventingRouter:
+    """A model that answers with recipes nobody offered, so `finalise` keeps nothing."""
+
+    def invoke(self, _feature: object, _schema: type, *, user: str, **_kwargs: object) -> CorpusMealPlanResponse:
+        return CorpusMealPlanResponse(
+            week_summary="An invented week.",
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=f"rec_invented_{n}", title=f"Invented {n}", reason="Made up.")
+                for n in range(MEALS)
+            ],
+        )
+
+    def model_id_for(self, _feature: object, **_kwargs: object) -> str:
+        return "fake/model"
+
+
 def _sign_in_as_header_user(request: Request) -> str:
     return request.headers.get("x-test-user", "user-a")
 
@@ -166,7 +183,7 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "rec_tofu_noodles",
         "rec_chickpea_curry",
     }
-    # The plan shape is the synchronous endpoint's, `uses_up` included.
+    # The plan shape is the synchronous endpoint's, `uses_up` included, plus V3's proposal fields.
     assert set(view["result"]["suggestions"][0]) == {
         "recipe_id",
         "external_id",
@@ -174,7 +191,40 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "reason",
         "missing_ingredients",
         "uses_up",
+        "reason_kind",
+        "alternative",
     }
+    assert set(view["result"]) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
+    assert view["result"]["degraded"] is False
+    assert view["result"]["week_summary"] == "3 dinners for this week."
+
+
+def test_a_finished_session_carries_a_complete_proposal(api: TestClient) -> None:
+    view = _plan_to_completion(api, _body())
+
+    result = view["result"]
+    assert all(suggestion["reason_kind"] in _REASON_KINDS for suggestion in result["suggestions"])
+    assert all(suggestion["reason"] for suggestion in result["suggestions"])
+    # Four recipes were offered and three were chosen, so one candidate is left to swap to.
+    alternatives = [suggestion["alternative"] for suggestion in result["suggestions"] if suggestion["alternative"]]
+    assert len(alternatives) == 1
+    chosen = {suggestion["external_id"] for suggestion in result["suggestions"]}
+    assert next(alternative["external_id"] for alternative in alternatives) not in chosen
+
+
+def test_an_answer_that_keeps_no_meals_ends_the_session_with_the_fallback_plan(api: TestClient) -> None:
+    api.app.dependency_overrides[get_llm_router] = lambda: _InventingRouter()
+
+    view = _plan_to_completion(api, _body())
+
+    assert view["status"] == "done"
+    assert view["error"] is None
+    result = view["result"]
+    assert result["degraded"] is True
+    assert len(result["suggestions"]) == MEALS
+    assert all(suggestion["reason"] for suggestion in result["suggestions"])
+    assert any(suggestion["alternative"] is not None for suggestion in result["suggestions"])
+    assert result["week_summary"]
 
 
 def test_the_session_result_matches_the_synchronous_endpoint_for_the_same_seed(

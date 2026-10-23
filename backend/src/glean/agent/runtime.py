@@ -39,13 +39,14 @@ if TYPE_CHECKING:
     from glean.sessions.models import AgentSession
 
 # CloudWatch metric names, all in the `Glean` namespace:
-#   SessionsStarted, SessionsCompleted, SessionsFailed  Count
-#   SessionWallTime                                     Milliseconds, for every attempt that started
-# `SessionsDegraded` is reserved for V7's fallback (the scorer's best plan with template reasons);
-# V1 has no degraded path to count.
+#   SessionsStarted, SessionsCompleted, SessionsFailed, SessionsDegraded  Count
+#   SessionWallTime                                                     Milliseconds, for every attempt
+# A degraded week is a fallback the household never sees (spec §6.5), so the count is how a regression
+# in the model's answer shows up at all; it is how V3's fallback was reported before V7 adds the scorer.
 STARTED = "SessionsStarted"
 COMPLETED = "SessionsCompleted"
 FAILED = "SessionsFailed"
+DEGRADED = "SessionsDegraded"
 WALL_TIME = "SessionWallTime"
 
 
@@ -138,9 +139,17 @@ def _completed(deps: AgentDeps, session: AgentSession, result: MealPlanResult, *
         logger.warning("session lease moved on before the plan was written", extra={"session_id": session.session_id})
         return
     metrics.add_metric(name=COMPLETED, unit=MetricUnit.Count, value=1)
+    if result.degraded:
+        # The fallback plan looks like any other to the household (spec §6.5), so this count is how a
+        # regression in the model's answer shows up at all.
+        metrics.add_metric(name=DEGRADED, unit=MetricUnit.Count, value=1)
     logger.info(
         "meal plan session completed",
-        extra={"session_id": session.session_id, "suggestions": len(result.suggestions)},
+        extra={
+            "session_id": session.session_id,
+            "suggestions": len(result.suggestions),
+            "degraded": result.degraded,
+        },
     )
 
 

@@ -9,10 +9,14 @@ queues or LangGraph: the steps take plain values, and the LLM call goes through 
   urgent pantry item under the candidates that use it, and writes the model's one user message.
   Dietary flags, the time cap, meals already planned and the six-week recency floor are applied
   here (V2 and V4), so the offered set is the dietary guarantee.
-- **choose** is the only LLM step. It asks the model to pick from the candidates.
+- **choose** is the only LLM step. It asks the model to pick from the candidates, and for the week's
+  one-line summary, a reason kind per meal and one alternative per cube and per planned meal.
 - **finalise** rejects anything the model was not offered (ids, already-planned meals, over-long
-  lists) and writes each meal's reason: the model's prose without any sentence that dates
-  something, then one sentence the server wrote, plus `uses_up`.
+  lists, an alternative that is not an unused candidate) and writes the week's proposal: each meal's
+  reason -- the model's prose without any sentence that dates something, then one sentence the server
+  wrote -- plus `uses_up`, a `reason_kind`, and one alternative per card and per planned corpus meal.
+- **degraded** is the fallback the graph writes when the model's answer keeps nothing: the sampler's
+  best candidates with template text, every field of the proposal filled, flagged `degraded`.
 """
 
 from __future__ import annotations
@@ -28,11 +32,15 @@ from glean.llm import Feature
 from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
+    CorpusMealPlanAlternative,
     CorpusMealPlanRecipe,
     CorpusMealPlanResponse,
+    MealPlanAlternative,
     MealPlanRequest,
     MealPlanResult,
     MealPlanSuggestion,
+    PlannedMealAlternative,
+    ReasonKind,
     UsedUpPantryItem,
 )
 from glean.observability import logger
@@ -61,7 +69,21 @@ Rules:
   that many days ago and it is offered only because too few fresh candidates remained; choose one of the
   others whenever one fits.
 - Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
-  fine; do not pad the list with weaker choices to reach the limit."""
+  fine; do not pad the list with weaker choices to reach the limit.
+- Write week_summary as one line for the week as a whole, such as "Fish twice, and the coriander gets used".
+- Give every meal a reason_kind: urgent_item (an item going off is why), profile, feedback, balance (the
+  shape of the week), history (what the household cooked recently) or answer.
+- Give every meal one alternative: another candidate you did not choose, with one sentence on why it works.
+  Alternatives must differ from every meal you chose and from each other.
+- If planned_meals lists meals already in the week, give each of them one alternative in
+  planned_alternatives. Those meals are never chosen again: the week is topped up around them."""
+
+# The whole corpus as one page, so an already-planned meal's title can be looked up without a read per id.
+_ALL_RECIPES = 1_000_000
+# Template text for a proposal the server had to write itself: spec §6.2's degraded fallback.
+_TEMPLATE_MEAL_REASON = "A reliable pick for this week."
+_TEMPLATE_ALTERNATIVE_REASON = "Another option from this week's shortlist."
+NO_MEALS_WEEK_SUMMARY = "No dinners for this week."
 
 _MAX_CANDIDATE_INGREDIENTS = 12
 # How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
@@ -96,6 +118,18 @@ class UrgentUse(BaseModel):
     expires_in_days: int | None = None
 
 
+class PlannedMeal(BaseModel):
+    """A meal already in the week that came from the corpus.
+
+    Generation tops up around it and never replaces it (ADR 0020), and it can still be swapped by the
+    household, so the model is asked for one alternative per planned meal. An id the corpus does not
+    hold is the app's own plan entry: it still blocks a pick, but there is no corpus recipe to swap it to.
+    """
+
+    external_id: str
+    title: str
+
+
 class PreparedPlan(BaseModel):
     """What `prepare` hands `choose`: the model's message, and what `finalise` validates against.
 
@@ -110,6 +144,14 @@ class PreparedPlan(BaseModel):
     excluded_ids: list[str] = Field(description="Recipes already in the plan; generation only ever tops up.")
     urgent_uses: dict[str, list[UrgentUse]] = Field(
         description="Per offered external_id, the urgent pantry items that recipe uses, soonest to go off first."
+    )
+    titles: dict[str, str] = Field(
+        default_factory=dict,
+        description="Every offered external_id's title, so an alternative the server picks has one to show.",
+    )
+    planned: list[PlannedMeal] = Field(
+        default_factory=list,
+        description="The meals already in the week that came from the corpus, with their titles.",
     )
 
     @property
@@ -156,12 +198,14 @@ def prepare(
         now=request_now,
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
+    planned = _planned_corpus_meals(corpus, request.exclude_external_ids)
     logger.info(
         "generating corpus meal plan",
         extra={
             "pantry_items": len(request.pantry),
             "candidates": len(candidates),
             "urgent_pantry_items": len({item.name for items in urgent_uses.values() for item in items}),
+            "planned_meals": len(planned),
         },
     )
     context = {
@@ -185,6 +229,8 @@ def prepare(
         "purchase_tolerance": request.purchase_tolerance,
         "meals_per_week": request.meals_per_week,
         "dietary_flags": request.dietary_flags,
+        # Meals already in the week, which the model may offer an alternative for but never replace.
+        "planned_meals": [meal.model_dump() for meal in planned],
     }
     return PreparedPlan(
         user=json.dumps(context, default=str),
@@ -199,50 +245,194 @@ def prepare(
             ]
             for candidate in candidates
         },
+        titles={candidate.external_id: candidate.title for candidate in candidates},
+        planned=planned,
     )
+
+
+def _planned_corpus_meals(corpus: RecipeCorpusStore, excluded_ids: Sequence[str]) -> list[PlannedMeal]:
+    """The already-planned meals the corpus holds, in the order the request listed them.
+
+    One index read, not one blob read per id: this runs on every Generate and the list is short.
+    """
+    wanted = list(dict.fromkeys(excluded_ids))
+    if not wanted:
+        return []
+    by_id = {summary.external_id: summary for summary in corpus.search(per_page=_ALL_RECIPES)[0]}
+    return [
+        PlannedMeal(external_id=external_id, title=by_id[external_id].title)
+        for external_id in wanted
+        if external_id in by_id
+    ]
 
 
 def choose(
     prepared: PreparedPlan, *, llm_router: LLMRouter, timeout_ms: int | None = None
-) -> list[CorpusMealPlanRecipe]:
-    """Ask the model to pick from the candidates. Its answer is unvalidated; `finalise` judges it.
+) -> CorpusMealPlanResponse:
+    """Ask the model for the week: its picks, their alternatives and the one-line summary.
 
-    *timeout_ms* bounds the call. The agent passes what is left of its 90 s budget, so one slow model
-    cannot hold the run past the point where the worker can still write an outcome.
+    Its answer is unvalidated; `finalise` judges every id in it. *timeout_ms* bounds the call: the agent
+    passes what is left of its 90 s budget, so one slow model cannot hold the run past the point where
+    the worker can still write an outcome.
     """
-    response = llm_router.invoke(
+    return llm_router.invoke(
         Feature.MEAL_PLAN_GENERATION,
         CorpusMealPlanResponse,
         system=CORPUS_MEAL_PLAN_SYSTEM_PROMPT,
         user=prepared.user,
         timeout_ms=timeout_ms,
     )
-    return response.suggestions
 
 
-def finalise(prepared: PreparedPlan, picks: Sequence[CorpusMealPlanRecipe]) -> MealPlanResult:
-    """Keep only choices that are valid, and write each meal's reason and `uses_up`.
+def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanResult:
+    """Keep only the choices that are valid, and write the week's proposal.
 
     Valid means: offered to the model (so the dietary decisions, the time cap and the recency floor
     held), not already in the plan (generation only tops up, ADR 0020), and no more than one per slot.
+    An alternative that is not an unused candidate -- invented, already planned, or another slice of
+    the same meal -- is dropped and replaced from the shortlist, so one bad id never costs the
+    household its week.
     """
     offered = set(prepared.offered_ids)
     excluded = set(prepared.excluded_ids)
-    invented = [pick.external_id for pick in picks if pick.external_id not in offered]
+    invented = [pick.external_id for pick in draft.suggestions if pick.external_id not in offered]
     if invented:
         logger.error("corpus meal plan chose recipes that were not offered; dropping", extra={"external_ids": invented})
-    planned = [pick.external_id for pick in picks if pick.external_id in excluded]
+    planned = [pick.external_id for pick in draft.suggestions if pick.external_id in excluded]
     if planned:
         logger.error("corpus meal plan chose recipes already in the plan; dropping", extra={"external_ids": planned})
-    kept = [pick for pick in picks if pick.external_id in offered and pick.external_id not in excluded]
+    kept = [pick for pick in draft.suggestions if pick.external_id in offered and pick.external_id not in excluded]
     if len(kept) > prepared.meals_per_week:
         logger.error(
             "corpus meal plan exceeded meals_per_week; truncating",
             extra={"returned": len(kept), "limit": prepared.meals_per_week},
         )
-    chosen = _reconciled(kept[: prepared.meals_per_week], prepared)
-    logger.info("meal plan generated", extra={"count": len(chosen)})
-    return MealPlanResult(suggestions=chosen)
+    choices = kept[: prepared.meals_per_week]
+    chosen = _reconciled(choices, prepared)
+    unavailable = excluded | {suggestion.external_id for suggestion in chosen if suggestion.external_id}
+    suggestions: list[MealPlanSuggestion] = []
+    for suggestion, pick in zip(chosen, choices, strict=True):
+        alternative = _alternative_for(pick.alternative, prepared, unavailable=unavailable)
+        if alternative is not None and alternative.external_id is not None:
+            unavailable.add(alternative.external_id)
+        suggestions.append(suggestion.model_copy(update={"alternative": alternative}))
+    planned_alternatives = _planned_alternatives(draft, prepared, unavailable=unavailable)
+    logger.info(
+        "meal plan generated",
+        extra={"count": len(suggestions), "planned_alternatives": len(planned_alternatives)},
+    )
+    return MealPlanResult(
+        suggestions=suggestions,
+        week_summary=_week_summary(draft.week_summary, count=len(suggestions)),
+        planned_alternatives=planned_alternatives,
+    )
+
+
+def degraded(prepared: PreparedPlan) -> MealPlanResult:
+    """The fallback proposal: the best candidates the sampler offered, with template text throughout.
+
+    Spec §6.2's fallback, for a run whose model step gave nothing usable (and, from V7, one that spent
+    its budget or errored). It is a proposal like any other -- a summary, a reason kind per meal, an
+    alternative per card and per planned meal -- so the household cannot tell; `degraded` and the logs
+    are the only record (spec §6.5).
+    """
+    draft = CorpusMealPlanResponse(
+        week_summary="",
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id=external_id,
+                title=prepared.titles.get(external_id, external_id),
+                reason=_TEMPLATE_MEAL_REASON,
+                reason_kind=ReasonKind.URGENT_ITEM if _urgent_items(prepared, external_id) else ReasonKind.BALANCE,
+            )
+            for external_id in prepared.offered_ids[: prepared.meals_per_week]
+        ],
+    )
+    result = finalise(prepared, draft)
+    logger.warning("meal plan fell back to the sampler's picks", extra={"count": len(result.suggestions)})
+    return result.model_copy(update={"degraded": True})
+
+
+def _week_summary(summary: str, *, count: int) -> str:
+    """The model's line, kept to one line, or template text: a corpus proposal's summary is never blank."""
+    line = " ".join(summary.split())
+    if line:
+        return line
+    if count == 0:
+        return NO_MEALS_WEEK_SUMMARY
+    if count == 1:
+        return "One dinner for this week."
+    return f"{count} dinners for this week."
+
+
+def _alternative_for(
+    model_alternative: CorpusMealPlanAlternative | None,
+    prepared: PreparedPlan,
+    *,
+    unavailable: set[str],
+) -> MealPlanAlternative | None:
+    """The model's alternative when it is an unused candidate, else the next-best one nothing else uses."""
+    if model_alternative is not None:
+        if (
+            model_alternative.external_id in set(prepared.offered_ids)
+            and model_alternative.external_id not in unavailable
+        ):
+            return _as_alternative(_suggestion_for(model_alternative, prepared))
+        logger.error(
+            "dropping an alternative that is not an unused candidate",
+            extra={"external_id": model_alternative.external_id},
+        )
+    spare = next((external_id for external_id in prepared.offered_ids if external_id not in unavailable), None)
+    if spare is None:
+        return None
+    return _as_alternative(_template_alternative(prepared, spare))
+
+
+def _planned_alternatives(
+    draft: CorpusMealPlanResponse,
+    prepared: PreparedPlan,
+    *,
+    unavailable: set[str],
+) -> list[PlannedMealAlternative]:
+    """One alternative per planned corpus meal, so a meal already in the week can be swapped too."""
+    planned_ids = {meal.external_id for meal in prepared.planned}
+    offered = {entry.planned_external_id: entry.alternative for entry in draft.planned_alternatives}
+    unknown = sorted(set(offered) - planned_ids)
+    if unknown:
+        logger.error(
+            "dropping alternatives for meals that are not corpus meals in the plan", extra={"external_ids": unknown}
+        )
+    entries: list[PlannedMealAlternative] = []
+    for meal in prepared.planned:
+        alternative = _alternative_for(offered.get(meal.external_id), prepared, unavailable=unavailable)
+        if alternative is None or alternative.external_id is None:
+            continue
+        unavailable.add(alternative.external_id)
+        entries.append(
+            PlannedMealAlternative(
+                external_id=meal.external_id, alternative=MealPlanSuggestion(**alternative.model_dump())
+            )
+        )
+    return entries
+
+
+def _as_alternative(suggestion: MealPlanSuggestion) -> MealPlanAlternative:
+    """A swap target: the same line, without an alternative of its own."""
+    return MealPlanAlternative(**suggestion.model_dump(exclude={"alternative"}))
+
+
+def _template_alternative(prepared: PreparedPlan, external_id: str) -> MealPlanSuggestion:
+    """An alternative the server picked -- the next-best candidate -- with template reason text."""
+    items = _urgent_items(prepared, external_id)
+    return _suggestion_for(
+        CorpusMealPlanAlternative(
+            external_id=external_id,
+            title=prepared.titles.get(external_id, external_id),
+            reason=_TEMPLATE_ALTERNATIVE_REASON,
+            reason_kind=ReasonKind.URGENT_ITEM if items else ReasonKind.BALANCE,
+        ),
+        prepared,
+    )
 
 
 def _urgent_item_payload(item: PantryItem, *, reference_date: date) -> dict[str, object]:
@@ -263,24 +453,32 @@ def _reconciled(chosen: Sequence[CorpusMealPlanRecipe], prepared: PreparedPlan) 
     always carries exactly one expiry statement, naming up to `_MAX_NAMED_URGENT_ITEMS` of them, while
     `uses_up` carries every urgent item the recipe uses.
     """
-    suggestions: list[MealPlanSuggestion] = []
-    for suggestion in chosen:
-        items = sorted(
-            prepared.urgent_uses.get(suggestion.external_id, ()),
-            key=lambda urgent_item: (urgent_item.expires_in_days or 0, urgent_item.name.casefold()),
-        )
-        reason = suggestion.reason
-        if items:
-            reason = _canonical_reason(reason, items, reference_date=prepared.reference_date)
-        suggestions.append(
-            MealPlanSuggestion(
-                external_id=suggestion.external_id,
-                title=suggestion.title,
-                reason=reason,
-                uses_up=[_used_up(item, reference_date=prepared.reference_date) for item in items],
-            )
-        )
-    return suggestions
+    return [_suggestion_for(meal, prepared) for meal in chosen]
+
+
+def _suggestion_for(
+    meal: CorpusMealPlanRecipe | CorpusMealPlanAlternative, prepared: PreparedPlan
+) -> MealPlanSuggestion:
+    """One meal as a proposal line: the reason with its canonical expiry sentence, plus `uses_up`."""
+    items = _urgent_items(prepared, meal.external_id)
+    reason = meal.reason
+    if items:
+        reason = _canonical_reason(reason, items, reference_date=prepared.reference_date)
+    return MealPlanSuggestion(
+        external_id=meal.external_id,
+        title=meal.title,
+        reason=reason,
+        uses_up=[_used_up(item, reference_date=prepared.reference_date) for item in items],
+        reason_kind=meal.reason_kind,
+    )
+
+
+def _urgent_items(prepared: PreparedPlan, external_id: str) -> list[UrgentUse]:
+    """The urgent pantry items a recipe uses, soonest to go off first."""
+    return sorted(
+        prepared.urgent_uses.get(external_id, ()),
+        key=lambda urgent_item: (urgent_item.expires_in_days or 0, urgent_item.name.casefold()),
+    )
 
 
 def _canonical_reason(reason: str, items: Sequence[UrgentUse], *, reference_date: date) -> str:
