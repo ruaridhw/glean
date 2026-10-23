@@ -108,7 +108,11 @@ class SessionStore(Protocol):
         ...
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
-        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`. False when the lease was lost."""
+        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`. False when the lease was lost.
+
+        A line that arrives after a cancel is refused too: a cancelled session writes nothing more, so
+        the graph stops at the next step rather than leaving one progress line behind it.
+        """
         ...
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
