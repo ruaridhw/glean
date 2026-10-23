@@ -307,7 +307,7 @@ void main() {
     },
   );
   gleanWidgetTest(
-    'Generate is inert while its actual HTTP request is pending',
+    'Generate opens the review once while its actual HTTP request is pending',
     (tester) async {
       await h.dispose();
       final response = Completer<http.Response>();
@@ -320,12 +320,16 @@ void main() {
       );
       await open(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
-      await tester.pump();
-      expect(find.text('Generating'), findsOneWidget);
+      await pumpUntil(
+        tester,
+        () => find.textContaining('Planning ').evaluate().isNotEmpty,
+        description: 'the working state',
+      );
+      expect(find.text('Cancel'), findsOneWidget);
       response.complete(http.Response('{"suggestions":[]}', 200));
       await tester.pumpAndSettle();
       expect(requests, 1);
-      expect(find.text('No recipes fit right now. Try again.'), findsOneWidget);
+      expect(find.text('No meals to suggest'), findsOneWidget);
     },
   );
 }

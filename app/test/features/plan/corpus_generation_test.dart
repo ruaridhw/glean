@@ -118,14 +118,15 @@ void main() {
           .read(generateWeekControllerProvider.notifier)
           .generate(weekStart: week, slots: 3, servings: 4);
       expect(
-        harness.container.read(generateWeekControllerProvider).hasError,
-        isFalse,
-        reason:
-            '${harness.container.read(generateWeekControllerProvider).error}',
+        harness.container.read(generateWeekControllerProvider).phase,
+        GenerateProposalPhase.proposal,
       );
       expect(body!['source'], 'corpus');
       expect(body!['exclude_external_ids'], ['rec_planned']);
       expect(body!['meals_per_week'], 3);
+      await harness.container
+          .read(generateWeekControllerProvider.notifier)
+          .addToPlan();
       final entries = await plan.getWeek(
         userId: harness.userId,
         weekStart: week,
@@ -446,18 +447,21 @@ void main() {
     final controller = harness.container.read(
       generateWeekControllerProvider.notifier,
     );
-    final operation = controller.generate(
-      weekStart: week,
-      slots: 2,
-      servings: 2,
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    await harness.container.pump();
-    expect(
-      harness.container.read(generateWeekControllerProvider).isLoading,
-      isTrue,
-    );
     await controller.generate(weekStart: week, slots: 2, servings: 2);
+    expect(
+      harness.container.read(generateWeekControllerProvider).phase,
+      GenerateProposalPhase.proposal,
+    );
+
+    final operation = controller.addToPlan();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(
+      harness.container.read(generateWeekControllerProvider).saving,
+      isTrue,
+      reason: 'the save is in flight while the detail is fetched',
+    );
+    // A second Add while the first is saving must not run the transaction again.
+    expect(await controller.addToPlan(), 0);
     pending.complete(
       http.Response(
         jsonEncode({'external_id': 'rec_new', 'title': 'Beans'}),
@@ -471,22 +475,16 @@ void main() {
     expect(entries, hasLength(1));
   });
 
-  gleanWidgetTest('zero corpus picks show retry feedback, never success', (
+  gleanWidgetTest('zero corpus picks show the no-meals state, never success', (
     tester,
   ) async {
     suggest([]);
     await harness.pumpAt(tester, AppRoutes.plan.path);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
-    await pumpUntil(
-      tester,
-      () => find
-          .text('No recipes fit right now. Try again.')
-          .evaluate()
-          .isNotEmpty,
-      description: 'empty-generation feedback',
-    );
-    expect(find.textContaining('Week generated'), findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.text('No meals to suggest'), findsOneWidget);
+    expect(find.textContaining('Week added'), findsNothing);
   });
 
   test('a gap insertion failure rolls back all plan entries', () async {
@@ -498,9 +496,12 @@ void main() {
     await harness.container
         .read(generateWeekControllerProvider.notifier)
         .generate(weekStart: week, slots: 1, servings: 2);
+    await harness.container
+        .read(generateWeekControllerProvider.notifier)
+        .addToPlan();
     expect(
-      harness.container.read(generateWeekControllerProvider).hasError,
-      isTrue,
+      harness.container.read(generateWeekControllerProvider).phase,
+      GenerateProposalPhase.failed,
     );
     final entries = await harness.container
         .read(planRepositoryProvider)
