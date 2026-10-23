@@ -1,13 +1,14 @@
 """The async stack's two queue consumers: the session worker and the dead-letter handler.
 
-Both handlers are thin. The worker renews the message's visibility, calls `glean.agent.start` and
-lets that module decide the session's outcome; the dead-letter handler marks a session
-`worker_failed` once SQS has given up on it. Neither imports LangGraph, and neither knows how a plan
-is made.
+Both handlers are thin. The worker calls `glean.agent.start` and lets that module decide the
+session's outcome; the dead-letter handler marks a session `worker_failed` once SQS has given up on it.
+Neither imports LangGraph, and neither knows how a plan is made.
 
-Deployed event source mappings (template.yaml): the worker takes one message at a time with a 60 s
-visibility timeout that it renews every 20 s, and the dead-letter queue has its own mapping to
-`dlq_handler`.
+Deployed event source mappings (template.yaml): the worker takes one message at a time, and the
+queue's visibility timeout (130 s) is longer than the function's (120 s), which AWS requires and which
+means Lambda holds the message for as long as the run can last. Liveness lives on the session item: a
+lease the run renews, and an owner token that only one attempt holds. A run that dies has its lease
+lapse, and the redelivery picks it up from its checkpoint.
 """
 
 from __future__ import annotations
@@ -20,13 +21,11 @@ from glean.agent import build_deps, start
 from glean.config import get_settings
 from glean.observability import logger, metrics, tracer
 from glean.sessions.dynamo import DynamoSessionStore
-from glean.sessions.factories import session_queue
 from glean.sessions.models import AgentSession, SessionError, SessionErrorCode
-from glean.sessions.queue import SessionMessage, VisibilityLease
+from glean.sessions.queue import SessionMessage
 
 if TYPE_CHECKING:
     from glean.agent.deps import AgentDeps
-    from glean.sessions.queue import SessionQueue
 
 
 @tracer.capture_lambda_handler
@@ -34,21 +33,22 @@ if TYPE_CHECKING:
 def handler(event: dict[str, Any], _context: object = None) -> None:
     """The SQS session worker: one unit of work per message, batch size 1."""
     settings = get_settings()
-    queue = session_queue(settings)
-    deps = build_deps(settings, queue=queue)
+    deps = build_deps(settings)
     try:
         for record in event.get("Records", ()):
-            handle_record(record, deps, queue)
+            handle_record(record, deps)
     finally:
         metrics.flush_metrics()
 
 
-def handle_record(record: dict[str, Any], deps: AgentDeps, queue: SessionQueue) -> bool:
+def handle_record(record: dict[str, Any], deps: AgentDeps) -> bool:
     """Run the session this record names. Returns whether a run was started.
 
     A body this queue did not write, or a session the table no longer holds (expired, or never
     written), is logged and dropped: there is no run to start, and redelivering it would only reach
-    the dead-letter queue again.
+    the dead-letter queue again. Anything else the store or the run raises propagates, so Lambda fails
+    the delivery: SQS retries it, and the dead-letter queue's handler ends the session after the last
+    attempt.
     """
     try:
         message = SessionMessage.parse(record["body"])
@@ -62,9 +62,7 @@ def handle_record(record: dict[str, Any], deps: AgentDeps, queue: SessionQueue) 
         return False
 
     session = AgentSession(session_id=message.session_id, user_sub=message.user_sub, request=stored.request)
-    lease = VisibilityLease(lambda seconds: queue.extend_visibility(record["receiptHandle"], seconds))
-    with lease.keep_alive():
-        return start(session, deps)
+    return start(session, deps)
 
 
 @tracer.capture_lambda_handler

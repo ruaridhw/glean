@@ -21,10 +21,11 @@ from glean.meal_plan.schemas import CorpusMealPlanRecipe, MealPlanRequest, MealP
 from glean.sessions.models import SessionError, SessionErrorCode
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     from langgraph.graph.state import CompiledStateGraph  # noqa: TID251
 
+    from glean.agent.control import RunGuard
     from glean.agent.deps import AgentDeps
 
 
@@ -41,12 +42,16 @@ class PlanState(TypedDict, total=False):
 def build_graph(
     deps: AgentDeps,
     *,
-    progress: Callable[[str], None],
+    guard: RunGuard,
 ) -> CompiledStateGraph:
-    """Compile the three-node graph for one run, checkpointing under the session id."""
+    """Compile the three-node graph for one run, checkpointing under the session id.
+
+    Every node opens with `control.step`, which renews its lease and writes its progress line,
+    so a run that no longer owns the session stops before the next step.
+    """
 
     def prepare(state: PlanState) -> PlanState:
-        progress("Reading your pantry and the recipes we know")
+        guard.step("Reading your pantry and the recipes we know")
         prepared = pipeline.prepare(
             MealPlanRequest.model_validate(state["request"]),
             corpus=deps.corpus_factory(),
@@ -61,7 +66,7 @@ def build_graph(
         return {"prepared": prepared.model_dump(mode="json")}
 
     def plan(state: PlanState) -> PlanState:
-        progress("Choosing this week's dinners")
+        guard.step("Choosing this week's dinners")
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         try:
             picks = pipeline.choose(prepared, llm_router=deps.llm_router)
@@ -71,7 +76,7 @@ def build_graph(
         return {"picks": [pick.model_dump(mode="json") for pick in picks]}
 
     def finalise(state: PlanState) -> PlanState:
-        progress("Checking the week against what you can cook")
+        guard.step("Checking the week against what you can cook")
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         picks = [CorpusMealPlanRecipe.model_validate(pick) for pick in state.get("picks", [])]
         result = pipeline.finalise(prepared, picks)

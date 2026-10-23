@@ -33,7 +33,7 @@ def main() -> int:
     queue = session_queue(settings)
     stub = os.environ.get("AGENT_LLM_STUB") == "1"
     # The stub is a stand-in for the router, answering the same one call the graph makes.
-    deps = build_deps(settings, queue=queue, llm_router=cast("LLMRouter", StubMealPlanRouter()) if stub else None)
+    deps = build_deps(settings, llm_router=cast("LLMRouter", StubMealPlanRouter()) if stub else None)
     logger.info("local session worker starting", extra={"queue": settings.agent_session_queue_url, "stub": stub})
 
     stopping = False
@@ -45,8 +45,7 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     while not stopping:
         for message in queue.receive(wait_seconds=POLL_SECONDS):
-            record = {"body": message.body, "receiptHandle": message.receipt_handle}
-            handle_record(record, deps, queue)
+            handle_record({"body": message.body, "receiptHandle": message.receipt_handle}, deps)
             # Either the run finished or it failed with a typed code: the message is done either way.
             queue.delete(message.receipt_handle)
     metrics.flush_metrics()

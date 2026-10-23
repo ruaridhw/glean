@@ -1,10 +1,13 @@
 """The session store contract, and the in-memory store the inline runner and tests use.
 
-The store owns two rules so no caller can break them:
+The store owns three rules so no caller can break them:
 
-- **`claim` is the only way into `running`**, and it is conditional on `queued`. A duplicate queue
-  delivery, a retry or a second worker therefore drops out with `False` instead of running the plan
-  twice.
+- **`claim` is the only way into `running`.** It wins a `queued` session, or takes over a `running` one
+  whose lease has lapsed — and it hands the winner an owner token plus a lease. A duplicate delivery of
+  a live run is told it is owned elsewhere, so it drops; a crashed run's redelivery can take over.
+- **Only the owner writes the outcome.** `refresh_lease`, `append_progress`, `complete` and `fail` are
+  conditioned on the owner token, so a worker that lost its lease cannot finish a run someone else is
+  now driving.
 - **Every update refreshes `updated_at` and the TTL.** `get` never writes, because the app polls it
   every second.
 """
@@ -17,6 +20,7 @@ from typing import TYPE_CHECKING, Protocol
 from glean.sessions.models import (
     SESSION_TTL_HOURS,
     AgentSession,
+    ClaimResult,
     SessionError,
     SessionRecord,
     SessionStatus,
@@ -27,6 +31,11 @@ if TYPE_CHECKING:
 
     from glean.meal_plan.schemas import MealPlanResult
 
+# How long one attempt may run without refreshing its lease. The worker's function timeout is 120 s,
+# so a run that fits the Lambda fits its lease, and a redelivery can take over as soon as the queue
+# hands the message out again (about two minutes after the crash).
+LEASE_SECONDS = 120
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
@@ -34,6 +43,10 @@ def utcnow() -> datetime:
 
 def ttl_from(now: datetime, ttl_hours: int = SESSION_TTL_HOURS) -> int:
     return int((now + timedelta(hours=ttl_hours)).timestamp())
+
+
+def lease_from(now: datetime, lease_seconds: int = LEASE_SECONDS) -> int:
+    return int(now.timestamp()) + lease_seconds
 
 
 class SessionStore(Protocol):
@@ -47,20 +60,28 @@ class SessionStore(Protocol):
         """The session, or None when this user has no session with that id. Never writes."""
         ...
 
-    def claim(self, user_sub: str, session_id: str) -> bool:
-        """Move `queued` to `running`, and say whether this caller won the move."""
+    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
+        """Try to become the attempt that runs this session, taking a lease until `LEASE_SECONDS` from *now*."""
         ...
 
-    def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str]) -> None:
-        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`."""
+    def refresh_lease(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> bool:
+        """Extend the current owner's lease. False when this attempt no longer owns the session."""
         ...
 
-    def complete(self, user_sub: str, session_id: str, result: MealPlanResult) -> None:
-        """Finish the session with its plan."""
+    def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
+        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`. False when the lease was lost."""
         ...
 
-    def fail(self, user_sub: str, session_id: str, error: SessionError) -> bool:
-        """Fail the session, unless it has already finished. Says whether this call moved it."""
+    def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
+        """Finish the session with its plan, if this attempt still owns it."""
+        ...
+
+    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
+        """Fail the session, unless it has already finished. Says whether this call moved it.
+
+        The worker passes its owner token; the dead-letter handler passes none, because by then the run
+        that owned the session is gone and the queue has given up on it.
+        """
         ...
 
 
@@ -102,33 +123,60 @@ class InMemorySessionStore:
     def get(self, user_sub: str, session_id: str) -> SessionRecord | None:
         return self._records.get((user_sub, session_id))
 
-    def claim(self, user_sub: str, session_id: str) -> bool:
+    def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
         record = self.get(user_sub, session_id)
-        if record is None or record.status is not SessionStatus.QUEUED:
+        if record is None:
+            raise UnknownSessionError(session_id)
+        if record.status.terminal:
+            return ClaimResult.FINISHED
+        if record.status is SessionStatus.RUNNING and not self._lease_lapsed(record, now):
+            return ClaimResult.OWNED_ELSEWHERE
+        resumed = record.status is SessionStatus.RUNNING
+        self._write(
+            record.model_copy(update={"status": SessionStatus.RUNNING, "owner": owner, "lease_until": lease_from(now)})
+        )
+        return ClaimResult.RESUMED if resumed else ClaimResult.STARTED
+
+    def refresh_lease(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
             return False
-        self._write(record.model_copy(update={"status": SessionStatus.RUNNING}))
+        self._write(record.model_copy(update={"lease_until": lease_from(now)}))
         return True
 
-    def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str]) -> None:
-        record = self._known(user_sub, session_id)
+    def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
+            return False
         self._write(record.appended(list(lines)))
+        return True
 
-    def complete(self, user_sub: str, session_id: str, result: MealPlanResult) -> None:
-        record = self._known(user_sub, session_id)
+    def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
+            return False
         self._write(record.model_copy(update={"status": SessionStatus.DONE, "result": result, "error": None}))
+        return True
 
-    def fail(self, user_sub: str, session_id: str, error: SessionError) -> bool:
+    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
         record = self.get(user_sub, session_id)
         if record is None or record.status.terminal:
+            return False
+        if owner is not None and record.owner != owner:
             return False
         self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))
         return True
 
-    def _known(self, user_sub: str, session_id: str) -> SessionRecord:
+    def _owned(self, user_sub: str, session_id: str, owner: str) -> SessionRecord | None:
+        """The record, if this attempt may still write to it."""
         record = self.get(user_sub, session_id)
-        if record is None:
-            raise UnknownSessionError(session_id)
+        if record is None or record.status is not SessionStatus.RUNNING or record.owner != owner:
+            return None
         return record
+
+    @staticmethod
+    def _lease_lapsed(record: SessionRecord, now: datetime) -> bool:
+        return record.lease_until is None or record.lease_until < int(now.timestamp())
 
     def _write(self, record: SessionRecord) -> None:
         now = self._clock()
