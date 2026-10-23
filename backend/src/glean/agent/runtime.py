@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 # CloudWatch metric names, all in the `Glean` namespace:
 #   SessionsStarted, SessionsCompleted, SessionsFailed  Count
-#   SessionWallTime                                     Milliseconds
+#   SessionWallTime                                     Milliseconds, for every attempt that started
 # `SessionsDegraded` is reserved for V7's fallback (the scorer's best plan with template reasons);
 # V1 has no degraded path to count.
 STARTED = "SessionsStarted"
@@ -76,6 +76,9 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
         _failed(deps, session, SessionError(code=SessionErrorCode.WORKER_FAILED), owner=owner)
     else:
         _completed(deps, session, result, owner=owner)
+    finally:
+        # Every attempt that started reports its wall time, so provider and worker failures are in the
+        # latency distribution too, not only the runs that worked.
         metrics.add_metric(name=WALL_TIME, unit=MetricUnit.Milliseconds, value=int((time.monotonic() - started) * 1000))
     return True
 

@@ -357,7 +357,9 @@ def test_a_model_failure_ends_the_session_with_its_code(tmp_path: Any, monkeypat
     assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
 
 
-def test_every_run_is_counted_in_cloudwatch(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_every_attempt_is_counted_in_cloudwatch_including_its_wall_time(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     recorder = MetricsRecorder()
     monkeypatch.setattr(runtime, "metrics", recorder)
     sessions = _queued_store("sess-1", "sess-fail")
@@ -372,8 +374,9 @@ def test_every_run_is_counted_in_cloudwatch(tmp_path: Any, monkeypatch: pytest.M
         "SessionWallTime",
         "SessionsStarted",
         "SessionsFailed",
+        "SessionWallTime",
     ]
-    assert recorder.values[2] >= 0
+    assert all(value >= 0 for value in recorder.values[2::3])
 
 
 def test_a_provider_throttle_is_rate_limited_with_the_minutes_it_asked_for() -> None:
