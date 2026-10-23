@@ -403,3 +403,49 @@ def test_create_refuses_inputs_that_would_not_fit_one_item(store: tuple[SessionS
         sessions.create(AgentSession(session_id="sess-big", user_sub="user-a", request=absurd), now=clock.now)
 
     assert sessions.get("user-a", "sess-big") is None
+
+
+def test_complete_refuses_a_plan_that_would_not_fit_the_item(store: tuple[SessionStore, Clock]) -> None:
+    """S2: the reserve is a check, not an assumption — the plan is measured before it is written."""
+    sessions, clock = store
+    near_bound = _request(
+        recipe_history=[
+            {"recipe_id": 1, "title": secrets.token_hex(280_000), "last_cooked_at": None, "food_groups": []}
+        ]
+    )
+    stored = stored_input_bytes(near_bound)
+    assert MAX_STORED_INPUT_BYTES - 10_000 < stored <= MAX_STORED_INPUT_BYTES
+    sessions.create(AgentSession(session_id="sess-big-result", user_sub="user-a", request=near_bound), now=clock.now)
+    sessions.claim("user-a", "sess-big-result", owner="attempt-1", now=clock.now)
+    oversized = MealPlanResult(
+        suggestions=[MealPlanSuggestion(external_id="rec_1", title="Lentil Bake", reason="r" * 90_000)]
+    )
+
+    with pytest.raises(SessionTooLargeError):
+        sessions.complete("user-a", "sess-big-result", oversized, owner="attempt-1")
+
+    record = sessions.get("user-a", "sess-big-result")
+    assert record is not None
+    assert record.status is SessionStatus.RUNNING
+    assert record.result is None
+
+
+def test_complete_stores_a_plan_inside_the_reserve(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    near_bound = _request(
+        recipe_history=[
+            {"recipe_id": 1, "title": secrets.token_hex(280_000), "last_cooked_at": None, "food_groups": []}
+        ]
+    )
+    sessions.create(AgentSession(session_id="sess-ok-result", user_sub="user-a", request=near_bound), now=clock.now)
+    sessions.claim("user-a", "sess-ok-result", owner="attempt-1", now=clock.now)
+    fitting = MealPlanResult(
+        suggestions=[MealPlanSuggestion(external_id="rec_1", title="Lentil Bake", reason="r" * 40_000)]
+    )
+
+    assert sessions.complete("user-a", "sess-ok-result", fitting, owner="attempt-1") is True
+
+    record = sessions.get("user-a", "sess-ok-result")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result == fitting

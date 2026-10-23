@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Protocol
 
 from glean.sessions.models import (
+    MAX_ITEM_BYTES,
     MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
     AgentSession,
@@ -25,6 +26,7 @@ from glean.sessions.models import (
     SessionError,
     SessionRecord,
     SessionStatus,
+    item_bytes,
     stored_input_bytes,
 )
 
@@ -85,7 +87,11 @@ class SessionStore(Protocol):
         ...
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
-        """Finish the session with its plan, if this attempt still owns it."""
+        """Finish the session with its plan, if this attempt still owns it.
+
+        Raises `SessionTooLargeError` when the plan would push the item past DynamoDB's limit: the
+        caller turns that into a typed failure, because there is nowhere left to write it.
+        """
         ...
 
     def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
@@ -166,6 +172,13 @@ class InMemorySessionStore:
         record = self._owned(user_sub, session_id, owner)
         if record is None:
             return False
+        if (
+            item_bytes(
+                inputs=stored_input_bytes(record.request), progress=record.progress, result=result.model_dump_json()
+            )
+            > MAX_ITEM_BYTES
+        ):
+            raise SessionTooLargeError(session_id)
         self._write(record.model_copy(update={"status": SessionStatus.DONE, "result": result, "error": None}))
         return True
 

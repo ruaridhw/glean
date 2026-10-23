@@ -13,10 +13,14 @@ from __future__ import annotations
 import gzip
 from datetime import datetime  # noqa: TC003 - Pydantic resolves this annotation when the model is built
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # A session outlives the tap by a day, then DynamoDB expires it.
 SESSION_TTL_HOURS = 24
@@ -25,15 +29,18 @@ SESSION_TTL_HOURS = 24
 MAX_PROGRESS_LINES = 50
 
 # DynamoDB refuses an item over 400 KB, and the whole item is one write: the inputs, the progress lines
-# and the result share that budget. The inputs are stored gzipped, and the rest is reserved here so a
-# request that validates can never produce an item that fails to write.
+# and the result share that budget. Nothing in the schemas bounds a model's prose, so both ends are
+# guarded: `create` refuses a request whose inputs leave no room, and `complete` refuses to write a plan
+# that would overflow the item (the run then ends `failed / model_error` rather than raising).
 MAX_ITEM_BYTES = 400 * 1024
-# A corpus plan is at most seven meals; even generous reasons stay far inside this.
-RESULT_RESERVE_BYTES = 32 * 1024
+# The plan: up to seven meals, each with a reason, plus V3's alternative per meal and the reasons of the
+# planned meals. Four times the round-1 guess, because model prose is not bounded by any schema.
+RESULT_RESERVE_BYTES = 64 * 1024
 # Fifty progress lines of a sentence or two each.
 PROGRESS_RESERVE_BYTES = 16 * 1024
-# Keys, timestamps, the owner token, the lease and the error.
+# Keys, timestamps, the owner token, the lease and the error JSON.
 ITEM_OVERHEAD_BYTES = 2 * 1024
+# 409,600 - 65,536 - 16,384 - 2,048 = 325,632.
 MAX_STORED_INPUT_BYTES = MAX_ITEM_BYTES - RESULT_RESERVE_BYTES - PROGRESS_RESERVE_BYTES - ITEM_OVERHEAD_BYTES
 
 
@@ -49,6 +56,21 @@ def stored_inputs(request: MealPlanRequest) -> bytes:
 
 def stored_input_bytes(request: MealPlanRequest) -> int:
     return len(stored_inputs(request))
+
+
+def item_bytes(*, inputs: int, progress: Sequence[str], result: str | None = None, error: str | None = None) -> int:
+    """The size the item will have, near enough: its stored inputs, its lines, its outcome and its keys.
+
+    Used before the terminal write, so an oversized plan is a typed failure instead of a DynamoDB
+    ValidationException: UTF-8 bytes throughout, because that is what DynamoDB counts.
+    """
+    return (
+        inputs
+        + sum(len(line.encode()) for line in progress)
+        + len((result or "").encode())
+        + len((error or "").encode())
+        + ITEM_OVERHEAD_BYTES
+    )
 
 
 class SessionStatus(StrEnum):

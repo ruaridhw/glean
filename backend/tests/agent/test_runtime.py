@@ -7,6 +7,7 @@ the model is a fake at its boundary, and both clocks are the test's.
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +25,16 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from glean.sessions.dynamo import DynamoSessionStore
-from glean.sessions.models import AgentSession, SessionError, SessionErrorCode, SessionStatus
+from glean.sessions.models import (
+    ITEM_OVERHEAD_BYTES,
+    MAX_ITEM_BYTES,
+    MAX_STORED_INPUT_BYTES,
+    AgentSession,
+    SessionError,
+    SessionErrorCode,
+    SessionStatus,
+    stored_input_bytes,
+)
 from glean.sessions.queue import SessionMessage
 from glean.sessions.store import LEASE_SECONDS, QUEUE_VISIBILITY_SECONDS, InMemorySessionStore
 from glean.worker import dlq_handler, handle_record, handler
@@ -459,6 +469,91 @@ def test_the_model_is_given_what_is_left_of_the_budget(tmp_path: Any) -> None:
     handle_record(_record("sess-1"), deps)
 
     assert seen == [60_000]
+
+
+def _near_bound_request() -> MealPlanRequest:
+    """An input that is accepted and leaves almost none of the item's room to the outcome.
+
+    The title is incompressible, so the gzipped inputs land just under the bound rather than at a few KB.
+    """
+    return MealPlanRequest(
+        source="corpus",
+        pantry=[],
+        purchase_tolerance=0.3,
+        meals_per_week=2,
+        dietary_flags=[],
+        max_active_time_mins=None,
+        recipe_history=[
+            {"recipe_id": 1, "title": secrets.token_hex(280_000), "last_cooked_at": None, "food_groups": []}
+        ],
+    )
+
+
+class _ReasonModel(PicksOneCandidate):
+    """A schema-valid plan whose one reason is exactly *reason_bytes* characters."""
+
+    def __init__(self, reason_bytes: int) -> None:
+        super().__init__()
+        self._reason_bytes = reason_bytes
+
+    def invoke(self, feature: object, schema: type, *, user: str, **kwargs: Any) -> CorpusMealPlanResponse:
+        context = json.loads(user)
+        return CorpusMealPlanResponse(
+            suggestions=[
+                CorpusMealPlanRecipe(
+                    external_id=context["candidates"][0]["external_id"],
+                    title=context["candidates"][0]["title"],
+                    reason=secrets.token_hex(self._reason_bytes // 2),
+                )
+            ]
+        )
+
+
+def test_a_plan_that_would_not_fit_the_item_fails_the_session_instead_of_raising(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round 2's S2: the reserve is enforced, not assumed.
+
+    Near-bound inputs plus a schema-valid plan larger than the reserve exceed one item. The run must end
+    `failed / model_error` — a typed outcome the app can act on — rather than raising into SQS (which would
+    dead-letter it after two attempts and leave the household with nothing).
+    """
+    monkeypatch.setattr(runtime, "metrics", MetricsRecorder())
+    clock = FakeClock()
+    sessions = InMemorySessionStore(clock=clock.wall)
+    request = _near_bound_request()
+    stored = stored_input_bytes(request)
+    assert MAX_STORED_INPUT_BYTES - 10_000 < stored <= MAX_STORED_INPUT_BYTES
+    sessions.create(AgentSession(session_id="sess-1", user_sub="user-a", request=request), now=clock.now)
+    # 90 KB of plan against ~10 KB of remaining room: over the item limit.
+    assert stored + 90_000 + ITEM_OVERHEAD_BYTES > MAX_ITEM_BYTES
+
+    handle_record(_record("sess-1"), _deps(sessions, tmp_path, _ReasonModel(90_000), clock))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.FAILED
+    assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
+    assert record.result is None
+
+
+def test_a_plan_that_just_fits_is_written(tmp_path: Any) -> None:
+    """The other side of the boundary: the same inputs plus a plan inside the reserve are stored."""
+    clock = FakeClock()
+    sessions = InMemorySessionStore(clock=clock.wall)
+    request = _near_bound_request()
+    stored = stored_input_bytes(request)
+    sessions.create(AgentSession(session_id="sess-1", user_sub="user-a", request=request), now=clock.now)
+    assert stored + 40_000 + ITEM_OVERHEAD_BYTES < MAX_ITEM_BYTES
+
+    handle_record(_record("sess-1"), _deps(sessions, tmp_path, _ReasonModel(40_000), clock))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result is not None
+    assert len(record.result.suggestions) == 1
+    assert len(record.result.suggestions[0].reason) == 40_000
 
 
 def test_a_poison_message_is_dropped() -> None:

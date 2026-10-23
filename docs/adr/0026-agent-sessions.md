@@ -70,9 +70,13 @@ until V6's scorer exists to supply the degraded plan.
   between them: above the function timeout so a live run is never taken over inside its own
   invocation, below the visibility timeout so every redelivery finds it lapsed. The three numbers live
   in `sessions/store.py` and the template test checks `template.yaml` against them.
-- **The item's size is bounded on the way in.** Inputs are stored gzipped and `create` refuses a
-  request whose item would not leave room for the progress lines and the plan, so a large but valid
-  request is a 422 rather than a failed write.
+- **The item's size is bounded at both ends.** Inputs are stored gzipped and `create` refuses a request
+  whose item would not leave room for the progress lines and the plan (422), so a large but valid
+  request is refused rather than failing at the first write. The plan is measured too: 64 KB is
+  reserved for it (V3 adds an alternative per meal and the planned meals' reasons), and `complete`
+  refuses a result that would overflow the item, which fails the session `model_error` with the reason
+  logged rather than raising into SQS. Nothing in the schemas bounds a model's prose, so a reserve
+  alone would be an assumption.
 - **The checkpointer is not an API.** Nothing outside `glean.agent` reads `agent_checkpoints`, and
   the table is the agent's to replace.
 - **The synchronous endpoint stays** until the phone runs a build that uses sessions, then goes in a

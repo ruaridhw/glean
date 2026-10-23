@@ -26,6 +26,7 @@ from botocore.exceptions import ClientError
 
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.sessions.models import (
+    MAX_ITEM_BYTES,
     MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
     AgentSession,
@@ -33,6 +34,8 @@ from glean.sessions.models import (
     SessionError,
     SessionRecord,
     SessionStatus,
+    item_bytes,
+    stored_input_bytes,
     stored_inputs,
 )
 from glean.sessions.store import (
@@ -178,6 +181,18 @@ class DynamoSessionStore:
         )
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
+        # The item is one write and DynamoDB refuses it above 400 KB, so the whole item is measured before
+        # the result goes in: an oversized plan is the caller's typed failure, never a ValidationException.
+        record = self.get(user_sub, session_id)
+        if record is None or record.owner != owner or record.status is not SessionStatus.RUNNING:
+            return False
+        if (
+            item_bytes(
+                inputs=stored_input_bytes(record.request), progress=record.progress, result=result.model_dump_json()
+            )
+            > MAX_ITEM_BYTES
+        ):
+            raise SessionTooLargeError(session_id)
         return self._update(
             user_sub,
             session_id,
