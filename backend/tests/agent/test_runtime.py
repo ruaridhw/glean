@@ -334,6 +334,64 @@ def test_a_run_writes_no_lease_beyond_the_claim(tmp_path: Any) -> None:
     assert sessions.writes - writes_after_create == 5
 
 
+def test_a_crash_before_the_session_write_publishes_the_saved_plan(tmp_path: Any) -> None:
+    """Round 2's S1: the graph finished, only the session write was lost, so the retry publishes that plan.
+
+    Re-running here would bill a second model call for a plan the checkpoint already holds — and could turn
+    a finished plan into a model error if the provider fails the second time.
+    """
+
+    class ProcessDied(BaseException):
+        """The process vanished between the last node and the session write."""
+
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    router = PicksOneCandidate()
+    deps = _deps(sessions, tmp_path, router, clock)
+
+    publish_attempts = {"count": 0}
+    real_complete = sessions.complete
+
+    def die_on_first_publish(*args: Any, **kwargs: Any) -> bool:
+        publish_attempts["count"] += 1
+        if publish_attempts["count"] == 1:
+            raise ProcessDied
+        return real_complete(*args, **kwargs)
+
+    sessions.complete = die_on_first_publish  # ty: ignore[invalid-assignment]
+
+    with pytest.raises(ProcessDied):
+        start(_queued("sess-1"), deps)
+
+    crashed = sessions.get("user-a", "sess-1")
+    assert crashed is not None
+    assert crashed.status is SessionStatus.RUNNING
+    assert router.calls == 1
+
+    clock.advance(seconds=QUEUE_VISIBILITY_SECONDS)
+    recovered = _deps(sessions, tmp_path, router, clock)
+    recovered = AgentDeps(
+        sessions=recovered.sessions,
+        checkpointer=deps.checkpointer,
+        llm_router=recovered.llm_router,
+        corpus_factory=recovered.corpus_factory,
+        clock=recovered.clock,
+        monotonic=recovered.monotonic,
+    )
+
+    assert handle_record(_record("sess-1"), recovered) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.error is None
+    # No second model call, and prepare did not run again: the finished plan was published as it stood.
+    assert router.calls == 1
+    assert record.progress.count("Reading your pantry and the recipes we know") == 1
+    assert isinstance(record.result, MealPlanResult)
+    assert len(record.result.suggestions) == 1
+
+
 def test_a_takeover_with_no_checkpoint_starts_the_run_fresh(tmp_path: Any) -> None:
     clock = FakeClock()
     sessions = _queued_store(clock=clock)
