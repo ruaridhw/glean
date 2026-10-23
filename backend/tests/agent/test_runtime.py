@@ -1,4 +1,4 @@
-"""The worker's half of the async stack: ownership, crash recovery, metrics, the dead letter.
+"""The worker's half of the async stack: ownership, crash recovery, the budget, metrics, the dead letter.
 
 No AWS: the session stores are the in-memory store and moto's DynamoDB (built from `template.yaml`),
 the model is a fake at its boundary, and both clocks are the test's.
@@ -16,6 +16,7 @@ from moto import mock_aws
 
 from glean.agent import runtime, start
 from glean.agent.checkpoint import in_memory_checkpointer
+from glean.agent.control import AGENT_RUN_BUDGET_SECONDS
 from glean.agent.deps import AgentDeps
 from glean.agent.errors import model_error_for
 from glean.meal_plan.schemas import CorpusMealPlanRecipe, CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
@@ -257,6 +258,59 @@ def test_a_takeover_with_no_checkpoint_starts_the_run_fresh(tmp_path: Any) -> No
     assert record.status is SessionStatus.DONE
     assert record.progress[0] == "Reading your pantry and the recipes we know"
     assert router.calls == 1
+
+
+def test_a_run_that_spends_its_budget_ends_failed_with_a_code(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """S1: the 90 s budget is enforced, so a slow run ends itself instead of being killed by the Lambda."""
+    monkeypatch.setattr(runtime, "metrics", MetricsRecorder())
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+
+    class SlowModel(PicksOneCandidate):
+        def invoke(self, feature: object, schema: type, *, user: str, **kwargs: object) -> CorpusMealPlanResponse:
+            # The provider takes longer than the budget it was given: it cannot, so the deadline check
+            # between steps is what turns this into a typed failure at the next step.
+            clock.advance(seconds=AGENT_RUN_BUDGET_SECONDS + 1)
+            return super().invoke(feature, schema, user=user, **kwargs)
+
+    handle_record(_record("sess-1"), _deps(sessions, tmp_path, SlowModel(), clock))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert clock.seconds > AGENT_RUN_BUDGET_SECONDS
+    assert record.status is SessionStatus.FAILED
+    assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
+
+
+def test_the_model_is_given_what_is_left_of_the_budget(tmp_path: Any) -> None:
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    seen: list[int | None] = []
+
+    class RecordingModel(PicksOneCandidate):
+        def invoke(self, feature: object, schema: type, *, user: str, **kwargs: Any) -> CorpusMealPlanResponse:
+            seen.append(kwargs.get("timeout_ms"))
+            return super().invoke(feature, schema, user=user, **kwargs)
+
+    deps = _deps(sessions, tmp_path, RecordingModel(), clock)
+
+    def slow_corpus() -> RecipeCorpusStore:
+        # Preparing the candidates took 30 s of the 90, so the model may use the 60 that are left.
+        clock.advance(seconds=30)
+        return _corpus(tmp_path)
+
+    deps = AgentDeps(
+        sessions=deps.sessions,
+        checkpointer=deps.checkpointer,
+        llm_router=deps.llm_router,
+        corpus_factory=slow_corpus,
+        clock=deps.clock,
+        monotonic=deps.monotonic,
+    )
+
+    handle_record(_record("sess-1"), deps)
+
+    assert seen == [60_000]
 
 
 def test_a_poison_message_is_dropped() -> None:

@@ -34,8 +34,8 @@ class AgentDeps:
     checkpointer: BaseCheckpointSaver
     llm_router: LLMRouter
     corpus_factory: Callable[[], RecipeCorpusStore] = field(default=RecipeCorpusStore)
-    # Two clocks: wall time for the session item and its TTL, monotonic seconds for lease renewals.
-    # Tests replace both.
+    # Two clocks: wall time for the session item and its TTL, monotonic seconds for the run's budget and
+    # its lease renewals. Tests replace both.
     clock: Callable[[], datetime] = field(default=utcnow)
     monotonic: Callable[[], float] = field(default=time.monotonic)
 

@@ -46,8 +46,8 @@ def build_graph(
 ) -> CompiledStateGraph:
     """Compile the three-node graph for one run, checkpointing under the session id.
 
-    Every node opens with `control.step`, which renews its lease and writes its progress line,
-    so a run that no longer owns the session stops before the next step.
+    Every node opens with `control.step`, which spends the run's budget, renews its lease and writes its
+    progress line, so a run that is out of time or no longer owns the session stops before the next step.
     """
 
     def prepare(state: PlanState) -> PlanState:
@@ -69,7 +69,8 @@ def build_graph(
         guard.step("Choosing this week's dinners")
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         try:
-            picks = pipeline.choose(prepared, llm_router=deps.llm_router)
+            # The one blocking call: it may use what is left of the budget, never more.
+            picks = pipeline.choose(prepared, llm_router=deps.llm_router, timeout_ms=guard.remaining_ms())
         except Exception as exc:
             # The only LLM call in V1: a provider failure is the household's `model_error`, never a crash.
             raise AgentError(model_error_for(exc)) from exc

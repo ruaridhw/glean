@@ -202,13 +202,20 @@ def prepare(
     )
 
 
-def choose(prepared: PreparedPlan, *, llm_router: LLMRouter) -> list[CorpusMealPlanRecipe]:
-    """Ask the model to pick from the candidates. Its answer is unvalidated; `finalise` judges it."""
+def choose(
+    prepared: PreparedPlan, *, llm_router: LLMRouter, timeout_ms: int | None = None
+) -> list[CorpusMealPlanRecipe]:
+    """Ask the model to pick from the candidates. Its answer is unvalidated; `finalise` judges it.
+
+    *timeout_ms* bounds the call. The agent passes what is left of its 90 s budget, so one slow model
+    cannot hold the run past the point where the worker can still write an outcome.
+    """
     response = llm_router.invoke(
         Feature.MEAL_PLAN_GENERATION,
         CorpusMealPlanResponse,
         system=CORPUS_MEAL_PLAN_SYSTEM_PROMPT,
         user=prepared.user,
+        timeout_ms=timeout_ms,
     )
     return response.suggestions
 
