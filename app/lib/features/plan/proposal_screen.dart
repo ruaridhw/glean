@@ -11,6 +11,8 @@ import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/plan_providers.dart';
+import 'package:glean/data/repositories/plan_repository.dart'
+    show GeneratedWeekCommit;
 import 'package:glean/data/util/week.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/diagnostics/diagnostics.dart';
@@ -61,42 +63,63 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
   }
 
   Future<void> _addToPlan() async {
-    final int count = await _controller.addToPlan();
+    final GenerateWeekController controller = _controller;
+    final int count = await controller.addToPlan();
     if (!mounted || _leaving) return;
     // A failed save keeps the failed face and its copy on screen: nothing was added.
     if (ref.read(generateWeekControllerProvider).phase ==
         GenerateProposalPhase.failed) {
       return;
     }
-    _leaveAfterSave(count);
+    await _leaveAfterSave(count, controller.lastCommit, controller);
   }
 
   /// Retry on a failed save stays on the review and re-runs the transaction; a successful one closes it like
   /// Add to plan does. Retry on a failed run stays on the working face, so there is nothing to close.
   Future<void> _retry() async {
+    final GenerateWeekController controller = _controller;
     final bool wasSave =
         ref.read(generateWeekControllerProvider).result != null;
-    final int count = await _controller.retry();
+    final int count = await controller.retry();
     if (!mounted || _leaving || !wasSave) return;
     if (ref.read(generateWeekControllerProvider).phase ==
         GenerateProposalPhase.failed) {
       return;
     }
-    _leaveAfterSave(count);
+    await _leaveAfterSave(count, controller.lastCommit, controller);
   }
 
-  void _leaveAfterSave(int count) {
+  String _addedMessage(int count) => count == 0
+      ? 'Week updated.'
+      : '${count == 1 ? '1 dinner' : '$count dinners'} added to plan · '
+            'missing ingredients went to your shopping list';
+
+  /// Closes the review, leaving an Undo snackbar on the root messenger. The controller is captured before the
+  /// pop: the snackbar outlives this screen, and its Undo restores the commit taken in the save transaction
+  /// (the new entries are removed; a swapped planned meal gets its recipe, shopping rows and rating back).
+  Future<void> _leaveAfterSave(
+    int count,
+    GeneratedWeekCommit? commit,
+    GenerateWeekController controller,
+  ) async {
     if (!mounted || _leaving) return;
     _leaving = true;
     ref.read(hapticsProvider).mediumImpact();
-    GleanSnackBar.show(
+    if (commit == null) {
+      GleanSnackBar.show(context, _addedMessage(count));
+      if (mounted) context.pop();
+      return;
+    }
+    await GleanSnackBar.runUndoable<GeneratedWeekCommit>(
       context,
-      count == 0
-          ? 'Week updated.'
-          : '${count == 1 ? '1 dinner' : '$count dinners'} added to plan · '
-                'missing ingredients went to your shopping list',
+      perform: () async => commit,
+      undo: (GeneratedWeekCommit snapshot) =>
+          controller.undoAddToPlan(snapshot),
+      message: _addedMessage(count),
+      failureMessage: 'Could not add your week. Try again.',
+      undoFailureMessage: 'Could not undo. Try again.',
     );
-    context.pop();
+    if (mounted) context.pop();
   }
 
   void _openSettings() => context.goNamed(AppRoutes.settings.name);

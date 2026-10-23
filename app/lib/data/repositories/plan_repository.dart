@@ -28,6 +28,35 @@ const Duration cookedHistoryWindow = Duration(days: 84);
 /// two added together.
 const int maxDislikedHistoryItems = 200;
 
+/// One planned entry as it was before Add to plan swapped its recipe: the entry row, the requirement rows it
+/// derived and its rating row (at most one). Taken inside the save transaction, so Undo restores exactly what
+/// the review replaced rather than re-deriving it.
+class SwappedEntrySnapshot {
+  SwappedEntrySnapshot({
+    required this.entry,
+    required List<ShoppingListItem> shopping,
+    required List<MealRating> rating,
+  }) : shopping = List.unmodifiable(shopping),
+       rating = List.unmodifiable(rating);
+
+  final MealPlanEntry entry;
+  final List<ShoppingListItem> shopping;
+  final List<MealRating> rating;
+}
+
+/// Everything one Add to plan changed: the meals it inserted and the entries whose recipe it swapped. Undo
+/// deletes the first and restores the second from their snapshots.
+class GeneratedWeekCommit {
+  GeneratedWeekCommit({
+    required List<int> addedEntryIds,
+    required List<SwappedEntrySnapshot> swappedEntries,
+  }) : addedEntryIds = List.unmodifiable(addedEntryIds),
+       swappedEntries = List.unmodifiable(swappedEntries);
+
+  final List<int> addedEntryIds;
+  final List<SwappedEntrySnapshot> swappedEntries;
+}
+
 class PlanRepository {
   PlanRepository(this._db, this._pantry);
 
@@ -441,6 +470,77 @@ class PlanRepository {
       ),
     );
   }
+
+  /// Everything [replaceEntryRecipe] is about to change, captured in the caller's transaction so Add to plan's
+  /// Undo can put the entry, its shopping rows and its rating back exactly.
+  Future<SwappedEntrySnapshot> snapshotEntrySwap({
+    required int entryId,
+    required String userId,
+  }) async {
+    final entry =
+        await (_db.select(_db.mealPlanEntries)
+              ..where((t) => t.id.equals(entryId) & t.userId.equals(userId)))
+            .getSingle();
+    final shopping =
+        await (_db.select(_db.shoppingListItems)..where(
+              (t) =>
+                  t.userId.equals(userId) &
+                  t.sourceMealPlanEntryId.equals(entryId),
+            ))
+            .get();
+    final rating =
+        await (_db.select(_db.mealRatings)..where(
+              (t) =>
+                  t.userId.equals(userId) & t.mealPlanEntryId.equals(entryId),
+            ))
+            .get();
+    return SwappedEntrySnapshot(
+      entry: entry,
+      shopping: shopping,
+      rating: rating,
+    );
+  }
+
+  /// Puts the week back as it was before [commit]: removes the meals Add to plan inserted (their shopping rows
+  /// and ratings cascade), and restores every swapped planned entry's recipe, shopping rows and rating/note.
+  /// The caller's snackbar owns the failure copy; a row deleted in the meantime makes the whole undo a no-op
+  /// that throws, rather than a half-restored week.
+  Future<void> undoGeneratedWeek({
+    required String userId,
+    required GeneratedWeekCommit commit,
+  }) => _db.transaction(() async {
+    for (final int entryId in commit.addedEntryIds) {
+      await deleteEntry(id: entryId, userId: userId);
+    }
+    for (final SwappedEntrySnapshot snapshot in commit.swappedEntries) {
+      final MealPlanEntry entry = snapshot.entry;
+      await (_db.update(
+        _db.mealPlanEntries,
+      )..where((t) => t.id.equals(entry.id) & t.userId.equals(userId))).write(
+        MealPlanEntriesCompanion(
+          recipeId: Value(entry.recipeId),
+          recipeTitle: Value(entry.recipeTitle),
+          externalIdSnapshot: Value(entry.externalIdSnapshot),
+        ),
+      );
+      await (_db.delete(_db.shoppingListItems)..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.sourceMealPlanEntryId.equals(entry.id),
+          ))
+          .go();
+      for (final ShoppingListItem row in snapshot.shopping) {
+        await _db.into(_db.shoppingListItems).insert(row.toCompanion(false));
+      }
+      await (_db.delete(_db.mealRatings)..where(
+            (t) => t.userId.equals(userId) & t.mealPlanEntryId.equals(entry.id),
+          ))
+          .go();
+      for (final MealRating row in snapshot.rating) {
+        await _db.into(_db.mealRatings).insert(row.toCompanion(false));
+      }
+    }
+  });
 
   /// Deletes the entry; its plan-derived shopping rows cascade away via `onDelete: cascade`.
   Future<DeletedPlanEntry> deleteWithSnapshot({
