@@ -22,6 +22,7 @@ from glean.sessions.models import (
     MAX_ITEM_BYTES,
     MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
+    AbandonResult,
     AgentSession,
     ClaimResult,
     SessionError,
@@ -64,6 +65,11 @@ def lease_seconds_for(remaining_seconds: float) -> int:
 # The longest any attempt can hold a session (a claim at the first instant of a full invocation). The
 # template test checks the visibility timeout covers it.
 MAX_LEASE_SECONDS = WORKER_TIMEOUT_SECONDS + LEASE_GRACE_SECONDS
+
+# The dead-letter queue's visibility timeout: how often a dead letter that found a live run is retried.
+# It must cover the DLQ handler's own 30 s timeout, and be short enough that the session is failed
+# within about a minute of the lease lapsing (so about 3 minutes after a crash, inside the app's cap).
+DEAD_LETTER_VISIBILITY_SECONDS = 60
 
 
 def utcnow() -> datetime:
@@ -113,11 +119,15 @@ class SessionStore(Protocol):
         """
         ...
 
-    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
-        """Fail the session, unless it has already finished. Says whether this call moved it.
+    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str) -> bool:
+        """Fail the session if this attempt still owns it. Says whether this call moved it."""
+        ...
 
-        The worker passes its owner token; the dead-letter handler passes none, because by then the run
-        that owned the session is gone and the queue has given up on it.
+    def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
+        """Fail a session nothing is running any more: the dead-letter handler's only write.
+
+        Fails it only when it is nonterminal and its owner's lease has lapsed. A live run is reported as
+        `STILL_LIVE` so its caller can keep the message instead of acknowledging it away.
         """
         ...
 
@@ -216,17 +226,23 @@ class InMemorySessionStore:
         self._write(record.model_copy(update={"status": SessionStatus.DONE, "result": result, "error": None}))
         return True
 
-    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str | None = None) -> bool:
-        record = self.get(user_sub, session_id)
-        if record is None or record.status.terminal:
-            return False
-        if owner is not None and record.owner != owner:
-            return False
-        if owner is None and not self._lease_lapsed(record, self._clock()):
-            # No owner token means the dead-letter handler: a live run finishes itself, so leave it.
+    def fail(self, user_sub: str, session_id: str, error: SessionError, *, owner: str) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
             return False
         self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))
         return True
+
+    def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
+        record = self.get(user_sub, session_id)
+        if record is None:
+            return AbandonResult.MISSING
+        if record.status.terminal:
+            return AbandonResult.FINISHED
+        if not self._lease_lapsed(record, self._clock()):
+            return AbandonResult.STILL_LIVE
+        self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))
+        return AbandonResult.FAILED
 
     def _owned(self, user_sub: str, session_id: str, owner: str) -> SessionRecord | None:
         """The record, if this attempt may still write to it."""

@@ -43,9 +43,16 @@ the run — while the other copy is still working, and if that copy then died no
 pick the session up. Acknowledging is reserved for a terminal session (nothing left to do) and for runs
 this invocation completed. The queue therefore allows three receives rather than two: one may be spent
 failing a live duplicate, and two genuine attempts still fail a session before its message is
-dead-lettered. The dead-letter handler marks a session `failed / worker_failed` only when it is
-nonterminal *and* its lease has lapsed, so a live run is left to finish. A crashed run comes back within
-about 2.5 minutes, inside the app's five-minute cap.
+dead-lettered.
+
+The dead-letter queue is a retry loop, not a bin. Its handler marks a session `failed / worker_failed`
+only when it is nonterminal *and* its lease has lapsed; when a live run still owns it, the handler
+**raises**, so the dead letter is kept and retried on the dead-letter queue's own 60 s visibility
+timeout. Acknowledging there would delete the last trigger that can fail or resume the session if that
+run then died. It acknowledges only what is finished: the session missing (expired), already terminal,
+or newly failed. So a session sits at most one dead-letter retry (about a minute) past its lease
+lapsing — about 3 minutes after a crash, or immediately after the owner's own 120 s timeout — which is
+still inside the app's five-minute cap. A crashed run comes back within about 2.5 minutes.
 
 One run also has a budget: 90 s (§6.2). It is checked before every graph step, the one blocking call
 (the model) gets only what is left of it, and spending it ends the session `failed / model_error`
@@ -78,6 +85,10 @@ until V6's scorer exists to supply the degraded plan.
 - **Capacity.** `agent_sessions` at 2/2 and `agent_checkpoints` at 3/3 join the catalogue's 10/10. F1
   (#162) adds the recipe store at 5/5, making the account 20/20 against the free tier's 25/25
   (ADR 0001); `tests/infra/test_template_free_tier.py` sums them and reserves F1's share.
+- **Every queue consumer acknowledges only work that is finished.** A busy delivery, on the source
+  queue or the dead-letter queue, fails instead of returning: in SQS a successful return *is* the
+  delete. That is why the dead-letter queue has its own short visibility timeout and why its handler
+  distinguishes "still live" from "nothing to do".
 - **The queue's timeout, the function's timeout, init and the lease move together.** The visibility
   timeout must stay above the worker's timeout plus the longest init (E3505 is enforced, not
   suppressed), and the longest lease any attempt can take must end before it. A lease taken at the

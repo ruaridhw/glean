@@ -25,6 +25,7 @@ from glean.sessions.models import (
     MAX_PROGRESS_LINES,
     MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
+    AbandonResult,
     AgentSession,
     ClaimResult,
     SessionError,
@@ -352,9 +353,9 @@ def test_the_dead_letter_handler_fails_a_session_whose_attempt_has_gone(
     sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
 
-    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+    outcome = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 
-    assert moved is True
+    assert outcome is AbandonResult.FAILED
     assert sessions.get("user-a", "sess-1").status is SessionStatus.FAILED
 
 
@@ -364,13 +365,13 @@ def test_an_ownerless_failure_leaves_a_live_run_alone(store: tuple[SessionStore,
     sessions.create(_session(), now=clock.now)
     sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
 
-    while_live = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+    while_live = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 
     clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
-    after_the_lease = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+    after_the_lease = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 
-    assert while_live is False
-    assert after_the_lease is True
+    assert while_live is AbandonResult.STILL_LIVE
+    assert after_the_lease is AbandonResult.FAILED
     assert sessions.get("user-a", "sess-1").status is SessionStatus.FAILED
 
 
@@ -380,10 +381,10 @@ def test_a_finished_session_is_never_failed_afterwards(store: tuple[SessionStore
     sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
     sessions.complete("user-a", "sess-1", _result(), owner="attempt-1")
 
-    moved = sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+    outcome = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
 
     record = sessions.get("user-a", "sess-1")
-    assert moved is False
+    assert outcome is AbandonResult.FINISHED
     assert record.status is SessionStatus.DONE
     assert record.error is None
 

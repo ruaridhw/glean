@@ -25,8 +25,9 @@ from glean.agent import build_deps, start
 from glean.config import get_settings
 from glean.observability import logger, metrics, tracer
 from glean.sessions.dynamo import DynamoSessionStore
-from glean.sessions.models import AgentSession, SessionError, SessionErrorCode
+from glean.sessions.models import AbandonResult, AgentSession, SessionError, SessionErrorCode
 from glean.sessions.queue import SessionMessage
+from glean.sessions.store import SessionBusyError
 
 if TYPE_CHECKING:
     from glean.agent.deps import AgentDeps
@@ -72,11 +73,13 @@ def handle_record(record: dict[str, Any], deps: AgentDeps) -> bool:
 @tracer.capture_lambda_handler
 @logger.inject_lambda_context
 def dlq_handler(event: dict[str, Any], _context: object = None) -> None:
-    """The dead-letter handler: SQS ran out of attempts, so an abandoned session becomes `worker_failed`.
+    """The dead-letter handler: the source queue gave up, so an abandoned session becomes `worker_failed`.
 
-    It only fails a session whose lease has lapsed. A live run is left alone: it is still working, and
-    will write its own outcome. That is why the queue allows three receives -- a duplicate delivery that
-    was failed on purpose costs one of them.
+    It fails a session only when its lease has lapsed. If a live run still owns it, the handler
+    **raises**: a successful return would acknowledge (delete) the dead letter, and if that run then
+    died nothing would be left to recover the session. The dead-letter queue's own visibility timeout
+    brings the message back, so the session is failed within about a minute of its lease lapsing. The
+    source queue allows three receives because a duplicate delivery failed on purpose costs one.
     """
     sessions = DynamoSessionStore.from_environment()
     try:
@@ -92,11 +95,13 @@ def _fail_dead_letter(record: dict[str, Any], sessions: DynamoSessionStore) -> N
     except ValidationError:
         logger.exception("dropping a dead-letter message this queue did not write")
         return
-    moved = sessions.fail(message.user_sub, message.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
-    if moved:
+    outcome = sessions.fail_if_abandoned(
+        message.user_sub, message.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED)
+    )
+    if outcome is AbandonResult.STILL_LIVE:
+        # Do not acknowledge: the dead letter comes back, and by then the run has finished or died.
+        raise SessionBusyError(message.session_id)
+    if outcome is AbandonResult.FAILED:
         logger.warning("session failed after its message was dead-lettered", extra={"session_id": message.session_id})
     else:
-        logger.info(
-            "dead-lettered session is finished or still owned by a live run; leaving it alone",
-            extra={"session_id": message.session_id},
-        )
+        logger.info(f"dead-lettered session needed nothing ({outcome.value})", extra={"session_id": message.session_id})

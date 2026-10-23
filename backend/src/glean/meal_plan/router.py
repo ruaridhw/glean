@@ -63,7 +63,7 @@ def create_session(
     except Exception as error:
         # The session exists but nothing will run it. Fail it here rather than leave the app polling
         # a session that can never move, and let the app offer its retry.
-        sessions.fail(user_sub, session.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
+        sessions.fail_if_abandoned(user_sub, session.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Couldn't start planning your week. Try again.",

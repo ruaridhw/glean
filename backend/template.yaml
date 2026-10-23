@@ -261,6 +261,11 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "glean-agent-sessions-dlq-${Environment}"
+      # A dead letter that finds its session still running is failed on purpose so the message is kept
+      # (worker.py). This timeout is its retry cadence: at least the handler's 30 s, and short enough
+      # that a session is failed within about a minute of its lease lapsing (~3 minutes after a crash).
+      VisibilityTimeout: 60
+      # Two weeks, so a session that is retried all this way is still findable.
       MessageRetentionPeriod: 1209600
 
   GleanAgentQueue:
