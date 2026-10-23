@@ -20,6 +20,7 @@ import httpx
 import pytest
 from fastapi import Request  # noqa: TC002 - FastAPI resolves this annotation at runtime.
 from fastapi.testclient import TestClient
+from limits import parse
 from pydantic import SecretStr
 
 from glean.catalogue.router import get_catalogue_store
@@ -267,6 +268,41 @@ def limited_client(test_settings: Settings) -> Iterator[TestClient]:
 
 def _post(client: TestClient, route: AiRoute, user: str = "user-a") -> httpx.Response:
     return client.post(route.path, headers={"x-test-user": user}, **route.request_kwargs)
+
+
+def _route_named(name: str) -> AiRoute:
+    return next(route for route in AI_ROUTES if route.name == name)
+
+
+@pytest.mark.parametrize("name", ["meal plan session", "meal plan"])
+def test_a_refused_request_says_how_many_seconds_until_it_can_try_again(
+    limited_client: TestClient, name: str, tmp_path: Path
+) -> None:
+    """The app turns this into "Try again in N minutes", so it has to be a real wait, not zero."""
+    route = _route_named(name)
+
+    with route.boundaries(tmp_path):
+        allowed = [_post(limited_client, route) for _ in range(HOURLY_LIMIT)]
+        refused = _post(limited_client, route)
+
+    assert refused.status_code == 429
+    retry_after = int(refused.headers["Retry-After"])
+    assert 1 <= retry_after <= 3600  # an hourly window resets within the hour
+    # Additive: the body the app already reads is unchanged.
+    assert "limit" in refused.json()["detail"].lower()
+    assert [response.headers.get("Retry-After") for response in allowed] == [None, None]
+
+
+def test_the_retry_after_is_whole_seconds_until_the_window_resets(test_settings: Settings) -> None:
+    from glean.rate_limit import _seconds_until_a_slot_frees, limiter  # noqa: PLC0415 - the helper under test
+
+    item = parse("1/hour")
+    limiter.limiter.hit(item, "the-user")
+
+    seconds = _seconds_until_a_slot_frees(item, "the-user")
+
+    assert isinstance(seconds, int)
+    assert seconds > 0
 
 
 @pytest.mark.parametrize("route", AI_ROUTES, ids=lambda route: route.name)
