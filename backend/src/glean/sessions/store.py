@@ -3,11 +3,11 @@
 The store owns three rules so no caller can break them:
 
 - **`claim` is the only way into `running`.** It wins a `queued` session, or takes over a `running` one
-  whose lease has lapsed — and it hands the winner an owner token plus a lease. A duplicate delivery of
-  a live run is told it is owned elsewhere, so it drops; a crashed run's redelivery can take over.
-- **Only the owner writes the outcome.** `refresh_lease`, `append_progress`, `complete` and `fail` are
-  conditioned on the owner token, so a worker that lost its lease cannot finish a run someone else is
-  now driving.
+  whose lease has lapsed — and it hands the winner an owner token plus a lease taken ONCE, never
+  extended. A duplicate delivery of a live run is told it is owned elsewhere, so it drops; a crashed
+  run's redelivery can take over.
+- **Only the owner writes the outcome.** `append_progress`, `complete` and `fail` are conditioned on the
+  owner token, so a worker that lost its lease cannot finish a run someone else is now driving.
 - **Every update refreshes `updated_at` and the TTL.** `get` never writes, because the app polls it
   every second.
 """
@@ -33,10 +33,20 @@ if TYPE_CHECKING:
 
     from glean.meal_plan.schemas import MealPlanResult
 
-# How long one attempt may run without refreshing its lease. The worker's function timeout is 120 s,
-# so a run that fits the Lambda fits its lease, and a redelivery can take over as soon as the queue
-# hands the message out again (about two minutes after the crash).
-LEASE_SECONDS = 120
+# The worker's function timeout and the queue's visibility timeout, which `template.yaml` must match
+# (tests/infra/test_template_async_stack.py checks all three numbers against these).
+WORKER_TIMEOUT_SECONDS = 120
+QUEUE_VISIBILITY_SECONDS = 130
+
+# The lease an attempt takes at claim, and never extends. Two rules pick it:
+#   * below the visibility timeout, so every redelivered copy of the message finds it lapsed — a
+#     refreshed lease could outlive the visibility, and then the redelivered message would be acked as
+#     "owned elsewhere" with nothing left to recover the run;
+#   * above the function timeout plus a small margin, so a live run's own delivery can never be taken
+#     over while it is still inside the Lambda, and a duplicate copy delivered alongside it is dropped.
+# A Lambda can never outlive its timeout, so 125 s after the claim the attempt is provably gone.
+LEASE_MARGIN_SECONDS = 5
+LEASE_SECONDS = WORKER_TIMEOUT_SECONDS + LEASE_MARGIN_SECONDS
 
 
 def utcnow() -> datetime:
@@ -68,10 +78,6 @@ class SessionStore(Protocol):
 
     def claim(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> ClaimResult:
         """Try to become the attempt that runs this session, taking a lease until `LEASE_SECONDS` from *now*."""
-        ...
-
-    def refresh_lease(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> bool:
-        """Extend the current owner's lease. False when this attempt no longer owns the session."""
         ...
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
@@ -148,13 +154,6 @@ class InMemorySessionStore:
             record.model_copy(update={"status": SessionStatus.RUNNING, "owner": owner, "lease_until": lease_from(now)})
         )
         return ClaimResult.RESUMED if resumed else ClaimResult.STARTED
-
-    def refresh_lease(self, user_sub: str, session_id: str, *, owner: str, now: datetime) -> bool:
-        record = self._owned(user_sub, session_id, owner)
-        if record is None:
-            return False
-        self._write(record.model_copy(update={"lease_until": lease_from(now)}))
-        return True
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
         record = self._owned(user_sub, session_id, owner)

@@ -26,7 +26,7 @@ from glean.recipes.stored import StoredIngredient, StoredRecipe
 from glean.sessions.dynamo import DynamoSessionStore
 from glean.sessions.models import AgentSession, SessionError, SessionErrorCode, SessionStatus
 from glean.sessions.queue import SessionMessage
-from glean.sessions.store import LEASE_SECONDS, InMemorySessionStore
+from glean.sessions.store import LEASE_SECONDS, QUEUE_VISIBILITY_SECONDS, InMemorySessionStore
 from glean.worker import dlq_handler, handle_record, handler
 from tests.infra.cfn import sessions_table_properties
 
@@ -242,6 +242,96 @@ def test_a_crashed_run_is_resumed_from_its_checkpoint(tmp_path: Any) -> None:
     assert record.progress[0] == "Reading your pantry and the recipes we know"
     assert record.progress.count("Reading your pantry and the recipes we know") == 1
     assert recovered_router.calls == 1
+
+
+def test_a_run_that_crashes_late_is_taken_over_at_the_visibility_boundary(tmp_path: Any) -> None:
+    """The round-2 reproduction: a crash after a long prepare must not leave the retry with a live lease.
+
+    The lease is fixed at claim, so a redelivery at the queue's visibility boundary (130 s) always finds it
+    lapsed (125 s) and takes over. With a refreshed lease it would have read "owned elsewhere", been acked,
+    and the session would have stayed running for ever.
+    """
+
+    class ProcessDied(BaseException):
+        """A killed Lambda: not an Exception, so nothing catches it."""
+
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    dead = _deps(sessions, tmp_path, PicksOneCandidate(fails_with=ProcessDied()), clock)
+    claimed_lease = int(clock.now.timestamp()) + LEASE_SECONDS
+
+    def slow_prepare() -> RecipeCorpusStore:
+        corpora = _corpus(tmp_path)
+        clock.advance(seconds=45)  # a slow corpus read, past the old 40 s refresh point
+        return corpora
+
+    dead = AgentDeps(
+        sessions=dead.sessions,
+        checkpointer=dead.checkpointer,
+        llm_router=dead.llm_router,
+        corpus_factory=slow_prepare,
+        clock=dead.clock,
+        monotonic=dead.monotonic,
+    )
+
+    with pytest.raises(ProcessDied):
+        start(_queued("sess-1"), dead)
+
+    crashed = sessions.get("user-a", "sess-1")
+    assert crashed is not None
+    assert crashed.status is SessionStatus.RUNNING
+    assert crashed.lease_until == claimed_lease
+
+    # The message reappears when the queue's visibility timeout expires, which is after the lease lapsed.
+    clock.advance(seconds=QUEUE_VISIBILITY_SECONDS - 45)
+    recovered_router = PicksOneCandidate()
+    recovered = _deps(sessions, tmp_path, recovered_router, clock)
+    recovered = AgentDeps(
+        sessions=recovered.sessions,
+        checkpointer=dead.checkpointer,
+        llm_router=recovered.llm_router,
+        corpus_factory=recovered.corpus_factory,
+        clock=recovered.clock,
+        monotonic=recovered.monotonic,
+    )
+
+    assert handle_record(_record("sess-1"), recovered) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.progress.count("Reading your pantry and the recipes we know") == 1
+    assert recovered_router.calls == 1
+
+
+def test_a_run_writes_no_lease_beyond_the_claim(tmp_path: Any) -> None:
+    """Refreshes are gone: a completed run costs create, claim, three progress lines and the result."""
+    clock = FakeClock()
+    sessions = _queued_store(clock=clock)
+    writes_after_create = sessions.writes
+    claimed_at = int(clock.now.timestamp())
+
+    def slow_corpus() -> RecipeCorpusStore:
+        clock.advance(seconds=50)  # well past the old refresh cadence
+        return _corpus(tmp_path)
+
+    deps = _deps(sessions, tmp_path, PicksOneCandidate(), clock)
+    deps = AgentDeps(
+        sessions=deps.sessions,
+        checkpointer=deps.checkpointer,
+        llm_router=deps.llm_router,
+        corpus_factory=slow_corpus,
+        clock=deps.clock,
+        monotonic=deps.monotonic,
+    )
+
+    handle_record(_record("sess-1"), deps)
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.lease_until == claimed_at + LEASE_SECONDS
+    # claim + three progress writes + complete; no lease refresh anywhere in between.
+    assert sessions.writes - writes_after_create == 5
 
 
 def test_a_takeover_with_no_checkpoint_starts_the_run_fresh(tmp_path: Any) -> None:

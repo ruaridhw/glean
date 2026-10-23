@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from glean.sessions.store import LEASE_SECONDS, QUEUE_VISIBILITY_SECONDS, WORKER_TIMEOUT_SECONDS
 from tests.infra.cfn import (
     TEMPLATE,
     checkpoints_table_properties,
@@ -62,6 +63,21 @@ def test_the_queue_outlives_the_worker_as_aws_requires() -> None:
     worker = functions()["AgentWorkerFunction"]
 
     assert queue_properties("GleanAgentQueue")["VisibilityTimeout"] > worker["Timeout"]
+
+
+def test_the_lease_sits_between_the_function_timeout_and_the_visibility_timeout() -> None:
+    """The code's lease (store.LEASE_SECONDS) must be derivable from, and inside, these two numbers.
+
+    Above the lambda timeout means a live run is never taken over inside its own invocation; below the
+    visibility timeout means every redelivered copy of the message finds the lease lapsed, so a crashed
+    run's work is picked up rather than acked away.
+    """
+    worker = functions()["AgentWorkerFunction"]
+    queue = queue_properties("GleanAgentQueue")
+
+    assert worker["Timeout"] == WORKER_TIMEOUT_SECONDS
+    assert queue["VisibilityTimeout"] == QUEUE_VISIBILITY_SECONDS
+    assert worker["Timeout"] < LEASE_SECONDS < queue["VisibilityTimeout"]
 
 
 def test_the_template_suppresses_no_lint_rule() -> None:

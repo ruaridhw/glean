@@ -106,8 +106,9 @@ V1's graph wraps the corpus pipeline only.
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
 conditional `queued -> running` (a duplicate delivery finds it running and drops), runs
 `agent.start`, and writes `done` or `failed`. Liveness is the session's own lease, not the message's
-visibility: the attempt that starts a run takes an owner token and a 120 s lease, every later write is
-conditioned on that token, and a delivery may take over a `running` session whose lease has lapsed —
+visibility: the attempt that starts a run takes an owner token and a lease at claim (125 s = the 120 s
+worker timeout + 5 s, never extended), every later write is conditioned on that token, and a delivery
+may take over a `running` session whose lease has lapsed —
 resuming it from its LangGraph checkpoint. A crashed run therefore comes back within about two minutes,
 inside the app's five-minute cap; the queue's 130 s visibility timeout stays above the worker's 120 s
 timeout (cfn-lint E3505 is enforced, not suppressed), and the dead-letter queue's handler marks a

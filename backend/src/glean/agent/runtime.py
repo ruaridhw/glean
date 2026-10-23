@@ -58,7 +58,7 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
 
     started = time.monotonic()
     metrics.add_metric(name=STARTED, unit=MetricUnit.Count, value=1)
-    guard = RunGuard(deps.sessions, session, owner=owner, clock=deps.clock, monotonic=deps.monotonic)
+    guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic)
     try:
         result = _run(session, deps, guard=guard, resume=outcome is ClaimResult.RESUMED)
     except LostOwnership:
