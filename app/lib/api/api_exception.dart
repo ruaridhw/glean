@@ -37,7 +37,11 @@ final class ApiAuthException extends ApiException {
 /// The server returned 429: this user has used up the hourly allowance for AI requests. Retrying straight away
 /// fails identically, so callers show [userMessage] rather than a generic "try again".
 final class ApiRateLimitException extends ApiException {
-  const ApiRateLimitException(super.message);
+  const ApiRateLimitException(super.message, {this.retryAfterMinutes});
+
+  /// How long the server asked the caller to wait, in whole minutes, when it said so (a `Retry-After`
+  /// header); null when it did not, leaving the caller to pick a default.
+  final int? retryAfterMinutes;
 
   String get userMessage =>
       'You have reached the hourly limit for AI features. '
