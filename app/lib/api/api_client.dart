@@ -392,14 +392,15 @@ class GleanApiClient {
   /// The server's `Retry-After` in whole minutes, when it sends one as a number of seconds. The rate-limit
   /// message names a wait, so prefer the server's figure over the caller's default; a missing or unparsable
   /// header (an HTTP date, say) leaves the caller to choose.
-  /// The server's `Retry-After` in whole minutes, when it sends one as a number of seconds. The rate-limit
-  /// message names a wait, so prefer the server's figure over the caller's default; a missing or unparsable
-  /// header (an HTTP date, say) leaves the caller to choose.
+  /// The server's `Retry-After`, in whole minutes, when it sends one as a number of seconds (`60`). The
+  /// rate-limit message names a wait, so the server's figure beats the caller's default: seconds round up, and
+  /// never round down to "0 minutes". A missing header, or one carrying an HTTP date, leaves the caller to choose.
   int? _retryAfterMinutes(http.Response response) {
     final String? header = response.headers['retry-after'];
     if (header == null) return null;
     final int? seconds = int.tryParse(header.trim());
-    if (seconds == null || seconds <= 0) return null;
+    if (seconds == null) return null;
+    if (seconds <= 0) return 1;
     return (seconds / 60).ceil();
   }
 

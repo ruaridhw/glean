@@ -623,6 +623,37 @@ void main() {
       );
     });
 
+    for (final (String? header, int? minutes) in <(String?, int?)>[
+      ('120', 2),
+      ('30', 1),
+      ('59', 1),
+      ('0', 1),
+      (null, null),
+    ]) {
+      test('a 429 with Retry-After $header reports ${minutes}min', () async {
+        when(
+          () => httpClient.get(any(), headers: any(named: 'headers')),
+        ).thenAnswer(
+          (_) async => http.Response(
+            '{"detail":"AI request limit reached"}',
+            429,
+            headers: header == null ? const {} : {'retry-after': header},
+          ),
+        );
+
+        await expectLater(
+          client.searchRecipes(),
+          throwsA(
+            isA<ApiRateLimitException>().having(
+              (e) => e.retryAfterMinutes,
+              'retryAfterMinutes',
+              minutes,
+            ),
+          ),
+        );
+      });
+    }
+
     test(
       'a malformed body throws ApiParseException rather than crashing',
       () async {
