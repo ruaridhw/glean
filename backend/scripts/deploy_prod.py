@@ -28,6 +28,7 @@ PARAMETER_ENV_VARS = {
     "LangSmithEndpoint": "LANGSMITH_ENDPOINT",
     "GitSha": "GIT_SHA",
     "RateLimitPerHour": "RATE_LIMIT_PER_HOUR",
+    "AgentSessionTtlHours": "AGENT_SESSION_TTL_HOURS",
 }
 
 

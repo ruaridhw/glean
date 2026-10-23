@@ -35,3 +35,33 @@ def load(path: Path) -> dict[str, Any]:
 
 def catalogue_table_properties() -> dict[str, Any]:
     return load(TEMPLATE)["Resources"]["GleanCatalogueTable"]["Properties"]
+
+
+def dynamo_table_properties() -> dict[str, dict[str, Any]]:
+    """Every DynamoDB table in the stack, by logical id, as the template declares it."""
+    return {
+        name: resource["Properties"]
+        for name, resource in load(TEMPLATE)["Resources"].items()
+        if resource["Type"] == "AWS::DynamoDB::Table"
+    }
+
+
+def sessions_table_properties() -> dict[str, Any]:
+    return dynamo_table_properties()["GleanAgentSessionsTable"]
+
+
+def checkpoints_table_properties() -> dict[str, Any]:
+    return dynamo_table_properties()["GleanAgentCheckpointsTable"]
+
+
+def queue_properties(logical_id: str) -> dict[str, Any]:
+    return load(TEMPLATE)["Resources"][logical_id]["Properties"]
+
+
+def functions() -> dict[str, dict[str, Any]]:
+    """Every Lambda function in the stack, by logical id."""
+    return {
+        name: resource["Properties"]
+        for name, resource in load(TEMPLATE)["Resources"].items()
+        if resource["Type"] == "AWS::Serverless::Function"
+    }

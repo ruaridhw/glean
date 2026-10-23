@@ -1,6 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+Metadata:
+  # E3505 wants the queue's visibility timeout to exceed the function's timeout, so a message is never
+  # handed out twice while its handler still runs. This stack wants the opposite (ADR 0026): liveness
+  # IS the 60 s lease, renewed every 20 s while the graph runs, so a worker that dies mid-run has its
+  # message reappear within a minute instead of blocking the session. A duplicate delivery is
+  # harmless: glean.agent.start only begins on a conditional queued -> running write, so the second
+  # delivery finds the session already running and drops it.
+  cfn-lint:
+    config:
+      ignore_checks:
+        - E3505
+
 Globals:
   Function:
     Timeout: 30
@@ -56,6 +68,12 @@ Parameters:
     Type: Number
     Default: 60
     Description: Paid-model AI requests allowed per user per hour, per Lambda container.
+  # How long a Generate session (and its checkpoints) outlives the tap. The app polls a session for
+  # minutes, so this is only the backstop that keeps the two tables inside the free tier's storage.
+  AgentSessionTtlHours:
+    Type: Number
+    Default: 24
+    MinValue: 1
 
 Resources:
   # Every user's on-device data is keyed by their Cognito `sub`. A new pool
@@ -190,6 +208,80 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: false
 
+  # One item per Generate tap (spec §6.3): the inputs, the status, a bounded list of progress lines,
+  # and then the plan or a typed error. 2/2, with a TTL refreshed on every update. Two more tables take
+  # the account to 15/15 of the 25/25 free tier (ADR 0001); with F1's 5/5 recipe table the stack is
+  # 20/20.
+  GleanAgentSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "glean-agent-sessions-${Environment}"
+      TableClass: STANDARD
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+  # LangGraph's checkpoints, owned by the agent module (spec §6.2). 3/3, string PK/SK as the saver
+  # expects, and the saver's own gzip compression and 24 h TTL are set in code, not here.
+  GleanAgentCheckpointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "glean-agent-checkpoints-${Environment}"
+      TableClass: STANDARD
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+  # Lease-based liveness (ADR 0026): the worker renews this visibility timeout every 20 s while a run
+  # continues, so a crashed worker's message reappears within a minute rather than waiting out the
+  # function's timeout. After two failed attempts the dead-letter handler marks the session failed.
+  GleanAgentDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "glean-agent-sessions-dlq-${Environment}"
+      MessageRetentionPeriod: 1209600
+
+  GleanAgentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "glean-agent-sessions-${Environment}"
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt GleanAgentDeadLetterQueue.Arn
+        maxReceiveCount: 2
+
   GleanFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -206,6 +298,10 @@ Resources:
           S3_RECIPE_CACHE_BUCKET: !Ref GleanRecipeCacheBucket
           CATALOGUE_TABLE: !Ref GleanCatalogueTable
           RATE_LIMIT_PER_HOUR: !Ref RateLimitPerHour
+          AGENT_SESSIONS_TABLE: !Ref GleanAgentSessionsTable
+          AGENT_CHECKPOINTS_TABLE: !Ref GleanAgentCheckpointsTable
+          AGENT_SESSION_QUEUE_URL: !Ref GleanAgentQueue
+          AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -220,6 +316,10 @@ Resources:
             BucketName: !Ref GleanRecipeCacheBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref GleanCatalogueTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanAgentSessionsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt GleanAgentQueue.QueueName
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
         - Statement:
             - Effect: Allow
@@ -232,6 +332,87 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+
+  # The session worker (spec §6.3): same bundle as the API, one message at a time, and long enough to
+  # plan without the HTTP API's 30 s cap. It renews the message's visibility while it runs.
+  AgentWorkerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      CodeUri: .
+      Handler: glean.worker.handler
+      Timeout: 120
+      MemorySize: 256
+      Tracing: Active
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref GleanUserPool
+          COGNITO_APP_CLIENT_ID: !Ref GleanUserPoolClient
+          S3_RECEIPTS_BUCKET: !Ref GleanReceiptsBucket
+          S3_RECIPE_CACHE_BUCKET: !Ref GleanRecipeCacheBucket
+          CATALOGUE_TABLE: !Ref GleanCatalogueTable
+          AGENT_SESSIONS_TABLE: !Ref GleanAgentSessionsTable
+          AGENT_CHECKPOINTS_TABLE: !Ref GleanAgentCheckpointsTable
+          AGENT_SESSION_QUEUE_URL: !Ref GleanAgentQueue
+          AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
+          LANGSMITH_TRACING: !Ref LangSmithTracing
+          LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
+          LANGSMITH_PROJECT: glean
+          LANGSMITH_ENDPOINT: !Ref LangSmithEndpoint
+          LANGCHAIN_CALLBACKS_BACKGROUND: "false"
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - CloudWatchLogsFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref GleanRecipeCacheBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanAgentSessionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanAgentCheckpointsTable
+        # Renewing the lease needs ChangeMessageVisibility; acknowledging needs DeleteMessage.
+        - SQSPollerPolicy:
+            QueueName: !GetAtt GleanAgentQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:glean/${Environment}/*"
+      Events:
+        SessionQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt GleanAgentQueue.Arn
+            BatchSize: 1
+
+  # SQS gave up on the message: mark its session failed. Nothing else, so it needs nothing else.
+  AgentDeadLetterFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      CodeUri: .
+      Handler: glean.worker.dlq_handler
+      Timeout: 30
+      MemorySize: 128
+      Tracing: Active
+      Environment:
+        Variables:
+          AGENT_SESSIONS_TABLE: !Ref GleanAgentSessionsTable
+          AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - CloudWatchLogsFullAccess
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanAgentSessionsTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt GleanAgentDeadLetterQueue.QueueName
+      Events:
+        DeadLetterQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt GleanAgentDeadLetterQueue.Arn
+            BatchSize: 1
 
   PreSignUpFunction:
     Type: AWS::Serverless::Function
@@ -265,6 +446,18 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${GleanFunction}"
       RetentionInDays: 14
 
+  AgentWorkerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AgentWorkerFunction}"
+      RetentionInDays: 14
+
+  AgentDeadLetterFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AgentDeadLetterFunction}"
+      RetentionInDays: 14
+
   ErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -290,5 +483,13 @@ Outputs:
     Value: !Ref GleanUserPoolClient
   CatalogueTableName:
     Value: !Ref GleanCatalogueTable
+  AgentSessionsTableName:
+    Value: !Ref GleanAgentSessionsTable
+  AgentCheckpointsTableName:
+    Value: !Ref GleanAgentCheckpointsTable
+  AgentQueueUrl:
+    Value: !Ref GleanAgentQueue
+  AgentDeadLetterQueueUrl:
+    Value: !Ref GleanAgentDeadLetterQueue
   CognitoDomain:
     Value: !Sub "${CognitoDomainPrefix}-${Environment}.auth.eu-west-2.amazoncognito.com"

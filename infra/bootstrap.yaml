@@ -55,13 +55,22 @@ Resources:
               - !Sub 'arn:aws:s3:::glean-receipts-prod-${AWS::AccountId}/*'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}'
               - !Sub 'arn:aws:s3:::glean-recipe-cache-prod-${AWS::AccountId}/*'
-          # The catalogue table (ADR 0001) is created and updated by CloudFormation with the deploy
-          # role's credentials; scope it to this environment's table and its indexes.
+          # The catalogue, agent-session and agent-checkpoint tables (ADR 0001, ADR 0026) are created
+          # and updated by CloudFormation with the deploy role's credentials; scope it to this
+          # environment's tables and the catalogue's index.
           - Effect: Allow
             Action: dynamodb:*
             Resource:
               - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod'
               - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod/index/*'
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-sessions-prod'
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-checkpoints-prod'
+          # The session queue and its dead-letter queue, likewise managed by CloudFormation.
+          - Effect: Allow
+            Action: sqs:*
+            Resource:
+              - !Sub 'arn:aws:sqs:*:${AWS::AccountId}:glean-agent-sessions-prod'
+              - !Sub 'arn:aws:sqs:*:${AWS::AccountId}:glean-agent-sessions-dlq-prod'
           - Effect: Allow
             Action:
               - dynamodb:DescribeLimits
