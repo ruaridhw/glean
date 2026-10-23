@@ -55,7 +55,10 @@ src/glean/
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
                       #   hard constraints (dietary decisions, planned meals, time cap) are applied first
-                      #   and never relax. history comes in on the request as `cooked_history`.
+                      #   and never relax. history comes in on the request as `cooked_history`, carrying
+                      #   each cook's rating and note: a recipe whose latest rating is thumbs down never
+                      #   comes back, floor or no floor, and the note never reaches a prompt (screening it
+                      #   is the feedback screen's job, which does not exist yet).
 ```
 
 ### Structured output only
