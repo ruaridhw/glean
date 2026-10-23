@@ -307,19 +307,23 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
           ),
         ];
     }
+    // A Wrap, not a Row: at a 320 px screen with 2x text the two actions cannot share one line, and a Row
+    // overflows instead of stacking them.
     return SafeArea(
       minimum: EdgeInsets.all(tokens.spacing.md),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: tokens.spacing.sm,
+        runSpacing: tokens.spacing.sm,
         children: <Widget>[
           if (state.saving &&
-              state.phase == GenerateProposalPhase.proposal) ...[
+              state.phase == GenerateProposalPhase.proposal) ...<Widget>[
             const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(width: tokens.spacing.sm),
           ],
           ...actions,
         ],

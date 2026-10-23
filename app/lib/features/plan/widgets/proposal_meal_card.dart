@@ -79,8 +79,12 @@ class ProposalSwapPanel extends StatelessWidget {
             ),
           ],
           SizedBox(height: tokens.spacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          // Wrap constrains the button to the card's width, so a long label wraps instead of overflowing at
+          // large text scales. The panel's actions stay on one row while they fit.
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: tokens.spacing.sm,
+            runSpacing: tokens.spacing.sm,
             children: <Widget>[
               OutlinedButton(
                 onPressed: onUseAlternative,
