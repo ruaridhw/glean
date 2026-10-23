@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/router/app_routes.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/util/week.dart';
