@@ -30,6 +30,15 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 ```
 src/glean/
 ├── main.py           # FastAPI app + Mangum handler
+├── worker.py         # the async stack's two Lambda entry points: glean.worker.handler (SQS session
+│                     #   worker) and glean.worker.dlq_handler (marks a dead-lettered session failed)
+├── agent/            # the meal-plan agent as one deep module: start(session) hides LangGraph, the
+│                     #   checkpointer, the graph nodes and the progress lines. The ONLY place that may
+│                     #   import LangGraph (ruff TID251, like glean/llm.py for LangChain)
+├── sessions/         # agent sessions: the agent_sessions item models, the in-memory and DynamoDB
+│                     #   stores, the SQS queue + visibility lease, and the local factories
+├── dev/              # local-only helpers: the queue consumer for Docker Compose, a stub meal-plan
+│                     #   model, and the dev router
 ├── rate_limit.py     # enforce_ai_rate_limit: the per-user limit dependency for paid-model routes
 ├── config.py         # Pydantic BaseSettings (reads from .env / Secrets Manager in Lambda)
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
@@ -51,6 +60,9 @@ src/glean/
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation, saved mode and corpus mode
+                      # /meal-plan/sessions (POST, GET) — the async agent session routes
+                      # pipeline.py: corpus mode as prepare -> choose -> finalise, the three steps the
+                      #   sync route runs in order and the agent graph runs as its three nodes
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
@@ -71,6 +83,43 @@ app's `shoppingUnits` list by hand (a test catches drift).
 
 Callers pass `invoke` a `system` prompt and a `user` message (text, or text and `ImagePart`s) and never import
 LangChain or the OpenRouter SDK. Only `llm.py` does; ruff's `TID251` rejects those imports anywhere else in `src/glean`.
+
+### Agent sessions (the async meal plan)
+
+`POST /meal-plan/sessions` returns at once and the plan is made out of process (ADR 0026). The
+synchronous `POST /meal-plan` stays, shares `meal_plan.pipeline` and goes in a follow-up PR.
+
+```
+POST /meal-plan/sessions           202 {"session_id": "..."}        one paid call, rate limited
+GET  /meal-plan/sessions/{id}      200 SessionView                  free, never rate limited
+GET  ...?after=<cursor>            progress lines since the cursor
+```
+
+`SessionView` is `{session_id, status, progress, next_cursor, result, error, updated_at}`.
+`status` is `queued | running | waiting_for_user | done | failed`; `result` is `MealPlanResult`
+(the sync route's shape, `uses_up` included) and `error` is `{code, retry_after_minutes}` with
+`code` one of `no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
+Both routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
+another user's session is a 404 rather than a 403. `POST` refuses `source: "saved"` with a 422 —
+V1's graph wraps the corpus pipeline only.
+
+How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
+conditional `queued -> running` (a duplicate delivery finds it running and drops), runs
+`agent.start`, and writes `done` or `failed`. Liveness is the queue lease: a 60 s visibility timeout
+renewed every 20 s, and the dead-letter queue's handler marks a session `worker_failed` once SQS gives
+up. Never add a state machine or a scheduler on top (ADR 0026).
+
+- **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
+  `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a
+  session and the sync route return the same picks for the same request and seed (the session id
+  seeds the sampler). A wider graph (`plan <-> act`, questions, cancel) changes this module only.
+- **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
+  `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
+  and the cursor is an absolute index, so a poll is idempotent.
+- **`AGENT_RUNNER=inline`** (unit tests, evals, `make start-backend` on the host) runs the agent in
+  the request against the in-memory store and saver. Deployed and Compose run `queue`.
+  `make start-backend-docker` brings up DynamoDB Local, ElasticMQ, the worker and a bootstrap that
+  builds them from `template.yaml`.
 
 ### Auth
 
