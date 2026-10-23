@@ -10,6 +10,7 @@ Framework-free: the store implementations, the queue and the routes all share th
 
 from __future__ import annotations
 
+import gzip
 from datetime import datetime  # noqa: TC003 - Pydantic resolves this annotation when the model is built
 from enum import StrEnum
 
@@ -22,6 +23,32 @@ SESSION_TTL_HOURS = 24
 # How many progress lines one item keeps. The bound is a safety net: V1's graph writes three, V7's
 # tools a handful, and a runaway loop must not grow an item without limit. Older lines are dropped.
 MAX_PROGRESS_LINES = 50
+
+# DynamoDB refuses an item over 400 KB, and the whole item is one write: the inputs, the progress lines
+# and the result share that budget. The inputs are stored gzipped, and the rest is reserved here so a
+# request that validates can never produce an item that fails to write.
+MAX_ITEM_BYTES = 400 * 1024
+# A corpus plan is at most seven meals; even generous reasons stay far inside this.
+RESULT_RESERVE_BYTES = 32 * 1024
+# Fifty progress lines of a sentence or two each.
+PROGRESS_RESERVE_BYTES = 16 * 1024
+# Keys, timestamps, the owner token, the lease and the error.
+ITEM_OVERHEAD_BYTES = 2 * 1024
+MAX_STORED_INPUT_BYTES = MAX_ITEM_BYTES - RESULT_RESERVE_BYTES - PROGRESS_RESERVE_BYTES - ITEM_OVERHEAD_BYTES
+
+
+def stored_inputs(request: MealPlanRequest) -> bytes:
+    """The request as the item holds it: gzipped JSON.
+
+    V8's history window is 400 rows and each note may be 500 characters, so an input inside the schema
+    can be far larger than one DynamoDB item. Compressed it is a fraction of the size, and `create`
+    refuses anything still too big rather than failing at the first progress write.
+    """
+    return gzip.compress(request.model_dump_json().encode(), mtime=0)
+
+
+def stored_input_bytes(request: MealPlanRequest) -> int:
+    return len(stored_inputs(request))
 
 
 class SessionStatus(StrEnum):

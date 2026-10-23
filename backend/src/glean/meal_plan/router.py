@@ -18,7 +18,7 @@ from glean.sessions.models import (
     SessionRequest,
     SessionView,
 )
-from glean.sessions.store import SessionStore, utcnow
+from glean.sessions.store import SessionStore, SessionTooLargeError, utcnow
 
 router = APIRouter(prefix="/meal-plan", tags=["meal-plan"], dependencies=[Depends(verify_cognito_token)])
 
@@ -49,7 +49,15 @@ def create_session(
 ) -> SessionCreated:
     """Write the session, send it to the worker and return at once. One paid call."""
     session = AgentSession(session_id=uuid4().hex, user_sub=user_sub, request=request)
-    sessions.create(session, now=utcnow())
+    try:
+        sessions.create(session, now=utcnow())
+    except SessionTooLargeError as error:
+        # The request validates but its session item would not fit DynamoDB's 400 KB with room left for
+        # the progress lines and the plan. 422, like any other request the backend cannot take.
+        raise HTTPException(
+            status_code=422,
+            detail="This request is too large to plan from. Trim the recipe or cook history and try again.",
+        ) from error
     try:
         dispatch(session)
     except Exception as error:

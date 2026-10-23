@@ -6,6 +6,7 @@ the tests do not set -- or the other way round -- fails here rather than at depl
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -13,20 +14,28 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult, MealPlanSuggestion
+from glean.meal_plan.schemas import (
+    MealPlanRequest,
+    MealPlanResult,
+    MealPlanSuggestion,
+)
 from glean.sessions.dynamo import DynamoSessionStore
 from glean.sessions.models import (
+    MAX_ITEM_BYTES,
     MAX_PROGRESS_LINES,
+    MAX_STORED_INPUT_BYTES,
     SESSION_TTL_HOURS,
     AgentSession,
     ClaimResult,
     SessionError,
     SessionErrorCode,
     SessionStatus,
+    stored_input_bytes,
 )
 from glean.sessions.store import (
     LEASE_SECONDS,
     InMemorySessionStore,
+    SessionTooLargeError,
     UnknownSessionError,
 )
 from tests.infra.cfn import sessions_table_properties
@@ -81,8 +90,8 @@ def _request(**overrides: Any) -> MealPlanRequest:
     )
 
 
-def _session(session_id: str = "sess-1", user_sub: str = "user-a") -> AgentSession:
-    return AgentSession(session_id=session_id, user_sub=user_sub, request=_request())
+def _session(session_id: str = "sess-1", user_sub: str = "user-a", **overrides: Any) -> AgentSession:
+    return AgentSession(session_id=session_id, user_sub=user_sub, request=_request(**overrides))
 
 
 def _result() -> MealPlanResult:
@@ -105,6 +114,27 @@ def test_a_new_session_is_queued_and_holds_its_inputs(store: tuple[SessionStore,
     assert record.lease_until is None
     assert record.created_at == START
     assert record.updated_at == START
+
+
+def test_the_inputs_are_stored_compressed(store: tuple[SessionStore, Clock], tmp_path: Any) -> None:
+    sessions, clock = store
+    request = _request(
+        cooked_history=[{"recipe_id": None, "title": "Lentil Bake", "cooked_at": START.isoformat()}],
+    )
+
+    sessions.create(_session(), now=clock.now)
+
+    # A second session carrying a history row round-trips, and the stored bytes are compressed: the
+    # gzip of the JSON is far smaller than the JSON itself.
+    sessions.create(
+        AgentSession(session_id="sess-2", user_sub="user-a", request=request),
+        now=clock.now,
+    )
+    record = sessions.get("user-a", "sess-2")
+
+    assert record is not None
+    assert record.request == request
+    assert stored_input_bytes(request) < len(request.model_dump_json())
 
 
 def test_a_session_expires_a_day_after_its_last_update(store: tuple[SessionStore, Clock]) -> None:
@@ -311,3 +341,55 @@ def test_a_finished_session_is_never_failed_afterwards(store: tuple[SessionStore
     assert moved is False
     assert record.status is SessionStatus.DONE
     assert record.error is None
+
+
+def test_the_largest_history_the_app_sends_compresses_into_one_item(store: tuple[SessionStore, Clock]) -> None:
+    """The review's case: 2,500 saved recipes (464 KB of JSON) used to fail PutItem.
+
+    Stored gzipped it is a fraction of that, so the request the app really sends fits.
+    """
+    sessions, clock = store
+    crowded = _request(
+        recipe_history=[
+            {
+                "recipe_id": index,
+                "title": (
+                    "Slow-cooked beef ragu with tagliatelle, a Sunday sauce for the whole family "
+                    f"and enough for Monday lunches {index}"
+                ),
+                "last_cooked_at": None,
+                "food_groups": ["protein", "veg"],
+            }
+            for index in range(2500)
+        ]
+    )
+    assert len(crowded.model_dump_json()) > MAX_ITEM_BYTES  # the JSON alone is over one item
+    assert stored_input_bytes(crowded) < MAX_STORED_INPUT_BYTES
+
+    sessions.create(AgentSession(session_id="sess-large", user_sub="user-a", request=crowded), now=clock.now)
+
+    record = sessions.get("user-a", "sess-large")
+    assert record is not None
+    assert record.request == crowded
+
+
+def test_create_refuses_inputs_that_would_not_fit_one_item(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    # Nothing bounds a recipe title's length, so an absurd one can still overflow the item once the room
+    # kept for the progress lines and the result is set aside. It is refused at create, before the write.
+    absurd = _request(
+        recipe_history=[
+            {
+                "recipe_id": 1,
+                "title": secrets.token_hex(400_000),  # ~800 KB of incompressible text
+                "last_cooked_at": None,
+                "food_groups": [],
+            }
+        ]
+    )
+    assert stored_input_bytes(absurd) > MAX_STORED_INPUT_BYTES
+
+    with pytest.raises(SessionTooLargeError):
+        sessions.create(AgentSession(session_id="sess-big", user_sub="user-a", request=absurd), now=clock.now)
+
+    assert sessions.get("user-a", "sess-big") is None
