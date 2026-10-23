@@ -253,6 +253,24 @@ void main() {
       expect(other.preferredServings, UserConfigView.defaultPreferredServings);
     });
 
+    test(
+      'two overlapping claims give the explainer to exactly one tap',
+      () async {
+        final List<bool> first = await Future.wait(<Future<bool>>[
+          repository.claimRatingsExplainer(userId),
+          repository.claimRatingsExplainer(userId),
+        ]);
+        expect(first.where((bool claimed) => claimed), hasLength(1));
+
+        // The same holds for a user with no settings row yet, where the claim has to create it.
+        final List<bool> noRow = await Future.wait(<Future<bool>>[
+          repository.claimRatingsExplainer('user-fresh'),
+          repository.claimRatingsExplainer('user-fresh'),
+        ]);
+        expect(noRow.where((bool claimed) => claimed), hasLength(1));
+      },
+    );
+
     test('the ratings explainer is claimed once per user, and a settings save '
         'neither resets nor is reset by it', () async {
       expect(await repository.claimRatingsExplainer(userId), isTrue);

@@ -51,10 +51,6 @@ class RecipeHistoryItem {
   Map<String, dynamic> toJson() => _$RecipeHistoryItemToJson(this);
 }
 
-/// The longest rating note the backend accepts (`MAX_COOKED_NOTE_LENGTH`). The note sheet caps its input at
-/// this, so a long comment is stopped at the keyboard rather than failing the whole plan request.
-const int maxRatingNoteLength = 500;
-
 /// One meal the household actually cooked, sent to `POST /meal-plan` so corpus generation can leave it out of
 /// the week while it is too recent to repeat, and never offer a recipe they gave a thumbs down. The wire shape
 /// of the backend's `CookedHistoryItem`.
@@ -78,8 +74,9 @@ class CookedHistoryItem {
   /// the backend reads only the latest one per recipe.
   final String? rating;
 
-  /// The comment saved with [rating]. The backend validates it and does not put it in any prompt yet: that
-  /// is the feedback screen's job, and it does not exist.
+  /// The comment saved with [rating], bounded by `maxRatingNoteLength` code points (the phone counts the
+  /// same unit, so a saved note always passes the backend's validation). The backend never puts it in a
+  /// prompt yet: that is the feedback screen's job, and it does not exist.
   final String? note;
 
   Map<String, dynamic> toJson() => _$CookedHistoryItemToJson(this);

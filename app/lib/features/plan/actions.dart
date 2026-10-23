@@ -18,6 +18,8 @@ import 'package:glean/features/meals/recipe_preview_screen.dart';
 import 'package:glean/features/plan/widgets/rating_note_sheet.dart';
 import 'package:go_router/go_router.dart';
 
+import 'providers/ratings_explainer.dart';
+
 Future<void> markCookedWithUndo(
   BuildContext context,
   WidgetRef ref,
@@ -126,7 +128,8 @@ Future<void> noteMealRating(
 }
 
 /// The one-off "how ratings are used" explainer: shown on the first thumb this household taps, and never
-/// again. It claims the flag before showing, so a second tap cannot open a second copy.
+/// again. The claim is atomic, and the provider flag stops a second copy opening over the first if two taps
+/// race before it is answered.
 Future<void> _explainRatingsOnce(
   BuildContext context,
   WidgetRef ref,
@@ -136,45 +139,57 @@ Future<void> _explainRatingsOnce(
       .read(userConfigRepositoryProvider)
       .claimRatingsExplainer(userId);
   if (!first || !context.mounted) return;
+  final RatingsExplainerOpen open = ref.read(
+    ratingsExplainerOpenProvider.notifier,
+  );
+  if (!open.open()) return;
+  if (!context.mounted) {
+    open.close();
+    return;
+  }
   final AppTokens tokens = context.tokens;
-  await showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (BuildContext sheetContext) => SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          tokens.spacing.lg,
-          0,
-          tokens.spacing.lg,
-          tokens.spacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'How ratings work',
-              style: Theme.of(sheetContext).textTheme.titleMedium,
-            ),
-            SizedBox(height: tokens.spacing.md),
-            const Text(
-              'Thumbs down stops the planner offering that recipe.\n\n'
-              'Thumbs up favours it once six weeks have passed.\n\n'
-              'Long-press a thumb to add a comment for the planner.',
-            ),
-            SizedBox(height: tokens.spacing.md),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: () => Navigator.of(sheetContext).pop(),
-                child: const Text('Got it'),
+  try {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            tokens.spacing.lg,
+            0,
+            tokens.spacing.lg,
+            tokens.spacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'How ratings work',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
               ),
-            ),
-          ],
+              SizedBox(height: tokens.spacing.md),
+              const Text(
+                'Thumbs down stops the planner offering that recipe.\n\n'
+                'Thumbs up favours it once six weeks have passed.\n\n'
+                'Long-press a thumb to add a comment for the planner.',
+              ),
+              SizedBox(height: tokens.spacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  } finally {
+    open.close();
+  }
 }
 
 void onAddDinnerTapped(BuildContext context, WidgetRef ref) {
