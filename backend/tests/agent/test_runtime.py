@@ -122,6 +122,26 @@ class PicksOneCandidate:
         return "fake/model"
 
 
+class CancelsWhilePlanning(PicksOneCandidate):
+    """The household taps Cancel while the model is choosing: the DELETE lands mid-run."""
+
+    def __init__(self, sessions: InMemorySessionStore) -> None:
+        super().__init__()
+        self._sessions = sessions
+
+    def invoke(self, _feature: object, _schema: type, *, user: str, **kwargs: object) -> CorpusMealPlanResponse:
+        self._sessions.cancel("user-a", "sess-1")
+        return super().invoke(_feature, _schema, user=user, **kwargs)
+
+
+class _CancelOnComplete(InMemorySessionStore):
+    """A store where the household's DELETE lands just before the plan write."""
+
+    def complete(self, user_sub: str, session_id: str, result: Any, *, owner: str) -> bool:
+        self.cancel(user_sub, session_id)
+        return super().complete(user_sub, session_id, result, owner=owner)
+
+
 def _corpus(tmp_path: Any) -> RecipeCorpusStore:
     corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
     for external_id, title in [("rec_a", "Lentil Bake"), ("rec_b", "Tofu Noodles")]:
@@ -956,3 +976,57 @@ def test_the_worker_handler_walks_every_record(monkeypatch: pytest.MonkeyPatch) 
     handler({"Records": [_record("sess-1"), _record("sess-2")]}, LambdaContext())
 
     assert handled == [_record("sess-1")["body"], _record("sess-2")["body"]]
+
+
+def test_a_cancel_mid_run_stops_the_worker_between_steps(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = MetricsRecorder()
+    monkeypatch.setattr(runtime, "metrics", recorder)
+    sessions = _queued_store()
+    deps = _deps(sessions, tmp_path, CancelsWhilePlanning(sessions))
+
+    assert handle_record(_record("sess-1"), deps) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.result is None
+    # The cancel landed while the model was choosing, so `finalise`'s progress write was refused: the run
+    # stopped at the next step and wrote nothing more.
+    assert len(record.progress) == 2
+    assert "SessionsCancelled" in recorder.names
+    assert "SessionsCompleted" not in recorder.names
+
+
+def test_a_message_for_a_cancelled_session_is_acknowledged_and_runs_nothing(tmp_path: Any) -> None:
+    """`claim` reports a cancelled session as FINISHED: the delivery is acked and the model is not called."""
+    sessions = _queued_store()
+    sessions.cancel("user-a", "sess-1")
+    router = PicksOneCandidate()
+
+    assert handle_record(_record("sess-1"), _deps(sessions, tmp_path, router)) is False
+
+    assert router.calls == 0
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+
+
+def test_a_run_whose_cancel_beats_the_plan_leaves_the_session_cancelled(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The DELETE lands between the `finalise` node and the plan write: the household's cancel wins."""
+    recorder = MetricsRecorder()
+    monkeypatch.setattr(runtime, "metrics", recorder)
+    clock = FakeClock()
+    sessions = _CancelOnComplete(clock=clock.wall)
+    sessions.create(_queued(), now=clock.now)
+    deps = _deps(sessions, tmp_path, clock=clock)
+
+    assert handle_record(_record("sess-1"), deps) is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.result is None
+    assert "SessionsCancelled" in recorder.names
+    assert "SessionsCompleted" not in recorder.names

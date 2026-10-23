@@ -140,6 +140,7 @@ handler  # glean.worker.handler, referenced by template.yaml
 dlq_handler  # glean.worker.dlq_handler, referenced by template.yaml
 create_session  # FastAPI route handler (POST /meal-plan/sessions)
 get_session  # FastAPI route handler (GET /meal-plan/sessions/{id})
+cancel_session  # FastAPI route handler (DELETE /meal-plan/sessions/{id})
 WAITING_FOR_USER  # SessionStatus member: the app's contract, written once the agent can ask a question (V11)
 CANCELLED  # SessionStatus member: the app's contract once DELETE /meal-plan/sessions/{id} exists (V3)
 retry_after_minutes  # SessionError field, read by the app

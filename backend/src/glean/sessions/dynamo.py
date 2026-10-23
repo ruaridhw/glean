@@ -225,6 +225,22 @@ class DynamoSessionStore:
             },
         )
 
+    def cancel(self, user_sub: str, session_id: str) -> bool:
+        # A status write and nothing else. The lease is left alone: clearing it would let the next
+        # delivery claim the session again. Being terminal, it also fails every owner-conditioned write
+        # that follows, so a run that cancels mid-flight cannot write a plan over it.
+        return self._update(
+            user_sub,
+            session_id,
+            update="SET #status = :cancelled, updated_at = :now, #ttl = :ttl",
+            condition="attribute_exists(sk) AND #status <> :done AND #status <> :failed AND #status <> :cancelled",
+            values={
+                ":cancelled": SessionStatus.CANCELLED.value,
+                ":done": SessionStatus.DONE.value,
+                ":failed": SessionStatus.FAILED.value,
+            },
+        )
+
     def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
         record = self.get(user_sub, session_id)
         if record is None:
@@ -238,11 +254,15 @@ class DynamoSessionStore:
             session_id,
             update="SET #status = :failed, #error = :error, updated_at = :now, #ttl = :ttl",
             condition=(
-                "#status <> :done AND #status <> :failed AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
+                "#status <> :done AND #status <> :failed AND #status <> :cancelled "
+                "AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
             ),
             values={
                 ":failed": SessionStatus.FAILED.value,
                 ":done": SessionStatus.DONE.value,
+                # A cancelled session is terminal like a finished one: a dead letter that raced the
+                # household's DELETE must not rewrite it as a failure.
+                ":cancelled": SessionStatus.CANCELLED.value,
                 ":error": error.model_dump_json(),
                 ":now_epoch": int(self._clock().timestamp()),
             },
