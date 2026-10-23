@@ -13,7 +13,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import END, START, StateGraph  # noqa: TID251 - this module owns LangGraph
 
 from glean.agent.errors import AgentError, model_error_for
 from glean.meal_plan import pipeline
@@ -23,7 +23,7 @@ from glean.sessions.models import SessionError, SessionErrorCode
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from langgraph.graph.state import CompiledStateGraph
+    from langgraph.graph.state import CompiledStateGraph  # noqa: TID251
 
     from glean.agent.deps import AgentDeps
 

@@ -62,10 +62,12 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S", "W", "C4", "C90", "PT", "RUF", "A", "T20", "PIE", "RET", "TCH", "ASYNC", "FLY", "PERF", "PLC", "PLE", "TID251"]
-per-file-ignores = { "tests/**" = ["S101", "S311", "PERF401"], "scripts/tests/**" = ["S101"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"], "scripts/judge_study/report.py" = ["E501", "RUF001", "RUF003"], "src/glean/llm.py" = ["TID251"], "src/glean/agent/**" = ["TID251"], "!src/**" = ["TID251"] }
+per-file-ignores = { "tests/**" = ["S101", "S311", "PERF401"], "scripts/tests/**" = ["S101"], "tests/conftest.py" = ["E402"], "vulture_whitelist.py" = ["B018", "F821"], "scripts/**" = ["T20", "S110"], "scripts/judge_study/report.py" = ["E501", "RUF001", "RUF003"], "!src/**" = ["TID251"] }
 
-# glean.llm wraps the LLM libraries once, so the rest of src/glean calls LLMRouter with glean's own types. Tests, evals
-# and dev scripts outside src/ may still drive a chat model directly (the per-file-ignores above).
+# glean.llm wraps the LLM libraries once, so the rest of src/glean calls LLMRouter with glean's own types;
+# glean.agent owns LangGraph and its checkpointer the same way. Each owning import carries its own
+# `# noqa: TID251`, so neither lane is exempt from the other's ban. Tests, evals and dev scripts outside
+# src/ may still drive either library directly (the `!src/**` ignore above).
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "langchain_core".msg = "Only glean.llm imports LangChain; call LLMRouter.invoke instead."
 "langchain_openrouter".msg = "Only glean.llm imports LangChain; call LLMRouter.invoke instead."
