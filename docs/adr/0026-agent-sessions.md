@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# Agent sessions are the backend's one transient per-user state, and the queue lease is their liveness
+# Agent sessions are the backend's one transient per-user state, and the session's own lease is their liveness
 
 Generating a week became an agent run: too slow for the 30 s Lambda/API Gateway cap, and — from V3 —
 something the household can watch and answer. So `POST /meal-plan/sessions` writes one item to
@@ -24,25 +24,33 @@ graph nodes and the prompts sit behind it, and ruff `TID251` lets only that pack
 exactly as only `glean/llm.py` may import LangChain. Ripping LangGraph out for a hand-written loop
 would change this package and nothing else.
 
-**Liveness is the SQS lease, not a second orchestrator.** The queue's visibility timeout is 60 s and
-the worker renews it every 20 s while the graph runs. If the worker crashes or times out the
-renewals stop, the message reappears within a minute and the run is retried from its checkpoint. Only
-a conditional `queued → running` write starts a run, so a duplicate delivery finds the session
-running and drops. After two failed attempts the message reaches the dead-letter queue, whose handler
-marks the session `failed / worker_failed`. Every session therefore reaches `done` or `failed`
-through infrastructure.
+**Liveness is the session's own lease, not a second orchestrator.** The queue's visibility timeout is
+130 s and the worker's timeout is 120 s, the pairing AWS requires of an SQS event source (cfn-lint
+E3505) — a message therefore stays invisible for at least as long as any run it can deliver. What
+makes a crashed run recoverable is written on the session item instead: the attempt that starts a run
+takes an owner token and a lease (120 s, renewed as the graph moves), and every later write is
+conditioned on that token. A delivery may claim a session that is `queued`, or `running` with a lapsed
+lease; a live duplicate is told it is owned elsewhere and drops; a redelivery after a crash takes over
+and **resumes from the LangGraph checkpoint** rather than starting again. So a crashed run comes back
+within about two minutes and still lands inside the app's five-minute cap, and a worker that was taken
+over can no longer write the outcome. After two failed attempts the message reaches the dead-letter
+queue, whose handler marks the session `failed / worker_failed`, with no owner needed.
+
+One run also has a budget: 90 s (§6.2). It is checked before every graph step, the one blocking call
+(the model) gets only what is left of it, and spending it ends the session `failed / model_error`
+until V6's scorer exists to supply the degraded plan.
 
 **Considered options.**
 
 - **Step Functions around the run.** Rejected: a second orchestrator overlapping LangGraph, with its
-  own state, retries and visibility into a graph that already checkpoints every step. The queue's
-  lease gives the same guarantee — a run is retried while it is unrecoverable and dead-lettered when
+  own state, retries and visibility into a graph that already checkpoints every step. The lease on the
+  session gives the same guarantee — a run is retried while it is unrecoverable and dead-lettered when
   it is not — for one resource and no new execution model.
-- **A heartbeated DynamoDB `lease_until` field, with a sweeper.** Rejected: two sources of truth for
-  "is this run alive" (the message's visibility and the item's lease) and a sweeper to write.
-- **Lambda's own retry with a visibility timeout above the function's timeout.** Rejected by the
-  design: then a crashed run blocks its session for the full function timeout, and a redelivery can
-  never arrive while a run is still making progress.
+- **A 60 s visibility timeout renewed by the worker every 20 s.** Rejected by the platform: an SQS
+  event source requires the visibility timeout to be at least the function timeout, so the pair was
+  undeployable. Renewal could not fix that, and with the queue outliving the function it earns nothing.
+- **A visibility timeout below the function timeout, with the suppression of E3505.** Rejected: the
+  suppression hid an integration constraint, and the deploy would fail on the event-source mapping.
 - **Push (WebSocket/AppSync) instead of polling.** Deferred: polling every second costs one read and
   needs no connection state, and the app already polls for its catalogue sync.
 
@@ -51,9 +59,12 @@ through infrastructure.
 - **Capacity.** `agent_sessions` at 2/2 and `agent_checkpoints` at 3/3 join the catalogue's 10/10. F1
   (#162) adds the recipe store at 5/5, making the account 20/20 against the free tier's 25/25
   (ADR 0001); `tests/infra/test_template_free_tier.py` sums them and reserves F1's share.
-- **Deleting or merging the queue is not a tuning change.** The 60 s/20 s pair is what makes a
-  duplicate delivery routine and a stuck session impossible, so the template suppresses cfn-lint
-  `E3505` (which wants the visibility timeout to exceed the function timeout) deliberately.
+- **The queue's timeout and the function's timeout move together.** The visibility timeout must stay
+  above the worker's timeout (E3505 is enforced, not suppressed), and the lease must stay below the
+  visibility timeout, or a redelivery would find a lease that has not lapsed and drop the work.
+- **The item's size is bounded on the way in.** Inputs are stored gzipped and `create` refuses a
+  request whose item would not leave room for the progress lines and the plan, so a large but valid
+  request is a 422 rather than a failed write.
 - **The checkpointer is not an API.** Nothing outside `glean.agent` reads `agent_checkpoints`, and
   the table is the agent's to replace.
 - **The synchronous endpoint stays** until the phone runs a build that uses sessions, then goes in a

@@ -1,18 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Metadata:
-  # E3505 wants the queue's visibility timeout to exceed the function's timeout, so a message is never
-  # handed out twice while its handler still runs. This stack wants the opposite (ADR 0026): liveness
-  # IS the 60 s lease, renewed every 20 s while the graph runs, so a worker that dies mid-run has its
-  # message reappear within a minute instead of blocking the session. A duplicate delivery is
-  # harmless: glean.agent.start only begins on a conditional queued -> running write, so the second
-  # delivery finds the session already running and drops it.
-  cfn-lint:
-    config:
-      ignore_checks:
-        - E3505
-
 Globals:
   Function:
     Timeout: 30
@@ -264,9 +252,10 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: false
 
-  # Lease-based liveness (ADR 0026): the worker renews this visibility timeout every 20 s while a run
-  # continues, so a crashed worker's message reappears within a minute rather than waiting out the
-  # function's timeout. After two failed attempts the dead-letter handler marks the session failed.
+  # Longer than the worker's 120 s timeout, which AWS requires of an SQS event source (cfn-lint E3505)
+  # and which is what makes the message outlive any run it can deliver: Lambda holds it while the run
+  # works. Recovery is the session's own lease, not the message: a run that dies has its lease lapse,
+  # and the redelivery resumes it from its checkpoint about two minutes later (ADR 0026).
   GleanAgentDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -277,7 +266,8 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "glean-agent-sessions-${Environment}"
-      VisibilityTimeout: 60
+      # 10 s of margin over AgentWorkerFunction's Timeout: 120.
+      VisibilityTimeout: 130
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt GleanAgentDeadLetterQueue.Arn
         maxReceiveCount: 2
@@ -370,7 +360,7 @@ Resources:
             TableName: !Ref GleanAgentSessionsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref GleanAgentCheckpointsTable
-        # Renewing the lease needs ChangeMessageVisibility; acknowledging needs DeleteMessage.
+        # Receive, delete and get-queue-attributes on its own queue, nothing wider.
         - SQSPollerPolicy:
             QueueName: !GetAtt GleanAgentQueue.QueueName
         - Statement:
@@ -385,7 +375,8 @@ Resources:
             Queue: !GetAtt GleanAgentQueue.Arn
             BatchSize: 1
 
-  # SQS gave up on the message: mark its session failed. Nothing else, so it needs nothing else.
+  # SQS gave up on the message after two attempts: mark its session failed. Nothing else, so it needs
+  # nothing else.
   AgentDeadLetterFunction:
     Type: AWS::Serverless::Function
     Metadata:
