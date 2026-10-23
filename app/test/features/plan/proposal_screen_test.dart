@@ -81,6 +81,9 @@ http.Client proposalBackend({
   return recipeDetail(request.url.pathSegments.last);
 });
 
+GenerateProposalPhase refPhase(AppTestHarness h) =>
+    h.container.read(generateWeekControllerProvider).phase;
+
 void main() {
   final DateTime now = DateTime.now();
   final DateTime week = startOfWeek(now);
@@ -540,6 +543,64 @@ void main() {
       isEmpty,
     );
   });
+
+  gleanWidgetTest(
+    'a double-tap on Add saves once and shows exactly one Undo snackbar',
+    (tester) async {
+      final Completer<http.Response> heldDetail = Completer<http.Response>();
+      var detailStarted = false;
+      final h = AppTestHarness(
+        httpClient: proposalBackend(
+          result: <String, dynamic>{
+            'suggestions': <Map<String, dynamic>>[
+              suggestion('rec_a', title: 'Dinner A', reason: 'Fits.'),
+            ],
+            'week_summary': 'One dinner.',
+          },
+          holdDetail: () {
+            detailStarted = true;
+            return heldDetail.future;
+          },
+        ),
+      );
+      addTearDown(h.dispose);
+
+      await openProposal(tester, h);
+      // Both taps land before any frame can rebuild the disabled button.
+      await tester.tap(find.text('Add 1 dinner to plan'));
+      await tester.tap(find.text('Add 1 dinner to plan'));
+      await pumpUntil(
+        tester,
+        () => detailStarted,
+        description: 'the first save resolving a detail',
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        refPhase(h),
+        GenerateProposalPhase.proposal,
+        reason: 'the refused second request must not pop the review',
+      );
+
+      heldDetail.complete(recipeDetail('rec_a'));
+      await tester.pumpAndSettle();
+
+      expect(
+        await tester.runAsync(
+          () => h.container
+              .read(planRepositoryProvider)
+              .getWeek(userId: h.userId, weekStart: week),
+        ),
+        hasLength(1),
+        reason: 'one save ran, not two',
+      );
+      expect(find.text('Undo'), findsOneWidget);
+      expect(
+        find.text('Week updated.'),
+        findsNothing,
+        reason: 'the refused request reports no save',
+      );
+    },
+  );
 
   gleanWidgetTest(
     'Back while Add resolves details aborts the save, with no second pop',

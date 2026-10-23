@@ -460,7 +460,7 @@ void main() {
       reason: 'the save is in flight while the detail is fetched',
     );
     // A second Add while the first is saving must not run the transaction again.
-    expect(await controller.addToPlan(), 0);
+    expect(await controller.addToPlan(), isA<GenerateSaveIgnored>());
     pending.complete(
       http.Response(
         jsonEncode({'external_id': 'rec_new', 'title': 'Beans'}),
