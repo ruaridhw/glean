@@ -90,18 +90,43 @@ LangChain or the OpenRouter SDK. Only `llm.py` does; ruff's `TID251` rejects tho
 synchronous `POST /meal-plan` stays, shares `meal_plan.pipeline` and goes in a follow-up PR.
 
 ```
-POST /meal-plan/sessions           202 {"session_id": "..."}        one paid call, rate limited
-GET  /meal-plan/sessions/{id}      200 SessionView                  free, never rate limited
-GET  ...?after=<cursor>            progress lines since the cursor
+POST   /meal-plan/sessions         202 {"session_id": "..."}        one paid call, rate limited
+GET    /meal-plan/sessions/{id}    200 SessionView                  free, never rate limited
+GET    ...?after=<cursor>          progress lines since the cursor
+DELETE /meal-plan/sessions/{id}    204                              free, never rate limited
 ```
 
 `SessionView` is `{session_id, status, progress, next_cursor, result, error, updated_at}`.
-`status` is `queued | running | waiting_for_user | done | failed`; `result` is `MealPlanResult`
-(the sync route's shape, `uses_up` included) and `error` is `{code, retry_after_minutes}` with
-`code` one of `no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
-Both routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
+`status` is `queued | running | waiting_for_user | done | failed | cancelled`, and `done`, `failed` and
+`cancelled` are terminal. `error` is `{code, retry_after_minutes}` with `code` one of
+`no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
+All four routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
 another user's session is a 404 rather than a 403. `POST` refuses `source: "saved"` with a 422 —
-V1's graph wraps the corpus pipeline only.
+the graph wraps the corpus pipeline only.
+
+`result` (`MealPlanResult`, which the sync route returns too, additively) is the proposal:
+
+```jsonc
+{
+  "suggestions": [{   // one per empty slot
+    "recipe_id": null, "external_id": "rec_x", "title": "...", "reason": "...",
+    "missing_ingredients": [], "uses_up": [{"name": "coriander", "expires_in_days": 2, "goes_off": "Thu"}],
+    "reason_kind": "urgent_item | profile | feedback | balance | history | answer",
+    "alternative": {  // the swap target: the same shape without its own alternative
+      "recipe_id": null, "external_id": "rec_y", "title": "...", "reason": "...",
+      "missing_ingredients": [], "uses_up": [], "reason_kind": "balance"
+    }
+  }],
+  "week_summary": "One line for the week; template text when the plan is degraded.",
+  "planned_alternatives": [{"external_id": "rec_planned", "alternative": {/* a suggestion */}}],
+  "degraded": false   // true when finalise fell back; the UI must not treat it differently
+}
+```
+
+An alternative is always an offered, eligible candidate that is not already a chosen or planned meal;
+when the model's own alternative is unusable or missing, the server takes the next-best candidate.
+`planned_alternatives` only covers meals already in the week that came from the corpus, because there
+is no corpus recipe to show for the app's own plan entries.
 
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
 conditional `queued -> running`, runs `agent.start`, and writes `done` or `failed`. Liveness is the
@@ -124,6 +149,17 @@ is failed within about a minute of its lease lapsing, at most ~3 minutes after a
 only a session that is missing, terminal, or newly failed. One run also has a 90 s budget, checked
 between steps, and the model call gets only what is left of it. Never add a state machine or a
 scheduler on top (ADR 0026).
+
+How a session stops: `DELETE` calls `agent.cancel`, one status write that turns the session
+`cancelled` unless it is already terminal (so a repeat delete is a no-op and the answer is always 204).
+`cancelled` is terminal, which does the rest without a second mechanism: `RunGuard`'s step write is
+owner-conditioned *and* requires `running`, so the next step is refused and the run stops without
+writing anything (one read on the refused path only, to log a cancel as a cancel rather than as a lost
+lease); `complete`/`fail` cannot resurrect or overwrite it; `claim` reports `FINISHED`, so a redelivery
+or a takeover of a crashed run is acknowledged and does nothing; and the dead-letter handler treats it
+as terminal. A cancel that lands between the last step and the plan write therefore still wins. A
+complete run makes no reads beyond the lease design's own (the claim and each store call's check); a
+cancelled one adds exactly one, at the step that notices.
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
   `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a
