@@ -139,3 +139,5 @@ retry_after_minutes  # SessionError field, read by the app
 created_at  # SessionRecord field, kept for the table's own audit trail
 _plan_from_the_corpus  # Pydantic field validator (SessionRequest.source)
 writes  # InMemorySessionStore counter, asserted in tests that polling never writes
+QUEUE_VISIBILITY_SECONDS  # sessions/store.py: the number template.yaml must declare, asserted in the template test
+WORKER_TIMEOUT_SECONDS  # sessions/store.py: the other half of the lease arithmetic, same test
