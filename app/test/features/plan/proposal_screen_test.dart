@@ -6,7 +6,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/data/providers/repository_providers.dart';
+import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/features/plan/providers/generate_week_controller.dart';
 import 'package:glean/features/plan/widgets/proposal_meal_card.dart';
@@ -635,6 +637,109 @@ void main() {
       },
     );
   }
+
+  gleanWidgetTest(
+    'Undo restores a swapped planned meal and removes the week Add inserted',
+    (tester) async {
+      final h = AppTestHarness(
+        httpClient: proposalBackend(
+          result: <String, dynamic>{
+            'suggestions': <Map<String, dynamic>>[
+              suggestion('rec_new', title: 'New dinner', reason: 'Fits.'),
+            ],
+            'week_summary': 'One new dinner.',
+            'planned_alternatives': <Map<String, dynamic>>[
+              {
+                'external_id': 'rec_planned',
+                'alternative': alternative('rec_planned_alt', 'Fish pie'),
+              },
+            ],
+          },
+        ),
+      );
+      addTearDown(h.dispose);
+
+      final recipes = h.container.read(recipesRepositoryProvider);
+      final plan = h.container.read(planRepositoryProvider);
+      final shopping = h.container.read(shoppingRepositoryProvider);
+      final int plannedRecipeId = await recipes.save(
+        userId: h.userId,
+        externalId: 'rec_planned',
+        title: 'Leftover lasagne',
+        ingredients: const <SaveRecipeIngredient>[
+          SaveRecipeIngredient(canonicalName: 'peas', quantity: 100, unit: 'g'),
+        ],
+      );
+      final int entryId = await plan.addEntry(
+        userId: h.userId,
+        recipeId: plannedRecipeId,
+        recipeTitle: 'Leftover lasagne',
+        servings: 2,
+        plannedDate: week,
+      );
+      await shopping.addGapsForRecipe(
+        userId: h.userId,
+        recipeId: plannedRecipeId,
+        servings: 2,
+        sourceMealPlanEntryId: entryId,
+      );
+      // A stale rating on a planned row, which the swap drops and Undo must put back.
+      await h.db.customStatement(
+        'INSERT INTO meal_ratings '
+        '(user_id, meal_plan_entry_id, rating, note, created_at) '
+        'VALUES (?, ?, ?, ?, ?)',
+        <Object?>[
+          h.userId,
+          entryId,
+          'down',
+          'too sweet',
+          DateTime.utc(2026, 10, 6).toIso8601String(),
+        ],
+      );
+
+      await openProposal(tester, h);
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(ValueKey<String>('planned-$entryId')),
+          matching: find.text('Swap'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use alternative'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add 1 dinner to plan'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Undo'), findsOneWidget, reason: 'Add offers Undo');
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      final entries = await tester.runAsync(
+        () => plan.getWeek(userId: h.userId, weekStart: week),
+      );
+      expect(entries, hasLength(1), reason: 'the inserted dinner is gone');
+      final restored = entries!.single;
+      expect(restored.recipeId, plannedRecipeId);
+      expect(restored.recipeTitle, 'Leftover lasagne');
+      expect(restored.externalIdSnapshot, 'rec_planned');
+      expect(restored.rating, MealThumb.down);
+      expect(restored.note, 'too sweet');
+
+      final rows = await tester.runAsync(
+        () => shopping.watchAll(h.userId).first,
+      );
+      expect(
+        rows!.map((row) => row.name),
+        contains('peas'),
+        reason: 'the planned meal gets its own shopping demand back',
+      );
+      expect(
+        rows.map((row) => row.name),
+        isNot(contains('beans')),
+        reason: 'the swapped alternative\'s demand is gone',
+      );
+    },
+  );
 
   gleanWidgetTest(
     'an older backend result shows no summary and no swap, and still adds',

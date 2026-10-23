@@ -18,6 +18,8 @@ import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/recipe_proposal.dart';
+import 'package:glean/data/repositories/plan_repository.dart'
+    show GeneratedWeekCommit, SwappedEntrySnapshot;
 import 'package:glean/data/util/week.dart';
 
 import '../compression.dart';
@@ -149,6 +151,9 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// must not touch the state it no longer owns.
   int _attempt = 0;
 
+  /// The last successful Add to plan, kept only long enough for the screen to hand it to the Undo snackbar.
+  GeneratedWeekCommit? _lastCommit;
+
   @override
   GenerateProposalState build() => const GenerateProposalState();
 
@@ -164,6 +169,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   }) async {
     if (state.phase == GenerateProposalPhase.working) return;
     if (slots <= 0) return;
+    _lastCommit = null;
     final int attempt = ++_attempt;
     state = GenerateProposalState(
       phase: GenerateProposalPhase.working,
@@ -196,6 +202,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   Future<void> cancel() async {
     final String? session = state.sessionId;
     _attempt++;
+    _lastCommit = null;
     state = const GenerateProposalState();
     if (session != null) await _cancelSession(session);
   }
@@ -247,6 +254,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     if (result == null || weekStart == null || attempt.saving) return 0;
     // A save that Back discards while it is still resolving must never reach the transaction.
     final int saveAttempt = _attempt;
+    _lastCommit = null;
     state = attempt._copy(saving: true);
     try {
       final String userId = ref.read(currentUserIdProvider);
@@ -285,13 +293,12 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         // The review had meals, so saving none of them is a failure to show, not a quiet no-op.
         throw const GenerateFailure(GenerateFailureKind.unknown);
       }
-
       // Back aborts a save that is still resolving, so re-check the attempt before the transaction starts.
       if (saveAttempt != _attempt) return 0;
       state = state._copy(committing: true);
 
-      final int
-      inserted = await ref.read(gleanDatabaseProvider).transaction(() async {
+      final ({int inserted, GeneratedWeekCommit commit})
+      saved = await ref.read(gleanDatabaseProvider).transaction(() async {
         final plan = ref.read(planRepositoryProvider);
         final shopping = ref.read(shoppingRepositoryProvider);
         // Re-check inside the transaction: manual additions while the review was open must not overfill
@@ -307,9 +314,9 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         final Set<int?> currentIds = current
             .map((MealPlanEntryView entry) => entry.recipeId)
             .toSet();
-        int count = 0;
+        final List<int> addedEntryIds = <int>[];
         for (final RecipeView recipe in resolved) {
-          if (count >= remaining) break;
+          if (addedEntryIds.length >= remaining) break;
           if (currentIds.contains(recipe.id)) continue;
           final int entryId = await plan.addEntry(
             userId: userId,
@@ -324,10 +331,18 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
             servings: attempt.servings,
             sourceMealPlanEntryId: entryId,
           );
-          count++;
+          addedEntryIds.add(entryId);
         }
+        final List<SwappedEntrySnapshot> swappedEntries =
+            <SwappedEntrySnapshot>[];
         for (final ({int entryId, RecipeView recipe, int servings}) update
             in plannedUpdates) {
+          swappedEntries.add(
+            await plan.snapshotEntrySwap(
+              entryId: update.entryId,
+              userId: userId,
+            ),
+          );
           await plan.replaceEntryRecipe(
             entryId: update.entryId,
             userId: userId,
@@ -345,14 +360,21 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
             sourceMealPlanEntryId: update.entryId,
           );
         }
-        return count;
+        return (
+          inserted: addedEntryIds.length,
+          commit: GeneratedWeekCommit(
+            addedEntryIds: addedEntryIds,
+            swappedEntries: swappedEntries,
+          ),
+        );
       });
       // The review was discarded while the transaction ran? The screen blocks that, but never report a save
       // to a state that no longer owns it.
       if (saveAttempt != _attempt) return 0;
+      _lastCommit = saved.commit;
       _attempt++;
       state = const GenerateProposalState();
-      return inserted;
+      return saved.inserted;
     } catch (error) {
       if (saveAttempt == _attempt) {
         state = attempt._copy(
@@ -364,6 +386,18 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       return 0;
     }
   }
+
+  /// Puts the week back as it was before the last Add to plan. The screen captures the commit at save time and
+  /// passes it to the Undo snackbar, so a later Add cannot change what an older Undo restores.
+  Future<void> undoAddToPlan(GeneratedWeekCommit commit) => ref
+      .read(planRepositoryProvider)
+      .undoGeneratedWeek(
+        userId: ref.read(currentUserIdProvider),
+        commit: commit,
+      );
+
+  /// The commit the last successful Add to plan produced, or null when there is nothing to undo.
+  GeneratedWeekCommit? get lastCommit => _lastCommit;
 
   Future<void> _run(
     int attempt, {
