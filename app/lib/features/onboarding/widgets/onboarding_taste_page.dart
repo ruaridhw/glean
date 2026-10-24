@@ -150,7 +150,9 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
                 SizedBox(height: tokens.spacing.md),
               ],
               if (question != null) ...<Widget>[
-                _Bubble(text: question.text),
+                // The newest question is the one a screen reader should hear about; earlier turns are read on
+                // demand from the transcript.
+                _Bubble(text: question.text, announce: true),
                 if (question.options.isNotEmpty)
                   Padding(
                     padding: EdgeInsets.only(top: tokens.spacing.sm),
@@ -310,12 +312,14 @@ class _TurnBar extends StatelessWidget {
           ),
         ),
         SizedBox(height: tokens.spacing.xs),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(tokens.radius.pill),
-          child: LinearProgressIndicator(
-            value: (turn / maxTurns).clamp(0, 1),
-            minHeight: 4,
-            semanticsLabel: 'Question $turn of $maxTurns',
+        // The count above already says this once; a bar with its own label would say it twice.
+        ExcludeSemantics(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(tokens.radius.pill),
+            child: LinearProgressIndicator(
+              value: (turn / maxTurns).clamp(0, 1),
+              minHeight: 4,
+            ),
           ),
         ),
       ],
@@ -324,15 +328,31 @@ class _TurnBar extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.text, this.fromHousehold = false});
+  const _Bubble({
+    required this.text,
+    this.fromHousehold = false,
+    this.announce = false,
+  });
 
   final String text;
   final bool fromHousehold;
+
+  /// Whether a screen reader should read this out as it appears. Only the question on screen is announced.
+  final bool announce;
 
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final ColorScheme colors = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      liveRegion: announce,
+      label: fromHousehold ? 'You answered: $text' : 'Glean asked: $text',
+      child: ExcludeSemantics(child: _bubble(context, tokens, colors)),
+    );
+  }
+
+  Widget _bubble(BuildContext context, AppTokens tokens, ColorScheme colors) {
     return Align(
       alignment: fromHousehold ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -400,14 +420,20 @@ class _SkippedNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final ThemeData theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.only(top: tokens.spacing.xs),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Text(
-          'Skipped',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+    return Semantics(
+      container: true,
+      label: 'You skipped that question',
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: EdgeInsets.only(top: tokens.spacing.xs),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'Skipped',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ),

@@ -423,6 +423,48 @@ void main() {
     );
   });
 
+  testWidgets('the chat says who is speaking, announces each new question '
+      'once, and announces the turn count once', (WidgetTester tester) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    final _Rig rig = _Rig(<ScriptedResponse>[
+      questionResponse(turn: 1, text: 'Q1 opener'),
+      questionResponse(turn: 2, text: 'Q2 next'),
+    ]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+
+    expect(find.bySemanticsLabel('Glean asked: Q1 opener'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Question 1 of 7'),
+      findsOneWidget,
+      reason: 'the turn count is said once, not by the bar as well',
+    );
+
+    await _send(tester, 'katsu curry');
+
+    expect(find.bySemanticsLabel('You answered: katsu curry'), findsOneWidget);
+    expect(find.bySemanticsLabel('Glean asked: Q2 next'), findsOneWidget);
+    expect(find.bySemanticsLabel('Question 2 of 7'), findsOneWidget);
+
+    bool announces(String label) => tester
+        .getSemantics(find.bySemanticsLabel(label))
+        .getSemanticsData()
+        .flagsCollection
+        .isLiveRegion;
+    expect(
+      announces('Glean asked: Q2 next'),
+      isTrue,
+      reason: 'a screen reader should be told the question changed',
+    );
+    expect(
+      announces('Glean asked: Q1 opener'),
+      isFalse,
+      reason: 'an earlier turn is read on demand, not announced again',
+    );
+
+    semantics.dispose();
+  });
+
   testWidgets('Skip all saves no profile and carries on to the pantry', (
     WidgetTester tester,
   ) async {
