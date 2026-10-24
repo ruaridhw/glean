@@ -185,3 +185,43 @@ def test_a_follow_up_targets_a_profile_field() -> None:
         "field": "spice_tolerance",
         "options": ["Mild"],
     }
+
+
+def test_an_answer_bounds_its_options() -> None:
+    assert InterviewAnswer(text="x", options=["Mild"] * 10).options == ["Mild"] * 10
+    with pytest.raises(ValidationError):
+        InterviewAnswer(text="x", options=["Mild"] * 11)
+    with pytest.raises(ValidationError):
+        InterviewAnswer(text="x", options=["o" * 121])
+
+
+def test_a_question_bounds_its_text_and_options() -> None:
+    assert InterviewQuestion(id="x" * 64, text="q", options=["o" * 120], field="habits")
+    with pytest.raises(ValidationError):
+        InterviewQuestion(id="x" * 65, text="q", field="habits")
+    with pytest.raises(ValidationError):
+        InterviewQuestion(id="x", text="q" * 301, field="habits")
+    with pytest.raises(ValidationError):
+        InterviewQuestion(id="x", text="q", options=["o"] * 11, field="habits")
+
+
+def test_the_profile_bounds_its_lists_and_strings() -> None:
+    assert HouseholdProfile(loved_ingredients=["olives"] * 25)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(loved_ingredients=["olives"] * 26)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(disliked_ingredients=["o" * 121])
+    with pytest.raises(ValidationError):
+        HouseholdProfile(cuisines_liked=["Thai"] * 26)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(favourite_meals=[{"text": "Fish pie"}] * 26)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(favourite_meals=[{"text": "o" * 121}])
+    with pytest.raises(ValidationError):
+        HouseholdProfile(protein_targets=[{"protein": "fish"}] * 13)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(habits="h" * 501)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(household="h" * 501)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(notes=[{"date": "2026-10-19", "text": "n", "source": "interview"}] * 51)

@@ -173,9 +173,14 @@ _MEAL_STOPWORDS = frozenset(
 # the same meal: "chicken curry" matches "Chicken curry with rice", not "Curry night traybake".
 _TITLE_EXTRA_WORDS = 2
 
-# Bounds on what one interview can add to the profile, so a rambling answer can't bloat it.
+# Bounds on what one interview can add to the profile, so a rambling answer can't bloat it. The request
+# schema enforces the same ceilings, so these bites only on model output.
 _MAX_LIST_ENTRIES = 25
 _MAX_PHRASE_CHARS = 120
+_MAX_PARAGRAPH_CHARS = 500
+_MAX_SUMMARY_CHARS = 300
+# Each favourite costs one corpus search, so a long list is matched only as far as it is worth paying for.
+_MAX_MATCHED_FAVOURITES = 10
 _MAX_PARALLEL_SCREENS = 8
 # Screens run together and share this much of the request's time. Whatever hasn't answered by then is
 # dropped (the screen's safe outcome), which keeps a slow decisions endpoint inside the 30s Lambda cap:
@@ -255,7 +260,7 @@ def run_interview(
     profile = _finished(merged, held, corpus, now=now or datetime.now(UTC))
     return InterviewDoneResponse(
         profile=profile,
-        summary=reply.summary.strip() or _fallback_summary(profile),
+        summary=_summary(reply.summary) or _fallback_summary(profile),
         dropped_answer=screening.dropped,
     )
 
@@ -263,8 +268,8 @@ def run_interview(
 def _question_from(follow_up: FollowUp, turn: int) -> InterviewQuestion:
     return InterviewQuestion(
         id=f"follow-up-{turn}",
-        text=follow_up.text.strip(),
-        options=[option.strip() for option in follow_up.options if option.strip()][:5],
+        text=follow_up.text.strip()[:300],
+        options=_bounded(follow_up.options)[:5],
         field=follow_up.field,
     )
 
@@ -582,22 +587,37 @@ def _finished(
     """The finished profile: versioned, favourite meals matched, and stamped with the finish time."""
     # Built here rather than on entry, so an opener turn touches no recipe storage.
     store = corpus if corpus is not None else RecipeCorpusStore()
+    meals = _bounded(merged.favourite_meals)
+    matched = [
+        FavouriteMeal(text=text, recipe_id=match_recipe(text, store)) for text in meals[:_MAX_MATCHED_FAVOURITES]
+    ]
     return HouseholdProfile(
         version=1,
-        favourite_meals=[
-            FavouriteMeal(text=text, recipe_id=match_recipe(text, store)) for text in merged.favourite_meals
-        ],
-        loved_ingredients=merged.loved_ingredients,
-        disliked_ingredients=merged.disliked_ingredients,
-        cuisines_liked=merged.cuisines_liked,
-        cuisines_avoided=merged.cuisines_avoided,
-        protein_targets=merged.protein_targets,
+        favourite_meals=[*matched, *(FavouriteMeal(text=text) for text in meals[_MAX_MATCHED_FAVOURITES:])],
+        loved_ingredients=_bounded(merged.loved_ingredients),
+        disliked_ingredients=_bounded(merged.disliked_ingredients),
+        cuisines_liked=_bounded(merged.cuisines_liked),
+        cuisines_avoided=_bounded(merged.cuisines_avoided),
+        protein_targets=merged.protein_targets[:12],
         spice_tolerance=merged.spice_tolerance,
-        habits=merged.habits,
-        household=merged.household,
-        notes=list(held.notes),
+        habits=_paragraph(merged.habits),
+        household=_paragraph(merged.household),
+        notes=list(held.notes)[:_MAX_LIST_ENTRIES],
         interviewed_at=now,
     )
+
+
+def _bounded(entries: list[str]) -> list[str]:
+    """Clamp a list of short entries: no empty ones, each bounded, and the list itself bounded."""
+    return [entry.strip()[:_MAX_PHRASE_CHARS] for entry in entries if entry.strip()][:_MAX_LIST_ENTRIES]
+
+
+def _paragraph(text: str) -> str:
+    return text.strip()[:_MAX_PARAGRAPH_CHARS]
+
+
+def _summary(text: str) -> str:
+    return text.strip()[:_MAX_SUMMARY_CHARS]
 
 
 def _fallback_summary(profile: HouseholdProfile) -> str:
