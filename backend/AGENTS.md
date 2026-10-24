@@ -402,11 +402,18 @@ Any user-typed free text that a model will read — interview answers now, feedb
 first passed to `glean.screening.screen(text, decision_client=...)`. It asks the pinned decision model one
 `noul` question and returns the text only at `SCREEN_BAR` (0.9); below the bar, or on a timeout or a broken
 answer, it returns nothing and the caller drops the text and tells the user ("Couldn't use that answer").
-Fail-closed is the point: the uncertain outcome is not to use the text. Pass text to the model as data in a
-typed field, never as instructions, and re-screen what a stateless endpoint is asked to use again rather than
-trusting a transcript it did not screen itself. The question and the bar are pinned by
+Fail-closed is the point: the uncertain outcome is not to use the text.
+
+Pass text to the model as data in a typed field, never as instructions, and re-screen what a stateless
+endpoint is asked to use again rather than trusting a transcript it did not screen itself — including any
+draft profile the client hands back, whose free text is not sent to the model at all. Screens are cached per
+container (bounded, ten-minute TTL, an outage is never cached) and a request's screens run concurrently under
+an 8 s budget: at most seven decision calls and one model turn per request, ~18 s against the 30 s cap.
+
+The 0.9 bar is not yet calibrated on real traffic. The question and bar are pinned by
 `tests/profile/test_screening.py`; measure a change with
-`uv run python -m scripts.eval_screening --out /tmp/screening-eval.json` (paid, 60 decision calls).
+`uv run python -m scripts.eval_screening --out /tmp/screening-eval.json` against the 80-note synthetic set in
+`tests/fixtures/screening_calibration.json` (paid, 80 decision calls).
 
 ### Dietary ground truth
 
