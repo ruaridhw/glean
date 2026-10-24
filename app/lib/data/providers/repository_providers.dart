@@ -3,6 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../repositories/catalogue_repository.dart';
+import '../repositories/household_profile_repository.dart';
 import '../repositories/ingredients_repository.dart';
 import '../repositories/pantry_repository.dart';
 import '../repositories/plan_repository.dart';
@@ -56,4 +57,9 @@ final Provider<UserConfigRepository> userConfigRepositoryProvider =
 final Provider<CatalogueRepository> catalogueRepositoryProvider =
     Provider<CatalogueRepository>(
       (ref) => CatalogueRepository(ref.watch(gleanDatabaseProvider)),
+    );
+
+final Provider<HouseholdProfileRepository> householdProfileRepositoryProvider =
+    Provider<HouseholdProfileRepository>(
+      (ref) => HouseholdProfileRepository(ref.watch(gleanDatabaseProvider)),
     );
