@@ -145,7 +145,8 @@ class ScorerWeights:
     repeat_cuisine: float = -1.0
     # "Whole food": +1 `whole`, 0 `mixed`, 0 `processed`.
     whole_food: float = 1.0
-    # "Whole food": the "healthier" chip doubles it.
+    # "Whole food": the "healthier" chip doubles it. If V9 also maps a predicate to that chip, both apply, so
+    # its predicate mapping is the place to keep it from counting twice.
     healthier_multiplier: float = 2.0
     # "'Lighter' chip": -1 per recipe above the week's median calories, where nutrition exists.
     lighter: float = -1.0
@@ -182,6 +183,26 @@ class ProteinTarget:
     max_per_week: int | None = None
 
 
+class PredicateField(StrEnum):
+    """The attribute a predicate reads. The filter's allowlist, and the scorer's, is these six."""
+
+    MAIN_PROTEIN = "main_protein"
+    MAIN_CARB = "main_carb"
+    DISH_TYPE = "dish_type"
+    CUISINE = "cuisine"
+    WHOLE_FOOD = "whole_food"
+    ACTIVE_TIME = "active_time"
+
+
+class PredicateOp(StrEnum):
+    """The operators a filter may use. `lte`/`gte` compare minutes, so they are active_time's alone."""
+
+    IN = "in"
+    NOT_IN = "not_in"
+    LTE = "lte"
+    GTE = "gte"
+
+
 @dataclass(frozen=True, slots=True)
 class Predicate:
     """The spec's filter predicate, as the scorer evaluates it against one recipe's attributes.
@@ -212,26 +233,6 @@ class Predicate:
         value = attributes.as_mapping()[self.field.value]
         values = {candidate.casefold() for candidate in self.values}
         return value in values if self.op is PredicateOp.IN else value not in values
-
-
-class PredicateField(StrEnum):
-    """The attribute a predicate reads. The filter's allowlist, and the scorer's, is these six."""
-
-    MAIN_PROTEIN = "main_protein"
-    MAIN_CARB = "main_carb"
-    DISH_TYPE = "dish_type"
-    CUISINE = "cuisine"
-    WHOLE_FOOD = "whole_food"
-    ACTIVE_TIME = "active_time"
-
-
-class PredicateOp(StrEnum):
-    """The operators a filter may use. `lte`/`gte` compare minutes, so they are active_time's alone."""
-
-    IN = "in"
-    NOT_IN = "not_in"
-    LTE = "lte"
-    GTE = "gte"
 
 
 @dataclass(frozen=True, slots=True)
