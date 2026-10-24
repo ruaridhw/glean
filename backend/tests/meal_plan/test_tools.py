@@ -7,6 +7,8 @@ on synthetic attributes only: no corpus, no store, no model.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from glean.meal_plan.tools import (
@@ -21,6 +23,9 @@ from glean.meal_plan.tools import (
     ScoringContext,
     Term,
     UnknownRecipeIds,
+    _greedy_plan,
+    _Scorer,
+    create_candidate_meal_plans,
     score_meal_plan,
 )
 from glean.recipes.attributes import (
@@ -425,3 +430,197 @@ def test_a_minutes_predicate_compares_the_active_time_bucket() -> None:
 def test_a_minutes_predicate_only_applies_to_active_time() -> None:
     with pytest.raises(ValueError, match="active_time"):
         Predicate(PredicateField.CUISINE, PredicateOp.LTE, ("30",))
+
+
+# --- create_candidate_meal_plans: k distinct balanced weeks -----------------------------------------------
+
+
+def week(*, n: int = 3, pool: int = 6):
+    """A pool wide enough for a balanced week: cycling proteins, carbs, cuisines and dish types."""
+    proteins = [MainProtein.CHICKEN, MainProtein.FISH, MainProtein.BEEF, MainProtein.BEANS_AND_PULSES]
+    carbs = [MainCarb.RICE, MainCarb.PASTA, MainCarb.POTATO, MainCarb.NONE]
+    cuisines = [Cuisine.ITALIAN, Cuisine.INDIAN, Cuisine.THAI, Cuisine.MEXICAN]
+    dish_types = [DishType.CURRY, DishType.SALAD_OR_BOWL, DishType.PAN_OR_GRILL, DishType.SOUP_OR_STEW]
+    return context(
+        *(
+            candidate(
+                f"recipe-{index}",
+                main_protein=proteins[index % len(proteins)],
+                main_carb=carbs[index % len(carbs)],
+                cuisine=cuisines[index % len(cuisines)],
+                dish_type=dish_types[index % len(dish_types)],
+                pantry_fit=float(pool - index),
+            )
+            for index in range(pool)
+        )
+    )
+
+
+def test_two_distinct_plans_of_n_recipes() -> None:
+    plans = create_candidate_meal_plans(
+        ["recipe-0", "recipe-1", "recipe-2", "recipe-3", "recipe-4", "recipe-5"], 3, week()
+    )
+    assert len(plans) == 2
+    for plan in plans:
+        assert len(plan.recipes) == 3
+        assert len(set(plan.recipe_ids)) == 3
+    assert set(plans[0].recipe_ids) != set(plans[1].recipe_ids)
+
+
+def test_the_plans_are_ordered_best_first() -> None:
+    ids = [f"recipe-{index}" for index in range(6)]
+    plans = create_candidate_meal_plans(ids, 3, week())
+    assert plans[0].total >= plans[1].total
+
+
+def test_a_plan_scores_exactly_what_scoring_its_ids_scores() -> None:
+    ctx = week()
+    plans = create_candidate_meal_plans([f"recipe-{index}" for index in range(6)], 3, ctx)
+    for plan in plans:
+        assert plan.total == score_meal_plan(plan.recipe_ids, ctx).total
+
+
+def test_the_same_seed_gives_the_same_plans() -> None:
+    ids = [f"recipe-{index}" for index in range(6)]
+    first = create_candidate_meal_plans(ids, 3, week(), seed=7)
+    again = create_candidate_meal_plans(ids, 3, week(), seed=7)
+    assert [plan.recipe_ids for plan in first] == [plan.recipe_ids for plan in again]
+
+
+def test_a_different_seed_breaks_the_ties_differently() -> None:
+    # Every candidate scores the same, so the seed's tie-break is the only thing choosing between them.
+    ctx = context(*(candidate(f"recipe-{index}") for index in range(6)))
+    ids = [f"recipe-{index}" for index in range(6)]
+    assert (
+        create_candidate_meal_plans(ids, 3, ctx, seed=0)[0].recipe_ids
+        != create_candidate_meal_plans(ids, 3, ctx, seed=1)[0].recipe_ids
+    )
+
+
+def test_a_balanced_week_does_not_put_two_chickens_in_it() -> None:
+    ctx = context(
+        candidate("chicken-one", main_protein=MainProtein.CHICKEN, main_carb=MainCarb.RICE, pantry_fit=3.0),
+        candidate("chicken-two", main_protein=MainProtein.CHICKEN, main_carb=MainCarb.PASTA, pantry_fit=2.9),
+        candidate("fish", main_protein=MainProtein.FISH, main_carb=MainCarb.POTATO, pantry_fit=2.0),
+        candidate("lamb", main_protein=MainProtein.LAMB, main_carb=MainCarb.NONE, pantry_fit=1.9),
+    )
+    (best,) = create_candidate_meal_plans(["chicken-one", "chicken-two", "fish", "lamb"], 2, ctx, k=1)
+    proteins = [ctx.recipes[recipe_id].attributes.main_protein for recipe_id in best.recipe_ids]
+    assert proteins.count(MainProtein.CHICKEN) == 1
+
+
+def test_local_search_improves_on_the_greedy_fill() -> None:
+    # Greedy's third slot takes a second fish, which makes its second slot the wrong partner: the rice repeat it
+    # brought is still there, and swapping it for the stronger beef-and-pasta week only pays once the second fish
+    # is already in. Greedy never looks back, so the local search's one swap is what earns the extra 1.3.
+    ctx = context(
+        candidate(
+            "curry",
+            main_protein=MainProtein.FISH,
+            main_carb=MainCarb.PASTA,
+            dish_type=DishType.CURRY,
+            cuisine=Cuisine.THAI,
+            pantry_fit=3.5,
+        ),
+        candidate(
+            "thai-beef",
+            main_protein=MainProtein.BEEF,
+            main_carb=MainCarb.RICE,
+            dish_type=DishType.SALAD_OR_BOWL,
+            cuisine=Cuisine.THAI,
+            pantry_fit=5.6,
+        ),
+        candidate(
+            "thai-fish",
+            main_protein=MainProtein.FISH,
+            main_carb=MainCarb.RICE,
+            dish_type=DishType.SALAD_OR_BOWL,
+            cuisine=Cuisine.THAI,
+            pantry_fit=7.1,
+        ),
+        candidate(
+            "italian-fish",
+            main_protein=MainProtein.FISH,
+            main_carb=MainCarb.PASTA,
+            dish_type=DishType.CURRY,
+            cuisine=Cuisine.ITALIAN,
+            pantry_fit=10.0,
+        ),
+        candidate(
+            "italian-beef",
+            main_protein=MainProtein.BEEF,
+            main_carb=MainCarb.PASTA,
+            dish_type=DishType.SALAD_OR_BOWL,
+            cuisine=Cuisine.ITALIAN,
+            pantry_fit=6.9,
+        ),
+    )
+    ids = ["curry", "thai-beef", "thai-fish", "italian-fish", "italian-beef"]
+    greedy = _greedy_plan(_Scorer(ctx, ScorerWeights()), ids, 3, dict.fromkeys(ids, 0.0))
+    assert greedy == ["italian-fish", "thai-beef", "thai-fish"]
+    (best,) = create_candidate_meal_plans(ids, 3, ctx, k=1)
+    assert set(best.recipe_ids) == {"italian-fish", "italian-beef", "thai-fish"}
+    assert best.total > score_meal_plan(greedy, ctx).total
+
+
+def test_a_pool_the_size_of_the_week_can_only_yield_one_plan() -> None:
+    ctx = week(pool=3)
+    plans = create_candidate_meal_plans(["recipe-0", "recipe-1", "recipe-2"], 3, ctx)
+    assert len(plans) == 1
+
+
+def test_a_pool_smaller_than_the_week_plans_every_recipe() -> None:
+    ctx = week(pool=4)
+    (plan,) = create_candidate_meal_plans(["recipe-0", "recipe-1", "recipe-2", "recipe-3"], 7, ctx, k=1)
+    assert sorted(plan.recipe_ids) == ["recipe-0", "recipe-1", "recipe-2", "recipe-3"]
+
+
+@pytest.mark.parametrize(("ids", "n", "k"), [([], 3, 2), (["recipe-0"], 0, 2), (["recipe-0"], 3, 0)])
+def test_a_week_that_cannot_be_planned_yields_no_plans(ids, n, k) -> None:
+    ctx = week(pool=4)
+    assert create_candidate_meal_plans(ids, n, ctx, k=k) == ()
+
+
+def test_generation_rejects_an_id_the_context_does_not_describe() -> None:
+    with pytest.raises(UnknownRecipeIds, match="ghost"):
+        create_candidate_meal_plans(["recipe-0", "ghost"], 2, week())
+
+
+def test_generating_two_weeks_of_seven_is_well_under_a_hundred_milliseconds() -> None:
+    pool = [f"recipe-{index}" for index in range(120)]
+    ctx = context(
+        *(
+            candidate(
+                recipe_id,
+                main_protein=list(MainProtein)[index % len(MainProtein)],
+                main_carb=list(MainCarb)[index % len(MainCarb)],
+                dish_type=list(DishType)[index % len(DishType)],
+                cuisine=list(Cuisine)[index % len(Cuisine)],
+                pantry_fit=float(120 - index) / 40,
+            )
+            for index, recipe_id in enumerate(pool)
+        )
+    )
+    create_candidate_meal_plans(pool, 7, ctx, seed=0)  # warm the caches the way the graph will have them warm
+    started = time.perf_counter()
+    plans = create_candidate_meal_plans(pool, 7, ctx, seed=0)
+    elapsed = time.perf_counter() - started
+    assert len(plans) == 2
+    assert elapsed < 0.1, f"two weeks of seven from 120 candidates took {elapsed * 1000:.1f} ms"
+
+
+def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
+    # The search adds the penalties up arithmetically so it can afford to try thousands of swaps; this pins that
+    # the number it optimises is the number the breakdown reports.
+    ctx = context(
+        candidate("a", main_protein=MainProtein.CHICKEN, cuisine=Cuisine.THAI, calories=400),
+        candidate("b", main_protein=MainProtein.CHICKEN, cuisine=Cuisine.THAI, calories=900),
+        candidate("c", main_protein=MainProtein.FISH, cuisine=Cuisine.THAI, calories=None),
+        chips=frozenset({LIGHTER_CHIP, "healthier"}),
+        protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=2),),
+    )
+    scorer = _Scorer(ctx, ScorerWeights())
+    plan = scorer.score(["a", "b", "c"])
+    assert scorer._penalty_points(["a", "b", "c"]) == sum(penalty.points for penalty in plan.penalties)
+    assert plan.points(Term.LIGHTER) < 0
+    assert plan.points(Term.PROTEIN_TARGET) < 0
