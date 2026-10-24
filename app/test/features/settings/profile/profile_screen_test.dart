@@ -540,6 +540,30 @@ void main() {
     expect(find.text("Glean doesn't know your tastes yet"), findsNothing);
   });
 
+  gleanWidgetTest('leaving straight after a removal still saves it and still '
+      'offers Undo', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await profiles().save(userId: _userId, profile: _filled);
+    await harness.pumpAt(tester, AppRoutes.settings.path);
+    await pumpPastSkeleton(tester);
+    unawaited(harness.router.pushNamed(AppRoutes.settingsProfile.name));
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Remove olives'));
+    harness.router.pop();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Removed olives'), findsOneWidget);
+    expect((await stored(tester))!.dislikedIngredients, <String>['mushrooms']);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
   gleanWidgetTest('a failed save says so and leaves the profile as it was', (
     tester,
   ) async {

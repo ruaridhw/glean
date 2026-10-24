@@ -147,6 +147,8 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
   }) {
     final T item = list.read(widget.profile)[index];
     final String label = list.label(item);
+    // Read before the write: the screen may be gone by the time it lands, and the snackbar must still show.
+    final Haptics haptics = ref.read(hapticsProvider);
     return GleanSnackBar.runUndoable<int>(
       context,
       perform: () async {
@@ -170,7 +172,7 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
       message: message ?? 'Removed $label',
       failureMessage: failureMessage ?? 'Could not remove $label. Try again.',
       undoFailureMessage: 'Could not put $label back. Try again.',
-      onSuccess: () => ref.read(hapticsProvider).mediumImpact(),
+      onSuccess: haptics.mediumImpact,
     );
   }
 
