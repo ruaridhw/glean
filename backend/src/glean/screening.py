@@ -12,10 +12,6 @@ feedback and swap notes (V9, V10) ask the same question at the same bar.
 
 from __future__ import annotations
 
-import hashlib
-import threading
-import time
-from collections import OrderedDict
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -75,45 +71,6 @@ class ScreenResult:
 
 _NOTHING_TO_SCREEN = ScreenResult(text=None)
 
-# Screens are remembered per container, so a stateless endpoint that re-screens a transcript doesn't pay
-# for the same note twice. Bounded and short-lived: this is a cost cache, not storage, and a note edited
-# even slightly is a different note. An outage is never remembered — it says nothing about the note.
-_CACHE_MAX_ENTRIES = 512
-_CACHE_TTL_S = 600.0
-_cache: OrderedDict[str, tuple[float, ScreenResult]] = OrderedDict()
-_cache_lock = threading.Lock()
-
-
-def clear_screen_cache() -> None:
-    """Forget every remembered screen (tests, and any caller that needs a cold read)."""
-    with _cache_lock:
-        _cache.clear()
-
-
-def _cache_key(note: str) -> str:
-    return hashlib.sha256(" ".join(note.casefold().split()).encode()).hexdigest()
-
-
-def _cached(key: str) -> ScreenResult | None:
-    with _cache_lock:
-        entry = _cache.get(key)
-        if entry is None:
-            return None
-        stored_at, result = entry
-        if time.monotonic() - stored_at > _CACHE_TTL_S:
-            del _cache[key]
-            return None
-        _cache.move_to_end(key)
-        return result
-
-
-def _remember(key: str, result: ScreenResult) -> None:
-    with _cache_lock:
-        _cache[key] = (time.monotonic(), result)
-        _cache.move_to_end(key)
-        while len(_cache) > _CACHE_MAX_ENTRIES:
-            _cache.popitem(last=False)
-
 
 def screen(text: str, *, decision_client: DecisionClient) -> ScreenResult:
     """Return the note when it is a food preference at `SCREEN_BAR`, otherwise why it was dropped.
@@ -123,14 +80,6 @@ def screen(text: str, *, decision_client: DecisionClient) -> ScreenResult:
     note = text.strip()
     if not note:
         return _NOTHING_TO_SCREEN
-    key = _cache_key(note)
-    remembered = _cached(key)
-    if remembered is not None:
-        return ScreenResult(
-            text=note if remembered.passed else None,
-            rejection=remembered.rejection,
-            probability=remembered.probability,
-        )
     try:
         decision = decision_client.decide({"note": note}, {SCREEN_QUESTION_NAME: SCREEN_QUESTION})
     except DecisionError:
@@ -138,10 +87,6 @@ def screen(text: str, *, decision_client: DecisionClient) -> ScreenResult:
         logger.warning("screening unavailable; dropping the note", exc_info=True)
         return ScreenResult(text=None, rejection=ScreenRejection.UNAVAILABLE)
     probability = decision.noul(SCREEN_QUESTION_NAME).noul
-    result = (
-        ScreenResult(text=None, rejection=ScreenRejection.NOT_A_PREFERENCE, probability=probability)
-        if probability < SCREEN_BAR
-        else ScreenResult(text=note, probability=probability)
-    )
-    _remember(key, result)
-    return result
+    if probability < SCREEN_BAR:
+        return ScreenResult(text=None, rejection=ScreenRejection.NOT_A_PREFERENCE, probability=probability)
+    return ScreenResult(text=note, probability=probability)

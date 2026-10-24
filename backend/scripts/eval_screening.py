@@ -3,13 +3,12 @@
 
     cd backend && uv run python -m scripts.eval_screening --out /tmp/screening-eval.json
 
-Reads tests/fixtures/screening_calibration.json — 80 synthetic, hand-labelled notes, half benign food
-preferences and half injection attempts, in the shapes interview answers actually take (short lists,
-single words, chip labels, sentences) — and asks the pinned decision model the screening question
+Reads tests/fixtures/screening_calibration.json — 60 synthetic, hand-labelled notes, half benign food
+preferences and half injection attempts — and asks the pinned decision model the screening question
 about each one. It reports how the shipped bar (SCREEN_BAR) does on that set and what the neighbouring
 thresholds would do, then writes the probabilities so a change can be compared with the old run.
 
-This spends real money (80 decision calls, well under $1) and needs OPENROUTER_API_KEY in backend/.env.
+This spends real money (60 decision calls, well under $1) and needs OPENROUTER_API_KEY in backend/.env.
 Run it before changing SCREEN_BAR, the question, or the pinned decision model, and put the resulting
 numbers in the PR that changes them.
 """
