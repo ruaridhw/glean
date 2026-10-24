@@ -14,8 +14,8 @@ as zero: richness was dropped in G1, so there is nothing to read for the "3+ hea
 
 from __future__ import annotations
 
-import statistics
-from collections import Counter
+import random
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -43,6 +43,7 @@ __all__ = [
     "Term",
     "TermScore",
     "UnknownRecipeIds",
+    "create_candidate_meal_plans",
     "score_meal_plan",
 ]
 
@@ -55,6 +56,15 @@ LIGHTER_CHIP = "lighter"
 SIX_WEEKS_DAYS = 42
 NINE_WEEKS_DAYS = 63
 TWELVE_WEEKS_DAYS = 84
+
+# Two floats closer than this are the same score, so a "swap" between them is not an improvement.
+_SCORE_EPSILON = 1e-9
+# The local search stops after this many improving passes, and after this many plan evaluations, which is what
+# bounds the tool's time: a 120-recipe pool's neighbourhood is far more than one plan needs to settle.
+_MAX_LOCAL_SEARCH_PASSES = 8
+_MAX_SWAP_EVALUATIONS = 2000
+# Attempts per plan offered: each one blocks a recipe of the plan before it, so the plans differ by construction.
+_PLANS_ATTEMPTS_PER_PLAN = 4
 
 # Values that earn nothing when they repeat: an unknown attribute is not evidence of sameness, and a dish built
 # around no protein or no carb cannot repeat one.
@@ -79,6 +89,10 @@ class Term(StrEnum):
     REPEAT_CUISINE = "repeat_cuisine"
     LIGHTER = "lighter"
     PROTEIN_TARGET = "protein_target"
+
+
+# The repeat terms, in the order `_Scorer.repeat_values` gives their attribute values.
+_REPEAT_TERMS = (Term.REPEAT_MAIN_PROTEIN, Term.REPEAT_MAIN_CARB, Term.REPEAT_DISH_TYPE, Term.REPEAT_CUISINE)
 
 
 class Rating(StrEnum):
@@ -329,6 +343,51 @@ def score_meal_plan(
     return scorer.score(ids)
 
 
+def create_candidate_meal_plans(
+    recipe_ids: Sequence[str],
+    n: int,
+    ctx: ScoringContext,
+    weights: ScorerWeights | None = None,
+    k: int = 2,
+    seed: int = 0,
+) -> tuple[PlanScore, ...]:
+    """Offer up to k distinct candidate weeks of n recipes, best first, each with its score breakdown.
+
+    This is the scorer as the graph uses it: a greedy fill, then a pairwise-swap local search, with seeded
+    tie-breaks so the same seed is the same pair of weeks (ADR 0014 wants variety between Generates, not inside
+    one). The plans are distinct by construction: each one after the first blocks a recipe of the plan before it,
+    so a week the household has just been shown cannot come back as its own alternative.
+
+    Fewer than k plans come back when fewer exist: a pool that is exactly one week long has no second week in it.
+    A pool smaller than n plans every recipe it has.
+    """
+    scorer = _Scorer(ctx, weights or ScorerWeights())
+    pool = tuple(dict.fromkeys(recipe_ids))
+    scorer.require(pool)
+    if n <= 0 or k <= 0 or not pool:
+        return ()
+    size = min(n, len(pool))
+    ranks = _tie_break_ranks(pool, seed)
+    plans: list[PlanScore] = []
+    seen: set[frozenset[str]] = set()
+    blockers: deque[str] = deque()
+    for _attempt in range(_PLANS_ATTEMPTS_PER_PLAN * k):
+        blocked = blockers.popleft() if blockers else None
+        candidates = tuple(recipe_id for recipe_id in pool if recipe_id != blocked)
+        if len(candidates) < size:
+            continue
+        chosen = _local_search(scorer, _greedy_plan(scorer, candidates, size, ranks), candidates, ranks)
+        recipe_set = frozenset(chosen)
+        if recipe_set in seen:
+            continue
+        seen.add(recipe_set)
+        plans.append(scorer.score(chosen))
+        if len(plans) == k:
+            break
+        blockers = deque(sorted(chosen, key=ranks.__getitem__))
+    return tuple(plans)
+
+
 class _Scorer:
     """One scoring run: the per-recipe terms are plan-independent, so they are computed once and cached."""
 
@@ -336,7 +395,15 @@ class _Scorer:
         self._ctx = ctx
         self._weights = weights
         self._healthier = HEALTHIER_CHIP in ctx.chips
+        self._repeat_weights = (
+            weights.repeat_main_protein,
+            weights.repeat_main_carb,
+            weights.repeat_dish_type,
+            weights.repeat_cuisine,
+        )
         self._recipes: dict[str, RecipeScore] = {}
+        self._totals: dict[str, float] = {}
+        self._values: dict[str, tuple[str, str, str, str]] = {}
 
     def require(self, recipe_ids: Sequence[str]) -> None:
         """Raise `UnknownRecipeIds` naming every id the context has no facts for."""
@@ -353,9 +420,13 @@ class _Scorer:
 
     def total(self, recipe_ids: Sequence[str]) -> float:
         """The same number `score().total` gives, without building the breakdown: the search calls this."""
-        return sum(self.recipe(recipe_id).total for recipe_id in recipe_ids) + sum(
-            penalty.points for penalty in self.penalties(recipe_ids)
-        )
+        base = 0.0
+        for recipe_id in recipe_ids:
+            cached = self._totals.get(recipe_id)
+            if cached is None:
+                cached = self._totals[recipe_id] = self.recipe(recipe_id).total
+            base += cached
+        return base + self._penalty_points(recipe_ids)
 
     def recipe(self, recipe_id: str) -> RecipeScore:
         scored = self._recipes.get(recipe_id)
@@ -423,79 +494,162 @@ class _Scorer:
 
     def penalties(self, recipe_ids: Sequence[str]) -> tuple[PlanPenalty, ...]:
         """What the plan as a whole loses: repeats, the lighter chip's calories term, and protein targets."""
-        penalties = self._repeats(recipe_ids)
-        lighter = self._lighter(recipe_ids)
-        if lighter is not None:
-            penalties.append(lighter)
-        penalties.extend(self._protein_targets(recipe_ids))
+        penalties = [
+            PlanPenalty(term=term, points=weight * (len(ids) - 1), recipe_ids=tuple(ids[1:]), detail=value)
+            for term, weight, group in zip(
+                _REPEAT_TERMS, self._repeat_weights, self._occurrences(recipe_ids), strict=True
+            )
+            for value, ids in group.items()
+            if len(ids) > 1
+        ]
+        above, median = self._lighter_offenders(recipe_ids)
+        if above:
+            penalties.append(
+                PlanPenalty(
+                    term=Term.LIGHTER,
+                    points=self._weights.lighter * len(above),
+                    recipe_ids=above,
+                    detail=f"median {median:g} kcal",
+                )
+            )
+        penalties.extend(
+            PlanPenalty(
+                term=Term.PROTEIN_TARGET,
+                points=self._weights.protein_target_miss * misses,
+                detail=f"{target.protein.value} x{count} against min {target.min_per_week} max {target.max_per_week}",
+            )
+            for target, count, misses in self._target_misses(recipe_ids)
+        )
         return tuple(penalties)
 
-    def _repeats(self, recipe_ids: Sequence[str]) -> list[PlanPenalty]:
-        attributes = [(recipe_id, self._ctx.recipes[recipe_id].attributes) for recipe_id in recipe_ids]
-        penalties: list[PlanPenalty] = []
-        for term, attribute, weight in (
-            (Term.REPEAT_MAIN_PROTEIN, "main_protein", self._weights.repeat_main_protein),
-            (Term.REPEAT_MAIN_CARB, "main_carb", self._weights.repeat_main_carb),
-            (Term.REPEAT_DISH_TYPE, "dish_type", self._weights.repeat_dish_type),
-            (Term.REPEAT_CUISINE, "cuisine", self._weights.repeat_cuisine),
-        ):
-            occurrences: dict[str, list[str]] = {}
-            for recipe_id, attrs in attributes:
-                value = attrs.as_mapping()[attribute]
+    def _occurrences(self, recipe_ids: Sequence[str]) -> list[dict[str, list[str]]]:
+        """One value-to-recipes map per repeat term, in plan order, so "the extra ones" are stable."""
+        occurrences: list[dict[str, list[str]]] = [{}, {}, {}, {}]
+        for recipe_id in recipe_ids:
+            for group, value in zip(occurrences, self.repeat_values(recipe_id), strict=True):
                 if value not in _EXEMPT_REPEAT_VALUES:
-                    occurrences.setdefault(value, []).append(recipe_id)
-            for value, ids in occurrences.items():
-                if len(ids) > 1:
-                    penalties.append(
-                        PlanPenalty(term=term, points=weight * (len(ids) - 1), recipe_ids=tuple(ids[1:]), detail=value)
-                    )
-        return penalties
+                    group.setdefault(value, []).append(recipe_id)
+        return occurrences
 
-    def _lighter(self, recipe_ids: Sequence[str]) -> PlanPenalty | None:
+    def repeat_values(self, recipe_id: str) -> tuple[str, str, str, str]:
+        """The four attributes repeats are counted on, as plain strings, read once per recipe.
+
+        `as_mapping` builds a whole dict of all six attributes, which the search would pay for on every candidate
+        of every trial swap; the repeat terms need four of them and never change, so they are kept here.
+        """
+        cached = self._values.get(recipe_id)
+        if cached is None:
+            attrs = self._ctx.recipes[recipe_id].attributes
+            cached = self._values[recipe_id] = (
+                attrs.main_protein.value,
+                attrs.main_carb.value,
+                attrs.dish_type.value,
+                attrs.cuisine.value,
+            )
+        return cached
+
+    def _lighter_offenders(self, recipe_ids: Sequence[str]) -> tuple[tuple[str, ...], float]:
+        """The recipes above the week's own median calories, and that median. Empty without the chip."""
         if LIGHTER_CHIP not in self._ctx.chips:
-            return None
+            return (), 0.0
         known = [
             (recipe_id, calories)
             for recipe_id in recipe_ids
             if (calories := self._ctx.recipes[recipe_id].calories_per_serving) is not None
         ]
         if not known:
-            return None
-        median = statistics.median([calories for _, calories in known])
-        above = tuple(recipe_id for recipe_id, calories in known if calories > median)
-        if not above:
-            return None
-        return PlanPenalty(
-            term=Term.LIGHTER,
-            points=self._weights.lighter * len(above),
-            recipe_ids=above,
-            detail=f"median {median:g} kcal",
-        )
+            return (), 0.0
+        median = _median([calories for _recipe_id, calories in known])
+        return tuple(recipe_id for recipe_id, calories in known if calories > median), median
 
-    def _protein_targets(self, recipe_ids: Sequence[str]) -> list[PlanPenalty]:
+    def _target_misses(self, recipe_ids: Sequence[str]) -> list[tuple[ProteinTarget, int, int]]:
+        """Every protein target the plan misses, with the count it reached: more fish, fewer pork."""
         if not self._ctx.protein_targets:
             return []
         counts: Counter[MainProtein] = Counter(
             self._ctx.recipes[recipe_id].attributes.main_protein for recipe_id in recipe_ids
         )
-        penalties: list[PlanPenalty] = []
+        misses: list[tuple[ProteinTarget, int, int]] = []
         for target in self._ctx.protein_targets:
             count = counts[target.protein]
-            missing = 0
+            short = 0
             if target.min_per_week is not None and count < target.min_per_week:
-                missing += target.min_per_week - count
+                short += target.min_per_week - count
             if target.max_per_week is not None and count > target.max_per_week:
-                missing += count - target.max_per_week
-            if missing:
-                penalties.append(
-                    PlanPenalty(
-                        term=Term.PROTEIN_TARGET,
-                        points=self._weights.protein_target_miss * missing,
-                        detail=f"{target.protein.value} x{count} against "
-                        f"min {target.min_per_week} max {target.max_per_week}",
-                    )
-                )
-        return penalties
+                short += count - target.max_per_week
+            if short:
+                misses.append((target, count, short))
+        return misses
+
+    def _penalty_points(self, recipe_ids: Sequence[str]) -> float:
+        """The same penalties `penalties` describes, as one number: the search's hot path builds no objects."""
+        points = sum(
+            weight * sum(len(ids) - 1 for ids in group.values() if len(ids) > 1)
+            for weight, group in zip(self._repeat_weights, self._occurrences(recipe_ids), strict=True)
+        )
+        above, _median = self._lighter_offenders(recipe_ids)
+        points += self._weights.lighter * len(above)
+        points += self._weights.protein_target_miss * sum(
+            misses for _target, _count, misses in self._target_misses(recipe_ids)
+        )
+        return points
+
+
+def _median(values: list[float]) -> float:
+    """The median of a non-empty list: the week's own middle calories, which the lighter term compares against."""
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _tie_break_ranks(pool: Sequence[str], seed: int) -> dict[str, float]:
+    """One random rank per recipe, so a tie is broken by the seed rather than by the order ids arrived in."""
+    rng = random.Random(seed)  # noqa: S311 - seeded on purpose: the same Generate seed must plan the same week
+    return {recipe_id: rng.random() for recipe_id in pool}
+
+
+def _greedy_plan(scorer: _Scorer, pool: Sequence[str], size: int, ranks: Mapping[str, float]) -> list[str]:
+    """Fill the week one slot at a time with the recipe that makes the plan so far score best.
+
+    The local search starts here, and the tests compare the two: greedy alone commits to the strongest single
+    recipe, which is not always a plan that can reach a protein target or a balanced set of dishes.
+    """
+    chosen: list[str] = []
+    remaining = list(pool)
+    while len(chosen) < size:
+        best = max(remaining, key=lambda recipe_id: (scorer.total((*chosen, recipe_id)), ranks[recipe_id]))
+        chosen.append(best)
+        remaining.remove(best)
+    return chosen
+
+
+def _local_search(
+    scorer: _Scorer, chosen: Sequence[str], pool: Sequence[str], ranks: Mapping[str, float]
+) -> tuple[str, ...]:
+    """Swap one slot at a time while the week improves, taking the best swap in the neighbourhood each pass."""
+    best = list(chosen)
+    best_total = scorer.total(best)
+    evaluations = 0
+    for _pass in range(_MAX_LOCAL_SEARCH_PASSES):
+        present = set(best)
+        unused = [recipe_id for recipe_id in pool if recipe_id not in present]
+        improvement: tuple[float, float, list[str]] | None = None
+        for position in range(len(best)):
+            for incoming in unused:
+                if evaluations >= _MAX_SWAP_EVALUATIONS:
+                    return tuple(best)
+                evaluations += 1
+                trial = [*best]
+                trial[position] = incoming
+                total = scorer.total(trial)
+                if total > best_total + _SCORE_EPSILON and (
+                    improvement is None or (total, ranks[incoming]) > improvement[:2]
+                ):
+                    improvement = (total, ranks[incoming], trial)
+        if improvement is None:
+            break
+        best_total, _, best = improvement
+    return tuple(best)
 
 
 def _minutes(value: str) -> int | None:
