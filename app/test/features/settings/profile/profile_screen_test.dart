@@ -87,6 +87,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Steps the profile list until [finder] is built (a drag can land on a text field and scroll that instead).
+  Future<void> scrollToBuild(WidgetTester tester, Finder finder) async {
+    final ScrollPosition position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    while (finder.evaluate().isEmpty &&
+        position.pixels < position.maxScrollExtent) {
+      position.jumpTo(
+        (position.pixels + 200).clamp(0, position.maxScrollExtent),
+      );
+      await tester.pump();
+    }
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> enterInDialog(WidgetTester tester, String text) async {
     await tester.enterText(find.byKey(const Key('profile.entry')), text);
     await tester.tap(find.byKey(const Key('profile.entry.save')));
@@ -386,7 +402,8 @@ void main() {
       size: const Size(320, 844),
       textScale: 2,
     );
-    await tester.ensureVisible(
+    await scrollToBuild(
+      tester,
       find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
     );
     await openProteinDialog(tester);
