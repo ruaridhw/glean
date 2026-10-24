@@ -202,6 +202,10 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
             enabled: !state.pending && question != null,
             minLines: 1,
             maxLines: 3,
+            // The backend rejects an answer past its bound, so the field stops there instead of letting a paste
+            // turn into a request that can only fail.
+            maxLength: InterviewAnswer.maxTextLength,
+            buildCounter: _nearLimitCounter,
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => _answer(),
             onChanged: (_) => setState(() {}),
@@ -232,6 +236,27 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
     );
   }
 }
+
+/// The answer counter, shown only once the household is close to the limit: a count from the first character
+/// is noise on a one-line answer, and a silent stop at the limit is worse.
+Widget? _nearLimitCounter(
+  BuildContext context, {
+  required int currentLength,
+  required bool isFocused,
+  required int? maxLength,
+}) {
+  if (maxLength == null) return null;
+  if (currentLength < maxLength - _counterVisibleFrom) return null;
+  return Text(
+    '$currentLength/$maxLength',
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    ),
+  );
+}
+
+/// How far from the limit the counter appears.
+const double _counterVisibleFrom = 200;
 
 /// One step back through first run. Icon-only so the row still fits a narrow phone at large text next to
 /// Skip and Send.

@@ -329,6 +329,45 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
   });
 
+  testWidgets('free text stops at the length the backend accepts, and says '
+      'how much is left near the limit', (WidgetTester tester) async {
+    final _Rig rig = _Rig(<ScriptedResponse>[
+      questionResponse(turn: 1),
+      questionResponse(turn: 2),
+    ]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+
+    await tester.enterText(find.byType(TextField), 'katsu curry');
+    await tester.pump();
+    expect(
+      find.textContaining('/2000'),
+      findsNothing,
+      reason: 'no counter while there is room to spare',
+    );
+
+    await tester.enterText(find.byType(TextField), 'x' * 1800);
+    await tester.pump();
+    expect(find.text('1800/2000'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'x' * 2500);
+    await tester.pump();
+    expect(
+      find.text('2000/2000'),
+      findsOneWidget,
+      reason: 'capped, not rejected',
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(
+      (rig.backend.lastAnswer['text']! as String).length,
+      2000,
+      reason: 'what reaches the backend is within its bound',
+    );
+  });
+
   testWidgets('Skip all saves no profile and carries on to the pantry', (
     WidgetTester tester,
   ) async {

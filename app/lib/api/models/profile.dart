@@ -85,6 +85,9 @@ class InterviewQuestion {
 /// What the household said to one question: some free text, some of the offered [options], or neither when
 /// they skipped it. Skipping is an answer — it tells the interviewer to move on.
 class InterviewAnswer {
+  /// What the backend accepts for [text]; anything longer is a rejected request, so the composer stops there.
+  static const int maxTextLength = 2000;
+
   const InterviewAnswer({
     this.text,
     this.options = const <String>[],
