@@ -38,6 +38,9 @@ urgency_score  # CompressedPantryItem
 recipe_id  # RecipeHistoryItem / MealPlanRecipe
 last_cooked_at  # RecipeHistoryItem
 food_groups  # RecipeHistoryItem
+cooked_at  # CookedHistoryItem
+cooked_history  # MealPlanRequest
+_read_a_missing_offset_as_utc  # Pydantic field validator (CookedHistoryItem.cooked_at)
 reason  # MealPlanRecipe
 missing_ingredients  # MealPlanRecipe
 suggestions  # MealPlanResponse compatibility field

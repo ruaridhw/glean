@@ -25,6 +25,13 @@ Map<String, dynamic> _$RecipeHistoryItemToJson(RecipeHistoryItem instance) =>
       'food_groups': instance.foodGroups,
     };
 
+Map<String, dynamic> _$CookedHistoryItemToJson(CookedHistoryItem instance) =>
+    <String, dynamic>{
+      'recipe_id': instance.recipeId,
+      'title': instance.title,
+      'cooked_at': instance.cookedAt.toIso8601String(),
+    };
+
 Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
     <String, dynamic>{
       'pantry': instance.pantry.map((e) => e.toJson()).toList(),
@@ -36,6 +43,7 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
       'max_active_time_mins': instance.maxActiveTimeMins,
       'source': instance.source,
       'exclude_external_ids': instance.excludeExternalIds,
+      'cooked_history': instance.cookedHistory.map((e) => e.toJson()).toList(),
     };
 
 MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>

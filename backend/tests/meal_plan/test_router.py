@@ -1,6 +1,6 @@
 import json
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -238,9 +238,13 @@ class _ModelThatSuggestsEveryCorpusRecipe:
 
     def __init__(self, *also: str) -> None:
         self._also = also
+        self.offered: list[str] = []
+        self.candidates: list[dict[str, object]] = []
 
     def invoke(self, _feature, _schema, *, user: str, **_kwargs) -> CorpusMealPlanResponse:
-        offered = [candidate["external_id"] for candidate in json.loads(user)["candidates"]]
+        self.candidates = json.loads(user)["candidates"]
+        offered = [candidate["external_id"] for candidate in self.candidates]
+        self.offered = offered
         return CorpusMealPlanResponse(
             suggestions=[
                 CorpusMealPlanRecipe(external_id=external_id, title=external_id, reason="Looks good.")
@@ -290,6 +294,214 @@ def test_an_older_app_build_sending_nut_free_is_never_planned_a_tree_nut_or_a_pe
 
     assert response.status_code == 200
     assert [suggestion["external_id"] for suggestion in response.json()["suggestions"]] == ["rec_rice"]
+
+
+def test_corpus_mode_never_offers_a_recipe_cooked_in_the_last_six_weeks(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    _corpus_with(
+        tmp_path,
+        {
+            "rec_bolognese": ("Beef Bolognese", ["beef mince"]),
+            "rec_tacos": ("Beef Tacos", ["beef mince", "tortilla"]),
+            "rec_meatballs": ("Beef Meatballs", ["beef mince", "breadcrumbs"]),
+            "rec_stir_fry": ("Beef Stir Fry", ["beef mince", "noodles"]),
+        },
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        meals_per_week=1,
+        cooked_history=[_cooked("rec_bolognese", "Beef Bolognese", days_ago=10)],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    assert "rec_bolognese" not in model.offered
+    assert set(model.offered) == {"rec_tacos", "rec_meatballs", "rec_stir_fry"}
+
+
+def test_corpus_mode_relaxes_the_floor_rather_than_leave_the_week_unfillable(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    _corpus_with(
+        tmp_path,
+        {
+            "rec_bolognese": ("Beef Bolognese", ["beef mince"]),
+            "rec_tacos": ("Beef Tacos", ["beef mince", "tortilla"]),
+            "rec_meatballs": ("Beef Meatballs", ["beef mince", "breadcrumbs"]),
+        },
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        meals_per_week=2,
+        cooked_history=[_cooked("rec_bolognese", "Beef Bolognese", days_ago=10)],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    assert set(model.offered) == {"rec_bolognese", "rec_tacos", "rec_meatballs"}
+
+
+def test_a_vegetarian_household_is_never_offered_a_meat_recipe_even_when_the_floor_relaxes(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    recipes = {
+        "rec_lentil_bake": ("Lentil Bake", ["lentils", "potato"], 0.02),
+        "rec_chickpea_curry": ("Chickpea Curry", ["chickpeas", "coconut milk"], 0.02),
+        "rec_tofu_noodles": ("Tofu Noodles", ["tofu", "noodles"], 0.02),
+        "rec_chicken_pie": ("Chicken Pie", ["chicken breast", "pastry"], 0.97),
+    }
+    corpus = _corpus_with(
+        tmp_path, {external_id: (title, ingredients) for external_id, (title, ingredients, _) in recipes.items()}
+    )
+    _save_decisions(
+        corpus,
+        [
+            (external_id, "vegetarian", probability)
+            for external_id, (_title, _ingredients, probability) in recipes.items()
+        ],
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe("rec_chicken_pie")
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        dietary_flags=["vegetarian"],
+        meals_per_week=3,
+        # Every cooked recipe here is recent, so the floor has to relax for the week to fill at all.
+        cooked_history=[
+            _cooked("rec_lentil_bake", "Lentil Bake", days_ago=10),
+            _cooked("rec_chickpea_curry", "Chickpea Curry", days_ago=20),
+            _cooked("rec_chicken_pie", "Chicken Pie", days_ago=30),
+        ],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    # The floor relaxed: the recently cooked vegetarian recipes came back into the candidates. The meat
+    # recipe, which is just as recent but breaks the flag, never appears — not even when the model asks
+    # for it by id, because the service drops anything it didn't offer.
+    assert set(model.offered) == {"rec_lentil_bake", "rec_chickpea_curry", "rec_tofu_noodles"}
+    assert {suggestion["external_id"] for suggestion in response.json()["suggestions"]} == {
+        "rec_lentil_bake",
+        "rec_chickpea_curry",
+        "rec_tofu_noodles",
+    }
+
+
+def test_the_model_is_told_which_candidates_are_cooked_recently_and_that_fresh_ones_come_first(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    _corpus_with(
+        tmp_path,
+        {
+            "rec_bolognese": ("Beef Bolognese", ["beef mince"]),
+            "rec_tacos": ("Beef Tacos", ["beef mince", "tortilla"]),
+            "rec_meatballs": ("Beef Meatballs", ["beef mince", "breadcrumbs"]),
+        },
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        meals_per_week=2,  # six fresh recipes needed, so the floor relaxes
+        cooked_history=[_cooked("rec_bolognese", "Beef Bolognese", days_ago=10)],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    ages = {candidate["external_id"]: candidate["cooked_days_ago"] for candidate in model.candidates}
+    assert ages == {"rec_bolognese": 10, "rec_tacos": None, "rec_meatballs": None}
+    assert [candidate["external_id"] for candidate in model.candidates][-1] == "rec_bolognese"
+
+
+def test_cooked_history_is_a_bounded_list(client: TestClient, auth_headers: dict[str, str]) -> None:
+    app.dependency_overrides[get_llm_router] = lambda: _ModelThatSuggestsEveryCorpusRecipe()
+    body = {
+        **_corpus_request().model_dump(mode="json"),
+        "cooked_history": [_cooked(f"rec_{index}", f"Meal {index}", days_ago=1) for index in range(201)],
+    }
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 422
+
+
+def test_cooked_history_entries_take_a_title_when_the_app_kept_no_recipe_id(
+    client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(corpus_module, "get_recipe_corpus_store", lambda: FilesystemBlobStore(tmp_path))
+    _corpus_with(
+        tmp_path,
+        {
+            "rec_bolognese": ("Beef Bolognese", ["beef mince"]),
+            "rec_tacos": ("Beef Tacos", ["beef mince", "tortilla"]),
+            "rec_meatballs": ("Beef Meatballs", ["beef mince", "breadcrumbs"]),
+            "rec_stir_fry": ("Beef Stir Fry", ["beef mince", "noodles"]),
+        },
+    )
+    model = _ModelThatSuggestsEveryCorpusRecipe()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(
+        meals_per_week=1,
+        cooked_history=[{"recipe_id": None, "title": "Beef Bolognese", "cooked_at": _iso(days_ago=10)}],
+    ).model_dump(mode="json")
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    assert "rec_bolognese" not in model.offered
+
+
+def _cooked(recipe_id: str, title: str, *, days_ago: float) -> dict[str, object]:
+    return {"recipe_id": recipe_id, "title": title, "cooked_at": _iso(days_ago=days_ago)}
+
+
+def _iso(*, days_ago: float) -> str:
+    return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
+
+
+def _corpus_with(tmp_path, recipes: dict[str, tuple[str, list[str]]]) -> RecipeCorpusStore:
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for external_id, (title, ingredients) in recipes.items():
+        corpus.save(
+            StoredRecipe(
+                external_id=external_id,
+                title=title,
+                ingredients=[StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in ingredients],
+            )
+        )
+    return corpus
+
+
+def _save_decisions(corpus: RecipeCorpusStore, decisions: list[tuple[str, str, float]]) -> None:
+    DietaryDecisionStore(corpus.store).save(
+        [
+            DietaryDecision(
+                recipe_id=external_id,
+                flag=flag,
+                probability=probability,
+                model=f"{DECISION_MODEL}-20261014",
+                content_hash=content_fingerprint(corpus.get(external_id).title, _ingredient_names(corpus, external_id)),
+                criteria_hash=question_hash(dietary_questions()[flag]),
+                computed_at=datetime(2026, 10, 16, tzinfo=UTC),
+            )
+            for external_id, flag, probability in decisions
+        ]
+    )
+
+
+def _ingredient_names(corpus: RecipeCorpusStore, external_id: str) -> list[str]:
+    recipe = corpus.get(external_id)
+    assert recipe is not None
+    return [ingredient.canonical_name for ingredient in recipe.ingredients]
 
 
 def _corpus_request(**overrides: object) -> MealPlanRequest:

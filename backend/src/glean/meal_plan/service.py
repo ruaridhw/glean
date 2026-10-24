@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from glean.llm import Feature
 from glean.meal_plan.candidates import sample_corpus_candidates
+from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanResponse,
     MealPlanRequest,
@@ -43,6 +44,9 @@ Rules:
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
 - Vary cuisines and main ingredients across the week
+- Prefer candidates whose cooked_days_ago is null. A non-null value means the household cooked that recipe
+  that many days ago and it is offered only because too few fresh candidates remained; choose one of the
+  others whenever one fits.
 - Return AT MOST meals_per_week planned meals — never exceed meals_per_week. Returning fewer is
   fine; do not pad the list with weaker choices to reach the limit."""
 
@@ -127,6 +131,11 @@ def _generate_from_corpus(
         max_total_time_mins=request.max_active_time_mins,
         exclude_external_ids=request.exclude_external_ids,
         rng=rng,
+        cooked=[
+            CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at)
+            for meal in request.cooked_history
+        ],
+        slots=request.meals_per_week,
     )
     logger.info(
         "generating corpus meal plan",
@@ -141,9 +150,11 @@ def _generate_from_corpus(
             {
                 "external_id": candidate.external_id,
                 "title": candidate.title,
-                "cuisine": candidate.cuisine,
-                "total_time_mins": candidate.total_time_mins,
-                "ingredients": candidate.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
+                "cuisine": candidate.summary.cuisine,
+                "total_time_mins": candidate.summary.total_time_mins,
+                "ingredients": candidate.summary.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
+                # Null for a recipe the household has not cooked recently; a number marks a fallback.
+                "cooked_days_ago": None if candidate.cooked_days_ago is None else round(candidate.cooked_days_ago),
             }
             for candidate in candidates
         ],
