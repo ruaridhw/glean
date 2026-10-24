@@ -113,12 +113,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  gleanWidgetTest('an empty profile says so, says how the interview fills '
-      'it, and still offers every list to fill in by hand', (tester) async {
+  gleanWidgetTest('an empty profile says so without promising a setup step '
+      'the household may never see, and still offers every list', (
+    tester,
+  ) async {
     await pumpProfile(tester);
 
     expect(find.text("Glean doesn't know your tastes yet"), findsOneWidget);
-    expect(find.textContaining('first set up Glean'), findsOneWidget);
+    expect(
+      find.text('Add what you love and avoid, and it plans around them.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('set up'), findsNothing);
+    expect(find.textContaining('interview'), findsNothing);
     for (final (ProfileList<Object?> list, _, _) in _chipLists) {
       expect(find.byKey(Key('profile.add.${list.title}')), findsOneWidget);
     }
