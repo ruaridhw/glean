@@ -38,6 +38,10 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
   final ScrollController _chat = ScrollController();
   int _lastContentLength = -1;
 
+  /// One save at a time: confirming twice while the first write is in flight would say nothing new to the
+  /// household and would repeat the work behind a button that already looks pressed.
+  bool _saving = false;
+
   @override
   void initState() {
     super.initState();
@@ -88,16 +92,22 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
   }
 
   Future<void> _confirm() async {
+    if (_saving) return;
+    setState(() => _saving = true);
     final bool saved = await ref
         .read(interviewControllerProvider.notifier)
         .confirm();
     if (!mounted) return;
+    setState(() => _saving = false);
     ref.read(hapticsProvider).mediumImpact();
     if (!saved) {
+      // The profile is the one thing this page exists to capture, so a failed write keeps the household on the
+      // summary to try again rather than marking the step passed with nothing stored.
       GleanSnackBar.show(
         context,
         'Could not save your profile — you can set it up later in Settings.',
       );
+      return;
     }
     widget.onConfirmed();
   }
@@ -197,8 +207,14 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
               SizedBox(width: tokens.spacing.sm),
               Expanded(
                 child: FilledButton(
-                  onPressed: _confirm,
-                  child: const Text('Looks right'),
+                  onPressed: _saving ? null : _confirm,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Looks right'),
                 ),
               ),
             ],
