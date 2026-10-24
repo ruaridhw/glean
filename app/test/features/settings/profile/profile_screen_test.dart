@@ -575,6 +575,34 @@ void main() {
     expect((await stored(tester))!.toJson(), _filled.toJson());
   });
 
+  gleanWidgetTest('a free-text save that fails after the screen is left is '
+      'still reported, on Settings', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await profiles().save(userId: _userId, profile: _filled);
+    await harness.pumpAt(tester, AppRoutes.settings.path);
+    await pumpPastSkeleton(tester);
+    unawaited(harness.router.pushNamed(AppRoutes.settingsProfile.name));
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => harness.db.customStatement(
+        'CREATE TRIGGER fail_profile_update BEFORE UPDATE ON household_profiles '
+        "BEGIN SELECT RAISE(ABORT, 'test failure'); END",
+      ),
+    );
+
+    await tester.enterText(labeledTextField("Who's at the table"), 'Just me');
+    harness.router.pop();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not save your profile. Try again.'),
+      findsOneWidget,
+    );
+    expect((await stored(tester))!.household, 'Two adults, two kids');
+  });
+
   gleanWidgetTest('a failed save says so and leaves the profile as it was', (
     tester,
   ) async {

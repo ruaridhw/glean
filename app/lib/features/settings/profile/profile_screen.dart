@@ -16,6 +16,7 @@ import 'package:glean/data/providers/household_profile_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/household_profile_repository.dart';
 import 'package:glean/design_system/design_system.dart';
+import 'package:glean/logging/logging.dart';
 
 import 'profile_presentation.dart';
 import 'widgets/profile_chip_list.dart';
@@ -75,15 +76,30 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
     householdProfileRepositoryProvider,
   );
   late final String _userId = ref.read(currentUserIdProvider);
+  late final GleanLogger? _logger = ref.read(gleanLoggerProvider);
+
+  /// The app-wide messenger, which outlives this screen, so a save that fails after Back is still reported.
+  late ScaffoldMessengerState _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.of(context);
+  }
 
   Future<void> _change(
     HouseholdProfile Function(HouseholdProfile current) change,
   ) async {
     try {
       await _profiles.update(userId: _userId, change: change);
-    } catch (_) {
-      if (!mounted) return;
-      GleanSnackBar.show(context, 'Could not save your profile. Try again.');
+    } catch (error) {
+      unawaited(_logger?.error('profile save failed: ${describeError(error)}'));
+      if (_messenger.mounted) {
+        GleanSnackBar.showOn(
+          _messenger,
+          'Could not save your profile. Try again.',
+        );
+      }
     }
   }
 
