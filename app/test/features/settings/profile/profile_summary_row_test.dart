@@ -93,7 +93,7 @@ void main() {
       find.descendant(
         of: find.byKey(_row),
         matching: find.textContaining(
-          '3 favourites · 2 never · 1 loved · quick weeknights',
+          '3 favourites · 2 never · Quick weeknights',
         ),
       ),
       findsOneWidget,
