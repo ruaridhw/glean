@@ -907,7 +907,7 @@ def _seed(corpus: RecipeCorpusStore) -> None:
 def _offered(corpus: RecipeCorpusStore) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
-        pantry_names=[],
+        pantry=[],
         dietary_flags=[TREE_NUT_FREE],
         max_total_time_mins=None,
         exclude_external_ids=[],

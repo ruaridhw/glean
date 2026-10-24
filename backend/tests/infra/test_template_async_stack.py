@@ -21,8 +21,8 @@ from tests.infra.cfn import (
     sessions_table_properties,
 )
 
-# F1 (#162, open PR #194) adds the recipe store at 5/5; the free-tier sum in test_template_free_tier
-# counts it, so this file only checks what each of the async stack's own tables declares.
+# The free-tier sum includes the recipe store's real 5/5 capacity in test_template_free_tier;
+# this file checks the async resources and their access to that store.
 
 
 def test_the_session_table_is_2_2_and_expires_its_items() -> None:
@@ -132,8 +132,10 @@ def test_the_worker_can_read_what_a_run_needs_and_nothing_more() -> None:
     policies = functions()["AgentWorkerFunction"]["Policies"]
     tables = [p["DynamoDBCrudPolicy"]["TableName"] for p in policies if "DynamoDBCrudPolicy" in p]
     buckets = [p["S3ReadPolicy"]["BucketName"] for p in policies if "S3ReadPolicy" in p]
+    read_tables = [p["DynamoDBReadPolicy"]["TableName"] for p in policies if "DynamoDBReadPolicy" in p]
 
     assert tables == [{"Ref": "GleanAgentSessionsTable"}, {"Ref": "GleanAgentCheckpointsTable"}]
+    assert read_tables == [{"Ref": "GleanRecipesTable"}]
     # The corpus is read from the recipe cache bucket; the receipts bucket is the API's business.
     assert buckets == [{"Ref": "GleanRecipeCacheBucket"}]
     assert not [p for p in policies if "S3CrudPolicy" in p]
@@ -148,6 +150,8 @@ def test_the_api_is_told_where_the_session_stack_is() -> None:
         "AGENT_CHECKPOINTS_TABLE": {"Ref": "GleanAgentCheckpointsTable"},
         "AGENT_SESSION_QUEUE_URL": {"Ref": "GleanAgentQueue"},
         "AGENT_SESSION_TTL_HOURS": {"Ref": "AgentSessionTtlHours"},
+        "RECIPES_TABLE": {"Ref": "GleanRecipesTable"},
+        "RECIPE_STORE": {"Ref": "RecipeStore"},
     }.items():
         assert api[name] == reference
         assert worker[name] == reference
