@@ -1,7 +1,5 @@
 // Household profile persistence. `user_id` is the Cognito user sub, so the table is user-scoped by
 // construction and one user can only ever have one profile.
-import 'package:drift/drift.dart';
-
 import '../database.dart';
 import '../models/household_profile.dart';
 
