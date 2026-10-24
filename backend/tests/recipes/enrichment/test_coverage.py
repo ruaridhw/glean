@@ -11,8 +11,8 @@ def test_the_table_lists_every_question_with_its_counts_and_its_bar() -> None:
     rendered = report.render()
     header, first = rendered.splitlines()[1:3]
 
-    assert header.split() == ["question", "current", "stale", "missing", "failed", "bar"]
-    assert first.split() == ["dietary:vegan", "3", "1", "0", "0", "0.50", "(low)"]
+    assert header.split() == ["question", "current", "stale", "missing", "failed", "unsure", "bar"]
+    assert first.split() == ["dietary:vegan", "3", "1", "0", "0", "0", "0.50", "(low)"]
     assert "Recipes: 4   Questions: 2   Requests: 5   Answers stored: 6" in rendered
     assert "Coverage: 4/8 (50.0%)" in rendered
 
@@ -25,6 +25,23 @@ def test_the_report_is_readable_as_data_not_just_as_text() -> None:
     assert coverage.recipes == 4  # every recipe sits in exactly one bucket
     assert (report.covered, report.expected, report.coverage, report.failed) == (4, 8, 0.5, 1)
     assert report.stated_prep_time == 4
+
+
+def test_the_report_counts_how_many_current_answers_are_unsure_and_how_many_are_labelled() -> None:
+    report = CoverageReport(
+        recipes=4,
+        questions=[
+            QuestionCoverage("attribute:cuisine", _bar(), current=3, unsure=1),
+            QuestionCoverage("dietary:vegan", _bar(), current=2),
+        ],
+    )
+
+    assert (report.unsure, report.question("attribute:cuisine").labelled) == (1, 2)
+    assert "Labelled answers: 4/5 current; 1 stored unsure" in report.render()
+
+
+def test_a_report_with_no_unsure_answers_says_nothing_about_them() -> None:
+    assert "Labelled answers" not in _report().render()
 
 
 def test_the_report_states_how_many_recipes_give_a_prep_time() -> None:

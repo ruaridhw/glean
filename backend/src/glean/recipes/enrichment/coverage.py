@@ -1,8 +1,12 @@
 """What an enrichment run found and did, printed as a table and readable as data.
 
 Per question: how many recipes have a current answer, a stale one, none at all, or were asked and failed
-this run. Plus the run's totals — requests made, answers stored, and how many recipes state an active
-time, which is the number the coverage report is also there to put on (spec 6.1).
+this run — and, for a question whose answer is a value, how many of those current answers are `unsure`
+because the top option did not clear the bar. `unsure` is a real answer (no re-asking, no variety credit,
+no penalty), so the count is what says how much of the corpus the attributes actually describe.
+
+Plus the run's totals — requests made, answers stored, and how many recipes state a prep time, which is the
+number that puts a figure on Q3's finding that most of them do not (spec 6.1).
 """
 
 from __future__ import annotations
@@ -35,10 +39,17 @@ class QuestionCoverage:
     stale: int = 0
     missing: int = 0
     failed: int = 0
+    # Current answers that store `unsure`. Always 0 for a question whose answer is a probability (dietary).
+    unsure: int = 0
 
     @property
     def recipes(self) -> int:
         return self.current + self.stale + self.missing + self.failed
+
+    @property
+    def labelled(self) -> int:
+        """Current answers that carry a real value, which is what the scorer can use."""
+        return self.current - self.unsure
 
 
 @dataclass
@@ -78,6 +89,10 @@ class CoverageReport:
     def failed(self) -> int:
         return sum(coverage.failed for coverage in self.questions)
 
+    @property
+    def unsure(self) -> int:
+        return sum(coverage.unsure for coverage in self.questions)
+
     def render(self) -> str:
         lines = [
             f"Recipes: {self.recipes}   Questions: {len(self.questions)}   "
@@ -90,6 +105,9 @@ class CoverageReport:
             lines.append(f"Failed this run: {len(self.failures)} ({_summarise(self.failures)})")
         lines.append(f"Recipes with a stated prep time: {_ratio(self.stated_prep_time, self.recipes)}")
         lines.append(f"Coverage: {self.covered}/{self.expected} ({self.coverage:.1%})")
+        if self.unsure:
+            labelled = self.covered - self.unsure
+            lines.append(f"Labelled answers: {labelled}/{self.covered} current; {self.unsure} stored unsure")
         if self.recipes:
             lines.append("Projection: rebuilt" if self.rebuilt else "Projection: not rebuilt, nothing was written")
         if self.incomplete:
@@ -99,7 +117,7 @@ class CoverageReport:
         return "\n".join(lines)
 
 
-_COLUMNS = ("question", "current", "stale", "missing", "failed", "bar")
+_COLUMNS = ("question", "current", "stale", "missing", "failed", "unsure", "bar")
 
 
 def _table(questions: list[QuestionCoverage]) -> str:
@@ -110,6 +128,7 @@ def _table(questions: list[QuestionCoverage]) -> str:
             str(coverage.stale),
             str(coverage.missing),
             str(coverage.failed),
+            str(coverage.unsure),
             f"{coverage.bar.threshold:.2f} ({coverage.bar.safe_side})",
         )
         for coverage in questions

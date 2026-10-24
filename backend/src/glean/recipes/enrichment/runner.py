@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, cast
 from glean.decisions import DecisionError
 from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
+from glean.recipes.attributes import UNSURE
 from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
 from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
 from glean.recipes.enrichment.coverage import AnswerFailure, CoverageReport, QuestionCoverage
@@ -316,11 +317,16 @@ def _report(
                 counts.failed += 1
                 gap = True
                 continue
-            state = answer_state(
-                question, known.by_question(summary.external_id).get(question.name, ()), content_hash=content_hash
-            )
+            held = known.by_question(summary.external_id).get(question.name, ())
+            state = answer_state(question, held, content_hash=content_hash)
             if state is AnswerState.CURRENT:
                 counts.current += 1
+                # Counted for the scorer's sake: `unsure` earns no variety credit, so a high count is the
+                # report saying the corpus is plannable but not yet described.
+                if any(
+                    answer.value == UNSURE and question.is_current(answer, content_hash=content_hash) for answer in held
+                ):
+                    counts.unsure += 1
                 continue
             gap = True
             if state is AnswerState.STALE:

@@ -32,7 +32,7 @@ from glean.recipes.enrichment import (
     run_enrichment,
 )
 from glean.recipes.enrichment.active_time import active_time_question
-from glean.recipes.enrichment.attributes import WHOLE_FOOD_LEVELS, attribute_questions
+from glean.recipes.enrichment.attributes import WHOLE_FOOD_LEVELS, AttributeEnricher, attribute_questions
 from glean.recipes.enrichment.enricher import MIN_ATTRIBUTE_BAR, attribute_bar
 from glean.recipes.stored import StoredIngredient, StoredInstruction, StoredRecipe
 from tests.recipes.enrichment.fakes import FakeDecisionApi
@@ -222,6 +222,22 @@ def test_a_full_run_stores_a_label_or_an_unsure_for_every_attribute_and_a_bucket
     assert stored["attribute:main_protein"].value == MainProtein.CHICKEN.value
     assert stored["attribute:whole_food"].value == WholeFood.WHOLE.value
     assert stored[ACTIVE_TIME_QUESTION].value == ActiveTimeBucket.OVER_60.value
+
+
+def test_a_question_below_its_bar_is_reported_as_unsure_not_as_labelled(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+
+    # The fake answers 0.9 at its top option; a 0.95 bar for one attribute stores `unsure` for it alone.
+    report = run_enrichment(
+        corpus,
+        FakeDecisionApi().client(),
+        enrichers=(AttributeEnricher(bars={"main_protein": 0.95}),),
+    )
+
+    coverage = report.question("attribute:main_protein")
+    assert (coverage.current, coverage.unsure, coverage.labelled) == (1, 1, 0)
+    assert report.question("attribute:cuisine").labelled == 1
+    assert "Labelled answers: 4/5 current; 1 stored unsure" in report.render()
 
 
 def test_the_same_run_is_asked_nothing_the_second_time(tmp_path: Path) -> None:
