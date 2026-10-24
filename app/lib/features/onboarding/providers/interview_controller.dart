@@ -78,6 +78,10 @@ class InterviewController extends Notifier<InterviewState> {
   /// The exchange being sent, kept so Retry re-sends exactly what failed instead of losing the answer.
   InterviewTurn? _pending;
 
+  /// Bumped by [reset]. A turn already on the wire belongs to the interview that was skipped, so its reply is
+  /// dropped rather than allowed to put the conversation back on screen.
+  int _generation = 0;
+
   @override
   InterviewState build() => const InterviewState();
 
@@ -125,9 +129,12 @@ class InterviewController extends Notifier<InterviewState> {
   /// has no exchange to replay: Retry asks for the first question again instead of doing nothing.
   Future<void> retry() => _send(sendNothing: _pending == null);
 
-  /// Drops the whole interview, which is what Skip all means: nothing is saved and the transcript is gone.
+  /// Drops the whole interview, which is what Skip all means: nothing is saved and the transcript is gone. It
+  /// stays available while a turn is in flight, because it is the way out of a slow one; [_generation] makes
+  /// sure the reply that turn was waiting for cannot undo the skip.
   void reset() {
     _pending = null;
+    _generation++;
     state = const InterviewState();
   }
 
@@ -155,6 +162,7 @@ class InterviewController extends Notifier<InterviewState> {
   /// Posts the transcript, then either shows the next question or the summary. On failure the transcript stays
   /// exactly as it was and [_pending] keeps the answer for [retry].
   Future<void> _send({bool sendNothing = false}) async {
+    final int generation = _generation;
     final InterviewState before = state;
     final InterviewTurn? next = _pending;
     if (!sendNothing && next == null) return;
@@ -176,11 +184,11 @@ class InterviewController extends Notifier<InterviewState> {
             ),
           );
     } on ApiException catch (error) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _generation) return;
       state = before.copyWith(pending: false, failure: error);
       return;
     }
-    if (!ref.mounted) return;
+    if (!ref.mounted || generation != _generation) return;
 
     _pending = null;
     final Set<int> droppedTurns = <int>{

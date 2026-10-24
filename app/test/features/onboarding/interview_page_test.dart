@@ -1,6 +1,8 @@
 // The taste interview is the middle page of first run: a chat of up to seven turns, a "Question N of 7"
 // bar above it, Skip on every turn and Skip all, and a two-line summary whose confirmation is the only thing
 // that saves the profile. These tests drive it through the real first-run screen with a scripted backend.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -326,6 +328,60 @@ void main() {
       reason: 'Skip all makes no call',
     );
   });
+
+  testWidgets(
+    'a reply that lands after Skip all does not bring the interview back',
+    (WidgetTester tester) async {
+      final _Rig rig = _Rig(<ScriptedResponse>[
+        questionResponse(turn: 1, text: 'Q1 opener'),
+        questionResponse(turn: 2, text: 'Q2 stale'),
+        questionResponse(turn: 1, text: 'Q3 fresh'),
+      ]);
+      addTearDown(rig.db.close);
+      await rig.openInterview(tester);
+      expect(find.text('Q1 opener'), findsOneWidget);
+
+      final Completer<void> inFlight = Completer<void>();
+      rig.backend.holdNext = inFlight;
+      await tester.enterText(find.byType(TextField), 'katsu curry');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+      await tester.pump();
+      expect(
+        rig.backend.requests,
+        hasLength(2),
+        reason: 'the turn is on its way',
+      );
+
+      // Skip all is the way out of a slow turn, so it stays available while one is in flight — and it wins.
+      await tester.tap(find.text('Skip all'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stock your pantry'), findsOneWidget);
+
+      inFlight.complete();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Q3 fresh'), findsOneWidget, reason: 'a clean start');
+      expect(
+        find.text('Q2 stale'),
+        findsNothing,
+        reason: 'the late reply is dropped',
+      );
+      expect(
+        find.text('katsu curry'),
+        findsNothing,
+        reason: 'so is the answer it carried',
+      );
+      expect(
+        rig.backend.lastTranscript,
+        isEmpty,
+        reason: 'the interview started over, not from the skipped transcript',
+      );
+    },
+  );
 
   testWidgets(
     'the summary is confirmed, not edited, and confirming is what saves the '

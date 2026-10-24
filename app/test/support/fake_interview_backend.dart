@@ -3,6 +3,7 @@
 // The interview is one paid call per turn, so a test scripts exactly the turns it cares about and can then
 // read back every body the app sent: which answer was given, which was skipped, and whether the transcript
 // was replayed faithfully.
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -79,6 +80,10 @@ class FakeInterviewBackend {
   final List<ScriptedResponse> _script;
   late final MockHttpClient client = MockHttpClient();
 
+  /// When set, the next response waits for this before it is returned, so a test can act while a turn is still
+  /// in flight. The request itself is recorded before the wait.
+  Completer<void>? holdNext;
+
   bool _attached = false;
 
   /// The transcript of the last request, as the app sent it.
@@ -104,6 +109,9 @@ class FakeInterviewBackend {
         jsonDecode(invocation.namedArguments[#body]! as String)
             as Map<String, dynamic>,
       );
+      final Completer<void>? hold = holdNext;
+      holdNext = null;
+      if (hold != null) await hold.future;
       // An exhausted script repeats its last response, so a test that only cares about the first turn does
       // not have to script the whole interview.
       final ScriptedResponse next = _script.length > 1
