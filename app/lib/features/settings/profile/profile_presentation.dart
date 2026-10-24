@@ -29,17 +29,34 @@ class ProfileList<T> {
   /// edited as plain text.
   final T Function(String text, T? previous)? fromText;
 
-  /// The position of the item whose label is [itemLabel], ignoring case, or -1.
+  /// The position of the item whose label is [itemLabel], ignoring case and surrounding space, or -1.
   int indexOf(HouseholdProfile profile, String itemLabel) {
-    final String wanted = itemLabel.trim().toLowerCase();
-    return read(
-      profile,
-    ).indexWhere((T item) => label(item).toLowerCase() == wanted);
+    final String wanted = _key(itemLabel);
+    return read(profile).indexWhere((T item) => _key(label(item)) == wanted);
+  }
+
+  /// Where [item], last seen at [index], is now: [index] while the item there still says exactly the same,
+  /// so the chip that was tapped is the one acted on even beside an equal one; else the first item that says
+  /// the same; else -1.
+  int locate(HouseholdProfile profile, int index, T item) {
+    final List<T> items = read(profile);
+    final String wanted = label(item);
+    if (index >= 0 && index < items.length && label(items[index]) == wanted) {
+      return index;
+    }
+    return items.indexWhere((T other) => label(other) == wanted);
+  }
+
+  /// Whether [itemLabel] repeats an item already there, other than the one at [except] (the item being
+  /// changed, which may change case).
+  bool isTaken(HouseholdProfile profile, String itemLabel, {int? except}) {
+    final int at = indexOf(profile, itemLabel);
+    return at != -1 && at != except;
   }
 
   /// Appends [item], unless an item with the same label is already there.
   HouseholdProfile addItem(HouseholdProfile profile, T item) {
-    if (indexOf(profile, label(item)) != -1) return profile;
+    if (isTaken(profile, label(item))) return profile;
     return write(profile, <T>[...read(profile), item]);
   }
 
@@ -50,10 +67,14 @@ class ProfileList<T> {
     return addItem(profile, fromText!(trimmed, null));
   }
 
-  HouseholdProfile replaceAt(HouseholdProfile profile, int index, T item) =>
-      write(profile, <T>[...read(profile)]..[index] = item);
+  /// Replaces the item at [index], unless [item] repeats a different item already there.
+  HouseholdProfile replaceAt(HouseholdProfile profile, int index, T item) {
+    if (isTaken(profile, label(item), except: index)) return profile;
+    return write(profile, <T>[...read(profile)]..[index] = item);
+  }
 
-  /// Replaces the item at [index] with what [text] describes. Blank text changes nothing.
+  /// Replaces the item at [index] with what [text] describes. Blank text, or text repeating a different item,
+  /// changes nothing.
   HouseholdProfile editAt(HouseholdProfile profile, int index, String text) {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) return profile;
@@ -63,12 +84,16 @@ class ProfileList<T> {
   HouseholdProfile removeAt(HouseholdProfile profile, int index) =>
       write(profile, <T>[...read(profile)]..removeAt(index));
 
-  /// Puts [item] back at [index], or at the end when the list has since become shorter than that.
+  /// Puts [item] back at [index], or at the end when the list has since become shorter than that. Skipped when
+  /// an item with the same label has been added meanwhile, so Undo never makes a second chip.
   HouseholdProfile insertAt(HouseholdProfile profile, int index, T item) {
+    if (isTaken(profile, label(item))) return profile;
     final List<T> items = <T>[...read(profile)];
     return write(profile, items..insert(index.clamp(0, items.length), item));
   }
 }
+
+String _key(String label) => label.trim().toLowerCase();
 
 /// The lists the Profile screen edits, in the order it shows them.
 abstract final class ProfileLists {
@@ -138,11 +163,13 @@ HouseholdProfile _writeFavouriteMeals(
 ) => p.copyWith(favouriteMeals: items);
 String _favouriteLabel(FavouriteMeal meal) => meal.text;
 
-/// An edit that leaves the text as it was keeps the matched recipe; new text no longer matches it.
+/// An edit that changes only case or spacing keeps the matched recipe; new words no longer match it.
 FavouriteMeal _favouriteFromText(String text, FavouriteMeal? previous) =>
     FavouriteMeal(
       text: text,
-      recipeId: previous?.text == text ? previous?.recipeId : null,
+      recipeId: previous != null && _key(previous.text) == _key(text)
+          ? previous.recipeId
+          : null,
     );
 
 List<String> _lovedIngredients(HouseholdProfile p) => p.lovedIngredients;
