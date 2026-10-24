@@ -232,3 +232,5 @@ dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
 clear_screen_cache  # screening.py, called by the tests to start from a cold cache
 _targets_a_written_field  # Pydantic field validator (FollowUp.field)
 WRITABLE_PROFILE_FIELDS  # schemas.py, the fields an interview question may target
+_answers_belong_to_this_interview  # Pydantic model validator (InterviewRequest)
+question_for_turn  # schemas.py, the server's own question for a turn number

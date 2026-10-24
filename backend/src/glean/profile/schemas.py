@@ -180,6 +180,55 @@ class InterviewQuestion(BaseModel):
     skippable: Literal[True] = Field(default=True, description="Always true: every turn can be skipped.")
 
 
+# The five fixed openers, in the order the interview asks them (spec §6.4). They live with the
+# contract because the app renders them and the request validator checks them: a stateless endpoint
+# can't trust a transcript's own account of what was asked.
+OPENERS: tuple[InterviewQuestion, ...] = (
+    InterviewQuestion(
+        id="opener-favourite-meals",
+        text="What are three dinners you'd happily eat every fortnight?",
+        field=ProfileField.FAVOURITE_MEALS,
+    ),
+    InterviewQuestion(
+        id="opener-never-want",
+        text="Anything you never want to see on the plan?",
+        field=ProfileField.DISLIKED_INGREDIENTS,
+    ),
+    InterviewQuestion(
+        id="opener-love",
+        text="Any cuisines or ingredients you love?",
+        field=ProfileField.LOVED_INGREDIENTS,
+    ),
+    InterviewQuestion(
+        id="opener-weeks",
+        text="How do your weeks usually go?",
+        options=[
+            "Quick weeknights",
+            "Batch cook at the weekend",
+            "Leftovers",
+            "One treat meal",
+            "Guests often",
+        ],
+        field=ProfileField.HABITS,
+    ),
+    InterviewQuestion(
+        id="opener-table",
+        text="Who's usually at the table?",
+        field=ProfileField.HOUSEHOLD,
+    ),
+)
+
+
+def question_for_turn(turn: int) -> InterviewQuestion:
+    """The server's own question for a 1-based turn number."""
+    return OPENERS[turn - 1]
+
+
+def expected_question_id(index: int) -> str:
+    """The id the transcript's `index`-th answered turn must carry, counting from 0."""
+    return OPENERS[index].id if index < len(OPENERS) else f"follow-up-{index + 1}"
+
+
 class InterviewAnswer(BaseModel):
     """What the user did with one question: typed something, tapped options, skipped, or nothing."""
 
@@ -212,6 +261,29 @@ class InterviewRequest(BaseModel):
     draft_profile: HouseholdProfile = Field(
         default_factory=HouseholdProfile, description="The profile the app holds, which the turn refines."
     )
+
+    @model_validator(mode="after")
+    def _answers_belong_to_this_interview(self) -> InterviewRequest:
+        """The transcript must be the questions this interview asks, in order.
+
+        A client that sends its own question ids could otherwise skip the openers entirely, or file an
+        answer against a field nothing writes. The opener's field is the server's, not the client's.
+        """
+        for index, turn in enumerate(self.transcript):
+            expected = expected_question_id(index)
+            if turn.question.id != expected:
+                raise ValueError(f"turn {index + 1} answers {turn.question.id!r}, but this interview asks {expected!r}")
+            opener = OPENERS[index] if index < len(OPENERS) else None
+            if opener is not None and turn.question.field is not opener.field:
+                raise ValueError(
+                    f"turn {index + 1} answers {expected!r} for {turn.question.field.value}, "
+                    f"but {expected!r} fills {opener.field.value}"
+                )
+            if opener is None and turn.question.field not in WRITABLE_PROFILE_FIELDS:
+                raise ValueError(
+                    f"turn {index + 1} targets {turn.question.field.value}, which the interview never writes"
+                )
+        return self
 
 
 class InterviewQuestionResponse(BaseModel):

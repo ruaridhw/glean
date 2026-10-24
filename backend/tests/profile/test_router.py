@@ -244,8 +244,10 @@ def test_a_skipped_turn_contributes_nothing(
     assert second["question"]["id"] == "opener-never-want"
     assert decisions.notes == []  # nothing typed, so nothing to screen
 
-    for answer in ANSWERS[1:]:
-        transcript = [*transcript, _answered(second["question"], answer)]
+    transcript = [*transcript, _answered(second["question"], ANSWERS[1])]
+    for answer in ANSWERS[2:]:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
     _ask(client, transcript, auth_headers)
 
     payload = model.payload()
@@ -621,3 +623,59 @@ def test_a_skipped_turn_is_never_screened_or_used(
     assert "secretword" not in model.sent_text().casefold()
     assert [answered["turn"] for answered in model.payload()["answers"]] == [1, 2, 3, 4]
     assert "SECRETWORD" not in body["profile"]["household"]
+
+
+def _turn(question_id: str, field: str, answer: dict[str, Any] | None = None) -> dict[str, Any]:
+    return _answered(
+        {"id": question_id, "text": "q?", "options": [], "field": field, "skippable": True},
+        answer or {"text": "Chicken curry"},
+    )
+
+
+@pytest.mark.parametrize(
+    "transcript",
+    [
+        pytest.param([_turn("opener-forged", "favourite_meals")], id="forged opener id"),
+        pytest.param([_turn("opener-favourite-meals", "notes")], id="opener id with a forged field"),
+        pytest.param(
+            [_turn("opener-favourite-meals", "favourite_meals"), _turn("opener-love", "loved_ingredients")],
+            id="out of order",
+        ),
+        pytest.param(
+            [_turn(f"opener-{index}", "habits") for index in range(5)],
+            id="no openers at all",
+        ),
+        pytest.param(
+            [_turn(f"opener-{index}", "habits") for index in range(5)] + [_turn("follow-up-9", "habits")],
+            id="forged follow-up id",
+        ),
+        pytest.param(
+            [_turn(f"opener-{index}", "habits") for index in range(5)] + [_turn("follow-up-6", "notes")],
+            id="follow-up into a field the interview never writes",
+        ),
+    ],
+)
+def test_a_forged_transcript_is_rejected(
+    client: TestClient, auth_headers: dict[str, str], transcript: list[dict[str, Any]]
+) -> None:
+    response = client.post("/profile/interview", headers=auth_headers, json={"transcript": transcript})
+
+    assert response.status_code == 422
+
+
+def test_the_server_field_is_what_an_opener_answer_fills(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter
+) -> None:
+    transcript: list[dict[str, Any]] = []
+    for answer in ANSWERS:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+    _ask(client, transcript, auth_headers)
+
+    assert [answered["field"] for answered in model.payload()["answers"]] == [
+        "favourite_meals",
+        "disliked_ingredients",
+        "loved_ingredients",
+        "habits",
+        "household",
+    ]
