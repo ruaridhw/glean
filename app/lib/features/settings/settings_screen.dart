@@ -25,6 +25,7 @@ import 'widgets/developer_section.dart';
 import 'widgets/dietary_preferences_card.dart';
 import 'widgets/max_time_field.dart';
 import 'widgets/preference_slider_card.dart';
+import 'widgets/profile_summary_row.dart';
 import 'widgets/restore_backup_sheet.dart';
 import 'widgets/settings_stats_row.dart';
 import 'widgets/version_label.dart';
@@ -353,6 +354,10 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
             unawaited(_persist(fireCommitHaptic: false));
           },
         ),
+        SizedBox(height: tokens.spacing.lg),
+        const _SectionLabel('Profile'),
+        SizedBox(height: tokens.spacing.sm),
+        const ProfileSummaryRow(),
         SizedBox(height: tokens.spacing.lg),
         const _SectionLabel('Account'),
         SizedBox(height: tokens.spacing.sm),
