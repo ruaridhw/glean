@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import ValidationError
 
 from glean.profile.schemas import (
@@ -14,10 +17,12 @@ from glean.profile.schemas import (
     InterviewAnswer,
     InterviewQuestion,
     InterviewRequest,
+    InterviewTurn,
     MainProtein,
     ProfileField,
     ProteinTarget,
     SpiceTolerance,
+    WritableProfileField,
 )
 
 PROFILE_JSON = {
@@ -251,3 +256,20 @@ def test_a_follow_up_cannot_target_a_field_the_interview_never_writes() -> None:
     assert ProfileField.NOTES in ProfileField  # the profile still has the field
     assert ProfileField.NOTES not in WRITABLE_PROFILE_FIELDS
     assert set(ProfileField) - {ProfileField.NOTES} == WRITABLE_PROFILE_FIELDS
+
+
+def test_the_follow_up_schema_sent_to_the_model_cannot_name_notes() -> None:
+    """The model is given the JSON schema, not the validator, so `notes` must be absent from the schema."""
+    tool_schema = convert_to_openai_tool(InterviewTurn)
+    field_schema = InterviewTurn.model_json_schema()["$defs"]["FollowUp"]["properties"]["field"]
+
+    assert "notes" not in json.dumps(tool_schema)
+    assert "notes" not in json.dumps(field_schema)
+    assert field_schema["$ref"].endswith("WritableProfileField")
+
+
+def test_the_writable_fields_are_the_profile_fields_minus_notes() -> None:
+    assert {field.value for field in WritableProfileField} == {field.value for field in ProfileField} - {
+        ProfileField.NOTES.value
+    }
+    assert {field.value for field in WritableProfileField} == WRITABLE_PROFILE_FIELDS

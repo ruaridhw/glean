@@ -117,9 +117,12 @@ class FakeRouter:
     def __init__(self, replies: Sequence[InterviewTurn] = ()) -> None:
         self.replies = list(replies)
         self.calls: list[dict[str, Any]] = []
+        self.fail_with: Exception | None = None
 
     def invoke(self, feature: object, schema: type, messages: Any, **_: Any) -> InterviewTurn:
         self.calls.append({"feature": feature, "schema": schema, "messages": messages})
+        if self.fail_with is not None:
+            raise self.fail_with
         if self.replies:
             reply = self.replies.pop(0)
             assert isinstance(reply, schema)

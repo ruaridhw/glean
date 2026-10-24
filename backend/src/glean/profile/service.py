@@ -168,6 +168,17 @@ _SPICE_WORDS = {
 }
 
 
+class InterviewUnavailableError(Exception):
+    """The model's reply didn't fit the interview, so this turn has no answer.
+
+    The household did nothing wrong: the app can retry the same turn. Raised instead of letting a
+    structured-output `ValidationError` become a 500, and caught by the route.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("the interview model returned a reply that didn't fit the interview")
+
+
 @dataclass(frozen=True, slots=True)
 class _Screening:
     """Which of a transcript's answers may be used, and whether the last one was dropped."""
@@ -208,14 +219,19 @@ def run_interview(
 
     # Questions are numbered 1..MAX_TURNS; only the answer to the last one cannot be met by another.
     may_ask_follow_up = turn <= MAX_TURNS
-    reply = _ask_model(
-        turn=turn,
-        draft=draft,
-        transcript=transcript,
-        answers=screening.answers,
-        may_ask_follow_up=may_ask_follow_up,
-        llm_router=llm_router,
-    )
+    try:
+        reply = _ask_model(
+            turn=turn,
+            draft=draft,
+            transcript=transcript,
+            answers=screening.answers,
+            may_ask_follow_up=may_ask_follow_up,
+            llm_router=llm_router,
+        )
+    except ValueError as exc:
+        # `LLMRouter.invoke` validates the reply against the schema, so a wrong shape arrives here.
+        logger.warning("interview model reply was unusable", exc_info=True)
+        raise InterviewUnavailableError from exc
     merged = _merge(reply.draft_profile, draft, held)
 
     if may_ask_follow_up and reply.question is not None:
@@ -240,7 +256,9 @@ def _field_for(index: int, turn: TranscriptTurn) -> ProfileField:
     follow-up's field is the model's choice, echoed by the app, and the request validator has already
     refused anything the interview never writes.
     """
-    return OPENERS[index].field if index < len(OPENERS) else turn.question.field
+    if index < len(OPENERS):
+        return OPENERS[index].field
+    return ProfileField(turn.question.field.value)
 
 
 def _question_from(follow_up: FollowUp, turn: int) -> InterviewQuestion:
@@ -248,7 +266,7 @@ def _question_from(follow_up: FollowUp, turn: int) -> InterviewQuestion:
         id=f"follow-up-{turn}",
         text=follow_up.text.strip()[:300],
         options=_bounded(follow_up.options)[:5],
-        field=follow_up.field,
+        field=ProfileField(follow_up.field.value),
     )
 
 
