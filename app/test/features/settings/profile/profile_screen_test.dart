@@ -461,8 +461,8 @@ void main() {
     expect((await stored(tester))!.toJson(), _filled.toJson());
   });
 
-  gleanWidgetTest('spice is picked by tapping a chip and cleared by tapping it '
-      'again', (tester) async {
+  gleanWidgetTest('spice is picked by tapping a chip, and cleared by tapping it '
+      'again with an Undo', (tester) async {
     await pumpProfile(tester, seed: _filled);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
@@ -472,6 +472,11 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
     await tester.pumpAndSettle();
     expect((await stored(tester))!.spiceTolerance, isNull);
+    expect(find.text('Spice cleared'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
   });
 
   gleanWidgetTest('the free text saves as it is typed', (tester) async {

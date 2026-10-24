@@ -176,6 +176,32 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
     );
   }
 
+  /// Clears the spice answer with an Undo that restores it, unless another answer was picked meanwhile.
+  Future<void> _clearSpice() {
+    return GleanSnackBar.runUndoable<SpiceTolerance?>(
+      context,
+      perform: () async {
+        SpiceTolerance? previous;
+        await _profiles.update(
+          userId: _userId,
+          change: (HouseholdProfile p) {
+            previous = p.spiceTolerance;
+            return p.withSpiceTolerance(null);
+          },
+        );
+        return previous;
+      },
+      undo: (SpiceTolerance? previous) => _profiles.update(
+        userId: _userId,
+        change: (HouseholdProfile p) =>
+            p.spiceTolerance == null ? p.withSpiceTolerance(previous) : p,
+      ),
+      message: 'Spice cleared',
+      failureMessage: 'Could not clear spice. Try again.',
+      undoFailureMessage: 'Could not put spice back. Try again.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
@@ -264,10 +290,12 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
                       onSelected: (bool selected) {
                         ref.read(hapticsProvider).selectionClick();
                         unawaited(
-                          _change(
-                            (HouseholdProfile p) =>
-                                p.withSpiceTolerance(selected ? spice : null),
-                          ),
+                          selected
+                              ? _change(
+                                  (HouseholdProfile p) =>
+                                      p.withSpiceTolerance(spice),
+                                )
+                              : _clearSpice(),
                         );
                       },
                     ),
