@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from glean.recipes.attributes import UNSURE, Cuisine, MainProtein, RecipeAttributes, WholeFood
+from glean.recipes.attributes import UNSURE, Cuisine, MainCarb, MainProtein, RecipeAttributes, WholeFood
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -43,7 +43,10 @@ __all__ = [
     "Term",
     "TermScore",
     "UnknownRecipeIds",
+    "chosen_vs_best_ratio",
     "create_candidate_meal_plans",
+    "distinct_main_carbs",
+    "distinct_main_proteins",
     "score_meal_plan",
 ]
 
@@ -343,6 +346,37 @@ def score_meal_plan(
     return scorer.score(ids)
 
 
+def distinct_main_proteins(recipe_ids: Sequence[str], ctx: ScoringContext) -> int:
+    """How many different proteins the week is built around, with `none` and `unsure` left out.
+
+    Spec 6.6's soft gate wants at least N - 1 of these for a week of N: a week is balanced by what it varies,
+    and a dish with no protein or an unknown one cannot be counted as either variety or sameness.
+    """
+    _require_known(recipe_ids, ctx)
+    proteins = {ctx.recipes[recipe_id].attributes.main_protein for recipe_id in recipe_ids}
+    return len(proteins - {MainProtein.NONE, MainProtein.UNSURE})
+
+
+def distinct_main_carbs(recipe_ids: Sequence[str], ctx: ScoringContext) -> int:
+    """How many different carbs the week is built around, `none` and `unsure` left out (spec 6.6)."""
+    _require_known(recipe_ids, ctx)
+    carbs = {ctx.recipes[recipe_id].attributes.main_carb for recipe_id in recipe_ids}
+    return len(carbs - {MainCarb.NONE, MainCarb.UNSURE})
+
+
+def chosen_vs_best_ratio(chosen: PlanScore, best: PlanScore) -> float:
+    """The chosen plan's score as a fraction of the best plan's, for the eval's "within 15%" gate (spec 6.6).
+
+    A plan that scores at least as well as the best is 1.0, and the gate is `ratio >= 0.85`. Scores are signed
+    sums, so the shortfall is measured against the best plan's own magnitude rather than by dividing the two: a
+    best of zero would make a plain ratio meaningless. It floors at 0: the gate only reads whether it clears 0.85.
+    """
+    shortfall = best.total - chosen.total
+    if shortfall <= 0:
+        return 1.0
+    return max(1.0 - shortfall / max(abs(best.total), 1.0), 0.0)
+
+
 def create_candidate_meal_plans(
     recipe_ids: Sequence[str],
     n: int,
@@ -407,9 +441,7 @@ class _Scorer:
 
     def require(self, recipe_ids: Sequence[str]) -> None:
         """Raise `UnknownRecipeIds` naming every id the context has no facts for."""
-        missing = sorted(set(recipe_ids) - self._ctx.recipes.keys())
-        if missing:
-            raise UnknownRecipeIds(missing)
+        _require_known(recipe_ids, self._ctx)
 
     def score(self, recipe_ids: Sequence[str]) -> PlanScore:
         return PlanScore(
@@ -593,6 +625,13 @@ class _Scorer:
             misses for _target, _count, misses in self._target_misses(recipe_ids)
         )
         return points
+
+
+def _require_known(recipe_ids: Sequence[str], ctx: ScoringContext) -> None:
+    """Refuse a plan or a metric naming recipes the caller did not describe: the ids and the facts disagree."""
+    missing = sorted(set(recipe_ids) - ctx.recipes.keys())
+    if missing:
+        raise UnknownRecipeIds(missing)
 
 
 def _median(values: list[float]) -> float:
