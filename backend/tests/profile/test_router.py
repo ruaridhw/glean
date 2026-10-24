@@ -602,3 +602,22 @@ def test_the_models_profile_and_summary_are_clamped(
     assert len(body["summary"]) <= 300
     # A long favourite list can't turn into a long run of corpus searches.
     assert len(searches) <= 10
+
+
+def test_a_skipped_turn_is_never_screened_or_used(
+    client: TestClient, auth_headers: dict[str, str], decisions: FakeDecisions, model: FakeRouter
+) -> None:
+    # The app may still hold the text the user typed before tapping Skip; skip wins.
+    transcript: list[dict[str, Any]] = []
+    for answer in [*ANSWERS[:4], {"text": "SECRETWORD family of five", "skipped": True}]:
+        body = _ask(client, transcript, auth_headers)
+        assert body["dropped_answer"] is False
+        transcript = [*transcript, _answered(body["question"], answer)]
+    body = _ask(client, transcript, auth_headers)
+
+    assert body["status"] == "done"
+    assert body["dropped_answer"] is False
+    assert "SECRETWORD" not in decisions.notes
+    assert "secretword" not in model.sent_text().casefold()
+    assert [answered["turn"] for answered in model.payload()["answers"]] == [1, 2, 3, 4]
+    assert "SECRETWORD" not in body["profile"]["household"]
