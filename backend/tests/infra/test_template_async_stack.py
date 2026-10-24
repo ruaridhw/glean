@@ -155,11 +155,12 @@ def test_the_api_is_told_where_the_session_stack_is() -> None:
 
 def test_the_worker_gets_the_same_environment_as_the_api() -> None:
     # The worker builds the same Settings object as the API, so a variable added to one and not the
-    # other would only fail at run time, in Lambda. It never serves HTTP, so it may hold fewer.
+    # other would only fail at run time, in Lambda. The rate limit is the one exception: the API
+    # enforces it when a session is created or messaged, and every setting it feeds has a default.
     api = functions()["GleanFunction"]["Environment"]["Variables"]
     worker = functions()["AgentWorkerFunction"]["Environment"]["Variables"]
 
-    assert set(api) <= set(worker)
+    assert set(api) - {"RATE_LIMIT_PER_HOUR"} <= set(worker)
 
 
 def test_every_function_has_a_log_group_with_a_retention() -> None:

@@ -353,7 +353,6 @@ Resources:
           AGENT_SESSIONS_TABLE: !Ref GleanAgentSessionsTable
           AGENT_CHECKPOINTS_TABLE: !Ref GleanAgentCheckpointsTable
           AGENT_SESSION_QUEUE_URL: !Ref GleanAgentQueue
-          RATE_LIMIT_PER_HOUR: !Ref RateLimitPerHour
           AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
