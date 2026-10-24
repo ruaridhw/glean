@@ -206,7 +206,7 @@ def _names_nuts(summary) -> bool:
 def _ids(corpus: RecipeCorpusStore, flag: str) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
-        pantry_names=[],
+        pantry=[],
         dietary_flags=[flag],
         max_total_time_mins=None,
         exclude_external_ids=[],
