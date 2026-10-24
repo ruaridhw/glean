@@ -226,8 +226,6 @@ FROM_15_TO_30
 FROM_30_TO_45
 FROM_45_TO_60
 OVER_60
-as_mapping  # RecipeAttributes: what a projection entry stores
 recipe_attributes  # ProjectedRecipe: how planning reads a projection entry's attributes
-fits_time_cap  # RecipeAttributes: the household time cap's rule
 _labelled_questions_carry_a_value  # Pydantic model validator (RecipeAnswer)
 active_time_mins  # recipe_api client helper, called by callers outside src/

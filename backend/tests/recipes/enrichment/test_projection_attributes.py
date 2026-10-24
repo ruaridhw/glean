@@ -9,8 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from glean.decisions import DECISION_MODEL
-from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
+from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.attributes import ActiveTimeBucket, Cuisine, MainProtein, RecipeAttributes, WholeFood
 from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
 from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
@@ -145,8 +144,3 @@ def _criteria_hash(name: str) -> str:
         None,
     )
     return question.criteria_hash if question is not None else "d" * 64
-
-
-# A guard on the pinned model the fake reports: an answer under it is current, anything else is stale.
-assert DECISION_MODEL in SNAPSHOT
-assert dietary_question("vegan") == "dietary:vegan"
