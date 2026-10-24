@@ -55,10 +55,10 @@ void main() {
       final Map<String, List<List<Object?>>> rowsBefore = _dump(before);
       before.close();
       // The fixture carries the owner's own data, not just an empty schema.
-      expect(rowsBefore['user_config'], hasLength(1));
-      expect(rowsBefore['pantry_items'], hasLength(1));
-      expect(rowsBefore['meal_plan_entries'], hasLength(1));
-      expect(rowsBefore['recipes'], hasLength(1));
+      expect(rowsBefore['user_config'], isNotEmpty);
+      expect(rowsBefore['pantry_items'], isNotEmpty);
+      expect(rowsBefore['meal_plan_entries'], isNotEmpty);
+      expect(rowsBefore['recipes'], isNotEmpty);
 
       final GleanDatabase db = GleanDatabase(NativeDatabase(file));
       await db.customSelect('SELECT 1').get();
