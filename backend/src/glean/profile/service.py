@@ -441,7 +441,8 @@ def _apply(draft: ProfileDraft, field: ProfileField, answer: InterviewAnswer) ->
             spice = _spice_of(text) or _spice_of(" ".join(choices)) or draft.spice_tolerance
             return draft.model_copy(update={"spice_tolerance": spice})
         case _:
-            # protein_targets and notes: structured values the model reads from the answer.
+            # protein_targets is structured (the model reads it from the answer at the next turn); the
+            # remaining fields are never targeted by a question.
             return draft
 
 
