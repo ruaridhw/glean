@@ -214,6 +214,82 @@ void main() {
     });
   });
 
+  group('protein targets', () {
+    test('are picked from the main-protein values, without mixed or none', () {
+      expect(mainProteins, <String>[
+        'chicken',
+        'turkey_or_duck',
+        'beef',
+        'pork',
+        'lamb',
+        'fish',
+        'seafood',
+        'beans_and_pulses',
+        'tofu_or_plant_protein',
+        'vegetarian_other',
+      ]);
+      expect(proteinName('turkey_or_duck'), 'turkey or duck');
+      expect(proteinName('vegetarian_other'), 'other vegetarian');
+    });
+
+    test('there is one target per protein: setting one that exists replaces '
+        'it in place', () {
+      final HouseholdProfile twice = setProteinTarget(
+        _filled.copyWith(
+          proteinTargets: const <ProteinTarget>[
+            ProteinTarget(protein: 'chicken', maxPerWeek: 2),
+            ProteinTarget(protein: 'fish', minPerWeek: 2),
+          ],
+        ),
+        const ProteinTarget(protein: 'fish', maxPerWeek: 1),
+      );
+      expect(twice.proteinTargets.map(proteinTargetLabel), <String>[
+        'chicken · at most 2 a week',
+        'fish · at most 1 a week',
+      ]);
+    });
+
+    test('changing a target to another protein that has one leaves one '
+        'target for it, where the changed one was', () {
+      final HouseholdProfile changed = setProteinTarget(
+        _filled.copyWith(
+          proteinTargets: const <ProteinTarget>[
+            ProteinTarget(protein: 'chicken', maxPerWeek: 2),
+            ProteinTarget(protein: 'beef', maxPerWeek: 1),
+            ProteinTarget(protein: 'fish', minPerWeek: 2),
+          ],
+        ),
+        const ProteinTarget(protein: 'fish', minPerWeek: 3),
+        replacing: 'chicken',
+      );
+      expect(changed.proteinTargets.map(proteinTargetLabel), <String>[
+        'fish · at least 3 a week',
+        'beef · at most 1 a week',
+      ]);
+    });
+
+    test('a target needs a bound, counts run 1 to 7, and at least is not '
+        'above at most', () {
+      expect(proteinTargetError(null, null), 'Give at least or at most');
+      expect(proteinTargetError(0, null), 'Use a number from 1 to 7');
+      expect(proteinTargetError(null, 0), 'Use a number from 1 to 7');
+      expect(proteinTargetError(8, null), 'Use a number from 1 to 7');
+      expect(
+        proteinTargetError(3, 1),
+        'At least must not be more than at most',
+      );
+      expect(proteinTargetError(1, 7), isNull);
+      expect(proteinTargetError(null, 2), isNull);
+    });
+
+    test('a stored target of at most 0 reads as never', () {
+      expect(
+        proteinTargetLabel(const ProteinTarget(protein: 'beef', maxPerWeek: 0)),
+        'beef · never',
+      );
+    });
+  });
+
   group('labels', () {
     test('protein targets say how often', () {
       expect(

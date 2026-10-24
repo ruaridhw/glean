@@ -288,51 +288,142 @@ void main() {
     expect((await stored(tester))!.toJson(), _filled.toJson());
   });
 
-  gleanWidgetTest('a protein target is added with how often', (tester) async {
-    await pumpProfile(tester, seed: _filled);
-
+  Future<void> openProteinDialog(WidgetTester tester, {String? editing}) async {
     await tester.tap(
-      find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
+      editing == null
+          ? find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}'))
+          : find.widgetWithText(InputChip, editing),
     );
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('profile.protein.name')),
-      'chicken',
-    );
-    await tester.enterText(find.byKey(const Key('profile.protein.max')), '2');
-    await tester.tap(find.byKey(const Key('profile.entry.save')));
+  }
+
+  Future<void> fillProtein(
+    WidgetTester tester, {
+    String? protein,
+    String min = '',
+    String max = '',
+  }) async {
+    if (protein != null) {
+      await tester.tap(find.byKey(Key('profile.protein.$protein')));
+      await tester.pump();
+    }
+    await tester.enterText(find.byKey(const Key('profile.protein.min')), min);
+    await tester.enterText(find.byKey(const Key('profile.protein.max')), max);
+  }
+
+  gleanWidgetTest('a protein target is picked from the main proteins, and the '
+      'keyboard Done key adds it', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await openProteinDialog(tester);
+    expect(find.byKey(const Key('profile.protein.name')), findsNothing);
+    for (final String protein in mainProteins) {
+      expect(find.byKey(Key('profile.protein.$protein')), findsOneWidget);
+    }
+    expect(find.byKey(const Key('profile.protein.mixed')), findsNothing);
+    expect(find.byKey(const Key('profile.protein.none')), findsNothing);
+
+    await fillProtein(tester, protein: 'turkey_or_duck', max: '2');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     expect(
-      find.widgetWithText(InputChip, 'chicken · at most 2 a week'),
+      find.widgetWithText(InputChip, 'turkey or duck · at most 2 a week'),
       findsOneWidget,
     );
     final ProteinTarget target = (await stored(tester))!.proteinTargets.last;
-    expect(target.protein, 'chicken');
+    expect(target.protein, 'turkey_or_duck');
     expect(target.minPerWeek, isNull);
     expect(target.maxPerWeek, 2);
   });
 
-  gleanWidgetTest('a protein target whose least is above its most is refused '
-      'with a reason', (tester) async {
+  gleanWidgetTest('adding a protein that already has a target replaces it, so '
+      'each protein has one', (tester) async {
     await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(
-      find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('profile.protein.name')),
-      'beef',
-    );
-    await tester.enterText(find.byKey(const Key('profile.protein.min')), '3');
-    await tester.enterText(find.byKey(const Key('profile.protein.max')), '1');
+    await openProteinDialog(tester);
+    await fillProtein(tester, protein: 'fish', max: '3');
     await tester.tap(find.byKey(const Key('profile.entry.save')));
     await tester.pumpAndSettle();
 
-    expect(find.text('At least must not be more than at most'), findsOneWidget);
-    expect((await stored(tester))!.proteinTargets, hasLength(1));
+    final List<ProteinTarget> targets = (await stored(tester))!.proteinTargets;
+    expect(targets.single.protein, 'fish');
+    expect(targets.single.minPerWeek, isNull);
+    expect(targets.single.maxPerWeek, 3);
   });
+
+  gleanWidgetTest('changing a target opens with its protein and counts and '
+      'saves in place', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await openProteinDialog(tester, editing: 'fish · at least 2 a week');
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.descendant(
+              of: find.byKey(const Key('profile.protein.fish')),
+              matching: find.byType(ChoiceChip),
+              matchRoot: true,
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+    await fillProtein(tester, min: '1', max: '2');
+    await tester.tap(find.byKey(const Key('profile.entry.save')));
+    await tester.pumpAndSettle();
+
+    final ProteinTarget target = (await stored(tester))!.proteinTargets.single;
+    expect(proteinTargetLabel(target), 'fish · 1–2 a week');
+  });
+
+  gleanWidgetTest('the protein dialog fits a 320-wide phone at 2x text', (
+    tester,
+  ) async {
+    await pumpProfile(
+      tester,
+      seed: _filled,
+      size: const Size(320, 844),
+      textScale: 2,
+    );
+    await tester.ensureVisible(
+      find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
+    );
+    await openProteinDialog(tester);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('profile.protein.max')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final (String why, String? protein, String min, String max, String error)
+      in <(String, String?, String, String, String)>[
+        ('no protein', null, '', '2', 'Pick a protein'),
+        ('no bound', 'beef', '', '', 'Give at least or at most'),
+        ('more than seven', 'beef', '8', '', 'Use a number from 1 to 7'),
+        ('at most nought', 'beef', '', '0', 'Use a number from 1 to 7'),
+        (
+          'least above most',
+          'beef',
+          '3',
+          '1',
+          'At least must not be more than at most',
+        ),
+      ]) {
+    gleanWidgetTest('a protein target with $why is refused with a reason', (
+      tester,
+    ) async {
+      await pumpProfile(tester, seed: _filled);
+
+      await openProteinDialog(tester);
+      await fillProtein(tester, protein: protein, min: min, max: max);
+      await tester.tap(find.byKey(const Key('profile.entry.save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(error), findsOneWidget);
+      expect((await stored(tester))!.toJson(), _filled.toJson());
+    });
+  }
 
   gleanWidgetTest('a deleted note comes back exactly on Undo', (tester) async {
     await pumpProfile(tester, seed: _filled);
