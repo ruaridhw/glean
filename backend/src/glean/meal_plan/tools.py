@@ -1,0 +1,507 @@
+"""The planner's system-1 tools: score a week, and offer k balanced weeks to choose between.
+
+Framework-free and pure (spec 6.2, "Tools"): plain typed functions over plain data, with no graph, store or
+network import, so the agent graph, the evals (6.6) and the MCP server all call the same code through thin
+adapters. Feasibility is decided upstream — dietary decisions, the time cap, meals already planned and the
+six-week floor all happen in `get_eligible_recipes` — so everything here is a score, never a filter.
+
+A plan's score is each recipe's fit minus the plan's penalties, one weight per row of the scorer table
+(spec 6.2, "Scorer weights"). Every one of those numbers is a starting guess, so they live in `ScorerWeights`
+and no term hard-codes its own. A recipe whose attributes are `unsure` earns no variety credit and no penalty,
+and a term whose attribute is not in G1's set is skipped and named in the breakdown rather than silently scored
+as zero: richness was dropped in G1, so there is nothing to read for the "3+ hearty" rule.
+"""
+
+from __future__ import annotations
+
+import statistics
+from collections import Counter
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import TYPE_CHECKING
+
+from glean.recipes.attributes import UNSURE, Cuisine, MainProtein, RecipeAttributes, WholeFood
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+__all__ = [
+    "HEALTHIER_CHIP",
+    "LIGHTER_CHIP",
+    "CandidateRecipe",
+    "PlanPenalty",
+    "PlanScore",
+    "Predicate",
+    "PredicateField",
+    "PredicateOp",
+    "ProteinTarget",
+    "Rating",
+    "RecipeScore",
+    "ScorerWeights",
+    "ScoringContext",
+    "SkippedTerm",
+    "Term",
+    "TermScore",
+    "UnknownRecipeIds",
+    "score_meal_plan",
+]
+
+# The chip names V9 sends on the wire. The scorer reads two of them by name; every other chip earns its +2 only
+# through the predicate the caller maps it to.
+HEALTHIER_CHIP = "healthier"
+LIGHTER_CHIP = "lighter"
+
+# Six, nine and twelve weeks, in days: the recency bands' boundaries.
+SIX_WEEKS_DAYS = 42
+NINE_WEEKS_DAYS = 63
+TWELVE_WEEKS_DAYS = 84
+
+# Values that earn nothing when they repeat: an unknown attribute is not evidence of sameness, and a dish built
+# around no protein or no carb cannot repeat one.
+_EXEMPT_REPEAT_VALUES = frozenset({UNSURE, "none"})
+
+
+class Term(StrEnum):
+    """One row of the scorer table. A breakdown names these, so the evals and logs can read a term by name."""
+
+    PANTRY_FIT = "pantry_fit"
+    FAVOURITE = "favourite"
+    LIKED_CUISINE = "liked_cuisine"
+    LOVED_INGREDIENT = "loved_ingredient"
+    AVOIDED_CUISINE = "avoided_cuisine"
+    FEEDBACK_CHIP = "feedback_chip"
+    RECENCY = "recency"
+    RATING = "rating"
+    WHOLE_FOOD = "whole_food"
+    REPEAT_MAIN_PROTEIN = "repeat_main_protein"
+    REPEAT_MAIN_CARB = "repeat_main_carb"
+    REPEAT_DISH_TYPE = "repeat_dish_type"
+    REPEAT_CUISINE = "repeat_cuisine"
+    LIGHTER = "lighter"
+    PROTEIN_TARGET = "protein_target"
+
+
+class Rating(StrEnum):
+    """A thumb on a cooked meal (spec 6.5). Only cooked meals are rated, so a rating always has an age."""
+
+    UP = "up"
+    DOWN = "down"
+
+
+@dataclass(frozen=True, slots=True)
+class ScorerWeights:
+    """Every weight in one place, each comment naming the row of the scorer table it comes from.
+
+    The table's own words: these numbers are guesses. They shape every plan more than anything else in the
+    system, so a change to one is reported before and after on the eval dataset.
+    """
+
+    # "Pantry fit": the caller sends the urgency-weighted sum, already scaled so the top recipe is about +3.
+    pantry_fit: float = 1.0
+    # "Profile affinity": +2 favourite match.
+    favourite: float = 2.0
+    # "Profile affinity": +1 liked cuisine.
+    liked_cuisine: float = 1.0
+    # "Profile affinity": +1 loved ingredient, per ingredient of the profile this recipe was matched to.
+    loved_ingredient: float = 1.0
+    # "Profile affinity": -2 avoided cuisine. Disliked ingredients are a hard exclusion upstream, not a weight.
+    avoided_cuisine: float = -2.0
+    # "Human feedback match": +2 per chip the recipe satisfies.
+    feedback_chip: float = 2.0
+    # "Recency": -8 if cooked in the last 6 weeks, and only when the six-week floor had to relax.
+    recency_relaxed: float = -8.0
+    # "Recency": -3 in weeks 7-9.
+    recency_weeks_7_to_9: float = -3.0
+    # "Recency": -1 in weeks 10-12.
+    recency_weeks_10_to_12: float = -1.0
+    # "Ratings": thumbs down, -8 whatever its age.
+    rating_down: float = -8.0
+    # "Ratings": thumbs up, +1 once past six weeks.
+    rating_up_after_six_weeks: float = 1.0
+    # "Same main_protein twice": -3 per extra occurrence.
+    repeat_main_protein: float = -3.0
+    # "Same main_carb twice": -2 per extra.
+    repeat_main_carb: float = -2.0
+    # "Same dish_type twice": -2 per extra.
+    repeat_dish_type: float = -2.0
+    # "Same cuisine twice": -1 per extra.
+    repeat_cuisine: float = -1.0
+    # "Whole food": +1 `whole`, 0 `mixed`, 0 `processed`.
+    whole_food: float = 1.0
+    # "Whole food": the "healthier" chip doubles it.
+    healthier_multiplier: float = 2.0
+    # "'Lighter' chip": -1 per recipe above the week's median calories, where nutrition exists.
+    lighter: float = -1.0
+    # "Protein targets from the profile": -4 per miss, such as fish at least once.
+    protein_target_miss: float = -4.0
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateRecipe:
+    """One candidate recipe exactly as the scorer needs it: all plain data, no lookup of its own.
+
+    `pantry_fit` is the caller's already urgency-weighted, already scaled figure; `days_since_cooked` is None for
+    a recipe the household has never cooked; `offered_after_floor_relaxed` says the six-week floor was lowered to
+    offer it, which is the only case the recency row's -8 applies; `loved_ingredients` are the profile's loved
+    ingredients this recipe was matched to upstream.
+    """
+
+    recipe_id: str
+    attributes: RecipeAttributes = field(default_factory=RecipeAttributes)
+    calories_per_serving: float | None = None
+    pantry_fit: float = 0.0
+    days_since_cooked: int | None = None
+    rating: Rating | None = None
+    offered_after_floor_relaxed: bool = False
+    loved_ingredients: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProteinTarget:
+    """One line of the profile's `protein_targets` (spec 6.4): a protein, and a floor, a ceiling, or both."""
+
+    protein: MainProtein
+    min_per_week: int | None = None
+    max_per_week: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Predicate:
+    """The spec's filter predicate, as the scorer evaluates it against one recipe's attributes.
+
+    A chip maps to a predicate (V9); the scorer asks it whether the recipe satisfies the chip. The filter's own
+    Predicate has the same field/op/values shape, so the filter can adopt this type rather than duplicate it.
+    """
+
+    field: PredicateField
+    op: PredicateOp
+    values: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.op in (PredicateOp.LTE, PredicateOp.GTE):
+            if self.field is not PredicateField.ACTIVE_TIME:
+                raise ValueError(f"{self.op.value} compares minutes, so it only applies to active_time")
+            if len(self.values) != 1 or _minutes(self.values[0]) is None:
+                raise ValueError(f"{self.op.value} takes exactly one number of minutes, not {self.values!r}")
+
+    def matches(self, attributes: RecipeAttributes) -> bool:
+        """Whether these attributes satisfy the predicate. An attribute that isn't known satisfies nothing."""
+        if self.op in (PredicateOp.LTE, PredicateOp.GTE):
+            bound = attributes.active_time_upper_bound_mins
+            limit = _minutes(self.values[0])
+            if bound is None or limit is None:
+                return False
+            return bound <= limit if self.op is PredicateOp.LTE else bound >= limit
+        value = attributes.as_mapping()[self.field.value]
+        values = {candidate.casefold() for candidate in self.values}
+        return value in values if self.op is PredicateOp.IN else value not in values
+
+
+class PredicateField(StrEnum):
+    """The attribute a predicate reads. The filter's allowlist, and the scorer's, is these six."""
+
+    MAIN_PROTEIN = "main_protein"
+    MAIN_CARB = "main_carb"
+    DISH_TYPE = "dish_type"
+    CUISINE = "cuisine"
+    WHOLE_FOOD = "whole_food"
+    ACTIVE_TIME = "active_time"
+
+
+class PredicateOp(StrEnum):
+    """The operators a filter may use. `lte`/`gte` compare minutes, so they are active_time's alone."""
+
+    IN = "in"
+    NOT_IN = "not_in"
+    LTE = "lte"
+    GTE = "gte"
+
+
+@dataclass(frozen=True, slots=True)
+class ScoringContext:
+    """Everything the scorer reads, built by the caller from the session: no store, no profile read, no model.
+
+    `recipes` holds one `CandidateRecipe` per candidate id. The rest are the optional profile inputs (spec 6.4)
+    and the week's feedback chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
+    predicate earns nothing (and the two chips the scorer reads by name still work: `healthier` doubles the whole
+    food term, `lighter` turns on the calories term).
+    """
+
+    recipes: Mapping[str, CandidateRecipe] = field(default_factory=dict)
+    favourite_recipe_ids: frozenset[str] = frozenset()
+    liked_cuisines: frozenset[Cuisine] = frozenset()
+    avoided_cuisines: frozenset[Cuisine] = frozenset()
+    protein_targets: tuple[ProteinTarget, ...] = ()
+    chips: frozenset[str] = frozenset()
+    chip_predicates: Mapping[str, Predicate] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class TermScore:
+    """What one term gave one recipe, positive or negative."""
+
+    term: Term
+    points: float
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeScore:
+    """One recipe's contribution: its terms, and their sum."""
+
+    recipe_id: str
+    terms: tuple[TermScore, ...]
+
+    @property
+    def total(self) -> float:
+        return sum(term_score.points for term_score in self.terms)
+
+
+@dataclass(frozen=True, slots=True)
+class PlanPenalty:
+    """What one term took off the plan, and which recipes (or which target) it took it from."""
+
+    term: Term
+    points: float
+    recipe_ids: tuple[str, ...] = ()
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SkippedTerm:
+    """A term the scorer did not evaluate, and why: the eval reports these rather than reading a silent zero."""
+
+    term: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlanScore:
+    """A whole week: every recipe's terms, the plan's penalties, and the terms that could not be evaluated."""
+
+    recipes: tuple[RecipeScore, ...]
+    penalties: tuple[PlanPenalty, ...] = ()
+    skipped_terms: tuple[SkippedTerm, ...] = ()
+
+    @property
+    def total(self) -> float:
+        """The plan's score: each recipe's fit, minus the plan's penalties."""
+        return sum(recipe.total for recipe in self.recipes) + sum(penalty.points for penalty in self.penalties)
+
+    @property
+    def recipe_ids(self) -> tuple[str, ...]:
+        return tuple(recipe.recipe_id for recipe in self.recipes)
+
+    def points(self, term: Term) -> float:
+        """Everything this one term gave or took, across the week."""
+        from_recipes = sum(
+            term_score.points for recipe in self.recipes for term_score in recipe.terms if term_score.term is term
+        )
+        return from_recipes + sum(penalty.points for penalty in self.penalties if penalty.term is term)
+
+
+class UnknownRecipeIds(KeyError):
+    """A plan named a recipe the caller's context does not describe: the ids and the facts disagree."""
+
+
+# The terms that cannot be scored yet, with the reason. G1 dropped richness, so nothing carries "hearty".
+_SKIPPED_TERMS: tuple[SkippedTerm, ...] = (
+    SkippedTerm(
+        term="hearty_repeat",
+        reason="no G1 attribute carries heartiness: richness was dropped until a slice needs it, "
+        "so a plan of 3+ hearty dishes cannot be counted",
+    ),
+)
+
+
+def score_meal_plan(
+    recipe_ids: Sequence[str],
+    ctx: ScoringContext,
+    weights: ScorerWeights | None = None,
+) -> PlanScore:
+    """Score any set of recipes, with the breakdown, so the agent can test its own substitutions.
+
+    Unknown ids raise rather than score as zero: a plan naming a recipe the caller did not describe is a bug in
+    the caller, not a weak plan.
+    """
+    ids = tuple(recipe_ids)
+    scorer = _Scorer(ctx, weights or ScorerWeights())
+    scorer.require(ids)
+    return scorer.score(ids)
+
+
+class _Scorer:
+    """One scoring run: the per-recipe terms are plan-independent, so they are computed once and cached."""
+
+    def __init__(self, ctx: ScoringContext, weights: ScorerWeights) -> None:
+        self._ctx = ctx
+        self._weights = weights
+        self._healthier = HEALTHIER_CHIP in ctx.chips
+        self._recipes: dict[str, RecipeScore] = {}
+
+    def require(self, recipe_ids: Sequence[str]) -> None:
+        """Raise `UnknownRecipeIds` naming every id the context has no facts for."""
+        missing = sorted(set(recipe_ids) - self._ctx.recipes.keys())
+        if missing:
+            raise UnknownRecipeIds(missing)
+
+    def score(self, recipe_ids: Sequence[str]) -> PlanScore:
+        return PlanScore(
+            recipes=tuple(self.recipe(recipe_id) for recipe_id in recipe_ids),
+            penalties=self.penalties(recipe_ids),
+            skipped_terms=_SKIPPED_TERMS,
+        )
+
+    def total(self, recipe_ids: Sequence[str]) -> float:
+        """The same number `score().total` gives, without building the breakdown: the search calls this."""
+        return sum(self.recipe(recipe_id).total for recipe_id in recipe_ids) + sum(
+            penalty.points for penalty in self.penalties(recipe_ids)
+        )
+
+    def recipe(self, recipe_id: str) -> RecipeScore:
+        scored = self._recipes.get(recipe_id)
+        if scored is None:
+            facts = self._ctx.recipes[recipe_id]
+            scored = self._recipes[recipe_id] = RecipeScore(recipe_id=recipe_id, terms=self._terms(facts))
+        return scored
+
+    def _terms(self, facts: CandidateRecipe) -> tuple[TermScore, ...]:
+        """One recipe's fit: every per-recipe row of the table, in table order."""
+        return (
+            TermScore(Term.PANTRY_FIT, self._weights.pantry_fit * facts.pantry_fit),
+            TermScore(
+                Term.FAVOURITE, self._weights.favourite if facts.recipe_id in self._ctx.favourite_recipe_ids else 0.0
+            ),
+            TermScore(Term.LIKED_CUISINE, self._liked_cuisine(facts)),
+            TermScore(Term.LOVED_INGREDIENT, self._weights.loved_ingredient * len(facts.loved_ingredients)),
+            TermScore(Term.AVOIDED_CUISINE, self._avoided_cuisine(facts)),
+            TermScore(Term.FEEDBACK_CHIP, self._feedback_chips(facts)),
+            TermScore(Term.RECENCY, self._recency(facts)),
+            TermScore(Term.RATING, self._rating(facts)),
+            TermScore(Term.WHOLE_FOOD, self._whole_food(facts)),
+        )
+
+    def _liked_cuisine(self, facts: CandidateRecipe) -> float:
+        return self._weights.liked_cuisine if facts.attributes.cuisine in self._ctx.liked_cuisines else 0.0
+
+    def _avoided_cuisine(self, facts: CandidateRecipe) -> float:
+        return self._weights.avoided_cuisine if facts.attributes.cuisine in self._ctx.avoided_cuisines else 0.0
+
+    def _feedback_chips(self, facts: CandidateRecipe) -> float:
+        satisfied = sum(
+            1
+            for chip in self._ctx.chips
+            if (predicate := self._ctx.chip_predicates.get(chip)) is not None and predicate.matches(facts.attributes)
+        )
+        return self._weights.feedback_chip * satisfied
+
+    def _recency(self, facts: CandidateRecipe) -> float:
+        days = facts.days_since_cooked
+        if days is None:
+            return 0.0
+        if days <= SIX_WEEKS_DAYS:
+            # The floor normally excludes these; only a relaxed floor offers one, and only then is it penalised.
+            return self._weights.recency_relaxed if facts.offered_after_floor_relaxed else 0.0
+        if days <= NINE_WEEKS_DAYS:
+            return self._weights.recency_weeks_7_to_9
+        if days <= TWELVE_WEEKS_DAYS:
+            return self._weights.recency_weeks_10_to_12
+        return 0.0
+
+    def _rating(self, facts: CandidateRecipe) -> float:
+        if facts.rating is Rating.DOWN:
+            return self._weights.rating_down
+        if facts.rating is Rating.UP:
+            # A thumb up is worth something only once the meal is old enough to be a pleasure to repeat.
+            days = facts.days_since_cooked
+            return self._weights.rating_up_after_six_weeks if days is not None and days > SIX_WEEKS_DAYS else 0.0
+        return 0.0
+
+    def _whole_food(self, facts: CandidateRecipe) -> float:
+        if facts.attributes.whole_food is not WholeFood.WHOLE:
+            return 0.0
+        return self._weights.whole_food * (self._weights.healthier_multiplier if self._healthier else 1.0)
+
+    def penalties(self, recipe_ids: Sequence[str]) -> tuple[PlanPenalty, ...]:
+        """What the plan as a whole loses: repeats, the lighter chip's calories term, and protein targets."""
+        penalties = self._repeats(recipe_ids)
+        lighter = self._lighter(recipe_ids)
+        if lighter is not None:
+            penalties.append(lighter)
+        penalties.extend(self._protein_targets(recipe_ids))
+        return tuple(penalties)
+
+    def _repeats(self, recipe_ids: Sequence[str]) -> list[PlanPenalty]:
+        attributes = [(recipe_id, self._ctx.recipes[recipe_id].attributes) for recipe_id in recipe_ids]
+        penalties: list[PlanPenalty] = []
+        for term, attribute, weight in (
+            (Term.REPEAT_MAIN_PROTEIN, "main_protein", self._weights.repeat_main_protein),
+            (Term.REPEAT_MAIN_CARB, "main_carb", self._weights.repeat_main_carb),
+            (Term.REPEAT_DISH_TYPE, "dish_type", self._weights.repeat_dish_type),
+            (Term.REPEAT_CUISINE, "cuisine", self._weights.repeat_cuisine),
+        ):
+            occurrences: dict[str, list[str]] = {}
+            for recipe_id, attrs in attributes:
+                value = attrs.as_mapping()[attribute]
+                if value not in _EXEMPT_REPEAT_VALUES:
+                    occurrences.setdefault(value, []).append(recipe_id)
+            for value, ids in occurrences.items():
+                if len(ids) > 1:
+                    penalties.append(
+                        PlanPenalty(term=term, points=weight * (len(ids) - 1), recipe_ids=tuple(ids[1:]), detail=value)
+                    )
+        return penalties
+
+    def _lighter(self, recipe_ids: Sequence[str]) -> PlanPenalty | None:
+        if LIGHTER_CHIP not in self._ctx.chips:
+            return None
+        known = [
+            (recipe_id, calories)
+            for recipe_id in recipe_ids
+            if (calories := self._ctx.recipes[recipe_id].calories_per_serving) is not None
+        ]
+        if not known:
+            return None
+        median = statistics.median([calories for _, calories in known])
+        above = tuple(recipe_id for recipe_id, calories in known if calories > median)
+        if not above:
+            return None
+        return PlanPenalty(
+            term=Term.LIGHTER,
+            points=self._weights.lighter * len(above),
+            recipe_ids=above,
+            detail=f"median {median:g} kcal",
+        )
+
+    def _protein_targets(self, recipe_ids: Sequence[str]) -> list[PlanPenalty]:
+        if not self._ctx.protein_targets:
+            return []
+        counts: Counter[MainProtein] = Counter(
+            self._ctx.recipes[recipe_id].attributes.main_protein for recipe_id in recipe_ids
+        )
+        penalties: list[PlanPenalty] = []
+        for target in self._ctx.protein_targets:
+            count = counts[target.protein]
+            missing = 0
+            if target.min_per_week is not None and count < target.min_per_week:
+                missing += target.min_per_week - count
+            if target.max_per_week is not None and count > target.max_per_week:
+                missing += count - target.max_per_week
+            if missing:
+                penalties.append(
+                    PlanPenalty(
+                        term=Term.PROTEIN_TARGET,
+                        points=self._weights.protein_target_miss * missing,
+                        detail=f"{target.protein.value} x{count} against "
+                        f"min {target.min_per_week} max {target.max_per_week}",
+                    )
+                )
+        return penalties
+
+
+def _minutes(value: str) -> int | None:
+    """The minutes a predicate value states (`30`, `30 min`), or None when it states none."""
+    text = value.strip().casefold()
+    for suffix in ("minutes", "minute", "mins", "min"):
+        text = text.removesuffix(suffix)
+    text = text.strip()
+    return int(text) if text.isdigit() else None
