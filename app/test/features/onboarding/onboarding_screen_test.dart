@@ -1,7 +1,8 @@
-// Widget tests for the first-run setup flow itself: stepping through
-// dinners/servings/dietary flags, persisting what was captured, being
-// skippable at any point, and ending on its own receipt-scan step.
+// Widget tests for the first-run flow: one basics page (the two numbers plus
+// the dietary disclosure) that hands its values forward to the pantry step,
+// which is the only step that writes them.
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
@@ -16,8 +17,10 @@ import 'package:go_router/go_router.dart';
 import '../../data/fixture.dart';
 
 const String _userId = 'user-1';
-const String _scanStepQuestion = 'Stock your pantry';
-const Key _selectedValue = ValueKey<String>('onboarding.selectedValue');
+const Key _dinnersSlider = Key('onboarding.dinnersSlider');
+const Key _servingsSlider = Key('onboarding.servingsSlider');
+const Key _dinnersValue = ValueKey<String>('onboarding.dinnersValue');
+const Key _servingsValue = ValueKey<String>('onboarding.servingsValue');
 
 Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
   final GoRouter router = GoRouter(
@@ -47,55 +50,56 @@ void main() {
   setUp(() => db = createTestDatabase());
   tearDown(() => db.close());
 
+  Future<void> pumpOnboarding(
+    WidgetTester tester, {
+    Size size = const Size(420, 1200),
+    double textScale = 1,
+  }) async {
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_buildApp(db: db));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> saveAndRead(WidgetTester tester) async {
+    await tester.tap(find.text('Scan a receipt'));
+    await tester.pumpAndSettle();
+    expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsOneWidget);
+  }
+
   testWidgets(
-    'steps through dinners, servings and dietary flags, persists them, '
-    'marks itself complete, and ends on receipt-scan',
+    'carries the chosen dinners, servings and dietary flags through to the '
+    'save that the pantry step performs',
     (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpOnboarding(tester);
 
-      await tester.pumpWidget(_buildApp(db: db));
+      expect(find.text('The basics'), findsOneWidget);
+
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(400, 0));
       await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(_dinnersValue)).data, '7');
 
-      expect(
-        find.text('How many dinners do you cook at home most weeks?'),
-        findsOneWidget,
-      );
-
-      final TestGesture gesture = await tester.startGesture(
-        tester.getCenter(find.byType(Slider)),
-      );
-      await gesture.moveBy(const Offset(80, 0));
-      await gesture.up();
-      await tester.pump();
-
-      await tester.tap(find.text('Next'));
+      await tester.drag(find.byKey(_servingsSlider), const Offset(400, 0));
       await tester.pumpAndSettle();
-      expect(
-        find.text('How many people are you usually cooking for?'),
-        findsOneWidget,
-      );
+      expect(tester.widget<Text>(find.byKey(_servingsValue)).data, '6');
 
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Dietary preferences'));
       await tester.pumpAndSettle();
-      expect(
-        find.text('Any dietary preferences we should know about?'),
-        findsOneWidget,
-      );
-
+      await tester.ensureVisible(find.text('Vegan'));
       await tester.tap(find.text('Vegan'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text(_scanStepQuestion), findsOneWidget);
+      expect(find.text('Stock your pantry'), findsOneWidget);
 
-      await tester.tap(find.text('Scan a receipt'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsOneWidget);
+      await saveAndRead(tester);
 
       final saved = await UserConfigRepository(db).get(_userId);
+      expect(saved.mealsPerWeek, 7);
+      expect(saved.preferredServings, 6);
       expect(saved.dietaryFlags, <String>['Vegan']);
       expect(
         (await (db.select(
@@ -103,60 +107,333 @@ void main() {
         )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
+      // The model still writes the same tolerance default it always has.
+      expect(saved.purchaseTolerance, UserConfigView.defaultPurchaseTolerance);
     },
   );
 
   testWidgets(
-    'Skip is available immediately, discards captured input, and marks '
-    'setup complete without navigating to scan',
+    'skipping the basics page finishes setup without saving this page\'s '
+    'answers, so the defaults still apply',
     (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpOnboarding(tester);
 
-      await tester.pumpWidget(_buildApp(db: db));
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byKey(_servingsSlider), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dietary preferences'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Vegan'));
+      await tester.tap(find.text('Vegan'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Skip'));
+      await tester.tap(find.text('Skip this page'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stock your pantry'), findsOneWidget);
+
+      await tester.tap(find.text("I'll do this later"));
       await tester.pumpAndSettle();
 
       expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
+      final saved = await UserConfigRepository(db).get(_userId);
+      expect(saved.mealsPerWeek, UserConfigView.defaultMealsPerWeek);
+      expect(saved.preferredServings, UserConfigView.defaultPreferredServings);
+      expect(saved.dietaryFlags, isEmpty);
       expect(
         (await (db.select(
           db.userConfig,
         )..where((t) => t.id.equals(_userId))).getSingle()).onboardingCompleted,
         isTrue,
       );
-
-      final saved = await UserConfigRepository(db).get(_userId);
-      expect(saved.dietaryFlags, isEmpty);
     },
   );
 
   testWidgets(
-    '"I\'ll do this later" on the final step also persists captured input '
-    'without navigating to scan',
+    'the dietary disclosure stays closed until asked and counts what is '
+    'selected',
     (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await pumpOnboarding(tester);
 
-      await tester.pumpWidget(_buildApp(db: db));
+      expect(find.text('Dietary preferences'), findsOneWidget);
+      expect(find.text('0 selected'), findsOneWidget);
+      expect(find.text('Vegetarian'), findsNothing);
+
+      await tester.tap(find.text('Dietary preferences'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vegetarian'), findsOneWidget);
+      expect(find.text('Paleo'), findsOneWidget);
+
+      await tester.tap(find.text('Vegan'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 selected'), findsOneWidget);
+
+      await tester.tap(find.text('Peanut-free'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 selected'), findsOneWidget);
+
+      await tester.tap(find.text('Dietary preferences'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vegan'), findsNothing);
+      expect(find.text('2 selected'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Back from the pantry page returns to the basics page with the chosen '
+    'values still in place',
+    (WidgetTester tester) async {
+      await pumpOnboarding(tester);
+
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byKey(_servingsSlider), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dietary preferences'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Vegan'));
+      await tester.tap(find.text('Vegan'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Next'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
+      expect(find.text('Stock your pantry'), findsOneWidget);
+
+      await tester.tap(find.text('Back'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Vegetarian'));
+      expect(find.text('The basics'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(_dinnersValue)).data, '7');
+      expect(tester.widget<Text>(find.byKey(_servingsValue)).data, '1');
+      expect(find.text('1 selected'), findsOneWidget);
+
+      await tester.tap(find.text('Dietary preferences'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
+      final FilterChip vegan = tester.widget<FilterChip>(
+        find.ancestor(
+          of: find.text('Vegan'),
+          matching: find.byType(FilterChip),
+        ),
+      );
+      expect(vegan.selected, isTrue);
+    },
+  );
+
+  testWidgets(
+    'the progress indicator marks the current page and keeps the taste '
+    'interview\'s slot reserved',
+    (WidgetTester tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      await pumpOnboarding(tester);
+
+      bool isCurrent(String slot) =>
+          tester
+              .getSemantics(
+                find.byKey(ValueKey<String>('onboarding.step.$slot')),
+              )
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected
+              .toBoolOrNull() ??
+          false;
+
+      expect(isCurrent('0'), isTrue);
+      expect(isCurrent('1'), isFalse);
+      expect(isCurrent('2'), isFalse);
+      expect(
+        find.bySemanticsLabel('Step 2 of 3: Taste, coming later'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(isCurrent('0'), isFalse);
+      expect(isCurrent('1'), isFalse);
+      expect(isCurrent('2'), isTrue);
+      expect(find.bySemanticsLabel('Step 3 of 3: Pantry'), findsOneWidget);
+
+      semantics.dispose();
+    },
+  );
+
+  for (final double scale in <double>[1.3, 2]) {
+    testWidgets(
+      'both pages fit a 320-wide phone at ${scale}x text, with the chips open',
+      (WidgetTester tester) async {
+        await pumpOnboarding(
+          tester,
+          size: const Size(320, 844),
+          textScale: scale,
+        );
+        expect(tester.takeException(), isNull, reason: 'the basics page');
+
+        await tester.ensureVisible(find.text('Dietary preferences'));
+        await tester.tap(find.text('Dietary preferences'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'the basics page with the chips open',
+        );
+        await tester.ensureVisible(find.text('Paleo'));
+        expect(find.text('Paleo'), findsOneWidget);
+
+        await tester.ensureVisible(find.text('Continue'));
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'the pantry page');
+
+        expect(find.text('Stock your pantry'), findsOneWidget);
+        await tester.ensureVisible(find.text('Scan a receipt'));
+        expect(find.text('Scan a receipt'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets(
+    'a passed basics step looks and reads as done, and says how it was passed',
+    (WidgetTester tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      await pumpOnboarding(tester);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      final Finder basicsSlot = find.byKey(
+        const ValueKey<String>('onboarding.step.0'),
+      );
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics, completed'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: basicsSlot,
+          matching: find.byIcon(Icons.check_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics'),
+        findsOneWidget,
+        reason: 'back on the basics page it is current again, not done',
+      );
+
+      await tester.tap(find.text('Skip this page'));
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics, skipped'),
+        findsOneWidget,
+        reason: 'skipping is not the same as answering',
+      );
+      expect(
+        find.descendant(
+          of: basicsSlot,
+          matching: find.byIcon(Icons.remove_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('the pantry page keeps its content centred while it fits', (
+    WidgetTester tester,
+  ) async {
+    await pumpOnboarding(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    final Rect body = tester.getRect(find.byType(SingleChildScrollView));
+    final Rect heading = tester.getRect(find.text('Stock your pantry'));
+    final Rect icon = tester.getRect(find.byIcon(Icons.receipt_long_rounded));
+
+    expect((heading.top + icon.bottom) / 2, closeTo(body.center.dy, 2));
+  });
+
+  testWidgets(
+    'a screen reader can expand and collapse the dietary disclosure',
+    (WidgetTester tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      await pumpOnboarding(tester);
+
+      SemanticsNode disclosure() => find.semantics
+          .byLabel('Dietary preferences, 0 selected')
+          .evaluate()
+          .single;
+
+      expect(
+        disclosure().getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+        reason: 'a semantic button with no tap action cannot be activated',
+      );
+
+      tester.semantics.tap(
+        find.semantics.byLabel('Dietary preferences, 0 selected'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Vegan'), findsOneWidget);
+      expect(
+        disclosure()
+            .getSemanticsData()
+            .flagsCollection
+            .isExpanded
+            .toBoolOrNull(),
+        isTrue,
+      );
+
+      tester.semantics.tap(
+        find.semantics.byLabel('Dietary preferences, 0 selected'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Vegan'), findsNothing);
+
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'shows the same bounds as Settings, opens on the defaults, and calls the '
+    'servings control Servings on first run',
+    (WidgetTester tester) async {
+      await pumpOnboarding(tester);
+
+      expect(tester.widget<Text>(find.byKey(_dinnersValue)).data, '5');
+      expect(tester.widget<Text>(find.byKey(_servingsValue)).data, '2');
+      expect(find.text('SERVINGS'), findsOneWidget);
+      expect(find.text('DEFAULT SERVINGS'), findsNothing);
+
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(_dinnersValue)).data, '3');
+
+      await tester.drag(find.byKey(_servingsSlider), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(_servingsValue)).data, '1');
+    },
+  );
+
+  testWidgets(
+    "I'll do this later on the pantry page saves what the basics page "
+    'captured without opening the scanner',
+    (WidgetTester tester) async {
+      await pumpOnboarding(tester);
+
+      await tester.drag(find.byKey(_dinnersSlider), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
       await tester.tap(find.text("I'll do this later"));
       await tester.pumpAndSettle();
 
       expect(find.text('SCAN_SCREEN_PLACEHOLDER'), findsNothing);
       final saved = await UserConfigRepository(db).get(_userId);
-      expect(saved.dietaryFlags, <String>['Vegetarian']);
+      expect(saved.mealsPerWeek, 7);
       expect(
         (await (db.select(
           db.userConfig,
@@ -165,59 +442,4 @@ void main() {
       );
     },
   );
-
-  testWidgets(
-    'the dietary step asks only about diet; the scan offer has its own step',
-    (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(420, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-
-      await tester.pumpWidget(_buildApp(db: db));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('Any dietary preferences we should know about?'),
-        findsOneWidget,
-      );
-      expect(find.text('Scan a receipt'), findsNothing);
-      expect(find.text('Back'), findsOneWidget);
-      expect(find.text('Next'), findsOneWidget);
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(find.text(_scanStepQuestion), findsOneWidget);
-      expect(find.text('Scan a receipt'), findsOneWidget);
-      expect(find.text("I'll do this later"), findsOneWidget);
-    },
-  );
-
-  testWidgets('each slider step shows the number currently chosen', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(420, 1000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(_buildApp(db: db));
-    await tester.pumpAndSettle();
-
-    String shown() => tester.widget<Text>(find.byKey(_selectedValue)).data!;
-
-    expect(shown(), '${UserConfigView.defaultMealsPerWeek}');
-    await tester.drag(find.byType(Slider), const Offset(400, 0));
-    await tester.pumpAndSettle();
-    expect(shown(), '7');
-
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    expect(shown(), '${UserConfigView.defaultPreferredServings}');
-    await tester.drag(find.byType(Slider), const Offset(-400, 0));
-    await tester.pumpAndSettle();
-    expect(shown(), '1');
-  });
 }

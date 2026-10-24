@@ -1,46 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
-import '../onboarding_screen.dart';
+import '../onboarding_page.dart';
 
-/// "Back"/"Next" on every step but the last, "Scan a receipt"/"I'll do this later" on it. Its own `const`
-/// class rather than an `OnboardingScreen` builder method, for its own rebuild scope.
+/// The actions for one first-run page. The basics page offers Continue plus a
+/// page-scoped Skip; the pantry page keeps its two exits and gains the Back
+/// into the basics page.
 class OnboardingFooter extends StatelessWidget {
   const OnboardingFooter({
     super.key,
-    required this.step,
+    required this.page,
     required this.onBack,
-    required this.onNext,
+    required this.onContinue,
+    required this.onSkipBasics,
     required this.onScanReceipt,
     required this.onFinishLater,
   });
 
-  final int step;
+  final OnboardingPage page;
   final VoidCallback onBack;
-  final VoidCallback onNext;
+  final VoidCallback onContinue;
+  final VoidCallback onSkipBasics;
   final VoidCallback onScanReceipt;
   final VoidCallback onFinishLater;
 
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
-    final bool isLastStep = step == OnboardingScreen.stepCount - 1;
-    if (!isLastStep) {
-      return Row(
+    if (page == OnboardingPage.basics) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          if (step > 0)
-            OutlinedButton(onPressed: onBack, child: const Text('Back')),
-          const Spacer(),
-          FilledButton(onPressed: onNext, child: const Text('Next')),
+          FilledButton(onPressed: onContinue, child: const Text('Continue')),
+          SizedBox(height: tokens.spacing.xs),
+          TextButton(
+            onPressed: onSkipBasics,
+            child: const Text('Skip this page'),
+          ),
         ],
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        FilledButton(
-          onPressed: onScanReceipt,
-          child: const Text('Scan a receipt'),
+        Row(
+          children: <Widget>[
+            OutlinedButton(onPressed: onBack, child: const Text('Back')),
+            SizedBox(width: tokens.spacing.md),
+            Expanded(
+              child: FilledButton(
+                onPressed: onScanReceipt,
+                child: const Text('Scan a receipt'),
+              ),
+            ),
+          ],
         ),
         SizedBox(height: tokens.spacing.sm),
         TextButton(

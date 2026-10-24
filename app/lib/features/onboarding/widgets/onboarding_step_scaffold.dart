@@ -5,6 +5,9 @@ import 'package:glean/design_system/design_system.dart';
 /// optional subtitle, and whichever control answers it. Kept separate from
 /// [OnboardingScreen] so the heading style is consistent across steps
 /// without repeating it at each call site.
+///
+/// The content is centred while it fits and scrolls once it does not, so a
+/// narrow phone with large text still reaches everything.
 class OnboardingStepScaffold extends StatelessWidget {
   const OnboardingStepScaffold({
     super.key,
@@ -20,7 +23,7 @@ class OnboardingStepScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
-    return Padding(
+    final Widget content = Padding(
       padding: EdgeInsets.symmetric(horizontal: tokens.spacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,6 +38,15 @@ class OnboardingStepScaffold extends StatelessWidget {
           child,
         ],
       ),
+    );
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) =>
+          SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(child: content),
+            ),
+          ),
     );
   }
 }
