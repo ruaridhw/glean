@@ -1,39 +1,62 @@
 """dietary decisions: stored beside the corpus, read when candidates are chosen.
 
-Generate never calls the decision model. A producer computes one probability per (recipe, flag),
-stores them as one JSONL blob in the corpus store, and candidate selection reads
-them. The decision is the only dietary rule: there are no ingredient word lists behind it.
+Generate never calls the decision model. A producer computes one probability per (recipe, flag), stores
+them as decision answers in the corpus store, and candidate selection reads them back. The decision is
+the only dietary rule: there are no ingredient word lists behind it.
+
+An answer is stored under the stable question name `dietary:<flag>` (see `recipes.answers`), so it lands
+in the DynamoDB ANSWER item or the pre-F1 JSONL line without the two stores needing different shapes.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
 from glean.observability import logger
-from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
+from glean.recipes.answers import (
+    DIETARY_DECISIONS_KEY,
+    RecipeAnswer,
+    content_fingerprint,
+    dietary_flag,
+    dietary_question,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from glean.decisions import DecisionClient
-    from glean.recipes.corpus import RecipeCorpusStore
+    from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
+
+__all__ = [
+    "DIETARY_DECISIONS_KEY",
+    "DIETARY_FLAGS",
+    "LEGACY_NUT_FREE",
+    "PEANUT_FREE",
+    "TREE_NUT_FREE",
+    "CorpusUnavailableError",
+    "CoverageReport",
+    "DietaryDecision",
+    "DietaryDecisionStore",
+    "DietaryDecisions",
+    "content_fingerprint",
+    "dietary_answers",
+    "dietary_questions",
+    "produce_missing_decisions",
+    "question_hash",
+]
 
 _CURRENT_MODEL = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")  # as DecisionClient accepts it
 _EVERYTHING = 1_000_000
 _CHECKPOINT_EVERY = 25
-
-# Not `.json`-suffixed, so `BlobStore.list_keys` never mistakes it for a recipe.
-DIETARY_DECISIONS_KEY = "_decisions/dietary.jsonl"
 
 TREE_NUT_FREE = "tree-nut-free"
 PEANUT_FREE = "peanut-free"
@@ -81,46 +104,74 @@ class DietaryDecision(BaseModel):
     computed_at: datetime = Field(description="When the decision was computed.")
 
 
-def content_fingerprint(title: str, ingredient_names: Iterable[str]) -> str:
-    """Identifies the recipe state a decision assessed, so editing a recipe under its id voids the decision."""
-    normalised = [" ".join(name.casefold().split()) for name in ingredient_names]
-    payload = json.dumps([" ".join(title.casefold().split()), sorted(normalised)])
-    return hashlib.sha256(payload.encode()).hexdigest()
-
-
 def question_hash(question: NoulQuestion) -> str:
     """Identifies the question a decision answered, so rewording a flag's criteria voids its old decisions."""
     return hashlib.sha256(question.model_dump_json().encode()).hexdigest()
 
 
 class DietaryDecisionStore:
-    def __init__(self, store: BlobStore) -> None:
-        self._store = store
+    """Dietary decisions as corpus answers: one per (recipe, flag), through whichever backend is open."""
+
+    def __init__(self, corpus: CorpusBackend) -> None:
+        self._corpus = corpus
 
     def load(self) -> list[DietaryDecision]:
-        raw = self._store.read(DIETARY_DECISIONS_KEY)
-        if raw is None:
-            return []
-        decisions = []
-        for line in raw.splitlines():
-            if not line.strip():
-                continue
-            try:
-                decisions.append(DietaryDecision.model_validate_json(line))
-            except ValidationError:
-                continue
-        return decisions
+        decisions = (_decision_from_answer(answer) for answer in self._corpus.answers())
+        return [decision for decision in decisions if decision is not None]
 
     def save(self, decisions: list[DietaryDecision]) -> None:
-        ordered = sorted(decisions, key=lambda decision: (decision.recipe_id, decision.flag))
-        self._store.write(DIETARY_DECISIONS_KEY, "".join(decision.model_dump_json() + "\n" for decision in ordered))
+        self._corpus.save_answers(dietary_answers(decisions))
+
+
+def dietary_answers(decisions: Iterable[DietaryDecision]) -> list[RecipeAnswer]:
+    """The stored answers that carry these decisions, for a producer writing them as corpus data."""
+    return [_answer_from_decision(decision) for decision in decisions]
+
+
+def _answer_from_decision(decision: DietaryDecision) -> RecipeAnswer:
+    return RecipeAnswer(
+        recipe_id=decision.recipe_id,
+        question=dietary_question(decision.flag),
+        probability=decision.probability,
+        model=decision.model,
+        content_hash=decision.content_hash,
+        criteria_hash=decision.criteria_hash,
+        computed_at=decision.computed_at,
+    )
+
+
+def _decision_from_answer(answer: RecipeAnswer) -> DietaryDecision | None:
+    """The dietary decision a stored answer carries, or None when another enricher owns the question."""
+    flag = dietary_flag(answer.question)
+    if flag is None:
+        return None
+    return DietaryDecision(
+        recipe_id=answer.recipe_id,
+        flag=flag,
+        probability=answer.probability,
+        model=answer.model,
+        content_hash=answer.content_hash,
+        criteria_hash=answer.criteria_hash,
+        computed_at=answer.computed_at,
+    )
 
 
 class DietaryDecisions:
-    """Stored decisions, looked up by (recipe id, flag)."""
+    """Stored decisions, looked up by (recipe id, flag).
+
+    A (recipe, flag) can have several stored answers: the table keys them by criteria hash, and a reworded
+    question leaves the old wording's answer beside the new one. Keep the one that speaks for what is asked
+    now — an older wording can never shadow it — and among equals the latest computation wins. The corpus
+    answers, the blob JSONL and a projection rebuilt from the table all go through this.
+    """
 
     def __init__(self, decisions: list[DietaryDecision]) -> None:
-        self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
+        self._by_key: dict[tuple[str, str], DietaryDecision] = {}
+        for decision in decisions:
+            key = (decision.recipe_id, decision.flag)
+            incumbent = self._by_key.get(key)
+            if incumbent is None or _preferred(decision, incumbent):
+                self._by_key[key] = decision
 
     def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
@@ -137,6 +188,22 @@ class DietaryDecisions:
         if decision is None or not _is_current(decision, summary):
             return True
         return decision.probability >= THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
+
+
+def _preferred(candidate: DietaryDecision, incumbent: DietaryDecision) -> bool:
+    """Whether `candidate` speaks for the current question better than `incumbent`."""
+    if _answers_current_question(candidate) != _answers_current_question(incumbent):
+        return _answers_current_question(candidate)
+    return (candidate.computed_at, candidate.criteria_hash) > (incumbent.computed_at, incumbent.criteria_hash)
+
+
+def _answers_current_question(decision: DietaryDecision) -> bool:
+    question = _QUESTIONS.get(decision.flag)
+    return (
+        question is not None
+        and decision.criteria_hash == question_hash(question)
+        and _CURRENT_MODEL.fullmatch(decision.model) is not None
+    )
 
 
 def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:

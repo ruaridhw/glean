@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
@@ -19,8 +20,19 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipe_api.schemas import RecipeApiRecipe, RecipeApiSearchResponse
 from glean.recipes import service
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.dynamo_corpus import DynamoCorpusBackend, RecipeTooLargeError
+from glean.recipes.projection import loads
 from glean.recipes.schemas import ImportUrlRequest
-from glean.recipes.stored import RecipeLlmResponse, RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
+from glean.recipes.stored import (
+    RecipeLlmResponse,
+    RecipeParseResult,
+    RecipeProvenance,
+    StoredIngredient,
+    StoredInstruction,
+    StoredRecipe,
+)
+from tests.conftest import RECIPES_TABLE_NAME
+from tests.recipes.fake_projection import InMemoryProjectionStore
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -421,6 +433,85 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
     assert len(data["instructions"]) == 2
     llm_router.invoke.assert_not_called()
     import_url_to_canonical.assert_not_called()
+
+
+def test_import_url_rejects_a_recipe_the_corpus_cannot_store(client: TestClient) -> None:
+    corpus_store = _empty_corpus_store()
+    corpus_store.save.side_effect = RecipeTooLargeError(
+        "recipe 'import:huge' is 12000 bytes, over the corpus's 10000 byte budget"
+    )
+    app.dependency_overrides[get_llm_router] = lambda: MagicMock()
+
+    with (
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=corpus_store),
+        patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
+        patch(
+            "glean.recipes.service.recipe_providers.import_url_to_canonical",
+            return_value=RecipeParseResult(
+                recipe=_stored_recipe("import:huge", title="Huge", source_url="https://example.com/huge"),
+                parser="schema_org",
+                source_url="https://example.com/huge",
+            ),
+        ),
+    ):
+        resp = client.post("/recipes/import-url", json={"url": "https://example.com/huge"})
+
+    assert resp.status_code == 422
+    assert "too large" in resp.json()["detail"].lower()
+    assert "10000 byte budget" in resp.json()["detail"]
+
+
+def test_a_retried_import_repairs_the_projection_the_first_attempt_could_not_publish(
+    client: TestClient, recipes_table: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reviewer's case: the first import 500s on a publish failure, and the retry must heal it."""
+    object_store = InMemoryProjectionStore()
+    failing = _FailingOncePublishStore(object_store)
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=failing)
+    store = RecipeCorpusStore(backend)
+    app.dependency_overrides[get_llm_router] = lambda: MagicMock()
+    recipe = _stored_recipe("import:huge-not", title="Bean Tacos", source_url="https://example.com/tacos")
+
+    with (
+        TestClient(app, raise_server_exceptions=False) as failing_client,  # the 500 is the subject here
+        patch("glean.recipes.service.RecipeCorpusStore", return_value=store),
+        patch("glean.recipes.providers.socket.getaddrinfo", _fake_getaddrinfo({"example.com": "93.184.216.34"})),
+        patch(
+            "glean.recipes.service.recipe_providers.import_url_to_canonical",
+            return_value=RecipeParseResult(recipe=recipe, parser="schema_org", source_url=recipe.source_url),
+        ) as parse,
+    ):
+        first = failing_client.post("/recipes/import-url", json={"url": recipe.source_url})
+        assert first.status_code == 500
+        assert object_store.data is None
+
+        failing.failures = 0
+        retried = failing_client.post("/recipes/import-url", json={"url": recipe.source_url})
+
+    assert retried.status_code == 200
+    assert parse.call_count == 1  # the retry deduped on the source URL instead of paying for another parse
+    published = loads(object_store.data)
+    assert [entry.summary.external_id for entry in published.recipes] == [recipe.external_id]
+
+
+class _FailingOncePublishStore:
+    """A projection object whose publication fails a set number of times."""
+
+    def __init__(self, inner: InMemoryProjectionStore) -> None:
+        self.inner = inner
+        self.failures = 99  # enough to exhaust one request's retries
+
+    def read(self) -> bytes | None:
+        return self.inner.read()
+
+    def load(self) -> Any:
+        return self.inner.load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        if self.failures:
+            self.failures -= 1
+            raise ClientError({"Error": {"Code": "AccessDenied"}}, "PutObject")
+        return self.inner.store(data, etag=etag)
 
 
 def test_import_url_returns_cached_recipe_for_same_source_url_without_import_pipeline() -> None:

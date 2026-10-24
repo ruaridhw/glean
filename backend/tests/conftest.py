@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import boto3
 import pytest
 from fastapi.testclient import TestClient
+from moto import mock_aws
 
 from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
 from glean.main import app
 from glean.rate_limit import limiter
+from tests.infra.cfn import recipes_table_properties
+
+RECIPES_TABLE_NAME = "glean-recipes-test"
+_REGION = "eu-west-2"
+# CloudFormation-only properties that create_table does not take.
+_CFN_ONLY = {"TableName", "TableClass", "PointInTimeRecoverySpecification"}
 
 _TEST_SETTINGS = Settings(
     _env_file=None,
@@ -39,3 +47,12 @@ def auth_headers() -> dict[str, str]:
 @pytest.fixture(autouse=True)
 def _fresh_rate_limit_window() -> None:
     limiter.reset()
+
+
+@pytest.fixture
+def recipes_table():
+    """The recipes table exactly as template.yaml defines it, in moto."""
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name=_REGION)
+        props = {k: v for k, v in recipes_table_properties().items() if k not in _CFN_ONLY}
+        yield dynamodb.create_table(TableName=RECIPES_TABLE_NAME, **props)

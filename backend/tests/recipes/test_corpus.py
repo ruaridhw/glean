@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.answers import RecipeAnswer, dietary_question
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import (
     RecipeProvenance,
@@ -85,6 +87,34 @@ def test_get_resolves_flat_layout_recipe_through_rebuilt_index(tmp_path) -> None
     results, total = store.search(q="pasta")
     assert [result.external_id for result in results] == ["rec_007572af2fb61ccb"]
     assert total == 1
+
+
+def test_publish_keeps_a_legacy_flat_blob_key_so_the_recipe_stays_readable(tmp_path) -> None:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    recipe = _recipe("rec_flat", title="Flat Recipe", source_url="https://example.com/flat")
+    (tmp_path / "legacy-flat.json").write_text(recipe.model_dump_json())
+    assert store.rebuild_index() == 1
+    before = (tmp_path / "legacy-flat.json").read_bytes()
+
+    assert store.publish(recipe) is False  # the summary already says exactly this, at its real key
+
+    summary = store.search(per_page=10)[0][0]
+    assert (summary.key, summary.external_id) == ("legacy-flat.json", "rec_flat")
+    assert (tmp_path / "legacy-flat.json").read_bytes() == before
+    assert store.get("rec_flat") == recipe
+    assert store.get_by_source_url("https://example.com/flat") == recipe
+
+
+def test_publish_finds_a_legacy_flat_blob_when_the_index_does_not_know_it(tmp_path) -> None:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    recipe = _recipe("rec_flat", title="Flat Recipe", source_url="https://example.com/flat")
+    (tmp_path / "legacy-flat.json").write_text(recipe.model_dump_json())
+
+    assert store.publish(recipe) is True
+
+    summary = store.search(per_page=10)[0][0]
+    assert summary.key == "legacy-flat.json"
+    assert store.get("rec_flat") == recipe
 
 
 def test_index_written_by_save_is_visible_to_a_fresh_store(tmp_path) -> None:
@@ -179,6 +209,30 @@ def test_search_dietary_filter_requires_all_requested_flags(tmp_path) -> None:
 
     assert [recipe.title for recipe in results] == ["Chickpea Curry"]
     assert total == 1
+
+
+def test_answers_for_reads_one_recipe_answers_from_the_blob_corpus(tmp_path) -> None:
+    store = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    store.save(_recipe("rec_a", title="A"))
+    store.save(_recipe("rec_b", title="B"))
+    answers = [_answer("rec_a", "vegan"), _answer("rec_a", "peanut-free", criteria="b" * 64), _answer("rec_b", "vegan")]
+
+    assert store.save_answers(answers) == 3
+
+    assert store.answers_for("rec_a") == sorted(answers[:2], key=lambda a: (a.question, a.criteria_hash))
+    assert store.answers_for("rec_missing") == []
+
+
+def _answer(recipe_id: str, flag: str, *, criteria: str = "a" * 64) -> RecipeAnswer:
+    return RecipeAnswer(
+        recipe_id=recipe_id,
+        question=dietary_question(flag),
+        probability=0.02,
+        model="typesafe/jev-1.14-20261014",
+        content_hash="c" * 64,
+        criteria_hash=criteria,
+        computed_at=datetime(2026, 10, 22, tzinfo=UTC),
+    )
 
 
 def _recipe(

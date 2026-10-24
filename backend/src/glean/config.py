@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from aws_lambda_powertools.utilities import parameters
 from pydantic import SecretStr  # noqa: TC002 - Pydantic resolves this field type at runtime.
@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     s3_recipe_cache_bucket: str = ""
     # DynamoDB catalogue table (ADR 0001). Empty locally / in tests: catalogue endpoints answer 503.
     catalogue_table: str = ""
+    # Which store the recipe corpus reads (F1/#162, ADR 0014): "blobs" is the S3 corpus/ prefix with its
+    # JSONL index and dietary JSONL; "dynamo" is the glean-recipes table plus its S3 projection. Flipped
+    # per deploy, so the blob path stays the default and a rollback is one parameter.
+    recipe_store: Literal["blobs", "dynamo"] = "blobs"
+    # DynamoDB recipe table (F1/#162). Only opened when recipe_store is "dynamo".
+    recipes_table: str = ""
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
     llm_model_policy_overrides: dict[Feature, LLMModelPolicy] | None = None

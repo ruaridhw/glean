@@ -4,13 +4,15 @@ from __future__ import annotations
 import argparse
 import csv
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from glean.config import get_settings
 from glean.llm import LLMRouter
-from glean.recipe_api.blob_store import FilesystemBlobStore
-from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.corpus import open_corpus
 from glean.recipes.offline import OfflineRecipeImportJob, OfflineRecipeImportResult, import_offline_recipes
+
+if TYPE_CHECKING:
+    from glean.recipes.corpus import RecipeCorpusStore
 
 
 class CorpusImportJob(OfflineRecipeImportJob):
@@ -26,7 +28,13 @@ def main() -> int:
     results = run_jobs(
         jobs,
         llm_router=llm_router,
-        corpus=RecipeCorpusStore(FilesystemBlobStore(args.cache_dir)),
+        corpus=open_corpus(
+            table=args.table,
+            bucket=args.bucket,
+            cache_dir=args.cache_dir,
+            region=args.region,
+            corpus_dir=args.cache_dir,
+        ),
         manifest_path=args.manifest,
         rate_limit_seconds=args.rate_limit_seconds,
     )
@@ -40,10 +48,17 @@ def main() -> int:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Import recipe URLs into the local cache.")
+    parser = argparse.ArgumentParser(description="Import recipe URLs into the recipe corpus.")
     parser.add_argument("--jobs-file", required=True, type=Path, help="CSV with name,url columns.")
     parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--cache-dir", required=True, type=Path)
+    parser.add_argument(
+        "--cache-dir", type=Path, help="Local cache root: the corpus in blob mode, the projection in dynamo mode."
+    )
+    parser.add_argument(
+        "--bucket", help="S3 recipe-cache bucket: the corpus/ prefix, or the projection in dynamo mode."
+    )
+    parser.add_argument("--table", help="DynamoDB recipes table (F1/#162): import straight into the store.")
+    parser.add_argument("--region", default="eu-west-2")
     parser.add_argument("--fail-on-llm", action="store_true")
     parser.add_argument("--rate-limit-seconds", type=float, default=0.0)
     return parser.parse_args()

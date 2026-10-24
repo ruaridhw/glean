@@ -56,6 +56,13 @@ Parameters:
     Type: Number
     Default: 60
     Description: Paid-model AI requests allowed per user per hour, per Lambda container.
+  # Which store the recipe corpus reads (F1/#162): `blobs` is the S3 corpus/ prefix with its JSONL index
+  # and dietary JSONL, `dynamo` is the glean-recipes table plus its S3 projection. Flipped with the deploy,
+  # so the blob path stays the default and rolling back is one parameter.
+  RecipeStore:
+    Type: String
+    AllowedValues: [blobs, dynamo]
+    Default: blobs
 
 Resources:
   # Every user's on-device data is keyed by their Cognito `sub`. A new pool
@@ -190,6 +197,31 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: false
 
+  # The recipe corpus and its derived data (F1/#162): recipe bodies, one item per decision answer, and a
+  # SOURCE pointer per import URL. 5/5 with no GSIs, so the account stays inside the free tier (ADR 0001);
+  # planning reads the S3 projection, never a scan of this table.
+  GleanRecipesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "glean-recipes-${Environment}"
+      TableClass: STANDARD
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
   GleanFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -206,6 +238,8 @@ Resources:
           S3_RECIPE_CACHE_BUCKET: !Ref GleanRecipeCacheBucket
           CATALOGUE_TABLE: !Ref GleanCatalogueTable
           RATE_LIMIT_PER_HOUR: !Ref RateLimitPerHour
+          RECIPES_TABLE: !Ref GleanRecipesTable
+          RECIPE_STORE: !Ref RecipeStore
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -220,6 +254,8 @@ Resources:
             BucketName: !Ref GleanRecipeCacheBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref GleanCatalogueTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanRecipesTable
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
         - Statement:
             - Effect: Allow
@@ -290,5 +326,7 @@ Outputs:
     Value: !Ref GleanUserPoolClient
   CatalogueTableName:
     Value: !Ref GleanCatalogueTable
+  RecipesTableName:
+    Value: !Ref GleanRecipesTable
   CognitoDomain:
     Value: !Sub "${CognitoDomainPrefix}-${Environment}.auth.eu-west-2.amazoncognito.com"

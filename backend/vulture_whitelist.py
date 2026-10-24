@@ -120,3 +120,6 @@ normalise_names  # POST /catalogue/normalise route
 # catalogue/router.py: sync response fields and the route handler are read by FastAPI / the app
 groups  # CatalogueSyncResponse field
 sync_catalogue  # GET /catalogue route
+
+# recipes/ (F1/#162): the corpus behind one backend seam
+_from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSONL lines)
