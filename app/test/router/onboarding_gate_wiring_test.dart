@@ -7,9 +7,12 @@ import 'package:glean/features/onboarding/onboarding_screen.dart';
 import 'package:glean/features/pantry/pantry_screen.dart';
 import 'package:glean/router/app_routes.dart';
 
+import '../support/fake_interview_backend.dart';
 import '../support/harness.dart';
 
 void main() {
+  setUpAll(registerInterviewFallbacks);
+
   testWidgets('a first-run user lands on setup, not the tab shell', (
     tester,
   ) async {
@@ -39,7 +42,13 @@ void main() {
   testWidgets(
     'finishing setup swaps straight to Pantry with no route change needed',
     (tester) async {
-      final harness = AppTestHarness(onboarded: false);
+      final FakeInterviewBackend interview = FakeInterviewBackend(
+        <ScriptedResponse>[questionResponse(turn: 1)],
+      )..attach();
+      final harness = AppTestHarness(
+        onboarded: false,
+        httpClient: interview.client,
+      );
       addTearDown(harness.dispose);
 
       await tester.pumpWidget(harness.app());
@@ -48,6 +57,8 @@ void main() {
       expect(find.byType(OnboardingScreen), findsOneWidget);
 
       await tester.tap(find.text('Skip this page'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Skip all'));
       await tester.pumpAndSettle();
       await tester.tap(find.text("I'll do this later"));
       await tester.pump();

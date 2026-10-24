@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
@@ -18,7 +16,7 @@ class OnboardingProgress extends StatelessWidget {
   });
 
   static const int basicsSlot = 0;
-  static const int interviewSlot = 1;
+  static const int tastesSlot = 1;
   static const int pantrySlot = 2;
   static const List<String> labels = <String>['Basics', 'Taste', 'Pantry'];
 
@@ -45,7 +43,6 @@ class OnboardingProgress extends StatelessWidget {
                 slot: slot,
                 label: labels[slot],
                 isCurrent: slot == currentSlot,
-                isReserved: slot == interviewSlot,
                 isCompleted: completedSlots.contains(slot),
                 isSkipped: skippedSlots.contains(slot),
               ),
@@ -62,7 +59,6 @@ class _StepSlot extends StatelessWidget {
     required this.slot,
     required this.label,
     required this.isCurrent,
-    required this.isReserved,
     required this.isCompleted,
     required this.isSkipped,
   });
@@ -70,7 +66,6 @@ class _StepSlot extends StatelessWidget {
   final int slot;
   final String label;
   final bool isCurrent;
-  final bool isReserved;
   final bool isCompleted;
   final bool isSkipped;
 
@@ -113,14 +108,12 @@ class _StepSlot extends StatelessWidget {
         horizontal: tokens.spacing.sm,
         vertical: tokens.spacing.xs,
       ),
-      decoration: isReserved
-          ? null
-          : BoxDecoration(
-              color: isCurrent
-                  ? colors.primaryContainer
-                  : colors.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(tokens.radius.pill),
-            ),
+      decoration: BoxDecoration(
+        color: isCurrent
+            ? colors.primaryContainer
+            : colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(tokens.radius.pill),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
@@ -133,11 +126,7 @@ class _StepSlot extends StatelessWidget {
               shape: BoxShape.circle,
               border: isCurrent || isCompleted
                   ? null
-                  : Border.all(
-                      color: isReserved
-                          ? colors.outlineVariant
-                          : colors.outline,
-                    ),
+                  : Border.all(color: colors.outline),
             ),
             child: mark,
           ),
@@ -158,8 +147,6 @@ class _StepSlot extends StatelessWidget {
         ? ', completed'
         : isSkipped
         ? ', skipped'
-        : isReserved
-        ? ', coming later'
         : '';
     final String semanticsLabel =
         'Step ${slot + 1} of ${OnboardingProgress.labels.length}: '
@@ -169,52 +156,7 @@ class _StepSlot extends StatelessWidget {
       key: ValueKey<String>('onboarding.step.$slot'),
       label: semanticsLabel,
       selected: isCurrent,
-      child: ExcludeSemantics(
-        child: isReserved
-            ? CustomPaint(
-                painter: _DashedPillBorder(color: colors.outlineVariant),
-                child: pill,
-              )
-            : pill,
-      ),
+      child: ExcludeSemantics(child: pill),
     );
   }
-}
-
-/// A dashed stadium outline, used only for the reserved interview slot. Flutter
-/// has no dashed border, and pulling in a package for one pill is not worth it.
-class _DashedPillBorder extends CustomPainter {
-  const _DashedPillBorder({required this.color});
-
-  final Color color;
-
-  static const double _dash = 4;
-  static const double _gap = 3;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Path outline = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(size.height / 2),
-        ),
-      );
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    for (final metric in outline.computeMetrics()) {
-      double start = 0;
-      while (start < metric.length) {
-        final double end = math.min(start + _dash, metric.length);
-        canvas.drawPath(metric.extractPath(start, end), paint);
-        start = end + _gap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedPillBorder oldDelegate) =>
-      oldDelegate.color != color;
 }

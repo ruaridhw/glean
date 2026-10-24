@@ -1,8 +1,10 @@
 /// First-run setup: one "basics" page carrying dinners per week, servings and
 /// the dietary flags (which steer meal-plan generation and otherwise stay at
-/// their defaults), then the pantry step, which is the only page that writes
-/// what was chosen. Both pages are skippable, and skipping the basics page
-/// leaves today's defaults untouched. Wired in by `OnboardingGate`.
+/// their defaults), then the taste interview, then the pantry step, which is
+/// the only page that writes what was chosen there. Every page is skippable:
+/// skipping the basics page leaves today's defaults untouched, and skipping the
+/// interview (a turn at a time, or with Skip all) saves no profile at all.
+/// Wired in by `OnboardingGate`.
 library;
 
 import 'dart:async';
@@ -18,6 +20,7 @@ import 'package:glean/router/intake_params.dart';
 import 'package:go_router/go_router.dart';
 
 import 'onboarding_page.dart';
+import 'providers/interview_controller.dart';
 import 'widgets/onboarding_footer.dart';
 import 'widgets/onboarding_progress.dart';
 import 'widgets/onboarding_step_body.dart';
@@ -28,6 +31,10 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
+
+/// How the taste interview ended, which is what the progress indicator reports: a profile confirmed is
+/// passing the step, Skip all is skipping it.
+enum _TasteOutcome { answered, skipped }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   OnboardingPage _page = OnboardingPage.basics;
@@ -41,7 +48,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// stored defaults stay exactly as they were.
   _BasicsAnswers? _answers;
 
-  void _continueToPantry() {
+  /// `null` until the interview is passed one way or the other.
+  _TasteOutcome? _tasteOutcome;
+
+  void _continueToTastes() {
     ref.read(hapticsProvider).lightImpact();
     setState(() {
       _answers = _BasicsAnswers(
@@ -49,7 +59,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         servings: _servings,
         dietaryFlags: _dietaryFlags.toList(),
       );
-      _page = OnboardingPage.pantry;
+      _page = OnboardingPage.tastes;
     });
   }
 
@@ -59,13 +69,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     ref.read(hapticsProvider).lightImpact();
     setState(() {
       _answers = null;
+      _page = OnboardingPage.tastes;
+    });
+  }
+
+  /// Skips the whole interview: the transcript is dropped before the pantry page, so nothing is saved and the
+  /// household plans exactly as it did before the interview existed.
+  void _skipAllTastes() {
+    ref.read(hapticsProvider).lightImpact();
+    ref.read(interviewControllerProvider.notifier).reset();
+    setState(() {
+      _tasteOutcome = _TasteOutcome.skipped;
       _page = OnboardingPage.pantry;
     });
   }
 
-  void _backToBasics() {
+  void _onTasteConfirmed() {
+    setState(() {
+      _tasteOutcome = _TasteOutcome.answered;
+      _page = OnboardingPage.pantry;
+    });
+  }
+
+  /// Back is one step, whichever page it is on; the interview keeps its transcript, so returning to it does not
+  /// pay for the questions already answered.
+  void _back() {
     ref.read(hapticsProvider).lightImpact();
-    setState(() => _page = OnboardingPage.basics);
+    setState(() {
+      _page = switch (_page) {
+        OnboardingPage.basics => OnboardingPage.basics,
+        OnboardingPage.tastes => OnboardingPage.basics,
+        OnboardingPage.pantry => OnboardingPage.tastes,
+      };
+    });
   }
 
   /// The single exit path from the pantry page: "Scan a receipt" continues into
@@ -114,8 +150,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final ThemeData theme = Theme.of(context);
-    final bool basicsPassed = _page == OnboardingPage.pantry;
-    final bool basicsAnswered = _answers != null;
+    // The enum's order is the step order, so its index is the progress slot.
+    final int slot = _page.index;
+    final bool pastBasics = slot > OnboardingPage.basics.index;
+    final bool pastTastes = slot > OnboardingPage.tastes.index;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -130,34 +168,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   const GleanMark(size: 32),
                   SizedBox(width: tokens.spacing.sm),
                   Expanded(
-                    child: Text(
-                      'About a minute',
-                      textAlign: TextAlign.end,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _page == OnboardingPage.tastes
+                          ? TextButton(
+                              onPressed: _skipAllTastes,
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: tokens.spacing.sm,
+                                ),
+                              ),
+                              child: const Text('Skip all'),
+                            )
+                          : Text(
+                              'About a minute',
+                              textAlign: TextAlign.end,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
                     ),
                   ),
                 ],
               ),
               SizedBox(height: tokens.spacing.md),
               OnboardingProgress(
-                currentSlot: _page == OnboardingPage.basics
-                    ? OnboardingProgress.basicsSlot
-                    : OnboardingProgress.pantrySlot,
-                completedSlots: basicsPassed && basicsAnswered
-                    ? const <int>{OnboardingProgress.basicsSlot}
-                    : const <int>{},
-                skippedSlots: basicsPassed && !basicsAnswered
-                    ? const <int>{OnboardingProgress.basicsSlot}
-                    : const <int>{},
+                currentSlot: slot,
+                completedSlots: <int>{
+                  if (pastBasics && _answers != null)
+                    OnboardingProgress.basicsSlot,
+                  if (pastTastes && _tasteOutcome == _TasteOutcome.answered)
+                    OnboardingProgress.tastesSlot,
+                },
+                skippedSlots: <int>{
+                  if (pastBasics && _answers == null)
+                    OnboardingProgress.basicsSlot,
+                  if (pastTastes && _tasteOutcome == _TasteOutcome.skipped)
+                    OnboardingProgress.tastesSlot,
+                },
               ),
               SizedBox(height: tokens.spacing.sm),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   // Pages fill the body and start at its top; the pantry page
-                  // centres itself, the basics page scrolls from the heading.
+                  // centres itself, the basics page scrolls from the heading,
+                  // and the interview keeps its conversation in its own list.
                   layoutBuilder:
                       (Widget? current, List<Widget> previousChildren) => Stack(
                         fit: StackFit.expand,
@@ -180,17 +237,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         }
                       });
                     },
+                    onTasteConfirmed: _onTasteConfirmed,
+                    onBack: _back,
                   ),
                 ),
               ),
-              OnboardingFooter(
-                page: _page,
-                onBack: _backToBasics,
-                onContinue: _continueToPantry,
-                onSkipBasics: _skipBasics,
-                onScanReceipt: () => unawaited(_finish(navigateToScan: true)),
-                onFinishLater: () => unawaited(_finish(navigateToScan: false)),
-              ),
+              // The interview carries its own Skip/Send/Confirm row, because it
+              // depends on the turn on screen.
+              if (_page != OnboardingPage.tastes)
+                OnboardingFooter(
+                  page: _page,
+                  onBack: _back,
+                  onContinue: _continueToTastes,
+                  onSkipBasics: _skipBasics,
+                  onScanReceipt: () => unawaited(_finish(navigateToScan: true)),
+                  onFinishLater: () =>
+                      unawaited(_finish(navigateToScan: false)),
+                ),
             ],
           ),
         ),

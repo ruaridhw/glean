@@ -1,6 +1,8 @@
 // Widget tests for the first-run flow: one basics page (the two numbers plus
 // the dietary disclosure) that hands its values forward to the pantry step,
-// which is the only step that writes them.
+// which is the only step that writes them, with the taste interview in between.
+// The interview's own conversation is covered by `interview_page_test.dart`;
+// here it only has to be passed through, either skipped or confirmed.
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +13,13 @@ import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/repositories/user_config_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/onboarding/onboarding_screen.dart';
+import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
 import '../../data/fixture.dart';
+import '../../support/fake_interview_backend.dart';
 
 const String _userId = 'user-1';
 const Key _dinnersSlider = Key('onboarding.dinnersSlider');
@@ -22,7 +27,11 @@ const Key _servingsSlider = Key('onboarding.servingsSlider');
 const Key _dinnersValue = ValueKey<String>('onboarding.dinnersValue');
 const Key _servingsValue = ValueKey<String>('onboarding.servingsValue');
 
-Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
+Widget _buildApp({
+  required GleanDatabase db,
+  Haptics? haptics,
+  http.Client? httpClient,
+}) {
   final GoRouter router = GoRouter(
     initialLocation: '/',
     routes: <RouteBase>[
@@ -38,6 +47,10 @@ Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
     overrides: [
       gleanDatabaseProvider.overrideWithValue(db),
       currentUserIdProvider.overrideWithValue(_userId),
+      apiBaseUrlProvider.overrideWithValue('http://localhost:9999'),
+      // These tests hold no session: the interview call goes out unauthenticated, as the client allows.
+      apiAccessTokenProvider.overrideWithValue(() async => null),
+      if (httpClient != null) httpClientProvider.overrideWithValue(httpClient),
       if (haptics != null) hapticsProvider.overrideWithValue(haptics),
     ],
     child: MaterialApp.router(theme: gleanLightTheme, routerConfig: router),
@@ -45,10 +58,26 @@ Widget _buildApp({required GleanDatabase db, Haptics? haptics}) {
 }
 
 void main() {
-  late GleanDatabase db;
+  setUpAll(registerInterviewFallbacks);
 
-  setUp(() => db = createTestDatabase());
+  late GleanDatabase db;
+  late FakeInterviewBackend interview;
+
+  setUp(() {
+    db = createTestDatabase();
+    // One question, repeated: these tests only walk past the interview.
+    interview = FakeInterviewBackend(<ScriptedResponse>[
+      questionResponse(turn: 1),
+    ])..attach();
+  });
   tearDown(() => db.close());
+
+  /// Walks first run past the interview without answering it. Skip all is the page-scoped skip, so it saves
+  /// nothing and lands on the pantry page.
+  Future<void> skipTastePage(WidgetTester tester) async {
+    await tester.tap(find.text('Skip all'));
+    await tester.pumpAndSettle();
+  }
 
   Future<void> pumpOnboarding(
     WidgetTester tester, {
@@ -59,7 +88,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(_buildApp(db: db));
+    await tester.pumpWidget(_buildApp(db: db, httpClient: interview.client));
     await tester.pumpAndSettle();
   }
 
@@ -93,6 +122,9 @@ void main() {
 
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
+      expect(find.text('Question 1 of 7'), findsOneWidget);
+
+      await skipTastePage(tester);
       expect(find.text('Stock your pantry'), findsOneWidget);
 
       await saveAndRead(tester);
@@ -130,6 +162,9 @@ void main() {
 
       await tester.tap(find.text('Skip this page'));
       await tester.pumpAndSettle();
+      expect(find.text('Question 1 of 7'), findsOneWidget);
+
+      await skipTastePage(tester);
       expect(find.text('Stock your pantry'), findsOneWidget);
 
       await tester.tap(find.text("I'll do this later"));
@@ -197,9 +232,14 @@ void main() {
 
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
+      await skipTastePage(tester);
       expect(find.text('Stock your pantry'), findsOneWidget);
 
       await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Question 1 of 7'), findsOneWidget, reason: 'one step');
+
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
 
       expect(find.text('The basics'), findsOneWidget);
@@ -220,8 +260,8 @@ void main() {
   );
 
   testWidgets(
-    'the progress indicator marks the current page and keeps the taste '
-    'interview\'s slot reserved',
+    'the progress indicator marks the current page, and the taste interview is '
+    'done or skipped rather than reserved',
     (WidgetTester tester) async {
       final SemanticsHandle semantics = tester.ensureSemantics();
       await pumpOnboarding(tester);
@@ -241,17 +281,33 @@ void main() {
       expect(isCurrent('1'), isFalse);
       expect(isCurrent('2'), isFalse);
       expect(
-        find.bySemanticsLabel('Step 2 of 3: Taste, coming later'),
+        find.bySemanticsLabel('Step 2 of 3: Taste'),
         findsOneWidget,
+        reason: 'it is a step of the flow now, not a reserved place',
       );
 
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
       expect(isCurrent('0'), isFalse);
+      expect(isCurrent('1'), isTrue);
+      expect(isCurrent('2'), isFalse);
+      expect(
+        find.bySemanticsLabel('Step 1 of 3: Basics, completed'),
+        findsOneWidget,
+      );
+
+      await skipTastePage(tester);
+
+      expect(isCurrent('0'), isFalse);
       expect(isCurrent('1'), isFalse);
       expect(isCurrent('2'), isTrue);
       expect(find.bySemanticsLabel('Step 3 of 3: Pantry'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Step 2 of 3: Taste, skipped'),
+        findsOneWidget,
+        reason: 'Skip all is not the same as answering',
+      );
 
       semantics.dispose();
     },
@@ -282,6 +338,10 @@ void main() {
         await tester.ensureVisible(find.text('Continue'));
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'the interview page');
+
+        await tester.ensureVisible(find.text('Skip all'));
+        await skipTastePage(tester);
         expect(tester.takeException(), isNull, reason: 'the pantry page');
 
         expect(find.text('Stock your pantry'), findsOneWidget);
@@ -315,7 +375,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Back'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
       expect(
         find.bySemanticsLabel('Step 1 of 3: Basics'),
@@ -348,6 +408,7 @@ void main() {
     await pumpOnboarding(tester);
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
+    await skipTastePage(tester);
 
     final Rect body = tester.getRect(find.byType(SingleChildScrollView));
     final Rect heading = tester.getRect(find.text('Stock your pantry'));
@@ -428,6 +489,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
+      await skipTastePage(tester);
       await tester.tap(find.text("I'll do this later"));
       await tester.pumpAndSettle();
 
