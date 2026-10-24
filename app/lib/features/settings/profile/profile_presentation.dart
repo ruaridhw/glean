@@ -202,18 +202,81 @@ String _noteLabel(ProfileNote note) => '${note.date} ${note.text}';
 String _same(String value) => value;
 String _text(String text, String? _) => text;
 
+/// The corpus `main_protein` values a target can name, in the order the picker shows them. `mixed` and `none`
+/// are left out: neither is a protein a household would want more or less of.
+const List<String> mainProteins = <String>[
+  'chicken',
+  'turkey_or_duck',
+  'beef',
+  'pork',
+  'lamb',
+  'fish',
+  'seafood',
+  'beans_and_pulses',
+  'tofu_or_plant_protein',
+  'vegetarian_other',
+];
+
+/// How a `main_protein` value reads, e.g. `turkey or duck`. A value this build does not know reads as stored.
+String proteinName(String protein) => switch (protein) {
+  'vegetarian_other' => 'other vegetarian',
+  _ => protein.replaceAll('_', ' '),
+};
+
+/// The most dinners a week, so the most times one protein can appear.
+const int maxPerWeekCap = 7;
+
+/// Why a target with these bounds cannot be saved, or `null` when it can: it needs at least one bound, each
+/// from 1 to [maxPerWeekCap], and at least may not exceed at most.
+String? proteinTargetError(int? min, int? max) {
+  if (min == null && max == null) return 'Give at least or at most';
+  bool outOfRange(int? n) => n != null && (n < 1 || n > maxPerWeekCap);
+  if (outOfRange(min) || outOfRange(max)) {
+    return 'Use a number from 1 to $maxPerWeekCap';
+  }
+  if (min != null && max != null && min > max) {
+    return 'At least must not be more than at most';
+  }
+  return null;
+}
+
+/// Stores [target] as its protein's one target. It takes the place of the target for [replacing] (the protein
+/// being changed) when given, else of the protein's existing target, else goes at the end; any other target for
+/// the same protein is dropped.
+HouseholdProfile setProteinTarget(
+  HouseholdProfile profile,
+  ProteinTarget target, {
+  String? replacing,
+}) {
+  final List<ProteinTarget> targets = profile.proteinTargets;
+  int at = replacing == null
+      ? -1
+      : targets.indexWhere((ProteinTarget t) => t.protein == replacing);
+  if (at == -1) {
+    at = targets.indexWhere((ProteinTarget t) => t.protein == target.protein);
+  }
+  final List<ProteinTarget> next = <ProteinTarget>[
+    for (final (int i, ProteinTarget t) in targets.indexed)
+      if (i == at) target else if (t.protein != target.protein) t,
+  ];
+  if (at == -1) next.add(target);
+  return profile.copyWith(proteinTargets: next);
+}
+
 /// e.g. `fish · 2–3 a week`, `fish · at least 2 a week`, or just `fish` with no bounds.
 String proteinTargetLabel(ProteinTarget target) {
   final int? min = target.minPerWeek;
   final int? max = target.maxPerWeek;
   final String? often = switch ((min, max)) {
+    (_, 0) => 'never',
     (final int lo, final int hi) when lo == hi => '$lo a week',
     (final int lo, final int hi) => '$lo–$hi a week',
     (final int lo, null) => 'at least $lo a week',
     (null, final int hi) => 'at most $hi a week',
     (null, null) => null,
   };
-  return often == null ? target.protein : '${target.protein} · $often';
+  final String name = proteinName(target.protein);
+  return often == null ? name : '$name · $often';
 }
 
 /// How the spice choice reads on its chip.

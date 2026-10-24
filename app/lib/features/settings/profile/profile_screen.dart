@@ -131,11 +131,10 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
       ),
     );
     if (target == null || !mounted) return;
-    await _change((HouseholdProfile p) {
-      if (current == null) return list.addItem(p, target);
-      final int at = list.locate(p, index!, current);
-      return at == -1 ? p : list.replaceAt(p, at, target);
-    });
+    await _change(
+      (HouseholdProfile p) =>
+          setProteinTarget(p, target, replacing: current?.protein),
+    );
     if (mounted) ref.read(hapticsProvider).mediumImpact();
   }
 
