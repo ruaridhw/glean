@@ -229,3 +229,4 @@ interviewed_at  # HouseholdProfile field, stamped by the service
 skippable  # InterviewQuestion field, always true
 max_turns  # InterviewQuestionResponse field
 dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
+clear_screen_cache  # screening.py, called by the tests to start from a cold cache

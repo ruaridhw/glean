@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -10,8 +11,18 @@ from fastapi.testclient import TestClient  # noqa: TC002 - fixtures annotate wit
 from glean.dependencies import get_decision_client
 from glean.llm import Feature
 from glean.main import app
+from glean.profile import service
 from glean.profile.schemas import InterviewTurn
-from tests.profile.conftest import FakeDecisions, FakeRouter, asks, broken_decisions, finished, stored_recipe
+from glean.screening import clear_screen_cache
+from tests.profile.conftest import (
+    FakeDecisions,
+    FakeRouter,
+    asks,
+    broken_decisions,
+    finished,
+    slow_decisions,
+    stored_recipe,
+)
 
 if TYPE_CHECKING:
     from glean.recipes.corpus import RecipeCorpusStore
@@ -444,3 +455,74 @@ def test_the_clients_draft_free_text_never_reaches_the_model_when_the_screen_is_
     assert DRAFT_INJECTION not in model.sent_text()
     assert model.payload()["draft_profile"]["habits"] == ""
     assert done["profile"]["habits"] == DRAFT_INJECTION
+
+
+def test_an_answer_is_screened_once_however_many_turns_re_send_it(
+    client: TestClient, auth_headers: dict[str, str], decisions: FakeDecisions, model: FakeRouter
+) -> None:
+    model.replies = [asks("How spicy is too spicy?"), asks("Anything else?"), finished()]
+    transcript: list[dict[str, Any]] = []
+    for answer in ANSWERS:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+    for answer in [{"text": "Medium"}, {"text": "Peas"}]:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+    body = _ask(client, transcript, auth_headers)
+
+    assert body["status"] == "done"
+    # Five openers are screened as they arrive; the model turns then add only the new answer each time.
+    assert len(decisions.notes) == 7
+    assert sorted(decisions.notes) == sorted(
+        [
+            "Chicken curry, lasagne",
+            "Mushrooms",
+            "Fish, Italian",
+            "Quick weeknights\nLeftovers",
+            "Two adults and a toddler",
+            "Medium",
+            "Peas",
+        ]
+    )
+    assert len(model.calls) == 3
+
+
+def test_a_screen_that_runs_out_of_time_drops_its_note(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transcript: list[dict[str, Any]] = []
+    for answer in ANSWERS:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+    # The model turn re-screens the transcript; give it a screen that is too slow to finish in time.
+    app.dependency_overrides[get_decision_client] = slow_decisions
+    monkeypatch.setattr(service, "_SCREEN_BUDGET_S", 0.05)
+    clear_screen_cache()
+
+    body = _ask(client, transcript, auth_headers)
+
+    assert body["status"] == "done"
+    assert model.payload()["answers"] == []  # nothing was vouched for in time, so nothing was sent
+    # The last answer's screen timed out, and a timeout drops the note: the app is told it was unusable.
+    assert body["dropped_answer"] is True
+
+
+def test_screens_run_together_not_one_after_another(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transcript: list[dict[str, Any]] = []
+    for answer in ANSWERS:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+    app.dependency_overrides[get_decision_client] = slow_decisions
+    monkeypatch.setattr(service, "_SCREEN_BUDGET_S", 5.0)
+    clear_screen_cache()
+
+    started = time.monotonic()
+    body = _ask(client, transcript, auth_headers)
+    elapsed = time.monotonic() - started
+
+    assert body["status"] == "done"
+    assert len(model.payload()["answers"]) == 5
+    # Five half-second screens in series would take 2.5s; together they take about one.
+    assert elapsed < 1.2
