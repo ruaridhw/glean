@@ -4,6 +4,8 @@ import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/database.dart';
+import 'package:glean/data/models/household_profile.dart';
+import 'package:glean/data/repositories/household_profile_repository.dart';
 import 'package:glean/diagnostics/diagnostics.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
@@ -41,6 +43,14 @@ void main() {
       await before.customStatement(
         "INSERT INTO user_config (id, meals_per_week) VALUES ('user-1', 4)",
       );
+      // Every user-data table travels in an export, the profile included.
+      await HouseholdProfileRepository(before).save(
+        userId: 'user-1',
+        profile: const HouseholdProfile(
+          dislikedIngredients: <String>['mushrooms'],
+          habits: 'Quick weeknights',
+        ),
+      );
       final File backup = await snapshotDatabase(before, dir);
       await before.close();
       final GleanDatabase freshInstall = open(liveFile);
@@ -55,6 +65,12 @@ void main() {
       final GleanDatabase restored = open(liveFile);
       addTearDown(restored.close);
       expect(await _mealsPerWeek(restored, 'user-1'), 4);
+      final HouseholdProfile? profile = await HouseholdProfileRepository(
+        restored,
+      ).get('user-1');
+      expect(profile, isNotNull);
+      expect(profile!.habits, 'Quick weeknights');
+      expect(profile.dislikedIngredients, <String>['mushrooms']);
     },
   );
 
