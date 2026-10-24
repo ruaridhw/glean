@@ -71,7 +71,8 @@ void main() {
       expect(question.maxTurns, 7);
       expect(question.question.id, 'openers.favourite_meals');
       expect(question.question.options, isEmpty);
-      expect(question.question.field, ProfileField.favouriteMeals);
+      expect(question.question.field, 'favourite_meals');
+      expect(question.question.knownField, ProfileField.favouriteMeals);
       expect(question.question.skippable, isTrue);
     });
 
@@ -117,11 +118,12 @@ void main() {
         'One treat meal',
         'Guests often',
       ]);
-      expect(response.question.field, ProfileField.habits);
+      expect(response.question.field, 'habits');
+      expect(response.question.knownField, ProfileField.habits);
     });
 
-    test('a field or status this build does not know does not break the '
-        'interview', () {
+    test('a field this build does not know is kept as the backend named it, so '
+        'the transcript replays verbatim', () {
       final InterviewResponse response = InterviewResponse.fromJson(
         <String, dynamic>{
           ..._questionJson,
@@ -133,7 +135,16 @@ void main() {
         },
       );
 
-      expect((response as InterviewQuestionResponse).question.field, isNull);
+      final InterviewQuestion asked =
+          (response as InterviewQuestionResponse).question;
+      expect(asked.knownField, isNull, reason: 'this build has no such field');
+      expect(
+        asked.field,
+        'food_rules',
+        reason:
+            'the backend requires a known field back, so the raw value is kept',
+      );
+      expect(asked.toJson()['field'], 'food_rules');
 
       expect(
         () => InterviewResponse.fromJson(<String, dynamic>{
@@ -190,6 +201,35 @@ void main() {
         });
       },
     );
+
+    test('a replayed question sends its field back exactly, including one this '
+        'build does not know', () {
+      InterviewQuestion parsed(Object? field) =>
+          InterviewQuestion.fromJson(<String, dynamic>{
+            'id': 'followup.spice',
+            'text': 'How spicy is too spicy?',
+            'options': <dynamic>[],
+            'field': field,
+            'skippable': true,
+          });
+
+      final Map<String, dynamic> encoded = InterviewRequest(
+        transcript: <InterviewTurn>[
+          InterviewTurn(
+            question: parsed('spice_level'),
+            answer: const InterviewAnswer(text: 'medium'),
+          ),
+        ],
+        draftProfile: const HouseholdProfile(),
+      ).toJson();
+
+      expect(
+        ((encoded['transcript']! as List<dynamic>).single
+            as Map<String, dynamic>)['question'],
+        containsPair('field', 'spice_level'),
+      );
+      expect(parsed('habits').toJson()['field'], 'habits');
+    });
 
     test('an options answer keeps its chips', () {
       expect(

@@ -8,8 +8,7 @@ library;
 
 import '../../data/models/household_profile.dart';
 
-/// A profile field a question can target, as the contract names it. `null` stands for a field this build does
-/// not know, which it simply does not use.
+/// A profile field a question can target, as this build knows the contract's names.
 enum ProfileField {
   favouriteMeals('favourite_meals'),
   lovedIngredients('loved_ingredients'),
@@ -48,7 +47,10 @@ class InterviewQuestion {
       InterviewQuestion(
         id: _required(json, 'id'),
         text: _required(json, 'text'),
-        field: ProfileField.parse(json['field']),
+        field: switch (json['field']) {
+          final String value => value,
+          _ => null,
+        },
         options: <String>[
           if (json['options'] case final List<dynamic> options)
             for (final Object? option in options)
@@ -59,7 +61,15 @@ class InterviewQuestion {
 
   final String id;
   final String text;
-  final ProfileField? field;
+
+  /// The targeted field, kept exactly as the backend named it rather than as a value this build happens to
+  /// know: the transcript replays every question verbatim, and the backend requires a field it recognises, so
+  /// sending `null` for a newer build's field would fail the whole rest of the interview with a 422.
+  final String? field;
+
+  /// [field] as this build understands it, or `null` for one it does not know yet.
+  ProfileField? get knownField => ProfileField.parse(field);
+
   final List<String> options;
   final bool skippable;
 
@@ -67,7 +77,7 @@ class InterviewQuestion {
     'id': id,
     'text': text,
     'options': options,
-    'field': field?.wireValue,
+    'field': field,
     'skippable': skippable,
   };
 }
