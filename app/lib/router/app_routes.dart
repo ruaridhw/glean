@@ -42,6 +42,11 @@ abstract final class AppRoutes {
   static const RouteSpec shop = RouteSpec('/shop', 'shop');
 
   static const RouteSpec settings = RouteSpec('/settings', 'settings');
+  // The household profile, pushed inside the Settings tab so Back returns to Settings.
+  static const RouteSpec settingsProfile = RouteSpec(
+    '/settings/profile',
+    'settings-profile',
+  );
 
   // --- Intake: a modal task outside every tab branch, shared by Pantry and Shop. ---
   static const RouteSpec intakeScan = RouteSpec('/intake/scan', 'intake-scan');
