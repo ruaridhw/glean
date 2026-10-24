@@ -211,21 +211,19 @@ def run_interview(
     """Answer one turn of the interview: the next question, or the finished profile."""
     transcript = request.transcript
     turn = len(transcript) + 1
-    draft = _draft_of(request.draft_profile)
+    held = request.draft_profile
 
     if turn <= len(OPENERS):
-        # The openers need no model: they are fixed, and their answers apply deterministically.
-        last = transcript[-1] if transcript else None
-        answer = _screen_turn(last, decision_client) if last is not None else None
-        if last is not None and answer is not None:
-            draft = _apply(draft, last.question.field, answer)
+        # The openers need no model: they are fixed. The answer is screened so the app can be told
+        # its free text was unusable, and nothing else about the turn is needed.
         return InterviewQuestionResponse(
             question=OPENERS[turn - 1],
             turn=turn,
-            dropped_answer=last is not None and answer is None and bool(_answer_blob(last.answer)),
+            dropped_answer=_last_answer_dropped(transcript, decision_client),
         )
 
     screening = _screen_transcript(transcript, decision_client)
+    draft = _model_draft(held)
     for answered, answer in zip(transcript, screening.answers, strict=True):
         if answer is not None:
             draft = _apply(draft, answered.question.field, answer)
@@ -240,7 +238,7 @@ def run_interview(
         may_ask_follow_up=may_ask_follow_up,
         llm_router=llm_router,
     )
-    merged = _merge(reply.draft_profile, draft)
+    merged = _merge(reply.draft_profile, draft, held)
 
     if may_ask_follow_up and reply.question is not None:
         return InterviewQuestionResponse(
@@ -249,7 +247,7 @@ def run_interview(
             dropped_answer=screening.dropped,
         )
 
-    profile = _finished(merged, request.draft_profile, corpus, now=now or datetime.now(UTC))
+    profile = _finished(merged, held, corpus, now=now or datetime.now(UTC))
     return InterviewDoneResponse(
         profile=profile,
         summary=reply.summary.strip() or _fallback_summary(profile),
@@ -273,7 +271,14 @@ def _answer_blob(answer: InterviewAnswer) -> str:
     return "\n".join(parts)
 
 
-def _screen_turn(turn: TranscriptTurn, decision_client: DecisionClient) -> InterviewAnswer | None:
+def _last_answer_dropped(transcript: list[TranscriptTurn], decision_client: DecisionClient) -> bool:
+    """Whether the newest answer was screened and refused, which is what the app tells the user."""
+    if not transcript:
+        return False
+    return _screen_one(transcript[-1], decision_client) is None and bool(_answer_blob(transcript[-1].answer))
+
+
+def _screen_one(turn: TranscriptTurn, decision_client: DecisionClient) -> InterviewAnswer | None:
     """The answer to use for this turn, or None when it was skipped, blank or dropped."""
     if turn.answer.skipped:
         return None
@@ -322,17 +327,25 @@ def _screen_transcript(transcript: list[TranscriptTurn], decision_client: Decisi
     return _Screening(answers=answers, dropped=dropped)
 
 
-def _draft_of(profile: HouseholdProfile) -> ProfileDraft:
+def _model_draft(held: HouseholdProfile) -> ProfileDraft:
+    """What the model may see before the answers: the typed fields, and none of the free text.
+
+    The app's draft is the app's own data, and this stateless endpoint has no way to know it was ever
+    screened, so none of its free text — meal names, ingredient and cuisine lists, habits, household —
+    is sent to the model. It is merged back into the finished profile after the call instead
+    (`_merge`), so nothing the household already told Glean is lost. `protein_targets` and
+    `spice_tolerance` are enums and counts, not free text, so the model may read them.
+    """
     return ProfileDraft(
-        favourite_meals=[meal.text for meal in profile.favourite_meals],
-        loved_ingredients=list(profile.loved_ingredients),
-        disliked_ingredients=list(profile.disliked_ingredients),
-        cuisines_liked=list(profile.cuisines_liked),
-        cuisines_avoided=list(profile.cuisines_avoided),
-        protein_targets=list(profile.protein_targets),
-        spice_tolerance=profile.spice_tolerance,
-        habits=profile.habits,
-        household=profile.household,
+        favourite_meals=[],
+        loved_ingredients=[],
+        disliked_ingredients=[],
+        cuisines_liked=[],
+        cuisines_avoided=[],
+        protein_targets=list(held.protein_targets),
+        spice_tolerance=held.spice_tolerance,
+        habits="",
+        household="",
     )
 
 
@@ -503,18 +516,31 @@ def _ask_model(
     return llm_router.invoke(Feature.PROFILE_INTERVIEW, InterviewTurn, messages)
 
 
-def _merge(model: ProfileDraft, from_transcript: ProfileDraft) -> ProfileDraft:
-    """The model's reading of the answers, never dropping what the transcript already established."""
+def _merge(model: ProfileDraft, from_transcript: ProfileDraft, held: HouseholdProfile) -> ProfileDraft:
+    """The finished fields: what the household held, what the transcript established, then the model.
+
+    The model may add to the profile but never delete from it: every list is a union, in the order the
+    household said things, and the model's free text is appended to the app's rather than replacing it.
+    """
     return ProfileDraft(
-        favourite_meals=model.favourite_meals or from_transcript.favourite_meals,
-        loved_ingredients=model.loved_ingredients or from_transcript.loved_ingredients,
-        disliked_ingredients=model.disliked_ingredients or from_transcript.disliked_ingredients,
-        cuisines_liked=model.cuisines_liked or from_transcript.cuisines_liked,
-        cuisines_avoided=model.cuisines_avoided or from_transcript.cuisines_avoided,
-        protein_targets=model.protein_targets or from_transcript.protein_targets,
-        spice_tolerance=model.spice_tolerance or from_transcript.spice_tolerance,
-        habits=model.habits.strip() or from_transcript.habits,
-        household=model.household.strip() or from_transcript.household,
+        favourite_meals=_added(
+            _added([meal.text for meal in held.favourite_meals], from_transcript.favourite_meals),
+            model.favourite_meals,
+        ),
+        loved_ingredients=_added(
+            _added(held.loved_ingredients, from_transcript.loved_ingredients), model.loved_ingredients
+        ),
+        disliked_ingredients=_added(
+            _added(held.disliked_ingredients, from_transcript.disliked_ingredients), model.disliked_ingredients
+        ),
+        cuisines_liked=_added(_added(held.cuisines_liked, from_transcript.cuisines_liked), model.cuisines_liked),
+        cuisines_avoided=_added(
+            _added(held.cuisines_avoided, from_transcript.cuisines_avoided), model.cuisines_avoided
+        ),
+        protein_targets=model.protein_targets or from_transcript.protein_targets or held.protein_targets,
+        spice_tolerance=model.spice_tolerance or from_transcript.spice_tolerance or held.spice_tolerance,
+        habits=_joined(_joined(held.habits, [from_transcript.habits]), [model.habits]),
+        household=_joined(_joined(held.household, [from_transcript.household]), [model.household]),
     )
 
 
