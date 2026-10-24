@@ -292,6 +292,10 @@ class CatalogueAliases extends Table {
 /// The household profile the taste interview builds: one row per signed-in user, holding the profile as
 /// versioned JSON in a single column so its shape can grow without a schema bump each time. `updatedAt` is
 /// when the row last changed, so a reader can tell a stale profile from a fresh one without decoding it.
+///
+/// The row class is named apart from the model it carries: `HouseholdProfile` is the typed profile in
+/// `lib/data/models/household_profile.dart`, and this table only stores its JSON.
+@DataClassName('HouseholdProfileRow')
 class HouseholdProfiles extends Table {
   TextColumn get userId => text()();
   TextColumn get profileJson => text()();

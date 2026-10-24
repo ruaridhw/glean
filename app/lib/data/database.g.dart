@@ -8051,7 +8051,7 @@ class CatalogueItemRedirectsCompanion
 }
 
 class $HouseholdProfilesTable extends HouseholdProfiles
-    with TableInfo<$HouseholdProfilesTable, HouseholdProfile> {
+    with TableInfo<$HouseholdProfilesTable, HouseholdProfileRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -8096,7 +8096,7 @@ class $HouseholdProfilesTable extends HouseholdProfiles
   static const String $name = 'household_profiles';
   @override
   VerificationContext validateIntegrity(
-    Insertable<HouseholdProfile> instance, {
+    Insertable<HouseholdProfileRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -8134,9 +8134,9 @@ class $HouseholdProfilesTable extends HouseholdProfiles
   @override
   Set<GeneratedColumn> get $primaryKey => {userId};
   @override
-  HouseholdProfile map(Map<String, dynamic> data, {String? tablePrefix}) {
+  HouseholdProfileRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return HouseholdProfile(
+    return HouseholdProfileRow(
       userId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}user_id'],
@@ -8158,12 +8158,12 @@ class $HouseholdProfilesTable extends HouseholdProfiles
   }
 }
 
-class HouseholdProfile extends DataClass
-    implements Insertable<HouseholdProfile> {
+class HouseholdProfileRow extends DataClass
+    implements Insertable<HouseholdProfileRow> {
   final String userId;
   final String profileJson;
   final String updatedAt;
-  const HouseholdProfile({
+  const HouseholdProfileRow({
     required this.userId,
     required this.profileJson,
     required this.updatedAt,
@@ -8185,12 +8185,12 @@ class HouseholdProfile extends DataClass
     );
   }
 
-  factory HouseholdProfile.fromJson(
+  factory HouseholdProfileRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return HouseholdProfile(
+    return HouseholdProfileRow(
       userId: serializer.fromJson<String>(json['userId']),
       profileJson: serializer.fromJson<String>(json['profileJson']),
       updatedAt: serializer.fromJson<String>(json['updatedAt']),
@@ -8206,17 +8206,17 @@ class HouseholdProfile extends DataClass
     };
   }
 
-  HouseholdProfile copyWith({
+  HouseholdProfileRow copyWith({
     String? userId,
     String? profileJson,
     String? updatedAt,
-  }) => HouseholdProfile(
+  }) => HouseholdProfileRow(
     userId: userId ?? this.userId,
     profileJson: profileJson ?? this.profileJson,
     updatedAt: updatedAt ?? this.updatedAt,
   );
-  HouseholdProfile copyWithCompanion(HouseholdProfilesCompanion data) {
-    return HouseholdProfile(
+  HouseholdProfileRow copyWithCompanion(HouseholdProfilesCompanion data) {
+    return HouseholdProfileRow(
       userId: data.userId.present ? data.userId.value : this.userId,
       profileJson: data.profileJson.present
           ? data.profileJson.value
@@ -8227,7 +8227,7 @@ class HouseholdProfile extends DataClass
 
   @override
   String toString() {
-    return (StringBuffer('HouseholdProfile(')
+    return (StringBuffer('HouseholdProfileRow(')
           ..write('userId: $userId, ')
           ..write('profileJson: $profileJson, ')
           ..write('updatedAt: $updatedAt')
@@ -8240,13 +8240,13 @@ class HouseholdProfile extends DataClass
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is HouseholdProfile &&
+      (other is HouseholdProfileRow &&
           other.userId == this.userId &&
           other.profileJson == this.profileJson &&
           other.updatedAt == this.updatedAt);
 }
 
-class HouseholdProfilesCompanion extends UpdateCompanion<HouseholdProfile> {
+class HouseholdProfilesCompanion extends UpdateCompanion<HouseholdProfileRow> {
   final Value<String> userId;
   final Value<String> profileJson;
   final Value<String> updatedAt;
@@ -8265,7 +8265,7 @@ class HouseholdProfilesCompanion extends UpdateCompanion<HouseholdProfile> {
   }) : userId = Value(userId),
        profileJson = Value(profileJson),
        updatedAt = Value(updatedAt);
-  static Insertable<HouseholdProfile> custom({
+  static Insertable<HouseholdProfileRow> custom({
     Expression<String>? userId,
     Expression<String>? profileJson,
     Expression<String>? updatedAt,
@@ -14976,21 +14976,21 @@ class $$HouseholdProfilesTableTableManager
         RootTableManager<
           _$GleanDatabase,
           $HouseholdProfilesTable,
-          HouseholdProfile,
+          HouseholdProfileRow,
           $$HouseholdProfilesTableFilterComposer,
           $$HouseholdProfilesTableOrderingComposer,
           $$HouseholdProfilesTableAnnotationComposer,
           $$HouseholdProfilesTableCreateCompanionBuilder,
           $$HouseholdProfilesTableUpdateCompanionBuilder,
           (
-            HouseholdProfile,
+            HouseholdProfileRow,
             BaseReferences<
               _$GleanDatabase,
               $HouseholdProfilesTable,
-              HouseholdProfile
+              HouseholdProfileRow
             >,
           ),
-          HouseholdProfile,
+          HouseholdProfileRow,
           PrefetchHooks Function()
         > {
   $$HouseholdProfilesTableTableManager(
@@ -15045,21 +15045,21 @@ typedef $$HouseholdProfilesTableProcessedTableManager =
     ProcessedTableManager<
       _$GleanDatabase,
       $HouseholdProfilesTable,
-      HouseholdProfile,
+      HouseholdProfileRow,
       $$HouseholdProfilesTableFilterComposer,
       $$HouseholdProfilesTableOrderingComposer,
       $$HouseholdProfilesTableAnnotationComposer,
       $$HouseholdProfilesTableCreateCompanionBuilder,
       $$HouseholdProfilesTableUpdateCompanionBuilder,
       (
-        HouseholdProfile,
+        HouseholdProfileRow,
         BaseReferences<
           _$GleanDatabase,
           $HouseholdProfilesTable,
-          HouseholdProfile
+          HouseholdProfileRow
         >,
       ),
-      HouseholdProfile,
+      HouseholdProfileRow,
       PrefetchHooks Function()
     >;
 
