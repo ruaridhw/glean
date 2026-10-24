@@ -3,14 +3,17 @@ from __future__ import annotations
 import pytest
 
 from glean.recipe_api.schemas import RecipeApiRecipe
+from glean.recipes.corpus import recipe_payload
 from glean.recipes.stored import (
     RecipeImportError,
     RecipeParseResult,
+    StoredRecipe,
     stored_from_llm_json,
     stored_from_recipe_api,
     stored_from_schema_org,
     stored_to_recipe_out,
 )
+from tests.recipes.corpus_fixtures import synthetic_recipe
 
 
 def test_recipe_api_mapping_preserves_recipe_fields() -> None:
@@ -97,7 +100,7 @@ def test_schema_org_conversion_handles_instruction_and_ingredient_shapes() -> No
     assert recipe.external_id == "ab559dc41bdddf0d"
     assert recipe.title == "Tomato Soup"
     assert recipe.cuisine == "British"
-    assert recipe.active_time_mins == 10
+    assert recipe.prep_time_mins == 10
     assert recipe.total_time_mins == 40
     assert recipe.yield_count == 4
     assert [(ingredient.canonical_name, ingredient.quantity, ingredient.unit) for ingredient in recipe.ingredients] == [
@@ -224,7 +227,7 @@ def test_llm_json_conversion_handles_time_yield_and_ingredient_strings() -> None
 
     assert recipe.external_id == "28425e008f393138"
     assert recipe.source_url == "https://example.com/pasta"
-    assert recipe.active_time_mins == 10
+    assert recipe.prep_time_mins == 10
     assert recipe.total_time_mins == 30
     assert recipe.yield_count == 4
     assert [ingredient.api_ingredient_id for ingredient in recipe.ingredients] == [None, None]
@@ -280,3 +283,29 @@ def test_validation_failures_report_exact_categories(data: dict, expected_catego
         stored_from_schema_org(data, source_url="https://example.com/omelette")
 
     assert exc_info.value.category == expected_category
+
+
+def test_a_body_written_before_the_rename_reads_its_stated_time_as_prep_time() -> None:
+    """Old corpus bodies and old DynamoDB items say `active_time_mins`; the value is not lost or ignored."""
+    old_body = {
+        "external_id": "rec_old",
+        "title": "Synthetic Old Recipe",
+        "active_time_mins": 10,
+        "total_time_mins": 40,
+        "ingredients": [{"canonical_name": "rice", "quantity": 1, "unit": "cup"}],
+        "instructions": [{"step_number": 1, "phase": "main", "text": "Cook it."}],
+    }
+
+    recipe = StoredRecipe.model_validate(old_body)
+
+    assert recipe.prep_time_mins == 10
+    # Re-serialising writes the new name and keeps the value, so nothing is silently dropped.
+    written = recipe_payload(recipe)
+    assert (written["prep_time_mins"], "active_time_mins" in written) == (10, False)
+
+
+def test_the_public_recipe_response_still_carries_the_stated_time_under_its_old_name() -> None:
+    recipe = synthetic_recipe("rec_timed", title="Timed", ingredients=["rice"])
+    recipe = recipe.model_copy(update={"prep_time_mins": 10})
+
+    assert stored_to_recipe_out(recipe).active_time_mins == 10

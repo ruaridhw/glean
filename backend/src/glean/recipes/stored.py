@@ -4,7 +4,7 @@ import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from glean.nutrition import NutritionFields, copy_nutrition
 from glean.recipe_api.client import _iso_to_mins
@@ -137,14 +137,24 @@ class StoredRecipe(BaseModel):
     `StoredRecipe` is the internal persistence shape. It keeps parser metadata
     and source provenance for the import pipeline. Convert it to `RecipeOut` only
     at the API boundary.
+
+    `prep_time_mins` is the time the *source stated*, and Q3 found that is really schema.org `prepTime`
+    (`stored_from_schema_org` reads `prepTime or cookTime` into it): stated for 35% of the corpus, median
+    10 min against a 35 min median total. It is not hands-on time, so V5 estimates active time for every
+    recipe instead (`recipes/enrichment/active_time.py`) and leaves the stated value here, unlost. Old
+    bodies predate the rename and carry it as `active_time_mins`, which still reads.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     external_id: str
     title: str
     source_url: str | None = None
     cuisine: str | None = None
     difficulty: str | None = None
-    active_time_mins: int | None = None
+    prep_time_mins: int | None = Field(
+        default=None, validation_alias=AliasChoices("prep_time_mins", "active_time_mins")
+    )
     total_time_mins: int | None = None
     dietary_flags: list[str] = Field(default_factory=list)
     not_suitable_for: list[str] = Field(default_factory=list)
@@ -199,7 +209,7 @@ def stored_from_recipe_api(api_recipe: RecipeApiRecipe) -> StoredRecipe:
         source_url=api_recipe.source_url,
         cuisine=api_recipe.cuisine,
         difficulty=api_recipe.difficulty,
-        active_time_mins=_iso_to_mins(api_recipe.meta.active_time),
+        prep_time_mins=_iso_to_mins(api_recipe.meta.active_time),
         total_time_mins=_iso_to_mins(api_recipe.meta.total_time),
         dietary_flags=api_recipe.dietary.flags,
         not_suitable_for=api_recipe.dietary.not_suitable_for,
@@ -234,7 +244,8 @@ def stored_from_schema_org(data: dict, *, source_url: str) -> StoredRecipe:
             source_url=source_url,
             cuisine=_string_value(data.get("recipeCuisine")) or None,
             difficulty=None,
-            active_time_mins=sane_import_time_mins(
+            # Q3: this is schema.org `prepTime` (falling back to `cookTime`), not hands-on time.
+            prep_time_mins=sane_import_time_mins(
                 _iso_to_mins(_string_value(data.get("prepTime") or data.get("cookTime")))
             ),
             total_time_mins=sane_import_time_mins(_iso_to_mins(_string_value(data.get("totalTime")))),
@@ -268,7 +279,7 @@ def stored_from_llm_response(data: RecipeLlmResponse, *, source_url: str) -> Sto
             source_url=recipe_source_url,
             cuisine=_string_value(data.cuisine) or None,
             difficulty=_string_value(data.difficulty) or None,
-            active_time_mins=sane_import_time_mins(_iso_to_mins(data.prep_time or data.active_time)),
+            prep_time_mins=sane_import_time_mins(_iso_to_mins(data.prep_time or data.active_time)),
             total_time_mins=sane_import_time_mins(_iso_to_mins(data.total_time)),
             dietary_flags=_string_list(data.dietary_flags),
             not_suitable_for=_string_list(data.not_suitable_for),
@@ -288,7 +299,9 @@ def stored_to_recipe_out(recipe: StoredRecipe) -> RecipeOut:
         source_url=recipe.source_url,
         cuisine=recipe.cuisine,
         difficulty=recipe.difficulty,
-        active_time_mins=recipe.active_time_mins,
+        # The public response keeps its name (the app reads `activeTimeMins`); the value is the stated time,
+        # exactly as it was before the rename, until phase 2 serves the enriched active time there too.
+        active_time_mins=recipe.prep_time_mins,
         total_time_mins=recipe.total_time_mins,
         dietary_flags=recipe.dietary_flags,
         not_suitable_for=recipe.not_suitable_for,

@@ -24,11 +24,11 @@ def test_the_report_is_readable_as_data_not_just_as_text() -> None:
     assert (coverage.current, coverage.stale, coverage.missing, coverage.failed) == (3, 1, 0, 0)
     assert coverage.recipes == 4  # every recipe sits in exactly one bucket
     assert (report.covered, report.expected, report.coverage, report.failed) == (4, 8, 0.5, 1)
-    assert report.stated_active_time == 4
+    assert report.stated_prep_time == 4
 
 
-def test_the_report_states_how_many_recipes_give_an_active_time() -> None:
-    assert "Recipes with a stated active time: 4/4 (100.0%)" in _report().render()
+def test_the_report_states_how_many_recipes_give_a_prep_time() -> None:
+    assert "Recipes with a stated prep time: 4/4 (100.0%)" in _report().render()
 
 
 def test_recipes_without_full_coverage_are_named_but_not_all_listed() -> None:
@@ -60,7 +60,7 @@ def test_a_corpus_with_no_recipes_reads_as_complete_rather_than_dividing_by_zero
     report = CoverageReport(recipes=0, questions=[QuestionCoverage("dietary:vegan", _bar())])
 
     assert (report.expected, report.coverage) == (0, 1.0)
-    assert "Recipes with a stated active time: 0/0" in report.render()
+    assert "Recipes with a stated prep time: 0/0" in report.render()
 
 
 def test_a_failure_is_summarised_by_one_example() -> None:
@@ -84,7 +84,7 @@ def _report(*, incomplete: list[str] | None = None, failures: list | None = None
         ],
         requests=5,
         answers_stored=6,
-        stated_active_time=4,
+        stated_prep_time=4,
         rebuilt=True,
         incomplete=["rec_3"] if incomplete is None else incomplete,
         failures=[] if failures is None else failures,

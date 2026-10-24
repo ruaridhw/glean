@@ -81,11 +81,9 @@ def run_enrichment(
     selected = summaries[:limit] if limit is not None else summaries
     known = _KnownAnswers(corpus.store)
     work = [(summary, missing) for summary in selected if (missing := _missing(questions, summary, known))]
-    stated_active_time = _stated_active_time(corpus)
+    stated_prep_time = _stated_prep_time(corpus)
     if dry_run:
-        return _report(
-            summaries, questions, known, stated_active_time=stated_active_time, planned=len(work), dry_run=True
-        )
+        return _report(summaries, questions, known, stated_prep_time=stated_prep_time, planned=len(work), dry_run=True)
     if client is None:
         raise EnrichmentError("a run needs a decision client unless it is a dry run")
     _check_models(client, questions)
@@ -116,7 +114,7 @@ def run_enrichment(
         known,
         requests=run.requests,
         stored=run.produced,
-        stated_active_time=stated_active_time,
+        stated_prep_time=stated_prep_time,
         failures=run.failures,
     )
 
@@ -275,7 +273,7 @@ def _report(
     *,
     requests: int = 0,
     stored: int = 0,
-    stated_active_time: int = 0,
+    stated_prep_time: int = 0,
     planned: int = 0,
     dry_run: bool = False,
     failures: Sequence[AnswerFailure] = (),
@@ -311,7 +309,7 @@ def _report(
         questions=[coverage[question.name] for question in questions],
         requests=requests,
         answers_stored=stored,
-        stated_active_time=stated_active_time,
+        stated_prep_time=stated_prep_time,
         rebuilt=stored > 0,
         dry_run=dry_run,
         planned_requests=planned,
@@ -333,13 +331,13 @@ def _missing(
     )
 
 
-def _stated_active_time(corpus: RecipeCorpusStore) -> int:
-    """How many recipes state an active time (spec 6.1).
+def _stated_prep_time(corpus: RecipeCorpusStore) -> int:
+    """How many recipes state a prep time (spec 6.1; Q3 found this is what the corpus actually states).
 
     Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
     rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
     """
-    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
+    return sum(1 for recipe in corpus.all_recipes() if recipe.prep_time_mins is not None)
 
 
 def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:

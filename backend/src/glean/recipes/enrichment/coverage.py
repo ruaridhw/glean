@@ -52,7 +52,7 @@ class CoverageReport:
     questions: list[QuestionCoverage]
     requests: int = 0
     answers_stored: int = 0
-    stated_active_time: int = 0
+    stated_prep_time: int = 0
     rebuilt: bool = False
     dry_run: bool = False
     planned_requests: int = 0
@@ -88,7 +88,7 @@ class CoverageReport:
             lines.append(f"Dry run: {self.planned_requests} recipes would be asked; nothing was requested or stored.")
         if self.failures:
             lines.append(f"Failed this run: {len(self.failures)} ({_summarise(self.failures)})")
-        lines.append(f"Recipes with a stated active time: {_ratio(self.stated_active_time, self.recipes)}")
+        lines.append(f"Recipes with a stated prep time: {_ratio(self.stated_prep_time, self.recipes)}")
         lines.append(f"Coverage: {self.covered}/{self.expected} ({self.coverage:.1%})")
         if self.recipes:
             lines.append("Projection: rebuilt" if self.rebuilt else "Projection: not rebuilt, nothing was written")
