@@ -173,8 +173,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       child: _page == OnboardingPage.tastes
                           ? TextButton(
                               onPressed: _skipAllTastes,
+                              // A full tap target, not the compact one a
+                              // secondary action defaults to: it is the only
+                              // way out of the interview.
                               style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
+                                minimumSize: const Size(48, 48),
                                 padding: EdgeInsets.symmetric(
                                   horizontal: tokens.spacing.sm,
                                 ),
