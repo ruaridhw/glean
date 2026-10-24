@@ -108,8 +108,7 @@ provider  # Decision field
 usage  # Decision field
 __cause__  # exception chain cleared in DecisionClient.decide so upstream text can't leak via causes
 __context__  # as above
-produce_missing_decisions  # used by scripts/compute_dietary_decisions.py
-render  # CoverageReport.render, printed by the producer script
+render  # CoverageReport.render, printed by scripts/enrich_corpus.py and make enrich-corpus
 failures  # CoverageReport field, asserted in tests and read by operators in the report
 
 # catalogue/normalise.py: NormalisedName response fields and the route handler are read by FastAPI / the app
@@ -123,3 +122,6 @@ sync_catalogue  # GET /catalogue route
 
 # recipes/ (F1/#162): the corpus behind one backend seam
 _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSONL lines)
+
+# recipes/enrichment/ (F2): enrichers declare questions, the runner asks and stores them
+HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe side, per ADR 0025

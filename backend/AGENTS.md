@@ -15,6 +15,9 @@ uv run pytest -k "test_name"           # single test by name
 uv run python scripts/seed_catalogue.py --table glean-catalogue-<env>  # idempotent catalogue seed; prod runs are the owner's
 # idempotent, resumable, paced; refuses a prod table without --i-am-the-owner. Owner-run against prod.
 uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-<env> --bucket <recipe-cache-bucket> --dry-run
+# asks the decision model only what the corpus is missing or stale on (paid); exit 1 unless coverage is 100%.
+# `make enrich-corpus` is the local/dev wrapper; prod runs are the owner's.
+uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --dry-run
 ```
 
 ## Architecture
@@ -58,15 +61,28 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
   - The table is the only authority for a full projection. `rebuild_projection()` (and the migration's last
     step, and `scripts/build_recipe_index.py --table`) scans it and publishes conditionally, re-scanning if
     another writer got there first; nothing publishes a document built from anywhere else.
+- **Enrichment is a pipeline, not a script** (F2, ADR 0025). `recipes/enrichment/` holds:
+  - `enricher.py` — what an enricher declares: each question's wording, its **confidence bar** (threshold
+    plus which side is safe) and the rule that turns a raw answer into a stored value. `Enricher` is a
+    `Protocol`, so V5's attribute enrichers slot in as more.
+  - `runner.py` — `run_enrichment`: one `DecisionClient.decide` request per recipe carrying **every**
+    question missing or stale across all enrichers, answers written through the seam per checkpoint, and
+    the projection rebuilt once at the end. It decides that from `answers_for` (the authoritative read), so
+    a run that died, or whose final rebuild failed, resumes instead of paying for the same answers again.
+    Stale means the answer's criteria hash, the recipe's content hash or the model is no longer current.
+  - `coverage.py` — the per-question coverage report (current / stale / missing / failed), printed as a
+    table by `scripts/enrich_corpus.py` and readable as data.
+  - `dietary.py` — the first enricher: six `noul` questions with ADR 0011's thresholds unchanged.
+    `meal_plan/dietary_decisions.py` is now the read side and re-exports those questions.
 
 ### Rolling back to blobs
 
 `RECIPE_STORE=blobs` restores the corpus **as of the migration that filled the table**. Nothing in dynamo
-mode writes the blobs or `_decisions/dietary.jsonl` — not an import, not a decision run — so recipes
+mode writes the blobs or `_decisions/dietary.jsonl` — not an import, not an enrichment run — so recipes
 imported and answers computed while the setting was `dynamo` are only in DynamoDB and the projection. That
 is a snapshot rollback, not a two-way mirror: before flipping back, export or re-create anything that must
-survive (re-import the affected URLs, re-run `scripts/compute_dietary_decisions.py`), or read straight from
-the table. The migration prints the same warning at the end of every run.
+survive (re-import the affected URLs, re-run `scripts/enrich_corpus.py`), or read straight from the table.
+The migration prints the same warning at the end of every run.
 
 ### Module layout
 
@@ -95,7 +111,9 @@ src/glean/
 │                     # corpus.py: RecipeCorpusStore + the CorpusBackend seam (blob adapter)
 │                     # dynamo_corpus.py: the glean-recipes table + projection maintenance (F1/#162)
 │                     # projection.py: the gzipped S3 projection planning reads
-│                     # answers.py: one decision answer (dietary now, F2's attributes later)
+│                     # answers.py: one decision answer (dietary now, V5's attributes later)
+│                     # enrichment/ — enrichers declare questions, the runner asks one request per recipe
+│                     #   enricher.py, runner.py, coverage.py, dietary.py (ADR 0025)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation
 ```
