@@ -62,8 +62,6 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
     final List<String> options = _chosen.toList();
     if (text.trim().isEmpty && options.isEmpty) return;
     ref.read(hapticsProvider).lightImpact();
-    _composer.clear();
-    setState(_chosen.clear);
     unawaited(
       ref
           .read(interviewControllerProvider.notifier)
@@ -73,9 +71,15 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
 
   void _skip() {
     ref.read(hapticsProvider).lightImpact();
+    unawaited(ref.read(interviewControllerProvider.notifier).skip());
+  }
+
+  /// The composer is cleared only once a turn has been accepted (the transcript grew), never when a send starts
+  /// or fails: after a failure the household has to be able to read, and correct, what Retry will send.
+  void _clearWhenAccepted(InterviewState? previous, InterviewState next) {
+    if (next.transcript.length <= (previous?.transcript.length ?? 0)) return;
     _composer.clear();
     setState(_chosen.clear);
-    unawaited(ref.read(interviewControllerProvider.notifier).skip());
   }
 
   void _retry() {
@@ -115,6 +119,7 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
   @override
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
+    ref.listen<InterviewState>(interviewControllerProvider, _clearWhenAccepted);
     final InterviewState state = ref.watch(interviewControllerProvider);
     final InterviewQuestion? question = state.question;
     // A new turn, or the summary, is new content to bring into view.
