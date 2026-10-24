@@ -98,6 +98,15 @@ class Feature(StrEnum):
             eval_model="google/gemini-3.1-flash-lite",
         ),
     )
+    PROFILE_INTERVIEW = (
+        "profile-interview",
+        LLMModelPolicy(
+            # One call per interview turn, so first-token latency is the whole experience: the same
+            # flash-lite policy as the other interactive routes, well inside the 30s Lambda cap.
+            production_model="google/gemini-3.1-flash-lite",
+            eval_model="z-ai/glm-5.2",
+        ),
+    )
 
 
 # Derived, not authored: kept for callers that want a plain mapping (e.g. the

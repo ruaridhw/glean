@@ -269,6 +269,11 @@ AI_ROUTES = [
         request_kwargs={"json": {"url": "https://example.com/carbonara"}},
     ),
     AiRoute(
+        name="profile interview",
+        path="/profile/interview",
+        request_kwargs={"json": {"transcript": []}},
+    ),
+    AiRoute(
         name="catalogue normalise",
         path="/catalogue/normalise",
         boundaries=_catalogue_boundaries,
