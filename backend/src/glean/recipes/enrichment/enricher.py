@@ -23,18 +23,22 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from glean.decisions import DEFAULT_MODEL, DecisionModel
+from glean.recipes.attributes import UNSURE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from glean.decisions import Decision, Question
     from glean.recipes.answers import RecipeAnswer
     from glean.recipes.search_index import RecipeSummary
+    from glean.recipes.stored import StoredRecipe
 
 __all__ = [
+    "DEFAULT_ATTRIBUTE_BAR",
+    "MIN_ATTRIBUTE_BAR",
     "Acceptance",
     "AnswerState",
     "ConfidenceBar",
@@ -44,6 +48,10 @@ __all__ = [
     "StoredValue",
     "UncalibratedModelError",
     "answer_state",
+    "attribute_bar",
+    "choice_above_bar",
+    "level_above_bar",
+    "method_state",
     "question_hash",
     "recipe_state",
 ]
@@ -141,6 +149,65 @@ class Enricher(Protocol):
         """Every question this family asks about each recipe, in the order they should be reported."""
         ...
 
+    def state(self, recipe: StoredRecipe | None) -> Mapping[str, Any]:
+        """Extra state this family's questions need, beyond the recipe's title and ingredients.
+
+        The runner merges it into the request only when this family has a question to ask, so a dietary run
+        pays for no method text. A family whose questions read only the ingredients returns nothing.
+        """
+        ...
+
+
+# The confidence floor G1 settled for an attribute-style answer, and the bar it starts at (spec 6.1). A bar
+# may be tuned per attribute on the labelled sample, never below the floor; below whichever bar applies the
+# value is stored as `unsure`, which earns no variety credit and no penalty.
+MIN_ATTRIBUTE_BAR = 0.7
+DEFAULT_ATTRIBUTE_BAR = 0.8
+
+
+def attribute_bar(threshold: float = DEFAULT_ATTRIBUTE_BAR) -> ConfidenceBar:
+    """An attribute-style question's floor, refusing one looser than G1 allows.
+
+    V5's attributes and active time use this; dietary's bars are exclusion thresholds with `SafeSide.LOW`
+    and are not subject to the floor (ADR 0011).
+    """
+    if not MIN_ATTRIBUTE_BAR <= threshold <= 1.0:
+        raise ValueError(f"an attribute bar must be between {MIN_ATTRIBUTE_BAR} and 1.0, not {threshold}")
+    return ConfidenceBar(threshold=threshold, safe_side=SafeSide.HIGH)
+
+
+def choice_above_bar(name: str, bar: ConfidenceBar) -> Acceptance:
+    """Accept a `choice` question's top option at or above the bar, and store `unsure` below it.
+
+    Below the bar the answer still exists, so it is stored: `unsure` is what stops a recipe being re-asked
+    (and re-paid for) on every run, and it is what the spec means by "earns no variety credit and no
+    penalty". The stored probability is the top option's, so a later bar can be retuned from what is stored.
+    """
+
+    def accept(decision: Decision) -> StoredValue:
+        answer = decision.choice(name)
+        top = max(answer.probabilities, key=lambda option: answer.probabilities[option])
+        probability = answer.probabilities[top]
+        return StoredValue(probability=probability, value=top if probability >= bar.threshold else UNSURE)
+
+    return accept
+
+
+def level_above_bar(name: str, bar: ConfidenceBar, levels: Sequence[str]) -> Acceptance:
+    """The same rule for a `score` question, whose answer is the level with the highest probability.
+
+    `levels` is the question's own level order (`criteria[0]` first), so the stored value is the level's
+    label rather than its index.
+    """
+
+    def accept(decision: Decision) -> StoredValue:
+        answer = decision.score(name)
+        top = max(answer.probabilities, key=lambda index: answer.probabilities[index])
+        probability = answer.probabilities[top]
+        return StoredValue(probability=probability, value=levels[top] if probability >= bar.threshold else UNSURE)
+
+    return accept
+
 
 class AnswerState(StrEnum):
     """How a recipe stands against one question."""
@@ -171,3 +238,12 @@ def question_hash(question: Question) -> str:
 def recipe_state(summary: RecipeSummary) -> dict[str, str | list[str]]:
     """What the decision model is shown about a recipe: its title and its ingredient names."""
     return {"recipe_title": summary.title, "ingredients": list(summary.ingredient_names)}
+
+
+def method_state(recipe: StoredRecipe | None) -> dict[str, list[str]]:
+    """The recipe's method, step by step, for the questions that read it.
+
+    `None` is a recipe the projection lists and the table no longer has; the questions still get asked, with
+    no method to read, rather than the run failing on a corpus that is briefly inconsistent.
+    """
+    return {"method": [] if recipe is None else [step.text for step in recipe.instructions]}

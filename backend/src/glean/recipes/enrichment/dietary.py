@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from glean.decisions import Decision
+    from glean.recipes.stored import StoredRecipe
 
 __all__ = [
     "CALIBRATED_DIETARY",
@@ -257,6 +258,10 @@ class DietaryEnricher:
 
     def questions(self) -> tuple[EnrichmentQuestion, ...]:
         return tuple(_enrichment_question(flag, self.calibration) for flag in self.flags)
+
+    def state(self, recipe: StoredRecipe | None) -> Mapping[str, object]:
+        """Nothing: a dietary question reads the title and ingredients, which the runner always sends."""
+        return {}
 
 
 DIETARY_ENRICHER = DietaryEnricher()

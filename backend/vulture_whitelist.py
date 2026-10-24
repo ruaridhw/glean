@@ -169,3 +169,65 @@ _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSON
 
 # recipes/enrichment/ (F2): enrichers declare questions, the runner asks and stores them
 HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe side, per ADR 0025
+
+# recipes/attributes.py — the G1 attribute contract. Enum members are read by value (a projection entry, a
+# question's criteria, a label), not by name, so vulture cannot see them used.
+CHICKEN
+TURKEY_OR_DUCK
+BEEF
+PORK
+LAMB
+FISH
+SEAFOOD
+BEANS_AND_PULSES
+TOFU_OR_PLANT_PROTEIN
+VEGETARIAN_OTHER
+MIXED
+NONE
+RICE
+PASTA
+NOODLES
+POTATO
+BREAD_OR_WRAPS
+OTHER_GRAINS
+CURRY
+STIR_FRY
+PASTA_DISH
+SOUP_OR_STEW
+ROAST_OR_TRAYBAKE
+SALAD_OR_BOWL
+HANDHELD
+PIE_OR_BAKE
+RICE_DISH
+PAN_OR_GRILL
+OTHER
+BRITISH
+ITALIAN
+FRENCH
+SPANISH
+GREEK
+MIDDLE_EASTERN
+NORTH_AFRICAN
+INDIAN
+THAI
+VIETNAMESE
+CHINESE
+JAPANESE
+KOREAN
+SOUTHEAST_ASIAN
+MEXICAN
+CARIBBEAN
+AMERICAN
+LATIN_AMERICAN
+WHOLE
+PROCESSED
+UP_TO_15
+FROM_15_TO_30
+FROM_30_TO_45
+FROM_45_TO_60
+OVER_60
+as_mapping  # RecipeAttributes: what a projection entry stores
+recipe_attributes  # ProjectedRecipe: how planning reads a projection entry's attributes
+fits_time_cap  # RecipeAttributes: the household time cap's rule
+_labelled_questions_carry_a_value  # Pydantic model validator (RecipeAnswer)
+active_time_mins  # recipe_api client helper, called by callers outside src/

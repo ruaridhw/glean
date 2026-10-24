@@ -90,14 +90,28 @@ class FakeDecisionApi:
         )
 
     def _answer(self, question: dict, *, high: bool) -> dict:
-        """One answer in the endpoint's shape: a `noul` probability, or a choice distribution over its options."""
+        """One answer in the endpoint's shape: a `noul` probability, a choice distribution, or a score."""
         if question["type"] == "noul":
             return {"type": "noul", "noul": self._high if high else self._low}
-        options = list(question["criteria"])
-        top = options[0] if high else options[1]
-        rest = (1.0 - self._high) / max(len(options) - 1, 1)
-        probabilities = {option: (self._high if option == top else rest) for option in options}
-        return {"type": "choice", "choice": top, "probabilities": probabilities, "confidence": self._high}
+        if question["type"] == "choice":
+            options = list(question["criteria"])
+            top = options[0] if high else options[1]
+            rest = (1.0 - self._high) / max(len(options) - 1, 1)
+            probabilities = {option: (self._high if option == top else rest) for option in options}
+            return {"type": "choice", "choice": top, "probabilities": probabilities, "confidence": self._high}
+        # A score question: the same distribution over level indices, high at the top level and low at the
+        # bottom, plus the probability-weighted position the endpoint reports with it.
+        levels = len(question["criteria"])
+        top = levels - 1 if high else 0
+        rest = (1.0 - self._high) / max(levels - 1, 1)
+        probabilities = {index: (self._high if index == top else rest) for index in range(levels)}
+        score = sum(index * probability for index, probability in probabilities.items())
+        return {
+            "type": "score",
+            "score": score,
+            "probabilities": {str(index): probability for index, probability in probabilities.items()},
+            "confidence": self._high,
+        }
 
     def asked(self, title: str) -> dict:
         """The one request the fake saw for the recipe with this title."""
@@ -143,6 +157,9 @@ class DinnerEnricher:
 
     def questions(self) -> Sequence[EnrichmentQuestion]:
         return (dinner_question(threshold=self.threshold, instructions=self.instructions),)
+
+    def state(self, recipe) -> dict:
+        return {}
 
 
 class CountingBackend(BlobCorpusBackend):

@@ -95,7 +95,7 @@ def test_a_corpus_filled_by_f1s_migration_produces_no_requests(tmp_path: Path, r
     )
     api = FakeDecisionApi()
 
-    report = run_enrichment(RecipeCorpusStore(target), api.client())
+    report = run_enrichment(RecipeCorpusStore(target), api.client(), enrichers=(DIETARY_ENRICHER,))
 
     assert api.requests == []  # the migration's answers are already current
     assert (report.answers_stored, report.coverage) == (0, 1.0)
@@ -107,7 +107,7 @@ def test_planning_excludes_the_same_recipes_before_and_after_a_run(tmp_path: Pat
     before = {flag: _ids(corpus, flag) for flag in DIETARY_FLAGS}
     assert before["tree-nut-free"] == {"rec_tomato"}  # the stored probability already decided this
 
-    run_enrichment(corpus, FakeDecisionApi().client())
+    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
     assert {flag: _ids(corpus, flag) for flag in DIETARY_FLAGS} == before
 
@@ -116,7 +116,7 @@ def test_a_probability_the_model_is_unsure_about_is_still_stored_and_decided_at_
     corpus = _blob_corpus(tmp_path)
 
     # 0.3 is the tree-nut exclusion threshold: the answer is stored as it came, and it excludes.
-    run_enrichment(corpus, FakeDecisionApi(low=0.3).client())
+    run_enrichment(corpus, FakeDecisionApi(low=0.3).client(), enrichers=(DIETARY_ENRICHER,))
 
     stored = {answer.question: answer.probability for answer in corpus.answers() if answer.recipe_id == "rec_tomato"}
     assert stored[dietary_question(TREE_NUT_FREE)] == 0.3
@@ -126,7 +126,7 @@ def test_a_probability_the_model_is_unsure_about_is_still_stored_and_decided_at_
 def test_a_question_the_model_is_not_asked_about_is_never_reported(tmp_path: Path) -> None:
     corpus = _blob_corpus(tmp_path)
 
-    report = run_enrichment(corpus, FakeDecisionApi().client())
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
     assert {coverage.name for coverage in report.questions} == {dietary_question(flag) for flag in DIETARY_FLAGS}
 
