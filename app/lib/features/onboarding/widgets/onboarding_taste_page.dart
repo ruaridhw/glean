@@ -184,7 +184,18 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
         ),
         SizedBox(height: tokens.spacing.md),
         if (state.finished)
-          FilledButton(onPressed: _confirm, child: const Text('Looks right'))
+          Row(
+            children: <Widget>[
+              _BackButton(onPressed: widget.onBack),
+              SizedBox(width: tokens.spacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _confirm,
+                  child: const Text('Looks right'),
+                ),
+              ),
+            ],
+          )
         else ...<Widget>[
           TextField(
             controller: _composer,

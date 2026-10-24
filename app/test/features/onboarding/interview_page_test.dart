@@ -317,6 +317,11 @@ void main() {
         findsOneWidget,
       );
       expect(await rig.savedProfile(), isNull, reason: 'nothing saved yet');
+      expect(
+        find.byTooltip('Back'),
+        findsOneWidget,
+        reason: 'the summary is still a page of first run, so it keeps Back',
+      );
 
       await tester.tap(find.widgetWithText(FilledButton, 'Looks right'));
       await tester.pumpAndSettle();
