@@ -10,7 +10,7 @@ import datetime as dt  # noqa: TC003 - Pydantic resolves these field types at ru
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Seven questions in one interview: the five fixed openers and at most two follow-ups.
 MAX_TURNS = 7
@@ -71,9 +71,28 @@ class ProfileField(StrEnum):
     NOTES = "notes"
 
 
-# The fields an interview answer can feed. `notes` is written by feedback (spec §6.4, V15) and the
-# parked retake, so a follow-up aimed at it would burn one of the two follow-ups on a lost answer.
-WRITABLE_PROFILE_FIELDS = frozenset(field for field in ProfileField if field is not ProfileField.NOTES)
+class WritableProfileField(StrEnum):
+    """The profile fields an interview answer can fill.
+
+    `notes` is not one: feedback writes them (spec §6.4, V15) and the retake is parked, so a follow-up
+    aimed there would spend one of the two follow-ups on an answer nobody stores. This is a separate enum
+    from `ProfileField` on purpose — the model is sent a JSON schema, and a schema is what stops it naming a
+    field nothing writes; a validator would only fail after the model had already chosen.
+    """
+
+    FAVOURITE_MEALS = "favourite_meals"
+    LOVED_INGREDIENTS = "loved_ingredients"
+    DISLIKED_INGREDIENTS = "disliked_ingredients"
+    CUISINES_LIKED = "cuisines_liked"
+    CUISINES_AVOIDED = "cuisines_avoided"
+    PROTEIN_TARGETS = "protein_targets"
+    SPICE_TOLERANCE = "spice_tolerance"
+    HABITS = "habits"
+    HOUSEHOLD = "household"
+
+
+# Compared by value, because a transcript carries plain JSON strings.
+WRITABLE_PROFILE_FIELDS = frozenset(field.value for field in WritableProfileField)
 
 
 class NoteSource(StrEnum):
@@ -279,7 +298,7 @@ class InterviewRequest(BaseModel):
                     f"turn {index + 1} answers {expected!r} for {turn.question.field.value}, "
                     f"but {expected!r} fills {opener.field.value}"
                 )
-            if opener is None and turn.question.field not in WRITABLE_PROFILE_FIELDS:
+            if opener is None and turn.question.field.value not in WRITABLE_PROFILE_FIELDS:
                 raise ValueError(
                     f"turn {index + 1} targets {turn.question.field.value}, which the interview never writes"
                 )
@@ -330,15 +349,8 @@ class FollowUp(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1, description="One question, in the same voice as the openers.")
-    field: ProfileField = Field(description="The profile field the answer will fill.")
+    field: WritableProfileField = Field(description="The profile field the answer will fill.")
     options: list[str] = Field(default_factory=list, description="Two to five short tappable answers, or empty.")
-
-    @field_validator("field")
-    @classmethod
-    def _targets_a_written_field(cls, field: ProfileField) -> ProfileField:
-        if field not in WRITABLE_PROFILE_FIELDS:
-            raise ValueError(f"a follow-up cannot target {field.value}: the interview never writes it")
-        return field
 
 
 class InterviewTurn(BaseModel):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from glean.config import Settings  # noqa: TC001 - FastAPI resolves this via Annotated/Depends at runtime.
 from glean.decisions import DecisionClient  # noqa: TC001 - FastAPI resolves this via Annotated/Depends at runtime.
@@ -31,4 +31,12 @@ def interview(
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
     decision_client: Annotated[DecisionClient, Depends(get_decision_client)],
 ) -> InterviewResponse:
-    return service.run_interview(request, llm_router=llm_router, decision_client=decision_client)
+    try:
+        return service.run_interview(request, llm_router=llm_router, decision_client=decision_client)
+    except service.InterviewUnavailableError as exc:
+        # A model reply that didn't fit is not a server fault the household can do anything about: the
+        # turn can simply be retried.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The interview could not continue. Please try the turn again.",
+        ) from exc

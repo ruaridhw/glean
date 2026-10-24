@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient  # noqa: TC002 - fixtures annotate with it at runtime.
+from pydantic import ValidationError
 
 from glean.dependencies import get_decision_client
 from glean.llm import Feature
@@ -707,3 +708,29 @@ def test_favourite_matching_is_confident_or_null(phrase: str, expected: str | No
         corpus.save(stored_recipe(external_id, title))
 
     assert service.match_recipe(phrase, corpus) == expected
+
+
+def _unusable_reply() -> ValidationError:
+    """What the structured-output path raises when the model answers with the wrong shape."""
+    try:
+        InterviewTurn.model_validate({"summary": "no profile at all"})
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("InterviewTurn accepted an incomplete reply")
+
+
+def test_an_unusable_model_reply_is_a_plain_failure_not_a_crash(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter
+) -> None:
+    model.fail_with = _unusable_reply()
+    transcript: list[dict[str, Any]] = []
+    for answer in ANSWERS:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
+
+    response = client.post(
+        "/profile/interview", headers=auth_headers, json={"transcript": transcript, "draft_profile": PROFILE}
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "The interview could not continue. Please try the turn again."}
