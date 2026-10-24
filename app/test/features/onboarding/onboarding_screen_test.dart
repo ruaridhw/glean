@@ -377,6 +377,20 @@ void main() {
     );
   }
 
+  testWidgets('Skip all is a full-size tap target, not a 40dp strip', (
+    WidgetTester tester,
+  ) async {
+    await pumpOnboarding(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    final Size size = tester.getSize(
+      find.widgetWithText(TextButton, 'Skip all'),
+    );
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, greaterThanOrEqualTo(48));
+  });
+
   testWidgets(
     'a passed basics step looks and reads as done, and says how it was passed',
     (WidgetTester tester) async {
