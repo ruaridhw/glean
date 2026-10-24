@@ -27,6 +27,7 @@ from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.profile.schemas import (
     MAX_TURNS,
+    OPENERS,
     FavouriteMeal,
     FollowUp,
     HouseholdProfile,
@@ -41,6 +42,7 @@ from glean.profile.schemas import (
     ProfileField,
     SpiceTolerance,
     TranscriptTurn,
+    question_for_turn,
 )
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.screening import screen
@@ -83,41 +85,6 @@ Asking a question:
 `summary`: when you finish, exactly two short lines for the household to confirm, in plain language and
 without markdown, e.g. "You love fish pie and anything Thai.\\nNo mushrooms, and nothing too spicy." Otherwise
 return an empty string."""
-
-OPENERS: tuple[InterviewQuestion, ...] = (
-    InterviewQuestion(
-        id="opener-favourite-meals",
-        text="What are three dinners you'd happily eat every fortnight?",
-        field=ProfileField.FAVOURITE_MEALS,
-    ),
-    InterviewQuestion(
-        id="opener-never-want",
-        text="Anything you never want to see on the plan?",
-        field=ProfileField.DISLIKED_INGREDIENTS,
-    ),
-    InterviewQuestion(
-        id="opener-love",
-        text="Any cuisines or ingredients you love?",
-        field=ProfileField.LOVED_INGREDIENTS,
-    ),
-    InterviewQuestion(
-        id="opener-weeks",
-        text="How do your weeks usually go?",
-        options=[
-            "Quick weeknights",
-            "Batch cook at the weekend",
-            "Leftovers",
-            "One treat meal",
-            "Guests often",
-        ],
-        field=ProfileField.HABITS,
-    ),
-    InterviewQuestion(
-        id="opener-table",
-        text="Who's usually at the table?",
-        field=ProfileField.HOUSEHOLD,
-    ),
-)
 
 # The cuisine names a household can love or avoid (spec §6.1, `cuisine`). "Other" is left out:
 # it means nothing as a preference.
@@ -227,16 +194,16 @@ def run_interview(
         # The openers need no model: they are fixed. The answer is screened so the app can be told
         # its free text was unusable, and nothing else about the turn is needed.
         return InterviewQuestionResponse(
-            question=OPENERS[turn - 1],
+            question=question_for_turn(turn),
             turn=turn,
             dropped_answer=_last_answer_dropped(transcript, decision_client),
         )
 
     screening = _screen_transcript(transcript, decision_client)
     draft = _model_draft(held)
-    for answered, answer in zip(transcript, screening.answers, strict=True):
+    for index, (answered, answer) in enumerate(zip(transcript, screening.answers, strict=True)):
         if answer is not None:
-            draft = _apply(draft, answered.question.field, answer)
+            draft = _apply(draft, _field_for(index, answered), answer)
 
     # Questions are numbered 1..MAX_TURNS; only the answer to the last one cannot be met by another.
     may_ask_follow_up = turn <= MAX_TURNS
@@ -263,6 +230,16 @@ def run_interview(
         summary=_summary(reply.summary) or _fallback_summary(profile),
         dropped_answer=screening.dropped,
     )
+
+
+def _field_for(index: int, turn: TranscriptTurn) -> ProfileField:
+    """The profile field an answer fills: the server's for an opener, the model's for a follow-up.
+
+    An opener's field is fixed by the question the server asked, whatever the transcript claims; a
+    follow-up's field is the model's choice, echoed by the app, and the request validator has already
+    refused anything the interview never writes.
+    """
+    return OPENERS[index].field if index < len(OPENERS) else turn.question.field
 
 
 def _question_from(follow_up: FollowUp, turn: int) -> InterviewQuestion:
@@ -350,12 +327,12 @@ def _screen_transcript(transcript: list[TranscriptTurn], decision_client: Decisi
         pool.shutdown(wait=False, cancel_futures=True)
     results = {blob: result for blob, result in zip(distinct, screened, strict=True) if result is not None}
     answers: list[InterviewAnswer | None] = []
-    for answered, blob in zip(transcript, blobs, strict=True):
+    for index, (answered, blob) in enumerate(zip(transcript, blobs, strict=True)):
         result = results.get(blob) if blob else None
         if result is not None and not result.passed:
             logger.warning(
                 "interview answer dropped",
-                extra={"field": answered.question.field.value, "reason": str(result.rejection)},
+                extra={"field": _field_for(index, answered).value, "reason": str(result.rejection)},
             )
         answers.append(answered.answer if result is not None and result.passed else None)
     dropped = answers[-1] is None and bool(blobs[-1])
@@ -536,12 +513,12 @@ def _ask_model(
         "draft_profile": draft.model_dump(mode="json"),
         "answers": [
             {
-                "turn": number,
-                "field": answered.question.field.value,
+                "turn": index + 1,
+                "field": _field_for(index, answered).value,
                 "text": answer.text.strip() if answer.text and answer.text.strip() else None,
                 "options": answer.options,
             }
-            for number, (answered, answer) in enumerate(zip(transcript, answers, strict=True), start=1)
+            for index, (answered, answer) in enumerate(zip(transcript, answers, strict=True))
             if answer is not None
         ],
     }

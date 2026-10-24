@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from glean.profile.schemas import (
     MAX_TURNS,
+    OPENERS,
     WRITABLE_PROFILE_FIELDS,
     FollowUp,
     HouseholdProfile,
@@ -107,21 +108,19 @@ def test_the_request_round_trips_what_the_app_sends() -> None:
         {
             "transcript": [
                 {
-                    "question": {
-                        "id": "opener-weeks",
-                        "text": "How do your weeks usually go?",
-                        "options": ["Quick weeknights"],
-                        "field": "habits",
-                        "skippable": True,
-                    },
-                    "answer": {"text": "Quick weeknights", "options": ["Quick weeknights"], "skipped": False},
-                }
+                    "question": OPENERS[0].model_dump(mode="json"),
+                    "answer": {"text": "Chicken curry", "options": [], "skipped": False},
+                },
+                {
+                    "question": OPENERS[1].model_dump(mode="json"),
+                    "answer": {"text": None, "options": ["Mushrooms"], "skipped": False},
+                },
             ],
             "draft_profile": PROFILE_JSON,
         }
     )
 
-    assert request.transcript[0].answer.text == "Quick weeknights"
+    assert request.transcript[1].answer.options == ["Mushrooms"]
     assert request.draft_profile.spice_tolerance is SpiceTolerance.MEDIUM
 
 
@@ -132,15 +131,30 @@ def test_the_request_defaults_to_an_empty_interview() -> None:
     assert request.draft_profile == HouseholdProfile()
 
 
-def test_the_transcript_is_capped_at_the_maximum_turn_count() -> None:
-    turn = {
-        "question": {"id": "q", "text": "q?", "options": [], "field": "habits", "skippable": True},
-        "answer": {"text": None, "options": [], "skipped": True},
-    }
+def _valid_turns() -> list[dict[str, object]]:
+    """One acceptable turn for every question an interview asks, in order."""
+    questions = [*OPENERS, *(FollowUp(text=f"follow-up {number}?", field="habits") for number in range(2))]
+    return [
+        {
+            "question": {
+                "id": OPENERS[index].id if index < len(OPENERS) else f"follow-up-{index + 1}",
+                "text": question.text if index < len(OPENERS) else str(question.text),
+                "options": [],
+                "field": question.field.value if index < len(OPENERS) else "habits",
+                "skippable": True,
+            },
+            "answer": {"text": None, "options": [], "skipped": True},
+        }
+        for index, question in enumerate(questions)
+    ]
 
-    assert len(InterviewRequest.model_validate({"transcript": [turn] * MAX_TURNS}).transcript) == MAX_TURNS
+
+def test_the_transcript_is_capped_at_the_maximum_turn_count() -> None:
+    turns = _valid_turns()
+
+    assert len(InterviewRequest.model_validate({"transcript": turns}).transcript) == MAX_TURNS
     with pytest.raises(ValidationError):
-        InterviewRequest.model_validate({"transcript": [turn] * (MAX_TURNS + 1)})
+        InterviewRequest.model_validate({"transcript": [*turns, turns[-1]]})
 
 
 def test_the_answer_rejects_unknown_fields() -> None:
