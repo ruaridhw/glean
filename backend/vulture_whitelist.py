@@ -230,3 +230,5 @@ skippable  # InterviewQuestion field, always true
 max_turns  # InterviewQuestionResponse field
 dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
 clear_screen_cache  # screening.py, called by the tests to start from a cold cache
+_targets_a_written_field  # Pydantic field validator (FollowUp.field)
+WRITABLE_PROFILE_FIELDS  # schemas.py, the fields an interview question may target
