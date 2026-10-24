@@ -118,4 +118,39 @@ void main() {
     expect(await profiles.get(_userId), isNull);
     expect(await profiles.watch(_userId).first, isNull);
   });
+  test(
+    'update applies a change to the stored profile and saves the result',
+    () async {
+      await profiles.save(userId: _userId, profile: answered);
+
+      final HouseholdProfile updated = await profiles.update(
+        userId: _userId,
+        change: (HouseholdProfile current) => current.copyWith(
+          dislikedIngredients: <String>[
+            ...current.dislikedIngredients,
+            'olives',
+          ],
+        ),
+      );
+
+      expect(updated.dislikedIngredients, <String>['mushrooms', 'olives']);
+      final HouseholdProfile stored = (await profiles.get(_userId))!;
+      expect(stored.dislikedIngredients, <String>['mushrooms', 'olives']);
+      expect(stored.habits, 'Quick weeknights');
+      expect(stored.favouriteMeals.single.recipeId, 'rec_1');
+    },
+  );
+
+  test('update before any profile exists starts from an empty one', () async {
+    await profiles.update(
+      userId: _userId,
+      change: (HouseholdProfile current) {
+        expect(current.isEmpty, isTrue);
+        return current.copyWith(household: 'Just me');
+      },
+    );
+
+    expect((await profiles.get(_userId))!.household, 'Just me');
+    expect(await profiles.get('user-2'), isNull);
+  });
 }

@@ -27,6 +27,21 @@ class HouseholdProfileRepository {
     );
   }
 
+  /// Reads [userId]'s profile (an empty one before they have any), applies [change] and stores the result, in
+  /// one transaction so two edits in quick succession never write over each other. Returns what was stored.
+  Future<HouseholdProfile> update({
+    required String userId,
+    required HouseholdProfile Function(HouseholdProfile current) change,
+  }) {
+    return _db.transaction(() async {
+      final HouseholdProfile next = change(
+        await get(userId) ?? const HouseholdProfile(),
+      );
+      await save(userId: userId, profile: next);
+      return next;
+    });
+  }
+
   /// Stores [profile] as [userId]'s one profile, replacing whatever was there. [now] is for tests; production
   /// passes nothing and the row is stamped with the current time.
   Future<void> save({
