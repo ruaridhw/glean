@@ -485,6 +485,20 @@ void main() {
     },
   );
 
+  gleanWidgetTest('two edits made in quick succession both land', (
+    tester,
+  ) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
+    await tester.tap(find.byTooltip('Remove mushrooms'));
+    await tester.pumpAndSettle();
+
+    final HouseholdProfile after = (await stored(tester))!;
+    expect(after.spiceTolerance, SpiceTolerance.hot);
+    expect(after.dislikedIngredients, <String>['olives']);
+  });
+
   gleanWidgetTest('the free text saves as it is typed', (tester) async {
     await pumpProfile(tester, seed: _filled);
 

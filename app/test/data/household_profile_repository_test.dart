@@ -153,4 +153,25 @@ void main() {
     expect((await profiles.get(_userId))!.household, 'Just me');
     expect(await profiles.get('user-2'), isNull);
   });
+
+  test('two updates started together both land', () async {
+    await profiles.save(userId: _userId, profile: answered);
+
+    await Future.wait(<Future<HouseholdProfile>>[
+      profiles.update(
+        userId: _userId,
+        change: (HouseholdProfile p) =>
+            p.withSpiceTolerance(SpiceTolerance.hot),
+      ),
+      profiles.update(
+        userId: _userId,
+        change: (HouseholdProfile p) =>
+            p.copyWith(dislikedIngredients: <String>[]),
+      ),
+    ]);
+
+    final HouseholdProfile stored = (await profiles.get(_userId))!;
+    expect(stored.spiceTolerance, SpiceTolerance.hot);
+    expect(stored.dislikedIngredients, isEmpty);
+  });
 }
