@@ -22,7 +22,11 @@ class ProfileSummaryRow extends ConsumerWidget {
         title: const Text('Your profile'),
         // Nothing until the read lands, rather than flashing the empty line at someone who has a profile.
         subtitle: Text(
-          profile.hasValue ? profileSummary(profile.value) : '',
+          switch (profile) {
+            AsyncData(:final HouseholdProfile? value) => profileSummary(value),
+            AsyncError() => 'Could not load your profile',
+            _ => '',
+          },
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

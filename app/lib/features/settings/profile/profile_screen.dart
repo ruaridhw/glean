@@ -38,10 +38,20 @@ class ProfileScreen extends ConsumerWidget {
           profile: value ?? const HouseholdProfile(),
         ),
         AsyncError() => Center(
-          child: Text(
-            'Could not load your profile. Try again.',
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'Could not load your profile.',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              TextButton(
+                // Reads the stored profile again; nothing was written, so this is not a reload after a mutation.
+                onPressed: () => ref.invalidate(householdProfileProvider),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
         ),
         _ => const ListSkeleton(rows: 4, rowHeight: 96),
