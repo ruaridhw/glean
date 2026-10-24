@@ -171,6 +171,61 @@ class HouseholdProfile {
   final List<ProfileNote> notes;
   final DateTime? interviewedAt;
 
+  /// True when the household has told Glean nothing and Glean has kept no notes.
+  bool get isEmpty =>
+      favouriteMeals.isEmpty &&
+      lovedIngredients.isEmpty &&
+      dislikedIngredients.isEmpty &&
+      cuisinesLiked.isEmpty &&
+      cuisinesAvoided.isEmpty &&
+      proteinTargets.isEmpty &&
+      spiceTolerance == null &&
+      habits.isEmpty &&
+      household.isEmpty &&
+      notes.isEmpty;
+
+  /// A copy with the named fields replaced. [spiceTolerance] can be cleared, so it has [withSpiceTolerance].
+  HouseholdProfile copyWith({
+    List<FavouriteMeal>? favouriteMeals,
+    List<String>? lovedIngredients,
+    List<String>? dislikedIngredients,
+    List<String>? cuisinesLiked,
+    List<String>? cuisinesAvoided,
+    List<ProteinTarget>? proteinTargets,
+    String? habits,
+    String? household,
+    List<ProfileNote>? notes,
+  }) => HouseholdProfile(
+    version: version,
+    favouriteMeals: favouriteMeals ?? this.favouriteMeals,
+    lovedIngredients: lovedIngredients ?? this.lovedIngredients,
+    dislikedIngredients: dislikedIngredients ?? this.dislikedIngredients,
+    cuisinesLiked: cuisinesLiked ?? this.cuisinesLiked,
+    cuisinesAvoided: cuisinesAvoided ?? this.cuisinesAvoided,
+    proteinTargets: proteinTargets ?? this.proteinTargets,
+    spiceTolerance: spiceTolerance,
+    habits: habits ?? this.habits,
+    household: household ?? this.household,
+    notes: notes ?? this.notes,
+    interviewedAt: interviewedAt,
+  );
+
+  HouseholdProfile withSpiceTolerance(SpiceTolerance? value) =>
+      HouseholdProfile(
+        version: version,
+        favouriteMeals: favouriteMeals,
+        lovedIngredients: lovedIngredients,
+        dislikedIngredients: dislikedIngredients,
+        cuisinesLiked: cuisinesLiked,
+        cuisinesAvoided: cuisinesAvoided,
+        proteinTargets: proteinTargets,
+        spiceTolerance: value,
+        habits: habits,
+        household: household,
+        notes: notes,
+        interviewedAt: interviewedAt,
+      );
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'version': version,
     'favourite_meals': <Map<String, dynamic>>[
