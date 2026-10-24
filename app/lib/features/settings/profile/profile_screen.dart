@@ -3,7 +3,8 @@
 /// [HouseholdProfileRepository.update], and the screen redraws from the watched profile. Removing a chip or a
 /// note is undone from the snackbar, which puts the same item back where it was.
 ///
-/// The taste interview in first run fills this in; retaking it from here is not offered yet.
+/// The taste interview in first run can fill this in, but not every household has seen it, so the empty state does
+/// not promise it. Retaking the interview from here is not offered yet.
 library;
 
 import 'dart:async';
@@ -273,8 +274,7 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
                   ),
                   SizedBox(height: tokens.spacing.xs),
                   Text(
-                    'The taste questions when you first set up Glean fill '
-                    'this in. You can also add things yourself below.',
+                    'Add what you love and avoid, and it plans around them.',
                     style: text.bodyMedium,
                   ),
                 ],
