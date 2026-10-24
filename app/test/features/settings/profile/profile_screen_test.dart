@@ -7,11 +7,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/household_profile.dart';
+import 'package:glean/data/providers/household_profile_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/household_profile_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/settings/profile/profile_presentation.dart';
 import 'package:glean/router/app_routes.dart';
+
+import 'package:riverpod/misc.dart' show Override;
 
 import '../../../support/harness.dart';
 
@@ -461,23 +464,26 @@ void main() {
     expect((await stored(tester))!.toJson(), _filled.toJson());
   });
 
-  gleanWidgetTest('spice is picked by tapping a chip, and cleared by tapping it '
-      'again with an Undo', (tester) async {
-    await pumpProfile(tester, seed: _filled);
+  gleanWidgetTest(
+    'spice is picked by tapping a chip, and cleared by tapping it '
+    'again with an Undo',
+    (tester) async {
+      await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
-    await tester.pumpAndSettle();
-    expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
+      await tester.pumpAndSettle();
+      expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
-    await tester.pumpAndSettle();
-    expect((await stored(tester))!.spiceTolerance, isNull);
-    expect(find.text('Spice cleared'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
+      await tester.pumpAndSettle();
+      expect((await stored(tester))!.spiceTolerance, isNull);
+      expect(find.text('Spice cleared'), findsOneWidget);
 
-    await tester.tap(find.text('Undo'));
-    await tester.pumpAndSettle();
-    expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
-  });
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
+    },
+  );
 
   gleanWidgetTest('the free text saves as it is typed', (tester) async {
     await pumpProfile(tester, seed: _filled);
@@ -586,6 +592,31 @@ void main() {
     expect(find.text('Could not remove olives. Try again.'), findsOneWidget);
     expect(find.widgetWithText(InputChip, 'olives'), findsOneWidget);
     expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
+  gleanWidgetTest('a profile that cannot be read says so, and Retry reads it '
+      'again', (tester) async {
+    int reads = 0;
+    final AppTestHarness failing = AppTestHarness(
+      overrides: <Override>[
+        householdProfileProvider.overrideWith((ref) {
+          reads++;
+          return reads == 1
+              ? Stream<HouseholdProfile?>.error(StateError('unreadable'))
+              : Stream<HouseholdProfile?>.value(null);
+        }),
+      ],
+    );
+    addTearDown(failing.dispose);
+    await failing.pumpAt(tester, AppRoutes.settingsProfile.path);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not load your profile.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text("Glean doesn't know your tastes yet"), findsOneWidget);
   });
 
   for (final double scale in <double>[1, 2]) {

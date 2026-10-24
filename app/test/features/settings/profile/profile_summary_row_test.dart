@@ -4,10 +4,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/household_profile.dart';
+import 'package:glean/data/providers/household_profile_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/household_profile_repository.dart';
 import 'package:glean/features/settings/profile/profile_screen.dart';
 import 'package:glean/router/app_routes.dart';
+
+import 'package:riverpod/misc.dart' show Override;
 
 import '../../../support/harness.dart';
 
@@ -114,6 +117,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(rowText('1 never'), findsOneWidget);
+  });
+
+  gleanWidgetTest('a profile that cannot be read gives a neutral line, not a '
+      'blank or an empty profile', (tester) async {
+    final AppTestHarness failing = AppTestHarness(
+      overrides: <Override>[
+        householdProfileProvider.overrideWith(
+          (ref) => Stream<HouseholdProfile?>.error(StateError('unreadable')),
+        ),
+      ],
+    );
+    addTearDown(failing.dispose);
+    await tester.binding.setSurfaceSize(const Size(420, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await failing.pumpAt(tester, AppRoutes.settings.path);
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+
+    expect(rowText('Could not load your profile'), findsOneWidget);
   });
 
   gleanWidgetTest('tapping the row opens the Profile screen, and Back returns '
