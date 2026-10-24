@@ -21,3 +21,4 @@ The walkthrough question stays open; nothing here precludes adding one later.
 - **Onboarding status comes straight from stored config** — there is no separate "has seen onboarding" flag to drift out of sync.
 - **The receipt-scan step is also the feature's demo:** the first thing the app does for you is turn paper into a pantry.
 - **A "Describe your pantry" alternative belongs beside "Scan a receipt"** on that last step (ported from the Expo-era onboarding work, #74).
+- **Amended by ADR 0027:** the taste interview sits between the basics and the pantry, still skippable, and still ending by stocking the pantry.
