@@ -16,8 +16,11 @@ from glean.meal_plan.dietary_decisions import (
 )
 from glean.meal_plan.eligibility import CookedMeal
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.answers import RecipeAnswer
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.enrichment.active_time import active_time_question
 from glean.recipes.stored import StoredIngredient, StoredRecipe
+from tests.recipes.enrichment.fakes import SNAPSHOT
 
 CURRENT_MODEL = f"{DECISION_MODEL}-20261014"
 
@@ -951,3 +954,122 @@ def _store_decisions(corpus: RecipeCorpusStore, probabilities: dict[tuple[str, s
 def _fingerprint(corpus: RecipeCorpusStore, recipe_id: str) -> str:
     summary = next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
     return content_fingerprint(summary.title, summary.ingredient_names)
+
+
+# -- the household time cap uses the enriched active-time bucket (spec 6.1) ---------------------
+
+
+def test_the_time_cap_admits_a_slow_total_when_the_hands_on_time_is_short(tmp_path) -> None:
+    """Q3's whole point: a 60-minute total with 10 minutes of work fits a 20-minute cap."""
+    corpus = _corpus(tmp_path, [("rec_traybake", "Traybake", ["chicken", "potato"], 60)])
+    _enrich(corpus, "rec_traybake", "<=15")
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry=_pantry(),
+        dietary_flags=[],
+        max_total_time_mins=20,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=10,
+    )
+
+    assert [candidate.external_id for candidate in candidates] == ["rec_traybake"]
+
+
+def test_the_time_cap_compares_against_the_buckets_upper_bound(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_stew", "Slow Stew", ["beef", "carrot"], 30)])
+    _enrich(corpus, "rec_stew", "15-30")
+
+    def offered(cap: int) -> list[str]:
+        return [
+            candidate.external_id
+            for candidate in sample_corpus_candidates(
+                corpus,
+                pantry=_pantry(),
+                dietary_flags=[],
+                max_total_time_mins=cap,
+                exclude_external_ids=[],
+                rng=random.Random(0),
+                sample_size=10,
+            )
+        ]
+
+    assert offered(30) == ["rec_stew"]  # 15-30 can mean 30 minutes
+    assert offered(29) == []
+
+
+def test_a_bucket_with_no_upper_bound_never_fits_a_cap(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_project", "Weekend Project", ["beef", "pastry"], 200)])
+    _enrich(corpus, "rec_project", "60+")
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry=_pantry(),
+        dietary_flags=[],
+        max_total_time_mins=180,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=10,
+    )
+
+    assert candidates == []
+
+
+def test_a_recipe_with_no_active_time_answer_still_falls_back_to_total_time(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_plain", "Plain Bake", ["beef", "potato"], 40)])
+
+    def offered(cap: int) -> list[str]:
+        return [
+            candidate.external_id
+            for candidate in sample_corpus_candidates(
+                corpus,
+                pantry=_pantry(),
+                dietary_flags=[],
+                max_total_time_mins=cap,
+                exclude_external_ids=[],
+                rng=random.Random(0),
+                sample_size=10,
+            )
+        ]
+
+    assert offered(45) == ["rec_plain"]
+    assert offered(35) == []
+
+
+def test_an_unsure_active_time_answer_falls_back_to_total_time_too(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_plain", "Plain Bake", ["beef", "potato"], 40)])
+    _enrich(corpus, "rec_plain", "unsure")
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry=_pantry(),
+        dietary_flags=[],
+        max_total_time_mins=35,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        sample_size=10,
+    )
+
+    assert candidates == []
+
+
+def _enrich(corpus: RecipeCorpusStore, recipe_id: str, bucket: str) -> None:
+    """Store an active-time answer for one recipe, under the question's current wording."""
+    recipe = corpus.get(recipe_id)
+    assert recipe is not None
+    question = active_time_question()
+    corpus.save_answers(
+        [
+            RecipeAnswer(
+                recipe_id=recipe_id,
+                question=question.name,
+                probability=0.9,
+                value=bucket,
+                model=SNAPSHOT,
+                content_hash=content_fingerprint(recipe.title, [i.canonical_name for i in recipe.ingredients]),
+                criteria_hash=question.criteria_hash,
+                computed_at=datetime(2026, 10, 22, tzinfo=UTC),
+            )
+        ]
+    )
