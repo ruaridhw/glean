@@ -136,7 +136,7 @@ void main() {
 
       final upgraded = sqlite3.open(file.path);
       addTearDown(upgraded.close);
-      expect(upgraded.select('PRAGMA user_version').single.values.single, 6);
+      expect(upgraded.select('PRAGMA user_version').single.values.single, 7);
       for (final String t in before.keys) {
         expect(
           _rows(upgraded, t, oldColumns[t]!).length,

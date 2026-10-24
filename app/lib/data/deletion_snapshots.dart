@@ -8,11 +8,17 @@ class DeletedPlanEntry {
     this.entry,
     List<ShoppingListItem> shopping,
     List<CookedAdjustment> adjustments,
+    List<MealRating> rating,
   ) : shopping = List.unmodifiable(shopping),
-      adjustments = List.unmodifiable(adjustments);
+      adjustments = List.unmodifiable(adjustments),
+      rating = List.unmodifiable(rating);
   final MealPlanEntry entry;
   final List<ShoppingListItem> shopping;
   final List<CookedAdjustment> adjustments;
+
+  /// The entry's `meal_ratings` row, at most one, which the delete cascaded away: Undo restores the
+  /// household's verdict along with the meal it was about.
+  final List<MealRating> rating;
 }
 
 class DeletedRecipe {

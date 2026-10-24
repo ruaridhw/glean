@@ -173,6 +173,10 @@ def _generate_from_corpus(
         )
         for item in request.pantry
     ]
+    # `cooked_history`'s ratings decide what may be offered (a thumbs-down recipe never is), and nothing
+    # else here reads them. Its notes go no further than this function's argument: the only path a note
+    # will take into a prompt is the screened human-feedback channel, which is not built yet. Until that
+    # screen exists the note is stored on the phone and validated on the wire, and that is all.
     candidates = sample_corpus_candidates(
         corpus,
         pantry=pantry,
@@ -181,7 +185,12 @@ def _generate_from_corpus(
         exclude_external_ids=request.exclude_external_ids,
         rng=rng,
         cooked=[
-            CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at)
+            CookedMeal(
+                recipe_id=meal.recipe_id,
+                title=meal.title,
+                cooked_at=meal.cooked_at,
+                rating=meal.rating,
+            )
             for meal in request.cooked_history
         ],
         slots=request.meals_per_week,

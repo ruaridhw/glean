@@ -18,10 +18,6 @@ import 'package:glean/data/util/week.dart';
 import '../compression.dart';
 import '../food_groups.dart';
 
-/// The history window Generate sends: twelve weeks of cooked meals. The backend leaves out anything cooked in the
-/// last six of them, relaxing only when the corpus cannot otherwise fill the week.
-const cookedHistoryWindow = Duration(days: 84);
-
 class GenerateWeekController extends AsyncNotifier<int> {
   @override
   FutureOr<int> build() => 0;
@@ -50,10 +46,8 @@ class GenerateWeekController extends AsyncNotifier<int> {
     final pantry = await ref.read(pantryRepositoryProvider).getAll(userId);
     final saved = await recipes.getSaved(userId);
     final entries = await plan.getWeek(userId: userId, weekStart: weekStart);
-    final cooked = await plan.cookedSince(
-      userId: userId,
-      since: DateTime.now().subtract(cookedHistoryWindow),
-    );
+    // The window plus any older cook that still carries a thumbs down: a dislike does not expire.
+    final cooked = await plan.plannerHistory(userId: userId);
     final config = await ref.read(userConfigRepositoryProvider).get(userId);
     final groups = <int, List<String>>{};
     for (final recipe in saved) {
@@ -91,6 +85,10 @@ class GenerateWeekController extends AsyncNotifier<int> {
             // UTC, with the offset the wire format needs: a local wall clock read as UTC aged a
             // 41d23h-old cook past the six-week floor in a UTC-7 zone.
             cookedAt: entry.cookedAt!.toUtc(),
+            // The latest thumb and its note, if any; the backend keeps a thumbs-down recipe out of the
+            // week and reads nothing else from either.
+            rating: entry.rating?.dbValue,
+            note: entry.note,
           ),
       ],
       foodGroupCoverage: foodGroupCoverageForWeek(entries, groups),

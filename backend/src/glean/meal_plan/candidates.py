@@ -151,6 +151,10 @@ def sample_corpus_candidates(
         slots=slots,
     )
     floor_ids = set(floor.recipe_ids)
+    if floor.disliked:
+        # A deliberate exclusion, not an empty corpus: logged so an eval can tell "nothing was rated" from
+        # "the household's thumbs left too few recipes".
+        logger.info("thumbs-down recipes left out", extra={"disliked": len(floor.disliked)})
     if floor.relaxed_floor:
         # The soft repeat rule gave way because the hard constraints left too few fresh recipes. Reported
         # so eval runs and logs can tell "no repeats" from "no repeats because the floor never relaxed".

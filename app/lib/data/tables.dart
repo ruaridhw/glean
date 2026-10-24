@@ -9,6 +9,7 @@
 // - `shopping_list_items.ingredientId` is NOT NULL, and `sourceMealPlanEntryId` cascades a deleted plan
 //   entry's shopping rows away.
 // - `cooked_adjustments` records exactly what "Cooked" took from the pantry so it can be reversed.
+// - `meal_ratings` holds the household's thumb (and optional note) on a cooked entry, one row per entry.
 //
 // Dates/timestamps are ISO-8601 TEXT rather than drift's `dateTime()`; text sorts and range-filters correctly
 // with plain SQL comparisons, which the week-scoped plan queries rely on. SQL names are drift's default
@@ -123,6 +124,25 @@ class MealPlanEntries extends Table {
   IntColumn get servings => integer()();
 }
 
+/// The household's verdict on a meal they cooked: a thumb, and optionally why. One row per plan entry, so
+/// switching the thumb updates it and clearing the thumb deletes it — a meal is never rated twice.
+///
+/// Only cooked entries are rated (the repository refuses an uncooked one): an uncooked meal says nothing
+/// reliable about taste. Rows cascade away with their entry, and travel to the planner inside the cooked
+/// history window, where a thumbs down keeps the recipe out of future plans.
+class MealRatings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get userId => text()();
+  IntColumn get mealPlanEntryId => integer()
+      .references(MealPlanEntries, #id, onDelete: KeyAction.cascade)
+      .unique()();
+  // `MealThumb.dbValue` ('up' or 'down'). Never null: clearing the rating deletes the row.
+  TextColumn get rating => text()();
+  // Free text the household typed in the long-press sheet; null when they saved no comment.
+  TextColumn get note => text().nullable()();
+  TextColumn get createdAt => text()();
+}
+
 /// The exact pantry delta "Cooked" applied for one plan entry, so it can be reversed precisely. One row per
 /// ingredient the recipe touched.
 class CookedAdjustments extends Table {
@@ -184,6 +204,10 @@ class UserConfig extends Table {
   // Whether the Shopping tab groups rows by store section. Lives on this device's database, so it is a
   // per-device choice; defaults off.
   BoolColumn get groupShoppingBySection =>
+      boolean().withDefault(const Constant(false))();
+  // Whether the one-off "how ratings are used" explainer has been shown. Defaults false, so a user with no
+  // row yet gets it on their first thumb; the flag lives here rather than in a table of its own.
+  BoolColumn get ratingsExplainerSeen =>
       boolean().withDefault(const Constant(false))();
 
   @override

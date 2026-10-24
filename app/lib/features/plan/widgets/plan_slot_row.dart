@@ -5,10 +5,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
+import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/design_system/design_system.dart';
 
 import '../actions.dart';
 import '../presentation.dart';
+import 'rating_thumbs.dart';
 
 class PlanSlotRow extends ConsumerWidget {
   const PlanSlotRow({
@@ -36,6 +38,8 @@ class PlanSlotRow extends ConsumerWidget {
       child: _FilledSlotRow(
         entry: entry,
         onCooked: () => markCookedWithUndo(context, ref, entry),
+        onRate: (MealThumb thumb) => rateMeal(context, ref, entry, thumb),
+        onNote: (MealThumb thumb) => noteMealRating(context, ref, entry, thumb),
         onOpen: canOpenPlannedRecipe(entry) ? () => onOpen(entry) : null,
       ),
     );
@@ -89,11 +93,15 @@ class _FilledSlotRow extends StatelessWidget {
   const _FilledSlotRow({
     required this.entry,
     required this.onCooked,
+    required this.onRate,
+    required this.onNote,
     required this.onOpen,
   });
 
   final MealPlanEntryView entry;
   final VoidCallback onCooked;
+  final ValueChanged<MealThumb> onRate;
+  final ValueChanged<MealThumb> onNote;
 
   /// Null when the entry has no recipe to open, which leaves the row inert.
   final VoidCallback? onOpen;
@@ -147,6 +155,9 @@ class _FilledSlotRow extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       entry.recipeTitle,
+                      // Two lines: the thumbs take the width a longer title used to have, and a name cut to
+                      // one line stops identifying the meal ("Lemon and herb sal...").
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: cooked
                           ? textTheme.titleMedium?.copyWith(
@@ -163,14 +174,21 @@ class _FilledSlotRow extends StatelessWidget {
                 ),
               ),
               SizedBox(width: tokens.spacing.md),
-              // The trailing "Cooked?" pill (a themed `OutlinedButton`) fades out once cooked rather than vanishing outright.
+              // The trailing "Cooked?" pill (a themed `OutlinedButton`) becomes the two thumbs once
+              // cooked: only a cooked meal says anything reliable about whether it was liked, so the
+              // thumbs never appear on a row that has not been cooked yet.
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 transitionBuilder:
                     (Widget child, Animation<double> animation) =>
                         FadeTransition(opacity: animation, child: child),
                 child: cooked
-                    ? const SizedBox.shrink(key: ValueKey<String>('cooked-gap'))
+                    ? RatingThumbs(
+                        key: const ValueKey<String>('rating-thumbs'),
+                        rating: entry.rating,
+                        onRate: onRate,
+                        onNote: onNote,
+                      )
                     : OutlinedButton(
                         key: const ValueKey<String>('cooked-button'),
                         onPressed: onCooked,
