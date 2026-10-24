@@ -8050,6 +8050,279 @@ class CatalogueItemRedirectsCompanion
   }
 }
 
+class $HouseholdProfilesTable extends HouseholdProfiles
+    with TableInfo<$HouseholdProfilesTable, HouseholdProfile> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $HouseholdProfilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileJsonMeta = const VerificationMeta(
+    'profileJson',
+  );
+  @override
+  late final GeneratedColumn<String> profileJson = GeneratedColumn<String>(
+    'profile_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<String> updatedAt = GeneratedColumn<String>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [userId, profileJson, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'household_profiles';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<HouseholdProfile> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('profile_json')) {
+      context.handle(
+        _profileJsonMeta,
+        profileJson.isAcceptableOrUnknown(
+          data['profile_json']!,
+          _profileJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_profileJsonMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {userId};
+  @override
+  HouseholdProfile map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return HouseholdProfile(
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      profileJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}profile_json'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $HouseholdProfilesTable createAlias(String alias) {
+    return $HouseholdProfilesTable(attachedDatabase, alias);
+  }
+}
+
+class HouseholdProfile extends DataClass
+    implements Insertable<HouseholdProfile> {
+  final String userId;
+  final String profileJson;
+  final String updatedAt;
+  const HouseholdProfile({
+    required this.userId,
+    required this.profileJson,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
+    map['profile_json'] = Variable<String>(profileJson);
+    map['updated_at'] = Variable<String>(updatedAt);
+    return map;
+  }
+
+  HouseholdProfilesCompanion toCompanion(bool nullToAbsent) {
+    return HouseholdProfilesCompanion(
+      userId: Value(userId),
+      profileJson: Value(profileJson),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory HouseholdProfile.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return HouseholdProfile(
+      userId: serializer.fromJson<String>(json['userId']),
+      profileJson: serializer.fromJson<String>(json['profileJson']),
+      updatedAt: serializer.fromJson<String>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
+      'profileJson': serializer.toJson<String>(profileJson),
+      'updatedAt': serializer.toJson<String>(updatedAt),
+    };
+  }
+
+  HouseholdProfile copyWith({
+    String? userId,
+    String? profileJson,
+    String? updatedAt,
+  }) => HouseholdProfile(
+    userId: userId ?? this.userId,
+    profileJson: profileJson ?? this.profileJson,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  HouseholdProfile copyWithCompanion(HouseholdProfilesCompanion data) {
+    return HouseholdProfile(
+      userId: data.userId.present ? data.userId.value : this.userId,
+      profileJson: data.profileJson.present
+          ? data.profileJson.value
+          : this.profileJson,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HouseholdProfile(')
+          ..write('userId: $userId, ')
+          ..write('profileJson: $profileJson, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(userId, profileJson, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is HouseholdProfile &&
+          other.userId == this.userId &&
+          other.profileJson == this.profileJson &&
+          other.updatedAt == this.updatedAt);
+}
+
+class HouseholdProfilesCompanion extends UpdateCompanion<HouseholdProfile> {
+  final Value<String> userId;
+  final Value<String> profileJson;
+  final Value<String> updatedAt;
+  final Value<int> rowid;
+  const HouseholdProfilesCompanion({
+    this.userId = const Value.absent(),
+    this.profileJson = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  HouseholdProfilesCompanion.insert({
+    required String userId,
+    required String profileJson,
+    required String updatedAt,
+    this.rowid = const Value.absent(),
+  }) : userId = Value(userId),
+       profileJson = Value(profileJson),
+       updatedAt = Value(updatedAt);
+  static Insertable<HouseholdProfile> custom({
+    Expression<String>? userId,
+    Expression<String>? profileJson,
+    Expression<String>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
+      if (profileJson != null) 'profile_json': profileJson,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  HouseholdProfilesCompanion copyWith({
+    Value<String>? userId,
+    Value<String>? profileJson,
+    Value<String>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return HouseholdProfilesCompanion(
+      userId: userId ?? this.userId,
+      profileJson: profileJson ?? this.profileJson,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (profileJson.present) {
+      map['profile_json'] = Variable<String>(profileJson.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<String>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HouseholdProfilesCompanion(')
+          ..write('userId: $userId, ')
+          ..write('profileJson: $profileJson, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$GleanDatabase extends GeneratedDatabase {
   _$GleanDatabase(QueryExecutor e) : super(e);
   $GleanDatabaseManager get managers => $GleanDatabaseManager(this);
@@ -8082,6 +8355,8 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
       $IngredientOverridesTable(this);
   late final $CatalogueItemRedirectsTable catalogueItemRedirects =
       $CatalogueItemRedirectsTable(this);
+  late final $HouseholdProfilesTable householdProfiles =
+      $HouseholdProfilesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -8103,6 +8378,7 @@ abstract class _$GleanDatabase extends GeneratedDatabase {
     catalogueSyncState,
     ingredientOverrides,
     catalogueItemRedirects,
+    householdProfiles,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -14609,6 +14885,183 @@ typedef $$CatalogueItemRedirectsTableProcessedTableManager =
       CatalogueItemRedirect,
       PrefetchHooks Function()
     >;
+typedef $$HouseholdProfilesTableCreateCompanionBuilder =
+    HouseholdProfilesCompanion Function({
+      required String userId,
+      required String profileJson,
+      required String updatedAt,
+      Value<int> rowid,
+    });
+typedef $$HouseholdProfilesTableUpdateCompanionBuilder =
+    HouseholdProfilesCompanion Function({
+      Value<String> userId,
+      Value<String> profileJson,
+      Value<String> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$HouseholdProfilesTableFilterComposer
+    extends Composer<_$GleanDatabase, $HouseholdProfilesTable> {
+  $$HouseholdProfilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileJson => $composableBuilder(
+    column: $table.profileJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$HouseholdProfilesTableOrderingComposer
+    extends Composer<_$GleanDatabase, $HouseholdProfilesTable> {
+  $$HouseholdProfilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get profileJson => $composableBuilder(
+    column: $table.profileJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$HouseholdProfilesTableAnnotationComposer
+    extends Composer<_$GleanDatabase, $HouseholdProfilesTable> {
+  $$HouseholdProfilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get profileJson => $composableBuilder(
+    column: $table.profileJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$HouseholdProfilesTableTableManager
+    extends
+        RootTableManager<
+          _$GleanDatabase,
+          $HouseholdProfilesTable,
+          HouseholdProfile,
+          $$HouseholdProfilesTableFilterComposer,
+          $$HouseholdProfilesTableOrderingComposer,
+          $$HouseholdProfilesTableAnnotationComposer,
+          $$HouseholdProfilesTableCreateCompanionBuilder,
+          $$HouseholdProfilesTableUpdateCompanionBuilder,
+          (
+            HouseholdProfile,
+            BaseReferences<
+              _$GleanDatabase,
+              $HouseholdProfilesTable,
+              HouseholdProfile
+            >,
+          ),
+          HouseholdProfile,
+          PrefetchHooks Function()
+        > {
+  $$HouseholdProfilesTableTableManager(
+    _$GleanDatabase db,
+    $HouseholdProfilesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$HouseholdProfilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$HouseholdProfilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$HouseholdProfilesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> userId = const Value.absent(),
+                Value<String> profileJson = const Value.absent(),
+                Value<String> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HouseholdProfilesCompanion(
+                userId: userId,
+                profileJson: profileJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String userId,
+                required String profileJson,
+                required String updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => HouseholdProfilesCompanion.insert(
+                userId: userId,
+                profileJson: profileJson,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$HouseholdProfilesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GleanDatabase,
+      $HouseholdProfilesTable,
+      HouseholdProfile,
+      $$HouseholdProfilesTableFilterComposer,
+      $$HouseholdProfilesTableOrderingComposer,
+      $$HouseholdProfilesTableAnnotationComposer,
+      $$HouseholdProfilesTableCreateCompanionBuilder,
+      $$HouseholdProfilesTableUpdateCompanionBuilder,
+      (
+        HouseholdProfile,
+        BaseReferences<
+          _$GleanDatabase,
+          $HouseholdProfilesTable,
+          HouseholdProfile
+        >,
+      ),
+      HouseholdProfile,
+      PrefetchHooks Function()
+    >;
 
 class $GleanDatabaseManager {
   final _$GleanDatabase _db;
@@ -14648,4 +15101,6 @@ class $GleanDatabaseManager {
         _db,
         _db.catalogueItemRedirects,
       );
+  $$HouseholdProfilesTableTableManager get householdProfiles =>
+      $$HouseholdProfilesTableTableManager(_db, _db.householdProfiles);
 }
