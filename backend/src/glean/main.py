@@ -17,6 +17,7 @@ from glean.dev.router import router as dev_router
 from glean.health.router import router as health_router
 from glean.meal_plan.router import router as meal_plan_router
 from glean.observability import logger
+from glean.profile.router import router as profile_router
 from glean.receipts.router import router as receipts_router
 from glean.recipes.router import router as recipes_router
 from glean.shopping.router import router as shopping_router
@@ -37,6 +38,7 @@ app.include_router(receipts_router)
 app.include_router(recipes_router)
 app.include_router(shopping_router)
 app.include_router(meal_plan_router)
+app.include_router(profile_router)
 
 # Only a browser needs CORS, and the only browser client is the Flutter web
 # dev loop (`make start-web`) talking to a server run locally with

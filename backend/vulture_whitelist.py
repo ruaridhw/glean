@@ -205,3 +205,27 @@ swap_outcome  # PlanState key: the swap's finished outcome, keyed by swap id so 
 note_dropped  # MessageAccepted field: the 202 tells the app the screen dropped the note ("Couldn't use that note")
 questions_asked  # PlanState key (V11): how many questions the agent has asked, at most one
 working_seconds  # PlanState key (V11): the working time spent before the question, carried into the resume
+
+# profile/schemas.py: the household profile and the interview contract, read by FastAPI, the app and the model
+# MainProtein members: the settled attribute vocabulary (spec §6.1), not all used in src yet
+interview  # POST /profile/interview route handler
+CHICKEN  # MainProtein member
+TURKEY_OR_DUCK  # MainProtein member
+BEEF  # MainProtein member
+PORK  # MainProtein member
+LAMB  # MainProtein member
+FISH  # MainProtein member
+SEAFOOD  # MainProtein member
+TOFU_OR_PLANT_PROTEIN  # MainProtein member
+VEGETARIAN_OTHER  # MainProtein member
+MIXED  # MainProtein member
+PROTEIN_TARGETS  # ProfileField member, targeted by a model-chosen follow-up
+NOTES  # ProfileField member, targeted by a model-chosen follow-up
+INTERVIEW  # NoteSource member, appended from the interview
+FEEDBACK  # NoteSource member, the proposal screen's notes (V15)
+protein  # ProteinTarget field
+_bounds_are_ordered  # Pydantic model validator (ProteinTarget)
+interviewed_at  # HouseholdProfile field, stamped by the service
+skippable  # InterviewQuestion field, always true
+max_turns  # InterviewQuestionResponse field
+dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
