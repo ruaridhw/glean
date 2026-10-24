@@ -15,6 +15,20 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # Seven questions in one interview: the five fixed openers and at most two follow-ups.
 MAX_TURNS = 7
 
+# Nothing a client sends is trusted to be small: every list and string has a ceiling, generous enough
+# that the app never meets it, so a forged or runaway request is a 422 rather than a 3 MB prompt.
+MAX_LIST_ENTRIES = 25
+MAX_TEXT_CHARS = 120
+MAX_PARAGRAPH_CHARS = 500
+MAX_QUESTION_CHARS = 300
+MAX_ID_CHARS = 64
+MAX_OPTIONS = 10
+MAX_NOTES = 50
+MAX_PROTEIN_TARGETS = 12  # one per MainProtein value
+
+_Text = Annotated[str, Field(min_length=1, max_length=MAX_TEXT_CHARS)]
+_Paragraph = Annotated[str, Field(max_length=MAX_PARAGRAPH_CHARS)]
+
 
 class SpiceTolerance(StrEnum):
     """How much heat the household wants. `null` means the interview didn't settle it."""
@@ -69,9 +83,10 @@ class FavouriteMeal(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    text: str = Field(min_length=1, description="The meal as the household said it.")
+    text: _Text = Field(description="The meal as the household said it.")
     recipe_id: str | None = Field(
         default=None,
+        max_length=200,
         description="The corpus recipe this meal is, when the title matched one confidently; otherwise null.",
     )
 
@@ -99,7 +114,9 @@ class ProfileNote(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     date: dt.date = Field(description="The day the note was recorded.")
-    text: str = Field(min_length=1, description="The note itself, in plain language.")
+    text: Annotated[str, Field(min_length=1, max_length=MAX_PARAGRAPH_CHARS)] = Field(
+        description="The note itself, in plain language."
+    )
     source: NoteSource = Field(description="Where the note came from.")
 
 
@@ -110,19 +127,33 @@ class HouseholdProfile(BaseModel):
 
     version: Literal[1] = Field(default=1, description="The profile shape's version. Always 1 today.")
     favourite_meals: list[FavouriteMeal] = Field(
-        default_factory=list, description="Dinners they would happily eat every fortnight."
+        default_factory=list,
+        max_length=MAX_LIST_ENTRIES,
+        description="Dinners they would happily eat every fortnight.",
     )
-    loved_ingredients: list[str] = Field(default_factory=list, description="Ingredients they love.")
-    disliked_ingredients: list[str] = Field(default_factory=list, description="Ingredients to never plan.")
-    cuisines_liked: list[str] = Field(default_factory=list, description="Cuisines they love.")
-    cuisines_avoided: list[str] = Field(default_factory=list, description="Cuisines to never plan.")
+    loved_ingredients: list[_Text] = Field(
+        default_factory=list, max_length=MAX_LIST_ENTRIES, description="Ingredients they love."
+    )
+    disliked_ingredients: list[_Text] = Field(
+        default_factory=list, max_length=MAX_LIST_ENTRIES, description="Ingredients to never plan."
+    )
+    cuisines_liked: list[_Text] = Field(
+        default_factory=list, max_length=MAX_LIST_ENTRIES, description="Cuisines they love."
+    )
+    cuisines_avoided: list[_Text] = Field(
+        default_factory=list, max_length=MAX_LIST_ENTRIES, description="Cuisines to never plan."
+    )
     protein_targets: list[ProteinTarget] = Field(
-        default_factory=list, description="How often each protein should appear in a week."
+        default_factory=list,
+        max_length=MAX_PROTEIN_TARGETS,
+        description="How often each protein should appear in a week.",
     )
     spice_tolerance: SpiceTolerance | None = Field(default=None, description="How much heat they want, or null.")
-    habits: str = Field(default="", description="How they plan and cook now, in their own words.")
-    household: str = Field(default="", description="Who eats at the table, in their own words.")
-    notes: list[ProfileNote] = Field(default_factory=list, description="The running memory of dated notes.")
+    habits: _Paragraph = Field(default="", description="How they plan and cook now, in their own words.")
+    household: _Paragraph = Field(default="", description="Who eats at the table, in their own words.")
+    notes: list[ProfileNote] = Field(
+        default_factory=list, max_length=MAX_NOTES, description="The running memory of dated notes."
+    )
     interviewed_at: dt.datetime | None = Field(default=None, description="When the interview finished, or null.")
 
 
@@ -131,9 +162,15 @@ class InterviewQuestion(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(min_length=1, description="Stable identifier for this question in this interview.")
-    text: str = Field(min_length=1, description="The question to show the user.")
-    options: list[str] = Field(default_factory=list, description="Tappable answers; may be empty.")
+    id: Annotated[str, Field(min_length=1, max_length=MAX_ID_CHARS)] = Field(
+        description="Stable identifier for this question in this interview."
+    )
+    text: Annotated[str, Field(min_length=1, max_length=MAX_QUESTION_CHARS)] = Field(
+        description="The question to show the user."
+    )
+    options: list[_Text] = Field(
+        default_factory=list, max_length=MAX_OPTIONS, description="Tappable answers; may be empty."
+    )
     field: ProfileField = Field(description="The profile field this question fills.")
     skippable: Literal[True] = Field(default=True, description="Always true: every turn can be skipped.")
 
@@ -144,7 +181,9 @@ class InterviewAnswer(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str | None = Field(default=None, max_length=2_000, description="What they typed, if anything.")
-    options: list[str] = Field(default_factory=list, description="Which offered options they chose.")
+    options: list[_Text] = Field(
+        default_factory=list, max_length=MAX_OPTIONS, description="Which offered options they chose."
+    )
     skipped: bool = Field(default=False, description="True when they skipped this turn.")
 
 

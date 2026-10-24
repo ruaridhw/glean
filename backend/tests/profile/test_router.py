@@ -12,7 +12,7 @@ from glean.dependencies import get_decision_client
 from glean.llm import Feature
 from glean.main import app
 from glean.profile import service
-from glean.profile.schemas import InterviewTurn
+from glean.profile.schemas import InterviewTurn, ProfileDraft
 from glean.screening import clear_screen_cache
 from tests.profile.conftest import (
     FakeDecisions,
@@ -170,16 +170,26 @@ def test_the_cap_is_seven_turns(client: TestClient, auth_headers: dict[str, str]
     assert len(model.calls) == 3  # turns 6, 7 and the turn that finished the interview
 
 
-def test_a_transcript_of_seven_answers_is_rejected(client: TestClient, auth_headers: dict[str, str]) -> None:
-    transcript = [
-        _answered(
-            {"id": f"opener-{index}", "text": "question?", "options": [], "field": "habits", "skippable": True},
-            {"text": "an answer"},
-        )
-        for index in range(8)
-    ]
+def test_seven_answered_turns_finish_the_interview(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter
+) -> None:
+    model.replies = [asks("How spicy is too spicy?"), asks("Anything else?"), finished()]
+    transcript: list[dict[str, Any]] = []
+    for answer in [*ANSWERS, {"text": "Medium"}, {"text": "Peas"}]:
+        body = _ask(client, transcript, auth_headers)
+        transcript = [*transcript, _answered(body["question"], answer)]
 
-    response = client.post("/profile/interview", headers=auth_headers, json={"transcript": transcript})
+    assert len(transcript) == 7
+    assert _ask(client, transcript, auth_headers)["status"] == "done"
+
+
+def test_more_than_seven_turns_is_rejected(client: TestClient, auth_headers: dict[str, str]) -> None:
+    turn = _answered(
+        {"id": "opener-favourite-meals", "text": "q?", "options": [], "field": "favourite_meals", "skippable": True},
+        {"text": "an answer"},
+    )
+
+    response = client.post("/profile/interview", headers=auth_headers, json={"transcript": [turn] * 8})
 
     assert response.status_code == 422
 
@@ -526,3 +536,69 @@ def test_screens_run_together_not_one_after_another(
     assert len(model.payload()["answers"]) == 5
     # Five half-second screens in series would take 2.5s; together they take about one.
     assert elapsed < 1.2
+
+
+def test_an_oversized_answer_is_rejected(client: TestClient, auth_headers: dict[str, str]) -> None:
+    question = _ask(client, [], auth_headers)["question"]
+    transcript = [
+        {
+            "question": question,
+            "answer": {"text": "Chicken curry", "options": ["Quick weeknights" * 30] * 200},
+        }
+    ]
+
+    response = client.post("/profile/interview", headers=auth_headers, json={"transcript": transcript})
+
+    assert response.status_code == 422
+
+
+def test_an_oversized_draft_profile_is_rejected(client: TestClient, auth_headers: dict[str, str]) -> None:
+    response = client.post(
+        "/profile/interview",
+        headers=auth_headers,
+        json={"transcript": [], "draft_profile": {"loved_ingredients": ["olives" * 5_000] * 300}},
+    )
+
+    assert response.status_code == 422
+
+
+def test_the_models_profile_and_summary_are_clamped(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter, corpus: RecipeCorpusStore
+) -> None:
+    searches: list[str] = []
+    real_search = corpus.search
+
+    def counting_search(*args: Any, **kwargs: Any) -> Any:
+        searches.append(str(kwargs.get("q") or (args[0] if args else "")))
+        return real_search(*args, **kwargs)
+
+    corpus.search = counting_search  # type: ignore[method-assign]
+    model.replies = [
+        finished(
+            draft=ProfileDraft.model_validate(
+                {
+                    "favourite_meals": [f"meal {number}" for number in range(40)],
+                    "loved_ingredients": [f"ingredient {number}" for number in range(40)],
+                    "disliked_ingredients": [],
+                    "cuisines_liked": [],
+                    "cuisines_avoided": [],
+                    "protein_targets": [],
+                    "spice_tolerance": None,
+                    "habits": "h" * 900,
+                    "household": "t" * 900,
+                }
+            ),
+            summary="two lines\n" * 200,
+        )
+    ]
+
+    body = _walk_skipped(client, auth_headers, {})
+
+    profile = body["profile"]
+    assert len(profile["favourite_meals"]) == 25
+    assert len(profile["loved_ingredients"]) == 25
+    assert len(profile["habits"]) <= 500
+    assert len(profile["household"]) <= 500
+    assert len(body["summary"]) <= 300
+    # A long favourite list can't turn into a long run of corpus searches.
+    assert len(searches) <= 10
