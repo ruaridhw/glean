@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from glean.meal_plan.dietary_decisions import DietaryDecisionStore, dietary_answers
-from glean.recipes.corpus import RecipeCorpusStore, open_corpus, projection_store_for
+from glean.recipes.corpus import RecipeCorpusStore, dynamodb_endpoint_url, open_corpus, projection_store_for
 from glean.recipes.dynamo_corpus import (
     DynamoCorpusBackend,
     answer_item,
@@ -293,7 +293,11 @@ def main(
     if args.reset_checkpoint:
         checkpoint.reset()
     target = (
-        backend if backend is not None else DynamoCorpusBackend(args.table, projection=projections, region=args.region)
+        backend
+        if backend is not None
+        else DynamoCorpusBackend(
+            args.table, projection=projections, region=args.region, endpoint_url=dynamodb_endpoint_url()
+        )
     )
     summary = migrate(plan, target, checkpoint=checkpoint, wcu_per_second=args.wcu_per_second, limit=args.limit)
     projection = _write_projection(summary, target)

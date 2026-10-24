@@ -14,6 +14,8 @@ from tests.recipes.corpus_fixtures import synthetic_recipe
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
 
 def test_without_a_table_the_scripts_read_the_blob_corpus(tmp_path: Path) -> None:
     corpus = open_corpus(cache_dir=tmp_path)
@@ -56,3 +58,14 @@ def test_with_a_table_the_scripts_write_the_dynamo_store(recipes_table: Any, tmp
 def test_the_projection_lives_where_the_script_says(tmp_path: Path) -> None:
     assert isinstance(projection_store_for(bucket="glean-recipe-cache-test"), S3ProjectionStore)
     assert isinstance(projection_store_for(cache_dir=tmp_path), FilesystemProjectionStore)
+
+
+def test_a_table_honours_the_dynamodb_endpoint_setting(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # The scripts run without the app's settings, so they read the same variable the session store does.
+    monkeypatch.delenv("AWS_ENDPOINT_URL_DYNAMODB", raising=False)
+    monkeypatch.setenv("DYNAMODB_ENDPOINT_URL", "http://127.0.0.1:8000")
+
+    store = open_corpus(table=RECIPES_TABLE_NAME, cache_dir=tmp_path).store
+
+    assert isinstance(store, DynamoCorpusBackend)
+    assert store._client.meta.endpoint_url == "http://127.0.0.1:8000"

@@ -17,6 +17,7 @@ planner and the scripts never know which store they are on. `RECIPE_STORE` defau
 from __future__ import annotations
 
 import json
+import os
 import time
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
@@ -44,6 +45,7 @@ __all__ = [
     "CorpusBackend",
     "CorpusStoreError",
     "RecipeCorpusStore",
+    "dynamodb_endpoint_url",
     "get_corpus_backend",
     "open_corpus",
     "projection_store_for",
@@ -312,7 +314,12 @@ def _dynamo_corpus_backend() -> CorpusBackend:
     settings = get_settings()
     if not settings.recipes_table:
         raise CorpusStoreError("RECIPE_STORE=dynamo needs RECIPES_TABLE; refusing to read the corpus as empty")
-    return DynamoCorpusBackend(settings.recipes_table, projection=get_projection_store(), region=settings.aws_region)
+    return DynamoCorpusBackend(
+        settings.recipes_table,
+        projection=get_projection_store(),
+        region=settings.aws_region,
+        endpoint_url=settings.dynamodb_endpoint_url or None,
+    )
 
 
 def get_corpus_backend() -> CorpusBackend:
@@ -380,7 +387,9 @@ def open_corpus(
         from glean.recipes.dynamo_corpus import DynamoCorpusBackend  # noqa: PLC0415 - boto3 only when used
 
         projection = projection_store_for(bucket=bucket, cache_dir=cache_dir, region=region)
-        return RecipeCorpusStore(DynamoCorpusBackend(table, projection=projection, region=region))
+        return RecipeCorpusStore(
+            DynamoCorpusBackend(table, projection=projection, region=region, endpoint_url=dynamodb_endpoint_url())
+        )
     if bucket:
         from glean.recipe_api.blob_store import S3BlobStore  # noqa: PLC0415
 
@@ -390,6 +399,15 @@ def open_corpus(
     return RecipeCorpusStore(
         BlobCorpusBackend(FilesystemBlobStore(corpus_dir or (cache_dir or default_cache_dir()) / "corpus"))
     )
+
+
+def dynamodb_endpoint_url() -> str | None:
+    """`DYNAMODB_ENDPOINT_URL` for a script, read the way the session store reads it outside the app's settings.
+
+    Docker Compose and local rehearsals point DynamoDB Local through this one variable; a corpus client that
+    ignored it would talk to the real table.
+    """
+    return os.environ.get("DYNAMODB_ENDPOINT_URL") or None
 
 
 def default_cache_dir() -> Path:

@@ -175,11 +175,16 @@ class DynamoCorpusBackend:
         *,
         projection: ProjectionStore,
         region: str = "eu-west-2",
+        endpoint_url: str | None = None,
         session: boto3.Session | None = None,
     ) -> None:
         self._table = table_name
         self._projections = projection
-        self._client = (session or boto3.Session()).resource("dynamodb", region_name=region).meta.client
+        self._client = (
+            (session or boto3.Session())
+            .resource("dynamodb", region_name=region, endpoint_url=endpoint_url or None)
+            .meta.client
+        )
 
     # -- the CorpusBackend interface ----------------------------------------------------------------
 

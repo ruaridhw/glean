@@ -75,3 +75,21 @@ def test_a_process_without_deployment_settings_stays_on_the_blob_path(monkeypatc
     monkeypatch.setattr(config, "get_settings", lambda: config.Settings(_env_file=None))
 
     assert isinstance(corpus.RecipeCorpusStore().store, corpus.BlobCorpusBackend)
+
+
+def test_recipe_store_dynamo_honours_the_dynamodb_endpoint_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Docker Compose points every DynamoDB client at DynamoDB Local through this one setting; a corpus
+    # client that ignored it would read and write the real table.
+    monkeypatch.delenv("AWS_ENDPOINT_URL_DYNAMODB", raising=False)
+    monkeypatch.setattr(
+        config,
+        "get_settings",
+        lambda: _settings(
+            recipe_store="dynamo", recipes_table=RECIPES_TABLE_NAME, dynamodb_endpoint_url="http://dynamodb-local:8000"
+        ),
+    )
+
+    store = corpus.RecipeCorpusStore().store
+
+    assert isinstance(store, DynamoCorpusBackend)
+    assert store._client.meta.endpoint_url == "http://dynamodb-local:8000"
