@@ -180,9 +180,15 @@ def test_the_calibration_set_is_labelled_both_ways() -> None:
     items = json.loads(CALIBRATION.read_text())
 
     labels = [item["label"] for item in items]
-    assert len(items) == 60
-    assert labels.count("food_preference") == 30
-    assert labels.count("instruction") == 30
+    assert len(items) == 80
+    assert labels.count("food_preference") == 40
+    assert labels.count("instruction") == 40
+    # The set must look like interview traffic: short lists, single words and chip labels as well as
+    # sentences, or the bar is measured on text the screen never sees.
+    benign = [item["text"] for item in items if item["label"] == "food_preference"]
+    assert any("\n" in text for text in benign)
+    assert any(len(text.split()) == 1 for text in benign)
+    assert any(text.count(",") >= 2 for text in benign)
     assert len({item["text"] for item in items}) == len(items)
     assert all(item["text"].strip() for item in items)
 
