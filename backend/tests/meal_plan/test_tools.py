@@ -11,6 +11,7 @@ import time
 
 import pytest
 
+import glean.meal_plan.tools as tools_module
 from glean.meal_plan.tools import (
     LIGHTER_CHIP,
     CandidateRecipe,
@@ -586,6 +587,15 @@ def test_generation_rejects_an_id_the_context_does_not_describe() -> None:
         create_candidate_meal_plans(["recipe-0", "ghost"], 2, week())
 
 
+def test_the_swap_search_stops_at_its_evaluation_budget(monkeypatch) -> None:
+    # The budget is what bounds the tool's time on a pool with a neighbourhood far larger than a week needs.
+    monkeypatch.setattr(tools_module, "_MAX_SWAP_EVALUATIONS", 0)
+    ctx = week(pool=6)
+    plans = create_candidate_meal_plans([f"recipe-{index}" for index in range(6)], 3, ctx)
+    assert len(plans) == 2
+    assert all(len(plan.recipes) == 3 for plan in plans)
+
+
 def test_generating_two_weeks_of_seven_is_well_under_a_hundred_milliseconds() -> None:
     pool = [f"recipe-{index}" for index in range(120)]
     ctx = context(
@@ -624,3 +634,10 @@ def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
     assert scorer._penalty_points(["a", "b", "c"]) == sum(penalty.points for penalty in plan.penalties)
     assert plan.points(Term.LIGHTER) < 0
     assert plan.points(Term.PROTEIN_TARGET) < 0
+
+
+def test_a_minutes_predicate_takes_exactly_one_number() -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        Predicate(PredicateField.ACTIVE_TIME, PredicateOp.LTE, ("30", "45"))
+    with pytest.raises(ValueError, match="exactly one"):
+        Predicate(PredicateField.ACTIVE_TIME, PredicateOp.GTE, ("quick",))
