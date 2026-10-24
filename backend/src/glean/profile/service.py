@@ -176,7 +176,8 @@ class _Screening:
     dropped: bool
 
 
-@tracer.capture_method
+# The response is the household's own profile, so the trace records the call, not what it returned.
+@tracer.capture_method(capture_response=False)
 def run_interview(
     request: InterviewRequest,
     *,
