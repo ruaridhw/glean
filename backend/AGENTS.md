@@ -18,6 +18,10 @@ uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-<env> --buc
 # asks the decision model only what the corpus is missing or stale on (paid); exit 1 unless coverage is 100%.
 # `make enrich-corpus` is the local/dev wrapper; prod runs are the owner's.
 uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --dry-run
+# measures the attributes against an independent labeller's labels and picks each bar (paid enrich step, then
+# a free compare). The sample and its v5-check/ answers live outside the repo; `make check-attributes SAMPLE=...`.
+uv run python scripts/check_recipe_attributes.py enrich --sample <sample-dir>
+uv run python scripts/check_recipe_attributes.py compare --sample <sample-dir>
 ```
 
 ## Architecture
@@ -41,8 +45,10 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
     (`projection/recipes-v1.json.gz` in the recipe-cache bucket) that search, summaries and planning's
     dietary decisions read, cached 5 minutes per Lambda. See `recipes/dynamo_corpus.py` for the item schema
     (`RECIPE#<id>`/`RECIPE`, `RECIPE#<id>`/`ANSWER#<question>#<criteria_hash>`, `SOURCE#<url sha>`/`RECIPE`).
-  - Answers are named `dietary:<flag>` for the dietary enricher; F2's enrichers add their own question names
-    to the same item shape/projection entry (`attributes`).
+  - Answers are named `dietary:<flag>`, `attribute:<name>` and `active_time:bucket`; every enricher's answers
+    share the same item shape, and a projection entry carries the attributes derived from them (`attributes`).
+    A `noul` answer is its probability; a `choice`/`score` answer also carries the value it accepted
+    (`RecipeAnswer.value`, `unsure` below its bar).
   - Behaviour is identical across the seam: search results, dietary exclusions and the store's interface do
     not change with the setting, which is why the API and the planner never branch on it.
   - The projection is one S3 object published by every writer, so publication is a conditional write
@@ -78,6 +84,19 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
   - `dietary.py` — the first enricher: six `noul` questions with ADR 0011's thresholds unchanged, owned by
     `CALIBRATED_DIETARY` (the model and cutoffs as one reviewed `DietaryCalibration`).
     `meal_plan/dietary_decisions.py` is now the read side and re-exports those questions.
+  - `attributes.py` — five questions per recipe: `choice` for `main_protein`, `main_carb`, `dish_type` and
+    `cuisine`, `score` for `whole_food`. Accepted only at the attribute's bar (0.8 by default, per-attribute
+    tunable, never below 0.7), otherwise stored `unsure`.
+  - `active_time.py` — one `score` over the method, with the stated prep and total times as hints, answering
+    with one of G1's five buckets. Below its bar it stores `unsure`, and the filter falls back to total time.
+  - `projection_attributes.py` — `attributes_from_answers`: how a recipe's current answers become the
+    attributes its projection entry carries. Both the full rebuild and the incremental answer write use it.
+  - An enricher may add `state(recipe)` for what it needs beyond title and ingredients (the method, the
+    stated times). The runner merges it only for the families it is asking, so a dietary-only run sends no
+    method text.
+  - `recipes/attributes.py` is the shared contract: the G1 enums, the `unsure` member each allows, the frozen
+    `RecipeAttributes` model and the time-cap rule (`fits_time_cap`), plus the projection entry's typed
+    accessor (`ProjectedRecipe.recipe_attributes`).
 
 ### Rolling back to blobs
 
@@ -121,12 +140,14 @@ src/glean/
 ├── recipe_api/       # recipe-api.com HTTP client + blob_store (S3 / filesystem cache seam)
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
+│                     # attributes.py: the G1 attribute contract (enums, RecipeAttributes, the time-cap rule)
 │                     # corpus.py: RecipeCorpusStore + the CorpusBackend seam (blob adapter)
 │                     # dynamo_corpus.py: the glean-recipes table + projection maintenance (F1/#162)
 │                     # projection.py: the gzipped S3 projection planning reads
 │                     # answers.py: one decision answer (dietary now, V5's attributes later)
 │                     # enrichment/ — enrichers declare questions, the runner asks one request per recipe
-│                     #   enricher.py, runner.py, coverage.py, dietary.py (ADR 0025)
+│                     #   enricher.py, runner.py, coverage.py, dietary.py, attributes.py, active_time.py,
+│                     #   projection_attributes.py (ADR 0025)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation, saved mode and corpus mode
                       # /meal-plan/sessions (POST, GET) — the async agent session routes
