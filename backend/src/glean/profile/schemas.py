@@ -10,7 +10,7 @@ import datetime as dt  # noqa: TC003 - Pydantic resolves these field types at ru
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Seven questions in one interview: the five fixed openers and at most two follow-ups.
 MAX_TURNS = 7
@@ -69,6 +69,11 @@ class ProfileField(StrEnum):
     HABITS = "habits"
     HOUSEHOLD = "household"
     NOTES = "notes"
+
+
+# The fields an interview answer can feed. `notes` is written by feedback (spec §6.4, V15) and the
+# parked retake, so a follow-up aimed at it would burn one of the two follow-ups on a lost answer.
+WRITABLE_PROFILE_FIELDS = frozenset(field for field in ProfileField if field is not ProfileField.NOTES)
 
 
 class NoteSource(StrEnum):
@@ -255,6 +260,13 @@ class FollowUp(BaseModel):
     text: str = Field(min_length=1, description="One question, in the same voice as the openers.")
     field: ProfileField = Field(description="The profile field the answer will fill.")
     options: list[str] = Field(default_factory=list, description="Two to five short tappable answers, or empty.")
+
+    @field_validator("field")
+    @classmethod
+    def _targets_a_written_field(cls, field: ProfileField) -> ProfileField:
+        if field not in WRITABLE_PROFILE_FIELDS:
+            raise ValueError(f"a follow-up cannot target {field.value}: the interview never writes it")
+        return field
 
 
 class InterviewTurn(BaseModel):

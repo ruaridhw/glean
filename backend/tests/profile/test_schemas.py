@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from glean.profile.schemas import (
     MAX_TURNS,
+    WRITABLE_PROFILE_FIELDS,
     FollowUp,
     HouseholdProfile,
     InterviewAnswer,
@@ -225,3 +226,14 @@ def test_the_profile_bounds_its_lists_and_strings() -> None:
         HouseholdProfile(household="h" * 501)
     with pytest.raises(ValidationError):
         HouseholdProfile(notes=[{"date": "2026-10-19", "text": "n", "source": "interview"}] * 51)
+
+
+def test_a_follow_up_cannot_target_a_field_the_interview_never_writes() -> None:
+    # Notes are written by feedback (V15), not by an interview answer, so aiming a follow-up at them
+    # would spend one of the two follow-ups on an answer nobody stores.
+    with pytest.raises(ValidationError):
+        FollowUp(text="Anything else?", field=ProfileField.NOTES)
+
+    assert ProfileField.NOTES in ProfileField  # the profile still has the field
+    assert ProfileField.NOTES not in WRITABLE_PROFILE_FIELDS
+    assert set(ProfileField) - {ProfileField.NOTES} == WRITABLE_PROFILE_FIELDS
