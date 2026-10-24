@@ -13,6 +13,7 @@ class CompressedPantryItem {
     required this.unit,
     required this.foodGroup,
     required this.urgencyScore,
+    this.expiresInDays,
   });
 
   final int id;
@@ -21,6 +22,10 @@ class CompressedPantryItem {
   final String unit;
   final String foodGroup;
   final double urgencyScore;
+
+  /// Whole calendar days until [expiryDate], or null when the item has no expiry date. The backend
+  /// cannot recover this from [urgencyScore], and it uses it to name the item in a meal's reason.
+  final int? expiresInDays;
 
   Map<String, dynamic> toJson() => _$CompressedPantryItemToJson(this);
 }
@@ -84,6 +89,7 @@ class MealPlanRequest {
     this.source = 'saved',
     this.excludeExternalIds = const [],
     this.cookedHistory = const [],
+    this.localDate,
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -113,7 +119,33 @@ class MealPlanRequest {
   /// Meals cooked in the last twelve weeks, so the plan can avoid repeating them.
   final List<CookedHistoryItem> cookedHistory;
 
+  /// The phone's local calendar date (`YYYY-MM-DD`), the date [pantry]'s `expiresInDays` was measured
+  /// from. The backend dates a going-off item in the household's calendar, not the server's UTC one.
+  final String? localDate;
+
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
+}
+
+/// One urgent pantry item a planned meal uses up. The server writes this alongside the reason so a later
+/// screen can render the expiry without parsing prose.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class UsedUpPantryItem {
+  const UsedUpPantryItem({
+    required this.name,
+    this.expiresInDays,
+    this.goesOff,
+  });
+
+  factory UsedUpPantryItem.fromJson(Map<String, dynamic> json) =>
+      _$UsedUpPantryItemFromJson(json);
+
+  final String name;
+
+  /// Whole days until the item goes off; null when the server did not know.
+  final int? expiresInDays;
+
+  /// Weekday the item goes off in the household's calendar, e.g. `Thu`; null when unknown.
+  final String? goesOff;
 }
 
 /// A single LLM-suggested recipe returned by `POST /meal-plan`: an ephemeral proposal, persisted only when the
@@ -126,6 +158,7 @@ class MealPlanRecipe {
     required this.title,
     required this.reason,
     this.missingIngredients = const [],
+    this.usesUp = const [],
   });
 
   factory MealPlanRecipe.fromJson(Map<String, dynamic> json) =>
@@ -137,6 +170,11 @@ class MealPlanRecipe {
   final String reason;
   @JsonKey(defaultValue: <String>[])
   final List<String> missingIngredients;
+
+  /// Urgent pantry items this meal uses up, soonest to go off first. Parsed now, shown once the proposal
+  /// screen exists.
+  @JsonKey(defaultValue: <UsedUpPantryItem>[])
+  final List<UsedUpPantryItem> usesUp;
 }
 
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)

@@ -43,6 +43,8 @@ cooked_history  # MealPlanRequest
 _read_a_missing_offset_as_utc  # Pydantic field validator (CookedHistoryItem.cooked_at)
 reason  # MealPlanRecipe
 missing_ingredients  # MealPlanRecipe
+uses_up  # MealPlanSuggestion field the app renders later
+goes_off  # UsedUpPantryItem field the app renders later
 suggestions  # MealPlanResponse compatibility field
 generate_meal_plan  # FastAPI route handler
 parse_description  # FastAPI route handler

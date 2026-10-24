@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,6 +17,13 @@ class CompressedPantryItem(BaseModel):
     )
     urgency_score: float = Field(
         description="Higher score = more urgent to use (expiring soon, long unused, low quantity)"
+    )
+    expires_in_days: int | None = Field(
+        default=None,
+        description=(
+            "Whole days until the item goes off; null when its expiry date is unknown. Optional so an "
+            "older app build that does not send it still works."
+        ),
     )
 
 
@@ -87,6 +94,14 @@ class MealPlanRequest(BaseModel):
         le=7,
         description="Number of meal-plan slots to fill (may be less than full week if plan is partially filled)",
     )
+    local_date: date | None = Field(
+        default=None,
+        description=(
+            "The phone's local calendar date, the one `expires_in_days` was measured from. The plan dates "
+            "a going-off item by the household's calendar, so it cannot use the server's UTC date. Null "
+            "from an app build that does not send it."
+        ),
+    )
     dietary_flags: list[str] = Field(description="User dietary preferences to respect (e.g. ['vegan', 'gluten-free'])")
     max_active_time_mins: int | None = Field(
         ge=1,
@@ -134,6 +149,19 @@ class CorpusMealPlanResponse(BaseModel):
     suggestions: list[CorpusMealPlanRecipe] = Field(description="Ranked candidates that satisfy the constraints.")
 
 
+class UsedUpPantryItem(BaseModel):
+    """One urgent pantry item a planned meal uses up, so the app need not read it out of the reason."""
+
+    name: str
+    expires_in_days: int | None = Field(
+        default=None, description="Whole days until the item goes off; null when unknown"
+    )
+    goes_off: str | None = Field(
+        default=None,
+        description="Weekday the item goes off in the household's calendar (e.g. 'Thu'); null when unknown",
+    )
+
+
 class MealPlanSuggestion(BaseModel):
     """One planned meal: a saved recipe (recipe_id) or a corpus recipe (external_id)."""
 
@@ -143,6 +171,8 @@ class MealPlanSuggestion(BaseModel):
     reason: str
     # Filled only by saved-mode plans; the app derives shopping gaps from the recipe itself.
     missing_ingredients: list[str] = Field(default_factory=list)
+    # Urgent pantry items this meal uses, soonest to go off first. A proposal field the app shows later.
+    uses_up: list[UsedUpPantryItem] = Field(default_factory=list)
 
 
 class MealPlanResult(BaseModel):

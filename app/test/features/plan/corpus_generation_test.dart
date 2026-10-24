@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/data/providers/repository_providers.dart';
+import 'package:glean/data/util/week.dart';
 import 'package:glean/features/plan/providers/generate_week_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
@@ -249,6 +250,24 @@ void main() {
       expect(sent, endsWith('Z'));
       expect(DateTime.parse(sent).isAtSameMomentAs(localCook), isTrue);
       expect(DateTime.parse(sent), localCook.toUtc());
+    },
+  );
+
+  test(
+    'sends the phone local date, so a going-off item is dated in the household calendar',
+    () async {
+      // The backend cannot derive which calendar date `expires_in_days` was measured from, and the
+      // servers UTC date is a day behind a UK phone late in the evening.
+      final now = DateTime.now();
+      Map<String, dynamic>? body;
+      suggest(['rec_new'], capture: (value) => body = value);
+      detail('rec_new');
+
+      await harness.container
+          .read(generateWeekControllerProvider.notifier)
+          .generate(weekStart: week, slots: 1, servings: 2);
+
+      expect(body!['local_date'], formatDate(now));
     },
   );
 

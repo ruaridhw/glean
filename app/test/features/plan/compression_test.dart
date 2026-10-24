@@ -2,6 +2,7 @@
 // history) — the pantry
 // urgency-scoring/top-N compression that feeds `MealPlanRequest.pantry`.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
 import 'package:glean/features/plan/compression.dart';
 
@@ -113,6 +114,54 @@ void main() {
       final items = <PantryItemView>[_item(foodGroup: 'vegetables')];
       final result = compressPantry(items, now: _now);
       expect(result.single.foodGroup, 'vegetables');
+    });
+  });
+
+  group('expires_in_days', () {
+    test('counts whole calendar days until the expiry date', () {
+      final items = <PantryItemView>[
+        _item(canonicalName: 'coriander', expiryDate: DateTime(2026, 4, 9)),
+      ];
+      final result = compressPantry(items, now: _now);
+      expect(result.single.expiresInDays, 2);
+    });
+
+    test('is zero for an item that goes off later today', () {
+      final items = <PantryItemView>[
+        _item(canonicalName: 'coriander', expiryDate: DateTime(2026, 4, 7, 23)),
+      ];
+      final result = compressPantry(items, now: _now);
+      expect(result.single.expiresInDays, 0);
+    });
+
+    test('is null when the item has no expiry date', () {
+      final items = <PantryItemView>[_item()];
+      final result = compressPantry(items, now: _now);
+      expect(result.single.expiresInDays, isNull);
+    });
+
+    test('is serialised for the meal-plan request', () {
+      const item = CompressedPantryItem(
+        id: 7,
+        name: 'coriander',
+        quantity: 50,
+        unit: 'g',
+        foodGroup: 'herbs',
+        urgencyScore: 120,
+        expiresInDays: 2,
+      );
+      expect(item.toJson()['expires_in_days'], 2);
+      expect(
+        const CompressedPantryItem(
+          id: 7,
+          name: 'salt',
+          quantity: 500,
+          unit: 'g',
+          foodGroup: 'other',
+          urgencyScore: 15,
+        ).toJson()['expires_in_days'],
+        isNull,
+      );
     });
   });
 }
