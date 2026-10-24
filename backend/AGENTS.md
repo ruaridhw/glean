@@ -391,6 +391,11 @@ from glean.rate_limit import enforce_ai_rate_limit
 
 Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass auth count against the limit even if the model call then fails; unauthenticated requests get 401 and count for nothing. Free routes (health, recipe search and get) stay unlimited.
 
+When a route is only sometimes paid, charge through `charge_ai_request(user_sub, settings)` from a
+route-level dependency instead of picking another limiter — `profile/router.py`'s
+`enforce_interview_rate_limit` skips the interview's first turn, which calls no model at all. There is
+still one limit and one implementation.
+
 ### Free text a model will read goes through the screen
 
 Any user-typed free text that a model will read — interview answers now, feedback and swap notes later — is
