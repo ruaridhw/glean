@@ -28,10 +28,12 @@ from glean.dependencies import verify_cognito_token
 limiter = Limiter(key_func=get_remote_address)
 
 
-def enforce_ai_rate_limit(
-    user_sub: Annotated[str, Depends(verify_cognito_token)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> None:
+def charge_ai_request(user_sub: str, settings: Settings) -> None:
+    """Count one paid-model request against the user's hourly allowance, or answer 429.
+
+    The one implementation of the limit: a route that is only sometimes paid (the interview's first
+    turn calls no model) charges through this rather than growing a limiter of its own.
+    """
     allowance = parse(f"{settings.rate_limit_per_hour}/hour")
     if not limiter.limiter.hit(allowance, user_sub):
         raise HTTPException(
@@ -49,3 +51,10 @@ def _seconds_until_a_slot_frees(allowance: RateLimitItem, user_sub: str) -> int:
     """
     reset_time = limiter.limiter.get_window_stats(allowance, user_sub).reset_time
     return max(1, math.ceil(reset_time - time.time()))
+
+
+def enforce_ai_rate_limit(
+    user_sub: Annotated[str, Depends(verify_cognito_token)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    charge_ai_request(user_sub, settings)

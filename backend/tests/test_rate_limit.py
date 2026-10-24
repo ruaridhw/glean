@@ -86,6 +86,20 @@ def _public_dns(hostname: str, *_: object, **__: object) -> list[tuple[Any, ...]
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
 
 
+def _answered_first_opener() -> dict[str, Any]:
+    """One answered turn: the interview's first turn makes no paid call, so it isn't the one to charge."""
+    return {
+        "question": {
+            "id": "opener-favourite-meals",
+            "text": "What are three dinners you'd happily eat every fortnight?",
+            "options": [],
+            "field": "favourite_meals",
+            "skippable": True,
+        },
+        "answer": {"text": None, "options": [], "skipped": True},
+    }
+
+
 def _stored_recipe(external_id: str) -> StoredRecipe:
     return StoredRecipe(
         external_id=external_id,
@@ -271,7 +285,7 @@ AI_ROUTES = [
     AiRoute(
         name="profile interview",
         path="/profile/interview",
-        request_kwargs={"json": {"transcript": []}},
+        request_kwargs={"json": {"transcript": [_answered_first_opener()]}},
     ),
     AiRoute(
         name="catalogue normalise",
@@ -419,3 +433,21 @@ def test_routes_that_call_no_paid_model_are_not_limited(test_settings: Settings,
     assert health == [200] * 3
     assert search == [200] * 3
     assert detail == [200] * 3
+
+
+def test_the_first_interview_turn_is_not_charged(test_settings: Settings, tmp_path: Path) -> None:
+    """The first turn asks the first opener and makes no paid call, so it isn't a paid request."""
+    client = _client(test_settings.model_copy(update={"rate_limit_per_hour": 1}))
+    turn_one = {"json": {"transcript": []}}
+    paid = {"json": {"transcript": [_answered_first_opener()]}}
+
+    free = [
+        client.post("/profile/interview", headers={"x-test-user": "user-a"}, **turn_one).status_code for _ in range(3)
+    ]
+    first_paid = client.post("/profile/interview", headers={"x-test-user": "user-a"}, **paid).status_code
+    over_limit = client.post("/profile/interview", headers={"x-test-user": "user-a"}, **paid).status_code
+    app.dependency_overrides.clear()
+
+    assert free == [200, 200, 200]
+    assert first_paid == 200
+    assert over_limit == 429
