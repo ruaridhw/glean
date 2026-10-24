@@ -1,0 +1,392 @@
+// The Profile screen is where the household sees and corrects what Glean knows. Every edit saves through the
+// repository straight away, and removing anything (a chip or a note) is undone from the snackbar back to exactly
+// what was stored before. These tests pump the real route over the real in-memory database and read the stored
+// profile back through the repository.
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/data/models/household_profile.dart';
+import 'package:glean/data/providers/repository_providers.dart';
+import 'package:glean/data/repositories/household_profile_repository.dart';
+import 'package:glean/design_system/design_system.dart';
+import 'package:glean/features/settings/profile/profile_presentation.dart';
+import 'package:glean/router/app_routes.dart';
+
+import '../../../support/harness.dart';
+
+const String _userId = 'test-user';
+
+const HouseholdProfile _filled = HouseholdProfile(
+  favouriteMeals: <FavouriteMeal>[
+    FavouriteMeal(text: 'Katsu curry', recipeId: 'rec_1'),
+    FavouriteMeal(text: 'Fish pie'),
+  ],
+  lovedIngredients: <String>['miso'],
+  dislikedIngredients: <String>['mushrooms', 'olives'],
+  cuisinesLiked: <String>['Indian'],
+  cuisinesAvoided: <String>['Thai'],
+  proteinTargets: <ProteinTarget>[
+    ProteinTarget(protein: 'fish', minPerWeek: 2),
+  ],
+  spiceTolerance: SpiceTolerance.mild,
+  habits: 'Quick weeknights, treat Friday',
+  household: 'Two adults, two kids',
+  notes: <ProfileNote>[
+    ProfileNote(
+      date: '2026-10-20',
+      text: 'Asked for no fish on Mondays',
+      source: ProfileNoteSource.interview,
+    ),
+    ProfileNote(
+      date: '2026-10-24',
+      text: 'Prefers rice over pasta midweek',
+      source: ProfileNoteSource.feedback,
+    ),
+  ],
+);
+
+/// Each chip list, the item the filled profile has in it, and a new item to add.
+final List<(ProfileList<Object?>, String, String)> _chipLists =
+    <(ProfileList<Object?>, String, String)>[
+      (ProfileLists.favouriteMeals, 'Fish pie', 'Dal'),
+      (ProfileLists.lovedIngredients, 'miso', 'prawns'),
+      (ProfileLists.dislikedIngredients, 'mushrooms', 'capers'),
+      (ProfileLists.cuisinesLiked, 'Indian', 'Japanese'),
+      (ProfileLists.cuisinesAvoided, 'Thai', 'French'),
+      (ProfileLists.proteinTargets, 'fish · at least 2 a week', ''),
+    ];
+
+void main() {
+  late AppTestHarness harness;
+
+  setUp(() => harness = AppTestHarness());
+  tearDown(() => harness.dispose());
+
+  HouseholdProfileRepository profiles() =>
+      harness.container.read(householdProfileRepositoryProvider);
+
+  Future<HouseholdProfile?> stored(WidgetTester tester) =>
+      tester.runAsync<HouseholdProfile?>(() => profiles().get(_userId));
+
+  Future<void> pumpProfile(
+    WidgetTester tester, {
+    HouseholdProfile? seed,
+    Size size = const Size(420, 2600),
+    double textScale = 1,
+  }) async {
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    if (seed != null) {
+      await profiles().save(userId: _userId, profile: seed);
+    }
+    await harness.pumpAt(tester, AppRoutes.settingsProfile.path);
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> enterInDialog(WidgetTester tester, String text) async {
+    await tester.enterText(find.byKey(const Key('profile.entry')), text);
+    await tester.tap(find.byKey(const Key('profile.entry.save')));
+    await tester.pumpAndSettle();
+  }
+
+  gleanWidgetTest('an empty profile says so, says how the interview fills '
+      'it, and still offers every list to fill in by hand', (tester) async {
+    await pumpProfile(tester);
+
+    expect(find.text("Glean doesn't know your tastes yet"), findsOneWidget);
+    expect(find.textContaining('first set up Glean'), findsOneWidget);
+    for (final (ProfileList<Object?> list, _, _) in _chipLists) {
+      expect(find.byKey(Key('profile.add.${list.title}')), findsOneWidget);
+    }
+    expect(find.text('Nothing yet.'), findsNothing);
+  });
+
+  gleanWidgetTest('a filled profile shows every list, the free text and the '
+      'notes Glean kept with their date and source', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    expect(find.text("Glean doesn't know your tastes yet"), findsNothing);
+    for (final (_, String existing, _) in _chipLists) {
+      expect(find.widgetWithText(InputChip, existing), findsOneWidget);
+    }
+    expect(find.text('Quick weeknights, treat Friday'), findsOneWidget);
+    expect(find.text('Two adults, two kids'), findsOneWidget);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Mild'))
+          .selected,
+      isTrue,
+    );
+    expect(find.text('Prefers rice over pasta midweek'), findsOneWidget);
+    expect(find.text('24 Oct 2026 · from your feedback'), findsOneWidget);
+    expect(find.text('20 Oct 2026 · from the interview'), findsOneWidget);
+  });
+
+  for (final (ProfileList<Object?> list, String existing, String added)
+      in _chipLists.where((e) => e.$3.isNotEmpty)) {
+    gleanWidgetTest('${list.title}: an added item saves', (tester) async {
+      await pumpProfile(tester, seed: _filled);
+
+      await tester.tap(find.byKey(Key('profile.add.${list.title}')));
+      await tester.pumpAndSettle();
+      await enterInDialog(tester, '  $added ');
+
+      expect(find.widgetWithText(InputChip, added), findsOneWidget);
+      final HouseholdProfile after = (await stored(tester))!;
+      expect(list.indexOf(after, added), list.read(_filled).length);
+      expect(list.read(after).length, list.read(_filled).length + 1);
+    });
+
+    gleanWidgetTest('${list.title}: an edited item saves in place', (
+      tester,
+    ) async {
+      await pumpProfile(tester, seed: _filled);
+
+      await tester.tap(find.widgetWithText(InputChip, existing));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('profile.entry')))
+            .controller!
+            .text,
+        existing,
+      );
+      await enterInDialog(tester, '$existing (edited)');
+
+      final HouseholdProfile after = (await stored(tester))!;
+      final int at = list.indexOf(_filled, existing);
+      expect(list.indexOf(after, '$existing (edited)'), at);
+      expect(list.read(after).length, list.read(_filled).length);
+    });
+  }
+
+  for (final (ProfileList<Object?> list, String existing, _) in _chipLists) {
+    gleanWidgetTest('${list.title}: a removed item comes back exactly on '
+        'Undo', (tester) async {
+      await pumpProfile(tester, seed: _filled);
+
+      await tester.tap(find.byTooltip('Remove $existing'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InputChip, existing), findsNothing);
+      expect(find.text('Removed $existing'), findsOneWidget);
+      expect(list.indexOf((await stored(tester))!, existing), -1);
+      expect(harness.hapticCalls, <HapticWeight>[HapticWeight.medium]);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InputChip, existing), findsOneWidget);
+      expect((await stored(tester))!.toJson(), _filled.toJson());
+    });
+  }
+
+  gleanWidgetTest('editing a favourite without changing its text keeps the '
+      'recipe it matched; new text drops the match', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'Katsu curry');
+    expect((await stored(tester))!.favouriteMeals.first.recipeId, 'rec_1');
+
+    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'Chicken katsu');
+    final FavouriteMeal edited = (await stored(tester))!.favouriteMeals.first;
+    expect(edited.text, 'Chicken katsu');
+    expect(edited.recipeId, isNull);
+  });
+
+  gleanWidgetTest('cancelling the entry dialog changes nothing', (
+    tester,
+  ) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(InputChip, 'olives'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('profile.entry')), 'capers');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
+  gleanWidgetTest('a protein target is added with how often', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(
+      find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('profile.protein.name')),
+      'chicken',
+    );
+    await tester.enterText(find.byKey(const Key('profile.protein.max')), '2');
+    await tester.tap(find.byKey(const Key('profile.entry.save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(InputChip, 'chicken · at most 2 a week'),
+      findsOneWidget,
+    );
+    final ProteinTarget target = (await stored(tester))!.proteinTargets.last;
+    expect(target.protein, 'chicken');
+    expect(target.minPerWeek, isNull);
+    expect(target.maxPerWeek, 2);
+  });
+
+  gleanWidgetTest('a protein target whose least is above its most is refused '
+      'with a reason', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(
+      find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('profile.protein.name')),
+      'beef',
+    );
+    await tester.enterText(find.byKey(const Key('profile.protein.min')), '3');
+    await tester.enterText(find.byKey(const Key('profile.protein.max')), '1');
+    await tester.tap(find.byKey(const Key('profile.entry.save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('At least must not be more than at most'), findsOneWidget);
+    expect((await stored(tester))!.proteinTargets, hasLength(1));
+  });
+
+  gleanWidgetTest('a deleted note comes back exactly on Undo', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(
+      find.byTooltip('Delete note: Asked for no fish on Mondays'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Asked for no fish on Mondays'), findsNothing);
+    expect(find.text('Note deleted'), findsOneWidget);
+    expect((await stored(tester))!.notes.single.text, contains('rice'));
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Asked for no fish on Mondays'), findsOneWidget);
+    expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
+  gleanWidgetTest('spice is picked by tapping a chip and cleared by tapping it '
+      'again', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
+    await tester.pumpAndSettle();
+    expect((await stored(tester))!.spiceTolerance, SpiceTolerance.hot);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Hot'));
+    await tester.pumpAndSettle();
+    expect((await stored(tester))!.spiceTolerance, isNull);
+  });
+
+  gleanWidgetTest('the free text saves as it is typed', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.enterText(
+      labeledTextField('How your weeks go'),
+      'Batch cook on Sunday',
+    );
+    await tester.enterText(labeledTextField("Who's at the table"), 'Just me');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final HouseholdProfile after = (await stored(tester))!;
+    expect(after.habits, 'Batch cook on Sunday');
+    expect(after.household, 'Just me');
+  });
+
+  gleanWidgetTest('edits made on an empty profile are there when the screen '
+      'is opened again', (tester) async {
+    await pumpProfile(tester);
+
+    await tester.tap(
+      find.byKey(Key('profile.add.${ProfileLists.dislikedIngredients.title}')),
+    );
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'olives');
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Medium'));
+    await tester.enterText(labeledTextField('How your weeks go'), 'Leftovers');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await releaseDriftTree(tester);
+    await harness.pumpAt(tester, AppRoutes.settingsProfile.path);
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(InputChip, 'olives'), findsOneWidget);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Medium'))
+          .selected,
+      isTrue,
+    );
+    expect(find.text('Leftovers'), findsOneWidget);
+    expect(find.text("Glean doesn't know your tastes yet"), findsNothing);
+  });
+
+  gleanWidgetTest('a failed save says so and leaves the profile as it was', (
+    tester,
+  ) async {
+    await pumpProfile(tester, seed: _filled);
+    await tester.runAsync(
+      () => harness.db.customStatement(
+        'CREATE TRIGGER fail_profile_update BEFORE UPDATE ON household_profiles '
+        "BEGIN SELECT RAISE(ABORT, 'test failure'); END",
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Remove olives'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not remove olives. Try again.'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'olives'), findsOneWidget);
+    expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
+  for (final double scale in <double>[1, 2]) {
+    gleanWidgetTest('a filled profile fits a 320-wide phone at ${scale}x text, '
+        'down to the last note', (tester) async {
+      await pumpProfile(
+        tester,
+        seed: _filled,
+        size: const Size(320, 844),
+        textScale: scale,
+      );
+      expect(tester.takeException(), isNull);
+
+      // Step through the whole list so every row is built and laid out.
+      final ScrollPosition position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      while (position.pixels < position.maxScrollExtent) {
+        position.jumpTo(
+          (position.pixels + 200).clamp(0, position.maxScrollExtent),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull, reason: 'at ${position.pixels}');
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('Prefers rice over pasta midweek'), findsOneWidget);
+
+      await tester.tap(
+        find.byTooltip('Delete note: Prefers rice over pasta midweek'),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'the undo snackbar');
+    });
+  }
+}

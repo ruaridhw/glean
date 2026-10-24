@@ -21,6 +21,7 @@ import '../features/onboarding/onboarding_gate.dart';
 import '../features/pantry/pantry_screen.dart';
 import '../features/plan/plan_screen.dart';
 import '../features/plan/proposal_screen.dart';
+import '../features/settings/profile/profile_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/shop/shop_screen.dart';
 import 'app_routes.dart';
@@ -247,6 +248,14 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
                 name: AppRoutes.settings.name,
                 builder: (BuildContext context, GoRouterState state) =>
                     const SettingsScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'profile',
+                    name: AppRoutes.settingsProfile.name,
+                    builder: (BuildContext context, GoRouterState state) =>
+                        const ProfileScreen(),
+                  ),
+                ],
               ),
             ],
           ),
