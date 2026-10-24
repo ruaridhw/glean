@@ -419,7 +419,9 @@ def create_candidate_meal_plans(
         plans.append(scorer.score(chosen))
         if len(plans) == k:
             break
-        blockers = deque(sorted(chosen, key=ranks.__getitem__))
+        # The next plan blocks the week's weakest recipe, so the alternative differs by one swap rather than
+        # by losing whatever the seed happened to rank first.
+        blockers = deque(sorted(chosen, key=lambda recipe_id: (scorer.base_total(recipe_id), ranks[recipe_id])))
     return tuple(plans)
 
 
@@ -453,13 +455,14 @@ class _Scorer:
 
     def total(self, recipe_ids: Sequence[str]) -> float:
         """The same number `score().total` gives, without building the breakdown: the search calls this."""
-        base = 0.0
-        for recipe_id in recipe_ids:
-            cached = self._totals.get(recipe_id)
-            if cached is None:
-                cached = self._totals[recipe_id] = self.recipe(recipe_id).total
-            base += cached
-        return base + self._penalty_points(recipe_ids)
+        return sum(self.base_total(recipe_id) for recipe_id in recipe_ids) + self._penalty_points(recipe_ids)
+
+    def base_total(self, recipe_id: str) -> float:
+        """One recipe's own fit, before any plan penalty: what the recipe brings to a week on its own."""
+        cached = self._totals.get(recipe_id)
+        if cached is None:
+            cached = self._totals[recipe_id] = self.recipe(recipe_id).total
+        return cached
 
     def recipe(self, recipe_id: str) -> RecipeScore:
         scored = self._recipes.get(recipe_id)

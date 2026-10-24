@@ -693,3 +693,48 @@ def test_a_minutes_predicate_takes_exactly_one_number() -> None:
         Predicate(PredicateField.ACTIVE_TIME, PredicateOp.LTE, ("30", "45"))
     with pytest.raises(ValueError, match="exactly one"):
         Predicate(PredicateField.ACTIVE_TIME, PredicateOp.GTE, ("quick",))
+
+
+def test_the_alternative_week_keeps_the_strongest_recipe_and_differs_by_one_swap() -> None:
+    # The alternative exists to be swapped in, so it must not give up the week's best recipe: an alternative the
+    # scorer itself rates well short of the best would trip the eval's drift gate on the scorer's own output.
+    ctx = context(
+        candidate(
+            "dominant",
+            main_protein=MainProtein.CHICKEN,
+            main_carb=MainCarb.RICE,
+            dish_type=DishType.CURRY,
+            cuisine=Cuisine.ITALIAN,
+            pantry_fit=9.0,
+        ),
+        candidate(
+            "fish",
+            main_protein=MainProtein.FISH,
+            main_carb=MainCarb.POTATO,
+            dish_type=DishType.SALAD_OR_BOWL,
+            cuisine=Cuisine.THAI,
+            pantry_fit=2.0,
+        ),
+        candidate(
+            "beef",
+            main_protein=MainProtein.BEEF,
+            main_carb=MainCarb.NONE,
+            dish_type=DishType.PAN_OR_GRILL,
+            cuisine=Cuisine.MEXICAN,
+            pantry_fit=1.9,
+        ),
+        candidate(
+            "lamb",
+            main_protein=MainProtein.LAMB,
+            main_carb=MainCarb.PASTA,
+            dish_type=DishType.SOUP_OR_STEW,
+            cuisine=Cuisine.INDIAN,
+            pantry_fit=1.8,
+        ),
+    )
+    ids = ["dominant", "fish", "beef", "lamb"]
+    best, alternative = create_candidate_meal_plans(ids, 2, ctx)
+    assert "dominant" in best.recipe_ids
+    assert "dominant" in alternative.recipe_ids
+    assert len(set(best.recipe_ids) ^ set(alternative.recipe_ids)) == 2
+    assert chosen_vs_best_ratio(alternative, best) > 0.85
