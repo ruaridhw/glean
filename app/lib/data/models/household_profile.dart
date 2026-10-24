@@ -7,8 +7,9 @@
 ///
 /// Reading is deliberately tolerant, because the JSON may have been written by a build this one is not: a
 /// missing key reads as empty, an entry of the wrong shape is skipped instead of losing the whole profile, an
-/// unknown `spice_tolerance` reads as no answer, and a version this build does not know is carried through
-/// unchanged. Nothing here throws on bad input; [decode] reports an unreadable column as `null`.
+/// unknown `spice_tolerance` reads as no answer, and a `version` this build does not know is kept as the number
+/// the document carried (keys it cannot name are still dropped, so a round trip through an older build is
+/// lossy by design). Nothing here throws on bad input; [decode] reports an unreadable column as `null`.
 library;
 
 import 'dart:convert';
@@ -200,8 +201,8 @@ String? _text(Object? value) => switch (value) {
 };
 
 int? _int(Object? value) => switch (value) {
-  final int number => number,
-  final num number => number.toInt(),
+  // A JSON number can decode to a non-finite double (`1e400`), and `toInt()` on one throws.
+  final num number when number.isFinite => number.toInt(),
   _ => null,
 };
 
