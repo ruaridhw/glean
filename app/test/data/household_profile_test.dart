@@ -161,6 +161,32 @@ void main() {
     expect(profile.interviewedAt, isNull);
   });
 
+  test('a number the wire should never carry reads as no value instead of '
+      'throwing', () {
+    final HouseholdProfile profile = HouseholdProfile.fromJson(
+      <String, dynamic>{
+        'version': 1,
+        'protein_targets': <dynamic>[
+          <String, dynamic>{
+            'protein': 'fish',
+            'min_per_week': 1e400,
+            'max_per_week': 2,
+          },
+        ],
+      },
+    );
+
+    expect(profile.proteinTargets.single.minPerWeek, isNull);
+    expect(profile.proteinTargets.single.maxPerWeek, 2);
+
+    // The whole document, as it comes out of the stored column.
+    final HouseholdProfile? decoded = HouseholdProfile.decode(
+      '{"version": 1e400}',
+    );
+    expect(decoded, isNotNull);
+    expect(decoded!.version, HouseholdProfile.currentVersion);
+  });
+
   test('a stored column that is not a profile at all reads as no profile', () {
     expect(HouseholdProfile.decode(''), isNull);
     expect(HouseholdProfile.decode('not json'), isNull);
