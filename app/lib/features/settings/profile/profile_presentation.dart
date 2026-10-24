@@ -1,0 +1,260 @@
+/// Pure rules behind the Profile screen and the Settings summary row: how each list of the household profile is
+/// edited, how a removed item is put back exactly where it was, and what one line says about a profile. No
+/// Flutter import on purpose, so it is testable without a widget tree.
+library;
+
+import 'package:glean/data/models/household_profile.dart';
+
+/// One list in the household profile, with the operations the Profile screen needs on it. Every operation
+/// returns a new profile and leaves every other field alone.
+class ProfileList<T> {
+  const ProfileList({
+    required this.title,
+    required this.read,
+    required this.write,
+    required this.label,
+    this.fromText,
+  });
+
+  /// The heading the Profile screen shows above the list.
+  final String title;
+  final List<T> Function(HouseholdProfile profile) read;
+  final HouseholdProfile Function(HouseholdProfile profile, List<T> items)
+  write;
+
+  /// What the item says on its chip; also how two items count as the same.
+  final String Function(T item) label;
+
+  /// Builds an item from typed text, given the item it replaces when editing. `null` for lists that are not
+  /// edited as plain text.
+  final T Function(String text, T? previous)? fromText;
+
+  /// The position of the item whose label is [itemLabel], ignoring case, or -1.
+  int indexOf(HouseholdProfile profile, String itemLabel) {
+    final String wanted = itemLabel.trim().toLowerCase();
+    return read(
+      profile,
+    ).indexWhere((T item) => label(item).toLowerCase() == wanted);
+  }
+
+  /// Appends [item], unless an item with the same label is already there.
+  HouseholdProfile addItem(HouseholdProfile profile, T item) {
+    if (indexOf(profile, label(item)) != -1) return profile;
+    return write(profile, <T>[...read(profile), item]);
+  }
+
+  /// Appends the item [text] describes. Blank text, or text already in the list, changes nothing.
+  HouseholdProfile add(HouseholdProfile profile, String text) {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) return profile;
+    return addItem(profile, fromText!(trimmed, null));
+  }
+
+  HouseholdProfile replaceAt(HouseholdProfile profile, int index, T item) =>
+      write(profile, <T>[...read(profile)]..[index] = item);
+
+  /// Replaces the item at [index] with what [text] describes. Blank text changes nothing.
+  HouseholdProfile editAt(HouseholdProfile profile, int index, String text) {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) return profile;
+    return replaceAt(profile, index, fromText!(trimmed, read(profile)[index]));
+  }
+
+  HouseholdProfile removeAt(HouseholdProfile profile, int index) =>
+      write(profile, <T>[...read(profile)]..removeAt(index));
+
+  /// Puts [item] back at [index], or at the end when the list has since become shorter than that.
+  HouseholdProfile insertAt(HouseholdProfile profile, int index, T item) {
+    final List<T> items = <T>[...read(profile)];
+    return write(profile, items..insert(index.clamp(0, items.length), item));
+  }
+}
+
+/// The lists the Profile screen edits, in the order it shows them.
+abstract final class ProfileLists {
+  static const ProfileList<FavouriteMeal> favouriteMeals =
+      ProfileList<FavouriteMeal>(
+        title: 'Favourite dinners',
+        read: _favouriteMeals,
+        write: _writeFavouriteMeals,
+        label: _favouriteLabel,
+        fromText: _favouriteFromText,
+      );
+  static const ProfileList<String> lovedIngredients = ProfileList<String>(
+    title: 'Ingredients you love',
+    read: _lovedIngredients,
+    write: _writeLovedIngredients,
+    label: _same,
+    fromText: _text,
+  );
+  static const ProfileList<String> dislikedIngredients = ProfileList<String>(
+    title: 'Never on the plan',
+    read: _dislikedIngredients,
+    write: _writeDislikedIngredients,
+    label: _same,
+    fromText: _text,
+  );
+  static const ProfileList<String> cuisinesLiked = ProfileList<String>(
+    title: 'Cuisines you like',
+    read: _cuisinesLiked,
+    write: _writeCuisinesLiked,
+    label: _same,
+    fromText: _text,
+  );
+  static const ProfileList<String> cuisinesAvoided = ProfileList<String>(
+    title: 'Cuisines you avoid',
+    read: _cuisinesAvoided,
+    write: _writeCuisinesAvoided,
+    label: _same,
+    fromText: _text,
+  );
+  static const ProfileList<ProteinTarget> proteinTargets =
+      ProfileList<ProteinTarget>(
+        title: 'How often each protein',
+        read: _proteinTargets,
+        write: _writeProteinTargets,
+        label: proteinTargetLabel,
+      );
+  static const ProfileList<ProfileNote> notes = ProfileList<ProfileNote>(
+    title: 'Things Glean noted',
+    read: _notes,
+    write: _writeNotes,
+    label: _noteLabel,
+  );
+
+  /// The plain-text lists, edited as chips.
+  static const List<ProfileList<String>> textLists = <ProfileList<String>>[
+    lovedIngredients,
+    dislikedIngredients,
+    cuisinesLiked,
+    cuisinesAvoided,
+  ];
+}
+
+List<FavouriteMeal> _favouriteMeals(HouseholdProfile p) => p.favouriteMeals;
+HouseholdProfile _writeFavouriteMeals(
+  HouseholdProfile p,
+  List<FavouriteMeal> items,
+) => p.copyWith(favouriteMeals: items);
+String _favouriteLabel(FavouriteMeal meal) => meal.text;
+
+/// An edit that leaves the text as it was keeps the matched recipe; new text no longer matches it.
+FavouriteMeal _favouriteFromText(String text, FavouriteMeal? previous) =>
+    FavouriteMeal(
+      text: text,
+      recipeId: previous?.text == text ? previous?.recipeId : null,
+    );
+
+List<String> _lovedIngredients(HouseholdProfile p) => p.lovedIngredients;
+HouseholdProfile _writeLovedIngredients(
+  HouseholdProfile p,
+  List<String> items,
+) => p.copyWith(lovedIngredients: items);
+List<String> _dislikedIngredients(HouseholdProfile p) => p.dislikedIngredients;
+HouseholdProfile _writeDislikedIngredients(
+  HouseholdProfile p,
+  List<String> items,
+) => p.copyWith(dislikedIngredients: items);
+List<String> _cuisinesLiked(HouseholdProfile p) => p.cuisinesLiked;
+HouseholdProfile _writeCuisinesLiked(HouseholdProfile p, List<String> items) =>
+    p.copyWith(cuisinesLiked: items);
+List<String> _cuisinesAvoided(HouseholdProfile p) => p.cuisinesAvoided;
+HouseholdProfile _writeCuisinesAvoided(
+  HouseholdProfile p,
+  List<String> items,
+) => p.copyWith(cuisinesAvoided: items);
+List<ProteinTarget> _proteinTargets(HouseholdProfile p) => p.proteinTargets;
+HouseholdProfile _writeProteinTargets(
+  HouseholdProfile p,
+  List<ProteinTarget> items,
+) => p.copyWith(proteinTargets: items);
+List<ProfileNote> _notes(HouseholdProfile p) => p.notes;
+HouseholdProfile _writeNotes(HouseholdProfile p, List<ProfileNote> items) =>
+    p.copyWith(notes: items);
+String _noteLabel(ProfileNote note) => '${note.date} ${note.text}';
+String _same(String value) => value;
+String _text(String text, String? _) => text;
+
+/// e.g. `fish · 2–3 a week`, `fish · at least 2 a week`, or just `fish` with no bounds.
+String proteinTargetLabel(ProteinTarget target) {
+  final int? min = target.minPerWeek;
+  final int? max = target.maxPerWeek;
+  final String? often = switch ((min, max)) {
+    (final int lo, final int hi) when lo == hi => '$lo a week',
+    (final int lo, final int hi) => '$lo–$hi a week',
+    (final int lo, null) => 'at least $lo a week',
+    (null, final int hi) => 'at most $hi a week',
+    (null, null) => null,
+  };
+  return often == null ? target.protein : '${target.protein} · $often';
+}
+
+/// How the spice choice reads on its chip.
+String spiceLabel(SpiceTolerance value) => switch (value) {
+  SpiceTolerance.none => 'Not at all',
+  SpiceTolerance.mild => 'Mild',
+  SpiceTolerance.medium => 'Medium',
+  SpiceTolerance.hot => 'Hot',
+};
+
+const List<String> _months = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// When a note was kept and where it came from, e.g. `4 Oct 2026 · from the interview`. A date that is not
+/// `YYYY-MM-DD` shows as written.
+String noteMeta(ProfileNote note) {
+  final DateTime? date = DateTime.tryParse(note.date);
+  final String when = date == null
+      ? note.date
+      : '${date.day} ${_months[date.month - 1]} ${date.year}';
+  final String from = switch (note.source) {
+    ProfileNoteSource.interview => 'from the interview',
+    ProfileNoteSource.feedback => 'from your feedback',
+  };
+  return '$when · $from';
+}
+
+/// The one line Settings shows for the profile: counts first, then how the weeks go, then the rest.
+String profileSummary(HouseholdProfile? profile) {
+  if (profile == null || profile.isEmpty) {
+    return 'Nothing yet: tell Glean what you love and avoid';
+  }
+  String count(int n, String one, [String? many]) =>
+      '$n ${n == 1 ? one : (many ?? '${one}s')}';
+  final int never =
+      profile.dislikedIngredients.length + profile.cuisinesAvoided.length;
+  final int loved =
+      profile.lovedIngredients.length + profile.cuisinesLiked.length;
+  return <String>[
+    if (profile.favouriteMeals.isNotEmpty)
+      count(profile.favouriteMeals.length, 'favourite'),
+    if (never > 0) '$never never',
+    if (loved > 0) '$loved loved',
+    if (profile.habits.isNotEmpty) _firstClause(profile.habits),
+    if (profile.household.isNotEmpty) _firstClause(profile.household),
+    if (profile.proteinTargets.isNotEmpty)
+      count(profile.proteinTargets.length, 'protein target'),
+    if (profile.spiceTolerance case final SpiceTolerance spice)
+      'spice: ${spiceLabel(spice).toLowerCase()}',
+    if (profile.notes.isNotEmpty) count(profile.notes.length, 'note'),
+  ].join(' · ');
+}
+
+/// The text up to its first comma, full stop or line break, starting lower case so it reads mid-line.
+String _firstClause(String text) {
+  final String clause = text.split(RegExp(r'[,.;\n]')).first.trim();
+  if (clause.isEmpty) return text.trim();
+  return clause[0].toLowerCase() + clause.substring(1);
+}
