@@ -260,6 +260,32 @@ void main() {
   );
 
   testWidgets(
+    'first run is basics, then the taste interview, then the pantry, and back '
+    'walks the same pages in reverse',
+    (WidgetTester tester) async {
+      await pumpOnboarding(tester);
+      expect(find.text('The basics'), findsOneWidget);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Question 1 of 7'), findsOneWidget);
+      expect(find.text('The basics'), findsNothing);
+
+      await skipTastePage(tester);
+      expect(find.text('Stock your pantry'), findsOneWidget);
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Question 1 of 7'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('The basics'), findsOneWidget);
+      expect(find.text('Stock your pantry'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'the progress indicator marks the current page, and the taste interview is '
     'done or skipped rather than reserved',
     (WidgetTester tester) async {
