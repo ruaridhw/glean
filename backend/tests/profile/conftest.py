@@ -7,6 +7,7 @@ against the same search code the deployed corpus uses.
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -21,9 +22,10 @@ from glean.profile.schemas import InterviewTurn, ProfileDraft
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import RecipeProvenance, StoredRecipe
+from glean.screening import clear_screen_cache
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
 ACCEPTED = 0.95
@@ -46,6 +48,16 @@ class FakeDecisions:
         self.notes.append(note)
         probability = REJECTED if any(marker in note.casefold() for marker in self.injected) else self.probability
         return _noul_response(probability)
+
+
+def slow_decisions(delay_s: float = 0.5) -> DecisionClient:
+    """A decisions client that takes its time, for the request's screening budget."""
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        time.sleep(delay_s)
+        return _noul_response(ACCEPTED)
+
+    return DecisionClient(api_key=SecretStr("test"), transport=httpx.MockTransport(slow))
 
 
 def broken_decisions() -> DecisionClient:
@@ -155,3 +167,12 @@ def _local_boundaries(decisions: FakeDecisions, model: FakeRouter, corpus: Recip
     app.dependency_overrides[get_decision_client] = decisions.client
     app.dependency_overrides[get_llm_router] = lambda: model
     monkeypatch.setattr(service, "RecipeCorpusStore", lambda: corpus)
+    clear_screen_cache()
+
+
+@pytest.fixture(autouse=True)
+def _cold_screen_cache() -> Iterator[None]:
+    """The screen's cache lives on the module, so a test must never inherit another test's answers."""
+    clear_screen_cache()
+    yield
+    clear_screen_cache()

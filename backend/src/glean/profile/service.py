@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -176,6 +177,10 @@ _TITLE_EXTRA_WORDS = 2
 _MAX_LIST_ENTRIES = 25
 _MAX_PHRASE_CHARS = 120
 _MAX_PARALLEL_SCREENS = 8
+# Screens run together and share this much of the request's time. Whatever hasn't answered by then is
+# dropped (the screen's safe outcome), which keeps a slow decisions endpoint inside the 30s Lambda cap:
+# at most this long, then the model's own timeout.
+_SCREEN_BUDGET_S = 8.0
 
 _WORD = re.compile(r"\w+")
 _PHRASE_SEPARATOR = re.compile(r"[,;\n]")
@@ -271,6 +276,27 @@ def _answer_blob(answer: InterviewAnswer) -> str:
     return "\n".join(parts)
 
 
+def _collect(
+    pool: ThreadPoolExecutor, blobs: list[str], decision_client: DecisionClient, *, until: float
+) -> list[ScreenResult | None]:
+    """Screen `blobs` in parallel; whatever fails or isn't done by `until` (monotonic) is None.
+
+    None means the note can't be vouched for, which drops it — the same outcome as a rejection.
+    """
+    futures = [pool.submit(screen, blob, decision_client=decision_client) for blob in blobs]
+    wait(futures, timeout=max(0.0, until - time.monotonic()))
+    results: list[ScreenResult | None] = []
+    for future in futures:
+        if future.done() and not future.cancelled() and future.exception() is None:
+            results.append(future.result())
+            continue
+        if future.done() and not future.cancelled():
+            logger.warning("screening failed; dropping the note", exc_info=future.exception())
+        future.cancel()
+        results.append(None)
+    return results
+
+
 def _last_answer_dropped(transcript: list[TranscriptTurn], decision_client: DecisionClient) -> bool:
     """Whether the newest answer was screened and refused, which is what the app tells the user."""
     if not transcript:
@@ -307,12 +333,14 @@ def _screen_transcript(transcript: list[TranscriptTurn], decision_client: Decisi
         return _Screening(answers=[], dropped=False)
     blobs = [_answer_blob(answered.answer) for answered in transcript]
     distinct = sorted({blob for blob in blobs if blob})
-
-    def screen_one(blob: str) -> ScreenResult:
-        return screen(blob, decision_client=decision_client)
-
-    with ThreadPoolExecutor(max_workers=max(1, min(len(distinct), _MAX_PARALLEL_SCREENS))) as pool:
-        results = dict(zip(distinct, pool.map(screen_one, distinct), strict=True))
+    pool = ThreadPoolExecutor(max_workers=max(1, min(len(distinct), _MAX_PARALLEL_SCREENS)))
+    try:
+        screened = _collect(pool, distinct, decision_client, until=time.monotonic() + _SCREEN_BUDGET_S)
+    finally:
+        # Anything still running outlives the request rather than holding it open: its result would
+        # arrive after the caller has already been told the answer was unusable.
+        pool.shutdown(wait=False, cancel_futures=True)
+    results = {blob: result for blob, result in zip(distinct, screened, strict=True) if result is not None}
     answers: list[InterviewAnswer | None] = []
     for answered, blob in zip(transcript, blobs, strict=True):
         result = results.get(blob) if blob else None
