@@ -86,12 +86,17 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
       ),
     );
     if (text == null || !mounted) return;
+    if (list.isTaken(widget.profile, text)) {
+      GleanSnackBar.show(context, '$text is already there');
+      return;
+    }
     await _change((HouseholdProfile p) => list.add(p, text));
     if (mounted) ref.read(hapticsProvider).mediumImpact();
   }
 
   Future<void> _edit<T>(ProfileList<T> list, int index) async {
-    final String current = list.label(list.read(widget.profile)[index]);
+    final T item = list.read(widget.profile)[index];
+    final String current = list.label(item);
     final String? text = await showDialog<String>(
       context: context,
       builder: (BuildContext _) => ProfileEntryDialog(
@@ -101,8 +106,12 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
       ),
     );
     if (text == null || !mounted) return;
+    if (list.isTaken(widget.profile, text, except: index)) {
+      GleanSnackBar.show(context, '$text is already there');
+      return;
+    }
     await _change((HouseholdProfile p) {
-      final int at = list.indexOf(p, current);
+      final int at = list.locate(p, index, item);
       return at == -1 ? p : list.editAt(p, at, text);
     });
     if (mounted) ref.read(hapticsProvider).mediumImpact();
@@ -124,7 +133,7 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
     if (target == null || !mounted) return;
     await _change((HouseholdProfile p) {
       if (current == null) return list.addItem(p, target);
-      final int at = list.indexOf(p, list.label(current));
+      final int at = list.locate(p, index!, current);
       return at == -1 ? p : list.replaceAt(p, at, target);
     });
     if (mounted) ref.read(hapticsProvider).mediumImpact();
@@ -146,7 +155,7 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         await _profiles.update(
           userId: _userId,
           change: (HouseholdProfile p) {
-            removedAt = list.indexOf(p, label);
+            removedAt = list.locate(p, index, item);
             return removedAt == -1 ? p : list.removeAt(p, removedAt);
           },
         );

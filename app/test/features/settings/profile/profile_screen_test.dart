@@ -202,6 +202,78 @@ void main() {
     expect(edited.recipeId, isNull);
   });
 
+  gleanWidgetTest('Undo after the same item was added again does not make a '
+      'second chip', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.byTooltip('Remove olives'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('profile.add.${ProfileLists.dislikedIngredients.title}')),
+    );
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'Olives');
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+
+    expect((await stored(tester))!.dislikedIngredients, <String>[
+      'mushrooms',
+      'Olives',
+    ]);
+  });
+
+  gleanWidgetTest('adding or changing an item into one already there is '
+      'refused, and says why', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(InputChip, 'mushrooms'));
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'Olives');
+    expect(find.text('Olives is already there'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(Key('profile.add.${ProfileLists.dislikedIngredients.title}')),
+    );
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'MUSHROOMS');
+    expect(find.text('MUSHROOMS is already there'), findsOneWidget);
+
+    expect((await stored(tester))!.toJson(), _filled.toJson());
+  });
+
+  gleanWidgetTest('a favourite edited only in case keeps its recipe', (
+    tester,
+  ) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.pumpAndSettle();
+    await enterInDialog(tester, 'katsu curry');
+
+    final FavouriteMeal edited = (await stored(tester))!.favouriteMeals.first;
+    expect(edited.text, 'katsu curry');
+    expect(edited.recipeId, 'rec_1');
+  });
+
+  gleanWidgetTest('removing the second of two equal favourites removes that '
+      'one, so the first keeps its recipe', (tester) async {
+    await pumpProfile(
+      tester,
+      seed: const HouseholdProfile(
+        favouriteMeals: <FavouriteMeal>[
+          FavouriteMeal(text: 'Dal', recipeId: 'rec_3'),
+          FavouriteMeal(text: 'Dal'),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Remove Dal').at(1));
+    await tester.pumpAndSettle();
+
+    final FavouriteMeal left = (await stored(tester))!.favouriteMeals.single;
+    expect(left.recipeId, 'rec_3');
+  });
+
   gleanWidgetTest('cancelling the entry dialog changes nothing', (
     tester,
   ) async {

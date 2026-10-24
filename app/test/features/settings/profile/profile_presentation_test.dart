@@ -159,6 +159,61 @@ void main() {
     });
   });
 
+  group('no duplicate chips', () {
+    const ProfileList<String> never = ProfileLists.dislikedIngredients;
+
+    test(
+      'putting an item back skips it when the same label is there again',
+      () {
+        final HouseholdProfile removed = never.removeAt(_filled, 1);
+        final HouseholdProfile readded = never.add(removed, 'Olives');
+        final HouseholdProfile undone = never.insertAt(readded, 1, 'olives');
+        expect(never.read(undone), <String>['mushrooms', 'Olives']);
+      },
+    );
+
+    test('an edit into another item already there is refused', () {
+      expect(never.editAt(_filled, 0, ' OLIVES '), same(_filled));
+      expect(never.replaceAt(_filled, 0, 'olives'), same(_filled));
+    });
+
+    test('an edit that only changes case is allowed, and a favourite keeps '
+        'its recipe', () {
+      expect(never.read(never.editAt(_filled, 1, 'Olives'))[1], 'Olives');
+      const ProfileList<FavouriteMeal> favourites = ProfileLists.favouriteMeals;
+      final FavouriteMeal edited = favourites
+          .read(favourites.editAt(_filled, 0, 'katsu curry'))
+          .first;
+      expect(edited.text, 'katsu curry');
+      expect(edited.recipeId, 'rec_1');
+    });
+
+    test('locate prefers the tapped position, so the second of two equal '
+        'chips is the one acted on', () {
+      const ProfileList<FavouriteMeal> favourites = ProfileLists.favouriteMeals;
+      const HouseholdProfile twins = HouseholdProfile(
+        favouriteMeals: <FavouriteMeal>[
+          FavouriteMeal(text: 'Dal', recipeId: 'rec_3'),
+          FavouriteMeal(text: 'Dal'),
+        ],
+      );
+      final FavouriteMeal second = favourites.read(twins)[1];
+      expect(favourites.locate(twins, 1, second), 1);
+      final HouseholdProfile left = favourites.removeAt(
+        twins,
+        favourites.locate(twins, 1, second),
+      );
+      expect(favourites.read(left).single.recipeId, 'rec_3');
+    });
+
+    test('locate falls back to the label when the list moved, and gives -1 '
+        'when the item is gone', () {
+      expect(never.locate(_filled, 0, 'olives'), 1);
+      expect(never.locate(_filled, 0, 'capers'), -1);
+      expect(never.locate(_filled, 9, 'mushrooms'), 0);
+    });
+  });
+
   group('labels', () {
     test('protein targets say how often', () {
       expect(
