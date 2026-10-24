@@ -21,6 +21,16 @@ Future<File> _fixtureFile(int version) async {
   return file;
 }
 
+/// The schema a database file holds, in the shape `schema_v8_snapshot.sql` is written: every object's `sql` as
+/// SQLite stores it, ordered by type then name.
+String _schemaOf(Database raw) {
+  final rows = raw.select(
+    'SELECT sql FROM sqlite_master WHERE sql IS NOT NULL '
+    "AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
+  );
+  return '${rows.map((Row r) => '${r['sql']};').join('\n')}\n';
+}
+
 /// Every table and its rows as the frozen file holds them, so the upgrade can be compared row by row.
 Map<String, List<List<Object?>>> _dump(Database raw) {
   final List<String> tables = <String>[
@@ -42,7 +52,10 @@ Map<String, List<List<Object?>>> _dump(Database raw) {
 }
 
 void main() {
-  for (final int fixtureVersion in <int>[6, 7]) {
+  // Version 7 belongs to #196 (the meal-ratings slice) and merges first, so this branch is tested on the one
+  // frozen file it can honestly offer: a real version-6 database. On the rebase, add 7 to this list and let
+  // the schema comparison below prove the merged upgrade lands on the merged snapshot.
+  for (final int fixtureVersion in <int>[6]) {
     test('a version $fixtureVersion file upgrades to the current schema with '
         'every row intact and gains an empty household_profiles', () async {
       final File file = await _fixtureFile(fixtureVersion);
@@ -103,6 +116,13 @@ void main() {
             .values
             .single,
         1,
+      );
+      // Not just the rows: the upgraded database must be exactly the schema this build describes. That is what
+      // stops a fixture for a version no build wrote from passing as a real upgrade.
+      expect(
+        _schemaOf(after),
+        File('test/data/fixtures/schema_v8_snapshot.sql').readAsStringSync(),
+        reason: 'the upgrade lands on the schema the snapshot pins',
       );
     });
   }

@@ -26,6 +26,15 @@ Future<String> _schemaOf(GleanDatabase db) async {
   return '${rows.map((r) => '${r.read<String>('sql')};').join('\n')}\n';
 }
 
+// One branch can own a version number: #196 (the meal-ratings slice) takes v7 and merges first, so its
+// `meal_ratings` table and `user_config.ratings_explainer_seen` column arrive with its own fixtures. A file for
+// that version cannot be written here without inventing a schema no build ever produced, so this branch's
+// lineage goes v6 -> v8 and the gap is named rather than filled.
+//
+// **On the rebase onto #196, delete this set, take #196's `schema_v6.sql` and `schema_v7.sql`, and regenerate
+// `schema_v8_snapshot.sql` from the merged schema** — the snapshot has to describe what ships.
+const Set<int> _fixturesThatArriveWithAnotherBranch = <int>{7};
+
 void main() {
   test('the schema matches the snapshot for its schemaVersion, so a table '
       'change cannot ship without a migration', () async {
@@ -53,6 +62,7 @@ void main() {
           'schema; never edit this snapshot in place.',
     );
     for (var v = 1; v < db.schemaVersion; v++) {
+      if (_fixturesThatArriveWithAnotherBranch.contains(v)) continue;
       expect(
         File('test/data/fixtures/schema_v$v.sql').existsSync(),
         isTrue,
