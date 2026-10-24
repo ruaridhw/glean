@@ -48,7 +48,7 @@ void main() {
       );
       expect(
         profileSummary(const HouseholdProfile(habits: 'Leftovers on Monday')),
-        'leftovers on Monday',
+        'Leftovers on Monday',
       );
       expect(
         profileSummary(
@@ -69,9 +69,36 @@ void main() {
     test('a full profile leads with counts, then how the weeks go', () {
       expect(
         profileSummary(_filled),
-        startsWith('3 favourites · 3 never · 3 loved · quick weeknights'),
+        startsWith('3 favourites · 3 never · Quick weeknights'),
       );
     });
+
+    test('loved things are not counted, as in the design', () {
+      expect(
+        profileSummary(
+          const HouseholdProfile(
+            lovedIngredients: <String>['miso'],
+            cuisinesLiked: <String>['Indian'],
+            household: 'Just me',
+          ),
+        ),
+        'Just me',
+      );
+    });
+
+    test(
+      'free text keeps its own capitals and skips an empty first clause',
+      () {
+        expect(
+          profileSummary(const HouseholdProfile(habits: 'Sunday batch cook')),
+          'Sunday batch cook',
+        );
+        expect(
+          profileSummary(const HouseholdProfile(household: '. Two adults')),
+          'Two adults',
+        );
+      },
+    );
   });
 
   group('ProfileList', () {

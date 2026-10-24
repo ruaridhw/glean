@@ -316,7 +316,8 @@ String noteMeta(ProfileNote note) {
   return '$when · $from';
 }
 
-/// The one line Settings shows for the profile: counts first, then how the weeks go, then the rest.
+/// The one line Settings shows for the profile: favourites and nevers first, then how the weeks go, then the
+/// rest. Loved things are not counted, as in the design, so the habits stay in view.
 String profileSummary(HouseholdProfile? profile) {
   if (profile == null || profile.isEmpty) {
     return 'Nothing yet: tell Glean what you love and avoid';
@@ -325,13 +326,10 @@ String profileSummary(HouseholdProfile? profile) {
       '$n ${n == 1 ? one : (many ?? '${one}s')}';
   final int never =
       profile.dislikedIngredients.length + profile.cuisinesAvoided.length;
-  final int loved =
-      profile.lovedIngredients.length + profile.cuisinesLiked.length;
   return <String>[
     if (profile.favouriteMeals.isNotEmpty)
       count(profile.favouriteMeals.length, 'favourite'),
     if (never > 0) '$never never',
-    if (loved > 0) '$loved loved',
     if (profile.habits.isNotEmpty) _firstClause(profile.habits),
     if (profile.household.isNotEmpty) _firstClause(profile.household),
     if (profile.proteinTargets.isNotEmpty)
@@ -342,9 +340,8 @@ String profileSummary(HouseholdProfile? profile) {
   ].join(' · ');
 }
 
-/// The text up to its first comma, full stop or line break, starting lower case so it reads mid-line.
-String _firstClause(String text) {
-  final String clause = text.split(RegExp(r'[,.;\n]')).first.trim();
-  if (clause.isEmpty) return text.trim();
-  return clause[0].toLowerCase() + clause.substring(1);
-}
+/// The first non-empty clause of [text]: up to a comma, full stop, semicolon or line break, as written.
+String _firstClause(String text) => text
+    .split(RegExp(r'[,.;\n]'))
+    .map((String clause) => clause.trim())
+    .firstWhere((String clause) => clause.isNotEmpty, orElse: text.trim);
