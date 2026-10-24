@@ -12,6 +12,7 @@ import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/household_profile_repository.dart';
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/features/settings/profile/profile_presentation.dart';
+import 'package:glean/features/settings/profile/widgets/profile_chip_list.dart';
 import 'package:glean/router/app_routes.dart';
 
 import 'package:riverpod/misc.dart' show Override;
@@ -130,7 +131,7 @@ void main() {
 
     expect(find.text("Glean doesn't know your tastes yet"), findsNothing);
     for (final (_, String existing, _) in _chipLists) {
-      expect(find.widgetWithText(InputChip, existing), findsOneWidget);
+      expect(find.widgetWithText(ProfileChip, existing), findsOneWidget);
     }
     expect(find.text('Quick weeknights, treat Friday'), findsOneWidget);
     expect(find.text('Two adults, two kids'), findsOneWidget);
@@ -154,7 +155,7 @@ void main() {
       await tester.pumpAndSettle();
       await enterInDialog(tester, '  $added ');
 
-      expect(find.widgetWithText(InputChip, added), findsOneWidget);
+      expect(find.widgetWithText(ProfileChip, added), findsOneWidget);
       final HouseholdProfile after = (await stored(tester))!;
       expect(list.indexOf(after, added), list.read(_filled).length);
       expect(list.read(after).length, list.read(_filled).length + 1);
@@ -165,7 +166,7 @@ void main() {
     ) async {
       await pumpProfile(tester, seed: _filled);
 
-      await tester.tap(find.widgetWithText(InputChip, existing));
+      await tester.tap(find.widgetWithText(ProfileChip, existing));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -191,7 +192,7 @@ void main() {
       await tester.tap(find.byTooltip('Remove $existing'));
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(InputChip, existing), findsNothing);
+      expect(find.widgetWithText(ProfileChip, existing), findsNothing);
       expect(find.text('Removed $existing'), findsOneWidget);
       expect(list.indexOf((await stored(tester))!, existing), -1);
       expect(harness.hapticCalls, <HapticWeight>[HapticWeight.medium]);
@@ -199,7 +200,7 @@ void main() {
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(InputChip, existing), findsOneWidget);
+      expect(find.widgetWithText(ProfileChip, existing), findsOneWidget);
       expect((await stored(tester))!.toJson(), _filled.toJson());
     });
   }
@@ -208,12 +209,12 @@ void main() {
       'recipe it matched; new text drops the match', (tester) async {
     await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.tap(find.widgetWithText(ProfileChip, 'Katsu curry'));
     await tester.pumpAndSettle();
     await enterInDialog(tester, 'Katsu curry');
     expect((await stored(tester))!.favouriteMeals.first.recipeId, 'rec_1');
 
-    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.tap(find.widgetWithText(ProfileChip, 'Katsu curry'));
     await tester.pumpAndSettle();
     await enterInDialog(tester, 'Chicken katsu');
     final FavouriteMeal edited = (await stored(tester))!.favouriteMeals.first;
@@ -245,7 +246,7 @@ void main() {
       'refused, and says why', (tester) async {
     await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(find.widgetWithText(InputChip, 'mushrooms'));
+    await tester.tap(find.widgetWithText(ProfileChip, 'mushrooms'));
     await tester.pumpAndSettle();
     await enterInDialog(tester, 'Olives');
     expect(find.text('Olives is already there'), findsOneWidget);
@@ -265,7 +266,7 @@ void main() {
   ) async {
     await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(find.widgetWithText(InputChip, 'Katsu curry'));
+    await tester.tap(find.widgetWithText(ProfileChip, 'Katsu curry'));
     await tester.pumpAndSettle();
     await enterInDialog(tester, 'katsu curry');
 
@@ -298,7 +299,7 @@ void main() {
   ) async {
     await pumpProfile(tester, seed: _filled);
 
-    await tester.tap(find.widgetWithText(InputChip, 'olives'));
+    await tester.tap(find.widgetWithText(ProfileChip, 'olives'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('profile.entry')), 'capers');
     await tester.tap(find.text('Cancel'));
@@ -311,7 +312,7 @@ void main() {
     await tester.tap(
       editing == null
           ? find.byKey(Key('profile.add.${ProfileLists.proteinTargets.title}'))
-          : find.widgetWithText(InputChip, editing),
+          : find.widgetWithText(ProfileChip, editing),
     );
     await tester.pumpAndSettle();
   }
@@ -347,7 +348,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.widgetWithText(InputChip, 'turkey or duck · at most 2 a week'),
+      find.widgetWithText(ProfileChip, 'turkey or duck · at most 2 a week'),
       findsOneWidget,
     );
     final ProteinTarget target = (await stored(tester))!.proteinTargets.last;
@@ -554,7 +555,7 @@ void main() {
     await pumpPastSkeleton(tester);
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(InputChip, 'olives'), findsOneWidget);
+    expect(find.widgetWithText(ProfileChip, 'olives'), findsOneWidget);
     expect(
       tester
           .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Medium'))
@@ -632,7 +633,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Could not remove olives. Try again.'), findsOneWidget);
-    expect(find.widgetWithText(InputChip, 'olives'), findsOneWidget);
+    expect(find.widgetWithText(ProfileChip, 'olives'), findsOneWidget);
     expect((await stored(tester))!.toJson(), _filled.toJson());
   });
 
@@ -659,6 +660,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text("Glean doesn't know your tastes yet"), findsOneWidget);
+  });
+
+  gleanWidgetTest('the remove button on every chip is a 44pt target, even on a '
+      'short chip', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    for (final String label in <String>['miso', 'Fish pie', 'Thai']) {
+      final Size target = tester.getSize(
+        find.ancestor(
+          of: find.byTooltip('Remove $label'),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(target.width, greaterThanOrEqualTo(44), reason: label);
+      expect(target.height, greaterThanOrEqualTo(44), reason: label);
+    }
+
+    // A tap 20pt left of the short chip's ✕ still removes it rather than opening the edit.
+    final Offset cross = tester.getCenter(find.byTooltip('Remove miso'));
+    await tester.tapAt(cross - const Offset(20, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Removed miso'), findsOneWidget);
+  });
+
+  gleanWidgetTest('the Profile screen meets the tap target guideline', (
+    tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    await pumpProfile(tester, seed: _filled);
+
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    semantics.dispose();
   });
 
   for (final double scale in <double>[1, 2]) {
