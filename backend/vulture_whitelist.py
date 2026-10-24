@@ -175,3 +175,12 @@ HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe
 # label) and the questions key their criteria on the members, so no member needs a line here. What is left is
 # a Pydantic validator, which only Pydantic calls.
 _labelled_questions_carry_a_value  # Pydantic model validator (RecipeAnswer: a labelled answer must carry a value)
+
+# meal_plan/tools.py (V6): the scorer's contract, read by the agent graph (V7), the evals (6.6) and the tests
+MAIN_PROTEIN  # PredicateField member: a chip names the attribute it filters on (V9)
+MAIN_CARB  # PredicateField member, as above
+DISH_TYPE  # PredicateField member, as above
+CUISINE  # PredicateField member, as above
+NOT_IN  # PredicateOp member, from the spec's filter shape; V9's chips write it
+detail  # PlanPenalty field: the value, median or target the penalty is about
+skipped_terms  # PlanScore field: what the breakdown could not evaluate, reported by the evals
