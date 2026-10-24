@@ -596,6 +596,10 @@ void main() {
           );
       pending.complete(http.Response('{"session_id":"session-1"}', 202));
       await op;
+      // Capacity is re-checked when the review is committed, so the smaller week wins.
+      await h.container
+          .read(generateWeekControllerProvider.notifier)
+          .addToPlan();
       expect(
         await h.container
             .read(planRepositoryProvider)

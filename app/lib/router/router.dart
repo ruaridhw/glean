@@ -20,6 +20,7 @@ import '../features/meals/meals_screen.dart';
 import '../features/onboarding/onboarding_gate.dart';
 import '../features/pantry/pantry_screen.dart';
 import '../features/plan/plan_screen.dart';
+import '../features/plan/proposal_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/shop/shop_screen.dart';
 import 'app_routes.dart';
@@ -121,6 +122,15 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((Ref ref) {
           }
           return ReviewScreen(args: extra);
         },
+      ),
+
+      // --- Generate's review: a full-screen task outside every tab branch, like intake. Back returns to
+      // whichever tab pushed it, and the tab bar is not in the way of the review's own action bar. ---
+      GoRoute(
+        path: AppRoutes.planProposal.path,
+        name: AppRoutes.planProposal.name,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ProposalScreen(),
       ),
 
       GoRoute(

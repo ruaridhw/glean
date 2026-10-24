@@ -79,11 +79,12 @@ class SessionStatus(StrEnum):
     WAITING_FOR_USER = "waiting_for_user"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
     @property
     def terminal(self) -> bool:
         """Whether the app can stop polling."""
-        return self in {SessionStatus.DONE, SessionStatus.FAILED}
+        return self in {SessionStatus.DONE, SessionStatus.FAILED, SessionStatus.CANCELLED}
 
 
 class ClaimResult(StrEnum):
@@ -206,7 +207,7 @@ class SessionView(BaseModel):
     """GET /meal-plan/sessions/{id}: everything the app needs to render one poll."""
 
     session_id: str
-    status: SessionStatus = Field(description="queued | running | waiting_for_user | done | failed")
+    status: SessionStatus = Field(description="queued | running | waiting_for_user | done | failed | cancelled")
     progress: list[str] = Field(description="Progress lines written since the requested cursor, oldest first.")
     next_cursor: int = Field(description="Pass this as ?after= on the next poll.")
     result: MealPlanResult | None = Field(

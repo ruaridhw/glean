@@ -91,5 +91,6 @@ const _$MealPlanSessionStatusEnumMap = {
   MealPlanSessionStatus.waitingForUser: 'waiting_for_user',
   MealPlanSessionStatus.done: 'done',
   MealPlanSessionStatus.failed: 'failed',
+  MealPlanSessionStatus.cancelled: 'cancelled',
   MealPlanSessionStatus.unknown: 'unknown',
 };

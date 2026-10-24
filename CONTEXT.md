@@ -68,6 +68,20 @@ _Avoid_: score, review, feedback
 The thumb on a recipe's most recent *rated* cook, whichever way it points: a later thumbs up cancels an older thumbs down and vice versa, cooking the recipe again without rating it leaves the verdict alone, and clearing the thumb removes it. A cook belongs to its recipe by corpus recipe id, or, for a cook recorded before the app kept one, by its title with whitespace collapsed and case folded. The app sends the cook that carries this verdict so a thumbs down outlives the twelve-week history window, and the backend reads the same rule when it decides what may be offered.
 _Avoid_: last rating, current rating, score
 
+### Planning the week
+
+**Proposal**:
+A week the planner suggests, with a reason per meal and a reason kind, that the household reviews and swaps before anything is saved to the plan (ADR 0019).
+_Avoid_: suggestion list, generated plan, result
+
+**Alternative**:
+The one other meal offered beside a card, so a slot can be swapped on the phone without generating again. It is always a recipe that was eligible for this week and is not already in the week.
+_Avoid_: backup, second choice
+
+**Reason kind**:
+What a meal's reason rests on: an urgent item going off, the household's profile, this week's feedback, the shape of the week, what they cooked recently, or an answer they gave.
+_Avoid_: reason type, category
+
 ### Rules a catalogue item carries
 
 **Tracking mode**:

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from glean.meal_plan.schemas import CorpusMealPlanRecipe, CorpusMealPlanResponse
+from glean.meal_plan.schemas import CorpusMealPlanRecipe, CorpusMealPlanResponse, ReasonKind
 
 
 class StubMealPlanRouter:
@@ -22,14 +22,16 @@ class StubMealPlanRouter:
             raise NotImplementedError(f"the local stub only plans from the corpus, not {schema.__name__}")
         context = json.loads(user)
         return CorpusMealPlanResponse(
+            week_summary="A week of quick dinners.",
             suggestions=[
                 CorpusMealPlanRecipe(
                     external_id=candidate["external_id"],
                     title=candidate["title"],
                     reason="Uses what is already in the pantry.",
+                    reason_kind=ReasonKind.URGENT_ITEM if candidate["urgent_pantry_items"] else ReasonKind.BALANCE,
                 )
                 for candidate in context["candidates"][: context["meals_per_week"]]
-            ]
+            ],
         )
 
     def model_id_for(self, _feature: object, **_kwargs: object) -> str:

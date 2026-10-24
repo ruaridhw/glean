@@ -13,6 +13,14 @@ class AgentError(Exception):
         self.error = error
 
 
+class SessionCancelled(Exception):
+    """The household cancelled while the run was between steps.
+
+    A control-flow signal, not a failure: the record is already `cancelled` and the run must write
+    nothing more -- no progress line, no result, no error (spec §6.3).
+    """
+
+
 def model_error_for(exception: Exception) -> SessionError:
     """The session error a failed model call becomes.
 

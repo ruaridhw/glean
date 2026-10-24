@@ -86,6 +86,18 @@ void main() {
       expect(body!['meals_per_week'], 2);
       expect(find.text('Corpus rec_a'), findsOneWidget);
       expect(find.text('Corpus rec_b'), findsOneWidget);
+      expect(
+        await tester.runAsync(
+          () => plan.getWeek(
+            userId: h.userId,
+            weekStart: startOfWeek(DateTime.now()),
+          ),
+        ),
+        hasLength(1),
+        reason: 'only the meal the user planned by hand is saved so far',
+      );
+      await tester.tap(find.text('Add 3 dinners to plan'));
+      await tester.pumpAndSettle();
       final entries = await tester.runAsync(
         () => plan.getWeek(
           userId: h.userId,
@@ -110,7 +122,6 @@ void main() {
         ))!.single.quantity,
         1200,
       );
-      await tester.pumpAndSettle();
       expect(find.textContaining('shopping list'), findsOneWidget);
     },
   );
@@ -132,7 +143,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
       await tester.pumpAndSettle();
-      expect(find.text('No recipes fit right now. Try again.'), findsOneWidget);
+      await tester.tap(find.text('Add 1 dinner to plan'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Something went wrong planning your week.'),
+        findsOneWidget,
+      );
+      expect(find.text('Nothing was added to your plan.'), findsOneWidget);
       final plan = h.container.read(planRepositoryProvider);
       expect(
         await tester.runAsync(
@@ -144,7 +161,7 @@ void main() {
         isEmpty,
       );
       fail = false;
-      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(find.text('Corpus rec_a'), findsOneWidget);
       expect(

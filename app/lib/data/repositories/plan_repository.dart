@@ -28,6 +28,81 @@ const Duration cookedHistoryWindow = Duration(days: 84);
 /// two added together.
 const int maxDislikedHistoryItems = 200;
 
+/// One plan entry together with the rows that belong to it: its shopping requirement rows and its rating row
+/// (at most one). A save snapshot reads all three in the same transaction, so Undo restores values rather than
+/// re-deriving them.
+class PlanEntryState {
+  PlanEntryState({
+    required this.entry,
+    required List<ShoppingListItem> shopping,
+    required List<MealRating> rating,
+  }) : shopping = List.unmodifiable(shopping),
+       rating = List.unmodifiable(rating);
+
+  final MealPlanEntry entry;
+  final List<ShoppingListItem> shopping;
+  final List<MealRating> rating;
+}
+
+/// A planned meal whose recipe Add to plan swapped. [before] is what Undo puts back; [after] is the state the
+/// save left, which Undo validates the current row against before touching anything.
+class SwappedEntrySnapshot {
+  SwappedEntrySnapshot({required this.before, required this.after});
+
+  final PlanEntryState before;
+  final PlanEntryState after;
+}
+
+/// Everything one Add to plan changed: the meals it inserted (with the rows the save left) and the entries
+/// whose recipe it swapped. Undo deletes the first and restores the second from their snapshots.
+class GeneratedWeekCommit {
+  GeneratedWeekCommit({
+    required List<PlanEntryState> addedEntries,
+    required List<SwappedEntrySnapshot> swappedEntries,
+  }) : addedEntries = List.unmodifiable(addedEntries),
+       swappedEntries = List.unmodifiable(swappedEntries);
+
+  final List<PlanEntryState> addedEntries;
+  final List<SwappedEntrySnapshot> swappedEntries;
+}
+
+/// Undo refused because the week moved on after the save: an affected entry was cooked, rated, deleted or had
+/// its shopping edited. Nothing is restored and the caller shows one plain explanation.
+class PlanChangedSinceSaveException implements Exception {
+  const PlanChangedSinceSaveException();
+
+  @override
+  String toString() => 'PlanChangedSinceSaveException';
+}
+
+/// The entry fields a save leaves and an Undo must still find. `plannedDate` is deliberately absent: rollover
+/// moving an untouched meal into the new week is not an edit by the household.
+bool _sameSavedEntry(MealPlanEntry expected, MealPlanEntry current) =>
+    current.recipeId == expected.recipeId &&
+    current.recipeTitle == expected.recipeTitle &&
+    current.externalIdSnapshot == expected.externalIdSnapshot &&
+    current.servings == expected.servings;
+
+bool _sameShoppingRow(ShoppingListItem a, ShoppingListItem b) =>
+    a.id == b.id &&
+    a.userId == b.userId &&
+    a.ingredientId == b.ingredientId &&
+    a.name == b.name &&
+    a.quantity == b.quantity &&
+    a.unit == b.unit &&
+    a.source == b.source &&
+    a.isRequirement == b.isRequirement &&
+    a.isChecked == b.isChecked &&
+    a.sourceMealPlanEntryId == b.sourceMealPlanEntryId;
+
+bool _sameShopping(List<ShoppingListItem> a, List<ShoppingListItem> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (!_sameShoppingRow(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 class PlanRepository {
   PlanRepository(this._db, this._pantry);
 
@@ -408,6 +483,145 @@ class PlanRepository {
           ),
         );
   }
+
+  /// Points an existing entry at a different recipe, a swap the user accepted on the proposal. The entry keeps
+  /// its id, date and servings, so the week's shape does not move; [recipeTitle] and the corpus snapshot come
+  /// from the replacement recipe, exactly as [addEntry] records them. Its derived shopping rows are cleared by
+  /// `ShoppingRepository.clearGapsForEntry` and re-added from the new recipe in the same transaction.
+  ///
+  /// Any rating goes with the old recipe: a thumb and its note are a verdict on the meal that was cooked, so
+  /// keeping them on a different recipe would teach the planner the wrong thing. A planned meal normally has
+  /// none, and this also clears a stale one from a delivered build that rated it before the swap.
+  Future<void> replaceEntryRecipe({
+    required int entryId,
+    required String userId,
+    required int recipeId,
+    required String recipeTitle,
+  }) async {
+    final recipe =
+        await (_db.select(_db.recipes)
+              ..where((t) => t.id.equals(recipeId) & t.userId.equals(userId)))
+            .getSingle();
+    await (_db.delete(_db.mealRatings)..where(
+          (t) => t.mealPlanEntryId.equals(entryId) & t.userId.equals(userId),
+        ))
+        .go();
+    await (_db.update(
+      _db.mealPlanEntries,
+    )..where((t) => t.id.equals(entryId) & t.userId.equals(userId))).write(
+      MealPlanEntriesCompanion(
+        recipeId: Value(recipeId),
+        recipeTitle: Value(recipeTitle),
+        externalIdSnapshot: Value(recipe.externalId),
+      ),
+    );
+  }
+
+  /// One entry and the rows that belong to it, read in the caller's transaction. Used both before a swap (what
+  /// Undo restores) and after it (what Undo validates against).
+  Future<PlanEntryState> snapshotEntryState({
+    required int entryId,
+    required String userId,
+  }) async {
+    final entry =
+        await (_db.select(_db.mealPlanEntries)
+              ..where((t) => t.id.equals(entryId) & t.userId.equals(userId)))
+            .getSingleOrNull();
+    if (entry == null) {
+      throw const PlanChangedSinceSaveException();
+    }
+    final shopping =
+        await (_db.select(_db.shoppingListItems)
+              ..where(
+                (t) =>
+                    t.userId.equals(userId) &
+                    t.sourceMealPlanEntryId.equals(entryId),
+              )
+              ..orderBy(<OrderingTerm Function($ShoppingListItemsTable)>[
+                (t) => OrderingTerm.asc(t.id),
+              ]))
+            .get();
+    final rating =
+        await (_db.select(_db.mealRatings)..where(
+              (t) =>
+                  t.userId.equals(userId) & t.mealPlanEntryId.equals(entryId),
+            ))
+            .get();
+    return PlanEntryState(entry: entry, shopping: shopping, rating: rating);
+  }
+
+  /// Puts the week back as it was before [commit]: removes the meals Add to plan inserted (their shopping rows
+  /// and ratings cascade), and restores every swapped planned entry's recipe, shopping rows and rating/note.
+  ///
+  /// Every affected row is validated against the state the save left first: an inserted meal must still exist,
+  /// uncooked and unrated with the same identity and shopping; a swapped meal must still point at the swapped-in
+  /// recipe, uncooked, unrated, with the shopping rows the save left. If any of that moved on — the reviewer's
+  /// case cooks and rates the swapped-in meal — the whole undo is refused with
+  /// [PlanChangedSinceSaveException] before it writes anything, so a newer cook and rating are never deleted or
+  /// reassigned to the original recipe.
+  Future<void> undoGeneratedWeek({
+    required String userId,
+    required GeneratedWeekCommit commit,
+  }) => _db.transaction(() async {
+    for (final PlanEntryState added in commit.addedEntries) {
+      final PlanEntryState current = await snapshotEntryState(
+        entryId: added.entry.id,
+        userId: userId,
+      );
+      if (!_sameSavedEntry(added.entry, current.entry) ||
+          current.entry.cookedAt != null ||
+          current.rating.isNotEmpty ||
+          !_sameShopping(added.shopping, current.shopping)) {
+        throw const PlanChangedSinceSaveException();
+      }
+    }
+    for (final SwappedEntrySnapshot swap in commit.swappedEntries) {
+      final PlanEntryState expected = swap.after;
+      final PlanEntryState current = await snapshotEntryState(
+        entryId: expected.entry.id,
+        userId: userId,
+      );
+      if (!_sameSavedEntry(expected.entry, current.entry) ||
+          current.entry.cookedAt != expected.entry.cookedAt ||
+          current.rating.isNotEmpty ||
+          !_sameShopping(expected.shopping, current.shopping)) {
+        throw const PlanChangedSinceSaveException();
+      }
+    }
+
+    for (final PlanEntryState added in commit.addedEntries) {
+      await deleteEntry(id: added.entry.id, userId: userId);
+    }
+    for (final SwappedEntrySnapshot swap in commit.swappedEntries) {
+      final PlanEntryState before = swap.before;
+      final MealPlanEntry entry = before.entry;
+      await (_db.update(
+        _db.mealPlanEntries,
+      )..where((t) => t.id.equals(entry.id) & t.userId.equals(userId))).write(
+        MealPlanEntriesCompanion(
+          recipeId: Value(entry.recipeId),
+          recipeTitle: Value(entry.recipeTitle),
+          externalIdSnapshot: Value(entry.externalIdSnapshot),
+        ),
+      );
+      await (_db.delete(_db.shoppingListItems)..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.sourceMealPlanEntryId.equals(entry.id),
+          ))
+          .go();
+      for (final ShoppingListItem row in before.shopping) {
+        await _db.into(_db.shoppingListItems).insert(row.toCompanion(false));
+      }
+      await (_db.delete(_db.mealRatings)..where(
+            (t) => t.userId.equals(userId) & t.mealPlanEntryId.equals(entry.id),
+          ))
+          .go();
+      for (final MealRating row in before.rating) {
+        await _db.into(_db.mealRatings).insert(row.toCompanion(false));
+      }
+    }
+  });
 
   /// Deletes the entry; its plan-derived shopping rows cascade away via `onDelete: cascade`.
   Future<DeletedPlanEntry> deleteWithSnapshot({

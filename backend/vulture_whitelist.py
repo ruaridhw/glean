@@ -47,6 +47,12 @@ _read_a_missing_offset_as_utc  # Pydantic field validator (CookedHistoryItem.coo
 reason  # MealPlanRecipe
 missing_ingredients  # MealPlanRecipe
 uses_up  # MealPlanSuggestion field the app renders later
+reason_kind  # MealPlanSuggestion field the app renders later
+alternative  # MealPlanSuggestion field the app renders later
+PROFILE  # ReasonKind member: the evidence V13's profile will cite (the app parses every member)
+FEEDBACK  # ReasonKind member: the evidence V9's chips will cite (the app parses every member)
+HISTORY  # ReasonKind member: the evidence the cooked history cites (the app parses every member)
+ANSWER  # ReasonKind member: the evidence an interview answer cites (the app parses every member)
 goes_off  # UsedUpPantryItem field the app renders later
 suggestions  # MealPlanResponse compatibility field
 generate_meal_plan  # FastAPI route handler
@@ -134,7 +140,9 @@ handler  # glean.worker.handler, referenced by template.yaml
 dlq_handler  # glean.worker.dlq_handler, referenced by template.yaml
 create_session  # FastAPI route handler (POST /meal-plan/sessions)
 get_session  # FastAPI route handler (GET /meal-plan/sessions/{id})
+cancel_session  # FastAPI route handler (DELETE /meal-plan/sessions/{id})
 WAITING_FOR_USER  # SessionStatus member: the app's contract, written once the agent can ask a question (V11)
+CANCELLED  # SessionStatus member: the app's contract once DELETE /meal-plan/sessions/{id} exists (V3)
 retry_after_minutes  # SessionError field, read by the app
 created_at  # SessionRecord field, kept for the table's own audit trail
 _plan_from_the_corpus  # Pydantic field validator (SessionRequest.source)
