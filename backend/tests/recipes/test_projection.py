@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 from moto import mock_aws
 
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
+from glean.recipes.attributes import ActiveTimeBucket
 from glean.recipes.corpus import recipe_blob_key
 from glean.recipes.projection import (
     PROJECTION_KEY,
@@ -68,7 +69,7 @@ def test_projection_bytes_are_deterministic_so_an_unchanged_rebuild_writes_nothi
     assert json.loads(gzip.decompress(first))["version"] == 1
 
 
-def test_projection_carries_each_summary_with_its_blob_key_and_room_for_attributes() -> None:
+def test_projection_carries_each_summary_with_its_blob_key_and_unsure_attributes() -> None:
     projection = build_projection([synthetic_recipe("rec_x", title="X", ingredients=["rice"])], [])
 
     recipe = projection.by_id("rec_x")
@@ -82,7 +83,16 @@ def test_projection_carries_each_summary_with_its_blob_key_and_room_for_attribut
         total_time_mins=25,
         ingredient_names=["rice"],
     )
-    assert recipe.attributes == {}
+    # Every entry has every attribute; one nothing has enriched is `unsure`, which is plannable.
+    assert recipe.attributes == {
+        "main_protein": "unsure",
+        "main_carb": "unsure",
+        "dish_type": "unsure",
+        "cuisine": "unsure",
+        "whole_food": "unsure",
+        "active_time": "unsure",
+    }
+    assert recipe.recipe_attributes.active_time is ActiveTimeBucket.UNSURE
 
 
 def test_projection_drops_an_answer_whose_recipe_has_changed_since_it_was_asked() -> None:
