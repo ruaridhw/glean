@@ -287,6 +287,61 @@ void main() {
     },
   );
 
+  testWidgets('a failed answer stays in the composer, so the household can see '
+      'what Retry will send', (WidgetTester tester) async {
+    final _Rig rig = _Rig(<ScriptedResponse>[
+      questionResponse(
+        turn: 1,
+        options: <String>['Quick weeknights', 'Leftovers'],
+      ),
+      500,
+      questionResponse(turn: 2),
+    ]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+
+    await tester.enterText(find.byType(TextField), 'katsu curry');
+    await tester.tap(find.text('Quick weeknights'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'katsu curry',
+      reason: 'the answer is still there to read, and to correct',
+    );
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.ancestor(
+              of: find.text('Quick weeknights'),
+              matching: find.byType(FilterChip),
+            ),
+          )
+          .selected,
+      isTrue,
+      reason: 'so is the chosen chip',
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Question 2 of 7'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+      reason: 'accepted answers clear the composer',
+    );
+    expect(rig.backend.requests, hasLength(3));
+    expect(
+      rig.backend.lastAnswer['options'],
+      <String>['Quick weeknights'],
+      reason: 'the chip the household chose is what was sent again',
+    );
+  });
+
   testWidgets('a rejected answer says so in its own words, and names a way '
       'out other than Retry', (WidgetTester tester) async {
     final _Rig rig = _Rig(<ScriptedResponse>[questionResponse(turn: 1), 422]);
