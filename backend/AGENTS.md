@@ -130,6 +130,11 @@ src/glean/
 ├── decisions.py      # Glean Decisions client (DecisionClient): the only caller of /api/alpha/decisions
 ├── screening.py      # the injection screen: one pinned `noul` question at SCREEN_BAR (0.9), fails closed;
 │                     #   every household free text a model reads goes through it first
+├── profile/          # POST /profile/interview — the taste interview (spec §6.4): five fixed openers, then up
+│                     #   to two model-chosen follow-ups, capped at 7 questions. Stateless: the app sends the
+│                     #   transcript and draft profile each turn. Screened answers go to the model as data in
+│                     #   typed fields; a dropped answer never does. Favourite meals are matched to corpus
+│                     #   recipes by title. HouseholdProfile is versioned JSON, stored on the device
 ├── shopping/         # POST /shopping/parse-description — decision-gated segmentation, one batched parse for cache misses, per-segment parse cache
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
@@ -385,6 +390,18 @@ from glean.rate_limit import enforce_ai_rate_limit
 ```
 
 Add the route to `AI_ROUTES` in `tests/test_rate_limit.py`. Requests that pass auth count against the limit even if the model call then fails; unauthenticated requests get 401 and count for nothing. Free routes (health, recipe search and get) stay unlimited.
+
+### Free text a model will read goes through the screen
+
+Any user-typed free text that a model will read — interview answers now, feedback and swap notes later — is
+first passed to `glean.screening.screen(text, decision_client=...)`. It asks the pinned decision model one
+`noul` question and returns the text only at `SCREEN_BAR` (0.9); below the bar, or on a timeout or a broken
+answer, it returns nothing and the caller drops the text and tells the user ("Couldn't use that answer").
+Fail-closed is the point: the uncertain outcome is not to use the text. Pass text to the model as data in a
+typed field, never as instructions, and re-screen what a stateless endpoint is asked to use again rather than
+trusting a transcript it did not screen itself. The question and the bar are pinned by
+`tests/profile/test_screening.py`; measure a change with
+`uv run python -m scripts.eval_screening --out /tmp/screening-eval.json` (paid, 60 decision calls).
 
 ### Dietary ground truth
 

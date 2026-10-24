@@ -149,3 +149,17 @@ _Avoid_: non-food, unknown
 **Unresolved**:
 A name normalisation couldn't settle this time, e.g. during a model outage. Nothing is recorded, and it's tried again later.
 _Avoid_: pending, failed
+
+### The household profile
+
+**Household profile**:
+What the taste interview learned about the people eating: favourite dinners, loved and disliked ingredients and cuisines, how often each protein should appear, spice tolerance, how they cook now, and who's at the table. Kept on the device as versioned JSON, so it can grow without a database migration.
+_Avoid_: user preferences, taste data, profile settings
+
+**Favourite meal**:
+A dinner the household would happily eat every fortnight, in their own words. It carries the corpus recipe's id when the title search matched confidently, and no id when it didn't — the words are the favourite either way.
+_Avoid_: favourite recipe, liked meal
+
+**Interview**:
+The taste interview in first run: five fixed openers, then up to two follow-ups the model chooses, seven questions at most. Every answer is skippable, and free text is screened before any model reads it.
+_Avoid_: onboarding quiz, survey, questionnaire
