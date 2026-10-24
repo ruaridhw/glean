@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, latest_per_question
+from glean.recipes.attributes import RecipeAttributes
 from glean.recipes.corpus import recipe_blob_key
 from glean.recipes.search_index import RecipeSummary
 
@@ -49,12 +50,18 @@ class ProjectionError(Exception):
 
 
 class ProjectedRecipe(BaseModel):
-    """One recipe as planning needs it: its summary, its current answers, and its future attributes."""
+    """One recipe as planning needs it: its summary, its current answers, and its attributes."""
 
     summary: RecipeSummary
     answers: list[RecipeAnswer] = Field(default_factory=list)
-    # F2/V5 fill these (`main_protein`, `cuisine`, `active_time_mins`, ...) without a schema change here.
-    attributes: dict[str, Any] = Field(default_factory=dict)
+    # V5's attributes by their G1 names (`main_protein`, `cuisine`, `active_time`, ...), each a stored value
+    # or `unsure` (recipes/attributes.py). Plain strings, so a document written by any build reads back.
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def recipe_attributes(self) -> RecipeAttributes:
+        """The attributes typed, and `unsure` where the entry carries nothing: how planning reads them."""
+        return RecipeAttributes.from_mapping(self.attributes)
 
 
 class RecipeProjection(BaseModel):
