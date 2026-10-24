@@ -13,6 +13,7 @@ import 'models/catalogue.dart';
 import 'models/diagnostics.dart';
 import 'models/meal_plan.dart';
 import 'models/meal_plan_session.dart';
+import 'models/profile.dart';
 import 'models/receipts.dart';
 import 'models/recipes.dart';
 import 'models/shopping.dart';
@@ -152,6 +153,24 @@ class GleanApiClient {
       uri,
       () async => httpClient.delete(uri, headers: await _authHeaders()),
       (dynamic json) {},
+    );
+  }
+
+  // --- Household profile ---
+
+  /// One interview turn: sends the transcript so far and returns the next question, or the finished profile
+  /// and its summary. Stateless — the app holds the transcript, the backend holds nothing.
+  Future<InterviewResponse> continueInterview(InterviewRequest request) {
+    final uri = _uri('/profile/interview');
+    return _send(
+      uri,
+      () async => httpClient.post(
+        uri,
+        headers: await _jsonHeaders(),
+        body: jsonEncode(request.toJson()),
+      ),
+      (dynamic json) =>
+          InterviewResponse.fromJson(json as Map<String, dynamic>),
     );
   }
 
