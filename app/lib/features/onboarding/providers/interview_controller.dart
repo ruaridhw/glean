@@ -121,8 +121,9 @@ class InterviewController extends Notifier<InterviewState> {
     await _send();
   }
 
-  /// Re-sends the exchange that failed, unchanged.
-  Future<void> retry() => _send();
+  /// Re-sends what failed. The opener is not a turn in the transcript, so a failure before anything was sent
+  /// has no exchange to replay: Retry asks for the first question again instead of doing nothing.
+  Future<void> retry() => _send(sendNothing: _pending == null);
 
   /// Drops the whole interview, which is what Skip all means: nothing is saved and the transcript is gone.
   void reset() {

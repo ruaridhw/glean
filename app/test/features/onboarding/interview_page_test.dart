@@ -254,6 +254,37 @@ void main() {
     expect(find.text('Question 2 of 7'), findsOneWidget);
   });
 
+  testWidgets(
+    'a failed opener can be retried, and Retry asks for the first question '
+    'again rather than doing nothing',
+    (WidgetTester tester) async {
+      final _Rig rig = _Rig(<ScriptedResponse>[
+        500,
+        questionResponse(turn: 1, text: 'What are three dinners?'),
+        questionResponse(turn: 2),
+      ]);
+      addTearDown(rig.db.close);
+      await rig.openInterview(tester);
+
+      expect(find.text('Question 1 of 7'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('What are three dinners?'), findsOneWidget);
+      expect(find.text('Question 1 of 7'), findsOneWidget);
+      expect(rig.backend.requests, hasLength(2));
+      expect(
+        rig.backend.requests.map(
+          (Map<String, dynamic> body) => body['transcript'],
+        ),
+        <Object?>[isEmpty, isEmpty],
+        reason: 'the opener is asked from an empty transcript, twice',
+      );
+    },
+  );
+
   testWidgets('a rate-limited turn says so in its own words', (
     WidgetTester tester,
   ) async {
