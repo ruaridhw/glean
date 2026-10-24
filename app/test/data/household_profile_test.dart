@@ -192,4 +192,66 @@ void main() {
     expect(HouseholdProfile.decode('not json'), isNull);
     expect(HouseholdProfile.decode('[1, 2, 3]'), isNull);
   });
+  test('copyWith changes only the fields it names, and an edited profile '
+      'keeps its version and interview time', () {
+    final HouseholdProfile full = HouseholdProfile.fromJson(_full);
+
+    final HouseholdProfile edited = full.copyWith(
+      dislikedIngredients: <String>['mushrooms', 'olives'],
+      habits: 'Leftovers on Mondays',
+    );
+
+    expect(edited.dislikedIngredients, <String>['mushrooms', 'olives']);
+    expect(edited.habits, 'Leftovers on Mondays');
+    final Map<String, dynamic> rest = edited.toJson()
+      ..remove('disliked_ingredients')
+      ..remove('habits');
+    final Map<String, dynamic> original = full.toJson()
+      ..remove('disliked_ingredients')
+      ..remove('habits');
+    expect(rest, original);
+  });
+
+  test('spice tolerance can be set and cleared again', () {
+    final HouseholdProfile full = HouseholdProfile.fromJson(_full);
+
+    expect(
+      full.withSpiceTolerance(SpiceTolerance.hot).spiceTolerance,
+      SpiceTolerance.hot,
+    );
+    final HouseholdProfile cleared = full.withSpiceTolerance(null);
+    expect(cleared.spiceTolerance, isNull);
+    expect(cleared.habits, full.habits);
+  });
+
+  test('a profile is empty only when every answer and note is', () {
+    expect(const HouseholdProfile().isEmpty, isTrue);
+    expect(HouseholdProfile.fromJson(_full).isEmpty, isFalse);
+    for (final HouseholdProfile one in <HouseholdProfile>[
+      const HouseholdProfile(
+        favouriteMeals: <FavouriteMeal>[FavouriteMeal(text: 'dal')],
+      ),
+      const HouseholdProfile(lovedIngredients: <String>['miso']),
+      const HouseholdProfile(dislikedIngredients: <String>['olives']),
+      const HouseholdProfile(cuisinesLiked: <String>['Indian']),
+      const HouseholdProfile(cuisinesAvoided: <String>['Thai']),
+      const HouseholdProfile(
+        proteinTargets: <ProteinTarget>[ProteinTarget(protein: 'fish')],
+      ),
+      const HouseholdProfile(spiceTolerance: SpiceTolerance.none),
+      const HouseholdProfile(habits: 'Leftovers'),
+      const HouseholdProfile(household: 'Just me'),
+      const HouseholdProfile(
+        notes: <ProfileNote>[
+          ProfileNote(
+            date: '2026-10-24',
+            text: 'Likes rice',
+            source: ProfileNoteSource.feedback,
+          ),
+        ],
+      ),
+    ]) {
+      expect(one.isEmpty, isFalse, reason: one.encode());
+    }
+  });
 }
