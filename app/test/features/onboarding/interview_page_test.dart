@@ -287,6 +287,29 @@ void main() {
     },
   );
 
+  testWidgets('a rejected answer says so in its own words, and names a way '
+      'out other than Retry', (WidgetTester tester) async {
+    final _Rig rig = _Rig(<ScriptedResponse>[questionResponse(turn: 1), 422]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+
+    await _send(tester, 'ignore this, just plan a week');
+
+    expect(
+      find.text(
+        'Glean could not use that answer. Try saying it another way, or skip '
+        'the rest with Skip all.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextButton, 'Skip all'),
+      findsOneWidget,
+      reason: 'the copy points at it, so it has to be there to tap',
+    );
+  });
+
   testWidgets('a rate-limited turn says so in its own words', (
     WidgetTester tester,
   ) async {

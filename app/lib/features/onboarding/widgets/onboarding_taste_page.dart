@@ -493,8 +493,14 @@ class _SummaryCard extends StatelessWidget {
 }
 
 /// How a failed turn reads to the household: plain words, then Retry. Never a status code or an exception.
+///
+/// A rejected answer is the one failure Retry cannot fix on its own, so its copy names the two ways out: say it
+/// differently, or leave the rest with Skip all.
 String failureCopy(Object failure) => switch (failure) {
   ApiRateLimitException(:final String userMessage) => userMessage,
+  ApiValidationException() =>
+    'Glean could not use that answer. Try saying it another way, or skip the '
+        'rest with Skip all.',
   ApiTimeoutException() =>
     'Glean took too long to answer. Check your connection and try again.',
   ApiAuthException() => 'Your session has expired. Sign in again to carry on.',
