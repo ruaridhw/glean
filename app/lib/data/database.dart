@@ -39,13 +39,14 @@ String catalogueNameKey(String name) => name
     CatalogueSyncState,
     IngredientOverrides,
     CatalogueItemRedirects,
+    HouseholdProfiles,
   ],
 )
 class GleanDatabase extends _$GleanDatabase {
   GleanDatabase(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -99,6 +100,9 @@ class GleanDatabase extends _$GleanDatabase {
           }
           if (from < 7) {
             await _addMealRatings(m);
+          }
+          if (from < 8) {
+            await _addHouseholdProfiles(m);
           }
         });
       },
@@ -339,6 +343,16 @@ class GleanDatabase extends _$GleanDatabase {
     )) {
       await m.addColumn(userConfig, userConfig.ratingsExplainerSeen);
     }
+  }
+
+  // The household profile table, additive only: a file upgrading from v6 (or v7) keeps every row and gains
+  // an empty `household_profiles`. Self-contained so it can be renumbered by changing only the `from <` guard
+  // that calls it, and guarded by what the file already holds so replaying the step changes nothing.
+  Future<void> _addHouseholdProfiles(Migrator m) async {
+    final existing = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'household_profiles'",
+    ).get();
+    if (existing.isEmpty) await m.createTable(householdProfiles);
   }
 
   // The groups the app works from before its first sync. A sync later overwrites them by id.

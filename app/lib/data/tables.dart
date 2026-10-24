@@ -289,6 +289,18 @@ class CatalogueAliases extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// The household profile the taste interview builds: one row per signed-in user, holding the profile as
+/// versioned JSON in a single column so its shape can grow without a schema bump each time. `updatedAt` is
+/// when the row last changed, so a reader can tell a stale profile from a fresh one without decoding it.
+class HouseholdProfiles extends Table {
+  TextColumn get userId => text()();
+  TextColumn get profileJson => text()();
+  TextColumn get updatedAt => text()();
+
+  @override
+  Set<Column> get primaryKey => {userId};
+}
+
 /// How far catalogue sync has got: one row (`id` 1), absent until the first successful sync. `fullSyncedAt` is when
 /// the last full (`since=0`) sync succeeded; ordinary delta syncs leave it alone, so they can never postpone the
 /// next full one.

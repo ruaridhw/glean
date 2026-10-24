@@ -163,7 +163,7 @@ void main() {
 
       final upgraded = sqlite3.open(file.path);
       addTearDown(upgraded.close);
-      expect(upgraded.select('PRAGMA user_version').single.values.single, 7);
+      expect(upgraded.select('PRAGMA user_version').single.values.single, 8);
       for (final String table in columns.keys) {
         expect(
           rowsOf(upgraded, table),
