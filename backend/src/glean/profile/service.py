@@ -136,9 +136,9 @@ _MEAL_STOPWORDS = frozenset(
     }
 )
 
-# How many extra words a corpus title may carry beyond the household's phrase and still count as
-# the same meal: "chicken curry" matches "Chicken curry with rice", not "Curry night traybake".
-_TITLE_EXTRA_WORDS = 2
+# How many words a corpus title may add after the household's phrase and still count as the same meal:
+# "chicken curry" matches "Chicken curry with rice", not "Curry chicken salad" or "Chicken and leek pie".
+_TITLE_EXTRA_WORDS = 1
 
 # Bounds on what one interview can add to the profile, so a rambling answer can't bloat it. The request
 # schema enforces the same ceilings, so these bites only on model output.
@@ -469,30 +469,32 @@ def _joined(existing: str, parts: list[str]) -> str:
 def match_recipe(text: str, corpus: RecipeCorpusStore) -> str | None:
     """The corpus recipe a favourite meal is, when the title search is confident, else None.
 
-    Confidence means every meaningful word of the phrase appears in the recipe's title: a
-    one-word phrase must be the whole title, and a longer one may be the title plus a couple of
-    words ("chicken curry" is "Chicken curry with rice"). An unmatched favourite is kept as text.
+    Confidence is a title that starts with the household's words, in their order, adding at most one
+    word: "chicken curry" is "Chicken curry with rice" but not "Curry chicken salad", "Beef and
+    chicken curry" or "Chicken and leek pie", and "fish and chips" is not "Chips with fish sauce". A
+    single word must be the whole title, so a generic "pie" never picks a recipe. An unmatched
+    favourite keeps its text and carries no recipe id.
     """
     wanted = _meaningful_words(text)
     if not wanted:
         return None
-    summaries, _ = corpus.search(q=" ".join(sorted(wanted)), per_page=5)
+    summaries, _ = corpus.search(q=" ".join(sorted(set(wanted))), per_page=5)
     for summary in summaries:
         if _is_same_meal(wanted, summary):
             return summary.external_id
     return None
 
 
-def _is_same_meal(wanted: set[str], summary: RecipeSummary) -> bool:
+def _is_same_meal(wanted: list[str], summary: RecipeSummary) -> bool:
     title = _meaningful_words(summary.title)
-    if not wanted or not wanted <= title:
-        return False
-    extra = len(title) - len(wanted)
-    return extra == 0 if len(wanted) == 1 else extra <= _TITLE_EXTRA_WORDS
+    if len(wanted) == 1:
+        return title == wanted
+    return title[: len(wanted)] == wanted and len(title) - len(wanted) <= _TITLE_EXTRA_WORDS
 
 
-def _meaningful_words(text: str) -> set[str]:
-    return {word for word in _WORD.findall(text.casefold()) if word not in _MEAL_STOPWORDS}
+def _meaningful_words(text: str) -> list[str]:
+    """The words of a dish name that carry meaning, in the order they appear."""
+    return [word for word in _WORD.findall(text.casefold()) if word not in _MEAL_STOPWORDS]
 
 
 def _ask_model(

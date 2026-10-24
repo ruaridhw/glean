@@ -679,3 +679,31 @@ def test_the_server_field_is_what_an_opener_answer_fills(
         "habits",
         "household",
     ]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "expected"),
+    [
+        pytest.param("chicken curry", "corpus:chicken-curry", id="title starts with the phrase"),
+        pytest.param("curry chicken", "corpus:curry-chicken", id="a title that starts with the phrase"),
+        pytest.param("lasagne", "corpus:lasagne", id="the whole title"),
+        pytest.param("thai green curry", "corpus:thai", id="exact match"),
+        pytest.param("fish and chips", None, id="chips with fish sauce is not fish and chips"),
+        pytest.param("chicken pie", None, id="chicken and leek pie is not chicken pie"),
+        pytest.param("chicken salad", None, id="a title that merely contains the words is not the dish"),
+        pytest.param("mystery bake", None, id="nothing in the corpus"),
+    ],
+)
+def test_favourite_matching_is_confident_or_null(phrase: str, expected: str | None, corpus: RecipeCorpusStore) -> None:
+    for external_id, title in [
+        ("corpus:chicken-curry", "Chicken curry with rice"),
+        ("corpus:lasagne", "Lasagne"),
+        ("corpus:curry-chicken", "Curry chicken salad"),
+        ("corpus:beef-chicken-curry", "Beef and chicken curry"),
+        ("corpus:chips", "Chips with fish sauce"),
+        ("corpus:chicken-pie", "Chicken and leek pie"),
+        ("corpus:thai", "Thai green curry"),
+    ]:
+        corpus.save(stored_recipe(external_id, title))
+
+    assert service.match_recipe(phrase, corpus) == expected
