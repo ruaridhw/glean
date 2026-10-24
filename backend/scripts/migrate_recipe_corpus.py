@@ -83,6 +83,8 @@ class MigrationPlan:
 
     recipes: list[StoredRecipe]
     answers: dict[str, list[RecipeAnswer]]
+    # Each recipe's key in the source blob corpus, kept in the table so the projection keeps the blob layout.
+    keys: dict[str, str] = field(default_factory=dict)
 
     @property
     def wcu(self) -> int:
@@ -91,7 +93,8 @@ class MigrationPlan:
 
     def write_units(self, recipe: StoredRecipe) -> int:
         answers = self.answers_planned_for(recipe.external_id)
-        return recipe_write_units(recipe) + sum(answer_write_units(answer) for answer in answers)
+        key = self.keys.get(recipe.external_id)
+        return recipe_write_units(recipe, key=key) + sum(answer_write_units(answer) for answer in answers)
 
     def answers_planned_for(self, recipe_id: str) -> list[RecipeAnswer]:
         """The answers this migration will write for a recipe (the table's answers are read for the projection)."""
@@ -104,7 +107,7 @@ class MigrationPlan:
     def scan_units(self) -> int:
         """Read units the final projection rebuild spends: one consistent unit per 4 KB of every item."""
         bytes_read = sum(
-            item_size_bytes(recipe_item(recipe))
+            item_size_bytes(recipe_item(recipe, key=self.keys.get(recipe.external_id)))
             + (item_size_bytes(source_item(recipe)) if source_item(recipe) is not None else 0)
             + sum(item_size_bytes(answer_item(answer)) for answer in self.answers_planned_for(recipe.external_id))
             for recipe in self.recipes
@@ -343,7 +346,7 @@ def migrate(
         if answers:
             summary.answers_written += backend.save_answers(answers, rebuild_projection=False)
         pacer.spend(recipe_wcu(recipe))
-        summary.recipes_written += bool(backend.upsert(recipe))
+        summary.recipes_written += bool(backend.upsert(recipe, key=plan.keys.get(recipe.external_id)))
         summary.processed += 1
         checkpoint.add(recipe.external_id)
     checkpoint.save()
@@ -370,7 +373,13 @@ def _plan(source: RecipeCorpusStore) -> MigrationPlan:
     for answer in dietary_answers(DietaryDecisionStore(source.store).load()):
         if answer.recipe_id in known:
             answers.setdefault(answer.recipe_id, []).append(answer)
-    return MigrationPlan(recipes=recipes, answers=answers)
+    index = source.store.index()
+    keys = {
+        recipe.external_id: summary.key
+        for recipe in recipes
+        if index is not None and (summary := index.by_id(recipe.external_id)) is not None
+    }
+    return MigrationPlan(recipes=recipes, answers=answers, keys=keys)
 
 
 def _refuse_prod(table: str, *, i_am_the_owner: bool, writes: bool = True) -> None:

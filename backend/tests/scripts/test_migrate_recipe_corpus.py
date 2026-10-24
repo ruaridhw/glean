@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -21,9 +22,10 @@ from glean.meal_plan.dietary_decisions import (
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes import dynamo_corpus
-from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.corpus import RecipeCorpusStore, recipe_payload
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend, item_write_units, recipe_item, source_item
 from glean.recipes.projection import loads
+from glean.recipes.search_index import INDEX_KEY, RecipeSummary, loads_summaries
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -540,3 +542,56 @@ def _items(table: Any) -> list[dict[str, Any]]:
 def _projection(projections: InMemoryProjectionStore) -> RecipeProjection:
     assert projections.data is not None
     return loads(projections.data)
+
+
+def _with_a_legacy_flat_blob(source: RecipeCorpusStore) -> None:
+    """A recipe stored at the corpus's original flat key, as the real corpus's older recipes are."""
+    legacy = synthetic_recipe("rec_legacy_soup", title="Legacy Soup", ingredients=["leek", "potato"])
+    source.store.write("rec_legacy_soup.json", json.dumps(recipe_payload(legacy)))
+    source.rebuild_index()
+
+
+def _blob_summaries(source: RecipeCorpusStore) -> list[RecipeSummary]:
+    raw = source.store.read(INDEX_KEY)
+    assert raw is not None
+    return sorted(loads_summaries(raw), key=lambda summary: summary.external_id)
+
+
+def test_the_projection_summaries_match_the_blob_index_field_for_field(
+    tmp_path: Path, backend: DynamoCorpusBackend, source: RecipeCorpusStore, projections: InMemoryProjectionStore
+) -> None:
+    _with_a_legacy_flat_blob(source)
+
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    # Every field, the blob key included: a flat legacy key stays flat, a namespaced one stays namespaced.
+    assert _projection(projections).summaries() == _blob_summaries(source)
+    assert _projection(projections).by_id("rec_legacy_soup").summary.key == "rec_legacy_soup.json"
+
+
+def test_a_projection_rebuilt_from_the_table_alone_keeps_the_blob_keys(
+    tmp_path: Path, backend: DynamoCorpusBackend, source: RecipeCorpusStore, projections: InMemoryProjectionStore
+) -> None:
+    _with_a_legacy_flat_blob(source)
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    # The table is the authority: losing the projection must not lose where each body lives in the blobs.
+    projections.delete()
+    backend.rebuild_projection()
+
+    assert _projection(projections).summaries() == _blob_summaries(source)
+
+
+def test_a_later_save_or_publish_keeps_the_migrated_blob_key(
+    tmp_path: Path, backend: DynamoCorpusBackend, source: RecipeCorpusStore, projections: InMemoryProjectionStore
+) -> None:
+    _with_a_legacy_flat_blob(source)
+    assert _run(tmp_path, backend, source, projections) == 0
+    legacy = backend.get("rec_legacy_soup")
+    assert legacy is not None
+
+    projections.delete()
+    backend.publish(legacy)  # the dedupe repair path, with no projection entry to take the key from
+    backend.save(legacy.model_copy(update={"title": "Legacy Soup, Renamed"}))
+
+    assert _projection(projections).by_id("rec_legacy_soup").summary.key == "rec_legacy_soup.json"

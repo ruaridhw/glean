@@ -3,7 +3,9 @@
 Table `glean-recipes-<env>`, provisioned at 5/5 with no GSIs (ADR 0001). Three item shapes, all keyed by
 `pk` + `sk` strings:
 
-- `pk=RECIPE#<id>`, `sk=RECIPE` — the recipe body as JSON, at most 10 KB.
+- `pk=RECIPE#<id>`, `sk=RECIPE` — the recipe body as JSON, at most 10 KB, and `blob_key`: the key the body
+  has in the blob corpus (a legacy flat `rec_<id>.json` for the migrated recipes), so the projection rebuilt
+  from the table alone keeps the blob layout.
 - `pk=RECIPE#<id>`, `sk=ANSWER#<question>#<criteria_hash>` — one decision answer (probabilities, model,
   the recipe content hash it answered). Dietary decisions are answers under `dietary:<flag>`; F2's
   enrichers add their own question names beside them.
@@ -257,8 +259,11 @@ class DynamoCorpusBackend:
 
     # -- the migration and F2's runner ---------------------------------------------------------------
 
-    def upsert(self, recipe: StoredRecipe) -> bool:
+    def upsert(self, recipe: StoredRecipe, *, key: str | None = None) -> bool:
         """Write the recipe and its SOURCE pointer, and make sure the projection carries it.
+
+        `key` is where the body lives in the blob corpus (the migration passes the source index's key). Without
+        one, the key already stored for the recipe is kept, else the key the blob store would use.
 
         Returns whether anything durable was written: a recipe already in the table whose projection entry
         is also current writes nothing, which is what makes the migration re-runnable. The projection step
@@ -269,25 +274,35 @@ class DynamoCorpusBackend:
         # `SOURCE#` row with every other such recipe.
         pointer = source_item(recipe)
         stored = self._get(recipe_pk(recipe.external_id), RECIPE_SK)
+        blob_key = key or _stored_blob_key(stored) or recipe_blob_key(recipe.external_id)
         wrote_table = not (
-            stored is not None and stored.get("body") == body and (pointer is None or self._source_is_current(pointer))
+            stored is not None
+            and stored.get("body") == body
+            and stored.get("blob_key") == blob_key
+            and (pointer is None or self._source_is_current(pointer))
         )
         if wrote_table:
-            ops: list[dict[str, Any]] = [{"Put": {"TableName": self._table, "Item": recipe_item(recipe)}}]
+            item = recipe_item(recipe, key=blob_key)
+            ops: list[dict[str, Any]] = [{"Put": {"TableName": self._table, "Item": item}}]
             if pointer is not None:
                 ops.append({"Put": {"TableName": self._table, "Item": pointer}})
             self._transact(ops)
-        published = self.publish(recipe)  # always: this is also the repair after an earlier failed publish
+        # Always: this is also the repair after an earlier failed publish.
+        published = self.publish(recipe, key=blob_key)
         return wrote_table or published
 
-    def publish(self, recipe: StoredRecipe) -> bool:
+    def publish(self, recipe: StoredRecipe, *, key: str | None = None) -> bool:
         """Make an already-stored recipe visible to search and planning. True when the projection changed.
 
         Idempotent, and the repair path for a publish that failed earlier: a retried import deduped on its
         source URL calls this instead of paying for another parse, and a retried `upsert` converges here too.
+        The summary's blob key is `key`, or the one the table holds for the recipe.
         """
+        if key is None:
+            key = _stored_blob_key(self._get(recipe_pk(recipe.external_id), RECIPE_SK))
+        blob_key = key or recipe_blob_key(recipe.external_id)
         return self._publish(
-            lambda projection, _refresh: projection.with_recipe(self._projected(recipe, projection)),
+            lambda projection, _refresh: projection.with_recipe(self._projected(recipe, projection, key=blob_key)),
             what=f"recipe {recipe.external_id}",
         )
 
@@ -317,9 +332,16 @@ class DynamoCorpusBackend:
         """The whole projection, scanned back out of the table."""
         rows = self._scan()
         # SOURCE pointers share `sk=RECIPE`; only a recipe row carries a body.
-        recipes = [_stored_recipe(row) for row in rows if row["sk"] == RECIPE_SK and "body" in row]
+        recipes: list[StoredRecipe] = []
+        keys: dict[str, str] = {}
+        for row in rows:
+            if row["sk"] != RECIPE_SK or "body" not in row or (recipe := _stored_recipe(row)) is None:
+                continue
+            recipes.append(recipe)
+            if blob_key := _stored_blob_key(row):
+                keys[recipe.external_id] = blob_key
         answers = [_answer_from_row(row) for row in rows if str(row["sk"]).startswith(ANSWER_PREFIX)]
-        return build_projection([recipe for recipe in recipes if recipe is not None], answers)
+        return build_projection(recipes, answers, keys=keys)
 
     # -- projection cache ---------------------------------------------------------------------------
 
@@ -416,11 +438,10 @@ class DynamoCorpusBackend:
             _LoadedProjection(raw=snapshot.data, projection=projection, index=index),
         )
 
-    def _projected(self, recipe: StoredRecipe, projection: RecipeProjection) -> ProjectedRecipe:
+    def _projected(self, recipe: StoredRecipe, projection: RecipeProjection, *, key: str) -> ProjectedRecipe:
         """The projection entry for a recipe just written: its summary and the answers that still apply."""
         fingerprint = _fingerprint(recipe)
         known = projection.by_id(recipe.external_id)
-        key = known.summary.key if known is not None else recipe_blob_key(recipe.external_id)
         answers = latest_per_question(
             answer for answer in self.answers_for(recipe.external_id) if answer.content_hash == fingerprint
         )
@@ -504,9 +525,14 @@ class DynamoCorpusBackend:
         return retry_throttled(operation)
 
 
-def recipe_item(recipe: StoredRecipe) -> dict[str, Any]:
-    """The RECIPE item for a recipe: the body with the fields the table indexes or compares on."""
-    return {"pk": recipe_pk(recipe.external_id), "sk": RECIPE_SK, "body": _recipe_body(recipe)}
+def recipe_item(recipe: StoredRecipe, *, key: str | None = None) -> dict[str, Any]:
+    """The RECIPE item for a recipe: the body, and the key it has in the blob corpus (`key`, or the default)."""
+    return {
+        "pk": recipe_pk(recipe.external_id),
+        "sk": RECIPE_SK,
+        "body": _recipe_body(recipe),
+        "blob_key": key or recipe_blob_key(recipe.external_id),
+    }
 
 
 def source_item(recipe: StoredRecipe) -> dict[str, Any] | None:
@@ -548,9 +574,9 @@ def item_write_units(item: dict[str, Any]) -> int:
     return max(1, math.ceil(item_size_bytes(item) / 1024))
 
 
-def recipe_write_units(recipe: StoredRecipe) -> int:
+def recipe_write_units(recipe: StoredRecipe, *, key: str | None = None) -> int:
     """Write units for one recipe: its body and SOURCE pointer in one transaction, which bills double."""
-    items = [recipe_item(recipe), source_item(recipe)]
+    items = [recipe_item(recipe, key=key), source_item(recipe)]
     return 2 * sum(item_write_units(item) for item in items if item is not None)
 
 
@@ -617,6 +643,12 @@ def _stored_recipe(row: dict[str, Any]) -> StoredRecipe | None:
     except (KeyError, TypeError, ValueError):
         logger.warning("stored recipe body is unreadable", extra={"pk": row.get("pk")})
         return None
+
+
+def _stored_blob_key(row: dict[str, Any] | None) -> str | None:
+    """The blob key a RECIPE row records, or None for a row written before the table kept one."""
+    blob_key = row.get("blob_key") if row is not None else None
+    return str(blob_key) if blob_key else None
 
 
 def _answer_from_row(row: dict[str, Any]) -> RecipeAnswer:
