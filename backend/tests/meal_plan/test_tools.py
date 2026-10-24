@@ -26,7 +26,10 @@ from glean.meal_plan.tools import (
     UnknownRecipeIds,
     _greedy_plan,
     _Scorer,
+    chosen_vs_best_ratio,
     create_candidate_meal_plans,
+    distinct_main_carbs,
+    distinct_main_proteins,
     score_meal_plan,
 )
 from glean.recipes.attributes import (
@@ -634,6 +637,55 @@ def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
     assert scorer._penalty_points(["a", "b", "c"]) == sum(penalty.points for penalty in plan.penalties)
     assert plan.points(Term.LIGHTER) < 0
     assert plan.points(Term.PROTEIN_TARGET) < 0
+
+
+# --- variety metrics for the eval (spec 6.6) --------------------------------------------------------------
+
+
+def test_distinct_main_proteins_exclude_none_and_unsure() -> None:
+    ctx = context(
+        candidate("chicken", main_protein=MainProtein.CHICKEN),
+        candidate("chicken-again", main_protein=MainProtein.CHICKEN),
+        candidate("fish", main_protein=MainProtein.FISH),
+        candidate("vegetable", main_protein=MainProtein.NONE),
+        candidate("unknown", main_protein=MainProtein.UNSURE),
+    )
+    assert distinct_main_proteins(["chicken", "chicken-again", "fish", "vegetable", "unknown"], ctx) == 2
+
+
+def test_distinct_main_carbs_exclude_none_and_unsure() -> None:
+    ctx = context(
+        candidate("rice", main_carb=MainCarb.RICE),
+        candidate("pasta", main_carb=MainCarb.PASTA),
+        candidate("pasta-again", main_carb=MainCarb.PASTA),
+        candidate("no-carb", main_carb=MainCarb.NONE),
+        candidate("unknown"),
+    )
+    assert distinct_main_carbs(["rice", "pasta", "pasta-again", "no-carb", "unknown"], ctx) == 2
+
+
+def test_variety_metrics_reject_an_id_the_context_does_not_describe() -> None:
+    with pytest.raises(UnknownRecipeIds, match="ghost"):
+        distinct_main_proteins(["ghost"], context(candidate("a")))
+
+
+def test_the_chosen_plan_is_compared_with_the_best_as_a_ratio() -> None:
+    ctx = context(candidate("a", pantry_fit=10.0), candidate("b", pantry_fit=6.0))
+    best = score(["a", "b"], ctx)
+    assert chosen_vs_best_ratio(score(["a", "b"], ctx), best) == 1.0
+    assert chosen_vs_best_ratio(score(["a", "b"], ctx), best) > 0.85
+    assert chosen_vs_best_ratio(score(["b"], ctx), best) == pytest.approx(0.375)
+    assert chosen_vs_best_ratio(score(["b"], ctx), best) < 0.85
+
+
+def test_the_ratio_holds_up_when_the_scores_are_negative() -> None:
+    ctx = context(candidate("a", rating=Rating.DOWN), candidate("b", rating=Rating.DOWN))
+    best = score(["a"], ctx)
+    assert chosen_vs_best_ratio(score(["a"], ctx), best) == 1.0
+    assert chosen_vs_best_ratio(score(["b"], ctx), best) == 1.0
+    far_worse = score(["a", "b"], ctx)
+    assert chosen_vs_best_ratio(far_worse, best) >= 0.0
+    assert chosen_vs_best_ratio(far_worse, best) < 0.85
 
 
 def test_a_minutes_predicate_takes_exactly_one_number() -> None:
