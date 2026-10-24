@@ -281,6 +281,11 @@ def _answer_blob(answer: InterviewAnswer) -> str:
     return "\n".join(parts)
 
 
+def _blob_of(turn: TranscriptTurn) -> str:
+    """What a turn contributes to the screen: nothing at all when the household skipped it."""
+    return "" if turn.answer.skipped else _answer_blob(turn.answer)
+
+
 def _collect(
     pool: ThreadPoolExecutor, blobs: list[str], decision_client: DecisionClient, *, until: float
 ) -> list[ScreenResult | None]:
@@ -306,14 +311,12 @@ def _last_answer_dropped(transcript: list[TranscriptTurn], decision_client: Deci
     """Whether the newest answer was screened and refused, which is what the app tells the user."""
     if not transcript:
         return False
-    return _screen_one(transcript[-1], decision_client) is None and bool(_answer_blob(transcript[-1].answer))
+    return _screen_one(transcript[-1], decision_client) is None and bool(_blob_of(transcript[-1]))
 
 
 def _screen_one(turn: TranscriptTurn, decision_client: DecisionClient) -> InterviewAnswer | None:
     """The answer to use for this turn, or None when it was skipped, blank or dropped."""
-    if turn.answer.skipped:
-        return None
-    blob = _answer_blob(turn.answer)
+    blob = _blob_of(turn)
     if not blob:
         return None
     result = screen(blob, decision_client=decision_client)
@@ -336,7 +339,7 @@ def _screen_transcript(transcript: list[TranscriptTurn], decision_client: Decisi
     """
     if not transcript:
         return _Screening(answers=[], dropped=False)
-    blobs = [_answer_blob(answered.answer) for answered in transcript]
+    blobs = [_blob_of(answered) for answered in transcript]
     distinct = sorted({blob for blob in blobs if blob})
     pool = ThreadPoolExecutor(max_workers=max(1, min(len(distinct), _MAX_PARALLEL_SCREENS)))
     try:
@@ -355,8 +358,7 @@ def _screen_transcript(transcript: list[TranscriptTurn], decision_client: Decisi
                 extra={"field": answered.question.field.value, "reason": str(result.rejection)},
             )
         answers.append(answered.answer if result is not None and result.passed else None)
-    last = transcript[-1]
-    dropped = answers[-1] is None and not last.answer.skipped and bool(blobs[-1])
+    dropped = answers[-1] is None and bool(blobs[-1])
     return _Screening(answers=answers, dropped=dropped)
 
 
