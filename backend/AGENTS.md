@@ -410,6 +410,11 @@ draft profile the client hands back, whose free text is not sent to the model at
 container (bounded, ten-minute TTL, an outage is never cached) and a request's screens run concurrently under
 an 8 s budget: at most seven decision calls and one model turn per request, ~18 s against the 30 s cap.
 
+A finished `HouseholdProfile` is **not** screened as a whole: its free text is the client's own data,
+merged back after the model call. The interview only guarantees that the text it sent the model was
+screened. Any route that hands a profile to a model later — sessions, eligibility, the scorer, feedback
+notes — screens that free text first or sends only the enum fields (`spice_tolerance`, `protein_targets`).
+
 The 0.9 bar is not yet calibrated on real traffic. The question and bar are pinned by
 `tests/profile/test_screening.py`; measure a change with
 `uv run python -m scripts.eval_screening --out /tmp/screening-eval.json` against the 80-note synthetic set in

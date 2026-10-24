@@ -55,6 +55,10 @@ owner runs that paid command before the bar is trusted.
   ask the same question at the same bar.
 - **Changing the bar, the question or the pinned model is a paid measurement**, not an opinion.
 - **An unmatched favourite is still a favourite**: the words are kept, only the recipe id is null.
+- **The finished profile's free text is client data, and is not screened as a whole.** The interview
+  screens each answer, but the app's own draft is merged back unscreened (only its enum fields ever go to a
+  model). Anything that later sends the profile onward — agent sessions, eligibility, the scorer, V15's
+  feedback notes — must screen that text or send only the enum fields before a model reads it (spec §10).
 
 ## Evidence
 
