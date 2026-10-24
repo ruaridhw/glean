@@ -581,6 +581,59 @@ void main() {
     },
   );
 
+  testWidgets('a profile that fails to save says so and leaves the tastes step '
+      'unfinished, so it can be confirmed again', (WidgetTester tester) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    final _Rig rig = _Rig(<ScriptedResponse>[
+      questionResponse(turn: 1),
+      doneResponse(),
+    ]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+    await _send(tester, 'katsu curry');
+    await rig.db.customStatement(
+      'CREATE TRIGGER fail_profile_save BEFORE INSERT ON household_profiles '
+      "BEGIN SELECT RAISE(ABORT, 'test failure'); END",
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Looks right'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Could not save your profile — you can set it up later in Settings.',
+      ),
+      findsOneWidget,
+    );
+    expect(await rig.savedProfile(), isNull);
+    expect(
+      find.text('Stock your pantry'),
+      findsNothing,
+      reason: 'first run does not move on from an unconfirmed profile',
+    );
+    expect(
+      find.bySemanticsLabel('Step 2 of 3: Taste'),
+      findsOneWidget,
+      reason: 'a failed save is not passing the step',
+    );
+
+    await rig.db.customStatement('DROP TRIGGER fail_profile_save');
+    // Let the failure snackbar time out: it covers the confirm button.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Looks right'));
+    await tester.pumpAndSettle();
+
+    expect(await rig.savedProfile(), isNotNull);
+    expect(find.text('Stock your pantry'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Step 2 of 3: Taste, completed'),
+      findsOneWidget,
+    );
+
+    semantics.dispose();
+  });
+
   testWidgets('Back from the interview returns to the basics, and coming back '
       'does not pay for the openers again', (WidgetTester tester) async {
     final _Rig rig = _Rig(<ScriptedResponse>[
