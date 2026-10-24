@@ -24,7 +24,7 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes import dynamo_corpus
 from glean.recipes.corpus import RecipeCorpusStore, recipe_payload
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend, item_write_units, recipe_item, source_item
-from glean.recipes.projection import loads
+from glean.recipes.projection import ProjectionSnapshot, loads
 from glean.recipes.search_index import INDEX_KEY, RecipeSummary, loads_summaries
 
 if TYPE_CHECKING:
@@ -595,3 +595,44 @@ def test_a_later_save_or_publish_keeps_the_migrated_blob_key(
     backend.save(legacy.model_copy(update={"title": "Legacy Soup, Renamed"}))
 
     assert _projection(projections).by_id("rec_legacy_soup").summary.key == "rec_legacy_soup.json"
+
+
+class _CountingProjectionStore(InMemoryProjectionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requests = 0
+
+    def load(self) -> ProjectionSnapshot:
+        self.requests += 1
+        return super().load()
+
+    def store(self, data: bytes, *, etag: str | None) -> bool:
+        self.requests += 1
+        return super().store(data, etag=etag)
+
+
+def test_the_plan_states_every_read_and_projection_request_the_run_makes(
+    tmp_path: Path, recipes_table: Any, source: RecipeCorpusStore, capsys: pytest.CaptureFixture
+) -> None:
+    projections = _CountingProjectionStore()
+    backend = DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=projections)
+    calls: dict[str, int] = {}
+    for operation in ("GetItem", "Query"):
+        backend._client.meta.events.register(
+            f"before-call.dynamodb.{operation}",
+            lambda operation=operation, **_: calls.__setitem__(operation, calls.get(operation, 0) + 1),
+        )
+    plan = migrate_recipe_corpus._plan(source)
+
+    migrate_recipe_corpus.migrate(
+        plan, backend, checkpoint=migrate_recipe_corpus.Checkpoint(None, owner="test"), wcu_per_second=0
+    )
+
+    # The owner's time budget is only honest if it names the reads and the per-recipe projection rewrite too.
+    assert plan.answer_queries == calls["Query"] == 3
+    assert plan.point_reads == calls["GetItem"]
+    assert plan.projection_requests == projections.requests
+    assert _run(tmp_path, backend, source, projections, "--dry-run") == 0
+    out = capsys.readouterr().out
+    assert f"{plan.answer_queries} consistent answer Queries" in out
+    assert f"{plan.projection_requests} S3 projection requests" in out

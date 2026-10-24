@@ -11,8 +11,12 @@ twice the item size in KiB units, and each answer item is its own write. Item si
 (UTF-8 bytes of attribute names and values, rounded up per KiB), so the figure is what the pacer will spend,
 not a guess. On a 632-recipe corpus with six answers each that is roughly 9,000-17,000 WCU depending on
 recipe size, so about 37-70 minutes at the default 4 WCU/s, and the plan prints it for the corpus it is about
-to migrate. The last step is a full projection rebuild, which scans the table (a few more minutes of read
-capacity, also printed): the table is the authority, so a recipe imported while the run was going is kept.
+to migrate. Each recipe also costs reads, printed beside the writes: a consistent GetItem of its row, a
+consistent Query of its answers for its projection entry, and a read-modify-write of the whole S3 projection
+(a GET and a PUT, plus a GET when it has answers to store). The reads spend read capacity alongside the paced
+writes, so they add time only if they throttle. The last step is a full projection rebuild, which scans the
+table (a few more minutes of read capacity, also printed): the table is the authority, so a recipe imported
+while the run was going is kept.
 Throttles are retried with backoff, and `--wcu-per-second` trades time for headroom.
 
     # rehearse against a local corpus, writing nothing
@@ -116,6 +120,35 @@ class MigrationPlan:
 
     def scan_seconds(self) -> float:
         return self.scan_units / _READ_UNITS_PER_SECOND
+
+    @property
+    def point_reads(self) -> int:
+        """Consistent GetItems on a fresh run: one per recipe row (a re-run adds one per SOURCE pointer)."""
+        return len(self.recipes)
+
+    @property
+    def answer_queries(self) -> int:
+        """Consistent Queries: each recipe's projection entry reads its answers back from the table."""
+        return len(self.recipes)
+
+    @property
+    def read_units(self) -> int:
+        """Read units those GetItems and Queries spend: 1 per 4 KB, each rounded up, at least 1 a request."""
+        return sum(
+            math.ceil(item_size_bytes(recipe_item(recipe, key=self.keys.get(recipe.external_id))) / 4096)
+            + max(
+                1,
+                math.ceil(
+                    sum(item_size_bytes(answer_item(a)) for a in self.answers_planned_for(recipe.external_id)) / 4096
+                ),
+            )
+            for recipe in self.recipes
+        )
+
+    @property
+    def projection_requests(self) -> int:
+        """S3 requests for the per-recipe projection read-modify-write: GET and PUT, plus a GET to store answers."""
+        return sum(2 + bool(self.answers_planned_for(recipe.external_id)) for recipe in self.recipes)
 
 
 @dataclass
@@ -287,6 +320,12 @@ def main(
         f"{plan.wcu} write units, about {plan.duration_seconds(args.wcu_per_second) / 60:.1f} min "
         f"at {args.wcu_per_second:g} WCU/s, plus a {plan.scan_seconds() / 60:.1f} min scan "
         f"({plan.scan_units} read units) to rebuild the projection from the table"
+    )
+    print(
+        f"Alongside the writes: {plan.point_reads} consistent GetItems and {plan.answer_queries} consistent "
+        f"answer Queries ({plan.read_units} read units, {plan.read_units / _READ_UNITS_PER_SECOND / 60:.1f} min "
+        f"of read capacity), and {plan.projection_requests} S3 projection requests (each recipe re-reads and "
+        "rewrites the whole projection; they add time only if a request is slower than the recipe's write pacing)"
     )
     if args.dry_run:
         print("Dry run: wrote nothing.")
