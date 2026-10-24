@@ -354,7 +354,7 @@ def render_comparison(
     """The report: per attribute, its confusion table, then every bar's accuracy and coverage."""
     lines = []
     if sample:
-        lines.append(f"Sample: {sample}   Enriched: {sample and (enriched_at or 'unknown')}")
+        lines.append(f"Sample: {sample}   Enriched: {enriched_at or 'unknown'}")
     lines.extend(
         [
             f"Recipes labelled: {len(comparison.labels)}   Bars replayed: {MIN_ATTRIBUTE_BAR:.2f} to "
