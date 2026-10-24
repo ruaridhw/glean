@@ -24,6 +24,7 @@ from glean.recipes.enrichment.enricher import (
     ConfidenceBar,
     EnrichmentQuestion,
     SafeSide,
+    StoredValue,
     UncalibratedModelError,
 )
 
@@ -217,8 +218,8 @@ def dietary_questions(flags: tuple[str, ...] = DIETARY_FLAGS) -> dict[str, NoulQ
 def _accept_noul(name: str) -> Acceptance:
     """Store the probability itself: a dietary question's bar is applied when planning reads the answer."""
 
-    def accept(decision: Decision) -> float:
-        return decision.noul(name).noul
+    def accept(decision: Decision) -> StoredValue:
+        return StoredValue(probability=decision.noul(name).noul)
 
     return accept
 

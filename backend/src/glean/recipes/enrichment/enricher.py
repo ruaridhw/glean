@@ -53,13 +53,21 @@ class UncalibratedModelError(Exception):
     """A client or an answer names a model a question's bar wasn't measured on, so nothing may decide on it."""
 
 
-# What an acceptance rule stores for one question. Today's answer item carries a probability and nothing
-# else; V5's attribute enrichers widen this to a value (`unsure`, a cuisine) on the same item.
-type StoredValue = float
-# Given the whole decision, return the value to store, or None when the answer doesn't clear the bar and
-# the enricher would rather the question stayed open than stored a guess. None means "ask again next run",
-# not "store unsure": a stored below-the-bar value (`unsure`) needs a value on the answer item, which V5
-# adds with the attribute questions (ADR 0025).
+# What an acceptance rule stores for one question: the probability that decided the answer, and — for a
+# `choice` or `score` question — the value it accepted (a label, a bucket, or `unsure`). A `noul` answer is
+# its probability, so its value stays None and pre-V5 dietary lines are unchanged (ADR 0025, spec 6.1).
+@dataclass(frozen=True)
+class StoredValue:
+    """One question's answer, as it will be stored."""
+
+    probability: float
+    value: str | None = None
+
+
+# Given the whole decision, return what to store, or None when the enricher would rather the question stayed
+# open than stored an answer. None means "ask again next run", and it is not `unsure`: an attribute below its
+# bar still stores a value, because "we asked and are not sure" is an answer that stops the question being
+# re-asked and paid for on every run.
 type Acceptance = Callable[[Decision], StoredValue | None]
 
 

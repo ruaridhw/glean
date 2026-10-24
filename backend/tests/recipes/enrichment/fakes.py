@@ -1,8 +1,9 @@
 """Fakes for the enrichment tests: a recording decision API and a second, test-only enricher.
 
 The second enricher exists so the runner is tested as a pipeline of two families of questions rather than
-against dietary alone, and so the acceptance hook is exercised by a rule that is not dietary's: a high bar
-below which nothing is stored (the shape V5's attribute questions take, ADR 0025).
+against dietary alone, and so the acceptance hook is exercised by a rule that is not dietary's: a `choice`
+question with a high bar, below which `unsure` is stored (exactly the shape V5's attribute questions take,
+ADR 0025). It answers in the endpoint's wire format, so the tests cross the same seam the real client does.
 """
 
 from __future__ import annotations
@@ -14,9 +15,16 @@ from typing import TYPE_CHECKING
 import httpx
 from pydantic import SecretStr
 
-from glean.decisions import DECISION_MODEL, DEFAULT_MODEL, DecisionClient, DecisionModel, NoulCriteria, NoulQuestion
+from glean.decisions import (
+    DECISION_MODEL,
+    DEFAULT_MODEL,
+    ChoiceQuestion,
+    DecisionClient,
+    DecisionModel,
+)
+from glean.recipes.attributes import UNSURE
 from glean.recipes.corpus import BlobCorpusBackend
-from glean.recipes.enrichment import Acceptance, ConfidenceBar, EnrichmentQuestion, SafeSide
+from glean.recipes.enrichment import Acceptance, ConfidenceBar, EnrichmentQuestion, SafeSide, StoredValue
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -74,45 +82,60 @@ class FakeDecisionApi:
                 "model": self._snapshot,
                 "provider": "TypeSafe",
                 "answers": {
-                    name: {"type": "noul", "noul": self._high if name == DINNER or marked else self._low}
-                    for name in body["questions"]
+                    name: self._answer(question, high=name == DINNER or marked)
+                    for name, question in body["questions"].items()
                 },
                 "usage": {"input_tokens": 10, "output_tokens": 2, "cost": 0.00001},
             },
         )
+
+    def _answer(self, question: dict, *, high: bool) -> dict:
+        """One answer in the endpoint's shape: a `noul` probability, or a choice distribution over its options."""
+        if question["type"] == "noul":
+            return {"type": "noul", "noul": self._high if high else self._low}
+        options = list(question["criteria"])
+        top = options[0] if high else options[1]
+        rest = (1.0 - self._high) / max(len(options) - 1, 1)
+        probabilities = {option: (self._high if option == top else rest) for option in options}
+        return {"type": "choice", "choice": top, "probabilities": probabilities, "confidence": self._high}
 
     def asked(self, title: str) -> dict:
         """The one request the fake saw for the recipe with this title."""
         return next(request for request in self.requests if request["state"]["recipe_title"] == title)
 
 
-def bared_noul(name: str, bar: ConfidenceBar) -> Acceptance:
-    """Accept the probability only when it clears the bar, and store nothing below it."""
+def bared_choice(name: str, bar: ConfidenceBar) -> Acceptance:
+    """Accept the top option only at or above the bar, and store `unsure` below it (V5's attribute rule)."""
 
-    def accept(decision) -> float | None:
-        value = decision.noul(name).noul
-        return value if value >= bar.threshold else None
+    def accept(decision) -> StoredValue:
+        answer = decision.choice(name)
+        top = max(answer.probabilities, key=lambda option: answer.probabilities[option])
+        probability = answer.probabilities[top]
+        return StoredValue(probability=probability, value=top if probability >= bar.threshold else UNSURE)
 
     return accept
 
 
 def dinner_question(*, threshold: float = 0.8, instructions: str | None = None) -> EnrichmentQuestion:
-    """A question no production enricher declares: high side safe, nothing stored below the bar."""
+    """A question no production enricher declares: high side safe, `unsure` stored below the bar."""
     bar = ConfidenceBar(threshold=threshold, safe_side=SafeSide.HIGH)
     return EnrichmentQuestion(
         name=DINNER,
-        question=NoulQuestion(
-            instructions=instructions or "Is this recipe a dinner rather than a breakfast or a snack?",
-            criteria=NoulCriteria(true="The recipe is a dinner.", false="The recipe is not a dinner."),
+        question=ChoiceQuestion(
+            instructions=instructions or "Which meal is this recipe for: dinner, or not dinner?",
+            criteria={
+                "dinner": "The recipe is served as an evening meal.",
+                "not_dinner": "The recipe is a breakfast, a snack, a side or a drink.",
+            },
         ),
         bar=bar,
-        accept=bared_noul(DINNER, bar),
+        accept=bared_choice(DINNER, bar),
     )
 
 
 @dataclass(frozen=True)
 class DinnerEnricher:
-    """The test-only second enricher: one `noul` question with an attribute-style bar."""
+    """The test-only second enricher: one `choice` question with an attribute-style bar and `unsure`."""
 
     name: str = "test-dinner"
     threshold: float = 0.8

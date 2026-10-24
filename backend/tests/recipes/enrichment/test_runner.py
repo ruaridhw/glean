@@ -6,6 +6,7 @@ and the `DecisionClient` requests it makes, faked at the HTTP boundary.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
@@ -14,6 +15,7 @@ from glean.decisions import DECISION_MODEL, DecisionModel
 from glean.meal_plan.dietary_decisions import DietaryDecisions, DietaryDecisionStore
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
+from glean.recipes.attributes import UNSURE
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend, ProjectionPublishError
 from glean.recipes.enrichment import (
@@ -31,6 +33,7 @@ from glean.recipes.enrichment.dietary import (
     DietaryCalibration,
     dietary_enrichment_questions,
 )
+from glean.recipes.enrichment.enricher import ConfidenceBar, EnrichmentQuestion, SafeSide
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.enrichment.fakes import DINNER, SNAPSHOT, CountingBackend, DinnerEnricher, FakeDecisionApi
@@ -60,7 +63,8 @@ def test_one_request_per_recipe_carries_every_question_missing_from_both_enriche
     assert pesto["model"] == DECISION_MODEL
     assert pesto["state"] == {"recipe_title": "Pesto Pasta", "ingredients": ["spaghetti", "basil pesto"]}
     assert set(pesto["questions"]) == {*DIETARY_QUESTIONS, DINNER}
-    assert {question["type"] for question in pesto["questions"].values()} == {"noul"}
+    assert pesto["questions"][DINNER]["type"] == "choice"
+    assert {pesto["questions"][name]["type"] for name in DIETARY_QUESTIONS} == {"noul"}
 
 
 def test_every_answer_is_stored_on_its_own_with_what_produced_it(tmp_path) -> None:
@@ -169,22 +173,44 @@ def test_a_run_reports_only_the_enrichers_it_was_given(tmp_path) -> None:
     assert report.coverage == 1.0
 
 
-def test_an_answer_below_the_bar_is_not_stored_and_is_asked_again(tmp_path) -> None:
+def test_an_answer_below_the_bar_is_stored_as_unsure_and_is_not_asked_again(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    # The fake answers 0.9; a 0.95 bar is above it, so nothing clears it.
+    # The fake answers 0.9; a 0.95 bar is above it, so the top option is not trusted.
     strict = (DIETARY_ENRICHER, DinnerEnricher(threshold=0.95))
 
     run_enrichment(corpus, FakeDecisionApi().client(), enrichers=strict)
 
-    stored = {(answer.recipe_id, answer.question) for answer in corpus.answers()}
-    assert ("rec_pesto", DINNER) not in stored  # 0.9 is under the enricher's 0.95 bar
+    stored = {(answer.recipe_id, answer.question): answer for answer in corpus.answers()}
+    dinner = stored[("rec_pesto", DINNER)]
+    assert (dinner.value, dinner.probability) == (UNSURE, 0.9)  # stored, and honestly unsure
     # Dietary stores the probability itself and lets the bar decide at read time, so it is untouched.
-    assert ("rec_pesto", "dietary:vegetarian") in stored
+    assert stored[("rec_pesto", "dietary:vegetarian")].value is None
 
     asked_again = FakeDecisionApi()
     report = run_enrichment(corpus, asked_again.client(), enrichers=strict)
-    assert {frozenset(request["questions"]) for request in asked_again.requests} == {frozenset({DINNER})}
+    assert asked_again.requests == []  # `unsure` is an answer: nothing is re-asked or re-paid for
+    assert report.question(DINNER).current == 2
+
+
+def test_an_acceptance_that_stores_nothing_leaves_the_question_to_be_asked_again(tmp_path) -> None:
+    """`None` from an acceptance rule still means "nothing stored", which is not the same as `unsure`."""
+    corpus = _blob_corpus(tmp_path)
+    bar = ConfidenceBar(threshold=0.8, safe_side=SafeSide.HIGH)
+    open_ended = EnrichmentQuestion(
+        name=DINNER,
+        question=DinnerEnricher().questions()[0].question,
+        bar=bar,
+        accept=lambda decision: None,
+    )
+
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(_OneQuestion(open_ended),))
+
+    assert corpus.answers() == []
     assert report.question(DINNER).missing == 2
+
+    asked_again = FakeDecisionApi()
+    run_enrichment(corpus, asked_again.client(), enrichers=(_OneQuestion(open_ended),))
+    assert len(asked_again.requests) == 2
 
 
 def test_a_recipe_the_model_cannot_answer_is_recorded_and_the_run_continues(tmp_path) -> None:
@@ -419,6 +445,17 @@ def test_a_corpus_with_no_visible_recipes_fails_loudly(tmp_path) -> None:
 def test_a_run_that_is_not_a_dry_run_needs_a_client(tmp_path) -> None:
     with pytest.raises(EnrichmentError, match="decision client"):
         run_enrichment(_blob_corpus(tmp_path), None)
+
+
+@dataclass(frozen=True)
+class _OneQuestion:
+    """An enricher of exactly one declared question, for testing a single acceptance rule."""
+
+    question: EnrichmentQuestion
+    name: str = "test-one"
+
+    def questions(self) -> tuple[EnrichmentQuestion, ...]:
+        return (self.question,)
 
 
 def _counts(report, question: str) -> tuple[int, ...]:

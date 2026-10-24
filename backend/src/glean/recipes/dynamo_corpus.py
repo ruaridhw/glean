@@ -550,7 +550,7 @@ def source_item(recipe: StoredRecipe) -> dict[str, Any] | None:
 def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
     """The ANSWER item: one per (recipe, question, criteria hash)."""
     # DynamoDB takes no floats: the probability is a Decimal on the wire and a float in the model.
-    return {
+    item = {
         "pk": recipe_pk(answer.recipe_id),
         "sk": answer_sk(answer.question, answer.criteria_hash),
         "recipe_id": answer.recipe_id,
@@ -561,6 +561,11 @@ def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
         "criteria_hash": answer.criteria_hash,
         "computed_at": answer.computed_at.isoformat(),
     }
+    # A dietary answer is its probability, so its item is exactly the pre-V5 item: no new attribute, no extra
+    # write unit, and an older build reads it unchanged.
+    if answer.value is not None:
+        item["value"] = answer.value
+    return item
 
 
 def item_write_units(item: dict[str, Any]) -> int:
@@ -660,6 +665,7 @@ def _answer_from_row(row: dict[str, Any]) -> RecipeAnswer:
         content_hash=str(row["content_hash"]),
         criteria_hash=str(row["criteria_hash"]),
         computed_at=row["computed_at"],
+        value=row.get("value"),
     )
 
 

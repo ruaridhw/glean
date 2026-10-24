@@ -148,14 +148,15 @@ def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[Enr
         RecipeAnswer(
             recipe_id=summary.external_id,
             question=question.name,
-            probability=value,
+            probability=stored.probability,
+            value=stored.value,
             model=question.served_identity(decision.model),
             content_hash=content_hash,
             criteria_hash=question.criteria_hash,
             computed_at=computed_at,
         )
         for question in questions
-        if (value := question.accept(decision)) is not None
+        if (stored := question.accept(decision)) is not None
     ]
 
 
