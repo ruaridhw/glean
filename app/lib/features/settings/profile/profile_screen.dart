@@ -69,14 +69,11 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
   Future<void> _change(
     HouseholdProfile Function(HouseholdProfile current) change,
   ) async {
-    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
       await _profiles.update(userId: _userId, change: change);
     } catch (_) {
-      GleanSnackBar.showOn(
-        messenger,
-        'Could not save your profile. Try again.',
-      );
+      if (!mounted) return;
+      GleanSnackBar.show(context, 'Could not save your profile. Try again.');
     }
   }
 

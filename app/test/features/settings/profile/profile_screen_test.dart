@@ -2,6 +2,8 @@
 // repository straight away, and removing anything (a chip or a note) is undone from the snackbar back to exactly
 // what was stored before. These tests pump the real route over the real in-memory database and read the stored
 // profile back through the repository.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/household_profile.dart';
@@ -306,6 +308,26 @@ void main() {
     final HouseholdProfile after = (await stored(tester))!;
     expect(after.habits, 'Batch cook on Sunday');
     expect(after.household, 'Just me');
+  });
+
+  gleanWidgetTest('free text still saves when the screen is left before typing '
+      'pauses', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await profiles().save(userId: _userId, profile: _filled);
+    await harness.pumpAt(tester, AppRoutes.settings.path);
+    await pumpPastSkeleton(tester);
+    unawaited(harness.router.pushNamed(AppRoutes.settingsProfile.name));
+    await pumpPastSkeleton(tester);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(labeledTextField("Who's at the table"), 'Just me');
+    await tester.pump();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect((await stored(tester))!.household, 'Just me');
   });
 
   gleanWidgetTest('edits made on an empty profile are there when the screen '
