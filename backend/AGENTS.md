@@ -21,7 +21,7 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 
 - **AI processing:** Receipt OCR (Textract or vision model), ingredient normalisation, recipe import via URL, meal-plan generation — all LLM calls go through OpenRouter via LangChain and the feature-specific `LLMRouter` policy from `get_llm_router`.
 - **Auth:** Cognito JWT validation on every request (`verify_cognito_token` in `dependencies.py`)
-- **Rate limiting:** every paid-model route enforces `settings.rate_limit_per_hour` (default 20; deployments raise it to 60 via the template's `RateLimitPerHour` parameter) requests per hour per Cognito sub, and answers 429 past it. Counters live in memory, so the limit is **per Lambda container**, not global: a user spread across several warm containers can exceed it. Shared storage (e.g. DynamoDB) is the follow-up if that matters.
+- **Rate limiting:** every paid-model route enforces `settings.rate_limit_per_hour` (default 20; deployments raise it to 60 via the template's `RateLimitPerHour` parameter) requests per hour per Cognito sub, and answers 429 past it, with a `Retry-After` header holding the whole seconds until that caller's window frees a slot (the app says "try again in N minutes"). Counters live in memory, so the limit is **per Lambda container**, not global: a user spread across several warm containers can exceed it. Shared storage (e.g. DynamoDB) is the follow-up if that matters.
 - **S3 buffering:** Receipt images pass through S3 before Textract; dev DB exports also use S3
 - **Recipe data:** External recipe-api.com integration plus a durable recipe corpus. Both the HTTP response cache (24h search TTL; detail cached indefinitely) and the corpus are stored via `recipe_api.blob_store`: an S3 bucket (`s3_recipe_cache_bucket`) in deployed environments, or the `.cache/glean_recipe_cache` filesystem tree locally and in tests.
 
@@ -30,6 +30,15 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
 ```
 src/glean/
 ├── main.py           # FastAPI app + Mangum handler
+├── worker.py         # the async stack's two Lambda entry points: glean.worker.handler (SQS session
+│                     #   worker) and glean.worker.dlq_handler (marks a dead-lettered session failed)
+├── agent/            # the meal-plan agent as one deep module: start(session) hides LangGraph, the
+│                     #   checkpointer, the graph nodes and the progress lines. The ONLY place that may
+│                     #   import LangGraph (ruff TID251, like glean/llm.py for LangChain)
+├── sessions/         # agent sessions: the agent_sessions item models, the in-memory and DynamoDB
+│                     #   stores (owner token + lease, gzipped inputs), the SQS queue, the factories
+├── dev/              # local-only helpers: the queue consumer for Docker Compose, a stub meal-plan
+│                     #   model, and the dev router
 ├── rate_limit.py     # enforce_ai_rate_limit: the per-user limit dependency for paid-model routes
 ├── config.py         # Pydantic BaseSettings (reads from .env / Secrets Manager in Lambda)
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
@@ -51,6 +60,9 @@ src/glean/
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation, saved mode and corpus mode
+                      # /meal-plan/sessions (POST, GET) — the async agent session routes
+                      # pipeline.py: corpus mode as prepare -> choose -> finalise, the three steps the
+                      #   sync route runs in order and the agent graph runs as its three nodes
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
@@ -71,6 +83,63 @@ app's `shoppingUnits` list by hand (a test catches drift).
 
 Callers pass `invoke` a `system` prompt and a `user` message (text, or text and `ImagePart`s) and never import
 LangChain or the OpenRouter SDK. Only `llm.py` does; ruff's `TID251` rejects those imports anywhere else in `src/glean`.
+
+### Agent sessions (the async meal plan)
+
+`POST /meal-plan/sessions` returns at once and the plan is made out of process (ADR 0026). The
+synchronous `POST /meal-plan` stays, shares `meal_plan.pipeline` and goes in a follow-up PR.
+
+```
+POST /meal-plan/sessions           202 {"session_id": "..."}        one paid call, rate limited
+GET  /meal-plan/sessions/{id}      200 SessionView                  free, never rate limited
+GET  ...?after=<cursor>            progress lines since the cursor
+```
+
+`SessionView` is `{session_id, status, progress, next_cursor, result, error, updated_at}`.
+`status` is `queued | running | waiting_for_user | done | failed`; `result` is `MealPlanResult`
+(the sync route's shape, `uses_up` included) and `error` is `{code, retry_after_minutes}` with
+`code` one of `no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
+Both routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
+another user's session is a 404 rather than a 403. `POST` refuses `source: "saved"` with a 422 —
+V1's graph wraps the corpus pipeline only.
+
+How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
+conditional `queued -> running`, runs `agent.start`, and writes `done` or `failed`. Liveness is the
+session's own lease, not the message's visibility: the attempt that starts a run takes an owner token
+and a lease, taken once at claim and never extended, anchored to its own invocation deadline
+(`now + context.get_remaining_time_in_millis() + 2 s`, see `sessions/store.py`). Every later write is
+conditioned on that token, and a delivery may take over a `running` session whose lease has lapsed —
+resuming it from its LangGraph checkpoint, or publishing the plan a finished checkpoint holds.
+
+A delivery that finds a **live** owner must **raise**, never return: Lambda acknowledges a message whose
+handler returns, and acknowledging nonterminal work deletes the only trigger that recovers the run if
+the live attempt then dies. Only a terminal session and a run this invocation completed are
+acknowledged. The queue allows three receives for that reason (one may be spent failing a duplicate),
+and its 150 s visibility timeout covers the 120 s worker timeout plus up to 10 s of init
+(cfn-lint E3505 is enforced, not suppressed). A crashed run therefore comes back within about 2.5
+minutes, inside the app's five-minute cap. The dead-letter handler is a retry loop: it fails a session
+only when it is nonterminal *and* its lease has lapsed, and **raises** when a live run still owns it, so
+the dead letter is kept and retried on the dead-letter queue's own 60 s visibility timeout — a session
+is failed within about a minute of its lease lapsing, at most ~3 minutes after a crash. It acknowledges
+only a session that is missing, terminal, or newly failed. One run also has a 90 s budget, checked
+between steps, and the model call gets only what is left of it. Never add a state machine or a
+scheduler on top (ADR 0026).
+
+- **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
+  `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a
+  session and the sync route return the same picks for the same request and seed (the session id
+  seeds the sampler). A wider graph (`plan <-> act`, questions, cancel) changes this module only.
+- **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
+  `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
+  and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
+  `create` refuses (422) a request whose item would not leave room for the outcome: V8's 400-row
+  history with 500-character notes is a real input, and one item is 400 KB. The plan is measured
+  before it is written too (64 KB is reserved for it): a plan that would overflow the item fails the
+  session `model_error` instead of raising into SQS.
+- **`AGENT_RUNNER=inline`** (unit tests, evals, `make start-backend` on the host) runs the agent in
+  the request against the in-memory store and saver. Deployed and Compose run `queue`.
+  `make start-backend-docker` brings up DynamoDB Local, ElasticMQ, the worker and a bootstrap that
+  builds them from `template.yaml`.
 
 ### Auth
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from aws_lambda_powertools.utilities import parameters
 from pydantic import SecretStr  # noqa: TC002 - Pydantic resolves this field type at runtime.
@@ -52,6 +52,18 @@ class Settings(BaseSettings):
     catalogue_table: str = ""
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
+    # Agent sessions (spec §6.3): the async stack behind POST /meal-plan/sessions.
+    # `queue` writes the session and drops a message on SQS; `inline` runs the agent in the request,
+    # with the in-memory store and saver, for unit tests and evals only.
+    agent_runner: Literal["queue", "inline"] = "queue"
+    agent_sessions_table: str = ""
+    agent_checkpoints_table: str = ""
+    agent_session_queue_url: str = ""
+    # How long a session and its checkpoints outlive the tap.
+    agent_session_ttl_hours: int = 24
+    # The local Docker stack's stand-ins for DynamoDB and SQS; empty in a deployed environment.
+    dynamodb_endpoint_url: str = ""
+    sqs_endpoint_url: str = ""
     llm_model_policy_overrides: dict[Feature, LLMModelPolicy] | None = None
     receipt_ocr_mode: str = "textract"  # "textract" (AWS) or "vision" (OpenRouter vision model)
     langsmith_tracing: bool = False

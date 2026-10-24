@@ -15,6 +15,8 @@ _TEST_SETTINGS = Settings(
     cognito_user_pool_id="test-cognito_user_pool_id",
     cognito_app_client_id="test-cognito_app_client_id",
     s3_receipts_bucket="test-s3_receipts_bucket",
+    # Agent sessions run in the request against the in-memory store and saver: no AWS, no queue.
+    agent_runner="inline",
 )
 
 
