@@ -61,10 +61,20 @@ and one `score`) and `active-time` (one `score`, answered as one of five minute 
 **Confidence bars.** No answer is accepted because it is the top option. A dietary answer is its
 probability, and its threshold decides exclusions when planning reads it. An attribute's answer stores the
 value it accepted, and only at or above its bar; below the bar it stores `unsure`, which is a real answer:
-the recipe is not re-asked, and the scorer gives it no variety credit and no penalty. Attribute and
-active-time bars start at 0.8, may be tuned per attribute from a labelled sample, and may never be declared
-below 0.7 — a declaration below the floor is an error, not a quiet weakening. Active time below its bar
-falls back to total time in the household's time filter, as the filter did before V5.
+the recipe is not re-asked, and the scorer gives it no variety credit and no penalty. A bar may never be
+declared below 0.7 — a declaration below the floor is an error, not a quiet weakening.
+
+The bars ship from the 50-recipe check (`MEASURED_BARS` in `recipes/enrichment/attributes.py`), provisional
+because it is one sample: `main_protein` 0.80, `main_carb` 0.80, `dish_type` 0.80, `cuisine` 0.85,
+`whole_food` 0.90. On that sample they accepted 48/48 protein and carb answers with 100% right, 42/42 dish
+types at 97.6%, 36/36 cuisines at 0.85 with 100%, and 25/25 whole-food answers at 0.90 with 96%. Active time
+stays at 0.80 and is the one bar the check did not move: the model is rarely confident about hands-on work
+(35 of the 50 answers were below even the floor), so below its bar the answer is `unsure` and the household's
+time filter falls back to total time, as it did before V5.
+
+A bar is not part of a question's criteria hash, so **retuning a bar does not re-ask the corpus**: stored
+answers keep the values the old bar accepted, and lowering a bar cannot recover a label that was stored as
+`unsure`. Re-run the enrichment after a retune if the difference matters to planning.
 
 **The stated time is prep time.** Q3 found the field the corpus calls an active time is really schema.org
 `prepTime` (35% of recipes, median 10 minutes against a 35-minute median total), so it is now
@@ -132,7 +142,8 @@ then replays every bar from 0.7 to 0.95 and reports, per attribute, the accuracy
 accepts, its coverage, a confusion table, and the bar that earns the best accuracy:
 
 ```bash
-# adopt the chosen bar by editing DEFAULT_ATTRIBUTE_BAR or a per-attribute entry in AttributeEnricher.bars
+# adopt the measured bars by editing MEASURED_BARS in recipes/enrichment/attributes.py, then re-run the
+# enrichment (a bar change does not re-ask the corpus by itself)
 make check-attributes SAMPLE=<sample-dir>          # paid: needs OPENROUTER_API_KEY
 
 # the same two steps by hand; compare makes no model calls and needs no key

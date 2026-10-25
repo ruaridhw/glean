@@ -99,16 +99,34 @@ def test_whole_food_is_a_score_with_its_levels_lowest_first() -> None:
     assert [level.value for level in WHOLE_FOOD_LEVELS] == ["processed", "mixed", "whole"]
 
 
-def test_every_attribute_question_starts_at_the_settled_bar_and_leans_to_the_high_side() -> None:
+# The bars the 50-recipe check settled (v5-check/report.md, 2026-10-25). Provisional: one sample of 50.
+MEASURED_BARS = {
+    "main_protein": 0.80,
+    "main_carb": 0.80,
+    "dish_type": 0.80,
+    "cuisine": 0.85,
+    "whole_food": 0.90,
+}
+
+
+def test_every_attribute_ships_at_the_bar_the_check_sample_measured() -> None:
+    questions = attribute_questions()
+
+    assert {attribute: question.bar.threshold for attribute, question in questions.items()} == MEASURED_BARS
+
+
+def test_every_shipped_bar_leans_to_the_high_side_and_stays_above_the_floor() -> None:
     for question in ATTRIBUTE_ENRICHER.questions():
-        assert (question.bar.threshold, question.bar.safe_side) == (0.8, SafeSide.HIGH)
+        assert question.bar.safe_side is SafeSide.HIGH
+        assert MIN_ATTRIBUTE_BAR <= question.bar.threshold <= 1.0
 
 
 def test_a_bar_is_tunable_per_attribute_and_only_for_that_attribute() -> None:
     questions = attribute_questions(bars={"cuisine": 0.75})
 
     assert questions["cuisine"].bar.threshold == 0.75
-    assert questions["main_protein"].bar.threshold == 0.8
+    assert questions["main_protein"].bar.threshold == 0.80
+    assert questions["whole_food"].bar.threshold == 0.90  # the measured bar, untouched by the override
 
 
 @pytest.mark.parametrize("threshold", [0.69, 0.5, 0.0, 1.01])
@@ -140,16 +158,29 @@ def test_an_attribute_below_its_bar_stores_unsure_with_the_probability_that_fail
 def test_a_tuned_bar_moves_the_line_for_that_attribute() -> None:
     decision = _decision(_choice("attribute:cuisine", "thai", {"thai": 0.76, "italian": 0.24}))
 
-    assert attribute_questions()["cuisine"].accept(decision).value == "unsure"
+    assert attribute_questions()["cuisine"].accept(decision).value == "unsure"  # 0.76 is under cuisine's 0.85
     assert attribute_questions(bars={"cuisine": 0.75})["cuisine"].accept(decision).value == "thai"
 
 
 def test_whole_food_accepts_the_level_with_the_highest_probability() -> None:
     answer = attribute_questions()["whole_food"].accept(
-        _decision(_score("attribute:whole_food", {0: 0.05, 1: 0.15, 2: 0.8}))
+        _decision(_score("attribute:whole_food", {0: 0.05, 1: 0.05, 2: 0.9}))
     )
 
-    assert (answer.probability, answer.value) == (0.8, "whole")
+    assert (answer.probability, answer.value) == (0.9, "whole")
+
+
+def test_a_confidence_that_clears_one_attributes_bar_can_miss_anothers() -> None:
+    """The measured bars differ: 0.86 is enough for cuisine (0.85) and not for whole food (0.90)."""
+    questions = attribute_questions()
+
+    cuisine = questions["cuisine"].accept(
+        _decision(_choice("attribute:cuisine", "thai", {"thai": 0.86, "italian": 0.14}))
+    )
+    whole_food = questions["whole_food"].accept(_decision(_score("attribute:whole_food", {0: 0.05, 1: 0.09, 2: 0.86})))
+
+    assert cuisine.value == "thai"
+    assert whole_food.value == "unsure"
 
 
 def test_whole_food_below_its_bar_is_unsure_rather_than_a_guess() -> None:

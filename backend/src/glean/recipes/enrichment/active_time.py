@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from glean.recipes.stored import StoredRecipe
 
-__all__ = ["ACTIVE_TIME_ENRICHER", "BUCKETS", "ActiveTimeEnricher", "active_time_question"]
+__all__ = ["ACTIVE_TIME_BAR", "ACTIVE_TIME_ENRICHER", "BUCKETS", "ActiveTimeEnricher", "active_time_question"]
 
 # The bucket scale, lowest first, which is the order a `score` question's criteria take.
 BUCKETS: tuple[ActiveTimeBucket, ...] = (
@@ -62,12 +62,20 @@ _QUESTION = ScoreQuestion(
 )
 
 
+# Active time keeps the 0.8 the spec starts at, and it is the one bar the 50-recipe check did not move: the
+# model is rarely confident about hands-on work (35 of the sample's 50 answers were below even the 0.7 floor,
+# and the 15 it accepted at 0.70 were right 86.7% of the time). Rather than lower a bar to harvest those, the
+# spec's rule stands: below the bar the answer is `unsure`, and the household's time cap falls back to total
+# time, which is what it did before V5. A second sample is what would change this.
+ACTIVE_TIME_BAR = DEFAULT_ATTRIBUTE_BAR
+
+
 @dataclass(frozen=True)
 class ActiveTimeEnricher:
     """The active-time question, one per recipe, with the stated times as hints."""
 
     name: str = "active-time"
-    threshold: float = DEFAULT_ATTRIBUTE_BAR
+    threshold: float = ACTIVE_TIME_BAR
 
     def questions(self) -> tuple[EnrichmentQuestion, ...]:
         return (active_time_question(self.threshold),)
@@ -81,7 +89,7 @@ class ActiveTimeEnricher:
         }
 
 
-def active_time_question(threshold: float = DEFAULT_ATTRIBUTE_BAR) -> EnrichmentQuestion:
+def active_time_question(threshold: float = ACTIVE_TIME_BAR) -> EnrichmentQuestion:
     """The one question, with its bar and its bucket-accepting rule."""
     bar = attribute_bar(threshold)
     return EnrichmentQuestion(

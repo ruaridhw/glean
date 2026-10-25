@@ -34,10 +34,28 @@ if TYPE_CHECKING:
     from glean.decisions import Question
     from glean.recipes.stored import StoredRecipe
 
-__all__ = ["ATTRIBUTE_ENRICHER", "WHOLE_FOOD_LEVELS", "AttributeEnricher", "attribute_questions"]
+__all__ = ["ATTRIBUTE_ENRICHER", "MEASURED_BARS", "WHOLE_FOOD_LEVELS", "AttributeEnricher", "attribute_questions"]
 
 # The whole-food scale's order: lowest level first, which is the order a `score` question's criteria take.
 WHOLE_FOOD_LEVELS: tuple[WholeFood, ...] = (WholeFood.PROCESSED, WholeFood.MIXED, WholeFood.WHOLE)
+
+# The bars the 50-recipe check settled (spec 6.1, "Confidence bars"; G1). One sample, split across both import
+# sources, labelled by an independent model and adjudicated by the owner only where it and the decision model
+# disagreed, so these are provisional and a second sample is what would move them. At these bars that sample
+# scored: main_protein 48/48 accepted, 100% right; main_carb 48/48, 100%; dish_type 42/42, 97.6%; cuisine 36/36
+# at 0.85, 100%; whole_food 25/25 at 0.90, 96%. dish_type accepts the most at 0.75 (43/43, 97.7%) but 0.80 is
+# the spec's starting bar and the extra acceptance was one recipe, so it stays where G1 put it.
+#
+# A bar is not part of a question's criteria hash, so retuning one does not re-ask the corpus: the stored
+# answers keep the values the old bar accepted, and a lower bar cannot recover a label that was stored as
+# `unsure`. Rerun the enrichment after a retune if the difference matters to planning.
+MEASURED_BARS: dict[str, float] = {
+    "main_protein": 0.80,
+    "main_carb": 0.80,
+    "dish_type": 0.80,
+    "cuisine": 0.85,
+    "whole_food": 0.90,
+}
 
 _PROTEIN = ChoiceQuestion(
     instructions=(
@@ -189,9 +207,9 @@ _QUESTIONS: dict[str, Question] = {
 class AttributeEnricher:
     """The five G1 attribute questions, one per recipe, each with its own bar.
 
-    `bars` maps an attribute name (`main_protein`, `cuisine`, ...) to its threshold; anything unset uses
-    `DEFAULT_ATTRIBUTE_BAR`. Every threshold goes through `attribute_bar`, so a looser-than-allowed bar is a
-    declaration error rather than a quietly weaker answer.
+    `bars` maps an attribute name (`main_protein`, `cuisine`, ...) to a threshold that overrides the one the
+    check sample measured (`MEASURED_BARS`), which is what ships. Every threshold goes through
+    `attribute_bar`, so a looser-than-allowed bar is a declaration error rather than a quietly weaker answer.
     """
 
     name: str = "attributes"
@@ -205,7 +223,8 @@ class AttributeEnricher:
         return method_state(recipe)
 
     def threshold(self, attribute: str) -> float:
-        return self.bars.get(attribute, DEFAULT_ATTRIBUTE_BAR)
+        """The attribute's measured bar, unless a caller overrides it for one run."""
+        return self.bars.get(attribute, MEASURED_BARS.get(attribute, DEFAULT_ATTRIBUTE_BAR))
 
     def question_for(self, attribute: str) -> EnrichmentQuestion:
         """The question for one attribute, with its bar and its accept-above-the-bar rule."""
