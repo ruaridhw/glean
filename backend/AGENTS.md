@@ -254,8 +254,10 @@ writing anything (one read on the refused path only, to log a cancel as a cancel
 lease); `complete`/`fail` cannot resurrect or overwrite it; `claim` reports `FINISHED`, so a redelivery
 or a takeover of a crashed run is acknowledged and does nothing; and the dead-letter handler treats it
 as terminal. A cancel that lands between the last step and the plan write therefore still wins. A
-complete run makes no reads beyond the lease design's own (the claim and each store call's check); a
-cancelled one adds exactly one, at the step that notices.
+complete run makes no reads beyond the lease design's own (the claim and each store call's check) except
+one per later agent turn: a `plan` turn after a tool has no line to write, so it reads the session before
+its paid model call, and a cancel that landed while the tool ran stops the run there. A cancelled run
+adds at most one more read, at the step that notices.
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
   `src/glean/agent/**`). The graph is `prepare -> plan <-> act -> finalise` (V7). `prepare` and

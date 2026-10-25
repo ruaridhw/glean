@@ -19,7 +19,7 @@ Two promises sit here, both from spec §6.2:
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 from glean.agent.errors import AgentError, SessionCancelled, budget_spent
 from glean.observability import logger
@@ -28,7 +28,7 @@ from glean.sessions.models import SessionStatus
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from glean.sessions.models import AgentSession
+    from glean.sessions.models import AgentSession, SessionRecord
     from glean.sessions.store import SessionStore
 
 # Spec §6.2's agent budget: 90 s of wall time for one session.
@@ -94,27 +94,36 @@ class RunGuard:
     def step(self, line: str | None, *, budget: bool = True) -> None:
         """Called at the start of every graph node: the budget, then the progress line.
 
-        `line=None` checks the budget only: the agent's later `plan` turns write nothing of their own, and the
-        `act` or `finalise` node that follows each one writes (and so checks ownership and cancel) before any
-        tool runs or any result is written. `budget=False` is for `finalise`, which must still write the
-        degraded week after the budget is spent.
+        `line=None` is for a step with no line of its own -- the agent's later `plan` turns -- and checks
+        ownership and cancel with one read instead of a write, because the step that follows is a paid model
+        call: a household that cancelled while a tool ran must not pay for one more turn. `budget=False` is
+        for `finalise`, which must still write the degraded week after the budget is spent.
         """
         if budget:
             self._budget.check()
         if line is None:
+            self.check_live()
             return
         if not self._sessions.append_progress(
             self._session.user_sub, self._session.session_id, [line], owner=self._owner
         ):
             self._stopped()
 
-    def _stopped(self) -> NoReturn:
-        """The write was refused, so this run must write nothing more. Say which stop this is.
-
-        One read, on the refused path only: a run that finishes normally makes none. Without it a cancel
-        would be logged as a lost lease, and a cancellation would never be counted as one.
-        """
+    def check_live(self) -> None:
+        """Stop unless this attempt still owns a running session: one read, no write."""
         record = self._sessions.get(self._session.user_sub, self._session.session_id)
+        if record is None or record.status is not SessionStatus.RUNNING or record.owner != self._owner:
+            self._stopped(record)
+
+    def _stopped(self, record: SessionRecord | None | Literal[False] = False) -> NoReturn:
+        """This run must write nothing more. Say which stop this is.
+
+        A refused write costs one read here, on the refused path only, unless the caller already read the
+        record. Without it a cancel would be logged as a lost lease, and a cancellation would never be counted
+        as one.
+        """
+        if record is False:
+            record = self._sessions.get(self._session.user_sub, self._session.session_id)
         if record is not None and record.status is SessionStatus.CANCELLED:
             logger.info(
                 "session was cancelled by the household; stopping", extra={"session_id": self._session.session_id}

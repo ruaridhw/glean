@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from glean.agent import runtime, start
+from glean.agent import adapters, runtime, start
 from glean.agent.actions import MAX_FULL_IDS, PlanStep
 from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.control import AGENT_RUN_BUDGET_SECONDS
@@ -424,6 +424,25 @@ class TestCancel:
         assert record.status is SessionStatus.CANCELLED
         assert record.result is None
         assert "Looking for something Korean" not in record.progress
+        assert run.metric("SessionsCancelled") == [1]
+
+    def test_a_cancel_while_a_tool_runs_stops_the_run_before_the_next_paid_turn(
+        self, run: Run, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run_tool = adapters.run_tool
+
+        def cancels_mid_tool(*args: Any, **kwargs: Any) -> Any:
+            run.sessions.cancel("user-a", "sess-1")
+            return run_tool(*args, **kwargs)
+
+        monkeypatch.setattr(adapters, "run_tool", cancels_mid_tool)
+        model = ScriptedModel(call("get_recipes", ids=["rec_01"]), propose_first)
+
+        run.start(model)
+
+        assert run.record.status is SessionStatus.CANCELLED
+        # The tool's turn was paid for; the turn after the cancel was not.
+        assert model.calls == 1
         assert run.metric("SessionsCancelled") == [1]
 
 
