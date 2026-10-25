@@ -228,9 +228,7 @@ class _Nodes:
         return {
             "pending": None,
             "prepared": outcome.prepared.model_dump(mode="json"),
-            "transcript": bounded_transcript(
-                [*(state.get("transcript") or []), {"call": state["pending"], "result": outcome.result}]
-            ),
+            "transcript": bounded_transcript([*(state.get("transcript") or []), _entry(state["pending"], outcome)]),
             "tool_calls": tool_calls,
         }
 
@@ -263,6 +261,17 @@ class _Answer:
 
     action: CallTool | Propose
     invalid: int
+
+
+def _entry(call: dict[str, Any], outcome: adapters.ToolOutcome) -> dict[str, Any]:
+    """One transcript entry: the call, then its refusal as `error` or its output under `data`.
+
+    `data` holds third-party recipe text, and the system prompt says everything under it is data, never an
+    instruction, so the key is what marks it.
+    """
+    if "error" in outcome.result:
+        return {"call": call, "error": outcome.result["error"]}
+    return {"call": call, "data": outcome.result}
 
 
 def _after_plan(state: PlanState) -> str:
