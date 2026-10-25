@@ -14,9 +14,11 @@ import pytest
 
 import glean.meal_plan.tools as tools_module
 from glean.meal_plan.tools import (
+    CHIP_PREDICATES,
     LIGHTER_CHIP,
     CandidateRecipe,
     DuplicateRecipeIds,
+    FeedbackChip,
     Predicate,
     PredicateField,
     PredicateOp,
@@ -54,6 +56,7 @@ def attributes(
     dish_type: DishType = DishType.UNSURE,
     cuisine: Cuisine = Cuisine.UNSURE,
     whole_food: WholeFood = WholeFood.UNSURE,
+    active_time: ActiveTimeBucket = ActiveTimeBucket.UNSURE,
 ) -> RecipeAttributes:
     return RecipeAttributes(
         main_protein=main_protein,
@@ -61,6 +64,7 @@ def attributes(
         dish_type=dish_type,
         cuisine=cuisine,
         whole_food=whole_food,
+        active_time=active_time,
     )
 
 
@@ -73,6 +77,7 @@ def candidate(
     rating: Rating | None = None,
     floor_relaxed: bool = False,
     loved_ingredients: tuple[str, ...] = (),
+    cooked_last_week: bool = False,
     **attribute_values: object,
 ) -> CandidateRecipe:
     return CandidateRecipe(
@@ -84,6 +89,7 @@ def candidate(
         rating=rating,
         offered_after_floor_relaxed=floor_relaxed,
         loved_ingredients=loved_ingredients,
+        cooked_last_week=cooked_last_week,
     )
 
 
@@ -181,7 +187,7 @@ def test_each_satisfied_feedback_chip_earns_two() -> None:
     assert score(["b"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
 
 
-def test_a_chip_with_no_predicate_yet_earns_nothing() -> None:
+def test_a_chip_the_scorer_does_not_know_earns_nothing() -> None:
     ctx = context(candidate("a"), chips=frozenset({"comfort food"}))
     assert score(["a"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
 
@@ -203,6 +209,134 @@ def test_the_healthier_chip_doubles_whole_food() -> None:
     ctx = context(candidate("a", whole_food=WholeFood.WHOLE), chips=frozenset({"healthier"}))
     assert score(["a"], ctx).points(Term.WHOLE_FOOD) == 1.0
     assert score(["a"], context(candidate("a", whole_food=WholeFood.WHOLE))).points(Term.WHOLE_FOOD) == 0.5
+
+
+# --- the week's chips (V9): each one's predicate or scorer term, in one place --------------------------
+
+
+def chips(*names: FeedbackChip) -> frozenset[str]:
+    return frozenset(chip.value for chip in names)
+
+
+def test_the_chips_are_the_eight_the_app_offers() -> None:
+    assert [chip.value for chip in FeedbackChip] == [
+        "quick_weeknights",
+        "use_up_the_fridge",
+        "something_new",
+        "healthier",
+        "comfort_food",
+        "lighter",
+        "guests",
+        "same_as_last_week",
+    ]
+
+
+def test_quick_weeknights_pays_for_thirty_minutes_hands_on_or_less() -> None:
+    quick = candidate("quick", active_time=ActiveTimeBucket.FROM_15_TO_30)
+    slow = candidate("slow", active_time=ActiveTimeBucket.FROM_30_TO_45)
+    unknown = candidate("unknown")
+    ctx = context(quick, slow, unknown, chips=chips(FeedbackChip.QUICK_WEEKNIGHTS))
+    assert score(["quick"], ctx).points(Term.FEEDBACK_CHIP) == 2.0
+    assert score(["slow"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
+    assert score(["unknown"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
+
+
+@pytest.mark.parametrize(
+    ("dish_type", "pays"),
+    [
+        (DishType.PIE_OR_BAKE, True),
+        (DishType.SOUP_OR_STEW, True),
+        (DishType.CURRY, True),
+        (DishType.PASTA_DISH, True),
+        (DishType.SALAD_OR_BOWL, False),
+        (DishType.STIR_FRY, False),
+        (DishType.UNSURE, False),
+    ],
+)
+def test_comfort_food_pays_for_the_warming_dish_types(dish_type: DishType, pays: bool) -> None:
+    ctx = context(candidate("a", dish_type=dish_type), chips=chips(FeedbackChip.COMFORT_FOOD))
+    assert score(["a"], ctx).points(Term.FEEDBACK_CHIP) == (2.0 if pays else 0.0)
+
+
+@pytest.mark.parametrize(
+    ("dish_type", "pays"),
+    [
+        (DishType.ROAST_OR_TRAYBAKE, True),
+        (DishType.PIE_OR_BAKE, True),
+        (DishType.CURRY, True),
+        (DishType.RICE_DISH, True),
+        (DishType.HANDHELD, False),
+        (DishType.UNSURE, False),
+    ],
+)
+def test_guests_pays_for_dishes_that_serve_a_table(dish_type: DishType, pays: bool) -> None:
+    ctx = context(candidate("a", dish_type=dish_type), chips=chips(FeedbackChip.GUESTS))
+    assert score(["a"], ctx).points(Term.FEEDBACK_CHIP) == (2.0 if pays else 0.0)
+
+
+def test_something_new_pays_for_a_recipe_the_household_has_never_cooked() -> None:
+    ctx = context(
+        candidate("new"),
+        candidate("cooked", days_since_cooked=70),
+        candidate("last_week", cooked_last_week=True),
+        chips=chips(FeedbackChip.SOMETHING_NEW),
+    )
+    assert score(["new"], ctx).points(Term.FEEDBACK_CHIP) == 2.0
+    assert score(["cooked"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
+    assert score(["last_week"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
+
+
+def test_same_as_last_week_pays_for_what_was_cooked_last_week() -> None:
+    ctx = context(
+        candidate("last_week", cooked_last_week=True),
+        candidate("new"),
+        chips=chips(FeedbackChip.SAME_AS_LAST_WEEK),
+    )
+    assert score(["last_week"], ctx).points(Term.FEEDBACK_CHIP) == 2.0
+    assert score(["new"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
+
+
+def test_use_up_the_fridge_doubles_pantry_fit() -> None:
+    recipe = candidate("a", pantry_fit=1.5)
+    assert score(["a"], context(recipe)).points(Term.PANTRY_FIT) == 1.5
+    assert score(["a"], context(recipe, chips=chips(FeedbackChip.USE_UP_THE_FRIDGE))).points(Term.PANTRY_FIT) == 3.0
+
+
+def test_healthier_and_lighter_work_through_their_own_rows_not_a_chip_predicate() -> None:
+    # Healthier doubles whole food and lighter turns on the calories row; a predicate as well would pay twice.
+    assert FeedbackChip.HEALTHIER.value not in CHIP_PREDICATES
+    assert FeedbackChip.LIGHTER.value not in CHIP_PREDICATES
+    ctx = context(
+        candidate("a", whole_food=WholeFood.WHOLE, calories=400.0),
+        chips=chips(FeedbackChip.HEALTHIER, FeedbackChip.LIGHTER),
+    )
+    plan = score(["a"], ctx)
+    assert plan.points(Term.FEEDBACK_CHIP) == 0.0
+    assert plan.points(Term.WHOLE_FOOD) == 1.0
+    assert plan.points(Term.LIGHTER) == 0.0
+
+
+def test_two_satisfied_chips_earn_two_each() -> None:
+    ctx = context(
+        candidate("a", dish_type=DishType.CURRY, active_time=ActiveTimeBucket.UP_TO_15),
+        chips=chips(FeedbackChip.COMFORT_FOOD, FeedbackChip.QUICK_WEEKNIGHTS, FeedbackChip.SOMETHING_NEW),
+    )
+    assert score(["a"], ctx).points(Term.FEEDBACK_CHIP) == 6.0
+
+
+def test_a_quick_weeknights_week_is_quicker_than_one_without_it() -> None:
+    pool = [
+        candidate(f"slow{i}", active_time=ActiveTimeBucket.FROM_45_TO_60, pantry_fit=1.0, main_protein=protein)
+        for i, protein in enumerate((MainProtein.BEEF, MainProtein.PORK, MainProtein.LAMB))
+    ] + [
+        candidate(f"quick{i}", active_time=ActiveTimeBucket.FROM_15_TO_30, main_protein=protein)
+        for i, protein in enumerate((MainProtein.FISH, MainProtein.CHICKEN, MainProtein.TOFU_OR_PLANT_PROTEIN))
+    ]
+    ids = [recipe.recipe_id for recipe in pool]
+    plain = create_candidate_meal_plans(ids, 3, context(*pool), k=1)[0]
+    quick = create_candidate_meal_plans(ids, 3, context(*pool, chips=chips(FeedbackChip.QUICK_WEEKNIGHTS)), k=1)[0]
+    assert all(recipe_id.startswith("slow") for recipe_id in plain.recipe_ids)
+    assert all(recipe_id.startswith("quick") for recipe_id in quick.recipe_ids)
 
 
 # --- recency and ratings ----------------------------------------------------------------------------------
