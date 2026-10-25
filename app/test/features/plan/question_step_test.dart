@@ -319,6 +319,35 @@ void main() {
     },
   );
 
+  gleanWidgetTest(
+    'the note is limited in code points, the unit the backend counts',
+    (tester) async {
+      final requests = <http.Request>[];
+      final h = AppTestHarness(httpClient: questionBackend(requests: requests));
+      addTearDown(h.dispose);
+      await openQuestion(tester, h);
+      // One family emoji is one character on screen and five code points on the wire.
+      const String family = '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}';
+
+      await tester.enterText(find.byType(TextField), family * 101);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+        reason: '505 code points would be a 422, so the edit is refused',
+      );
+
+      await tester.enterText(find.byType(TextField), family * 100);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+      await tester.pumpAndSettle();
+      expect(sentMessage(requests), <String, dynamic>{
+        'type': 'answer',
+        'note': family * 100,
+      });
+    },
+  );
+
   gleanWidgetTest('Back on the question cancels the session and closes', (
     tester,
   ) async {

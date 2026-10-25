@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:glean/api/models/meal_plan_session.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The longest note the backend takes; it screens the note before the agent reads it.
+/// The longest note the backend takes (`MAX_NOTE_CHARS`), in Unicode code points, the unit it counts; it
+/// screens the note before the agent reads it. Flutter's own length limit counts characters on screen, which a
+/// joined emoji makes fewer than its code points, so the field limits with [_NoteFormatter] instead.
 const int maxQuestionNoteLength = 500;
 
 class QuestionStep extends StatefulWidget {
@@ -105,8 +107,8 @@ class _QuestionStepState extends State<QuestionStep> {
                     minLines: 1,
                     maxLines: 3,
                     textCapitalization: TextCapitalization.sentences,
-                    inputFormatters: <TextInputFormatter>[
-                      LengthLimitingTextInputFormatter(maxQuestionNoteLength),
+                    inputFormatters: const <TextInputFormatter>[
+                      _NoteFormatter(),
                     ],
                     decoration: const InputDecoration(
                       hintText: 'Add a note (optional)',
@@ -155,4 +157,16 @@ class _QuestionStepState extends State<QuestionStep> {
       ],
     );
   }
+}
+
+/// Keeps the note within [maxQuestionNoteLength] code points: an edit that would cross it is refused whole, so
+/// typing into the middle of a full note neither drops characters from its end nor moves the cursor.
+class _NoteFormatter extends TextInputFormatter {
+  const _NoteFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) => newValue.text.runes.length > maxQuestionNoteLength ? oldValue : newValue;
 }
