@@ -103,7 +103,9 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
 
     started = time.monotonic()
     metrics.add_metric(name=STARTED, unit=MetricUnit.Count, value=1)
-    guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic)
+    guard = RunGuard(
+        deps.sessions, session, owner=owner, monotonic=deps.monotonic, resumed=outcome is ClaimResult.RESUMED
+    )
     try:
         state = _run(session, deps, guard=guard, resume=outcome is ClaimResult.RESUMED)
         result = result_of(state)
