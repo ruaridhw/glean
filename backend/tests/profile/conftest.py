@@ -119,8 +119,8 @@ class FakeRouter:
         self.calls: list[dict[str, Any]] = []
         self.fail_with: Exception | None = None
 
-    def invoke(self, feature: object, schema: type, messages: Any, **_: Any) -> InterviewTurn:
-        self.calls.append({"feature": feature, "schema": schema, "messages": messages})
+    def invoke(self, feature: object, schema: type, *, system: str, user: str, **_: Any) -> InterviewTurn:
+        self.calls.append({"feature": feature, "schema": schema, "system": system, "user": user})
         if self.fail_with is not None:
             raise self.fail_with
         if self.replies:
@@ -131,10 +131,10 @@ class FakeRouter:
 
     def payload(self, index: int = -1) -> dict[str, Any]:
         """The JSON the model was given, so a test can prove what did and didn't reach it."""
-        return json.loads(self.calls[index]["messages"][-1].content)
+        return json.loads(self.calls[index]["user"])
 
     def sent_text(self, index: int = -1) -> str:
-        return "\n".join(str(message.content) for message in self.calls[index]["messages"])
+        return "\n".join((self.calls[index]["system"], self.calls[index]["user"]))
 
 
 def stored_recipe(external_id: str, title: str) -> StoredRecipe:
