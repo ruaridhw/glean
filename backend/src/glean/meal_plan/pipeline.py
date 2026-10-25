@@ -407,9 +407,14 @@ def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanR
     _log_drift(prepared, choices, draft.chosen_week)
     chosen = _reconciled(choices, prepared)
     unavailable = excluded | {suggestion.external_id for suggestion in chosen if suggestion.external_id}
+    # The other candidate week is a whole balanced week, so its meal in the same slot is the swap that keeps
+    # this one balanced; a spare candidate from the end of the offer is not.
+    swaps = balance.swap_targets(prepared.weeks, [pick.external_id for pick in choices])
     suggestions: list[MealPlanSuggestion] = []
-    for suggestion, pick in zip(chosen, choices, strict=True):
-        alternative = _alternative_for(pick.alternative, prepared, unavailable=unavailable)
+    for position, (suggestion, pick) in enumerate(zip(chosen, choices, strict=True)):
+        alternative = _alternative_for(
+            pick.alternative, prepared, unavailable=unavailable, preferred=swaps.get(position)
+        )
         if alternative is not None and alternative.external_id is not None:
             unavailable.add(alternative.external_id)
         suggestions.append(suggestion.model_copy(update={"alternative": alternative}))
@@ -513,8 +518,13 @@ def _alternative_for(
     prepared: PreparedPlan,
     *,
     unavailable: set[str],
+    preferred: str | None = None,
 ) -> MealPlanAlternative | None:
-    """The model's alternative when it is an unused candidate, else the next-best one nothing else uses."""
+    """The swap target: the model's when it is a free candidate, else the scorer's, else the next-best one.
+
+    `preferred` is the other candidate week's meal for this slot (V6), so a card with no alternative of its own
+    is offered the scorer's own swap before the offer's leftovers.
+    """
     if model_alternative is not None:
         if (
             model_alternative.external_id in set(prepared.offered_ids)
@@ -525,6 +535,8 @@ def _alternative_for(
             "dropping an alternative that is not an unused candidate",
             extra={"external_id": model_alternative.external_id},
         )
+    if preferred is not None and preferred in set(prepared.offered_ids) and preferred not in unavailable:
+        return _as_alternative(_template_alternative(prepared, preferred))
     spare = next((external_id for external_id in prepared.offered_ids if external_id not in unavailable), None)
     if spare is None:
         return None

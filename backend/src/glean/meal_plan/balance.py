@@ -176,6 +176,26 @@ def scored_weeks(
     return tuple(CandidateWeek.from_score(plan) for plan in plans)
 
 
+def swap_targets(weeks: Sequence[CandidateWeek], chosen_ids: Sequence[str]) -> dict[int, str]:
+    """For each slot of `chosen_ids`, the other candidate week's meal, so a card's Swap is the scorer's own.
+
+    The other week is a whole week the scorer judged near-best, so the meal in the same slot is the swap most
+    likely to keep the week balanced -- which a spare candidate taken from the end of the offer is not. Empty
+    for a slot the other week has no meal for, or where its meal is already chosen.
+    """
+    chosen = set(chosen_ids)
+    targets: dict[int, str] = {}
+    for position in range(len(chosen_ids)):
+        for week in weeks:
+            if position >= len(week.recipe_ids):
+                continue
+            candidate = week.recipe_ids[position]
+            if candidate not in chosen:
+                targets[position] = candidate
+                break
+    return targets
+
+
 def drift(chosen_ids: Sequence[str], best_ids: Sequence[str], context: ScoringContext) -> PlanGap:
     """How far a chosen week fell short of the scorer's best, for the line `finalise` logs (spec §6.6).
 

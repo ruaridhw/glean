@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from glean.meal_plan import pipeline
+from glean.meal_plan import balance, pipeline
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanRecipe,
@@ -255,18 +255,46 @@ def test_a_sixty_plus_bucket_has_no_upper_bound_so_the_card_shows_total_time(tmp
 def test_an_alternative_carries_its_own_labels_for_the_swap_panel(tmp_path: Path) -> None:
     """ "Also fish, 25 min": the panel labels the alternative, not the meal it would replace."""
     corpus = _corpus(tmp_path)
-    first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
-    chosen, alternative = first.offered_ids[0], first.offered_ids[1]
-    _enrich(corpus, alternative, main_protein="fish", active_time="<=15")
+    first = pipeline.prepare(_request(meals_per_week=1), corpus=corpus, rng=random.Random(0), now=NOW)
+    chosen, swap_id = first.weeks[0].recipe_ids[0], first.weeks[1].recipe_ids[0]
+    assert swap_id != chosen
+    _enrich(corpus, swap_id, main_protein="fish", active_time="<=15")
 
-    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
-    result = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)], planned=[]))
+    prepared = pipeline.prepare(_request(meals_per_week=1), corpus=corpus, rng=random.Random(0), now=NOW)
+    assert prepared.weeks[0].recipe_ids == [chosen]
+    result = pipeline.finalise(
+        prepared,
+        CorpusMealPlanResponse(
+            week_summary="One dinner.",
+            chosen_week=0,
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=chosen, title=prepared.titles[chosen], reason="The scorer's pick.")
+            ],
+        ),
+    )
     swap = result.suggestions[0].alternative
 
     assert swap is not None
-    assert swap.external_id == alternative
+    assert swap.external_id == swap_id
     assert (swap.attributes.main_protein, swap.attributes.active_time_mins) == ("fish", 15)
-    assert chosen != alternative
+
+
+def test_a_card_without_an_alternative_is_offered_the_other_weeks_meal(tmp_path: Path) -> None:
+    # The other candidate week is balanced as a whole, so its meal in the same slot is a better swap than a
+    # spare candidate from the end of the offer.
+    prepared = _prepared(tmp_path, meals_per_week=2)
+    week = prepared.weeks[0].recipe_ids
+    targets = balance.swap_targets(prepared.weeks, week)
+
+    result = pipeline.finalise(prepared, _week_draft(prepared, 0))
+    alternatives = [suggestion.alternative for suggestion in result.suggestions]
+
+    assert targets, "the fixture's two weeks have to differ somewhere for this to test anything"
+    assert all(alternative is not None for alternative in alternatives)
+    for position, target in targets.items():
+        assert alternatives[position] is not None
+        assert alternatives[position].external_id == target
+    assert not set(week) & {alternative.external_id for alternative in alternatives if alternative}
 
 
 def test_a_payload_without_attributes_still_reads(tmp_path: Path) -> None:
