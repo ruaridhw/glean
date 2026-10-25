@@ -186,6 +186,13 @@ class PreparedPlan(BaseModel):
             "Empty when no candidate was offered, and on a checkpoint written before V6."
         ),
     )
+    urgent_items_already_used: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Urgent pantry items a meal already in the week uses. They are being used up, so the scorer does not "
+            "charge this generation for leaving them out (spec 6.2, #122)."
+        ),
+    )
 
     @property
     def has_candidates(self) -> bool:
@@ -227,6 +234,9 @@ def prepare(
         now=request_now,
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
+    # A meal already in the week uses its items up too, so its urgent ones are not this generation's to use. They
+    # are read over the planned meals as well, or a week would be charged for an item it is not leaving unused.
+    already_used = _urgent_items_already_used(corpus, pantry, request.exclude_external_ids)
     # One read of the corpus's answers for the whole proposal: the labels a card shows are facts about the
     # recipe, so they are measured here rather than asked of the model.
     measured = recipe_attributes(corpus, [candidate.summary for candidate in candidates])
@@ -265,6 +275,7 @@ def prepare(
             "planned_meals": len(planned),
             "candidate_weeks": len(weeks),
             "best_week_unused_urgent_items": len(balance.unused_urgent_items(weeks[0])) if weeks else 0,
+            "urgent_items_already_used": len(already_used),
         },
     )
     context = {
@@ -317,6 +328,7 @@ def prepare(
         },
         facts=facts,
         weeks=list(weeks),
+        urgent_items_already_used=list(already_used),
     )
 
 
@@ -366,6 +378,19 @@ def _week_payload(weeks: Sequence[balance.CandidateWeek], *, titles: dict[str, s
         }
         for index, week in enumerate(weeks)
     ]
+
+
+def _urgent_items_already_used(
+    corpus: RecipeCorpusStore, pantry: Sequence[PantryItem], planned_ids: Sequence[str]
+) -> tuple[str, ...]:
+    """The urgent pantry items the meals already in the week use, by name, in name order.
+
+    Read over the planned meals, not the offer, so the scorer does not charge this generation for an item the
+    household is already cooking with (spec 6.2, #122: the criterion is the item being used, not this week's
+    meals being the ones that use it).
+    """
+    planned_uses = urgent_pantry_uses(corpus, pantry, planned_ids)
+    return tuple(sorted({item.name for items in planned_uses.values() for item in items}))
 
 
 def _planned_corpus_meals(corpus: RecipeCorpusStore, excluded_ids: Sequence[str]) -> list[PlannedMeal]:
@@ -464,7 +489,7 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
     """
     if not prepared.weeks:
         return
-    context = balance.scoring_context(prepared.facts)
+    context = balance.scoring_context(prepared.facts, urgent_items_already_used=prepared.urgent_items_already_used)
     best_ids = prepared.weeks[0].recipe_ids
     chosen_ids = [pick.external_id for pick in choices]
     gap = balance.drift(chosen_ids, best_ids, context)
