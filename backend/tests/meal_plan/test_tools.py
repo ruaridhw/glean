@@ -301,6 +301,20 @@ def test_repeated_unknown_attributes_are_exempt() -> None:
     assert plan.points(Term.REPEAT_CUISINE) == 0.0
 
 
+def test_a_repeated_catch_all_value_is_not_sameness() -> None:
+    # `mixed` means the dish is not built around one protein, and two different dishes both typed `other` are not
+    # the same dish, so neither is a repeat worth penalising. A shared `other` cuisine still is one: it is a
+    # value the cuisine list really uses.
+    ctx = context(
+        candidate("a", dish_type=DishType.OTHER, main_protein=MainProtein.MIXED, cuisine=Cuisine.OTHER),
+        candidate("b", dish_type=DishType.OTHER, main_protein=MainProtein.MIXED, cuisine=Cuisine.OTHER),
+    )
+    plan = score(["a", "b"], ctx)
+    assert plan.points(Term.REPEAT_MAIN_PROTEIN) == 0.0
+    assert plan.points(Term.REPEAT_DISH_TYPE) == 0.0
+    assert plan.points(Term.REPEAT_CUISINE) == -1.0
+
+
 def test_a_repeated_none_carb_still_costs_its_row() -> None:
     # The spec's carb row carries no exemption: a dish with no carb is still a repeated carb choice, and a
     # gluten-free week of four `none`-carb dinners is exactly the week the carb gate exists to catch.

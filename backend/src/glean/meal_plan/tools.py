@@ -80,13 +80,15 @@ _MAX_SWAP_EVALUATIONS = 2000
 _PLANS_ATTEMPTS_PER_PLAN = 4
 
 # Values that earn nothing when they repeat, one set per entry of `_REPEAT_TERMS`. An unknown attribute is not
-# evidence of sameness, so `unsure` is exempt everywhere. A dish built around no protein cannot repeat a protein;
-# a dish built around no carb is still a repeated carb choice, and the spec's carb row carries no exemption, so
-# only the protein row exempts `none` (owner decision 2026-10-25, from the V6 eval's carb-gate misses).
+# evidence of sameness, so `unsure` is exempt everywhere. The catch-all values are exempt too: a dish built around
+# no protein cannot repeat one (`none`), `mixed` says it is not built around any one protein, and two different
+# dishes both typed `other` are not the same dish. A dish built around no carb is still a repeated carb choice,
+# and the spec's carb row carries no exemption, so only the protein row exempts `none` (owner decision
+# 2026-10-25, from the V6 eval's carb-gate misses).
 _REPEAT_EXEMPT: tuple[frozenset[str], ...] = (
-    frozenset({UNSURE, "none"}),
+    frozenset({UNSURE, "none", "mixed"}),
     frozenset({UNSURE}),
-    frozenset({UNSURE}),
+    frozenset({UNSURE, "other"}),
     frozenset({UNSURE}),
 )
 
