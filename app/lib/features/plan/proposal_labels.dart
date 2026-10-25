@@ -40,6 +40,10 @@ const Map<String, String> _carbLabels = <String, String>{
 };
 
 /// Short display words for the G1 dish types.
+///
+/// `pasta_dish` is not "pasta": a pasta dish's card already says "pasta" for its carb, and two identical
+/// badges read like a mistake (6 of the 50 sample recipes are pasta dishes). It keeps the shape instead,
+/// which is what the dish badge is for.
 const Map<String, String> _dishLabels = <String, String>{
   'curry': 'curry',
   'stir_fry': 'stir-fry',
@@ -54,18 +58,33 @@ const Map<String, String> _dishLabels = <String, String>{
 };
 
 /// The badges for one meal, in the order the card shows them. Empty when nothing is known.
+///
+/// A badge whose words are already in the row is left out: a pasta carb and a pasta dish would otherwise show
+/// "pasta · pasta", and a rice dish reads "rice · rice dish". The carb comes first, so the more specific dish
+/// badge is the one that goes; the row never repeats a word.
 List<String> proposalLabels(MealPlanAttributes? attributes) {
   if (attributes == null) {
     return const <String>[];
   }
-  final String? protein = _proteinLabels[attributes.mainProtein];
-  final String? carb = _carbLabels[attributes.mainCarb];
-  final String? dish = _dishLabels[attributes.dishType];
   final int? minutes = attributes.activeTimeMins;
-  return <String>[
-    ?protein,
-    ?carb,
-    ?dish,
-    ?(minutes == null ? null : '${minutes.clamp(1, 999)} min'),
+  final List<String?> candidates = <String?>[
+    _proteinLabels[attributes.mainProtein],
+    _carbLabels[attributes.mainCarb],
+    _dishLabels[attributes.dishType],
+    minutes == null ? null : '${minutes.clamp(1, 999)} min',
   ];
+  final List<String> labels = <String>[];
+  final Set<String> words = <String>{};
+  for (final String? label in candidates) {
+    if (label == null) {
+      continue;
+    }
+    final Set<String> labelWords = label.split(' ').toSet();
+    if (labelWords.any(words.contains)) {
+      continue; // the row already says this word
+    }
+    labels.add(label);
+    words.addAll(labelWords);
+  }
+  return labels;
 }
