@@ -339,7 +339,7 @@ class PlanPenalty:
 
 @dataclass(frozen=True, slots=True)
 class PlanScore:
-    """A whole week: every recipe's terms, the plan's penalties, and the terms that could not be evaluated."""
+    """A whole week: every recipe's terms, and the penalties the week as a whole earned."""
 
     recipes: tuple[RecipeScore, ...]
     penalties: tuple[PlanPenalty, ...] = ()
