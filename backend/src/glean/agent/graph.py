@@ -580,6 +580,8 @@ def _refused(action: Any, *, asked: int) -> str | None:
         return None
     if asked >= MAX_QUESTIONS:
         return "You have already asked your one question this session. Plan with what you know."
+    if not action.question.strip():
+        return "A question needs words: ask it in one short sentence, or plan with what you know."
     if not any(option.strip() for option in action.options):
         return "A question needs at least one option for the household to tap."
     return None
