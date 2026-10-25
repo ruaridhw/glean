@@ -81,6 +81,9 @@ class OfferedRecipe:
 
     summary: RecipeSummary
     cooked_days_ago: float | None = None
+    # The urgency-weighted pantry fit the sampler ranked this recipe by, kept so the scorer (V6) can use the
+    # ranking the household was actually offered rather than recomputing it from the corpus.
+    pantry_fit: float = 0.0
 
     @property
     def external_id(self) -> str:
@@ -236,6 +239,7 @@ def sample_corpus_candidates(
         OfferedRecipe(
             summary=summary,
             cooked_days_ago=(floor.days_since_cooked[summary.external_id] if summary.external_id in relaxed else None),
+            pantry_fit=fit.get(summary.external_id, 0.0),
         )
         for summary in picked
     ]
