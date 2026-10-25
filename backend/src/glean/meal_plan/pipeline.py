@@ -62,7 +62,7 @@ from glean.recipes.attributes import DishType, MainCarb, MainProtein, RecipeAttr
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Collection, Sequence
+    from collections.abc import Callable, Collection, Sequence
 
     from glean.llm import LLMRouter
     from glean.recipes.corpus import RecipeCorpusStore
@@ -272,6 +272,7 @@ def prepare(
         slots=request.meals_per_week,
         now=request_now,
         preferred_ids=last_week,
+        narrowing={chip.value: _narrowing_rule(chip) for chip in screened.chips if chip in tools.NARROWING_CHIPS},
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
     # A meal already in the week uses its items up too, so its urgent ones are not this generation's to use. They
@@ -405,6 +406,11 @@ def _cooked_meals(request: MealPlanRequest) -> list[CookedMeal]:
         CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at, rating=meal.rating)
         for meal in request.cooked_history
     ]
+
+
+def _narrowing_rule(chip: tools.FeedbackChip) -> Callable[[RecipeAttributes, int | None], bool]:
+    """One narrowing chip's rule, as the sampler calls it: a recipe's attributes and its total minutes."""
+    return lambda attributes, total_time_mins: tools.chip_narrows(chip, attributes, total_time_mins=total_time_mins)
 
 
 def _floor_history(
