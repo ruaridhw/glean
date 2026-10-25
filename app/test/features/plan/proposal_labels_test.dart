@@ -20,7 +20,7 @@ void main() {
         'fish',
         'potato',
         'traybake',
-        '20 min',
+        'about 20 min',
       ]);
     });
 
@@ -83,7 +83,7 @@ void main() {
         activeTimeMins: 25,
       );
 
-      expect(proposalLabels(attributes), <String>['25 min']);
+      expect(proposalLabels(attributes), <String>['about 25 min']);
     });
 
     test('a badge never repeats a word already in the row', () {
@@ -121,7 +121,7 @@ void main() {
             activeTimeMins: 25,
           ),
         ),
-        <String>['pasta', '25 min'],
+        <String>['pasta', 'about 25 min'],
       );
     });
 
@@ -140,11 +140,11 @@ void main() {
     test('the time badge is the minutes the backend resolved', () {
       expect(
         proposalLabels(const MealPlanAttributes(activeTimeMins: 15)),
-        <String>['15 min'],
+        <String>['about 15 min'],
       );
       expect(
         proposalLabels(const MealPlanAttributes(activeTimeMins: 1)),
-        <String>['1 min'],
+        <String>['about 1 min'],
       );
     });
   });

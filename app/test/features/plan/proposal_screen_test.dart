@@ -204,7 +204,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      for (final String label in <String>['rice', 'curry', '35 min']) {
+      for (final String label in <String>['rice', 'curry', 'about 35 min']) {
         expect(
           find.descendant(
             of: find.byKey(const ValueKey<String>('suggestion-0')),
@@ -218,7 +218,7 @@ void main() {
         'beans',
         'wraps',
         'handheld',
-        '15 min',
+        'about 15 min',
       ]) {
         expect(
           find.descendant(
@@ -264,7 +264,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(ProposalSwapPanel),
-        matching: find.text('20 min'),
+        matching: find.text('about 20 min'),
       ),
       findsOneWidget,
     );

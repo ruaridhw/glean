@@ -7,6 +7,10 @@
 ///   (it stored `unsure`) or has not measured yet, so no badge is invented for it.
 /// - **"None" is not a badge.** "No protein" or "no carb" is a fact about the recipe, not something to label a
 ///   meal with; the card shows the protein or carbohydrate it does have, or nothing.
+/// - **The time is approximate in words.** The number is the active-time bucket's upper bound, capped by the
+///   recipe's total time, or the total time alone when no bucket was measured — so it can be either a "up to
+///   30 minutes" estimate or a stated total. The card has one string for both, and "about N min" is honest for
+///   both; a second format would need a source flag on the wire.
 ///
 /// Order matches V3's design (direction A, `design-gates/v3-v8-wireframes.html`): protein · carb · dish · time,
 /// as in "fish · rice · traybake · 20 min".
@@ -71,7 +75,7 @@ List<String> proposalLabels(MealPlanAttributes? attributes) {
     _proteinLabels[attributes.mainProtein],
     _carbLabels[attributes.mainCarb],
     _dishLabels[attributes.dishType],
-    minutes == null ? null : '${minutes.clamp(1, 999)} min',
+    minutes == null ? null : 'about ${minutes.clamp(1, 999)} min',
   ];
   final List<String> labels = <String>[];
   final Set<String> words = <String>{};
