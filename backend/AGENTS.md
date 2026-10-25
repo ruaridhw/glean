@@ -208,7 +208,8 @@ POST   /meal-plan/sessions/{id}/messages  202 {"session_id", "swap_id", "note_dr
 DELETE /meal-plan/sessions/{id}    204                              free, never rate limited
 ```
 
-`SessionView` is `{session_id, status, progress, next_cursor, result, error, swap, updated_at}`.
+`SessionView` is `{session_id, status, progress, next_cursor, result, error, swap, question, updated_at}`;
+`question` is `{question, options, why}` while the status is `waiting_for_user`, otherwise null.
 `status` is `queued | running | waiting_for_user | done | failed | cancelled`, and `done`, `failed` and
 `cancelled` are terminal. `error` is `{code, retry_after_minutes}` with `code` one of
 `no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
@@ -280,7 +281,7 @@ cancelled run adds at most one more read, at the step that notices.
   `src/glean/agent/**`). The graph is `prepare -> plan <-> act -> finalise` (V7). `prepare` and
   `finalise` are `meal_plan.pipeline`'s, so the sync route and a session offer the same candidates and
   validate a week the same way (the session id seeds the sampler). `plan` is the only LLM node and
-  answers a typed `NextAction` (`agent/actions.py`: `call_tool` with typed arguments, or `propose`)
+  answers a typed `NextAction` (`agent/actions.py`: `call_tool` with typed arguments, `ask_household`, or `propose`)
   through structured output, never provider tool-calling. `act` runs the tool through
   `agent/adapters.py` over the framework-free `meal_plan.tools`, writes the tool's progress line
   first, and widens the week with any recipe the tool found. The budget lives in the graph state: at
@@ -288,8 +289,7 @@ cancelled run adds at most one more read, at the step that notices.
   keeps nothing ends in the scorer's best week with template reasons (`degraded: true`), so once
   `prepare` has run a session never ends `model_error`. `finalise` logs each session's tool calls,
   invalid answers, fallback reason and drift from the scorer's best (CloudWatch `SessionToolCalls`,
-  `SessionInvalidActions`, `SessionDrift`). Asking the household (`ask_household`, V11) is the marked
-  extension point in `agent/actions.py`.
+  `SessionInvalidActions`, `SessionDrift`). Asking the household is `ask_household` (V11, below).
 - **Household messages.** `POST .../messages` takes one union discriminated on `type`
   (`sessions.models.HouseholdMessage`): `{"type": "swap", "slot", "note", "week"}` (V10),
   `{"type": "answer", "option", "note"}` and `{"type": "skip"}` (V11). The route branches on the type
@@ -297,7 +297,7 @@ cancelled run adds at most one more read, at the step that notices.
   closed: only the screened text, and why a note was dropped, are ever stored or passed on), then calls
   `agent.resume(session_id, message)`, which stores the message on the item and re-enqueues the session.
   It answers 202 `MessageAccepted {session_id, swap_id | null, note_dropped}`. An answer or a skip needs
-  `waiting_for_user`; until V11 parks a run, both are a 409.
+  `waiting_for_user` (else 409).
 - **Swaps (V10).** A swap needs a proposal (`done`, or a `failed` that still holds one) and no swap
   running: the status is the lock, so a second swap is a 409, except over a swap queued at least
   `STALE_QUEUED_SWAP_SECONDS` ago that no delivery ever took (the route died before dispatching it),
@@ -317,6 +317,23 @@ cancelled run adds at most one more read, at the step that notices.
   `SessionView.swap` is the newest swap (`state`, `note`: `none | used | dropped`, `replacement`); a
   swap on a failed or cancelled session reads `failed`. Undo swap is the app's own; it is why the app
   sends `week`.
+- **The agent's one question (V11).** `ask_household{question, options, why}` is the third `NextAction`.
+  `act` calls LangGraph's `interrupt()`; the runtime parks the session `waiting_for_user` with the question
+  (clipped to `MAX_QUESTION_CHARS`, `MAX_OPTIONS` x `MAX_OPTION_CHARS`) and **no owner and no lease**, and
+  counts `SessionsAsked`. A second question is refused like an unparseable answer, so the agent plans. An
+  answer must name an offered option, carry a note, or both (else 422). `agent.resume` stores the reply with
+  one conditional `waiting_for_user -> queued` write (a duplicate, late or post-cancel answer is a 409) and
+  re-enqueues the session; its delivery claims it like a fresh run, and `_run`'s first branch continues the
+  graph with `Command(resume=reply)`. The answer reaches the next turn like a tool result, under `data`. A
+  crash after that resumes with the same stored reply; a crash between the interrupt and the park re-parks
+  from the checkpoint without a model call; a late copy of the first message finds the session parked
+  (`ClaimResult.WAITING`) and is acknowledged; the dead-letter handler leaves a parked session alone
+  (`AbandonResult.WAITING`).
+- **The 90 s are working time.** No attempt exists while the household thinks, so no clock runs; the
+  working seconds spent before the question ride the graph state (`working_seconds`) and the resuming
+  attempt's budget starts that much spent (`RunBudget.carry`). A household that never answers leaves the
+  session parked until the 24 h TTL expires the item and its checkpoints; the app polls again only after it
+  sends its answer, so its five-minute `stalled` cap never counts the wait.
 - **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
   and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
