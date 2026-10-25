@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from glean.agent import start
+from glean.agent import MessageNotSent, resume, start
 from glean.agent.actions import PlanStep, SwapStep
 from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.deps import AgentDeps
@@ -23,8 +23,22 @@ from glean.agent.graph import MAX_SWAP_TOOL_CALLS, SWAP_FINALISE_LINE, SWAP_LINE
 from glean.meal_plan.pipeline import TEMPLATE_SWAP_REASON
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
-from glean.sessions.models import SessionStatus, SessionView, SwapMessage, SwapNoteUse, SwapState
-from glean.sessions.store import MAX_LEASE_SECONDS, WORKER_TIMEOUT_SECONDS, SessionBusyError
+from glean.sessions.models import (
+    AnswerMessage,
+    SessionStatus,
+    SessionView,
+    SkipMessage,
+    SwapMessage,
+    SwapNoteUse,
+    SwapState,
+)
+from glean.sessions.store import (
+    MAX_LEASE_SECONDS,
+    WORKER_TIMEOUT_SECONDS,
+    MessageRefusal,
+    MessageRefusedError,
+    SessionBusyError,
+)
 from tests.agent.test_graph import KOREAN_ID, Run, call, propose_first
 
 if TYPE_CHECKING:
@@ -448,3 +462,52 @@ class TestWorker:
 
         assert swap_run.view.swap.state is SwapState.DONE  # ty: ignore[possibly-missing-attribute]
         assert len(model.users(SwapStep)) == 1
+
+
+class TestResume:
+    """`agent.resume(session_id, message)`: the deep module's call for a household message (spec §6.2)."""
+
+    def test_a_swap_is_stored_and_its_session_sent_back_to_the_queue(self, swap_run: SwapRun) -> None:
+        sent: list[Any] = []
+        slot = swap_run.proposal.suggestions[1].external_id
+
+        swap_id = resume(
+            "sess-1",
+            SwapMessage(type="swap", slot=slot, note=NOTE),
+            user_sub="user-a",
+            sessions=swap_run.sessions,
+            dispatch=sent.append,
+        )
+
+        assert swap_id == 1
+        assert [session.session_id for session in sent] == ["sess-1"]
+        assert swap_run.record.status is SessionStatus.QUEUED
+        assert swap_run.record.pending_swap is not None
+
+    @pytest.mark.parametrize("message", [AnswerMessage(type="answer", option="Fish"), SkipMessage(type="skip")])
+    def test_an_answer_or_skip_with_no_run_parked_is_refused(
+        self, swap_run: SwapRun, message: AnswerMessage | SkipMessage
+    ) -> None:
+        with pytest.raises(MessageRefusedError) as refused:
+            resume("sess-1", message, user_sub="user-a", sessions=swap_run.sessions, dispatch=lambda _s: None)
+
+        assert refused.value.reason is MessageRefusal.NO_QUESTION
+        assert swap_run.record.status is SessionStatus.DONE
+
+    def test_a_queue_that_will_not_take_it_fails_the_session_and_keeps_the_proposal(self, swap_run: SwapRun) -> None:
+        def down(_session: Any) -> None:
+            raise RuntimeError("queue down")
+
+        slot = swap_run.proposal.suggestions[0].external_id
+        with pytest.raises(MessageNotSent):
+            resume(
+                "sess-1",
+                SwapMessage(type="swap", slot=slot),
+                user_sub="user-a",
+                sessions=swap_run.sessions,
+                dispatch=down,
+            )
+
+        assert swap_run.record.status is SessionStatus.FAILED
+        assert swap_run.record.result == swap_run.proposal
+        assert swap_run.view.swap.state is SwapState.FAILED  # ty: ignore[possibly-missing-attribute]

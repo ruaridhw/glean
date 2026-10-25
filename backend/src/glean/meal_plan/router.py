@@ -1,10 +1,10 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, NoReturn
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 
-from glean.agent import cancel
+from glean.agent import MessageNotSent, cancel, resume
 from glean.agent.dependencies import get_session_dispatcher, get_session_store
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
@@ -116,6 +116,7 @@ _MESSAGE_REFUSALS: dict[MessageRefusal, tuple[int, str]] = {
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "That meal isn't one this proposal suggested. Meals already in your plan are never replaced.",
     ),
+    MessageRefusal.NO_QUESTION: (status.HTTP_409_CONFLICT, "There is no question waiting for an answer."),
 }
 
 
@@ -142,70 +143,51 @@ def post_session_message(
     record = sessions.get(user_sub, session_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session")
+    note_dropped = False
     match message:
         case SwapMessage():
-            return _swap(record, message, sessions=sessions, dispatch=dispatch, decisions=decisions)
+            message, note_dropped = _screened_swap(record, message, decisions=decisions)
         case AnswerMessage() | SkipMessage():
-            return _answer_or_skip(record)
+            # V11 screens the answer's note here, the same way, once a run can be parked on its question.
+            if record.status is not SessionStatus.WAITING_FOR_USER:
+                _refuse(MessageRefusal.NO_QUESTION)
+    try:
+        swap_id = resume(
+            session_id, message, user_sub=user_sub, sessions=sessions, dispatch=dispatch, note_dropped=note_dropped
+        )
+    except UnknownSessionError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
+    except MessageRefusedError as error:
+        # Lost a race between the read above and the conditional write, or a message type nothing can take yet.
+        _refuse(error.reason, cause=error)
+    except MessageNotSent as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Couldn't send that right now. Try again."
+        ) from error
+    return MessageAccepted(session_id=session_id, swap_id=swap_id, note_dropped=note_dropped)
 
 
-def _swap(
-    record: SessionRecord,
-    message: SwapMessage,
-    *,
-    sessions: SessionStore,
-    dispatch: Callable[[AgentSession], None],
-    decisions: DecisionClient,
-) -> MessageAccepted:
-    """Queue a swap: refuse what cannot be swapped before paying for the screen, then screen, store and send it.
+def _screened_swap(
+    record: SessionRecord, message: SwapMessage, *, decisions: DecisionClient
+) -> tuple[SwapMessage, bool]:
+    """Refuse what cannot be swapped before paying for the screen, then screen the note.
 
-    A swap replaces one meal of a finished proposal, with the other slots locked; only one runs at a time.
+    Returns the message carrying only what the screen passed, and whether it dropped a note the household
+    wrote. The note as typed goes no further than this function.
     """
     refusal = swap_refusal(record) or (
         MessageRefusal.UNKNOWN_SLOT if record.swap_position(message.slot) is None else None
     )
     if refusal is not None:
-        code, detail = _MESSAGE_REFUSALS[refusal]
-        raise HTTPException(status_code=code, detail=detail)
+        _refuse(refusal)
     written = (message.note or "").strip()
     screened = screen(written, decision_client=decisions)
-    note_dropped = bool(written) and not screened.passed
-    try:
-        swap = sessions.enqueue_swap(
-            record.user_sub,
-            record.session_id,
-            message.model_copy(update={"note": screened.text}),
-            note_dropped=note_dropped,
-        )
-    except UnknownSessionError as error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
-    except MessageRefusedError as error:
-        # Lost a race with another swap between the read above and the conditional write.
-        code, detail = _MESSAGE_REFUSALS[error.reason]
-        raise HTTPException(status_code=code, detail=detail) from error
-    try:
-        dispatch(AgentSession(session_id=record.session_id, user_sub=record.user_sub, request=record.request))
-    except Exception as error:
-        # Queued, but nothing will run it. Fail the session as the create route does: the proposal stays on the
-        # item, the swap reads as failed, and the next swap is accepted.
-        sessions.fail_if_abandoned(
-            record.user_sub, record.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Couldn't find another meal right now. Try again."
-        ) from error
-    return MessageAccepted(session_id=record.session_id, swap_id=swap.swap_id, note_dropped=note_dropped)
+    return message.model_copy(update={"note": screened.text}), bool(written) and not screened.passed
 
 
-def _answer_or_skip(record: SessionRecord) -> MessageAccepted:
-    """An answer or a skip resumes a run parked on its question, and nothing else.
-
-    No run parks before V11 (`ask_household`), which screens the answer's note, stores the outcome as the
-    pending answer and re-enqueues the session here. Until then every answer or skip meets the status rule.
-    """
-    if record.status is not SessionStatus.WAITING_FOR_USER:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no question waiting for an answer.")
-    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This session cannot take an answer yet.")
+def _refuse(refusal: MessageRefusal, *, cause: Exception | None = None) -> NoReturn:
+    code, detail = _MESSAGE_REFUSALS[refusal]
+    raise HTTPException(status_code=code, detail=detail) from cause
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
