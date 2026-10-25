@@ -968,3 +968,24 @@ def test_an_urgent_item_a_planned_meal_uses_is_not_charged_to_the_week(tmp_path:
     context = balance.scoring_context(prepared.facts, urgent_items_already_used=prepared.urgent_items_already_used)
     elsewhere = next(external_id for external_id in prepared.offered_ids if external_id != "rec_fish_pie")
     assert score_meal_plan([elsewhere], context).points(Term.UNUSED_URGENT_ITEM) == 0.0
+
+
+def test_prepare_does_not_force_a_second_recipe_for_a_planned_urgent_item(tmp_path: Path) -> None:
+    # Through prepare, not just the scorer: the lentil bake already in the week uses the potato, and the offered
+    # fish pie uses it too but is the weaker week. Before the fix the -4 charge for "leaving the potato unused"
+    # put the fish pie in the week the model was shown; the strong recipe must win instead.
+    prepared = _prepared(
+        tmp_path,
+        meals_per_week=1,
+        exclude_external_ids=["rec_lentil_bake"],
+        pantry=[
+            {"id": 1, "name": "potato", "quantity": 400, "unit": "g", "urgency_score": 90.0, "expires_in_days": 2},
+            {"id": 2, "name": "beef shin", "quantity": 500, "unit": "g", "urgency_score": 300.0},
+        ],
+    )
+
+    assert prepared.urgent_items_already_used == ["potato"]
+    assert prepared.weeks[0].recipe_ids == ["rec_slow_roast"]
+    # Nothing is charged in either week: the pool's only urgent item is one a planned meal already uses.
+    assert all(balance.unused_urgent_items(week) == () for week in prepared.weeks)
+    assert all("unused_urgent_item" not in week.terms for week in prepared.weeks)

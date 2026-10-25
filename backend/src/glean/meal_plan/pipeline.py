@@ -260,7 +260,10 @@ def prepare(
     # Drawn after the sampler, so the offered list does not depend on how many numbers the scorer's tie-break
     # takes; one seed still plans one week, which is what a resumed session needs.
     weeks = balance.scored_weeks(
-        balance.scoring_context(facts),
+        # The same inputs the drift line rebuilds from: the week's chips, and the urgent items a planned meal is
+        # already using. Without the latter the weeks the model sees would still be pushed toward a second recipe
+        # for an item the household is cooking tonight.
+        balance.scoring_context(facts, chips=chips, urgent_items_already_used=already_used),
         [candidate.external_id for candidate in candidates],
         request.meals_per_week,
         seed=rng.randrange(_SCORER_SEED_RANGE),
