@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from glean.llm import Feature
 from glean.meal_plan import pipeline
-from glean.meal_plan.feedback import screen_feedback
+from glean.meal_plan.feedback import ScreenedFeedback, screen_feedback, without_note
 from glean.meal_plan.schemas import (
     MealPlanRequest,
     MealPlanResponse,
@@ -39,7 +39,6 @@ Rules:
 _rng = random.Random()  # noqa: S311 - varies recipe sampling; not security-sensitive
 
 
-@tracer.capture_method
 def generate_meal_plan(
     request: MealPlanRequest,
     *,
@@ -49,12 +48,16 @@ def generate_meal_plan(
     rng: random.Random | None = None,
     now: datetime | None = None,
 ) -> MealPlanResult:
-    """One meal plan. In corpus mode `decision_client` screens the week's note; without one the note is dropped."""
+    """One meal plan. In corpus mode `decision_client` screens the week's note; without one the note is dropped.
+
+    The screen runs first, here, so nothing traced below it ever receives the raw note: the plan is made from
+    the request without it and the screen's outcome.
+    """
     if request.source == "corpus":
         return _generate_from_corpus(
-            request,
+            without_note(request),
             llm_router=llm_router,
-            decision_client=decision_client,
+            feedback=screen_feedback(request.human_feedback, decision_client=decision_client),
             corpus=corpus or RecipeCorpusStore(),
             rng=rng or _rng,
             now=now,
@@ -62,6 +65,7 @@ def generate_meal_plan(
     return _generate_from_saved(request, llm_router=llm_router)
 
 
+@tracer.capture_method
 def _generate_from_saved(request: MealPlanRequest, *, llm_router: LLMRouter) -> MealPlanResult:
 
     context = {
@@ -114,11 +118,12 @@ def _generate_from_saved(request: MealPlanRequest, *, llm_router: LLMRouter) -> 
     )
 
 
+@tracer.capture_method
 def _generate_from_corpus(
     request: MealPlanRequest,
     *,
     llm_router: LLMRouter,
-    decision_client: DecisionClient | None,
+    feedback: ScreenedFeedback,
     corpus: RecipeCorpusStore,
     rng: random.Random,
     now: datetime | None,
@@ -129,7 +134,6 @@ def _generate_from_corpus(
     shape only ever gains fields. The agent's fallback is the graph's (§6.2), because it is the agent
     loop -- not the route -- that runs out of budget or steps.
     """
-    feedback = screen_feedback(request.human_feedback, decision_client=decision_client)
     prepared = pipeline.prepare(request, corpus=corpus, rng=rng, now=now, feedback=feedback)
     if not prepared.has_candidates:
         return MealPlanResult(

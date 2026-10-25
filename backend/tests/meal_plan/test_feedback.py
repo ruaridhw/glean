@@ -14,8 +14,15 @@ import httpx
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
-from glean.meal_plan.feedback import CHIP_GUIDANCE, ScreenedFeedback, prompt_payload, screen_feedback, unscreened
-from glean.meal_plan.schemas import FeedbackNoteOutcome, HumanFeedback
+from glean.meal_plan.feedback import (
+    CHIP_GUIDANCE,
+    ScreenedFeedback,
+    prompt_payload,
+    screen_feedback,
+    unscreened,
+    without_note,
+)
+from glean.meal_plan.schemas import FeedbackNoteOutcome, HumanFeedback, MealPlanRequest
 from glean.meal_plan.tools import FeedbackChip
 
 NOTE = "Kids are away Wednesday, something spicy then"
@@ -168,3 +175,24 @@ def test_a_dropped_note_leaves_no_trace_in_the_payload() -> None:
     assert payload["note"] is None
     assert "previous instructions" not in json.dumps(payload).casefold()
     assert "system prompt" not in json.dumps(payload).casefold()
+
+
+def test_without_note_keeps_the_chips_and_drops_only_the_note() -> None:
+    request = MealPlanRequest.model_validate(
+        {
+            "source": "corpus",
+            "pantry": [],
+            "purchase_tolerance": 0.5,
+            "meals_per_week": 2,
+            "dietary_flags": [],
+            "max_active_time_mins": None,
+            "human_feedback": {"chips": ["guests"], "note": INJECTION},
+        }
+    )
+
+    stripped = without_note(request)
+
+    assert stripped.human_feedback == HumanFeedback(chips=[FeedbackChip.GUESTS], note=None)
+    assert request.human_feedback is not None
+    assert request.human_feedback.note == INJECTION
+    assert INJECTION not in stripped.model_dump_json()

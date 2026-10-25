@@ -882,3 +882,64 @@ class TestHumanFeedback:
         result = feedback_run.record.result
         assert result.degraded is True
         assert result.feedback_note == "not_a_preference"
+
+
+class TestRawNoteStaysOutOfTheGraph:
+    """The note is screened before the graph runs: its input, state and checkpoints only ever hold the outcome."""
+
+    @staticmethod
+    def _everything_checkpointed(feedback_run: Run) -> str:
+        config = {"configurable": {"thread_id": feedback_run.session.session_id}}
+        return "\n".join(
+            repr((saved.checkpoint, saved.metadata, saved.pending_writes))
+            for saved in feedback_run.checkpointer.list(config)
+        )
+
+    def test_a_rejected_note_is_in_no_checkpoint(self, tmp_path: Any, monkeypatch) -> None:
+        feedback_run = _feedback_run(tmp_path, monkeypatch, note=INJECTION, decisions=Decisions())
+
+        feedback_run.start(ScriptedModel(propose_first))
+
+        saved = self._everything_checkpointed(feedback_run)
+        assert saved
+        assert "IGNORE-PREVIOUS-INSTRUCTIONS" not in saved
+        assert "not_a_preference" in saved
+
+    def test_an_accepted_note_is_carried_only_as_screened_text(self, tmp_path: Any, monkeypatch) -> None:
+        feedback_run = _feedback_run(tmp_path, monkeypatch, note=WEEK_NOTE, decisions=Decisions())
+
+        feedback_run.start(ScriptedModel(propose_first))
+
+        config = {"configurable": {"thread_id": feedback_run.session.session_id}}
+        # Oldest first; the earliest checkpoint holding state is the graph's input as it was saved.
+        states = [
+            saved.checkpoint["channel_values"] for saved in reversed(list(feedback_run.checkpointer.list(config)))
+        ]
+        first = next(values for values in states if "request" in values)
+        assert first["request"]["human_feedback"]["note"] is None
+        assert first["feedback"]["note"] == WEEK_NOTE
+        assert all((values.get("request") or {}).get("human_feedback", {}).get("note") is None for values in states)
+
+    def test_the_graph_is_invoked_without_the_raw_note(self, tmp_path: Any, monkeypatch) -> None:
+        feedback_run = _feedback_run(tmp_path, monkeypatch, note=INJECTION, decisions=Decisions())
+        inputs: list[Any] = []
+        real_build = runtime.build_graph
+
+        def recording_build(*args: Any, **kwargs: Any) -> Any:
+            graph = real_build(*args, **kwargs)
+            real_invoke = graph.invoke
+
+            def invoke(graph_input: Any, *rest: Any, **options: Any) -> Any:
+                inputs.append(graph_input)
+                return real_invoke(graph_input, *rest, **options)
+
+            graph.invoke = invoke
+            return graph
+
+        monkeypatch.setattr(runtime, "build_graph", recording_build)
+
+        feedback_run.start(ScriptedModel(propose_first))
+
+        assert inputs
+        assert "IGNORE-PREVIOUS-INSTRUCTIONS" not in json.dumps(inputs, default=str)
+        assert inputs[0]["feedback"]["note_outcome"] == "not_a_preference"
