@@ -4,8 +4,8 @@
 SQS. `AGENT_RUNNER=inline` (unit tests and evals only) runs the agent in the request, with the
 in-memory store and saver, so CI needs no containers.
 
-Both runners go through `agent.start`, so the conditional claim and the terminal-status guarantee are
-the same code in a test as in production.
+Both runners go through `agent.deliver`, so the conditional claim, the swap and the terminal-status
+guarantee are the same code in a test as in production.
 """
 
 from collections.abc import Callable
@@ -15,8 +15,8 @@ from typing import Annotated, Any
 from fastapi import Depends
 
 from glean.agent.checkpoint import in_memory_checkpointer
-from glean.agent.deps import AgentDeps
-from glean.agent.runtime import start
+from glean.agent.deps import AgentDeps, decision_screen
+from glean.agent.runtime import deliver
 from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router
@@ -43,7 +43,7 @@ def get_session_dispatcher(
     sessions: Annotated[SessionStore, Depends(get_session_store)],
     decision_client: Annotated[DecisionClient, Depends(get_decision_client)],
 ) -> Callable[[AgentSession], None]:
-    """How a `queued` session reaches the agent: a message, or (inline) the run itself."""
+    """How a `queued` session reaches the agent: a message, or (inline) the run or swap itself."""
     if settings.agent_runner == "inline":
         deps = AgentDeps(
             sessions=sessions,
@@ -51,11 +51,12 @@ def get_session_dispatcher(
             llm_router=llm_router,
             clock=utcnow,
             decision_client=decision_client,
+            screen=decision_screen(decision_client),
         )
 
         def run_inline(session: AgentSession) -> None:
             try:
-                start(session, deps)
+                deliver(session, deps)
             except SessionBusyError:
                 # Inline there is no queue to send the work back to, and another attempt owns the run:
                 # leave it alone rather than failing a session that is still being planned.

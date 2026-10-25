@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from limits import parse
 from pydantic import SecretStr
 
+from glean.agent.dependencies import get_session_dispatcher, get_session_store
 from glean.catalogue.router import get_catalogue_store
 from glean.catalogue.seed import load_seed
 from glean.catalogue.store import InMemoryCatalogueStore
@@ -30,11 +31,13 @@ from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
 from glean.main import app
-from glean.meal_plan.schemas import MealPlanResponse
+from glean.meal_plan.schemas import MealPlanRequest, MealPlanResponse, MealPlanResult, MealPlanSuggestion
 from glean.receipts.schemas import ScanResponse
 from glean.recipe_api.blob_store import FilesystemBlobStore, get_shopping_parse_store
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import RecipeProvenance, StoredIngredient, StoredInstruction, StoredRecipe
+from glean.sessions.models import AgentSession, SwapState
+from glean.sessions.store import InMemorySessionStore, utcnow
 from glean.shopping.schemas import ShoppingParseResponse
 
 if TYPE_CHECKING:
@@ -145,6 +148,45 @@ def _no_recipes(tmp_path: Path) -> Iterator[None]:
 
 
 @contextmanager
+def _swappable_proposals(tmp_path: Path) -> Iterator[None]:
+    """A finished proposal for each test user, and a queue whose worker finds nothing to swap in at once.
+
+    The session table and the queue are the boundaries: every swap is accepted and finished before the next
+    request, so each one is a 202 until the limit refuses it.
+    """
+    sessions = InMemorySessionStore()
+    request = MealPlanRequest(
+        source="corpus",
+        pantry=[],
+        purchase_tolerance=0.3,
+        meals_per_week=1,
+        dietary_flags=[],
+        max_active_time_mins=None,
+    )
+    proposal = MealPlanResult(suggestions=[MealPlanSuggestion(external_id="rec_1", title="Dish", reason="r")])
+    for user in ("user-a", "user-b"):
+        sessions.create(AgentSession(session_id="sess-swap", user_sub=user, request=request), now=utcnow())
+        sessions.claim(user, "sess-swap", owner="first-run", now=utcnow(), lease_seconds=60)
+        sessions.complete(user, "sess-swap", proposal, owner="first-run")
+
+    def finish_at_once(session: AgentSession) -> None:
+        record = sessions.get(session.user_sub, session.session_id)
+        pending = None if record is None else record.pending_swap
+        assert pending is not None
+        sessions.claim(session.user_sub, session.session_id, owner="swap", now=utcnow(), lease_seconds=60)
+        swap = pending.model_copy(update={"state": SwapState.NO_REPLACEMENT})
+        sessions.finish_swap(session.user_sub, session.session_id, proposal, swap, owner="swap")
+
+    app.dependency_overrides[get_session_store] = lambda: sessions
+    app.dependency_overrides[get_session_dispatcher] = lambda: finish_at_once
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_session_store, None)
+        app.dependency_overrides.pop(get_session_dispatcher, None)
+
+
+@contextmanager
 def _catalogue_boundaries(tmp_path: Path) -> Iterator[None]:
     """The DynamoDB table is the boundary: the seed in memory stands in for it. A known name needs no model call."""
     catalogue = InMemoryCatalogueStore(load_seed().items)
@@ -195,6 +237,13 @@ AI_ROUTES = [
                 "max_active_time_mins": None,
             }
         },
+        success_status=202,
+    ),
+    AiRoute(
+        name="meal plan session message",
+        path="/meal-plan/sessions/sess-swap/messages",
+        boundaries=_swappable_proposals,
+        request_kwargs={"json": {"type": "swap", "slot": "rec_1", "note": None}},
         success_status=202,
     ),
     AiRoute(
