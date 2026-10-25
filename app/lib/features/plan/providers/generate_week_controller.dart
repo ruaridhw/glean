@@ -122,6 +122,15 @@ class ReplacedMeal {
   final MealPlanRecipe? alternativeShown;
 }
 
+/// One plain line on a card after a swap. [problem] is true when the swap itself did not work (it reads as an
+/// error); a swap that worked but dropped its note says so in a neutral voice.
+class CardNotice {
+  const CardNotice(this.text, {this.problem = true});
+
+  final String text;
+  final bool problem;
+}
+
 /// The card copy for a swap's outcomes. Plain words, never a status code.
 const String swapFailedCopy = "Couldn't find another right now. Try again.";
 const String swapNothingElseCopy = 'Nothing else fits this slot right now.';
@@ -147,7 +156,7 @@ class GenerateProposalState {
     this.cursor = 0,
     this.findingAnother,
     this.replacedFrom = const <int, ReplacedMeal>{},
-    this.cardNotices = const <int, String>{},
+    this.cardNotices = const <int, CardNotice>{},
   });
 
   final GenerateProposalPhase phase;
@@ -192,7 +201,7 @@ class GenerateProposalState {
   final Map<int, ReplacedMeal> replacedFrom;
 
   /// Index -> one plain line on that card: a swap's error, "nothing else fits", or "Couldn't use that note".
-  final Map<int, String> cardNotices;
+  final Map<int, CardNotice> cardNotices;
 
   bool isReplaced(int index) => replacedFrom.containsKey(index);
 
@@ -223,7 +232,7 @@ class GenerateProposalState {
     FindAnotherState? findingAnother,
     bool clearFindingAnother = false,
     Map<int, ReplacedMeal>? replacedFrom,
-    Map<int, String>? cardNotices,
+    Map<int, CardNotice>? cardNotices,
   }) => GenerateProposalState(
     phase: phase ?? this.phase,
     weekStart: weekStart,
@@ -373,7 +382,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     final int find = ++_finds;
     state = before._copy(
       findingAnother: FindAnotherState(index: index, note: sent),
-      cardNotices: Map<int, String>.of(before.cardNotices)..remove(index),
+      cardNotices: Map<int, CardNotice>.of(before.cardNotices)..remove(index),
     );
 
     final api = ref.read(apiClientProvider);
@@ -461,7 +470,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       swaps: Map<int, MealPlanRecipe>.of(state.swaps)
         ..remove(index)
         ..addAll(<int, MealPlanRecipe>{index: ?alternative}),
-      cardNotices: Map<int, String>.of(state.cardNotices)..remove(index),
+      cardNotices: Map<int, CardNotice>.of(state.cardNotices)..remove(index),
     );
   }
 
@@ -479,11 +488,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       state.phase == GenerateProposalPhase.proposal &&
       state.findingAnother != null;
 
-  void _endFind(int attempt, int find, int index, {String? notice}) {
+  void _endFind(
+    int attempt,
+    int find,
+    int index, {
+    String? notice,
+    bool problem = true,
+  }) {
     if (!_findsAnother(attempt, find)) return;
     state = state._copy(
       clearFindingAnother: true,
-      cardNotices: <int, String>{...state.cardNotices, index: ?notice},
+      cardNotices: <int, CardNotice>{
+        ...state.cardNotices,
+        if (notice != null) index: CardNotice(notice, problem: problem),
+      },
     );
   }
 
@@ -526,6 +544,8 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       notice: noteDropped || swap.note == MealPlanSwapNote.dropped
           ? swapNoteDroppedCopy
           : null,
+      // The swap worked; only its note was left out.
+      problem: false,
     );
   }
 

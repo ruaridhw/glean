@@ -419,6 +419,16 @@ void main() {
         _inCard(1, find.text('Garlic & chilli prawn linguine')),
         findsOneWidget,
       );
+      // The swap worked, so the line is neutral, not an error.
+      final BuildContext context = tester.element(
+        _inCard(1, find.text("Couldn't use that note")),
+      );
+      final ColorScheme colors = Theme.of(context).colorScheme;
+      final Text line = tester.widget<Text>(
+        _inCard(1, find.text("Couldn't use that note")),
+      );
+      expect(line.style?.color, colors.onSurfaceVariant);
+      expect(line.style?.color, isNot(colors.error));
     },
   );
 
@@ -502,6 +512,15 @@ void main() {
       await _findAnother(tester, 1);
 
       expect(_inCard(1, find.text(failure.copy)), findsOneWidget);
+      final Text line = tester.widget<Text>(
+        _inCard(1, find.text(failure.copy)),
+      );
+      expect(
+        line.style?.color,
+        Theme.of(
+          tester.element(_inCard(1, find.text(failure.copy))),
+        ).colorScheme.error,
+      );
       expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
       expect(find.textContaining('409'), findsNothing);
       // The card can try again.

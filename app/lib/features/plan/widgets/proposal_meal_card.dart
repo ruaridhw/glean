@@ -10,7 +10,8 @@ import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/design_system/design_system.dart';
 
 import '../proposal_labels.dart';
-import '../providers/generate_week_controller.dart' show FindAnotherState;
+import '../providers/generate_week_controller.dart'
+    show CardNotice, FindAnotherState;
 
 /// Progress lines as they arrive: a tick for each finished line and a spinner on the newest. The working screen
 /// and a card finding another meal draw them the same way.
@@ -275,7 +276,7 @@ class ProposalMealCard extends StatelessWidget {
   final ValueChanged<String?>? onFindAnother;
   final bool findAnotherEnabled;
   final FindAnotherState? finding;
-  final String? notice;
+  final CardNotice? notice;
 
   /// True when "Find another" brought [meal] in, so the card offers Undo swap.
   final bool replaced;
@@ -364,8 +365,12 @@ class ProposalMealCard extends StatelessWidget {
             if (notice != null) ...<Widget>[
               SizedBox(height: tokens.spacing.xs),
               Text(
-                notice!,
-                style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+                notice!.text,
+                style: textTheme.bodySmall?.copyWith(
+                  color: notice!.problem
+                      ? colorScheme.error
+                      : colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
             if (replaced && onUndoReplacement != null && !swapOpen)
