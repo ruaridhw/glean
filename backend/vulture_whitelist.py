@@ -191,3 +191,7 @@ degraded_reason  # PlanState key: why finalise wrote the scorer's week, logged w
 
 # screening.py (the injection screen, ported unchanged from the taste interview)
 clear_screen_cache  # screening.py, called by the tests to start from a cold cache
+
+# meal_plan/schemas.py (V9): the week feedback
+_each_chip_once  # Pydantic field validator (HumanFeedback.chips)
+feedback_note  # MealPlanResult field, read by the app
