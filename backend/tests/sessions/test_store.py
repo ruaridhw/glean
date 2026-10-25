@@ -879,16 +879,6 @@ def test_a_meal_already_in_the_plan_is_not_a_slot_a_swap_can_replace(store: tupl
     assert record.swaps == []
 
 
-def test_the_slot_is_placed_by_the_week_the_app_shows(store: tuple[SessionStore, Clock]) -> None:
-    """The app put the cards in the other order on screen? The week it sends says where the slot is."""
-    sessions, clock = store
-    _done(sessions, clock)
-
-    swap = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2", week=["rec_2", "rec_1"]))
-
-    assert swap.position == 0
-
-
 @pytest.mark.parametrize(
     "week",
     [
@@ -897,8 +887,9 @@ def test_the_slot_is_placed_by_the_week_the_app_shows(store: tuple[SessionStore,
         ["rec_2", "rec_2"],
         ["rec_1", "rec_invented"],
         ["rec_1", "rec_planned"],
+        ["rec_2", "rec_1"],
     ],
-    ids=["too_short", "too_long", "repeated", "unknown_id", "planned_meal"],
+    ids=["too_short", "too_long", "repeated", "unknown_id", "planned_meal", "permuted"],
 )
 def test_a_week_that_does_not_match_the_proposal_is_refused(store: tuple[SessionStore, Clock], week: list[str]) -> None:
     sessions, clock = store

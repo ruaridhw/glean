@@ -295,6 +295,19 @@ class SessionRecord(BaseModel):
                     known.add(suggestion.alternative.external_id)
         return known - set(self.request.exclude_external_ids)
 
+    def meal_ids_at(self, position: int) -> set[str]:
+        """Every id that has stood on card *position*: its meal and alternative now, what swaps replaced there, and
+        what the app showed there when it asked for one. A week naming an id at any other card is not this week.
+        """
+        at = {swap.slot for swap in self.swaps if swap.position == position}
+        at |= {swap.week[position] for swap in self.swaps if position < len(swap.week)}
+        if self.result is not None and position < len(self.result.suggestions):
+            suggestion = self.result.suggestions[position]
+            at |= {suggestion.external_id} if suggestion.external_id else set()
+            if suggestion.alternative is not None and suggestion.alternative.external_id:
+                at.add(suggestion.alternative.external_id)
+        return at - set(self.request.exclude_external_ids)
+
     def with_swap(
         self, message: SwapMessage, *, position: int, now: int, note_rejection: str | None = None
     ) -> tuple[SessionRecord, SwapRecord]:
