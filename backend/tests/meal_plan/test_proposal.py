@@ -849,3 +849,38 @@ def test_a_recipe_the_floor_relaxed_is_not_offered_as_a_swap(tmp_path: Path, cap
     }
 
     assert relaxed_id not in offered_as_swap
+
+
+def test_a_relaxed_recipe_that_only_the_other_week_has_is_never_a_swap(tmp_path: Path) -> None:
+    # The reviewer's case: the other candidate week differs only by a recipe the six-week floor relaxed back in.
+    # It is the swap the scorer would suggest and exactly the one a card must not offer while fresh spares exist.
+    prepared = _prepared(tmp_path, meals_per_week=2)
+    fresh_a, fresh_b, relaxed = prepared.offered_ids[0], prepared.offered_ids[1], prepared.offered_ids[2]
+    prepared = prepared.model_copy(
+        update={
+            "facts": [
+                fact.model_copy(update={"offered_after_floor_relaxed": fact.recipe_id == relaxed})
+                for fact in prepared.facts
+            ],
+            "weeks": [
+                balance.CandidateWeek(recipe_ids=[fresh_a, fresh_b], total=10.0),
+                balance.CandidateWeek(recipe_ids=[fresh_a, relaxed], total=9.0),
+            ],
+        }
+    )
+
+    result = pipeline.finalise(
+        prepared,
+        CorpusMealPlanResponse(
+            week_summary="Two dinners.",
+            chosen_week=0,
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=external_id, title=prepared.titles[external_id], reason="Fine.")
+                for external_id in (fresh_a, fresh_b)
+            ],
+        ),
+    )
+    alternatives = [suggestion.alternative for suggestion in result.suggestions]
+
+    assert all(alternative is not None for alternative in alternatives)
+    assert relaxed not in {alternative.external_id for alternative in alternatives if alternative}
