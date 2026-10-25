@@ -108,6 +108,8 @@ _ALL_RECIPES = 1_000_000
 # Template text for a proposal the server had to write itself: spec §6.2's degraded fallback.
 _TEMPLATE_MEAL_REASON = "A reliable pick for this week."
 _TEMPLATE_ALTERNATIVE_REASON = "Another option from this week's shortlist."
+# The reason a swap's fallback replacement carries: the scorer picked it, so all it can honestly say is the fit.
+TEMPLATE_SWAP_REASON = "Swapped in as the best fit with the rest of your week."
 NO_MEALS_WEEK_SUMMARY = "No dinners for this week."
 
 _MAX_CANDIDATE_INGREDIENTS = 12
@@ -818,6 +820,73 @@ def _clip(text: str, chars: int) -> str:
     if len(text) <= chars:
         return text
     return f"{text[: chars - 1]}…"
+
+
+def replacement(
+    prepared: PreparedPlan,
+    pick: CorpusMealPlanAlternative | None,
+    *,
+    locked: Sequence[str],
+    unavailable: set[str],
+) -> tuple[MealPlanSuggestion, bool] | None:
+    """The meal that replaces one slot (spec §6.2 "Swap"), and whether it is the fallback; None if nothing is left.
+
+    The model's *pick* is kept, with its reason, when the week may use it: offered or found by a tool (so the
+    dietary decisions, the time cap and the floor held), not already planned (ADR 0020), and not in *unavailable*
+    -- the rest of the week, the cards' alternatives and what the household swapped out. Otherwise the scorer's
+    best replacement for the *locked* meals is used, with template text.
+    """
+    blocked = unavailable | set(prepared.excluded_ids)
+    if pick is not None:
+        if pick.external_id in set(prepared.offered_ids) and pick.external_id not in blocked:
+            return _suggestion_for(pick, prepared), False
+        logger.error("dropping a swap the week may not use", extra={"external_id": pick.external_id})
+    fallback = best_replacement(prepared, locked=locked, unavailable=blocked)
+    if fallback is None:
+        return None
+    items = _urgent_items(prepared, fallback)
+    template = CorpusMealPlanAlternative(
+        external_id=fallback,
+        title=prepared.titles.get(fallback, fallback),
+        reason=TEMPLATE_SWAP_REASON,
+        reason_kind=ReasonKind.URGENT_ITEM if items else ReasonKind.BALANCE,
+    )
+    return _suggestion_for(template, prepared), True
+
+
+def best_replacement(prepared: PreparedPlan, *, locked: Sequence[str], unavailable: set[str]) -> str | None:
+    """The free candidate that scores best beside the *locked* meals: a swap's degraded fallback.
+
+    Candidates are tried fresh first (`_spare_order`), so a tie goes to one the six-week floor did not have to let
+    back in. A prepared plan from before V6 has nothing scored and takes the first free candidate.
+    """
+    free = [external_id for external_id in _spare_order(prepared) if external_id not in unavailable]
+    if not free or not prepared.facts:
+        return free[0] if free else None
+    context = scoring_context_of(prepared)
+    kept = [external_id for external_id in locked if external_id in context.recipes]
+    scored = [external_id for external_id in free if external_id in context.recipes] or free[:1]
+    return max(scored, key=lambda external_id: _week_total(context, [*kept, external_id]))
+
+
+def _week_total(context: tools.ScoringContext, recipe_ids: Sequence[str]) -> float:
+    try:
+        return tools.score_meal_plan(recipe_ids, context).total
+    except (tools.UnknownRecipeIds, tools.DuplicateRecipeIds):
+        return float("-inf")
+
+
+def with_replacement(base: MealPlanResult, position: int, meal: MealPlanSuggestion) -> MealPlanResult:
+    """*base* with *meal* in slot *position* and every other slot as it was.
+
+    The card keeps its alternative, so "Use alternative" still works after a swap -- unless the alternative is the
+    meal that just came in, when there is nothing else to offer.
+    """
+    previous = base.suggestions[position].alternative
+    alternative = None if previous is None or previous.external_id == meal.external_id else previous
+    suggestions = list(base.suggestions)
+    suggestions[position] = meal.model_copy(update={"alternative": alternative})
+    return base.model_copy(update={"suggestions": suggestions})
 
 
 def _week_summary(summary: str, *, count: int) -> str:
