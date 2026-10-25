@@ -27,6 +27,7 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.sessions.models import (
     AnswerMessage,
+    HouseholdReply,
     SessionStatus,
     SessionView,
     SkipMessage,
@@ -42,7 +43,7 @@ from glean.sessions.store import (
     MessageRefusedError,
     SessionBusyError,
 )
-from tests.agent.test_graph import KOREAN_ID, Run, call, propose_first
+from tests.agent.test_graph import KOREAN_ID, Run, ask, call, propose_first
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -619,3 +620,38 @@ class TestWeekNote:
         assert latest is not None
         prepared = latest.checkpoint["channel_values"]["prepared"]
         assert prepared["feedback"]["chips"] == [FeedbackChip.HEALTHIER.value]
+
+
+class TestSwapAfterTheQuestion:
+    def test_a_swap_has_its_own_budget_after_the_week_asked_its_question(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = Run(tmp_path, monkeypatch)
+
+        def ask_after_a_minute(_context: dict[str, Any]) -> dict[str, Any]:
+            run.clock.advance(60)
+            return ask()
+
+        def look_after(seconds: float) -> Step:
+            def step(_context: dict[str, Any]) -> dict[str, Any]:
+                run.clock.advance(seconds)
+                return call("get_recipes", ids=["rec_01"])
+
+            return step
+
+        start(run.session, run.deps(Model(plan=[ask_after_a_minute])))  # ty: ignore[invalid-argument-type]
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No"))
+        start(run.session, run.deps(Model(plan=[propose_first])))  # ty: ignore[invalid-argument-type]
+        week = [meal.external_id or "" for meal in run.record.result.suggestions]
+        run.sessions.enqueue_swap(
+            "user-a", "sess-1", SwapMessage(type="swap", slot=week[1], note=None, week=week), note_rejection=None
+        )
+        swapping = Model(swap=[look_after(40), replace_with(a_free_candidate)])
+
+        start(run.session, run.deps(swapping))  # ty: ignore[invalid-argument-type]
+
+        # The week's minute before its question is the week's: the swap's 90 s start at zero, so 40 s in, its
+        # tool runs and the model is asked again for the replacement.
+        assert run.record.swaps[-1].state is SwapState.DONE
+        assert len(swapping.users(SwapStep)) == 2
+        assert run.record.result.suggestions[1].reason.startswith("Lighter, as you asked.")

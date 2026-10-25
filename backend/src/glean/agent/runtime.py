@@ -388,8 +388,10 @@ def _run(
     }
     snapshot = graph.get_state(config)  # ty: ignore[invalid-argument-type]
     # The 90 s are working time: a run that asked its question already spent some, and the household's
-    # thinking time since then is on no clock at all.
-    guard.carry(float(snapshot.values.get("working_seconds") or 0.0))
+    # thinking time since then is on no clock at all. A swap is new work with its own 90 s, whatever the week
+    # it changes spent.
+    if record.pending_swap is None:
+        guard.carry(float(snapshot.values.get("working_seconds") or 0.0))
     # What the item holds, then what the previous attempt left behind, decides how this one starts:
     #   1. a pending answer or skip -> resume the run parked on its question (V11, `Command(resume=...)`);
     #   2. a pending swap -> continue it, republish it, or run it from its input (`_swap_state`);
