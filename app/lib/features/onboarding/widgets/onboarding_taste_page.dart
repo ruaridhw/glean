@@ -105,7 +105,7 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
       // summary to try again rather than marking the step passed with nothing stored.
       GleanSnackBar.show(
         context,
-        'Could not save your profile — you can set it up later in Settings.',
+        'Could not save your profile. Try again, or Skip all.',
       );
       return;
     }
