@@ -122,8 +122,8 @@ def test_the_weights_are_the_scorer_table_defaults() -> None:
     assert weights.repeat_dish_type == -2.0
     assert weights.repeat_cuisine == -1.0
     assert weights.whole_food == 0.5
-    assert weights.healthier_multiplier == 2.0
-    assert weights.lighter == -1.0
+    assert weights.healthier_multiplier == 3.0
+    assert weights.lighter == -2.0
     assert weights.lighter_reference_kcal == 672
     assert weights.protein_target_miss == -4.0
     assert weights.unused_urgent_item == -4.0
@@ -205,9 +205,9 @@ def test_whole_food_earns_its_half_point_only_when_the_recipe_is_whole() -> None
     assert score(["unknown"], ctx).points(Term.WHOLE_FOOD) == 0.0
 
 
-def test_the_healthier_chip_doubles_whole_food() -> None:
+def test_the_healthier_chip_triples_whole_food() -> None:
     ctx = context(candidate("a", whole_food=WholeFood.WHOLE), chips=frozenset({"healthier"}))
-    assert score(["a"], ctx).points(Term.WHOLE_FOOD) == 1.0
+    assert score(["a"], ctx).points(Term.WHOLE_FOOD) == 1.5
     assert score(["a"], context(candidate("a", whole_food=WholeFood.WHOLE))).points(Term.WHOLE_FOOD) == 0.5
 
 
@@ -312,7 +312,7 @@ def test_healthier_and_lighter_work_through_their_own_rows_not_a_chip_predicate(
     )
     plan = score(["a"], ctx)
     assert plan.points(Term.FEEDBACK_CHIP) == 0.0
-    assert plan.points(Term.WHOLE_FOOD) == 1.0
+    assert plan.points(Term.WHOLE_FOOD) == 1.5
     assert plan.points(Term.LIGHTER) == 0.0
 
 
@@ -467,7 +467,7 @@ def test_a_repeated_none_carb_still_costs_its_row() -> None:
 # --- plan penalties: the lighter chip and protein targets -------------------------------------------------
 
 
-def test_the_lighter_chip_costs_a_point_per_recipe_above_the_fixed_reference() -> None:
+def test_the_lighter_chip_costs_two_points_per_recipe_above_the_fixed_reference() -> None:
     ctx = context(
         candidate("light", calories=400, main_protein=MainProtein.NONE),
         candidate("at-the-line", calories=672, main_protein=MainProtein.NONE),
@@ -475,7 +475,7 @@ def test_the_lighter_chip_costs_a_point_per_recipe_above_the_fixed_reference() -
         chips=frozenset({LIGHTER_CHIP}),
     )
     plan = score(["light", "at-the-line", "heavy"], ctx)
-    assert plan.points(Term.LIGHTER) == -1.0
+    assert plan.points(Term.LIGHTER) == -2.0
     (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.LIGHTER]
     assert penalty.recipe_ids == ("heavy",)
     assert "672" in penalty.detail
@@ -504,7 +504,7 @@ def test_a_recipe_with_unknown_calories_is_never_under_the_lighter_reference() -
     plan = score(["light", "unmeasured"], ctx)
     (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.LIGHTER]
     assert penalty.recipe_ids == ("unmeasured",)
-    assert plan.points(Term.LIGHTER) == -1.0
+    assert plan.points(Term.LIGHTER) == -2.0
 
 
 def test_a_week_with_no_stated_calories_counts_every_recipe_as_above() -> None:
@@ -514,7 +514,7 @@ def test_a_week_with_no_stated_calories_counts_every_recipe_as_above() -> None:
         chips=frozenset({LIGHTER_CHIP}),
     )
     plan = score(["unmeasured", "also-unmeasured"], ctx)
-    assert plan.points(Term.LIGHTER) == -2.0
+    assert plan.points(Term.LIGHTER) == -4.0
 
 
 def test_the_lighter_term_is_absent_without_the_chip() -> None:
