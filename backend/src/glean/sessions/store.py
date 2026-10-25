@@ -241,14 +241,19 @@ def swap_placement(record: SessionRecord, message: SwapMessage) -> int | Message
     """Where *message*'s slot sits in the week it names, or why the swap is refused.
 
     The slot must be a meal this proposal put on a card (never one already in the plan, ADR 0020). The week must
-    have one id per card, each one this proposal offered, none twice, with the slot among them.
+    have one id per card, each one that has stood on its own card (so a permuted week is refused), none twice,
+    with the slot among them.
     """
-    known = record.known_meal_ids()
-    if message.slot not in known:
+    if message.slot not in record.known_meal_ids():
         return MessageRefusal.UNKNOWN_SLOT
     week = message.week
     cards = len(record.result.suggestions) if record.result is not None else 0
-    if len(week) != cards or len(set(week)) != len(week) or not set(week) <= known or message.slot not in week:
+    if (
+        len(week) != cards
+        or len(set(week)) != len(week)
+        or any(meal not in record.meal_ids_at(position) for position, meal in enumerate(week))
+        or message.slot not in week
+    ):
         return MessageRefusal.INVALID_WEEK
     return week.index(message.slot)
 
