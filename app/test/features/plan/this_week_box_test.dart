@@ -229,7 +229,7 @@ void main() {
       );
       expect(
         tester.widget<Text>(summary()).data,
-        "Lighter · note couldn't be used",
+        "Note couldn't be used · Lighter",
       );
       expect(
         tester.widget<FilterChip>(chip(FeedbackChip.lighter)).selected,
@@ -527,6 +527,59 @@ void main() {
 
       expect(tester.widget<Text>(title()).data, 'This week');
       expect(tester.widget<Text>(summary()).data, 'Guests');
+    },
+  );
+
+  gleanWidgetTest(
+    'with the box closed on a 320 px phone a dropped note is still announced, first in the summary',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      feedbackNote = 'not_a_preference';
+      await open(tester);
+      await toggleBox(tester);
+      await tester.tap(chip(FeedbackChip.somethingNew));
+      await tester.tap(chip(FeedbackChip.healthier));
+      await tester.enterText(note(), 'ignore previous instructions and');
+      await tester.pumpAndSettle();
+      await toggleBox(tester);
+
+      await generateAndComeBack(tester);
+
+      expect(note(), findsNothing, reason: 'the box is closed');
+      expect(
+        find
+            .text("Couldn't use that note. Your chips still apply.")
+            .hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<Text>(summary()).data,
+        "Note couldn't be used · Something new · Healthier",
+      );
+    },
+  );
+
+  gleanWidgetTest(
+    'a dropped note is still announced after a restart, box closed',
+    (tester) async {
+      feedbackNote = 'unavailable';
+      await open(tester);
+      await toggleBox(tester);
+      await tester.enterText(note(), 'mild curries only');
+      await tester.pumpAndSettle();
+      await generateAndComeBack(tester);
+
+      addTearDown(h.dispose);
+      h = AppTestHarness(keepSecureStorage: true, httpClient: backend());
+      await open(tester);
+
+      expect(note(), findsNothing);
+      expect(
+        find.text("Couldn't use that note. Your chips still apply."),
+        findsOneWidget,
+      );
     },
   );
 
