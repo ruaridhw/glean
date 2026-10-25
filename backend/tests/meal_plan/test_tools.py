@@ -120,6 +120,7 @@ def test_the_weights_are_the_scorer_table_defaults() -> None:
     assert weights.lighter == -1.0
     assert weights.lighter_reference_kcal == 672
     assert weights.protein_target_miss == -4.0
+    assert weights.unused_urgent_item == -4.0
 
 
 def test_a_scorer_weights_override_is_the_one_the_plan_is_scored_with() -> None:
@@ -462,8 +463,11 @@ def test_every_row_of_the_scorer_table_is_scored() -> None:
             cuisine=Cuisine.INDIAN,
             calories=900,
         ),
+        # Offered and urgent, but this week does not cook it: the unused-urgent row's input.
+        candidate("salmon", main_protein=MainProtein.FISH, main_carb=MainCarb.NONE, calories=400),
         chips=frozenset({LIGHTER_CHIP}),
         protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=1),),
+        urgent_item_uses={"salmon": ("salmon fillet",)},
     )
     plan = score(["a", "b"], ctx)
     scored = {term_score.term for recipe in plan.recipes for term_score in recipe.terms}
@@ -804,8 +808,10 @@ def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
         candidate("a", main_protein=MainProtein.CHICKEN, cuisine=Cuisine.THAI, calories=400),
         candidate("b", main_protein=MainProtein.CHICKEN, cuisine=Cuisine.THAI, calories=900),
         candidate("c", main_protein=MainProtein.FISH, cuisine=Cuisine.THAI, calories=None),
+        candidate("salmon", main_protein=MainProtein.FISH, main_carb=MainCarb.NONE),
         chips=frozenset({LIGHTER_CHIP, "healthier"}),
         protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=2),),
+        urgent_item_uses={"salmon": ("salmon fillet", "coriander")},
     )
     scorer = _Scorer(ctx, ScorerWeights())
     plan = scorer.score(["a", "b", "c"])
@@ -1015,3 +1021,83 @@ def test_the_alternative_week_keeps_the_strongest_recipe_and_differs_by_one_swap
     assert "dominant" in alternative.recipe_ids
     assert len(set(best.recipe_ids) ^ set(alternative.recipe_ids)) == 2
     assert chosen_vs_best_ratio(alternative, best) > 0.85
+
+
+# --- plan penalties: urgent items the week leaves unused ---------------------------------------------------
+
+
+def test_an_urgent_item_the_pool_could_use_and_the_week_does_not_costs_four() -> None:
+    # Owner decision 2026-10-25: #122's criterion as a plan-level row, so urgent coverage does not have to
+    # out-bid a repeat penalty through pantry fit.
+    ctx = context(
+        candidate("chicken", main_protein=MainProtein.CHICKEN, main_carb=MainCarb.RICE),
+        candidate("salmon", main_protein=MainProtein.FISH, main_carb=MainCarb.NONE),
+        urgent_item_uses={"salmon": ("salmon fillet",)},
+    )
+    skipping = score(["chicken"], ctx)
+    (penalty,) = [penalty for penalty in skipping.penalties if penalty.term is Term.UNUSED_URGENT_ITEM]
+    assert penalty.points == -4.0
+    assert penalty.detail == "salmon fillet"
+    assert skipping.points(Term.UNUSED_URGENT_ITEM) == -4.0
+    # Cooking the recipe that uses it is what the week is for, so the row costs nothing then.
+    assert score(["chicken", "salmon"], ctx).points(Term.UNUSED_URGENT_ITEM) == 0.0
+
+
+def test_every_unused_urgent_item_costs_its_own_four() -> None:
+    ctx = context(
+        candidate("chicken"),
+        candidate("salmon"),
+        candidate("herby"),
+        # One recipe uses two items; another uses one. The week uses neither recipe.
+        urgent_item_uses={"salmon": ("salmon fillet",), "herby": ("coriander", "salmon fillet")},
+    )
+    plan = score(["chicken"], ctx)
+
+    assert plan.points(Term.UNUSED_URGENT_ITEM) == -8.0  # two items, one penalty line each
+    assert sorted(penalty.detail for penalty in plan.penalties if penalty.term is Term.UNUSED_URGENT_ITEM) == [
+        "coriander",
+        "salmon fillet",
+    ]
+
+
+def test_an_urgent_item_used_by_any_meal_of_the_week_is_covered() -> None:
+    ctx = context(
+        candidate("chicken"),
+        candidate("salmon"),
+        candidate("herby"),
+        urgent_item_uses={"salmon": ("salmon fillet",), "herby": ("coriander", "salmon fillet")},
+    )
+    plan = score(["chicken", "herby"], ctx)
+
+    assert plan.points(Term.UNUSED_URGENT_ITEM) == 0.0
+
+
+def test_an_urgent_item_no_candidate_uses_costs_nothing() -> None:
+    # The penalty is about the offer, not about the pantry: an item no recipe in the pool can use is nobody's.
+    ctx = context(
+        candidate("chicken"),
+        candidate("salmon"),
+        urgent_item_uses={},
+    )
+
+    assert score(["chicken"], ctx).points(Term.UNUSED_URGENT_ITEM) == 0.0
+
+
+def test_the_unused_urgent_row_reaches_the_weeks_a_generator_offers() -> None:
+    # A salmon recipe that scores less on its own is still worth taking while the pool can use the salmon.
+    built = [
+        CandidateRecipe(
+            recipe_id="chicken", attributes=RecipeAttributes(main_protein=MainProtein.CHICKEN), pantry_fit=2.0
+        ),
+        CandidateRecipe(recipe_id="beef", attributes=RecipeAttributes(main_protein=MainProtein.BEEF), pantry_fit=1.9),
+        CandidateRecipe(recipe_id="salmon", attributes=RecipeAttributes(main_protein=MainProtein.FISH), pantry_fit=1.0),
+    ]
+    ctx = ScoringContext(
+        recipes={entry.recipe_id: entry for entry in built},
+        urgent_item_uses={"salmon": ("salmon fillet",)},
+    )
+
+    week = create_candidate_meal_plans(["chicken", "beef", "salmon"], 2, ctx, k=1)[0]
+
+    assert "salmon" in week.recipe_ids
+    assert week.points(Term.UNUSED_URGENT_ITEM) == 0.0

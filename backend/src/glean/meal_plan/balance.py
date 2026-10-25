@@ -61,6 +61,13 @@ class RecipeFacts(BaseModel):
     days_since_cooked: float | None = None
     rating: Rating | None = None
     offered_after_floor_relaxed: bool = False
+    urgent_items: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "The urgent pantry items this recipe uses, by name (V4's three-day rule). The pool's urgent items are "
+            "the ones a week could use, and the ones it leaves out are penalised (spec 6.2, #122)."
+        ),
+    )
 
     def scorer_input(self) -> CandidateRecipe:
         """The plain dataclass `score_meal_plan` takes, with the attributes typed and `unsure` where empty."""
@@ -131,12 +138,15 @@ def facts_from(
     attributes: Mapping[str, RecipeAttributes],
     calories: Mapping[str, float | None],
     history: RecipeHistory,
+    urgent_items: Mapping[str, Sequence[str]] | None = None,
 ) -> list[RecipeFacts]:
     """One `RecipeFacts` per offered recipe: the scorer's whole view of what the household may be offered.
 
     `offered` carries the urgency-weighted pantry fit and, for a recipe the six-week floor relaxed back in,
     how long ago it was cooked. `history` supplies every candidate's cook age and latest thumb, so the
-    recency and rating rows can be scored for the fresh candidates too.
+    recency and rating rows can be scored for the fresh candidates too. `urgent_items` is V4's name per recipe
+    of the pantry items going off within three days it uses, which is what the week either uses or is charged
+    for leaving (spec 6.2, #122).
     """
     top = max((candidate.pantry_fit for candidate in offered), default=0.0)
     scale = PANTRY_FIT_TOP / top if top > 0 else 0.0
@@ -149,6 +159,7 @@ def facts_from(
             days_since_cooked=history.days_since_cooked.get(recipe.external_id),
             rating=_rating(history.latest_rating.get(recipe.external_id)),
             offered_after_floor_relaxed=recipe.cooked_days_ago is not None,
+            urgent_items=tuple((urgent_items or {}).get(recipe.external_id, ())),
         )
         for recipe in offered
     ]
@@ -156,7 +167,11 @@ def facts_from(
 
 def scoring_context(facts: Sequence[RecipeFacts], *, chips: Collection[str] = frozenset()) -> ScoringContext:
     """The context the scorer reads: the facts, and the week's feedback chips. Profile inputs wait for V13."""
-    return ScoringContext(recipes={entry.recipe_id: entry.scorer_input() for entry in facts}, chips=frozenset(chips))
+    return ScoringContext(
+        recipes={entry.recipe_id: entry.scorer_input() for entry in facts},
+        chips=frozenset(chips),
+        urgent_item_uses={entry.recipe_id: entry.urgent_items for entry in facts if entry.urgent_items},
+    )
 
 
 def scored_weeks(
@@ -198,6 +213,11 @@ def swap_targets(
                 targets[position] = candidate
                 break
     return targets
+
+
+def unused_urgent_items(week: CandidateWeek) -> tuple[str, ...]:
+    """The urgent items the week leaves unused, in name order: the rows its `unused_urgent_item` penalty names."""
+    return tuple(penalty.detail for penalty in week.penalties if penalty.term == Term.UNUSED_URGENT_ITEM.value)
 
 
 def drift(chosen_ids: Sequence[str], best_ids: Sequence[str], context: ScoringContext) -> PlanGap:

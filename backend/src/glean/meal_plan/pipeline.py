@@ -243,6 +243,9 @@ def prepare(
             cooked=cooked,
             now=request_now,
         ),
+        # V4's urgent uses, by item name: the pool's urgent items are what the scorer charges the week for
+        # leaving out (spec 6.2, #122).
+        urgent_items={external_id: tuple(item.name for item in items) for external_id, items in urgent_uses.items()},
     )
     # Drawn after the sampler, so the offered list does not depend on how many numbers the scorer's tie-break
     # takes; one seed still plans one week, which is what a resumed session needs.
@@ -261,6 +264,7 @@ def prepare(
             "urgent_pantry_items": len({item.name for items in urgent_uses.values() for item in items}),
             "planned_meals": len(planned),
             "candidate_weeks": len(weeks),
+            "best_week_unused_urgent_items": len(balance.unused_urgent_items(weeks[0])) if weeks else 0,
         },
     )
     context = {
