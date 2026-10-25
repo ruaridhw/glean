@@ -184,3 +184,7 @@ CUISINE  # PredicateField member, as above
 NOT_IN  # PredicateOp member, from the spec's filter shape; V9's chips write it
 detail  # PlanPenalty field: the value, median or target the penalty is about
 within_15_percent  # PlanGap: the eval's within-15% gate, read by the evals (6.6) and V7
+
+# agent/graph.py (V7): PlanState keys LangGraph merges into the checkpointed state; nodes read them with .get()
+invalid_actions  # PlanState key: answers that did not parse as a NextAction, counted for the session metrics
+degraded_reason  # PlanState key: why finalise wrote the scorer's week, logged with the session metrics

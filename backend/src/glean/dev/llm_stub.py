@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from glean.agent.actions import PlanStep, Propose
 from glean.meal_plan.schemas import CorpusMealPlanRecipe, CorpusMealPlanResponse, ReasonKind
 
 
@@ -18,9 +19,15 @@ class StubMealPlanRouter:
     """In place of `LLMRouter` for the local queue consumer."""
 
     def invoke(self, _feature: object, schema: type, *, user: str, **_kwargs: object) -> Any:
+        if schema is PlanStep:
+            # The agent's `plan` node (V7): propose at once, the same week the sync route would get.
+            return PlanStep(action=Propose(kind="propose", proposal=self._week(json.loads(user))))
         if schema is not CorpusMealPlanResponse:
             raise NotImplementedError(f"the local stub only plans from the corpus, not {schema.__name__}")
-        context = json.loads(user)
+        return self._week(json.loads(user))
+
+    @staticmethod
+    def _week(context: dict[str, Any]) -> CorpusMealPlanResponse:
         return CorpusMealPlanResponse(
             week_summary="A week of quick dinners.",
             suggestions=[

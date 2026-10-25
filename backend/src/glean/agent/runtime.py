@@ -35,12 +35,14 @@ from pydantic import ValidationError
 
 from glean.agent.control import LostOwnership, RunGuard
 from glean.agent.errors import AgentError, SessionCancelled
-from glean.agent.graph import build_graph, result_of
+from glean.agent.graph import MAX_TOOL_CALLS, build_graph, result_of, session_metrics_of
 from glean.observability import logger, metrics
 from glean.sessions.models import ClaimResult, SessionError, SessionErrorCode, SessionStatus
 from glean.sessions.store import SessionBusyError, SessionTooLargeError, lease_seconds_for
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from glean.agent.deps import AgentDeps
     from glean.meal_plan.schemas import MealPlanResult
     from glean.sessions.models import AgentSession
@@ -49,6 +51,8 @@ if TYPE_CHECKING:
 # CloudWatch metric names, all in the `Glean` namespace:
 #   SessionsStarted, SessionsCompleted, SessionsFailed, SessionsDegraded, SessionsCancelled  Count
 #   SessionWallTime                                                                         Milliseconds
+#   SessionToolCalls, SessionInvalidActions (per completed session)                         Count
+#   SessionDrift (chosen week's shortfall from the scorer's best, spec §6.6)                Percent
 # A degraded week is a fallback the household never sees (spec §6.5), so the count is how a regression
 # in the model's answer shows up at all. A cancelled one is work the household called off.
 STARTED = "SessionsStarted"
@@ -57,6 +61,9 @@ FAILED = "SessionsFailed"
 DEGRADED = "SessionsDegraded"
 CANCELLED = "SessionsCancelled"
 WALL_TIME = "SessionWallTime"
+TOOL_CALLS = "SessionToolCalls"
+INVALID_ACTIONS = "SessionInvalidActions"
+DRIFT = "SessionDrift"
 
 
 def cancel(session_id: str, *, user_sub: str, sessions: SessionStore) -> bool:
@@ -98,7 +105,8 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
     metrics.add_metric(name=STARTED, unit=MetricUnit.Count, value=1)
     guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic)
     try:
-        result = _run(session, deps, guard=guard, resume=outcome is ClaimResult.RESUMED)
+        state = _run(session, deps, guard=guard, resume=outcome is ClaimResult.RESUMED)
+        result = result_of(state)
     except SessionCancelled:
         _cancelled(deps, session, "the run stopped at its next step")
     except LostOwnership:
@@ -116,7 +124,14 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
         _failed(deps, session, SessionError(code=SessionErrorCode.WORKER_FAILED), owner=owner)
     else:
         try:
-            _completed(deps, session, result, owner=owner)
+            _completed(
+                deps,
+                session,
+                result,
+                owner=owner,
+                session_metrics=session_metrics_of(state),
+                wall_ms=int((time.monotonic() - started) * 1000),
+            )
         except SessionTooLargeError:
             # The plan is real but the item cannot hold it, and there is nowhere else to put it: fail the
             # session with a code the app can act on instead of raising into SQS.
@@ -132,14 +147,16 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
     return True
 
 
-def _run(session: AgentSession, deps: AgentDeps, *, guard: RunGuard, resume: bool):
+def _run(session: AgentSession, deps: AgentDeps, *, guard: RunGuard, resume: bool) -> Mapping[str, Any]:
+    """The graph's final state: the plan `finalise` wrote, and the session metrics beside it."""
     graph = build_graph(deps, guard=guard)
     # LangGraph's RunnableConfig is a plain mapping; naming its type would import LangChain into this
     # module, which only glean.llm may do.
     config: dict[str, Any] = {
         "configurable": {"thread_id": session.session_id},
-        # One LangSmith trace per session: the metadata lands on the graph's run and its children.
-        "metadata": {"session_id": session.session_id},
+        # One LangSmith trace per session: the metadata lands on the graph's run and its children (the model
+        # calls included). The per-session counts are `finalise`'s output, `session_metrics`, in the same trace.
+        "metadata": {"session_id": session.session_id, "agent_graph": "v7", "max_tool_calls": MAX_TOOL_CALLS},
     }
     # What the previous attempt left behind decides how this one starts:
     #   * pending nodes -> continue them (no new input), so completed steps are not paid for twice;
@@ -149,19 +166,25 @@ def _run(session: AgentSession, deps: AgentDeps, *, guard: RunGuard, resume: boo
     snapshot = graph.get_state(config)  # ty: ignore[invalid-argument-type]
     if resume and snapshot.next:
         logger.info("resuming a session from its checkpoint", extra={"session_id": session.session_id})
-        return result_of(graph.invoke(None, config=config))  # ty: ignore[invalid-argument-type]
+        return graph.invoke(None, config=config)  # ty: ignore[invalid-argument-type]
     if snapshot.values.get("result"):
         logger.info("publishing the plan a crashed attempt had already made", extra={"session_id": session.session_id})
-        return result_of(snapshot.values)
-    return result_of(
-        graph.invoke(
-            {"session_id": session.session_id, "request": session.request.model_dump(mode="json")},
-            config=config,  # ty: ignore[invalid-argument-type]
-        )
+        return snapshot.values
+    return graph.invoke(
+        {"session_id": session.session_id, "request": session.request.model_dump(mode="json")},
+        config=config,  # ty: ignore[invalid-argument-type]
     )
 
 
-def _completed(deps: AgentDeps, session: AgentSession, result: MealPlanResult, *, owner: str) -> None:
+def _completed(
+    deps: AgentDeps,
+    session: AgentSession,
+    result: MealPlanResult,
+    *,
+    owner: str,
+    session_metrics: Mapping[str, Any],
+    wall_ms: int,
+) -> None:
     if not deps.sessions.complete(session.user_sub, session.session_id, result, owner=owner):
         # A cancel that landed after the last step wins over the plan; a lost lease writes nothing.
         _refused_write(deps, session, what="plan")
@@ -171,12 +194,21 @@ def _completed(deps: AgentDeps, session: AgentSession, result: MealPlanResult, *
         # The fallback plan looks like any other to the household (spec §6.5), so this count is how a
         # regression in the model's answer shows up at all.
         metrics.add_metric(name=DEGRADED, unit=MetricUnit.Count, value=1)
+    # Spec §6.6's session metrics, for the median the evals report: how hard the agent worked, and how far
+    # its week fell from the scorer's best. A checkpoint from before V7 has none to report.
+    if "tool_calls" in session_metrics:
+        metrics.add_metric(name=TOOL_CALLS, unit=MetricUnit.Count, value=session_metrics["tool_calls"])
+        metrics.add_metric(name=INVALID_ACTIONS, unit=MetricUnit.Count, value=session_metrics["invalid_actions"])
+    if session_metrics.get("drift_fraction") is not None:
+        metrics.add_metric(name=DRIFT, unit=MetricUnit.Percent, value=session_metrics["drift_fraction"] * 100)
     logger.info(
         "meal plan session completed",
         extra={
             "session_id": session.session_id,
             "suggestions": len(result.suggestions),
             "degraded": result.degraded,
+            "wall_ms": wall_ms,
+            **session_metrics,
         },
     )
 
