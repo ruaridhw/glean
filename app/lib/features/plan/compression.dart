@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/data/models/pantry_item_view.dart';
+import 'package:glean/data/util/week.dart';
 
 const int defaultTopN = 15;
 
@@ -72,6 +73,9 @@ List<CompressedPantryItem> compressPantry(
         unit: item.unit,
         foodGroup: item.foodGroup,
         urgencyScore: score,
+        expiresInDays: item.expiryDate == null
+            ? null
+            : calendarDaysBetween(effectiveNow, item.expiryDate!),
       ),
   ];
 }

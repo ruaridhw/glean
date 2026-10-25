@@ -280,3 +280,134 @@ def test_a_naive_title_only_cook_is_compared_with_an_aware_id_matched_one() -> N
         result = _result(["rec_a", "rec_b", "rec_c", "rec_d"], list(rows))
 
         assert result.days_since_cooked["rec_a"] == pytest.approx(5)
+
+
+def _rated(recipe_id: str | None, title: str, *, days_ago: float, rating: str | None) -> CookedMeal:
+    return CookedMeal(recipe_id=recipe_id, title=title, cooked_at=NOW - timedelta(days=days_ago), rating=rating)
+
+
+def test_a_recipe_whose_latest_rating_is_thumbs_down_is_left_out() -> None:
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=10, rating="down")],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+    assert result.disliked == ("rec_a",)
+    assert "rec_a" not in result.days_since_cooked
+
+
+def test_thumbs_down_stays_out_when_the_floor_relaxes() -> None:
+    # Two slots leave too few fresh recipes, so the floor gives way for the recently cooked ones. A
+    # thumbs down is a hard constraint and does not come back with them.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c"],
+        [_rated("rec_a", "A", days_ago=10, rating="down"), _rated("rec_b", "B", days_ago=20, rating=None)],
+        slots=2,
+    )
+
+    assert result.relaxed_floor is True
+    assert result.relaxed == ("rec_b",)
+    assert "rec_a" not in result.recipe_ids
+
+
+def test_clearing_the_thumb_brings_the_recipe_back() -> None:
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=60, rating=None)],
+    )
+
+    assert "rec_a" in result.fresh
+    assert result.disliked == ()
+
+
+def test_a_thumbs_up_rating_never_excludes_a_recipe() -> None:
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=60, rating="up")],
+    )
+
+    assert "rec_a" in result.fresh
+    assert result.latest_rating == {"rec_a": "up"}
+
+
+def test_the_most_recent_rating_decides() -> None:
+    changed_their_mind = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=60, rating="down"), _rated("rec_a", "A", days_ago=5, rating="up")],
+    )
+
+    assert "rec_a" not in changed_their_mind.disliked
+    assert changed_their_mind.latest_rating == {"rec_a": "up"}
+
+    went_off_it = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=60, rating="up"), _rated("rec_a", "A", days_ago=5, rating="down")],
+    )
+
+    assert "rec_a" not in went_off_it.recipe_ids
+
+
+def test_cooking_again_without_rating_leaves_the_earlier_thumb_standing() -> None:
+    # A later unrated cook is not a verdict: only clearing or flipping the thumb changes one.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=20, rating="down"), _rated("rec_a", "A", days_ago=2, rating=None)],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+
+
+def test_a_title_only_cook_carries_its_rating_to_the_recipe_it_names() -> None:
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated(None, "  a ", days_ago=60, rating="down")],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+    assert result.disliked == ("rec_a",)
+
+
+def test_a_thumbs_down_recipe_can_still_be_named_by_title_when_the_new_cook_has_an_id() -> None:
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated(None, "A", days_ago=60, rating="down"), _rated("rec_a", "A", days_ago=2, rating=None)],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+
+
+def test_a_thumbs_down_older_than_the_window_still_keeps_the_recipe_out() -> None:
+    # The verdict does not age with the cook: twenty weeks on, the recipe is still not offered. The app sends
+    # that old cook on its own for exactly this reason.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=140, rating="down")],
+    )
+
+    assert "rec_a" not in result.recipe_ids
+    assert "rec_a" not in result.days_since_cooked
+    assert result.disliked == ("rec_a",)
+
+
+def test_a_later_thumbs_up_cancels_an_older_thumbs_down() -> None:
+    # "Latest rating" (CONTEXT.md) is the thumb on the most recent rated cook, whichever way it points, so a
+    # household that changed its mind is offered the recipe again once the newer cook is the only input.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=200, rating="down"), _rated("rec_a", "A", days_ago=100, rating="up")],
+    )
+
+    assert "rec_a" not in result.disliked
+    assert result.latest_rating == {"rec_a": "up"}
+
+
+def test_a_later_title_only_thumbs_up_cancels_an_older_id_matched_thumbs_down() -> None:
+    # The same recipe, identified by id on the old cook and only by title on the new one, as the app can send
+    # after a plan entry loses its corpus id snapshot.
+    result = _result(
+        ["rec_a", "rec_b", "rec_c", "rec_d"],
+        [_rated("rec_a", "A", days_ago=200, rating="down"), _rated(None, "  a ", days_ago=100, rating="up")],
+    )
+
+    assert "rec_a" not in result.disliked

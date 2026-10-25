@@ -40,9 +40,14 @@ last_cooked_at  # RecipeHistoryItem
 food_groups  # RecipeHistoryItem
 cooked_at  # CookedHistoryItem
 cooked_history  # MealPlanRequest
+rating  # CookedHistoryItem field (the household's thumb), read via model_dump / serialisation
+note  # CookedHistoryItem field, part of the request contract only
+latest_rating  # EligibleRecipes field the scorer's thumbs-up term will read
 _read_a_missing_offset_as_utc  # Pydantic field validator (CookedHistoryItem.cooked_at)
 reason  # MealPlanRecipe
 missing_ingredients  # MealPlanRecipe
+uses_up  # MealPlanSuggestion field the app renders later
+goes_off  # UsedUpPantryItem field the app renders later
 suggestions  # MealPlanResponse compatibility field
 generate_meal_plan  # FastAPI route handler
 parse_description  # FastAPI route handler

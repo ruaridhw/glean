@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
+import 'package:glean/data/models/meal_thumb.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/pantry_repository.dart'
@@ -14,7 +15,10 @@ import 'package:glean/data/repositories/pantry_repository.dart'
 import 'package:glean/design_system/design_system.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:glean/features/meals/recipe_preview_screen.dart';
+import 'package:glean/features/plan/widgets/rating_note_sheet.dart';
 import 'package:go_router/go_router.dart';
+
+import 'providers/ratings_explainer.dart';
 
 Future<void> markCookedWithUndo(
   BuildContext context,
@@ -55,6 +59,137 @@ Future<void> deleteEntryWithUndo(
     failureMessage: 'Could not remove ${entry.recipeTitle}. Try again.',
     undoFailureMessage: 'Could not restore ${entry.recipeTitle}.',
   );
+}
+
+/// Tapping a thumb on a cooked row: the same thumb again clears the rating, the other one switches it.
+///
+/// A rating is a write, not a destructive action, so it commits immediately with no confirm and no Undo
+/// snackbar — tapping the thumb again is the undo. The first thumb a household ever taps also shows the
+/// one-off explainer, after the write, so the rating is never held hostage to a dialog.
+Future<void> rateMeal(
+  BuildContext context,
+  WidgetRef ref,
+  MealPlanEntryView entry,
+  MealThumb thumb,
+) async {
+  final repository = ref.read(planRepositoryProvider);
+  final String userId = ref.read(currentUserIdProvider);
+  final bool clearing = entry.rating == thumb;
+  try {
+    if (clearing) {
+      await repository.clearRating(entryId: entry.id, userId: userId);
+    } else {
+      await repository.rate(entryId: entry.id, userId: userId, rating: thumb);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(context, 'Could not save your rating. Try again.');
+    }
+    return;
+  }
+  ref.read(hapticsProvider).selectionClick();
+  if (!context.mounted) return;
+  await _explainRatingsOnce(context, ref, userId);
+}
+
+/// Long-pressing a thumb: the same rating, with an optional comment, saved in one write.
+Future<void> noteMealRating(
+  BuildContext context,
+  WidgetRef ref,
+  MealPlanEntryView entry,
+  MealThumb thumb,
+) async {
+  final String? note = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext _) => RatingNoteSheet(entry: entry, thumb: thumb),
+  );
+  // Skipped or dismissed: the thumb and any existing note stay exactly as they were.
+  if (note == null || !context.mounted) return;
+  final repository = ref.read(planRepositoryProvider);
+  final String userId = ref.read(currentUserIdProvider);
+  try {
+    await repository.rateWithNote(
+      entryId: entry.id,
+      userId: userId,
+      rating: thumb,
+      note: note,
+    );
+  } catch (_) {
+    if (context.mounted) {
+      GleanSnackBar.show(context, 'Could not save your note. Try again.');
+    }
+    return;
+  }
+  ref.read(hapticsProvider).mediumImpact();
+  if (!context.mounted) return;
+  await _explainRatingsOnce(context, ref, userId);
+}
+
+/// The one-off "how ratings are used" explainer: shown on the first thumb this household taps, and never
+/// again. The claim is atomic, and the provider flag stops a second copy opening over the first if two taps
+/// race before it is answered.
+Future<void> _explainRatingsOnce(
+  BuildContext context,
+  WidgetRef ref,
+  String userId,
+) async {
+  final bool first = await ref
+      .read(userConfigRepositoryProvider)
+      .claimRatingsExplainer(userId);
+  if (!first || !context.mounted) return;
+  final RatingsExplainerOpen open = ref.read(
+    ratingsExplainerOpenProvider.notifier,
+  );
+  if (!open.open()) return;
+  if (!context.mounted) {
+    open.close();
+    return;
+  }
+  final AppTokens tokens = context.tokens;
+  try {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            tokens.spacing.lg,
+            0,
+            tokens.spacing.lg,
+            tokens.spacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'How ratings work',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+              SizedBox(height: tokens.spacing.md),
+              const Text(
+                'Thumbs down stops the planner offering that recipe.\n\n'
+                'Thumbs up favours it once six weeks have passed.\n\n'
+                'Long-press a thumb to add a comment for the planner.',
+              ),
+              SizedBox(height: tokens.spacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  } finally {
+    open.close();
+  }
 }
 
 void onAddDinnerTapped(BuildContext context, WidgetRef ref) {
