@@ -18,6 +18,13 @@ either is spent, or the model or a tool errors, `finalise` writes the degraded w
 week with template reasons, `degraded: true`. Once `prepare` has run there is always such a week, so from then
 on a run never ends `model_error`.
 
+**A swap is a second way in** (V10, spec §6.2 "Swap"). A finished session's thread is invoked again with a
+`swap` input, and START routes it to `swap_screen -> swap_plan <-> act -> swap_finalise`: the note goes through
+the injection screen and only what passes reaches the model, as the `swap_note` field; the other slots are
+locked; the model proposes one replacement (`ProposeReplacement`) within `MAX_SWAP_TOOL_CALLS`; and
+`swap_finalise` keeps it only if the week may use it, else takes the scorer's best replacement. The swap's
+outcome is `swap_outcome`, keyed by its id, so a crashed swap resumes or republishes like a crashed run.
+
 The graph is built per run, closing over the deps and the guard, and is checkpointed under the session id as
 its thread after every node, so a crashed run resumes at the node it died in and no finished tool call runs
 again. Every field in `PlanState` is JSON, so a checkpoint is just data.
@@ -32,21 +39,33 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from langgraph.graph import END, START, StateGraph  # noqa: TID251 - this module owns LangGraph
 
 from glean.agent import adapters
-from glean.agent.actions import TOOL_CALL, CallTool, PlanStep, Propose
+from glean.agent.actions import TOOL_CALL, CallTool, PlanStep, Propose, ProposeReplacement, SwapStep
 from glean.agent.control import BudgetSpent
 from glean.agent.errors import AgentError, model_error_for
-from glean.agent.prompts import AGENT_SYSTEM_PROMPT, bounded_transcript, user_message
+from glean.agent.prompts import (
+    AGENT_SYSTEM_PROMPT,
+    SWAP_SYSTEM_PROMPT,
+    bounded_transcript,
+    swap_user_message,
+    user_message,
+)
 from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
-from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
+from glean.meal_plan.schemas import (
+    CorpusMealPlanAlternative,
+    CorpusMealPlanResponse,
+    MealPlanRequest,
+    MealPlanResult,
+)
 from glean.observability import logger
-from glean.sessions.models import SessionError, SessionErrorCode
+from glean.sessions.models import SessionError, SessionErrorCode, SwapNoteUse, SwapState
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from langgraph.graph.state import CompiledStateGraph  # noqa: TID251
+    from pydantic import BaseModel
 
     from glean.agent.control import RunGuard
     from glean.agent.deps import AgentDeps
@@ -54,6 +73,8 @@ if TYPE_CHECKING:
 
 # Spec §6.2's agent budget: at most 8 tool calls in one session.
 MAX_TOOL_CALLS = 8
+# A swap looks for one meal, not a week: a search for what the note asks, a closer look, a score.
+MAX_SWAP_TOOL_CALLS = 3
 # Answers that do not parse as a NextAction, asked again before the run gives up on the model.
 MAX_INVALID_ACTIONS = 2
 # How much of a parse error is shown back to the model: enough to correct, not a wall of schema.
@@ -62,6 +83,10 @@ _ERROR_CHARS = 300
 PREPARE_LINE = "Reading your pantry and the recipes we know"
 PLAN_LINE = "Choosing this week's dinners"
 FINALISE_LINE = "Checking the week against what you can cook"
+# A swap's own lines, which the card being swapped shows in place (V10 direction A).
+SWAP_NOTE_LINE = "Reading your note"
+SWAP_LINE = "Finding another dinner"
+SWAP_FINALISE_LINE = "Checking it fits the week"
 
 
 class DegradedReason:
@@ -95,6 +120,14 @@ class PlanState(TypedDict, total=False):
     degraded_reason: str | None
     result: dict[str, Any] | None
     session_metrics: dict[str, Any] | None
+    # A swap (V10): what the runtime asked for -- the slot, its position, the note as typed, the locked meals,
+    # the ids it may not use and the proposal it changes -- and what the swap made of it. The note as typed
+    # stays here; only `swap_note`, what the screen passed, is ever put in front of the model.
+    swap: dict[str, Any] | None
+    swap_note: str | None
+    swap_note_use: str
+    swap_pick: dict[str, Any] | None
+    swap_outcome: dict[str, Any] | None
 
 
 def build_graph(
@@ -115,11 +148,17 @@ def build_graph(
     graph.add_node("plan", nodes.plan)
     graph.add_node("act", nodes.act)
     graph.add_node("finalise", nodes.finalise)
-    graph.add_edge(START, "prepare")
+    graph.add_node("swap_screen", nodes.swap_screen)
+    graph.add_node("swap_plan", nodes.swap_plan)
+    graph.add_node("swap_finalise", nodes.swap_finalise)
+    graph.add_conditional_edges(START, _route_start, ["prepare", "swap_screen"])
     graph.add_edge("prepare", "plan")
     graph.add_conditional_edges("plan", _after_plan, ["act", "finalise"])
-    graph.add_edge("act", "plan")
+    graph.add_conditional_edges("act", _after_act, ["plan", "swap_plan"])
     graph.add_edge("finalise", END)
+    graph.add_edge("swap_screen", "swap_plan")
+    graph.add_conditional_edges("swap_plan", _after_plan, ["act", "swap_finalise"])
+    graph.add_edge("swap_finalise", END)
     # ty widens the compiled graph's parameters away from the annotation above.
     return graph.compile(checkpointer=deps.checkpointer)  # ty: ignore[invalid-return-type]
 
@@ -149,21 +188,24 @@ class _Nodes:
     def prepare(self, state: PlanState) -> PlanState:
         # A budget spent here is `model_error`: there is no scorer week to fall back to yet.
         self._guard.step(PREPARE_LINE)
-        request = MealPlanRequest.model_validate(state["request"])
-        prepared = pipeline.prepare(
-            request,
-            # A state without `feedback` (none was screened) plans with the chips and no note.
-            feedback=None if state.get("feedback") is None else ScreenedFeedback.model_validate(state["feedback"]),
-            corpus=self._deps.corpus_factory(),
-            # The session id seeds the sampler, so a resumed run offers the same candidates.
-            rng=random.Random(state["session_id"]),  # noqa: S311 - varies recipe sampling, not security
-            now=self._deps.clock(),
-        )
+        prepared = self._prepared(state)
         if not prepared.has_candidates:
             # Nothing passes the dietary decisions, the time cap and the recency floor: the app says
             # "No recipes fit your diet and time limit" and sends the household to Settings.
             raise AgentError(SessionError(code=SessionErrorCode.NO_ELIGIBLE_RECIPES))
         return {"prepared": prepared.model_dump(mode="json"), "transcript": [], "tool_calls": 0, "invalid_actions": 0}
+
+    def _prepared(self, state: PlanState) -> pipeline.PreparedPlan:
+        return pipeline.prepare(
+            MealPlanRequest.model_validate(state["request"]),
+            # A state without `feedback` (none was screened) plans with the chips and no note.
+            feedback=None if state.get("feedback") is None else ScreenedFeedback.model_validate(state["feedback"]),
+            corpus=self._deps.corpus_factory(),
+            # The session id seeds the sampler, so a resumed run (or a swap whose checkpoint expired) is offered
+            # the same candidates.
+            rng=random.Random(state["session_id"]),  # noqa: S311 - varies recipe sampling, not security
+            now=self._deps.clock(),
+        )
 
     def plan(self, state: PlanState) -> PlanState:
         if state.get("degraded_reason"):
@@ -178,20 +220,35 @@ class _Nodes:
         except BudgetSpent:
             return _degrade(DegradedReason.TIME_BUDGET)
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
-        step = self._ask(prepared, transcript, tool_calls=tool_calls, invalid=state.get("invalid_actions", 0))
+        calls_left = max(MAX_TOOL_CALLS - tool_calls, 0)
+        step = self._ask(
+            PlanStep,
+            AGENT_SYSTEM_PROMPT,
+            lambda results: user_message(prepared.user, tool_results=results, tool_calls_left=calls_left),
+            transcript,
+            invalid=state.get("invalid_actions", 0),
+        )
         if not isinstance(step, _Answer):
             return step
         action = step.action
         update: PlanState = {"invalid_actions": step.invalid, "transcript": transcript}
-        if not isinstance(action, CallTool):
+        if isinstance(action, Propose):
             return {**update, "proposal": action.proposal.model_dump(mode="json"), "pending": None}
+        if not isinstance(action, CallTool):
+            return _degrade(DegradedReason.INVALID_ACTIONS, **update)
         if tool_calls >= MAX_TOOL_CALLS:
             logger.warning("the agent asked for a tool after its last call", extra={"tool_calls": tool_calls})
             return _degrade(DegradedReason.TOOL_BUDGET, **update)
         return {**update, "pending": action.call.model_dump(mode="json")}
 
     def _ask(
-        self, prepared: pipeline.PreparedPlan, transcript: list[dict[str, Any]], *, tool_calls: int, invalid: int
+        self,
+        schema: type[PlanStep | SwapStep],
+        system: str,
+        user: Callable[[list[dict[str, Any]]], str],
+        transcript: list[dict[str, Any]],
+        *,
+        invalid: int,
     ) -> _Answer | PlanState:
         """Ask the model for its next action, again after an answer that does not parse; or give up.
 
@@ -201,13 +258,11 @@ class _Nodes:
         while True:
             try:
                 # The one blocking call: it may use what is left of the budget, never more.
-                step = self._deps.llm_router.invoke(
+                step: BaseModel = self._deps.llm_router.invoke(
                     Feature.MEAL_PLAN_GENERATION,
-                    PlanStep,
-                    system=AGENT_SYSTEM_PROMPT,
-                    user=user_message(
-                        prepared.user, tool_results=transcript, tool_calls_left=max(MAX_TOOL_CALLS - tool_calls, 0)
-                    ),
+                    schema,
+                    system=system,
+                    user=user(transcript),
                     timeout_ms=self._guard.remaining_ms(),
                 )
             except ValueError as exc:
@@ -287,12 +342,129 @@ class _Nodes:
         logger.info("agent session finished", extra=metrics)
         return {"result": result.model_dump(mode="json"), "session_metrics": metrics}
 
+    def swap_screen(self, state: PlanState) -> PlanState:
+        """Screen the swap note, and start the swap's own loop with nothing spent."""
+        swap = state["swap"] or {}
+        note = swap.get("note")
+        self._guard.step(SWAP_NOTE_LINE if note else SWAP_LINE)
+        screened: str | None = None
+        use = SwapNoteUse.NONE
+        if note:
+            outcome = self._deps.screen(note)
+            screened = outcome.text
+            use = SwapNoteUse.USED if outcome.passed else SwapNoteUse.DROPPED
+            if not outcome.passed:
+                # The household sees "Couldn't use that note"; the swap still runs, without it.
+                logger.info(
+                    "the swap note did not pass the screen; swapping without it",
+                    extra={"rejection": outcome.rejection, "probability": outcome.probability},
+                )
+        prepared = state.get("prepared") or self._prepared(state).model_dump(mode="json")
+        return {
+            "prepared": prepared,
+            "swap_note": screened,
+            "swap_note_use": use.value,
+            "swap_pick": None,
+            "swap_outcome": None,
+            "transcript": [],
+            "pending": None,
+            "tool_calls": 0,
+            "invalid_actions": 0,
+            "degraded_reason": None,
+        }
+
+    def swap_plan(self, state: PlanState) -> PlanState:
+        """Ask for one replacement, or a tool first; the same loop as `plan`, on a smaller budget."""
+        if state.get("degraded_reason"):
+            return {"pending": None}
+        tool_calls = state.get("tool_calls", 0)
+        transcript = list(state.get("transcript") or [])
+        try:
+            self._guard.step(None)
+        except BudgetSpent:
+            return _degrade(DegradedReason.TIME_BUDGET)
+        prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
+        swap = _swap_context(state)
+        calls_left = max(MAX_SWAP_TOOL_CALLS - tool_calls, 0)
+        step = self._ask(
+            SwapStep,
+            SWAP_SYSTEM_PROMPT,
+            lambda results: swap_user_message(
+                prepared.user, swap=swap, tool_results=results, tool_calls_left=calls_left
+            ),
+            transcript,
+            invalid=state.get("invalid_actions", 0),
+        )
+        if not isinstance(step, _Answer):
+            return step
+        action = step.action
+        update: PlanState = {"invalid_actions": step.invalid, "transcript": transcript}
+        if isinstance(action, ProposeReplacement):
+            return {**update, "swap_pick": action.replacement.model_dump(mode="json"), "pending": None}
+        if not isinstance(action, CallTool):
+            return _degrade(DegradedReason.INVALID_ACTIONS, **update)
+        if tool_calls >= MAX_SWAP_TOOL_CALLS:
+            logger.warning("the agent asked for a tool after its last swap call", extra={"tool_calls": tool_calls})
+            return _degrade(DegradedReason.TOOL_BUDGET, **update)
+        return {**update, "pending": action.call.model_dump(mode="json")}
+
+    def swap_finalise(self, state: PlanState) -> PlanState:
+        """Keep the model's replacement if the week may use it, else the scorer's best; write the swap's outcome.
+
+        Nothing here raises for an empty offer: no meal left to swap in leaves the proposal as it was.
+        """
+        self._guard.step(SWAP_FINALISE_LINE, budget=False)
+        swap = state["swap"] or {}
+        base = MealPlanResult.model_validate(swap["base"])
+        position = swap["position"]
+        prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
+        reason = state.get("degraded_reason")
+        raw_pick = None if reason else state.get("swap_pick")
+        pick = None if raw_pick is None else CorpusMealPlanAlternative.model_validate(raw_pick)
+        chosen = None
+        if position < len(base.suggestions):
+            chosen = pipeline.replacement(
+                prepared,
+                pick,
+                locked=[meal["external_id"] for meal in swap.get("locked", [])],
+                unavailable=set(swap.get("unavailable_ids", [])),
+            )
+        if chosen is None:
+            logger.warning("nothing left to swap in; the proposal stays as it was", extra={"reason": reason})
+            state_, result, degraded = SwapState.NO_REPLACEMENT, base, True
+        else:
+            suggestion, degraded = chosen
+            state_, result = SwapState.DONE, pipeline.with_replacement(base, position, suggestion)
+            if degraded and reason is None:
+                reason = DegradedReason.NOTHING_KEPT
+        logger.info(
+            "agent swap finished",
+            extra={
+                "swap_id": swap.get("swap_id"),
+                "state": state_.value,
+                "degraded": degraded,
+                "degraded_reason": reason,
+                "tool_calls": state.get("tool_calls", 0),
+                "note": state.get("swap_note_use"),
+            },
+        )
+        return {
+            "swap_outcome": {
+                "swap_id": swap.get("swap_id"),
+                "state": state_.value,
+                "note_use": state.get("swap_note_use", SwapNoteUse.NONE.value),
+                "result": result.model_dump(mode="json"),
+                "degraded": degraded and state_ is SwapState.DONE,
+                "degraded_reason": reason,
+            }
+        }
+
 
 @dataclass(frozen=True)
 class _Answer:
-    """A parsed NextAction, and how many answers before it did not parse."""
+    """A parsed action, and how many answers before it did not parse."""
 
-    action: CallTool | Propose
+    action: CallTool | Propose | ProposeReplacement
     invalid: int
 
 
@@ -339,8 +511,30 @@ def _agents_best_week(state: PlanState, prepared: pipeline.PreparedPlan) -> list
     return best if gap.within_15_percent else None
 
 
+def _route_start(state: PlanState) -> str:
+    """A thread invoked with a swap works that swap; anything else plans the week."""
+    return "swap_screen" if state.get("swap") else "prepare"
+
+
 def _after_plan(state: PlanState) -> str:
-    return "act" if state.get("pending") else "finalise"
+    if state.get("pending"):
+        return "act"
+    return "swap_finalise" if state.get("swap") else "finalise"
+
+
+def _after_act(state: PlanState) -> str:
+    return "swap_plan" if state.get("swap") else "plan"
+
+
+def _swap_context(state: PlanState) -> dict[str, Any]:
+    """The swap as the model reads it: the slot, what stays, what it may not use, and the screened note only."""
+    swap = state["swap"] or {}
+    return {
+        "replacing": swap.get("replacing"),
+        "locked_week": swap.get("locked", []),
+        "unavailable_ids": swap.get("unavailable_ids", []),
+        "swap_note": state.get("swap_note"),
+    }
 
 
 def _degrade(reason: str, **update: Any) -> PlanState:
@@ -363,6 +557,12 @@ def _session_metrics(
         "drift_fraction": None if gap is None else round(gap.fraction, 4),
         "drift_within_15_percent": None if gap is None else gap.within_15_percent,
     }
+
+
+def swap_outcome_of(state: Mapping[str, Any], swap_id: int) -> dict[str, Any] | None:
+    """The outcome `swap_finalise` wrote for *swap_id*, or None if this state has not finished that swap."""
+    outcome = state.get("swap_outcome")
+    return outcome if outcome and outcome.get("swap_id") == swap_id else None
 
 
 def result_of(state: Mapping[str, Any]) -> MealPlanResult:

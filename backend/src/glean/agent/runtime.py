@@ -1,7 +1,16 @@
-"""Run one session: claim it, run the graph, write the outcome; and cancel one.
+"""Run one session: claim it, run the graph, write the outcome; resume it with a swap; and cancel one.
 
-`start` is the whole interface the worker and the inline runner share, and `cancel` the one the DELETE
+`deliver` is what the worker and the inline runner call for one queue delivery: a session with a swap
+pending is resumed with it (`resume`), anything else is started (`start`). `cancel` is what the DELETE
 route uses.
+
+- **Resuming with a swap** (V10). A swap message re-queues a finished session, and its delivery claims it
+  like any other: the same lease, the same owner token. `resume` invokes the session's own thread with the
+  swap, so the graph keeps the candidates `prepare` sampled. A swap always ends `done`: one that found
+  nothing, or broke, writes the proposal back as it was with the swap marked, because a failed swap must
+  never cost the household the week on screen. A delivery that finds the swap finished drops; one that
+  takes over a crashed swap resumes it from the checkpoint, or publishes the outcome a finished checkpoint
+  holds.
 
 - **Claiming.** The store hands out an owner token and a lease in the same conditional write that
   moves the session to `running`, or that takes over a run whose lease has lapsed. The lease is anchored
@@ -35,18 +44,25 @@ from pydantic import ValidationError
 
 from glean.agent.control import LostOwnership, RunGuard
 from glean.agent.errors import AgentError, SessionCancelled
-from glean.agent.graph import MAX_TOOL_CALLS, build_graph, result_of, session_metrics_of
+from glean.agent.graph import MAX_TOOL_CALLS, build_graph, result_of, session_metrics_of, swap_outcome_of
 from glean.meal_plan.feedback import screen_feedback, without_note
+from glean.meal_plan.schemas import MealPlanResult
 from glean.observability import logger, metrics
-from glean.sessions.models import ClaimResult, SessionError, SessionErrorCode, SessionStatus
+from glean.sessions.models import (
+    ClaimResult,
+    SessionError,
+    SessionErrorCode,
+    SessionStatus,
+    SwapNoteUse,
+    SwapState,
+)
 from glean.sessions.store import SessionBusyError, SessionTooLargeError, lease_seconds_for
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from glean.agent.deps import AgentDeps
-    from glean.meal_plan.schemas import MealPlanResult
-    from glean.sessions.models import AgentSession
+    from glean.sessions.models import AgentSession, SessionRecord, SwapRecord
     from glean.sessions.store import SessionStore
 
 # CloudWatch metric names, all in the `Glean` namespace:
@@ -65,6 +81,26 @@ WALL_TIME = "SessionWallTime"
 TOOL_CALLS = "SessionToolCalls"
 INVALID_ACTIONS = "SessionInvalidActions"
 DRIFT = "SessionDrift"
+#   SwapsStarted, SwapsCompleted, SwapsDegraded, SwapsFailed                                Count
+# A degraded swap is the scorer's replacement; a failed one left the proposal as it was.
+SWAPS_STARTED = "SwapsStarted"
+SWAPS_COMPLETED = "SwapsCompleted"
+SWAPS_DEGRADED = "SwapsDegraded"
+SWAPS_FAILED = "SwapsFailed"
+
+
+def deliver(session: AgentSession, deps: AgentDeps) -> bool:
+    """One queue delivery for *session*: its pending swap if it has one, otherwise its run.
+
+    Decided from the item, not the message: a redelivered first-run message that arrives after a swap was
+    queued runs the swap (the swap's own message then finds it finished and drops), so every copy of every
+    message leads to the same work.
+    """
+    record = deps.sessions.get(session.user_sub, session.session_id)
+    swap = None if record is None else record.pending_swap
+    if swap is not None:
+        return resume(session, swap, deps)
+    return start(session, deps)
 
 
 def cancel(session_id: str, *, user_sub: str, sessions: SessionStore) -> bool:
@@ -147,6 +183,166 @@ def start(session: AgentSession, deps: AgentDeps) -> bool:
         # Every attempt that started reports its wall time, so provider and worker failures are in the
         # latency distribution too, not only the runs that worked.
         metrics.add_metric(name=WALL_TIME, unit=MetricUnit.Milliseconds, value=int((time.monotonic() - started) * 1000))
+    return True
+
+
+def resume(session: AgentSession, swap: SwapRecord, deps: AgentDeps) -> bool:
+    """Continue *session* from its checkpoint with *swap*: one slot replaced, the rest locked (spec §6.2).
+
+    False when this delivery has nothing to do. Ends `done` whatever the swap made of it; see the module notes.
+    """
+    owner = uuid4().hex
+    claimed = _claim_swap(session, deps, owner=owner)
+    if claimed is None:
+        return False
+    record, current, resumed = claimed
+    if record.result is None or current is None:
+        logger.error("claimed a swap the session no longer holds", extra={"session_id": session.session_id})
+        if record.result is not None:
+            deps.sessions.complete(session.user_sub, session.session_id, record.result, owner=owner)
+        return True
+
+    started = time.monotonic()
+    metrics.add_metric(name=SWAPS_STARTED, unit=MetricUnit.Count, value=1)
+    guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic)
+    base = record.result
+    try:
+        finished = swap_outcome_of(
+            _run_swap(session, record, current, deps, guard=guard, resume=resumed), current.swap_id
+        )
+        if finished is None:
+            raise RuntimeError("the swap graph ended without an outcome")
+    except SessionCancelled:
+        _cancelled(deps, session, "the swap stopped at its next step")
+    except LostOwnership:
+        logger.warning("stopped a swap after losing the session lease", extra={"session_id": session.session_id})
+    except Exception:  # a broken swap must leave the proposal as it was, never a failed session
+        logger.exception("meal plan swap failed unexpectedly", extra={"session_id": session.session_id})
+        _finish_swap(deps, session, base, current.model_copy(update={"state": SwapState.FAILED}), owner=owner)
+    else:
+        swapped = current.model_copy(
+            update={"state": SwapState(finished["state"]), "note_use": SwapNoteUse(finished["note_use"])}
+        )
+        result = MealPlanResult.model_validate(finished["result"])
+        if _finish_swap(deps, session, result, swapped, owner=owner, base=base) and finished.get("degraded"):
+            metrics.add_metric(name=SWAPS_DEGRADED, unit=MetricUnit.Count, value=1)
+    finally:
+        metrics.add_metric(name=WALL_TIME, unit=MetricUnit.Milliseconds, value=int((time.monotonic() - started) * 1000))
+    return True
+
+
+def _claim_swap(
+    session: AgentSession, deps: AgentDeps, *, owner: str
+) -> tuple[SessionRecord, SwapRecord | None, bool] | None:
+    """Claim the session for a swap, and read what the claim won: the item's own swap and proposal.
+
+    None when the session has finished (the delivery drops); raises `SessionBusyError` when a live attempt owns
+    it, exactly as `start` does. The flag says whether this claim took over an attempt that died.
+    """
+    outcome = deps.sessions.claim(
+        session.user_sub,
+        session.session_id,
+        owner=owner,
+        now=deps.clock(),
+        lease_seconds=lease_seconds_for(deps.remaining_seconds()),
+    )
+    if outcome is ClaimResult.OWNED_ELSEWHERE:
+        raise SessionBusyError(session.session_id)
+    if outcome is ClaimResult.FINISHED:
+        logger.info("session has already finished; dropping this delivery", extra={"session_id": session.session_id})
+        return None
+    record = deps.sessions.get(session.user_sub, session.session_id)
+    if record is None:
+        return None
+    return record, record.pending_swap, outcome is ClaimResult.RESUMED
+
+
+def _run_swap(
+    session: AgentSession, record: SessionRecord, swap: SwapRecord, deps: AgentDeps, *, guard: RunGuard, resume: bool
+) -> Mapping[str, Any]:
+    """The graph state after *swap*: continued, republished, or run from its input, as `_run` decides for a run."""
+    graph = build_graph(deps, guard=guard)
+    config: dict[str, Any] = {
+        "configurable": {"thread_id": session.session_id},
+        "metadata": {"session_id": session.session_id, "agent_graph": "v10", "swap_id": swap.swap_id},
+    }
+    snapshot = graph.get_state(config)  # ty: ignore[invalid-argument-type]
+    if swap_outcome_of(snapshot.values, swap.swap_id) is not None:
+        logger.info("publishing the swap a crashed attempt had already made", extra={"session_id": session.session_id})
+        return snapshot.values
+    working = snapshot.values.get("swap") or {}
+    if resume and snapshot.next and working.get("swap_id") == swap.swap_id:
+        logger.info("resuming a swap from its checkpoint", extra={"session_id": session.session_id})
+        return graph.invoke(None, config=config)  # ty: ignore[invalid-argument-type]
+    return graph.invoke(
+        {
+            "session_id": session.session_id,
+            "request": record.request.model_dump(mode="json"),
+            "swap": swap_input(record, swap),
+        },
+        config=config,  # ty: ignore[invalid-argument-type]
+    )
+
+
+def swap_input(record: SessionRecord, swap: SwapRecord) -> dict[str, Any]:
+    """What the graph needs for *swap*: the slot, the meals that stay, and every id the replacement may not be.
+
+    Unavailable is the whole proposal as it stands (so the other slots stay distinct), every card's alternative
+    (the app may show one in place of its meal), every meal swapped out before (it must not come straight
+    back) and the meals already in the plan (ADR 0020: never replaced, never duplicated).
+    """
+    result = record.result or MealPlanResult(suggestions=[])
+    meals = result.suggestions
+    replacing = meals[swap.position] if swap.position < len(meals) else None
+    unavailable = {meal.external_id for meal in meals if meal.external_id}
+    unavailable |= {meal.alternative.external_id for meal in meals if meal.alternative and meal.alternative.external_id}
+    unavailable |= {entry.slot for entry in record.swaps}
+    unavailable |= set(record.request.exclude_external_ids)
+    for planned in result.planned_alternatives:
+        unavailable |= {planned.external_id, planned.alternative.external_id or planned.external_id}
+    return {
+        "swap_id": swap.swap_id,
+        "slot": swap.slot,
+        "position": swap.position,
+        "note": swap.note,
+        "replacing": None if replacing is None else {"external_id": replacing.external_id, "title": replacing.title},
+        "locked": [
+            {"external_id": meal.external_id, "title": meal.title}
+            for index, meal in enumerate(meals)
+            if index != swap.position and meal.external_id
+        ],
+        "unavailable_ids": sorted(unavailable),
+        "base": result.model_dump(mode="json"),
+    }
+
+
+def _finish_swap(
+    deps: AgentDeps,
+    session: AgentSession,
+    result: MealPlanResult,
+    swap: SwapRecord,
+    *,
+    owner: str,
+    base: MealPlanResult | None = None,
+) -> bool:
+    """Write the swap's outcome. A replacement too big for the item is written as a failed swap instead."""
+    try:
+        written = deps.sessions.finish_swap(session.user_sub, session.session_id, result, swap, owner=owner)
+    except SessionTooLargeError:
+        if base is None:
+            raise
+        logger.error("the swapped proposal would not fit the session item", extra={"session_id": session.session_id})
+        return _finish_swap(deps, session, base, swap.model_copy(update={"state": SwapState.FAILED}), owner=owner)
+    if not written:
+        _refused_write(deps, session, what="swap")
+        return False
+    metrics.add_metric(
+        name=SWAPS_FAILED if swap.state is SwapState.FAILED else SWAPS_COMPLETED, unit=MetricUnit.Count, value=1
+    )
+    logger.info(
+        "meal plan swap finished",
+        extra={"session_id": session.session_id, "swap_id": swap.swap_id, "state": swap.state.value},
+    )
     return True
 
 
