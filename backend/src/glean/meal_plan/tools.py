@@ -69,9 +69,16 @@ _MAX_SWAP_EVALUATIONS = 2000
 # Attempts per plan offered: each one blocks a recipe of the plan before it, so the plans differ by construction.
 _PLANS_ATTEMPTS_PER_PLAN = 4
 
-# Values that earn nothing when they repeat: an unknown attribute is not evidence of sameness, and a dish built
-# around no protein or no carb cannot repeat one.
-_EXEMPT_REPEAT_VALUES = frozenset({UNSURE, "none"})
+# Values that earn nothing when they repeat, one set per entry of `_REPEAT_TERMS`. An unknown attribute is not
+# evidence of sameness, so `unsure` is exempt everywhere. A dish built around no protein cannot repeat a protein;
+# a dish built around no carb is still a repeated carb choice, and the spec's carb row carries no exemption, so
+# only the protein row exempts `none` (owner decision 2026-10-25, from the V6 eval's carb-gate misses).
+_REPEAT_EXEMPT: tuple[frozenset[str], ...] = (
+    frozenset({UNSURE, "none"}),
+    frozenset({UNSURE}),
+    frozenset({UNSURE}),
+    frozenset({UNSURE}),
+)
 
 
 class Term(StrEnum):
@@ -562,8 +569,8 @@ class _Scorer:
         """One value-to-recipes map per repeat term, in plan order, so "the extra ones" are stable."""
         occurrences: list[dict[str, list[str]]] = [{}, {}, {}, {}]
         for recipe_id in recipe_ids:
-            for group, value in zip(occurrences, self.repeat_values(recipe_id), strict=True):
-                if value not in _EXEMPT_REPEAT_VALUES:
+            for group, value, exempt in zip(occurrences, self.repeat_values(recipe_id), _REPEAT_EXEMPT, strict=True):
+                if value not in exempt:
                     group.setdefault(value, []).append(recipe_id)
         return occurrences
 
