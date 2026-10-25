@@ -45,9 +45,11 @@ off, stream `adb logcat -s glean`), and only when the owner asks.
   versions (v7, v8), and the higher one tests **v6 → v8** against the last
   frozen file it can honestly offer: never write a fixture for a version no
   build produced. `schema_safety_test.dart` names such a gap explicitly. The
-  slice that merges second rebases, takes the other's fixtures, and
-  **regenerates its own snapshot from the merged schema** — the snapshot has
-  to describe what ships, and the upgrade test compares a migrated file's
+  slice that merges second rebases onto the other, and then **dumps a real
+  file for that version from the merged build** (the lower slice ships its
+  earlier fixture and its own snapshot, not a file for the version it added)
+  and **regenerates its own snapshot from the merged schema** — the snapshot
+  has to describe what ships, and the upgrade test compares a migrated file's
   `sqlite_master` with it.
 - Keep Android Auto Backup on (`test/android_backup_test.dart`), even though
   flutter_secure_storage's README suggests turning it off.
