@@ -205,7 +205,7 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "alternative",
         "attributes",
     }
-    assert set(view["result"]) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
+    assert set(view["result"]) == {"suggestions", "week_summary", "planned_alternatives", "degraded", "feedback_note"}
     assert view["result"]["degraded"] is False
     assert view["result"]["week_summary"] == "3 dinners for this week."
 
