@@ -1,9 +1,13 @@
-"""The planner's system-1 tools: score a week, and offer k balanced weeks to choose between.
+"""The planner's tools: find the eligible recipes, read them, score a week, and offer k balanced weeks.
 
 Framework-free and pure (spec 6.2, "Tools"): plain typed functions over plain data, with no graph, store or
 network import, so the agent graph, the evals (6.6) and the MCP server all call the same code through thin
 adapters. Feasibility is decided upstream — dietary decisions, the time cap, meals already planned and the
-six-week floor all happen in `get_eligible_recipes` — so everything here is a score, never a filter.
+six-week floor all happen in `get_eligible_recipes` — so everything after it is a score, never a filter.
+
+`get_eligible_recipes` and `get_recipes` (V7) read an `EligibilityContext`: the corpus as plain rows, plus the
+session's hard constraints. The caller builds it from whatever store holds the corpus (`pipeline.tool_context`),
+so the tools never read one, and a synthetic corpus is enough to test them.
 
 A plan's score is each recipe's fit minus the plan's penalties, one weight per row of the scorer table
 (spec 6.2, "Scorer weights"). Every one of those numbers is a starting guess, so they live in `ScorerWeights`
@@ -14,11 +18,15 @@ and every row of the table is scored: the table has no heartiness term, because 
 from __future__ import annotations
 
 import random
+import re
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
+from glean.meal_plan.candidates import GUARANTEE_MAX, PantryItem, mentions_item, near_duplicate_ingredients
+from glean.meal_plan.eligibility import apply_recency_floor
+from glean.meal_plan.eligibility import recency_penalty as _recency_penalty
 from glean.recipes.attributes import (
     UNSURE,
     ActiveTimeBucket,
@@ -30,13 +38,22 @@ from glean.recipes.attributes import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
+    from datetime import datetime
+
+    from glean.meal_plan.eligibility import CookedMeal
 
 __all__ = [
     "HEALTHIER_CHIP",
     "LIGHTER_CHIP",
+    "MAX_FILTER_LIMIT",
     "CandidateRecipe",
+    "CorpusRecipe",
     "DuplicateRecipeIds",
+    "EligibilityContext",
+    "EligibleRecipe",
+    "EligibleRecipes",
+    "FilterRejected",
     "PlanGap",
     "PlanPenalty",
     "PlanScore",
@@ -45,6 +62,9 @@ __all__ = [
     "PredicateOp",
     "ProteinTarget",
     "Rating",
+    "RecipeCard",
+    "RecipeDetails",
+    "RecipeFilter",
     "RecipeScore",
     "ScorerWeights",
     "ScoringContext",
@@ -56,6 +76,8 @@ __all__ = [
     "create_candidate_meal_plans",
     "distinct_main_carbs",
     "distinct_main_proteins",
+    "get_eligible_recipes",
+    "get_recipes",
     "score_meal_plan",
 ]
 
@@ -68,6 +90,12 @@ LIGHTER_CHIP = "lighter"
 SIX_WEEKS_DAYS = 42
 NINE_WEEKS_DAYS = 63
 TWELVE_WEEKS_DAYS = 84
+
+# The filter's `limit` (spec 6.2): one call returns at most this many recipes, and asking for more is refused.
+MAX_FILTER_LIMIT = 120
+# A summary card's key ingredients: as many as the model's candidate list shows (`pipeline`).
+_KEY_INGREDIENTS = 12
+_WORD_RE = re.compile(r"\w+")
 
 # Two floats closer than this are the same score, so a "swap" between them is not an improvement.
 _SCORE_EPSILON = 1e-9
@@ -826,3 +854,332 @@ def _minutes(value: str) -> int | None:
         text = text.removesuffix(suffix)
     text = text.strip()
     return int(text) if text.isdigit() else None
+
+
+@dataclass(frozen=True, slots=True)
+class CorpusRecipe:
+    """One corpus recipe as the corpus tools read it: what the projection's summary and attributes hold."""
+
+    recipe_id: str
+    title: str
+    cuisine: str | None = None
+    total_time_mins: int | None = None
+    ingredient_names: tuple[str, ...] = ()
+    attributes: RecipeAttributes = field(default_factory=RecipeAttributes)
+
+
+# A full recipe's ingredient lines and method steps, which only `get_recipes(detail="full")` reads.
+type FullRecipe = tuple[tuple[str, ...], tuple[str, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class EligibilityContext:
+    """The corpus and the session's hard constraints, as plain values the caller built from its store.
+
+    `dietary_excluded_ids` is what the stored dietary decisions rule out for the household's flags: deciding it
+    reads the decision store, so the caller does, and the tool applies it. `max_active_mins` is the household's
+    time cap. `cooked` is the history window the six-week floor and the thumbs-down rule read. `text_search`
+    is the corpus's full-text search (ids that match); without one, text matches title, cuisine and
+    ingredient words in memory. `load_full` reads one recipe's ingredient lines and method for
+    `get_recipes(detail="full")`.
+    """
+
+    recipes: Sequence[CorpusRecipe]
+    slots: int
+    now: datetime
+    dietary_excluded_ids: frozenset[str] = frozenset()
+    planned_ids: frozenset[str] = frozenset()
+    max_active_mins: int | None = None
+    cooked: Sequence[CookedMeal] = ()
+    pantry: Sequence[PantryItem] = ()
+    seed: int = 0
+    text_search: Callable[[str], Collection[str]] | None = None
+    load_full: Callable[[str], FullRecipe | None] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeFilter:
+    """The agent's filter (spec 6.2, "The filter's shape"). It can only narrow what the session allows.
+
+    Fields and operators come from `PredicateField`/`PredicateOp`, so nothing outside the allowlist can be said.
+    `max_active_mins` may only tighten the household's cap, and `limit` is at most `MAX_FILTER_LIMIT`: a filter
+    that asks for more is refused (`FilterRejected`) rather than quietly clamped, so the agent learns it.
+    """
+
+    text: str | None = None
+    include: tuple[Predicate, ...] = ()
+    exclude: tuple[Predicate, ...] = ()
+    max_active_mins: int | None = None
+    uses_pantry: tuple[str, ...] | None = None
+    exclude_ids: tuple[str, ...] = ()
+    limit: int = MAX_FILTER_LIMIT
+
+
+class FilterRejected(ValueError):
+    """The filter tried to widen what the session allows, or asked for something outside the allowlist."""
+
+
+@dataclass(frozen=True, slots=True)
+class EligibleRecipe:
+    """One recipe `get_eligible_recipes` returns, with everything the scorer and a proposal card need.
+
+    `pantry_fit` is the raw urgency-weighted sum of the pantry items it uses (not yet scaled to the scorer's
+    +3); `urgent_items` are those that go off within `URGENT_EXPIRY_DAYS`. `days_since_cooked` and `rating`
+    come from the history window, and `offered_after_floor_relaxed` marks a recipe the six-week floor gave back.
+    """
+
+    recipe_id: str
+    title: str
+    cuisine: str | None
+    total_time_mins: int | None
+    attributes: RecipeAttributes
+    pantry_fit: float = 0.0
+    pantry_items: tuple[str, ...] = ()
+    urgent_items: tuple[PantryItem, ...] = ()
+    days_since_cooked: float | None = None
+    rating: str | None = None
+    offered_after_floor_relaxed: bool = False
+
+    @property
+    def recency_penalty(self) -> float:
+        """The scorer's recency term for this recipe: -8 for a relaxed recipe, smaller as the cook ages."""
+        return _recency_penalty(self.days_since_cooked)
+
+
+@dataclass(frozen=True, slots=True)
+class EligibleRecipes:
+    """What one `get_eligible_recipes` call found: the ranked recipes, and how many passed before the limit."""
+
+    recipes: tuple[EligibleRecipe, ...]
+    matched: int
+    floor_relaxed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeCard:
+    """One recipe as `get_recipes` describes it. `ingredients` and `method` are filled for `detail="full"` only."""
+
+    recipe_id: str
+    title: str
+    cuisine: str | None
+    total_time_mins: int | None
+    active_time_mins: int | None
+    attributes: RecipeAttributes
+    key_ingredients: tuple[str, ...]
+    ingredients: tuple[str, ...] = ()
+    method: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeDetails:
+    """The cards found, and the ids the corpus does not hold."""
+
+    recipes: tuple[RecipeCard, ...]
+    unknown: tuple[str, ...] = ()
+
+
+def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -> EligibleRecipes:
+    """The recipes this household may be offered, narrowed by the agent's filter and ranked (spec 6.2).
+
+    1. The hard constraints: the dietary decisions, a thumbs down (V8), the time cap (V5's bucket rule) and the
+       meals already planned. Nothing later can bring one of these back.
+    2. The six-week floor (V2): recently cooked recipes are left out unless that leaves fewer than three per
+       slot, and then they come back last, carrying the recency penalty.
+    3. The agent's filter, which can only narrow.
+    4. The urgent guarantee (V4): every pantry item that goes off within three days gets the best recipe that
+       uses it, ahead of the ranking and inside the limit, up to `GUARANTEE_MAX` of them.
+    5. The ranking: urgency-weighted pantry fit, fresh before relaxed, seeded tie-breaks, and near-duplicates
+       of a recipe already taken left out.
+
+    Raises `FilterRejected` for a filter that would widen what the session allows.
+    """
+    _check_narrows(recipe_filter, ctx)
+    by_id = {recipe.recipe_id: recipe for recipe in ctx.recipes}
+    # Sorted, so the floor and the tie-breaks see the same order however the caller listed the corpus.
+    hard = [
+        recipe
+        for recipe_id, recipe in sorted(by_id.items())
+        if recipe_id not in ctx.planned_ids
+        and recipe_id not in ctx.dietary_excluded_ids
+        and recipe.attributes.fits_time_cap(ctx.max_active_mins, total_time_mins=recipe.total_time_mins)
+    ]
+    floor = apply_recency_floor(
+        [recipe.recipe_id for recipe in hard],
+        titles={recipe.recipe_id: recipe.title for recipe in hard},
+        cooked=ctx.cooked,
+        now=ctx.now,
+        slots=ctx.slots,
+    )
+    relaxed = set(floor.relaxed)
+    searched = _text_matches(recipe_filter.text, hard, ctx)
+    narrowed = [
+        by_id[recipe_id]
+        for recipe_id in floor.recipe_ids
+        if _passes(by_id[recipe_id], recipe_filter, searched=searched, pantry=ctx.pantry)
+    ]
+    entries = {
+        recipe.recipe_id: _eligible(
+            recipe,
+            ctx.pantry,
+            days_since_cooked=floor.days_since_cooked.get(recipe.recipe_id),
+            rating=floor.latest_rating.get(recipe.recipe_id),
+            relaxed=recipe.recipe_id in relaxed,
+        )
+        for recipe in narrowed
+    }
+    ranks = _tie_break_ranks(list(entries), ctx.seed)
+    ranked = sorted(
+        entries.values(),
+        key=lambda entry: (
+            entry.offered_after_floor_relaxed,
+            -entry.recency_penalty if entry.offered_after_floor_relaxed else 0.0,
+            -entry.pantry_fit,
+            ranks[entry.recipe_id],
+        ),
+    )
+    taken = _urgent_guarantee(ranked, limit=min(GUARANTEE_MAX, recipe_filter.limit))
+    for entry in ranked:
+        if len(taken) >= recipe_filter.limit:
+            break
+        if entry in taken or any(
+            near_duplicate_ingredients(by_id[entry.recipe_id].ingredient_names, by_id[other.recipe_id].ingredient_names)
+            for other in taken
+        ):
+            continue
+        taken.append(entry)
+    return EligibleRecipes(recipes=tuple(taken), matched=len(narrowed), floor_relaxed=floor.relaxed_floor)
+
+
+def get_recipes(
+    recipe_ids: Sequence[str], detail: Literal["summary", "full"], ctx: EligibilityContext
+) -> RecipeDetails:
+    """Describe recipes: title, cuisine, times, attributes and key ingredients; `full` adds lines and method.
+
+    A read, not a grant: describing a recipe does not make it eligible. Ids the corpus does not hold come back
+    in `unknown` rather than raising, so one bad id costs the agent nothing but that id.
+    """
+    by_id = {recipe.recipe_id: recipe for recipe in ctx.recipes}
+    cards: list[RecipeCard] = []
+    unknown: list[str] = []
+    for recipe_id in dict.fromkeys(recipe_ids):
+        recipe = by_id.get(recipe_id)
+        if recipe is None:
+            unknown.append(recipe_id)
+            continue
+        full = ctx.load_full(recipe_id) if detail == "full" and ctx.load_full is not None else None
+        ingredients, method = full if full is not None else ((), ())
+        cards.append(
+            RecipeCard(
+                recipe_id=recipe_id,
+                title=recipe.title,
+                cuisine=recipe.cuisine,
+                total_time_mins=recipe.total_time_mins,
+                active_time_mins=recipe.attributes.active_time_mins(recipe.total_time_mins),
+                attributes=recipe.attributes,
+                key_ingredients=recipe.ingredient_names[:_KEY_INGREDIENTS],
+                ingredients=ingredients,
+                method=method,
+            )
+        )
+    return RecipeDetails(recipes=tuple(cards), unknown=tuple(unknown))
+
+
+def _check_narrows(recipe_filter: RecipeFilter, ctx: EligibilityContext) -> None:
+    """Refuse a filter that would let more through than the session's own constraints do."""
+    if not 1 <= recipe_filter.limit <= MAX_FILTER_LIMIT:
+        raise FilterRejected(f"limit must be between 1 and {MAX_FILTER_LIMIT}, not {recipe_filter.limit}")
+    cap = recipe_filter.max_active_mins
+    if cap is not None:
+        if cap <= 0:
+            raise FilterRejected(f"max_active_mins must be a positive number of minutes, not {cap}")
+        if ctx.max_active_mins is not None and cap > ctx.max_active_mins:
+            raise FilterRejected(
+                f"max_active_mins may only tighten the household's {ctx.max_active_mins}-minute cap, not raise it"
+            )
+
+
+def _text_matches(text: str | None, recipes: Sequence[CorpusRecipe], ctx: EligibilityContext) -> set[str] | None:
+    """The ids `text` matches, or None when there is no text to match. One search per call."""
+    if text is None or not text.strip():
+        return None
+    if ctx.text_search is not None:
+        return set(ctx.text_search(text))
+    tokens = _WORD_RE.findall(text.casefold())
+    return {
+        recipe.recipe_id
+        for recipe in recipes
+        if all(
+            token in " ".join([recipe.title, recipe.cuisine or "", *recipe.ingredient_names]).casefold()
+            for token in tokens
+        )
+    }
+
+
+def _passes(
+    recipe: CorpusRecipe, recipe_filter: RecipeFilter, *, searched: set[str] | None, pantry: Sequence[PantryItem]
+) -> bool:
+    """Whether one recipe survives the agent's filter. Every clause narrows; none can add."""
+    attributes = recipe.attributes
+    if searched is not None and recipe.recipe_id not in searched:
+        return False
+    if recipe.recipe_id in recipe_filter.exclude_ids:
+        return False
+    if not all(predicate.matches(attributes) for predicate in recipe_filter.include):
+        return False
+    if any(predicate.matches(attributes) for predicate in recipe_filter.exclude):
+        return False
+    if not attributes.fits_time_cap(recipe_filter.max_active_mins, total_time_mins=recipe.total_time_mins):
+        return False
+    return all(
+        any(mentions_item(name, item) for name in recipe.ingredient_names) for item in recipe_filter.uses_pantry or ()
+    )
+
+
+def _eligible(
+    recipe: CorpusRecipe,
+    pantry: Sequence[PantryItem],
+    *,
+    days_since_cooked: float | None,
+    rating: str | None,
+    relaxed: bool,
+) -> EligibleRecipe:
+    """The recipe with its pantry fit: the same ingredient-line evidence a reason's "uses up" rests on."""
+    used = [item for item in pantry if any(mentions_item(name, item.name) for name in recipe.ingredient_names)]
+    return EligibleRecipe(
+        recipe_id=recipe.recipe_id,
+        title=recipe.title,
+        cuisine=recipe.cuisine,
+        total_time_mins=recipe.total_time_mins,
+        attributes=recipe.attributes,
+        pantry_fit=sum(item.weight for item in used),
+        pantry_items=tuple(item.name for item in used),
+        urgent_items=tuple(item for item in used if item.is_urgent),
+        days_since_cooked=days_since_cooked,
+        rating=rating,
+        offered_after_floor_relaxed=relaxed,
+    )
+
+
+def _urgent_guarantee(ranked: Sequence[EligibleRecipe], *, limit: int) -> list[EligibleRecipe]:
+    """One recipe per urgent item, soonest to go off first, the best-ranked recipe that uses it.
+
+    A recipe already guaranteed covers every urgent item it uses, so one dish using the coriander and the kale
+    takes one place, not two. Fresh recipes rank ahead of relaxed ones, so a relaxed recipe is guaranteed only
+    for an item no fresh recipe uses.
+    """
+    items = sorted(
+        {item for entry in ranked for item in entry.urgent_items},
+        key=lambda item: (item.expires_in_days or 0, item.name.casefold()),
+    )
+    guaranteed: list[EligibleRecipe] = []
+    covered: set[PantryItem] = set()
+    for item in items:
+        if len(guaranteed) >= limit:
+            break
+        if item in covered:
+            continue
+        entry = next((entry for entry in ranked if item in entry.urgent_items), None)
+        if entry is not None and entry not in guaranteed:
+            guaranteed.append(entry)
+            covered.update(entry.urgent_items)
+    return guaranteed
