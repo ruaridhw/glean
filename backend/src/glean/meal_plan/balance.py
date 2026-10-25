@@ -154,9 +154,9 @@ def facts_from(
     ]
 
 
-def scoring_context(facts: Sequence[RecipeFacts]) -> ScoringContext:
-    """The context the scorer reads. Profile and chips inputs stay empty until V13 and V9 send them."""
-    return ScoringContext(recipes={entry.recipe_id: entry.scorer_input() for entry in facts})
+def scoring_context(facts: Sequence[RecipeFacts], *, chips: Collection[str] = frozenset()) -> ScoringContext:
+    """The context the scorer reads: the facts, and the week's feedback chips. Profile inputs wait for V13."""
+    return ScoringContext(recipes={entry.recipe_id: entry.scorer_input() for entry in facts}, chips=frozenset(chips))
 
 
 def scored_weeks(
