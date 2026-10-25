@@ -82,6 +82,14 @@ _Avoid_: preferences, settings, prompt
 The one other meal offered beside a card, so a slot can be swapped on the phone without generating again. It is always a recipe that was eligible for this week and is not already in the week.
 _Avoid_: backup, second choice
 
+**Swap**:
+The household asking for another meal in one card of a proposal ("Find another"). The agent replaces that one meal and explains why, keeping the rest of the week exactly as it was; a meal already in the plan is never replaced. Taking the card's alternative is a local swap and asks nothing of the agent.
+_Avoid_: regenerate, reroll, replace
+
+**Swap note**:
+What the household writes with a swap, such as "something lighter, maybe fish". Optional, screened before any model reads it, and passed only as data; a note the screen drops shows "Couldn't use that note" and the swap runs without it.
+_Avoid_: swap reason, prompt, instruction
+
 **Reason kind**:
 What a meal's reason rests on: an urgent item going off, the household's profile, this week's feedback, the shape of the week, what they cooked recently, or an answer they gave.
 _Avoid_: reason type, category
