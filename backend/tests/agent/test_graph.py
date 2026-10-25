@@ -1128,6 +1128,29 @@ class TestQuestion:
         assert run.start(ScriptedModel()) is False
         assert run.record.status is SessionStatus.CANCELLED
 
+    def test_a_cancel_after_the_answers_claim_stops_before_the_paid_plan_turn(
+        self, run: Run, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._park(run, ask())
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="Two"))
+        claim = run.sessions.claim
+
+        def claim_then_cancel(*args: Any, **kwargs: Any) -> Any:
+            # The household backs out in the moment between the answer's delivery claiming the session and the
+            # run asking the model again.
+            outcome = claim(*args, **kwargs)
+            run.sessions.cancel("user-a", "sess-1")
+            return outcome
+
+        monkeypatch.setattr(run.sessions, "claim", claim_then_cancel)
+        resumed = ScriptedModel(propose_first)
+
+        run.start(resumed)
+
+        assert resumed.calls == 0
+        assert run.record.status is SessionStatus.CANCELLED
+        assert run.record.result is None
+
     def test_a_crash_after_the_answer_was_enqueued_resumes_with_that_answer_once(self, run: Run) -> None:
         class ProcessDied(BaseException):
             """A killed Lambda, from inside Python: nothing catches it."""
