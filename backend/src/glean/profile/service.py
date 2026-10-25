@@ -21,8 +21,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.profile.schemas import (
@@ -543,11 +541,12 @@ def _ask_model(
             if answer is not None
         ],
     }
-    messages = [
-        SystemMessage(PROFILE_INTERVIEW_SYSTEM_PROMPT),
-        HumanMessage(json.dumps(payload, ensure_ascii=False, sort_keys=True)),
-    ]
-    return llm_router.invoke(Feature.PROFILE_INTERVIEW, InterviewTurn, messages)
+    return llm_router.invoke(
+        Feature.PROFILE_INTERVIEW,
+        InterviewTurn,
+        system=PROFILE_INTERVIEW_SYSTEM_PROMPT,
+        user=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+    )
 
 
 def _merge(model: ProfileDraft, from_transcript: ProfileDraft, held: HouseholdProfile) -> ProfileDraft:
