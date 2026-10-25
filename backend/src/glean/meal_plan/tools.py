@@ -37,6 +37,7 @@ __all__ = [
     "HEALTHIER_CHIP",
     "LIGHTER_CHIP",
     "CandidateRecipe",
+    "PlanGap",
     "PlanPenalty",
     "PlanScore",
     "Predicate",
@@ -51,6 +52,7 @@ __all__ = [
     "Term",
     "TermScore",
     "UnknownRecipeIds",
+    "chosen_vs_best_gap",
     "chosen_vs_best_ratio",
     "create_candidate_meal_plans",
     "distinct_main_carbs",
@@ -366,6 +368,47 @@ class PlanScore:
         )
         return from_recipes + sum(penalty.points for penalty in self.penalties if penalty.term is term)
 
+    @property
+    def absolute_points(self) -> float:
+        """How much scoring is at stake here: every term's magnitude, the penalties included.
+
+        A plan's total is a signed sum, and it crosses zero when penalties cancel the fits, so this is the stable
+        measure of how much was scored: what the eval's "within 15%" gate is read against (`PlanGap`).
+        """
+        points = [term_score.points for recipe in self.recipes for term_score in recipe.terms]
+        points.extend(penalty.points for penalty in self.penalties)
+        return sum(abs(point) for point in points)
+
+
+@dataclass(frozen=True, slots=True)
+class PlanGap:
+    """How far a plan fell short of the best one, on the scale the eval's "within 15%" gate reads (spec 6.6).
+
+    `gap` is the points between them and `scale` is what was at stake in the best plan: the sum of its terms'
+    magnitudes, penalties included, floored at one. §6.6 asks for "within 15%" without naming a base, and dividing
+    by a plan's total cannot be it: totals cross zero, so a one-point gap against a near-zero best would read as a
+    total miss, and the generator's own alternative would fail the gate on the scorer's output rather than on
+    agent drift (owner decision 2026-10-25).
+    """
+
+    gap: float
+    scale: float
+
+    @property
+    def fraction(self) -> float:
+        """The shortfall as a fraction of what was at stake: 0.15 or less is the eval's "within 15%"."""
+        return self.gap / self.scale
+
+    @property
+    def within_15_percent(self) -> bool:
+        """§6.6's soft gate: the chosen plan is within 15% of the scorer's best."""
+        return self.fraction <= 0.15
+
+    @property
+    def ratio(self) -> float:
+        """`1 - fraction`, floored at 0: 1.0 is as good as the best, 0.85 is the gate."""
+        return max(1.0 - self.fraction, 0.0)
+
 
 class UnknownRecipeIds(KeyError):
     """A plan named a recipe the caller's context does not describe: the ids and the facts disagree."""
@@ -415,17 +458,18 @@ def distinct_main_carbs(recipe_ids: Sequence[str], ctx: ScoringContext) -> int:
     return len(carbs - {MainCarb.NONE, MainCarb.UNSURE})
 
 
-def chosen_vs_best_ratio(chosen: PlanScore, best: PlanScore) -> float:
-    """The chosen plan's score as a fraction of the best plan's, for the eval's "within 15%" gate (spec 6.6).
+def chosen_vs_best_gap(chosen: PlanScore, best: PlanScore) -> PlanGap:
+    """The points between a chosen plan and the scorer's best, and the scale §6.6's "within 15%" is read on.
 
-    A plan that scores at least as well as the best is 1.0, and the gate is `ratio >= 0.85`. Scores are signed
-    sums, so the shortfall is measured against the best plan's own magnitude rather than by dividing the two: a
-    best of zero would make a plain ratio meaningless. It floors at 0: the gate only reads whether it clears 0.85.
+    "Within 15%" means `gap <= 0.15 * scale`, which is `PlanGap.within_15_percent`. Nothing is owed when the
+    chosen plan scores as well as the best, so the gap floors at zero.
     """
-    shortfall = best.total - chosen.total
-    if shortfall <= 0:
-        return 1.0
-    return max(1.0 - shortfall / max(abs(best.total), 1.0), 0.0)
+    return PlanGap(gap=max(best.total - chosen.total, 0.0), scale=max(1.0, best.absolute_points))
+
+
+def chosen_vs_best_ratio(chosen: PlanScore, best: PlanScore) -> float:
+    """The same gap as a ratio, `1 - gap/scale`, floored at 0: the float the evals and the graph log."""
+    return chosen_vs_best_gap(chosen, best).ratio
 
 
 def create_candidate_meal_plans(

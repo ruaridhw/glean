@@ -27,6 +27,7 @@ from glean.meal_plan.tools import (
     UnknownRecipeIds,
     _greedy_plan,
     _Scorer,
+    chosen_vs_best_gap,
     chosen_vs_best_ratio,
     create_candidate_meal_plans,
     distinct_main_carbs,
@@ -791,6 +792,72 @@ def test_distinct_main_carbs_exclude_none_and_unsure() -> None:
 def test_variety_metrics_reject_an_id_the_context_does_not_describe() -> None:
     with pytest.raises(UnknownRecipeIds, match="ghost"):
         distinct_main_proteins(["ghost"], context(candidate("a")))
+
+
+def test_the_gap_is_read_against_what_was_at_stake_not_the_net_total() -> None:
+    # A plan's total crosses zero (penalties can outweigh fits), so a near-zero best would make any gap read as a
+    # total miss. The scale is the best plan's own term magnitudes, which stay large through zero.
+    ctx = context(
+        candidate(
+            "heavy-but-loved-once",
+            main_protein=MainProtein.CHICKEN,
+            cuisine=Cuisine.ITALIAN,
+            pantry_fit=3.0,
+            rating=Rating.DOWN,
+        ),
+        candidate("fish", main_protein=MainProtein.FISH, cuisine=Cuisine.THAI, pantry_fit=5.0),
+        candidate("prawns", main_protein=MainProtein.SEAFOOD, cuisine=Cuisine.SPANISH, pantry_fit=4.0),
+    )
+    best = score(["heavy-but-loved-once", "fish"], ctx)
+    chosen = score(["heavy-but-loved-once", "prawns"], ctx)
+    assert abs(best.total) < 0.5  # the fits and the thumb down cancel out
+    assert best.absolute_points > 10.0
+    gap = chosen_vs_best_gap(chosen, best)
+    assert gap.gap == pytest.approx(1.0)
+    assert gap.scale == best.absolute_points
+    assert gap.fraction == pytest.approx(1.0 / best.absolute_points)
+    assert gap.within_15_percent is True
+    assert gap.ratio == pytest.approx(1.0 - 1.0 / best.absolute_points)
+    # Dividing by the net total instead, as the first version did, calls that same one point a total miss.
+    assert 1.0 - 1.0 / max(abs(best.total), 1.0) < 0.85
+
+
+def test_a_plan_well_short_of_the_best_fails_the_fifteen_percent_gate() -> None:
+    ctx = context(
+        candidate("a", main_protein=MainProtein.CHICKEN, pantry_fit=10.0),
+        candidate("b", main_protein=MainProtein.FISH, pantry_fit=6.0),
+        candidate("c", main_protein=MainProtein.BEEF, pantry_fit=1.0),
+    )
+    best = score(["a", "b"], ctx)
+    short = score(["c"], ctx)
+    gap = chosen_vs_best_gap(short, best)
+    assert gap.gap == pytest.approx(15.0)
+    assert gap.scale == pytest.approx(16.0)
+    assert gap.within_15_percent is False
+    assert gap.ratio == pytest.approx(1.0 - 15.0 / 16.0)
+
+
+def test_a_better_plan_has_no_gap_and_the_scale_is_never_below_one() -> None:
+    ctx = context(candidate("a", pantry_fit=0.4), candidate("b", pantry_fit=0.6))
+    best = score(["a", "b"], ctx)
+    gap = chosen_vs_best_gap(score(["a", "b"], ctx), best)
+    assert gap.gap == 0.0
+    assert gap.scale == pytest.approx(1.0)  # the best's own terms add up to 1.0, which is the floor either way
+    assert gap.within_15_percent is True
+    assert gap.ratio == 1.0
+    tiny = score(["a"], ctx)
+    tiny_gap = chosen_vs_best_gap(tiny, best)
+    assert tiny_gap.scale == 1.0  # a best worth less than a point is still scored on a scale of at least one
+    assert tiny_gap.fraction == pytest.approx(0.6)
+
+
+def test_the_ratio_the_eval_reads_is_the_gaps_ratio() -> None:
+    ctx = context(candidate("a", pantry_fit=3.0), candidate("b", pantry_fit=1.0))
+    best = score(["a", "b"], ctx)
+    chosen = score(["a"], ctx)
+    gap = chosen_vs_best_gap(chosen, best)
+    assert chosen_vs_best_ratio(chosen, best) == gap.ratio
+    assert (chosen_vs_best_ratio(chosen, best) >= 0.85) is gap.within_15_percent
 
 
 def test_the_chosen_plan_is_compared_with_the_best_as_a_ratio() -> None:
