@@ -157,18 +157,20 @@ class SessionStore(Protocol):
         ...
 
     def enqueue_swap(
-        self, user_sub: str, session_id: str, message: SwapMessage, *, note_dropped: bool = False
+        self, user_sub: str, session_id: str, message: SwapMessage, *, note_rejection: str | None = None
     ) -> SwapRecord:
         """Queue a swap on a session with a proposal, and return it.
 
-        *message* carries the note the route's screen passed, never the note as typed; *note_dropped* says the
-        household wrote one the screen dropped. Accepted only from `done`, from a `failed` that still holds its
-        proposal (a swap whose worker died), or over a swap queued at least `STALE_QUEUED_SWAP_SECONDS` ago that no
-        delivery took, which is marked failed (abandoned). The swap's `queued_at` is the store's own clock.
+        *message* carries the note the route's screen passed, never the note as typed; *note_rejection* is why
+        the screen dropped a note the household wrote, if it did. Accepted only from `done`, from a `failed`
+        that still holds its proposal (a swap whose worker died), or over a swap queued at least
+        `STALE_QUEUED_SWAP_SECONDS` ago that no delivery took, which is marked failed (abandoned). The swap's
+        `queued_at` is the store's own clock.
+
         The session moves to `queued` with the swap as its newest, and the finished run's owner and lease are
         cleared so the next delivery claims it fresh. Raises `UnknownSessionError` for no such session, and
-        `MessageRefusedError` when a run or swap is still going, there is no proposal, or the slot is not one
-        of its meals.
+        `MessageRefusedError` when a run or swap is still going, there is no proposal, or the slot or the week
+        does not match its cards.
         """
         ...
 
@@ -252,7 +254,7 @@ def swap_placement(record: SessionRecord, message: SwapMessage) -> int | Message
 
 
 def queued_swap(
-    record: SessionRecord, message: SwapMessage, *, now: datetime, note_dropped: bool = False
+    record: SessionRecord, message: SwapMessage, *, now: datetime, note_rejection: str | None = None
 ) -> tuple[SessionRecord, SwapRecord]:
     """*record* with *message* queued, or the refusal both stores raise."""
     epoch = int(now.timestamp())
@@ -262,7 +264,7 @@ def queued_swap(
     position = swap_placement(record, message)
     if isinstance(position, MessageRefusal):
         raise MessageRefusedError(position)
-    return record.with_swap(message, position=position, now=epoch, note_dropped=note_dropped)
+    return record.with_swap(message, position=position, now=epoch, note_rejection=note_rejection)
 
 
 class SessionBusyError(RuntimeError):
@@ -364,12 +366,12 @@ class InMemorySessionStore:
         return True
 
     def enqueue_swap(
-        self, user_sub: str, session_id: str, message: SwapMessage, *, note_dropped: bool = False
+        self, user_sub: str, session_id: str, message: SwapMessage, *, note_rejection: str | None = None
     ) -> SwapRecord:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
-        updated, swap = queued_swap(record, message, now=self._clock(), note_dropped=note_dropped)
+        updated, swap = queued_swap(record, message, now=self._clock(), note_rejection=note_rejection)
         self._write(
             updated.model_copy(
                 update={"status": SessionStatus.QUEUED, "owner": None, "lease_until": None, "error": None}

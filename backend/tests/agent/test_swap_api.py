@@ -226,6 +226,8 @@ def test_a_note_the_screen_drops_is_never_stored_and_never_reaches_the_model(
     record = sessions.get("user-a", view["session_id"])
     assert record is not None
     assert injection not in record.model_dump_json()
+    # Why it was dropped is kept for the logs and evals, never the note itself.
+    assert record.swaps[-1].note_rejection == ("not_a_preference" if screen == "low_probability" else "unavailable")
     after = api.get(f"/meal-plan/sessions/{view['session_id']}").json()
     assert after["swap"]["state"] == "done"
     assert after["swap"]["note"] == "dropped"

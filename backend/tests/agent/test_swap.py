@@ -132,7 +132,8 @@ class SwapRun(Run):
         *week* the cards as the app shows them (the proposal's own meals unless a test says otherwise)."""
         shown = week or self.week
         message = SwapMessage(type="swap", slot=shown[position], note=note, week=shown)
-        self.sessions.enqueue_swap("user-a", "sess-1", message, note_dropped=note_dropped)
+        rejection = "not_a_preference" if note_dropped else None
+        self.sessions.enqueue_swap("user-a", "sess-1", message, note_rejection=rejection)
 
     @property
     def week(self) -> list[str]:

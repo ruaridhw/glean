@@ -127,19 +127,19 @@ def resume(
     user_sub: str,
     sessions: SessionStore,
     dispatch: Callable[[AgentSession], None],
-    note_dropped: bool = False,
+    note_rejection: str | None = None,
 ) -> int | None:
     """Resume *session_id* with a household message: store it on the item and re-enqueue the session.
 
-    *message* carries only what the route's screen passed; *note_dropped* says the household wrote a note the
-    screen dropped. Returns the swap's id for a swap. Raises `UnknownSessionError` for no such session,
+    *message* carries only what the route's screen passed; *note_rejection* is why the screen dropped a note the
+    household wrote, if it did. Returns the swap's id for a swap. Raises `UnknownSessionError` for no such session,
     `MessageRefusedError` when the session cannot take this message now, and `MessageNotSent` when the queue
     would not take it. The worker picks the message up from the item (`start`), never from the queue body.
     """
     match message:
         case SwapMessage():
             swap_id: int | None = sessions.enqueue_swap(
-                user_sub, session_id, message, note_dropped=note_dropped
+                user_sub, session_id, message, note_rejection=note_rejection
             ).swap_id
         case _:
             # V11 stores an answer or a skip as the pending answer of a run parked on its question, here. No run
