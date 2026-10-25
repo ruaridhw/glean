@@ -417,7 +417,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
           _endFind(attempt, find, index, notice: swapFailedCopy);
           return;
         }
-        if (update.status == MealPlanSessionStatus.cancelled) return;
+        if (update.status == MealPlanSessionStatus.cancelled) {
+          // The session was cancelled under the swap: it will never finish, so the card recovers.
+          _endFind(attempt, find, index, notice: swapFailedCopy);
+          return;
+        }
       } on ApiException catch (error) {
         // As for the run: a 404 cannot recover, anything else is one missed poll and the cap ends it.
         if (error is ApiServerException && error.statusCode == 404) {

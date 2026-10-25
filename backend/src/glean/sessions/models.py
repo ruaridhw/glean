@@ -372,9 +372,10 @@ class SwapView(BaseModel):
             return None
         swap = record.swaps[-1]
         state = swap.state
-        if state is SwapState.PENDING and record.status is SessionStatus.FAILED:
-            # The worker died with it, or the queue never took it: the dead-letter handler (or the route) failed
-            # the session. The proposal is still there, so the card shows the swap's error, not the week's.
+        if state is SwapState.PENDING and record.status in {SessionStatus.FAILED, SessionStatus.CANCELLED}:
+            # Nothing will finish it: the worker died with it or the queue never took it (the dead-letter handler
+            # or the route failed the session), or the household cancelled the session. The swap is over, so the
+            # card shows the swap's error, never a swap pending for good.
             state = SwapState.FAILED
         replacement = None
         if state is SwapState.DONE and record.result is not None and swap.position < len(record.result.suggestions):
