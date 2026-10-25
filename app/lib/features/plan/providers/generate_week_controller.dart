@@ -25,6 +25,7 @@ import 'package:glean/data/util/week.dart';
 import '../compression.dart';
 import '../food_groups.dart';
 import '../generate_failure.dart';
+import '../week_feedback.dart';
 
 /// How the session loop waits and measures. Injected so a test can drive the whole 1 s cadence and the 5 min cap
 /// without real delays: production sleeps for real and reads the wall clock.
@@ -495,6 +496,13 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
                 progress: <String>[...state.progress, ...update.progress],
                 result: result,
               );
+              // The box says "Couldn't use that note" when the screen dropped it; the chips applied anyway.
+              ref
+                  .read(weekFeedbackProvider(weekStart).notifier)
+                  .noteOutcome(
+                    sentNote: request.humanFeedback?.note,
+                    outcome: result.feedbackNote,
+                  );
               return;
             case MealPlanSessionStatus.failed:
               _fail(
@@ -666,7 +674,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     // One clock for the pantry slice and the date it was measured from: across local midnight they
     // must not disagree about which day `expires_in_days` counts from.
     final now = DateTime.now();
+    final HumanFeedbackRequest? feedback = ref
+        .read(weekFeedbackProvider(weekStart))
+        .toRequest();
     return MealPlanRequest(
+      humanFeedback: feedback,
       source: 'corpus',
       excludeExternalIds: excluded.toList(),
       pantry: compressPantry(pantry, now: now),
