@@ -8,8 +8,7 @@ six-week floor all happen in `get_eligible_recipes` — so everything here is a 
 A plan's score is each recipe's fit minus the plan's penalties, one weight per row of the scorer table
 (spec 6.2, "Scorer weights"). Every one of those numbers is a starting guess, so they live in `ScorerWeights`
 and no term hard-codes its own. A recipe whose attributes are `unsure` earns no variety credit and no penalty,
-and a term whose attribute is not in G1's set is skipped and named in the breakdown rather than silently scored
-as zero: richness was dropped in G1, so there is nothing to read for the "3+ hearty" rule.
+and every row of the table is scored: the table has no heartiness term, because G1 dropped richness.
 """
 
 from __future__ import annotations
@@ -48,7 +47,6 @@ __all__ = [
     "RecipeScore",
     "ScorerWeights",
     "ScoringContext",
-    "SkippedTerm",
     "Term",
     "TermScore",
     "UnknownRecipeIds",
@@ -339,20 +337,11 @@ class PlanPenalty:
 
 
 @dataclass(frozen=True, slots=True)
-class SkippedTerm:
-    """A term the scorer did not evaluate, and why: the eval reports these rather than reading a silent zero."""
-
-    term: str
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
 class PlanScore:
     """A whole week: every recipe's terms, the plan's penalties, and the terms that could not be evaluated."""
 
     recipes: tuple[RecipeScore, ...]
     penalties: tuple[PlanPenalty, ...] = ()
-    skipped_terms: tuple[SkippedTerm, ...] = ()
 
     @property
     def total(self) -> float:
@@ -414,16 +403,6 @@ class PlanGap:
 
 class UnknownRecipeIds(KeyError):
     """A plan named a recipe the caller's context does not describe: the ids and the facts disagree."""
-
-
-# The terms that cannot be scored yet, with the reason. G1 dropped richness, so nothing carries "hearty".
-_SKIPPED_TERMS: tuple[SkippedTerm, ...] = (
-    SkippedTerm(
-        term="hearty_repeat",
-        reason="no G1 attribute carries heartiness: richness was dropped until a slice needs it, "
-        "so a plan of 3+ hearty dishes cannot be counted",
-    ),
-)
 
 
 def score_meal_plan(
@@ -548,7 +527,6 @@ class _Scorer:
         return PlanScore(
             recipes=tuple(self.recipe(recipe_id) for recipe_id in recipe_ids),
             penalties=self.penalties(recipe_ids),
-            skipped_terms=_SKIPPED_TERMS,
         )
 
     def total(self, recipe_ids: Sequence[str]) -> float:
