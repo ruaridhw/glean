@@ -24,7 +24,7 @@ from glean.meal_plan.schemas import (
     MealPlanSuggestion,
     ReasonKind,
 )
-from glean.meal_plan.tools import LIGHTER_CHIP, Rating
+from glean.meal_plan.tools import LIGHTER_CHIP, Rating, Term, score_meal_plan
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.corpus import RecipeCorpusStore
@@ -948,3 +948,23 @@ def test_a_week_that_can_use_the_only_urgent_recipe_takes_it(tmp_path: Path) -> 
 
     assert "rec_fish_pie" in prepared.weeks[0].recipe_ids
     assert balance.unused_urgent_items(prepared.weeks[0]) == ()
+
+
+def test_an_urgent_item_a_planned_meal_uses_is_not_charged_to_the_week(tmp_path: Path) -> None:
+    # The reviewer's case: the lentil bake is already in the week and uses the potato, and the offered fish pie
+    # uses it too. The week is not leaving the potato unused, so nothing may be charged for fish pie staying out.
+    prepared = _prepared(
+        tmp_path,
+        meals_per_week=2,
+        exclude_external_ids=["rec_lentil_bake"],
+        pantry=[{"id": 1, "name": "potato", "quantity": 400, "unit": "g", "urgency_score": 90.0, "expires_in_days": 2}],
+    )
+
+    assert prepared.urgent_items_already_used == ["potato"]
+    assert {fact.recipe_id: fact.urgent_items for fact in prepared.facts}["rec_fish_pie"] == ("potato",)
+    assert all(balance.unused_urgent_items(week) == () for week in prepared.weeks)
+
+    # A plan that leaves the second potato recipe out is charged nothing for it.
+    context = balance.scoring_context(prepared.facts, urgent_items_already_used=prepared.urgent_items_already_used)
+    elsewhere = next(external_id for external_id in prepared.offered_ids if external_id != "rec_fish_pie")
+    assert score_meal_plan([elsewhere], context).points(Term.UNUSED_URGENT_ITEM) == 0.0

@@ -302,8 +302,9 @@ class ScoringContext:
 
     `recipes` holds one `CandidateRecipe` per candidate id. `urgent_item_uses` is V4's per-recipe urgent items:
     the items in the offered pool that go off within three days, so "the pool can use this item" is what makes
-    leaving it unused a penalty. The rest are the optional profile inputs (spec 6.4) and the week's feedback
-    chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
+    leaving it unused a penalty. `urgent_items_already_used` are the ones a meal already in the week uses, which
+    cannot be left unused and so are never charged. The rest are the optional profile inputs (spec 6.4) and the
+    week's feedback chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
     predicate earns nothing (and the two chips the scorer reads by name still work: `healthier` doubles the whole
     food term, `lighter` turns on the calories term).
     """
@@ -316,6 +317,7 @@ class ScoringContext:
     chips: frozenset[str] = frozenset()
     chip_predicates: Mapping[str, Predicate] = field(default_factory=dict)
     urgent_item_uses: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    urgent_items_already_used: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,9 +533,12 @@ class _Scorer:
             weights.repeat_dish_type,
             weights.repeat_cuisine,
         )
-        # Every urgent item at least one candidate uses: the ones a week could have used, and so the ones it
-        # can be charged for leaving out.
-        self._pool_urgent_items = frozenset(item for items in ctx.urgent_item_uses.values() for item in items)
+        # Every urgent item at least one candidate uses: the ones this week could have used, and so the ones it
+        # can be charged for leaving out. An item a meal already in the week uses is not one of them: it is being
+        # used, just not by this generation.
+        self._pool_urgent_items = frozenset(
+            item for items in ctx.urgent_item_uses.values() for item in items
+        ) - frozenset(ctx.urgent_items_already_used)
         self._recipes: dict[str, RecipeScore] = {}
         self._totals: dict[str, float] = {}
         self._values: dict[str, tuple[str, str, str, str]] = {}

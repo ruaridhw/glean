@@ -1101,3 +1101,52 @@ def test_the_unused_urgent_row_reaches_the_weeks_a_generator_offers() -> None:
 
     assert "salmon" in week.recipe_ids
     assert week.points(Term.UNUSED_URGENT_ITEM) == 0.0
+
+
+def test_an_urgent_item_a_planned_meal_already_uses_is_not_charged() -> None:
+    # The household is already cooking the haddock tonight, so a week that does not cook it twice is not leaving
+    # it unused: the item is in play, just not by this generation.
+    ctx = context(
+        candidate("chicken", main_protein=MainProtein.CHICKEN, main_carb=MainCarb.RICE),
+        candidate("haddock", main_protein=MainProtein.FISH, main_carb=MainCarb.POTATO),
+        urgent_item_uses={"haddock": ("haddock fillet",)},
+        urgent_items_already_used=("haddock fillet",),
+    )
+
+    assert score(["chicken"], ctx).points(Term.UNUSED_URGENT_ITEM) == 0.0
+    # Another item nothing planned uses is still charged, so the field subtracts rather than disables the row.
+    both = context(
+        candidate("chicken", main_protein=MainProtein.CHICKEN, main_carb=MainCarb.RICE),
+        candidate("haddock", main_protein=MainProtein.FISH, main_carb=MainCarb.POTATO),
+        candidate("herby", main_protein=MainProtein.LAMB, main_carb=MainCarb.NONE),
+        urgent_item_uses={"haddock": ("haddock fillet",), "herby": ("coriander",)},
+        urgent_items_already_used=("haddock fillet",),
+    )
+    assert score(["chicken"], both).points(Term.UNUSED_URGENT_ITEM) == -4.0
+
+
+def test_a_planned_urgent_item_does_not_force_a_second_recipe_that_uses_it() -> None:
+    # Without the subtraction the generator takes the weaker haddock recipe to dodge the -4; with it, the week
+    # keeps the better recipe and the planned meal goes on using the haddock.
+    built = [
+        CandidateRecipe(
+            recipe_id="chicken", attributes=RecipeAttributes(main_protein=MainProtein.CHICKEN), pantry_fit=2.0
+        ),
+        CandidateRecipe(recipe_id="beef", attributes=RecipeAttributes(main_protein=MainProtein.BEEF), pantry_fit=1.9),
+        CandidateRecipe(
+            recipe_id="haddock", attributes=RecipeAttributes(main_protein=MainProtein.FISH), pantry_fit=1.0
+        ),
+    ]
+    ids = [entry.recipe_id for entry in built]
+
+    charged = ScoringContext(recipes={e.recipe_id: e for e in built}, urgent_item_uses={"haddock": ("haddock fillet",)})
+    already_used = ScoringContext(
+        recipes={e.recipe_id: e for e in built},
+        urgent_item_uses={"haddock": ("haddock fillet",)},
+        urgent_items_already_used=("haddock fillet",),
+    )
+
+    assert "haddock" in create_candidate_meal_plans(ids, 2, charged, k=1)[0].recipe_ids
+    second = create_candidate_meal_plans(ids, 2, already_used, k=1)[0]
+    assert "haddock" not in second.recipe_ids
+    assert second.points(Term.UNUSED_URGENT_ITEM) == 0.0

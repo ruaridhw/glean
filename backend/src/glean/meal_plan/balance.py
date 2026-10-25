@@ -165,12 +165,22 @@ def facts_from(
     ]
 
 
-def scoring_context(facts: Sequence[RecipeFacts], *, chips: Collection[str] = frozenset()) -> ScoringContext:
-    """The context the scorer reads: the facts, and the week's feedback chips. Profile inputs wait for V13."""
+def scoring_context(
+    facts: Sequence[RecipeFacts],
+    *,
+    chips: Collection[str] = frozenset(),
+    urgent_items_already_used: Sequence[str] = (),
+) -> ScoringContext:
+    """The context the scorer reads: the facts, the week's chips, and what is already being used up.
+
+    `urgent_items_already_used` are the urgent items a meal already in the week uses: the week is not charged for
+    leaving those out, because it is not leaving them out. Profile inputs wait for V13.
+    """
     return ScoringContext(
         recipes={entry.recipe_id: entry.scorer_input() for entry in facts},
         chips=frozenset(chips),
         urgent_item_uses={entry.recipe_id: entry.urgent_items for entry in facts if entry.urgent_items},
+        urgent_items_already_used=tuple(urgent_items_already_used),
     )
 
 
