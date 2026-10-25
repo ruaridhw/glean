@@ -521,7 +521,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         "--target",
         type=float,
         default=DEFAULT_TARGET_ACCURACY,
-        help="The accuracy a chosen bar has to reach (default 95%).",
+        help="The accuracy a chosen bar has to reach (default 95%%).",
     )
     compare.add_argument(
         "--min-accepted",
