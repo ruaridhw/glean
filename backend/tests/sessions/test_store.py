@@ -26,6 +26,7 @@ from glean.sessions.models import (
     MAX_ITEM_BYTES,
     MAX_PROGRESS_LINES,
     MAX_STORED_INPUT_BYTES,
+    MAX_SWAPS_KEPT,
     SESSION_TTL_HOURS,
     AbandonResult,
     AgentSession,
@@ -33,6 +34,11 @@ from glean.sessions.models import (
     SessionError,
     SessionErrorCode,
     SessionStatus,
+    SessionView,
+    SwapMessage,
+    SwapNoteUse,
+    SwapRecord,
+    SwapState,
     stored_input_bytes,
 )
 from glean.sessions.store import (
@@ -42,6 +48,8 @@ from glean.sessions.store import (
     QUEUE_VISIBILITY_SECONDS,
     WORKER_TIMEOUT_SECONDS,
     InMemorySessionStore,
+    MessageRefusal,
+    MessageRefusedError,
     SessionTooLargeError,
     UnknownSessionError,
     lease_seconds_for,
@@ -707,3 +715,202 @@ def test_a_full_proposal_with_alternatives_fits_the_item(store: tuple[SessionSto
     assert record is not None
     assert record.status is SessionStatus.DONE
     assert record.result == plan
+
+
+# --- Swaps (V10): a swap message re-queues a finished session, one at a time -------------------------------
+
+
+def _proposal() -> MealPlanResult:
+    return MealPlanResult(
+        suggestions=[
+            MealPlanSuggestion(external_id="rec_1", title="Lentil Bake", reason="Cheap."),
+            MealPlanSuggestion(external_id="rec_2", title="Tofu Noodles", reason="Quick."),
+        ]
+    )
+
+
+def _done(sessions: SessionStore, clock: Clock, **overrides: Any) -> None:
+    sessions.create(_session(**overrides), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.complete("user-a", "sess-1", _proposal(), owner="attempt-1")
+
+
+def _swap(slot: str = "rec_2", note: str | None = None) -> SwapMessage:
+    return SwapMessage(type="swap", slot=slot, note=note)
+
+
+def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap(note="  maybe fish  "))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert swap == SwapRecord(swap_id=1, slot="rec_2", position=1, note="maybe fish")
+    assert record.status is SessionStatus.QUEUED
+    assert record.pending_swap == swap
+    # The proposal stays readable while the swap runs, and the finished run's lease no longer stands in the way
+    # of the claim (or of failing the session if the queue never takes the message).
+    assert record.result == _proposal()
+    assert record.owner is None
+    assert record.lease_until is None
+
+
+def test_only_one_swap_runs_at_a_time(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    sessions.enqueue_swap("user-a", "sess-1", _swap())
+
+    with pytest.raises(MessageRefusedError) as queued:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_1"))
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    with pytest.raises(MessageRefusedError) as running:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_1"))
+
+    assert queued.value.reason is MessageRefusal.BUSY
+    assert running.value.reason is MessageRefusal.BUSY
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert [swap.swap_id for swap in record.swaps] == [1]
+
+
+def test_a_swap_before_the_proposal_exists_is_refused_as_busy(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+
+    with pytest.raises(MessageRefusedError) as refused:
+        sessions.enqueue_swap("user-a", "sess-1", _swap())
+
+    assert refused.value.reason is MessageRefusal.BUSY
+
+
+@pytest.mark.parametrize("ending", ["cancel", "fail"])
+def test_a_session_with_no_proposal_takes_no_swap(store: tuple[SessionStore, Clock], ending: str) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    if ending == "cancel":
+        sessions.cancel("user-a", "sess-1")
+    else:
+        sessions.fail("user-a", "sess-1", SessionError(code=SessionErrorCode.MODEL_ERROR), owner="attempt-1")
+
+    with pytest.raises(MessageRefusedError) as refused:
+        sessions.enqueue_swap("user-a", "sess-1", _swap())
+
+    assert refused.value.reason is MessageRefusal.NO_PROPOSAL
+
+
+def test_a_meal_already_in_the_plan_is_not_a_slot_a_swap_can_replace(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock, exclude_external_ids=["rec_planned"])
+
+    with pytest.raises(MessageRefusedError) as refused:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_planned"))
+
+    assert refused.value.reason is MessageRefusal.UNKNOWN_SLOT
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.swaps == []
+
+
+def test_another_users_session_takes_no_swap(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+
+    with pytest.raises(UnknownSessionError):
+        sessions.enqueue_swap("user-b", "sess-1", _swap())
+
+
+def test_the_owner_finishes_a_swap_with_the_new_proposal(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap(note="maybe fish"))
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    swapped = MealPlanResult(
+        suggestions=[
+            _proposal().suggestions[0],
+            MealPlanSuggestion(external_id="rec_fish", title="Fish Pie", reason="You asked for fish."),
+        ]
+    )
+    finished = swap.model_copy(update={"state": SwapState.DONE, "note_use": SwapNoteUse.USED})
+
+    assert sessions.finish_swap("user-a", "sess-1", swapped, finished, owner="attempt-other") is False
+    assert sessions.finish_swap("user-a", "sess-1", swapped, finished, owner="attempt-2") is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result == swapped
+    assert record.swaps == [finished]
+    view = SessionView.from_record(record)
+    assert view.swap is not None
+    assert view.swap.state is SwapState.DONE
+    assert view.swap.note is SwapNoteUse.USED
+    assert view.swap.replacement is not None
+    assert view.swap.replacement.external_id == "rec_fish"
+
+
+def test_a_slot_the_app_swapped_back_still_finds_its_place(store: tuple[SessionStore, Clock]) -> None:
+    """Undo swap is local, so the app can ask again about a meal the server already replaced."""
+    sessions, clock = store
+    _done(sessions, clock)
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap())
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    swapped = MealPlanResult(
+        suggestions=[
+            _proposal().suggestions[0],
+            MealPlanSuggestion(external_id="rec_fish", title="Fish Pie", reason="Fish."),
+        ]
+    )
+    sessions.finish_swap(
+        "user-a", "sess-1", swapped, swap.model_copy(update={"state": SwapState.DONE}), owner="attempt-2"
+    )
+
+    again = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2"))
+
+    assert again.swap_id == 2
+    assert again.position == 1
+
+
+def test_a_swap_whose_worker_died_leaves_the_proposal_swappable(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    sessions.enqueue_swap("user-a", "sess-1", _swap())
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+    sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    view = SessionView.from_record(record)
+    assert view.status is SessionStatus.FAILED
+    assert view.swap is not None
+    assert view.swap.state is SwapState.FAILED
+    assert view.result == _proposal()
+
+    retried = sessions.enqueue_swap("user-a", "sess-1", _swap())
+
+    assert retried.swap_id == 2
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.QUEUED
+    assert record.error is None
+
+
+def test_the_swap_history_is_bounded(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    for attempt in range(MAX_SWAPS_KEPT + 3):
+        swap = sessions.enqueue_swap("user-a", "sess-1", _swap())
+        owner = f"attempt-swap-{attempt}"
+        sessions.claim("user-a", "sess-1", owner=owner, now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+        sessions.finish_swap(
+            "user-a", "sess-1", _proposal(), swap.model_copy(update={"state": SwapState.NO_REPLACEMENT}), owner=owner
+        )
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert len(record.swaps) == MAX_SWAPS_KEPT
+    assert record.swaps[-1].swap_id == MAX_SWAPS_KEPT + 3
