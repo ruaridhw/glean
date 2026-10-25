@@ -183,3 +183,4 @@ DISH_TYPE  # PredicateField member, as above
 CUISINE  # PredicateField member, as above
 NOT_IN  # PredicateOp member, from the spec's filter shape; V9's chips write it
 detail  # PlanPenalty field: the value, median or target the penalty is about
+within_15_percent  # PlanGap: the eval's within-15% gate, read by the evals (6.6) and V7
