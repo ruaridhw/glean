@@ -160,6 +160,32 @@ class UsedUpPantryItem {
   final String? goesOff;
 }
 
+/// The attributes a proposal card labels, measured by the backend's enrichment run (V5).
+///
+/// Only known values arrive: an attribute the decision model was not confident about is null, and the card
+/// shows no badge for it. An older backend omits the whole object, which parses as all-null.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class MealPlanAttributes {
+  const MealPlanAttributes({
+    this.mainProtein,
+    this.mainCarb,
+    this.dishType,
+    this.activeTimeMins,
+  });
+
+  factory MealPlanAttributes.fromJson(Map<String, dynamic> json) =>
+      _$MealPlanAttributesFromJson(json);
+
+  /// G1 value (`chicken`, `beans_and_pulses`, ...), or null when unknown.
+  final String? mainProtein;
+  final String? mainCarb;
+  final String? dishType;
+
+  /// Hands-on minutes to show: the enriched bucket's upper bound, or the recipe's total time when no bucket was
+  /// measured. Null when neither is known.
+  final int? activeTimeMins;
+}
+
 /// A single LLM-suggested recipe returned by `POST /meal-plan`: an ephemeral proposal, persisted only when the
 /// user commits it.
 ///
@@ -176,6 +202,7 @@ class MealPlanRecipe {
     this.usesUp = const [],
     this.reasonKind,
     this.alternative,
+    this.attributes,
   });
 
   factory MealPlanRecipe.fromJson(Map<String, dynamic> json) =>
@@ -200,6 +227,10 @@ class MealPlanRecipe {
   /// One diet-safe alternative from the same candidate pool, or null when the server offered none. Swapping is
   /// local and instant: this is a suggestion, not a saved recipe.
   final MealPlanRecipe? alternative;
+
+  /// What the card labels this meal as (V5). Additive, and nullable on purpose: an older backend omits it,
+  /// and a proposal read from a checkpoint written before V5 has none, so the card simply shows no badges.
+  final MealPlanAttributes? attributes;
 }
 
 /// A meal already in the week that the planner also offered an alternative for, matched by the corpus id the

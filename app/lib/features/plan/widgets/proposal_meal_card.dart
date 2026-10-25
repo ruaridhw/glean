@@ -7,33 +7,28 @@ import 'package:flutter/material.dart';
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/design_system/design_system.dart';
 
-/// The attribute labels' place are reserved from V3; recipe attributes arrive with V5. Until then the row is
-/// three deliberately empty dashed chips. They carry no invented value, and the semantics say so once.
-class ProposalAttributePlaceholders extends StatelessWidget {
-  const ProposalAttributePlaceholders({super.key});
+import '../proposal_labels.dart';
+
+/// What a meal is: protein, carb, dish type and hands-on time, as V3's design places them (direction A,
+/// "fish · rice · traybake · 20 min"). The values are measured by V5's enrichment; a meal with nothing measured
+/// yet, or nothing the model was sure enough about, gets no row at all rather than an empty chip or a guess.
+class ProposalAttributeLabels extends StatelessWidget {
+  const ProposalAttributeLabels({super.key, required this.attributes});
+
+  final MealPlanAttributes? attributes;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colorScheme = Theme.of(context).colorScheme;
-    return Semantics(
-      label: 'Recipe details not available yet',
-      child: ExcludeSemantics(
-        child: Wrap(
-          spacing: context.tokens.spacing.xs,
-          runSpacing: context.tokens.spacing.xs,
-          children: <Widget>[
-            for (int i = 0; i < 3; i++)
-              Container(
-                width: 44,
-                height: 22,
-                decoration: BoxDecoration(
-                  border: Border.all(color: colorScheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(context.tokens.radius.sm),
-                ),
-              ),
-          ],
-        ),
-      ),
+    final List<String> labels = proposalLabels(attributes);
+    if (labels.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Wrap(
+      spacing: context.tokens.spacing.xs,
+      runSpacing: context.tokens.spacing.xs,
+      children: <Widget>[
+        for (final String label in labels) GleanBadge(label: label),
+      ],
     );
   }
 }
@@ -69,6 +64,10 @@ class ProposalSwapPanel extends StatelessWidget {
             'Alternative: ${alternative.title}',
             style: textTheme.titleSmall,
           ),
+          if (proposalLabels(alternative.attributes).isNotEmpty) ...<Widget>[
+            SizedBox(height: tokens.spacing.xs),
+            ProposalAttributeLabels(attributes: alternative.attributes),
+          ],
           if (alternative.reason.isNotEmpty) ...<Widget>[
             SizedBox(height: tokens.spacing.xs),
             Text(
@@ -150,8 +149,10 @@ class ProposalMealCard extends StatelessWidget {
                   ),
               ],
             ),
-            SizedBox(height: tokens.spacing.xs),
-            const ProposalAttributePlaceholders(),
+            if (proposalLabels(meal.attributes).isNotEmpty) ...<Widget>[
+              SizedBox(height: tokens.spacing.xs),
+              ProposalAttributeLabels(attributes: meal.attributes),
+            ],
             if (meal.reason.isNotEmpty) ...<Widget>[
               SizedBox(height: tokens.spacing.sm),
               Text(
