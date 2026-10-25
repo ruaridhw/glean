@@ -620,6 +620,19 @@ def test_the_same_seed_gives_the_same_plans() -> None:
     assert [plan.recipe_ids for plan in first] == [plan.recipe_ids for plan in again]
 
 
+def test_a_pool_in_a_different_order_plans_the_same_week() -> None:
+    # Every candidate scores the same here, so only the seeded tie-break chooses between them; it must not also
+    # depend on the order the caller happened to list the ids in.
+    ctx = context(*(candidate(f"recipe-{index}") for index in range(8)))
+    ids = [f"recipe-{index}" for index in range(8)]
+    shuffled = list(ids)
+    random.Random(1).shuffle(shuffled)
+    assert shuffled != ids
+    first = create_candidate_meal_plans(ids, 4, ctx, k=2, seed=5)
+    second = create_candidate_meal_plans(shuffled, 4, ctx, k=2, seed=5)
+    assert [plan.recipe_ids for plan in first] == [plan.recipe_ids for plan in second]
+
+
 def test_a_different_seed_breaks_the_ties_differently() -> None:
     # Every candidate scores the same, so the seed's tie-break is the only thing choosing between them.
     ctx = context(*(candidate(f"recipe-{index}") for index in range(6)))
