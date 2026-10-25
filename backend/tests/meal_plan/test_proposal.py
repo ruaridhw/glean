@@ -674,8 +674,8 @@ def test_the_model_is_given_the_two_weeks_with_the_rows_that_scored_them(tmp_pat
 
 
 def test_stated_calories_are_read_only_when_the_lighter_chip_is_on(tmp_path: Path) -> None:
-    # No request can select a chip until V9, and calories are the one input only the lighter term reads, so a
-    # Generate must not pay up to 25 recipe reads for it. Today's prepare therefore reads none of them.
+    # Calories are the one input only the lighter term reads, so a Generate without that chip must not pay up to
+    # 25 recipe reads for it: this prepare, with no chips, reads none of them.
     corpus = _corpus(tmp_path)
     first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
     fed = first.offered_ids[0]
