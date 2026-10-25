@@ -799,6 +799,8 @@ def test_a_model_naming_a_week_that_does_not_exist_is_kept_and_flagged(
     assert len(result.suggestions) == MEALS
     errors = [record for record in caplog.records if "not offered" in record.message]
     assert len(errors) == 1
+    # A week index that does not exist cannot also be "a week the model did not return": one line, not two.
+    assert not [record for record in caplog.records if "named one candidate week" in record.message]
 
 
 def test_a_plan_checkpointed_before_v6_still_finalises(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
