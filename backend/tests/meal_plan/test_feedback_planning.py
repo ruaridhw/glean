@@ -24,7 +24,7 @@ from glean.meal_plan.schemas import (
 from glean.meal_plan.tools import FeedbackChip, Term
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
-from glean.recipes.stored import StoredIngredient, StoredRecipe
+from glean.recipes.stored import StoredIngredient, StoredNutrition, StoredRecipe
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -257,3 +257,27 @@ def test_a_later_thumbs_up_cancels_an_older_thumbs_down_for_same_as_last_week(tm
     )
 
     assert LAST_WEEK in prepared.offered_ids
+
+
+def test_the_lighter_chip_turns_on_the_calorie_reads_in_prepare_and_widen(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    for recipe_id in RECIPES:
+        stored = corpus.get(recipe_id)
+        assert stored is not None
+        corpus.save(stored.model_copy(update={"nutrition": StoredNutrition(calories=500, protein_g=30)}))
+
+    def prepare(chips: list[str]) -> pipeline.PreparedPlan:
+        return pipeline.prepare(_request(chips=chips), corpus=corpus, rng=random.Random(0), now=NOW)
+
+    lighter, plain = prepare(["lighter"]), prepare([])
+    assert {fact.calories_per_serving for fact in lighter.facts} == {500}
+    assert {fact.calories_per_serving for fact in plain.facts} == {None}
+
+    found = tools.get_eligible_recipes(
+        tools.RecipeFilter(), pipeline.tool_context(_request(chips=["lighter"]), corpus=corpus, now=NOW)
+    )
+    emptied = {"offered_ids": [], "facts": []}
+    widened = pipeline.widen(lighter.model_copy(update=emptied), found.recipes, corpus=corpus)
+    widened_plain = pipeline.widen(plain.model_copy(update=emptied), found.recipes, corpus=corpus)
+    assert {fact.calories_per_serving for fact in widened.facts} == {500}
+    assert {fact.calories_per_serving for fact in widened_plain.facts} == {None}
