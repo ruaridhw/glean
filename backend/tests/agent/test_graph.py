@@ -1052,6 +1052,15 @@ class TestQuestion:
         assert run.record.status is SessionStatus.DONE
         assert "option" in json.loads(model.users[1])["tool_results"][-1]["error"]
 
+    def test_a_blank_question_is_refused(self, run: Run) -> None:
+        model = ScriptedModel(ask(question="   "), propose_first)
+
+        run.start(model)
+
+        assert run.record.status is SessionStatus.DONE
+        assert run.record.question is None
+        assert "question" in json.loads(model.users[1])["tool_results"][-1]["error"]
+
     def test_the_question_is_bounded_before_it_is_parked(self, run: Run) -> None:
         self._park(run, ask(question="Why? " * 100, options=[f"Option {i} " + "x" * 100 for i in range(6)]))
 
