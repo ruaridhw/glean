@@ -148,9 +148,16 @@ that repair needs no new model call.
 The bars ship at 0.8 because that is G1's starting point; they are chosen from a labelled sample, the same
 discipline as the dietary audit. The sample is a directory of exported recipe bodies and an independent
 labeller's labels, both **outside this repo** (recipe text is third-party, ADR 0016). The tool runs the
-enrichers over the sample through the usual runner at G1's floor (0.7) so every answer keeps its top option,
-then replays every bar from 0.7 to 0.95 and reports, per attribute, the accuracy of the answers each bar
-accepts, its coverage, a confusion table, and the bar that earns the best accuracy:
+enrichers over the sample through the usual runner — one paid pass, because every stored answer keeps the
+model's own option and probability — then replays every bar from 0.7 to 0.95 and reports, per attribute, the
+accuracy of the answers each bar accepts, its coverage and confusion table, and the bar it recommends.
+
+**How the recommended bar is chosen.** The lowest bar (the widest coverage) whose accuracy reaches a target
+(default 95%) on at least a minimum number of answers (default 20); both are `--target` and `--min-accepted`.
+Ranking by accuracy alone rewards the bar that happened to accept one right answer — a 1-of-1 bar scores 100%
+— and on the first sample it recommended 0.95 for two attributes, which is why the rule changed. When no bar
+can meet both, the report names the best-supported one instead, by the lower end of a 95% Wilson interval on
+its accuracy, and says so.
 
 ```bash
 # adopt the measured bars by editing MEASURED_BARS in recipes/enrichment/attributes.py: they are read-time

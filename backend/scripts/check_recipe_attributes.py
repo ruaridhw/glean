@@ -83,6 +83,12 @@ _LABEL_KEYS: dict[str, str] = {"active_time": "active_time_bucket"}
 # The bars worth reporting: G1's floor to one so strict that almost nothing clears it.
 BAR_CEILING = 0.95
 BAR_STEP = 0.05
+# A bar is chosen for the corpus, not for the sample's luckiest answer: it has to be right at least this
+# often on at least this many answers. Both are configurable on `compare`.
+DEFAULT_TARGET_ACCURACY = 0.95
+DEFAULT_MIN_ACCEPTED = 20
+# The z for a 95% Wilson interval, used to rank bars when none meets the target.
+_WILSON_Z = 1.96
 
 
 def main(argv: Sequence[str] | None = None, *, client: DecisionClient | None = None) -> int:
@@ -186,6 +192,21 @@ class BarResult:
     def accuracy(self) -> float:
         return self.correct / self.accepted if self.accepted else 0.0
 
+    @property
+    def wilson_lower(self) -> float:
+        """The lower end of the 95% Wilson score interval around this bar's accuracy.
+
+        Accuracy alone favours a bar that accepted two answers and got both right. The interval asks how
+        little the sample could be telling us, which is what a bar has to be defensible on.
+        """
+        if not self.accepted:
+            return 0.0
+        n = self.accepted
+        p = self.correct / n
+        centre = p + _WILSON_Z**2 / (2 * n)
+        margin = _WILSON_Z * ((p * (1 - p) / n + _WILSON_Z**2 / (4 * n**2)) ** 0.5)
+        return (centre - margin) / (1 + _WILSON_Z**2 / n)
+
 
 @dataclass
 class AttributeComparison:
@@ -208,17 +229,26 @@ class AttributeComparison:
         """
         return sum(1 for _truth, value, probability in self.pairs if value == UNSURE or probability < bar)
 
-    @property
-    def best(self) -> BarResult | None:
-        """The bar with the best accuracy, then the widest coverage, then the loosest bar.
+    def chosen(
+        self, *, target: float = DEFAULT_TARGET_ACCURACY, min_accepted: int = DEFAULT_MIN_ACCEPTED
+    ) -> BarResult | None:
+        """The loosest bar that is both accurate enough and measured on enough answers.
 
-        The loosest bar on a tie is deliberate: the sample is 50 recipes, and a bar should not be raised
-        past what the sample's accuracy supports. Coverage is reported beside every bar so the owner can
-        trade some of it back for a stricter bar if they would rather.
+        Loosest, because a bar that clears the target on more answers describes more of the corpus: among bars
+        that meet the target and the minimum, the lowest wins. Chasing accuracy alone picks the bar that
+        happened to accept one right answer (a 1-of-1 bar scores 100%), which says nothing about the corpus.
+        When no bar meets both, the best-supported one wins instead — the highest Wilson lower bound, so the
+        report still names a defensible bar and says it fell short of the target.
         """
         if not self.bars:
             return None
-        return max(self.bars, key=lambda result: (result.accuracy, result.coverage, -result.bar))
+        qualifying = [result for result in self.bars if result.accepted >= min_accepted and result.accuracy >= target]
+        if qualifying:
+            return min(qualifying, key=lambda result: result.bar)
+        measured = [result for result in self.bars if result.accepted]
+        if not measured:
+            return None
+        return max(measured, key=lambda result: (result.wilson_lower, result.coverage, -result.bar))
 
     def at(self, bar: float) -> BarResult:
         return next(result for result in self.bars if abs(result.bar - bar) < 1e-9)
@@ -334,6 +364,8 @@ def _compare(args: argparse.Namespace) -> int:
         comparison,
         production_bar=args.bar,
         step=args.step,
+        target=args.target,
+        min_accepted=args.min_accepted,
         sample=answers.get("sample"),
         enriched_at=answers.get("enriched_at"),
     )
@@ -350,6 +382,8 @@ def render_comparison(
     *,
     production_bar: float = DEFAULT_ATTRIBUTE_BAR,
     step: float = BAR_STEP,
+    target: float = DEFAULT_TARGET_ACCURACY,
+    min_accepted: int = DEFAULT_MIN_ACCEPTED,
     sample: str | None = None,
     enriched_at: str | None = None,
 ) -> str:
@@ -374,15 +408,21 @@ def render_comparison(
     for attribute_comparison in comparison.attributes:
         lines.extend(_attribute_lines(attribute_comparison, production_bar=production_bar))
 
-    lines.append("Chosen bars (best accuracy; ties go to wider coverage, then the looser bar):")
+    lines.append(
+        f"Chosen bars (the lowest bar at {target:.0%} accuracy or better on at least {min_accepted} answers; "
+        f"when none qualifies, the highest Wilson lower bound):"
+    )
     for attribute_comparison in comparison.attributes:
-        best = attribute_comparison.best
-        if best is None or best.accepted == 0:
+        chosen = attribute_comparison.chosen(target=target, min_accepted=min_accepted)
+        if chosen is None:
             lines.append(f"  {attribute_comparison.attribute}: no accepted answers at any bar")
             continue
+        meets_target = chosen.accepted >= min_accepted and chosen.accuracy >= target
+        note = "" if meets_target else "  (no bar met the target; best supported)"
         lines.append(
-            f"  {attribute_comparison.attribute}: {best.bar:.2f} - accuracy {best.accuracy:.1%} "
-            f"on {best.accepted}/{attribute_comparison.labelled} labelled recipes ({best.coverage:.0%} coverage)"
+            f"  {attribute_comparison.attribute}: {chosen.bar:.2f} - accuracy {chosen.accuracy:.1%} "
+            f"on {chosen.accepted}/{attribute_comparison.labelled} labelled recipes "
+            f"({chosen.coverage:.0%} coverage, Wilson lower bound {chosen.wilson_lower:.1%}){note}"
         )
     return "\n".join(lines)
 
@@ -448,6 +488,18 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     compare.add_argument("--report", type=Path, default=None, help="Also write the report here.")
     compare.add_argument("--bar", type=float, default=DEFAULT_ATTRIBUTE_BAR, help="The bar the report marks.")
     compare.add_argument("--step", type=float, default=BAR_STEP, help="How finely the bars are replayed.")
+    compare.add_argument(
+        "--target",
+        type=float,
+        default=DEFAULT_TARGET_ACCURACY,
+        help="The accuracy a chosen bar has to reach (default 95%).",
+    )
+    compare.add_argument(
+        "--min-accepted",
+        type=int,
+        default=DEFAULT_MIN_ACCEPTED,
+        help="The answers a chosen bar has to accept before it can be chosen (default 20).",
+    )
     return parser.parse_args(argv)
 
 

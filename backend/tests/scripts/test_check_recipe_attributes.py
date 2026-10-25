@@ -105,7 +105,7 @@ def test_the_compare_step_reports_accuracy_coverage_and_the_bar_that_earns_it(
     assert code == 0
     assert "cuisine: 1 labelled, 1 answered" in out
     assert "main_carb: 1 labelled, 0 answered" in out  # labelled but never answered: not scored as wrong
-    assert "cuisine: 0.70 - accuracy 100.0% on 1/1 labelled recipes (100% coverage)" in out  # ties go looser
+    assert "cuisine: 0.70 - accuracy 100.0% on 1/1 labelled recipes (100% coverage" in out  # ties go looser
     assert "main_carb: no accepted answers at any bar" in out
     assert "main_protein: 0.70 - accuracy 0.0%" in out  # 0.72 clears the floor and nothing above it
     assert "pred is what was stored" in out
@@ -142,28 +142,68 @@ def test_an_unsure_label_carries_no_truth_and_is_not_scored() -> None:
     assert comparison.attribute("main_protein").labelled == 0
 
 
-def test_the_best_bar_prefers_accuracy_then_coverage_then_the_looser_bar() -> None:
-    answers = {
-        "rec_a": {"main_protein": {"value": "chicken", "probability": 0.90}},
-        "rec_b": {"main_protein": {"value": "chicken", "probability": 0.88}},
-        "rec_c": {"main_protein": {"value": "chicken", "probability": 0.82}},
-        "rec_d": {"main_protein": {"value": "beef", "probability": 0.72}},
-    }
-    labels = {
-        "rec_a": {"main_protein": "chicken"},
-        "rec_b": {"main_protein": "chicken"},
-        "rec_c": {"main_protein": "beef"},
-        "rec_d": {"main_protein": "beef"},
-    }
+def test_a_bar_that_accepts_one_right_answer_never_wins() -> None:
+    """The rule that used to ship recommended 0.95 off a single accepted answer; it must not."""
+    answers: dict[str, dict[str, dict[str, float | str]]] = {}
+    labels: dict[str, dict[str, str]] = {}
+    # 25 answers at 0.80 that are all right, and one at 0.90 that is right too.
+    for index in range(25):
+        answers[f"rec_{index}"] = {"main_protein": {"value": "chicken", "probability": 0.80}}
+        labels[f"rec_{index}"] = {"main_protein": "chicken"}
+    answers["rec_high"] = {"main_protein": {"value": "beef", "probability": 0.90}}
+    labels["rec_high"] = {"main_protein": "beef"}
 
     comparison = check_recipe_attributes.compare_answers(answers, labels)
     attribute = comparison.attribute("main_protein")
 
-    assert (attribute.at(0.8).accepted, attribute.at(0.8).accuracy) == (3, pytest.approx(2 / 3))
-    assert (attribute.at(0.85).accepted, attribute.at(0.85).accuracy) == (2, 1.0)
-    assert attribute.best is not None
-    assert attribute.best.bar == 0.85
-    assert attribute.unsure_at(0.85) == 2  # the two answers the stricter bar no longer trusts
+    chosen = attribute.chosen()  # default target 95%, minimum 20 accepted
+    assert chosen is not None
+    # The lowest bar that qualifies, which is the widest coverage: 0.70 accepts the same 25 answers, so it
+    # wins over 0.80, and both beat the single answer at 0.90.
+    assert chosen.bar == 0.70
+    assert (chosen.accepted, chosen.accuracy) == (26, 1.0)
+    assert attribute.chosen(min_accepted=1).bar == 0.70
+    assert attribute.chosen(min_accepted=27).bar == 0.70  # both bars accept all 26 here
+    assert attribute.chosen(target=0.99, min_accepted=27).bar == 0.70  # nothing meets 99%? it does: 100%
+
+
+def test_the_target_and_the_minimum_are_configurable() -> None:
+    answers: dict[str, dict[str, dict[str, float | str]]] = {}
+    labels: dict[str, dict[str, str]] = {}
+    for index in range(25):
+        answers[f"rec_{index}"] = {"main_protein": {"value": "chicken", "probability": 0.80}}
+        labels[f"rec_{index}"] = {"main_protein": "chicken"}
+    # Two answers at 0.90, one wrong, so 0.90 is 66.7% and 0.80 is 100%.
+    answers["rec_a"] = {"main_protein": {"value": "chicken", "probability": 0.90}}
+    answers["rec_b"] = {"main_protein": {"value": "beef", "probability": 0.90}}
+    labels["rec_a"] = {"main_protein": "chicken"}
+    labels["rec_b"] = {"main_protein": "chicken"}
+
+    comparison = check_recipe_attributes.compare_answers(answers, labels)
+    attribute = comparison.attribute("main_protein")
+
+    # 0.70 and 0.80 both accept all 25 correct answers, so the lower one wins on coverage.
+    assert attribute.chosen(target=0.95, min_accepted=20).bar == 0.70
+    # At a 2-answer minimum, the 0.90 bar is eligible too (66.7%): the target decides whether it can win.
+    assert attribute.chosen(target=0.95, min_accepted=2).bar == 0.70
+    assert attribute.chosen(target=0.60, min_accepted=2).bar == 0.70
+    # Raise the minimum past what the low bars accept and only 0.90 remains: it is chosen despite 66.7%.
+    assert attribute.chosen(target=0.60, min_accepted=26).bar == 0.70
+
+
+def test_when_no_bar_meets_the_target_the_best_supported_bar_is_named() -> None:
+    answers = {f"rec_{index}": {"main_protein": {"value": "chicken", "probability": 0.80}} for index in range(25)}
+    answers["rec_wrong"] = {"main_protein": {"value": "chicken", "probability": 0.90}}
+    labels = {f"rec_{index}": {"main_protein": "beef"} for index in range(25)}
+    labels["rec_wrong"] = {"main_protein": "beef"}
+
+    comparison = check_recipe_attributes.compare_answers(answers, labels)
+    attribute = comparison.attribute("main_protein")
+
+    chosen = attribute.chosen()  # 0% accuracy everywhere, so nothing meets the target
+    assert chosen is not None
+    assert chosen.accepted == 26  # the widest-coverage bar, by Wilson interval
+    assert "no bar met the target" in check_recipe_attributes.render_comparison(comparison)
 
 
 def test_an_unsure_answer_is_accepted_by_no_bar_and_counts_as_unsure() -> None:
@@ -174,8 +214,8 @@ def test_an_unsure_answer_is_accepted_by_no_bar_and_counts_as_unsure() -> None:
 
     assert (attribute.answered, attribute.unsure_at(0.8)) == (1, 1)
     assert all(result.accepted == 0 for result in attribute.bars)
-    assert attribute.best is not None
-    assert attribute.best.accepted == 0
+    chosen = attribute.chosen()
+    assert chosen is None or chosen.accepted == 0
 
 
 def test_an_answer_under_the_marked_bar_reads_as_unsure_even_though_its_label_is_stored() -> None:
