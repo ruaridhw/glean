@@ -279,7 +279,8 @@ class _OpenPanelState extends ConsumerState<_OpenPanel> {
   }
 }
 
-/// Keeps the note within [maxWeekNoteLength] code points as it is typed or pasted.
+/// Keeps the note within [maxWeekNoteLength] code points: an edit that would cross it is refused whole, so
+/// typing into the middle of a full note neither drops characters from its end nor moves the cursor.
 class _WeekNoteFormatter extends TextInputFormatter {
   const _WeekNoteFormatter();
 
@@ -287,13 +288,5 @@ class _WeekNoteFormatter extends TextInputFormatter {
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
-  ) {
-    final String kept = clipWeekNote(newValue.text);
-    if (kept == newValue.text) return newValue;
-    return TextEditingValue(
-      text: kept,
-      selection: TextSelection.collapsed(offset: kept.length),
-      composing: TextRange.empty,
-    );
-  }
+  ) => newValue.text.runes.length > maxWeekNoteLength ? oldValue : newValue;
 }

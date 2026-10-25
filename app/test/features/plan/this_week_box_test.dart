@@ -401,22 +401,54 @@ void main() {
   });
 
   gleanWidgetTest(
-    'a note with skin-toned emoji is clipped by code points, so Generate never sends more than the backend takes',
+    'a note is bounded by code points, so Generate never sends more than the backend takes',
     (tester) async {
       await open(tester);
       await toggleBox(tester);
-      // 150 letters and 30 "thumbs up, medium skin tone": 180 visible characters, 210 code points.
-      final String typed = '${'a' * 150}${'👍🏽' * 30}';
+      // 150 letters and 25 "thumbs up, medium skin tone": 175 visible characters, exactly 200 code points.
+      final String full = '${'a' * 150}${'👍🏽' * 25}';
+      await tester.enterText(note(), full);
+      await tester.pumpAndSettle();
 
-      await tester.enterText(note(), typed);
+      // Five more emoji would be 180 visible characters, which maxLength would allow, but 210 code points.
+      await tester.enterText(note(), '$full${'👍🏽' * 5}');
       await tester.pumpAndSettle();
       await generateAndComeBack(tester);
 
       final String sentNote =
           (sent.single['human_feedback'] as Map<String, dynamic>)['note']
               as String;
-      expect(sentNote.runes.length, lessThanOrEqualTo(maxWeekNoteLength));
-      expect(sentNote, '${'a' * 150}${'👍🏽' * 25}');
+      expect(sentNote.runes.length, maxWeekNoteLength);
+      expect(sentNote, full);
+    },
+  );
+
+  gleanWidgetTest(
+    'typing into the middle of a full note changes nothing and leaves the cursor where it was',
+    (tester) async {
+      await open(tester);
+      await toggleBox(tester);
+      final String full = 'a' * maxWeekNoteLength;
+      await tester.enterText(note(), full);
+      await tester.pumpAndSettle();
+      final TextField field = tester.widget<TextField>(note());
+      field.controller!.selection = const TextSelection.collapsed(offset: 100);
+      await tester.pumpAndSettle();
+
+      // One more character typed at the cursor, as the keyboard would send it.
+      tester.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: '${'a' * 100}X${'a' * 100}',
+          selection: const TextSelection.collapsed(offset: 101),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(field.controller!.text, full);
+      expect(
+        field.controller!.selection,
+        const TextSelection.collapsed(offset: 100),
+      );
     },
   );
 
