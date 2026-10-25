@@ -194,6 +194,8 @@ void main() {
       expect(_inCard(1, find.text('Finding another…')), findsOneWidget);
       expect(_inCard(1, find.text('Your note: "$_note"')), findsOneWidget);
       expect(_inCard(1, find.text('Reading your note')), findsOneWidget);
+      // Add waits for the swap: saving now would save the meal the household asked to replace.
+      expect(find.text('Finishing your swap…'), findsOneWidget);
       // The first run's lines belong to the first run, not to this card.
       expect(
         _inCard(1, find.text('Choosing this week\'s dinners')),
@@ -211,7 +213,7 @@ void main() {
               find.widgetWithText(FilledButton, 'Add 2 dinners to plan'),
             )
             .onPressed,
-        isNotNull,
+        isNull,
       );
       // One swap at a time: the other card cannot start a second.
       await tester.tap(_inCard(0, find.text('Swap back')));
@@ -240,6 +242,55 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(backend.messages, hasLength(1));
+      expect(find.text('Finishing your swap…'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Add 2 dinners to plan'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  gleanWidgetTest(
+    'Cancel on the working card puts the meal back, frees Add, and ignores '
+    'the swap if it finishes later',
+    (tester) async {
+      final Completer<http.Response> late = Completer<http.Response>();
+      final backend = SwapBackend(
+        swapPolls: <Future<http.Response> Function()>[() => late.future],
+      );
+      final h = _harness(backend);
+      addTearDown(h.dispose);
+
+      await _openProposal(tester, h);
+      await _findAnother(tester, 1, settle: false);
+      expect(_inCard(1, find.text('Finding another…')), findsOneWidget);
+
+      await tester.tap(_inCard(1, find.text('Cancel')));
+      await tester.pump();
+      expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
+      expect(find.text('Finishing your swap…'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Add 2 dinners to plan'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      late.complete(
+        _poll(
+          status: 'done',
+          swap: _swap('done', replacement: _replacement()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
+      expect(find.text('Garlic & chilli prawn linguine'), findsNothing);
     },
   );
 

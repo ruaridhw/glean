@@ -263,6 +263,7 @@ class ProposalMealCard extends StatelessWidget {
     this.notice,
     this.replaced = false,
     this.onUndoReplacement,
+    this.onCancelFindAnother,
   });
 
   final MealPlanRecipe meal;
@@ -279,6 +280,9 @@ class ProposalMealCard extends StatelessWidget {
   /// True when "Find another" brought [meal] in, so the card offers Undo swap.
   final bool replaced;
   final VoidCallback? onUndoReplacement;
+
+  /// Stops the "Find another" this card is working on and puts the card back as it was.
+  final VoidCallback? onCancelFindAnother;
 
   @override
   Widget build(BuildContext context) {
@@ -308,6 +312,14 @@ class ProposalMealCard extends StatelessWidget {
                 lines: finding.progress,
                 waiting: 'Asking for another dinner',
               ),
+              if (onCancelFindAnother != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onCancelFindAnother,
+                    child: const Text('Cancel'),
+                  ),
+                ),
             ],
           ),
         ),
