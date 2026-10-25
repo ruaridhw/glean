@@ -20,7 +20,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from glean.recipes.attributes import UNSURE, Cuisine, MainCarb, MainProtein, RecipeAttributes, WholeFood
+from glean.recipes.attributes import (
+    UNSURE,
+    ActiveTimeBucket,
+    Cuisine,
+    MainCarb,
+    MainProtein,
+    RecipeAttributes,
+    WholeFood,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -100,6 +108,17 @@ class Term(StrEnum):
     LIGHTER = "lighter"
     PROTEIN_TARGET = "protein_target"
 
+
+# The active-time buckets as the minutes they span, so a predicate can compare the end that can promise it.
+# The buckets themselves belong to the recipe attribute contract (`recipes/attributes.py`); this is the
+# predicate's own view of them, and it goes when that module grows a lower bound to match its upper one.
+_ACTIVE_TIME_RANGE: dict[str, tuple[int | None, int | None]] = {
+    ActiveTimeBucket.UP_TO_15.value: (0, 15),
+    ActiveTimeBucket.FROM_15_TO_30.value: (15, 30),
+    ActiveTimeBucket.FROM_30_TO_45.value: (30, 45),
+    ActiveTimeBucket.FROM_45_TO_60.value: (45, 60),
+    ActiveTimeBucket.OVER_60.value: (60, None),
+}
 
 # The repeat terms, in the order `_Scorer.repeat_values` gives their attribute values.
 _REPEAT_TERMS = (Term.REPEAT_MAIN_PROTEIN, Term.REPEAT_MAIN_CARB, Term.REPEAT_DISH_TYPE, Term.REPEAT_CUISINE)
@@ -212,7 +231,11 @@ class PredicateField(StrEnum):
 
 
 class PredicateOp(StrEnum):
-    """The operators a filter may use. `lte`/`gte` compare minutes, so they are active_time's alone."""
+    """The operators a filter may use.
+
+    `lte`/`gte` compare minutes, so they are active_time's alone, and they compare the right end of the bucket:
+    `lte N` against its upper bound, `gte N` against its lower bound.
+    """
 
     IN = "in"
     NOT_IN = "not_in"
@@ -247,11 +270,14 @@ class Predicate:
         enriched yet, so a `not_in` predicate read the other way would pay every un-enriched recipe.
         """
         if self.op in (PredicateOp.LTE, PredicateOp.GTE):
-            bound = attributes.active_time_upper_bound_mins
             limit = _minutes(self.values[0])
-            if bound is None or limit is None:
+            lower, upper = _ACTIVE_TIME_RANGE.get(attributes.active_time.value, (None, None))
+            if limit is None or lower is None:
                 return False
-            return bound <= limit if self.op is PredicateOp.LTE else bound >= limit
+            if self.op is PredicateOp.GTE:
+                return lower >= limit
+            # A bucket with no upper bound, like "60+", cannot be certified as coming under any limit.
+            return upper is not None and upper <= limit
         value = attributes.as_mapping()[self.field.value]
         if value == UNSURE:
             return False
