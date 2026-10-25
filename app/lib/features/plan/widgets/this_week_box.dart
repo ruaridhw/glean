@@ -47,6 +47,13 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
     final WeekFeedback feedback = ref.watch(
       weekFeedbackProvider(widget.weekStart),
     );
+    // The saved note arrives a moment after the box first builds; show it unless the field already says it.
+    ref.listen(weekFeedbackProvider(widget.weekStart), (
+      WeekFeedback? previous,
+      WeekFeedback next,
+    ) {
+      if (next.note != _note.text) _note.text = next.note;
+    });
     final WeekFeedbackController controller = ref.read(
       weekFeedbackProvider(widget.weekStart).notifier,
     );
