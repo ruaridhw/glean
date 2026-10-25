@@ -342,8 +342,8 @@ void main() {
     );
   });
 
-  testWidgets('a rejected answer says so in its own words, and names a way '
-      'out other than Retry', (WidgetTester tester) async {
+  testWidgets('a rejected answer says so in its own words, and names the two '
+      'ways forward', (WidgetTester tester) async {
     final _Rig rig = _Rig(<ScriptedResponse>[questionResponse(turn: 1), 422]);
     addTearDown(rig.db.close);
     await rig.openInterview(tester);
@@ -357,12 +357,54 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextButton, 'Retry'),
+      findsNothing,
+      reason: 'the answer is back in the composer; Send is the way forward',
+    );
+    expect(find.widgetWithText(FilledButton, 'Send'), findsOneWidget);
     expect(
       find.widgetWithText(TextButton, 'Skip all'),
       findsOneWidget,
       reason: 'the copy points at it, so it has to be there to tap',
     );
+  });
+
+  testWidgets('after a rejected answer there is no Retry: the corrected '
+      'composer is what Send sends', (WidgetTester tester) async {
+    final _Rig rig = _Rig(<ScriptedResponse>[
+      questionResponse(turn: 1),
+      422,
+      questionResponse(turn: 2),
+    ]);
+    addTearDown(rig.db.close);
+    await rig.openInterview(tester);
+
+    await tester.enterText(find.byType(TextField), 'first wording');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(TextButton, 'Retry'),
+      findsNothing,
+      reason: 'replaying the rejected wording can only be rejected again',
+    );
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'first wording',
+    );
+
+    await tester.enterText(find.byType(TextField), 'second wording');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Question 2 of 7'), findsOneWidget);
+    expect(
+      rig.backend.lastAnswer['text'],
+      'second wording',
+      reason: 'the edit is what goes back, not the wording that was rejected',
+    );
+    expect(rig.backend.requests, hasLength(3));
   });
 
   testWidgets('a rate-limited turn says so in its own words', (
