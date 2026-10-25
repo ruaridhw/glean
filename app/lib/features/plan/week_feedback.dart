@@ -146,19 +146,31 @@ class WeekFeedbackStore {
   static String keyFor(String userId) =>
       '${TokenStorage.userDataKeyPrefix}week_feedback.$userId';
 
+  // Every read and write runs one at a time, in the order called, each on a fresh read of the entry. Both
+  // read-modify-write the one entry, so two overlapping (a launch's restore and a tap, or two weeks' boxes)
+  // would otherwise let the slower one save a map the faster one has already replaced.
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> _inTurn<T>(Future<T> Function() operation) {
+    final Future<T> result = _tail.then((_) => operation());
+    _tail = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
   /// The week's saved selection. Past weeks are dropped here too, so an old note is gone at the next launch
   /// in a new week rather than kept until the next edit.
-  Future<WeekFeedback?> read(String userId, DateTime weekStart) async {
-    final Map<String, dynamic> weeks = await _weeks(userId);
-    if (_dropPastWeeks(weeks)) await _save(userId, weeks);
-    return WeekFeedback._fromJson(weeks[_week(weekStart)]);
-  }
+  Future<WeekFeedback?> read(String userId, DateTime weekStart) =>
+      _inTurn(() async {
+        final Map<String, dynamic> weeks = await _weeks(userId);
+        if (_dropPastWeeks(weeks)) await _save(userId, weeks);
+        return WeekFeedback._fromJson(weeks[_week(weekStart)]);
+      });
 
   Future<void> write(
     String userId,
     DateTime weekStart,
     WeekFeedback feedback,
-  ) async {
+  ) => _inTurn(() async {
     final Map<String, dynamic> weeks = await _weeks(userId);
     _dropPastWeeks(weeks);
     final String week = _week(weekStart);
@@ -168,7 +180,7 @@ class WeekFeedbackStore {
       weeks.remove(week);
     }
     await _save(userId, weeks);
-  }
+  });
 
   /// Removes every week before this one; true when there was one to remove.
   bool _dropPastWeeks(Map<String, dynamic> weeks) {
