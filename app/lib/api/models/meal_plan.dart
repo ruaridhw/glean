@@ -82,6 +82,19 @@ class CookedHistoryItem {
   Map<String, dynamic> toJson() => _$CookedHistoryItemToJson(this);
 }
 
+/// This week's chips and note, the backend's `HumanFeedback`. The note is screened for prompt injection before
+/// any model reads it; a note that fails is dropped and the chips still apply.
+@JsonSerializable(fieldRename: FieldRename.snake, createFactory: false)
+class HumanFeedbackRequest {
+  const HumanFeedbackRequest({required this.chips, this.note});
+
+  /// `FeedbackChip.wire` values, each once.
+  final List<String> chips;
+  final String? note;
+
+  Map<String, dynamic> toJson() => _$HumanFeedbackRequestToJson(this);
+}
+
 /// Request body for `POST /meal-plan`. [foodGroupCoverage] (meals cooked this week per food group) is not
 /// defaulted to empty: the caller must compute it.
 @JsonSerializable(
@@ -102,6 +115,7 @@ class MealPlanRequest {
     this.excludeExternalIds = const [],
     this.cookedHistory = const [],
     this.localDate,
+    this.humanFeedback,
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -134,6 +148,9 @@ class MealPlanRequest {
   /// The phone's local calendar date (`YYYY-MM-DD`), the date [pantry]'s `expiresInDays` was measured
   /// from. The backend dates a going-off item in the household's calendar, not the server's UTC one.
   final String? localDate;
+
+  /// This week's chips and note; null when nothing is set.
+  final HumanFeedbackRequest? humanFeedback;
 
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
 }
@@ -262,6 +279,7 @@ class MealPlanResponse {
     this.weekSummary = '',
     this.plannedAlternatives = const <MealPlanPlannedAlternative>[],
     this.degraded = false,
+    this.feedbackNote,
   });
 
   factory MealPlanResponse.fromJson(Map<String, dynamic> json) =>
@@ -282,4 +300,8 @@ class MealPlanResponse {
   /// app branches on it; it stays parsed for diagnostics and evals.
   @JsonKey(defaultValue: false)
   final bool degraded;
+
+  /// What became of the week's note: `used`, or `not_a_preference` / `unavailable` when it was dropped. Null
+  /// when no note was sent, or from a backend that does not screen notes.
+  final String? feedbackNote;
 }

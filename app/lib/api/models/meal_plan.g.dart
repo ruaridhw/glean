@@ -35,6 +35,10 @@ Map<String, dynamic> _$CookedHistoryItemToJson(CookedHistoryItem instance) =>
       'note': instance.note,
     };
 
+Map<String, dynamic> _$HumanFeedbackRequestToJson(
+  HumanFeedbackRequest instance,
+) => <String, dynamic>{'chips': instance.chips, 'note': instance.note};
+
 Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
     <String, dynamic>{
       'pantry': instance.pantry.map((e) => e.toJson()).toList(),
@@ -48,6 +52,7 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
       'exclude_external_ids': instance.excludeExternalIds,
       'cooked_history': instance.cookedHistory.map((e) => e.toJson()).toList(),
       'local_date': instance.localDate,
+      'human_feedback': instance.humanFeedback?.toJson(),
     };
 
 UsedUpPantryItem _$UsedUpPantryItemFromJson(Map<String, dynamic> json) =>
@@ -193,11 +198,13 @@ MealPlanResponse _$MealPlanResponseFromJson(Map<String, dynamic> json) =>
                 [],
           ),
           degraded: $checkedConvert('degraded', (v) => v as bool? ?? false),
+          feedbackNote: $checkedConvert('feedback_note', (v) => v as String?),
         );
         return val;
       },
       fieldKeyMap: const {
         'weekSummary': 'week_summary',
         'plannedAlternatives': 'planned_alternatives',
+        'feedbackNote': 'feedback_note',
       },
     );
