@@ -161,11 +161,24 @@ def _proposal(api: TestClient, *, user: str = "user-a") -> dict[str, Any]:
     return view
 
 
-def _swap(api: TestClient, session_id: str, slot: str, *, note: str | None = NOTE, user: str = "user-a") -> Any:
+def _swap(
+    api: TestClient,
+    session_id: str,
+    slot: str,
+    *,
+    note: str | None = NOTE,
+    user: str = "user-a",
+    week: list[str] | None = None,
+) -> Any:
+    """Post a swap with the week the app would send: the session's cards, unless *week* says otherwise."""
+    if week is None:
+        polled = api.get(f"/meal-plan/sessions/{session_id}", headers={"x-test-user": user})
+        result = polled.json().get("result") if polled.status_code == 200 else None
+        week = [meal["external_id"] for meal in result["suggestions"]] if result else [slot]
     return api.post(
         f"/meal-plan/sessions/{session_id}/messages",
         headers={"x-test-user": user},
-        json={"type": "swap", "slot": slot, "note": note},
+        json={"type": "swap", "slot": slot, "note": note, "week": week},
     )
 
 
@@ -290,9 +303,11 @@ def test_a_meal_already_in_the_plan_cannot_be_swapped_here(api: TestClient) -> N
 @pytest.mark.parametrize(
     "body",
     [
-        {"type": "swap", "slot": "rec_x", "note": "n" * (MAX_SWAP_NOTE_CHARS + 1)},
-        {"type": "swap", "slot": ""},
-        {"type": "swap", "slot": "rec_x", "extra": True},
+        {"type": "swap", "slot": "rec_x", "week": ["rec_x"], "note": "n" * (MAX_SWAP_NOTE_CHARS + 1)},
+        {"type": "swap", "slot": "", "week": ["rec_x"]},
+        {"type": "swap", "slot": "rec_x"},
+        {"type": "swap", "slot": "rec_x", "week": []},
+        {"type": "swap", "slot": "rec_x", "week": ["rec_x"], "extra": True},
         {"type": "answer", "slot": "rec_x"},
         {"type": "skip", "note": "x"},
         {"type": "nonsense"},
@@ -303,6 +318,18 @@ def test_a_message_outside_the_contract_is_refused(api: TestClient, body: dict[s
     view = _proposal(api)
 
     assert api.post(f"/meal-plan/sessions/{view['session_id']}/messages", json=body).status_code == 422
+
+
+def test_a_week_that_does_not_match_the_cards_is_refused(api: TestClient) -> None:
+    view = _proposal(api)
+    meals = [meal["external_id"] for meal in view["result"]["suggestions"]]
+
+    short = _swap(api, view["session_id"], meals[0], week=meals[:1])
+    invented = _swap(api, view["session_id"], meals[0], week=[meals[0], meals[1], "rec_invented"])
+
+    assert short.status_code == 422
+    assert invented.status_code == 422
+    assert api.get(f"/meal-plan/sessions/{view['session_id']}").json()["swap"] is None
 
 
 def test_a_queue_that_will_not_take_the_swap_fails_it_and_keeps_the_proposal(api: TestClient) -> None:

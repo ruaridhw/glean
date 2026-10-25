@@ -286,14 +286,16 @@ def _swap(
 def swap_input(record: SessionRecord, swap: SwapRecord) -> dict[str, Any]:
     """What the graph needs for *swap*: the slot, the meals that stay, and every id the replacement may not be.
 
-    Unavailable is the whole proposal as it stands (so the other slots stay distinct), every card's alternative
-    (the app may show one in place of its meal), every meal swapped out before (it must not come straight
-    back) and the meals already in the plan (ADR 0020: never replaced, never duplicated).
+    The week is the one the app showed when it asked (`swap.week`), so the swap locks and scores against what is
+    on screen, after any local swap or Undo. Unavailable is that week, the server's proposal as it stands (so a
+    meal the app swapped back out cannot return), every card's alternative (the app may show one in place of its
+    meal), every meal swapped out before, and the meals already in the plan (ADR 0020: never replaced, never
+    duplicated).
     """
     result = record.result or MealPlanResult(suggestions=[])
     meals = result.suggestions
-    replacing = meals[swap.position] if swap.position < len(meals) else None
-    unavailable = {meal.external_id for meal in meals if meal.external_id}
+    week = swap.week or [meal.external_id or "" for meal in meals]
+    unavailable = set(week) | {meal.external_id for meal in meals if meal.external_id}
     unavailable |= {meal.alternative.external_id for meal in meals if meal.alternative and meal.alternative.external_id}
     unavailable |= {entry.slot for entry in record.swaps}
     unavailable |= set(record.request.exclude_external_ids)
@@ -304,13 +306,9 @@ def swap_input(record: SessionRecord, swap: SwapRecord) -> dict[str, Any]:
         "slot": swap.slot,
         "position": swap.position,
         "note": swap.note,
-        "replacing": None if replacing is None else {"external_id": replacing.external_id, "title": replacing.title},
-        "locked": [
-            {"external_id": meal.external_id, "title": meal.title}
-            for index, meal in enumerate(meals)
-            if index != swap.position and meal.external_id
-        ],
-        "unavailable_ids": sorted(unavailable),
+        "week": week,
+        "locked": [meal for index, meal in enumerate(week) if index != swap.position and meal],
+        "unavailable_ids": sorted(unavailable - {""}),
         "base": result.model_dump(mode="json"),
     }
 

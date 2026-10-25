@@ -88,12 +88,14 @@ sealed class MealPlanSessionMessage {
   Map<String, dynamic> toJson();
 }
 
-/// Find another meal for the card whose meal is [slot], optionally with a [note].
+/// Find another meal for the card whose meal is [slot], optionally with a [note]. [week] is every card's meal as
+/// the screen shows it now, in card order, after any local swap or Undo: the server locks and scores against it.
 final class SwapMessage extends MealPlanSessionMessage {
-  const SwapMessage({required this.slot, this.note});
+  const SwapMessage({required this.slot, required this.week, this.note});
 
   /// The corpus id of the meal on the card being swapped.
   final String slot;
+  final List<String> week;
   final String? note;
 
   @override
@@ -101,6 +103,7 @@ final class SwapMessage extends MealPlanSessionMessage {
     'type': 'swap',
     'slot': slot,
     'note': note,
+    'week': week,
   };
 }
 

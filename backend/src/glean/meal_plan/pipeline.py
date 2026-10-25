@@ -62,7 +62,7 @@ from glean.recipes.attributes import DishType, MainCarb, MainProtein, RecipeAttr
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, Iterable, Sequence
 
     from glean.llm import LLMRouter
     from glean.recipes.corpus import RecipeCorpusStore
@@ -876,14 +876,18 @@ def _week_total(context: tools.ScoringContext, recipe_ids: Sequence[str]) -> flo
         return float("-inf")
 
 
-def with_replacement(base: MealPlanResult, position: int, meal: MealPlanSuggestion) -> MealPlanResult:
+def with_replacement(
+    base: MealPlanResult, position: int, meal: MealPlanSuggestion, *, taken: Iterable[str] = ()
+) -> MealPlanResult:
     """*base* with *meal* in slot *position* and every other slot as it was.
 
     The card keeps its alternative, so "Use alternative" still works after a swap -- unless the alternative is the
-    meal that just came in, when there is nothing else to offer.
+    meal that just came in, or one of *taken* (the week on screen, the meal swapped out), when there is nothing
+    else to offer.
     """
     previous = base.suggestions[position].alternative
-    alternative = None if previous is None or previous.external_id == meal.external_id else previous
+    blocked = {meal.external_id, *taken}
+    alternative = None if previous is None or previous.external_id in blocked else previous
     suggestions = list(base.suggestions)
     suggestions[position] = meal.model_copy(update={"alternative": alternative})
     return base.model_copy(update={"suggestions": suggestions})

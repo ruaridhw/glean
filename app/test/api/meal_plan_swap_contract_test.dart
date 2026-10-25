@@ -12,10 +12,25 @@ import 'package:http/testing.dart';
 void main() {
   test('each message is its type and its fields, as one union', () {
     expect(
-      const SwapMessage(slot: 'rec_a', note: 'maybe fish').toJson(),
-      <String, dynamic>{'type': 'swap', 'slot': 'rec_a', 'note': 'maybe fish'},
+      const SwapMessage(
+        slot: 'rec_a',
+        week: <String>['rec_a', 'rec_b'],
+        note: 'maybe fish',
+      ).toJson(),
+      <String, dynamic>{
+        'type': 'swap',
+        'slot': 'rec_a',
+        'note': 'maybe fish',
+        'week': <String>['rec_a', 'rec_b'],
+      },
     );
-    expect(const SwapMessage(slot: 'rec_a').toJson()['note'], isNull);
+    expect(
+      const SwapMessage(
+        slot: 'rec_a',
+        week: <String>['rec_a'],
+      ).toJson()['note'],
+      isNull,
+    );
     expect(const AnswerMessage(option: 'Fish').toJson(), <String, dynamic>{
       'type': 'answer',
       'option': 'Fish',
@@ -109,7 +124,11 @@ void main() {
     final MealPlanMessageAccepted accepted = await client
         .sendMealPlanSessionMessage(
           's 1',
-          const SwapMessage(slot: 'rec_a', note: 'fish'),
+          const SwapMessage(
+            slot: 'rec_a',
+            week: <String>['rec_a'],
+            note: 'fish',
+          ),
         );
 
     expect(sent.method, 'POST');
@@ -118,6 +137,7 @@ void main() {
       'type': 'swap',
       'slot': 'rec_a',
       'note': 'fish',
+      'week': <String>['rec_a'],
     });
     expect(accepted.swapId, 3);
   });

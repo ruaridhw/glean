@@ -736,8 +736,8 @@ def _done(sessions: SessionStore, clock: Clock, **overrides: Any) -> None:
     sessions.complete("user-a", "sess-1", _proposal(), owner="attempt-1")
 
 
-def _swap(slot: str = "rec_2", note: str | None = None) -> SwapMessage:
-    return SwapMessage(type="swap", slot=slot, note=note)
+def _swap(slot: str = "rec_2", note: str | None = None, week: list[str] | None = None) -> SwapMessage:
+    return SwapMessage(type="swap", slot=slot, note=note, week=week or ["rec_1", "rec_2"])
 
 
 def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[SessionStore, Clock]) -> None:
@@ -755,6 +755,7 @@ def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[Se
         note="maybe fish",
         note_use=SwapNoteUse.USED,
         queued_at=int(clock.now.timestamp()),
+        week=["rec_1", "rec_2"],
     )
     assert record.status is SessionStatus.QUEUED
     assert record.pending_swap == swap
@@ -877,6 +878,40 @@ def test_a_meal_already_in_the_plan_is_not_a_slot_a_swap_can_replace(store: tupl
     assert record.swaps == []
 
 
+def test_the_slot_is_placed_by_the_week_the_app_shows(store: tuple[SessionStore, Clock]) -> None:
+    """The app put the cards in the other order on screen? The week it sends says where the slot is."""
+    sessions, clock = store
+    _done(sessions, clock)
+
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2", week=["rec_2", "rec_1"]))
+
+    assert swap.position == 0
+
+
+@pytest.mark.parametrize(
+    "week",
+    [
+        ["rec_1"],
+        ["rec_1", "rec_2", "rec_3"],
+        ["rec_2", "rec_2"],
+        ["rec_1", "rec_invented"],
+        ["rec_1", "rec_planned"],
+    ],
+    ids=["too_short", "too_long", "repeated", "unknown_id", "planned_meal"],
+)
+def test_a_week_that_does_not_match_the_proposal_is_refused(store: tuple[SessionStore, Clock], week: list[str]) -> None:
+    sessions, clock = store
+    _done(sessions, clock, exclude_external_ids=["rec_planned"])
+
+    with pytest.raises(MessageRefusedError) as refused:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2" if "rec_2" in week else "rec_1", week=week))
+
+    assert refused.value.reason is MessageRefusal.INVALID_WEEK
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+
+
 def test_another_users_session_takes_no_swap(store: tuple[SessionStore, Clock]) -> None:
     sessions, clock = store
     _done(sessions, clock)
@@ -930,10 +965,12 @@ def test_a_slot_the_app_swapped_back_still_finds_its_place(store: tuple[SessionS
         "user-a", "sess-1", swapped, swap.model_copy(update={"state": SwapState.DONE}), owner="attempt-2"
     )
 
-    again = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2"))
+    # The app undid the swap on its own screen, so its week shows the original meal again.
+    again = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_2", week=["rec_1", "rec_2"]))
 
     assert again.swap_id == 2
     assert again.position == 1
+    assert again.week == ["rec_1", "rec_2"]
 
 
 def test_a_swap_whose_worker_died_leaves_the_proposal_swappable(store: tuple[SessionStore, Clock]) -> None:
