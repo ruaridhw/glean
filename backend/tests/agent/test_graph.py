@@ -63,6 +63,10 @@ class Metrics:
         self.recorded.setdefault(name, []).append(value)
 
 
+class ScriptFailed(BaseException):
+    """An assertion inside a scripted step, raised past the graph's provider-failure handling."""
+
+
 class ScriptedModel:
     """The model at its boundary: answers a script of PlanSteps, one per call, and records what it was shown."""
 
@@ -77,7 +81,12 @@ class ScriptedModel:
         if isinstance(step, BaseException):
             raise step
         if callable(step):
-            step = step(json.loads(user))
+            try:
+                step = step(json.loads(user))
+            except AssertionError as failed:
+                # The graph reads any Exception from the model as a provider failure and falls back, which would
+                # hide a failed check in a step; a BaseException is not caught, so the test fails loudly.
+                raise ScriptFailed(str(failed)) from failed
         return PlanStep.model_validate(step)
 
     def model_id_for(self, _feature: object, **_kwargs: object) -> str:
@@ -399,6 +408,28 @@ class TestBudget:
         assert result.degraded is True
         planned = [suggestion.external_id for suggestion in result.suggestions]
         assert (planned == swapped) is (kept == "agent")
+
+    def test_a_ninth_tool_call_never_keeps_a_shorter_week_than_the_scorers(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Round 2: with no pantry nothing scores, so one dinner passes the drift gate against four. Not kept."""
+        request = _request().model_copy(update={"pantry": [], "cooked_history": [], "meals_per_week": 4})
+        run = Run(tmp_path, monkeypatch, request=request)
+        scores: list[float] = []
+
+        def score_one_dinner(context: dict[str, Any]) -> dict[str, Any]:
+            scores.extend(week["score"] for week in context["candidate_weeks"])
+            return call("score_meal_plan", recipe_ids=[context["candidates"][-1]["external_id"]])
+
+        steps = [score_one_dinner, *[call("get_recipes", ids=["rec_01"])] * MAX_TOOL_CALLS]
+        run.start(ScriptedModel(*steps))
+
+        result = run.record.result
+        assert result.degraded is True
+        assert scores
+        assert set(scores) == {0}
+        assert run.metric("SessionToolCalls") == [MAX_TOOL_CALLS]
+        assert len(result.suggestions) == 4
 
     def test_spending_the_90_seconds_mid_loop_ends_in_the_scorers_week(self, run: Run) -> None:
         def slow(_context: dict[str, Any]) -> dict[str, Any]:
