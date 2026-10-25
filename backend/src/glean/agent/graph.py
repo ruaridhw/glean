@@ -19,11 +19,12 @@ week with template reasons, `degraded: true`. Once `prepare` has run there is al
 on a run never ends `model_error`.
 
 **A swap is a second way in** (V10, spec §6.2 "Swap"). A finished session's thread is invoked again with a
-`swap` input, and START routes it to `swap_screen -> swap_plan <-> act -> swap_finalise`: the note goes through
-the injection screen and only what passes reaches the model, as the `swap_note` field; the other slots are
-locked; the model proposes one replacement (`ProposeReplacement`) within `MAX_SWAP_TOOL_CALLS`; and
-`swap_finalise` keeps it only if the week may use it, else takes the scorer's best replacement. The swap's
-outcome is `swap_outcome`, keyed by its id, so a crashed swap resumes or republishes like a crashed run.
+`swap` input, and START routes it to `swap_start -> swap_plan <-> act -> swap_finalise`: the note arrives
+already screened (the route screens it before anything stores it) and reaches the model only as the
+`swap_note` field; the other slots are locked; the model proposes one replacement (`ProposeReplacement`)
+within `MAX_SWAP_TOOL_CALLS`; and `swap_finalise` keeps it only if the week may use it, else takes the
+scorer's best replacement. The swap's outcome is `swap_outcome`, keyed by its id, so a crashed swap resumes or
+republishes like a crashed run.
 
 The graph is built per run, closing over the deps and the guard, and is checkpointed under the session id as
 its thread after every node, so a crashed run resumes at the node it died in and no finished tool call runs
@@ -59,7 +60,7 @@ from glean.meal_plan.schemas import (
     MealPlanResult,
 )
 from glean.observability import logger
-from glean.sessions.models import SessionError, SessionErrorCode, SwapNoteUse, SwapState
+from glean.sessions.models import SessionError, SessionErrorCode, SwapState
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -120,12 +121,11 @@ class PlanState(TypedDict, total=False):
     degraded_reason: str | None
     result: dict[str, Any] | None
     session_metrics: dict[str, Any] | None
-    # A swap (V10): what the runtime asked for -- the slot, its position, the note as typed, the locked meals,
-    # the ids it may not use and the proposal it changes -- and what the swap made of it. The note as typed
-    # stays here; only `swap_note`, what the screen passed, is ever put in front of the model.
+    # A swap (V10): what the runtime asked for -- the slot, its position, the screened note, the locked meals,
+    # the ids it may not use and the proposal it changes -- and what the swap made of it. The note is already
+    # what the route's screen passed; `swap_note` is the one field that puts it in front of the model.
     swap: dict[str, Any] | None
     swap_note: str | None
-    swap_note_use: str
     swap_pick: dict[str, Any] | None
     swap_outcome: dict[str, Any] | None
 
@@ -148,15 +148,15 @@ def build_graph(
     graph.add_node("plan", nodes.plan)
     graph.add_node("act", nodes.act)
     graph.add_node("finalise", nodes.finalise)
-    graph.add_node("swap_screen", nodes.swap_screen)
+    graph.add_node("swap_start", nodes.swap_start)
     graph.add_node("swap_plan", nodes.swap_plan)
     graph.add_node("swap_finalise", nodes.swap_finalise)
-    graph.add_conditional_edges(START, _route_start, ["prepare", "swap_screen"])
+    graph.add_conditional_edges(START, _route_start, ["prepare", "swap_start"])
     graph.add_edge("prepare", "plan")
     graph.add_conditional_edges("plan", _after_plan, ["act", "finalise"])
     graph.add_conditional_edges("act", _after_act, ["plan", "swap_plan"])
     graph.add_edge("finalise", END)
-    graph.add_edge("swap_screen", "swap_plan")
+    graph.add_edge("swap_start", "swap_plan")
     graph.add_conditional_edges("swap_plan", _after_plan, ["act", "swap_finalise"])
     graph.add_edge("swap_finalise", END)
     # ty widens the compiled graph's parameters away from the annotation above.
@@ -342,28 +342,15 @@ class _Nodes:
         logger.info("agent session finished", extra=metrics)
         return {"result": result.model_dump(mode="json"), "session_metrics": metrics}
 
-    def swap_screen(self, state: PlanState) -> PlanState:
-        """Screen the swap note, and start the swap's own loop with nothing spent."""
+    def swap_start(self, state: PlanState) -> PlanState:
+        """Start the swap's own loop with nothing spent. The note was screened before it was stored."""
         swap = state["swap"] or {}
         note = swap.get("note")
         self._guard.step(SWAP_NOTE_LINE if note else SWAP_LINE)
-        screened: str | None = None
-        use = SwapNoteUse.NONE
-        if note:
-            outcome = self._deps.screen(note)
-            screened = outcome.text
-            use = SwapNoteUse.USED if outcome.passed else SwapNoteUse.DROPPED
-            if not outcome.passed:
-                # The household sees "Couldn't use that note"; the swap still runs, without it.
-                logger.info(
-                    "the swap note did not pass the screen; swapping without it",
-                    extra={"rejection": outcome.rejection, "probability": outcome.probability},
-                )
         prepared = state.get("prepared") or self._prepared(state).model_dump(mode="json")
         return {
             "prepared": prepared,
-            "swap_note": screened,
-            "swap_note_use": use.value,
+            "swap_note": note,
             "swap_pick": None,
             "swap_outcome": None,
             "transcript": [],
@@ -445,14 +432,12 @@ class _Nodes:
                 "degraded": degraded,
                 "degraded_reason": reason,
                 "tool_calls": state.get("tool_calls", 0),
-                "note": state.get("swap_note_use"),
             },
         )
         return {
             "swap_outcome": {
                 "swap_id": swap.get("swap_id"),
                 "state": state_.value,
-                "note_use": state.get("swap_note_use", SwapNoteUse.NONE.value),
                 "result": result.model_dump(mode="json"),
                 "degraded": degraded and state_ is SwapState.DONE,
                 "degraded_reason": reason,
@@ -513,7 +498,7 @@ def _agents_best_week(state: PlanState, prepared: pipeline.PreparedPlan) -> list
 
 def _route_start(state: PlanState) -> str:
     """A thread invoked with a swap works that swap; anything else plans the week."""
-    return "swap_screen" if state.get("swap") else "prepare"
+    return "swap_start" if state.get("swap") else "prepare"
 
 
 def _after_plan(state: PlanState) -> str:

@@ -4,7 +4,7 @@
 SQS. `AGENT_RUNNER=inline` (unit tests and evals only) runs the agent in the request, with the
 in-memory store and saver, so CI needs no containers.
 
-Both runners go through `agent.deliver`, so the conditional claim, the swap and the terminal-status
+Both runners go through `agent.start`, so the conditional claim, the swap and the terminal-status
 guarantee are the same code in a test as in production.
 """
 
@@ -15,8 +15,8 @@ from typing import Annotated, Any
 from fastapi import Depends
 
 from glean.agent.checkpoint import in_memory_checkpointer
-from glean.agent.deps import AgentDeps, decision_screen
-from glean.agent.runtime import deliver
+from glean.agent.deps import AgentDeps
+from glean.agent.runtime import start
 from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router
@@ -51,12 +51,11 @@ def get_session_dispatcher(
             llm_router=llm_router,
             clock=utcnow,
             decision_client=decision_client,
-            screen=decision_screen(decision_client),
         )
 
         def run_inline(session: AgentSession) -> None:
             try:
-                deliver(session, deps)
+                start(session, deps)
             except SessionBusyError:
                 # Inline there is no queue to send the work back to, and another attempt owns the run:
                 # leave it alone rather than failing a session that is still being planned.

@@ -1,6 +1,6 @@
 """The async stack's two queue consumers: the session worker and the dead-letter handler.
 
-Both handlers are thin. The worker calls `glean.agent.deliver` -- a new run, or a finished session's
+Both handlers are thin. The worker calls `glean.agent.start` -- a new run, or a finished session's
 queued swap -- and lets that module decide the session's outcome; the dead-letter handler marks a
 session `worker_failed` once SQS has given up on it. Neither imports LangGraph, and neither knows how a plan is made.
 
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from glean.agent import build_deps, deliver
+from glean.agent import build_deps, start
 from glean.config import get_settings
 from glean.observability import logger, metrics, tracer
 from glean.sessions.dynamo import DynamoSessionStore
@@ -67,7 +67,7 @@ def handle_record(record: dict[str, Any], deps: AgentDeps) -> bool:
         return False
 
     session = AgentSession(session_id=message.session_id, user_sub=message.user_sub, request=stored.request)
-    return deliver(session, deps)
+    return start(session, deps)
 
 
 @tracer.capture_lambda_handler
