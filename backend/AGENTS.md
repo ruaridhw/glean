@@ -204,7 +204,7 @@ synchronous `POST /meal-plan` stays, shares `meal_plan.pipeline` and goes in a f
 POST   /meal-plan/sessions         202 {"session_id": "..."}        one paid call, rate limited
 GET    /meal-plan/sessions/{id}    200 SessionView                  free, never rate limited
 GET    ...?after=<cursor>          progress lines since the cursor
-POST   /meal-plan/sessions/{id}/messages  202 {"session_id", "swap_id"}  one paid call, rate limited
+POST   /meal-plan/sessions/{id}/messages  202 {"session_id", "swap_id", "note_dropped"}  one paid call, rate limited
 DELETE /meal-plan/sessions/{id}    204                              free, never rate limited
 ```
 
@@ -290,23 +290,33 @@ cancelled run adds at most one more read, at the step that notices.
   invalid answers, fallback reason and drift from the scorer's best (CloudWatch `SessionToolCalls`,
   `SessionInvalidActions`, `SessionDrift`). Asking the household (`ask_household`, V11) is the marked
   extension point in `agent/actions.py`.
-- **Swaps (V10).** `POST .../messages` takes `{"type": "swap", "slot": <recipe id on the card>, "note":
-  str | null}`; the body type is `sessions.models.HouseholdMessage`, which V11 widens into a union
-  discriminated on `type` for its answer and skip. `enqueue_swap` is one conditional write that moves a
-  session with a proposal (`done`, or a `failed` that still holds one) back to `queued`, clears the lease
-  and appends the swap; while it is queued or running a second swap is a 409 (the status is the lock), a
-  slot that is not a meal of the proposal -- a planned meal included -- is a 422, and a queue that will not
-  take the message fails the session as create does (the proposal stays, and the next swap is accepted).
-  A swap is a new SQS message for the same session: `agent.deliver` reads the item and runs the pending
-  swap if there is one (`agent.resume`), so every copy of every message leads to the same work. `resume`
-  invokes the session's own LangGraph thread with the swap, entering `swap_screen -> swap_plan <-> act ->
-  swap_finalise`: the note goes through `glean.screening` and only what passes reaches the model, as the
-  `swap_note` field; the other slots are locked; the model may use up to 3 tools and proposes one
-  replacement, kept only if it is eligible, not planned and not anywhere in the week, its alternatives or
-  what was swapped out before -- otherwise the scorer's best replacement (`pipeline.replacement`). A swap
-  always ends `done`: with nothing left to swap in, or on a bug, the proposal is written back unchanged and
-  the swap reads `no_replacement` or `failed`. `SessionView.swap` is the newest swap (`state`, `note`:
-  `none | used | dropped`, `replacement`); the note as typed is never returned. Undo swap is the app's own.
+- **Household messages.** `POST .../messages` takes one union discriminated on `type`
+  (`sessions.models.HouseholdMessage`): `{"type": "swap", "slot", "note", "week"}` (V10),
+  `{"type": "answer", "option", "note"}` and `{"type": "skip"}` (V11). The route branches on the type
+  before any status check, screens any note with `glean.screening` before anything stores it (fail
+  closed: only the screened text, and why a note was dropped, are ever stored or passed on), then calls
+  `agent.resume(session_id, message)`, which stores the message on the item and re-enqueues the session.
+  It answers 202 `MessageAccepted {session_id, swap_id | null, note_dropped}`. An answer or a skip needs
+  `waiting_for_user`; until V11 parks a run, both are a 409.
+- **Swaps (V10).** A swap needs a proposal (`done`, or a `failed` that still holds one) and no swap
+  running: the status is the lock, so a second swap is a 409, except over a swap queued at least
+  `STALE_QUEUED_SWAP_SECONDS` ago that no delivery ever took (the route died before dispatching it),
+  which is marked failed and replaced. `week` is the card ids the app shows, after any local swap or Undo:
+  it must have one id per card, only ids this proposal offered, none twice, with `slot` among them (else
+  422), and the swap locks and scores against it. A planned meal is never a slot (422, ADR 0020). A queue
+  that will not take the message fails the session as create does; the proposal stays and the next swap
+  is accepted. Every delivery goes through `agent.start`, which decides from the item the claim won, in
+  `_run`'s order: a pending answer or skip (V11), a pending swap, a finished graph (publish), then as
+  before. So a stale first-run message runs the queued swap and can never publish the old week. A swap
+  invokes the session's own LangGraph thread with the swap: `swap_start -> swap_plan <-> act ->
+  swap_finalise`, where the screened note reaches the model only as `swap_note`, the model may use up to
+  3 tools, and proposes one replacement. The replacement is kept only if it is eligible, not planned and
+  not in the week, its alternatives or anything swapped out before; otherwise it is the scorer's best
+  (`pipeline.replacement`). A swap always ends `done`: with nothing left to swap in, or on a bug, the
+  proposal is written back unchanged and the swap reads `no_replacement` or `failed`.
+  `SessionView.swap` is the newest swap (`state`, `note`: `none | used | dropped`, `replacement`); a
+  swap on a failed or cancelled session reads `failed`. Undo swap is the app's own; it is why the app
+  sends `week`.
 - **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
   and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
