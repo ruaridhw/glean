@@ -404,11 +404,16 @@ void main() {
       await controller.generate(weekStart: week, slots: 1, servings: 1);
 
       final Future<void> skipping = controller.skipQuestion();
-      expect(
-        h.container.read(generateWeekControllerProvider).phase,
-        GenerateProposalPhase.working,
-        reason: 'the step gives way to the progress at once',
+      final GenerateProposalState sending = h.container.read(
+        generateWeekControllerProvider,
       );
+      expect(
+        sending.phase,
+        GenerateProposalPhase.question,
+        reason:
+            'the step stays until the server has the answer, so a failed send loses nothing',
+      );
+      expect(sending.sendingReply, isTrue);
       await skipping;
 
       final http.Request sent = requests.singleWhere(
@@ -524,17 +529,26 @@ void main() {
       },
     );
 
-    test('a refused answer (429) fails with the catalogue copy', () async {
+    test('a rate-limited send keeps the question with the rate-limit copy, and '
+        'Send can be tried again', () async {
       final clock = FakeClock();
+      final List<http.Request> requests = <http.Request>[];
+      var sends = 0;
       final h = harnessWith(
         clock,
         backend(
-          polls: [asking],
-          message: () => http.Response(
-            '{"detail":"Rate limit exceeded"}',
-            429,
-            headers: {'retry-after': '120'},
-          ),
+          capture: requests.add,
+          polls: [asking, () => doneWith('rec_a')],
+          message: () => ++sends == 1
+              ? http.Response(
+                  '{"detail":"Rate limit exceeded"}',
+                  429,
+                  headers: {'retry-after': '120'},
+                )
+              : http.Response(
+                  '{"session_id":"s1","swap_id":null,"note_dropped":false}',
+                  202,
+                ),
         ),
       );
       addTearDown(h.dispose);
@@ -545,12 +559,115 @@ void main() {
 
       await controller.answerQuestion(option: 'Two');
 
-      final GenerateProposalState state = h.container.read(
+      GenerateProposalState state = h.container.read(
         generateWeekControllerProvider,
       );
-      expect(state.phase, GenerateProposalPhase.failed);
-      expect(state.failure!.kind, GenerateFailureKind.rateLimited);
+      expect(state.phase, GenerateProposalPhase.question);
+      expect(state.question!.options, ['Yes, one', 'Two', 'No']);
+      expect(state.sendingReply, isFalse);
+      expect(
+        state.questionError,
+        "You've used too many AI credits. Try again in 2 minutes.",
+      );
+      expect(state.failure, isNull);
+      expect(
+        requests.where((request) => request.method == 'POST'),
+        hasLength(2),
+        reason: 'one create and one refused send: no second paid session',
+      );
+
+      await controller.answerQuestion(option: 'Two');
+
+      state = h.container.read(generateWeekControllerProvider);
+      expect(state.phase, GenerateProposalPhase.proposal);
+      expect(state.questionError, isNull);
     });
+
+    test('a send that times out keeps the question; a retry the server already '
+        'has (409) carries on to the result', () async {
+      final clock = FakeClock();
+      final List<http.Request> requests = <http.Request>[];
+      var sends = 0;
+      final h = harnessWith(
+        clock,
+        backend(
+          capture: requests.add,
+          polls: [asking, () => doneWith('rec_a')],
+          message: () {
+            if (++sends == 1) throw TimeoutException('the network stalled');
+            return http.Response(
+              '{"detail":"This session is not waiting for an answer."}',
+              409,
+            );
+          },
+        ),
+      );
+      addTearDown(h.dispose);
+      final GenerateWeekController controller = h.container.read(
+        generateWeekControllerProvider.notifier,
+      );
+      await controller.generate(weekStart: week, slots: 1, servings: 1);
+
+      await controller.skipQuestion();
+
+      GenerateProposalState state = h.container.read(
+        generateWeekControllerProvider,
+      );
+      expect(state.phase, GenerateProposalPhase.question);
+      expect(state.questionError, "Couldn't send that. Try again.");
+
+      await controller.skipQuestion();
+
+      state = h.container.read(generateWeekControllerProvider);
+      expect(state.phase, GenerateProposalPhase.proposal);
+      expect(
+        requests.where((request) => request.method == 'DELETE'),
+        isEmpty,
+        reason:
+            'the session the timed-out answer reached is the one that finished',
+      );
+    });
+
+    test(
+      'Retry after a failed run cancels the old session before it pays for a '
+      'new one',
+      () async {
+        final clock = FakeClock();
+        final List<http.Request> requests = <http.Request>[];
+        final h = harnessWith(
+          clock,
+          backend(
+            capture: requests.add,
+            polls: [
+              () => http.Response('{"detail":"No such session"}', 404),
+              () => doneWith('rec_a'),
+            ],
+          ),
+        );
+        addTearDown(h.dispose);
+        final GenerateWeekController controller = h.container.read(
+          generateWeekControllerProvider.notifier,
+        );
+        await controller.generate(weekStart: week, slots: 1, servings: 1);
+        expect(
+          h.container.read(generateWeekControllerProvider).phase,
+          GenerateProposalPhase.failed,
+        );
+
+        await controller.retry();
+
+        final List<String> calls = <String>[
+          for (final request in requests)
+            if (request.method != 'GET')
+              '${request.method} ${request.url.path}',
+        ];
+        expect(calls, [
+          'POST /meal-plan/sessions',
+          'DELETE /meal-plan/sessions/s1',
+          'POST /meal-plan/sessions',
+        ]);
+      },
+    );
 
     test('cancel on the question cancels the session', () async {
       final clock = FakeClock();

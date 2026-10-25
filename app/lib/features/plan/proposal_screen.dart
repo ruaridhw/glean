@@ -219,6 +219,8 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
       case GenerateProposalPhase.question:
         return QuestionStep(
           question: state.question!,
+          sending: state.sendingReply,
+          error: state.questionError,
           onSend: ({String? option, String? note}) =>
               unawaited(_controller.answerQuestion(option: option, note: note)),
           onSkip: () => unawaited(_controller.skipQuestion()),

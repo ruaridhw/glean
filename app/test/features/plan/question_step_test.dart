@@ -64,12 +64,14 @@ http.Client questionBackend({
   required List<http.Request> requests,
   Future<http.Response> Function()? afterAnswer,
   bool noteDropped = false,
+  http.Response Function()? refuseMessage,
 }) {
   var answered = false;
   return MockClient((http.Request request) async {
     requests.add(request);
     if (request.method == 'DELETE') return http.Response('', 204);
     if (request.method == 'POST' && request.url.path.endsWith('/messages')) {
+      if (refuseMessage != null) return refuseMessage();
       answered = true;
       return http.Response(
         jsonEncode(<String, dynamic>{
@@ -272,6 +274,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Chickpea & spinach dal'), findsOneWidget);
   });
+
+  gleanWidgetTest(
+    'a refused send keeps the question and the choice, says why, and can be '
+    'sent again',
+    (tester) async {
+      final requests = <http.Request>[];
+      final h = AppTestHarness(
+        httpClient: questionBackend(
+          requests: requests,
+          refuseMessage: () => http.Response(
+            '{"detail":"Rate limit exceeded"}',
+            429,
+            headers: <String, String>{'retry-after': '120'},
+          ),
+        ),
+      );
+      addTearDown(h.dispose);
+      await openQuestion(tester, h);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Two'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(question), findsOneWidget);
+      expect(
+        find.text("You've used too many AI credits. Try again in 2 minutes."),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Two'))
+            .selected,
+        isTrue,
+        reason: 'the choice survives the failed send',
+      );
+      expect(sendButton(tester).onPressed, isNotNull);
+      expect(
+        requests.where((request) => request.method == 'POST'),
+        hasLength(2),
+        reason: 'no second paid session was started',
+      );
+    },
+  );
 
   gleanWidgetTest('Back on the question cancels the session and closes', (
     tester,
