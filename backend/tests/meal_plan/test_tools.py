@@ -16,6 +16,7 @@ import glean.meal_plan.tools as tools_module
 from glean.meal_plan.tools import (
     LIGHTER_CHIP,
     CandidateRecipe,
+    DuplicateRecipeIds,
     Predicate,
     PredicateField,
     PredicateOp,
@@ -468,6 +469,17 @@ def test_every_row_of_the_scorer_table_is_scored() -> None:
     scored = {term_score.term for recipe in plan.recipes for term_score in recipe.terms}
     scored |= {penalty.term for penalty in plan.penalties}
     assert scored == set(Term)
+
+
+def test_a_plan_naming_the_same_recipe_twice_is_an_error() -> None:
+    # One week cannot cook a recipe in two slots, and scoring it twice would double its terms and its repeats,
+    # which is a caller bug rather than a weak plan.
+    ctx = context(candidate("a"), candidate("b"))
+    with pytest.raises(DuplicateRecipeIds, match="twice"):
+        score_meal_plan(["a", "a"], ctx)
+    # A candidate pool is a set of options, though, so a repeated id there is simply one option.
+    (plan,) = create_candidate_meal_plans(["a", "a", "b"], 2, ctx, k=1)
+    assert set(plan.recipe_ids) == {"a", "b"}
 
 
 def test_a_plan_naming_a_recipe_the_caller_did_not_describe_is_an_error() -> None:
