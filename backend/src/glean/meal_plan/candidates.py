@@ -163,7 +163,13 @@ def sample_corpus_candidates(
     }
     if narrowing:
         eligible = _narrowed(
-            eligible, narrowing, attributes=attributes, cooked=cooked, now=now or datetime.now(UTC), slots=slots
+            eligible,
+            narrowing,
+            attributes=attributes,
+            cooked=cooked,
+            now=now or datetime.now(UTC),
+            slots=slots,
+            keep=preferred_ids,
         )
     floor = apply_recency_floor(
         eligible,
@@ -294,6 +300,7 @@ def _narrowed(
     cooked: Sequence[CookedMeal],
     now: datetime,
     slots: int,
+    keep: Collection[str] = (),
 ) -> dict[str, RecipeSummary]:
     """The hard-constraint pool, narrowed by each chip in turn while at least three fresh recipes per slot pass.
 
@@ -301,6 +308,10 @@ def _narrowed(
     recent repeat. A chip that would leave too few is skipped, and pays its +2 in the scorer instead; each chip
     is decided on what the chips before it left. Hard constraints were applied before this, so narrowing can
     only remove recipes.
+
+    `keep` (last week's dinners, under "same as last week") survives every chip: the household asked for those
+    dinners by name, which is more explicit than a chip's rule. They count towards a chip's threshold only when
+    they match it, so they never talk a chip into narrowing.
     """
     narrowed = dict(eligible)
     fresh = set(
@@ -320,7 +331,11 @@ def _narrowed(
             if passes(attributes.get(external_id, RecipeAttributes()), summary.total_time_mins)
         }
         if len(kept & fresh) >= needed:
-            narrowed = {external_id: summary for external_id, summary in narrowed.items() if external_id in kept}
+            narrowed = {
+                external_id: summary
+                for external_id, summary in narrowed.items()
+                if external_id in kept or external_id in keep
+            }
             fresh &= kept
             logger.info("a chip narrowed the offer", extra={"chip": chip, "recipes": len(narrowed)})
         else:
