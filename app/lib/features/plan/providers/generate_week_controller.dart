@@ -135,6 +135,8 @@ class CardNotice {
 const String swapFailedCopy = "Couldn't find another right now. Try again.";
 const String swapNothingElseCopy = 'Nothing else fits this slot right now.';
 const String swapNoteDroppedCopy = "Couldn't use that note";
+const String swapStillFinishingCopy =
+    'Your last swap is still finishing. Try again in a moment.';
 
 /// Everything one Generate attempt holds: its arguments, its progress, its proposal, and the local swaps the
 /// user has made but not saved. A swap is a suggestion, not a write; [swaps] and [plannedSwaps] stay in memory
@@ -263,6 +265,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// Bumped by every "Find another" and by cancelling one, so a swap's poll that returns after it was cancelled
   /// or replaced changes nothing.
   int _finds = 0;
+
+  /// True from a Cancel until the server next accepts a swap: the cancelled swap may still be running there, so a
+  /// refusal means "wait for it", not "something went wrong".
+  bool _cancelledSwapMayRun = false;
 
   @override
   GenerateProposalState build() => const GenerateProposalState();
@@ -393,16 +399,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         SwapMessage(slot: slot, week: week, note: sent),
       );
     } on ApiException catch (error) {
-      _endFind(
-        attempt,
-        find,
-        index,
-        notice: error is ApiRateLimitException
-            ? GenerateFailure.fromApi(error).message
-            : swapFailedCopy,
-      );
+      _endFind(attempt, find, index, notice: _swapRefusedCopy(error));
       return;
     }
+    _cancelledSwapMayRun = false;
 
     final GenerateSessionPoller poller = ref.read(
       generateSessionPollerProvider,
@@ -479,7 +479,21 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   void cancelFindAnother() {
     if (state.findingAnother == null) return;
     _finds++;
+    _cancelledSwapMayRun = true;
     state = state._copy(clearFindingAnother: true);
+  }
+
+  /// The card's line when the server would not take a swap.
+  String _swapRefusedCopy(ApiException error) {
+    if (error is ApiRateLimitException) {
+      return GenerateFailure.fromApi(error).message;
+    }
+    if (error is ApiServerException &&
+        error.statusCode == 409 &&
+        _cancelledSwapMayRun) {
+      return swapStillFinishingCopy;
+    }
+    return swapFailedCopy;
   }
 
   bool _findsAnother(int attempt, int find) =>

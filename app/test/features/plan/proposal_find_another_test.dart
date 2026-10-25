@@ -82,10 +82,14 @@ class SwapBackend {
   SwapBackend({
     this.swapPolls = const <Future<http.Response> Function()>[],
     this.accept,
+    this.accepts = const <http.Response Function()>[],
   });
 
   final List<Future<http.Response> Function()> swapPolls;
   final http.Response Function()? accept;
+
+  /// Answers to successive swap messages, in order; past the list, [accept] (or a 202) answers.
+  final List<http.Response Function()> accepts;
   final List<http.Request> messages = <http.Request>[];
   bool _done = false;
   int _swapPolled = 0;
@@ -95,6 +99,9 @@ class SwapBackend {
     if (request.method == 'DELETE') return http.Response('', 204);
     if (request.method == 'POST' && path.endsWith('/messages')) {
       messages.add(request);
+      if (messages.length <= accepts.length) {
+        return accepts[messages.length - 1]();
+      }
       return (accept ??
           () => http.Response(
             '{"session_id":"s1","swap_id":1,"note_dropped":false}',
@@ -630,6 +637,52 @@ void main() {
       expect(state().isSwapped(1), isTrue);
       controller.swapSuggestion(1);
       expect(state().suggestionAt(1).title, 'Black bean tacos');
+    },
+  );
+
+  gleanWidgetTest(
+    'after a Cancel, a swap refused because the old one is still finishing '
+    'says so',
+    (tester) async {
+      final Completer<http.Response> old = Completer<http.Response>();
+      final backend = SwapBackend(
+        accepts: <http.Response Function()>[
+          () => http.Response(
+            '{"session_id":"s1","swap_id":1,"note_dropped":false}',
+            202,
+          ),
+          () =>
+              http.Response('{"detail":"Another swap is still running."}', 409),
+        ],
+        swapPolls: <Future<http.Response> Function()>[
+          () => old.future,
+          () async => _poll(status: 'running', swap: _swap('pending')),
+        ],
+      );
+      final h = _harness(backend);
+      addTearDown(h.dispose);
+
+      await _openProposal(tester, h);
+      await _findAnother(tester, 1, settle: false);
+      await tester.tap(_inCard(1, find.text('Cancel')));
+      await tester.pump();
+      await _findAnother(tester, 1);
+
+      expect(
+        _inCard(
+          1,
+          find.text(
+            'Your last swap is still finishing. Try again in a moment.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text("Couldn't find another right now. Try again."),
+        findsNothing,
+      );
+      old.complete(_poll(status: 'running', swap: _swap('pending')));
+      await tester.pumpAndSettle();
     },
   );
 }
