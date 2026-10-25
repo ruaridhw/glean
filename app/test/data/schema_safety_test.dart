@@ -31,8 +31,10 @@ Future<String> _schemaOf(GleanDatabase db) async {
 // that version cannot be written here without inventing a schema no build ever produced, so this branch's
 // lineage goes v6 -> v8 and the gap is named rather than filled.
 //
-// **On the rebase onto #196, delete this set, take #196's `schema_v6.sql` and `schema_v7.sql`, and regenerate
-// `schema_v8_snapshot.sql` from the merged schema** — the snapshot has to describe what ships.
+// **On the rebase onto #196: delete this set, keep #196's `schema_v6.sql`, dump a real version-7 file from
+// that build as `schema_v7.sql`, and regenerate `schema_v8_snapshot.sql` from the merged schema.** #196 ships
+// `schema_v6.sql` and `schema_v7_snapshot.sql` but no version-7 file of its own, so the file has to be produced
+// rather than copied; the snapshot has to describe what ships.
 const Set<int> _fixturesThatArriveWithAnotherBranch = <int>{7};
 
 void main() {

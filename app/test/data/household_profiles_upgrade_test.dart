@@ -53,8 +53,9 @@ Map<String, List<List<Object?>>> _dump(Database raw) {
 
 void main() {
   // Version 7 belongs to #196 (the meal-ratings slice) and merges first, so this branch is tested on the one
-  // frozen file it can honestly offer: a real version-6 database. On the rebase, add 7 to this list and let
-  // the schema comparison below prove the merged upgrade lands on the merged snapshot.
+  // frozen file it can honestly offer: a real version-6 database. On the rebase, dump a version-7 file from
+  // #196's build, add 7 to this list, and let the schema comparison below prove the merged upgrade lands on the
+  // merged snapshot.
   for (final int fixtureVersion in <int>[6]) {
     test('a version $fixtureVersion file upgrades to the current schema with '
         'every row intact and gains an empty household_profiles', () async {
