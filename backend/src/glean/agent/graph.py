@@ -343,7 +343,11 @@ class _Nodes:
         return {"result": result.model_dump(mode="json"), "session_metrics": metrics}
 
     def swap_start(self, state: PlanState) -> PlanState:
-        """Start the swap's own loop with nothing spent. The note was screened before it was stored."""
+        """Start the swap's own loop with nothing spent. The note was screened before it was stored.
+
+        If the checkpoint expired there is no prepared plan, so `prepare` re-runs on today's clock without the
+        week's screened note (the thread no longer holds it); the request's chips still apply.
+        """
         swap = state["swap"] or {}
         note = swap.get("note")
         self._guard.step(SWAP_NOTE_LINE if note else SWAP_LINE)
