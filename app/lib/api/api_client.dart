@@ -121,6 +121,28 @@ class GleanApiClient {
     );
   }
 
+  /// Asks for another meal in one card of a finished proposal (V10). The server answers 202 with the swap's id
+  /// and resumes the session; poll it for the swap's progress lines and its replacement. One paid call, rate
+  /// limited; a 409 means a swap is already running, a 422 that the card's meal cannot be swapped here.
+  Future<MealPlanSwapAccepted> sendMealPlanSwap(
+    String sessionId,
+    MealPlanSwapMessage message,
+  ) {
+    final uri = _uri(
+      '/meal-plan/sessions/${Uri.encodeComponent(sessionId)}/messages',
+    );
+    return _send(
+      uri,
+      () async => httpClient.post(
+        uri,
+        headers: await _jsonHeaders(),
+        body: jsonEncode(message.toJson()),
+      ),
+      (dynamic json) =>
+          MealPlanSwapAccepted.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
   /// Cancels a Generate run. The server answers 204 and the worker stops between graph steps; a terminal
   /// session stays as it was, so this is safe to call after the result has arrived. Free and not rate limited.
   Future<void> cancelMealPlanSession(String sessionId) {

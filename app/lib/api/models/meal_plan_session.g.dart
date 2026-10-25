@@ -33,6 +33,78 @@ MealPlanSessionError _$MealPlanSessionErrorFromJson(
   fieldKeyMap: const {'retryAfterMinutes': 'retry_after_minutes'},
 );
 
+Map<String, dynamic> _$MealPlanSwapMessageToJson(
+  MealPlanSwapMessage instance,
+) => <String, dynamic>{
+  'type': instance.type,
+  'slot': instance.slot,
+  'note': instance.note,
+};
+
+MealPlanSwapAccepted _$MealPlanSwapAcceptedFromJson(
+  Map<String, dynamic> json,
+) => $checkedCreate(
+  'MealPlanSwapAccepted',
+  json,
+  ($checkedConvert) {
+    final val = MealPlanSwapAccepted(
+      sessionId: $checkedConvert('session_id', (v) => v as String),
+      swapId: $checkedConvert('swap_id', (v) => (v as num).toInt()),
+    );
+    return val;
+  },
+  fieldKeyMap: const {'sessionId': 'session_id', 'swapId': 'swap_id'},
+);
+
+MealPlanSessionSwap _$MealPlanSessionSwapFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('MealPlanSessionSwap', json, ($checkedConvert) {
+      final val = MealPlanSessionSwap(
+        swapId: $checkedConvert('swap_id', (v) => (v as num).toInt()),
+        slot: $checkedConvert('slot', (v) => v as String),
+        position: $checkedConvert('position', (v) => (v as num).toInt()),
+        state: $checkedConvert(
+          'state',
+          (v) => $enumDecode(
+            _$MealPlanSwapStateEnumMap,
+            v,
+            unknownValue: MealPlanSwapState.unknown,
+          ),
+        ),
+        note: $checkedConvert(
+          'note',
+          (v) =>
+              $enumDecodeNullable(
+                _$MealPlanSwapNoteEnumMap,
+                v,
+                unknownValue: MealPlanSwapNote.unknown,
+              ) ??
+              MealPlanSwapNote.none,
+        ),
+        replacement: $checkedConvert(
+          'replacement',
+          (v) => v == null
+              ? null
+              : MealPlanRecipe.fromJson(v as Map<String, dynamic>),
+        ),
+      );
+      return val;
+    }, fieldKeyMap: const {'swapId': 'swap_id'});
+
+const _$MealPlanSwapStateEnumMap = {
+  MealPlanSwapState.pending: 'pending',
+  MealPlanSwapState.done: 'done',
+  MealPlanSwapState.noReplacement: 'no_replacement',
+  MealPlanSwapState.failed: 'failed',
+  MealPlanSwapState.unknown: 'unknown',
+};
+
+const _$MealPlanSwapNoteEnumMap = {
+  MealPlanSwapNote.none: 'none',
+  MealPlanSwapNote.used: 'used',
+  MealPlanSwapNote.dropped: 'dropped',
+  MealPlanSwapNote.unknown: 'unknown',
+};
+
 MealPlanSessionUpdate _$MealPlanSessionUpdateFromJson(
   Map<String, dynamic> json,
 ) => $checkedCreate(
@@ -69,6 +141,12 @@ MealPlanSessionUpdate _$MealPlanSessionUpdateFromJson(
         (v) => v == null
             ? null
             : MealPlanSessionError.fromJson(v as Map<String, dynamic>),
+      ),
+      swap: $checkedConvert(
+        'swap',
+        (v) => v == null
+            ? null
+            : MealPlanSessionSwap.fromJson(v as Map<String, dynamic>),
       ),
       sessionId: $checkedConvert('session_id', (v) => v as String?),
       updatedAt: $checkedConvert(
