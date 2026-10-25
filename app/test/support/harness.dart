@@ -62,11 +62,15 @@ class AppTestHarness {
     // write then never completes.
     AuthStatus authStatus = AuthStatus.active,
     List<Override> overrides = const <Override>[],
+    // Keep what an earlier harness wrote to `flutter_secure_storage`, so a test can restart the app.
+    bool keepSecureStorage = false,
   }) : haptics = haptics ?? RecordingHaptics(),
        db = createTestDatabase() {
     // A real TokenStorage over the plugin's in-memory test platform, so
     // signing out clears it for real.
-    FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    if (!keepSecureStorage) {
+      FlutterSecureStorage.setMockInitialValues(<String, String>{});
+    }
     _container = ProviderContainer(
       overrides: <Override>[
         gleanDatabaseProvider.overrideWithValue(db),

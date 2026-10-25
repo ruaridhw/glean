@@ -1,13 +1,21 @@
 /// What the household tells the planner about one week: chips and an optional note (the "This week" box).
 ///
-/// Held in memory, one selection per week, keyed by the week's start: nothing is set by default, a new week
-/// starts empty, and closing the app clears it too. Nothing here is written to the database, so the box needs
-/// no schema change. What each chip does to the plan is the backend's (`meal_plan.tools.FeedbackChip`); this
-/// file only names them for the screen and the wire.
+/// One selection per week, keyed by the week's start: nothing is set by default and a new week starts empty.
+/// It survives a restart through [WeekFeedbackStore], a key-value entry in `flutter_secure_storage` (the store
+/// the sign-in tokens already use), not the database, so the box needs no schema change. What each chip does to
+/// the plan is the backend's (`meal_plan.tools.FeedbackChip`); this file only names them for the screen, the
+/// wire and the store.
 library;
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:glean/api/models/meal_plan.dart';
+import 'package:glean/auth/auth_controller.dart' show authControllerProvider;
+import 'package:glean/data/providers/clock_provider.dart';
+import 'package:glean/data/util/week.dart';
 
 /// The note's limit, in Unicode code points: the backend's `MAX_FEEDBACK_NOTE_LENGTH`.
 const int maxWeekNoteLength = 200;
@@ -76,6 +84,30 @@ class WeekFeedback {
           note: hasNote ? note.trim() : null,
         );
 
+  bool get _storable => !isEmpty || noteUnused;
+
+  Map<String, dynamic> _toJson() => <String, dynamic>{
+    'chips': <String>[for (final FeedbackChip chip in orderedChips) chip.wire],
+    'note': note,
+    'note_unused': noteUnused,
+  };
+
+  /// A stored entry, or null when it is not one this build can read. An unknown chip is skipped.
+  static WeekFeedback? _fromJson(Object? json) {
+    if (json is! Map) return null;
+    final Object? chips = json['chips'];
+    final Object? note = json['note'];
+    return WeekFeedback(
+      chips: <FeedbackChip>{
+        if (chips is List)
+          for (final FeedbackChip chip in FeedbackChip.values)
+            if (chips.contains(chip.wire)) chip,
+      },
+      note: note is String ? note : '',
+      noteUnused: json['note_unused'] == true,
+    );
+  }
+
   WeekFeedback _copy({
     Set<FeedbackChip>? chips,
     String? note,
@@ -86,6 +118,72 @@ class WeekFeedback {
     noteUnused: noteUnused ?? this.noteUnused,
   );
 }
+
+/// Where the selections are kept between launches: one JSON entry per user in `flutter_secure_storage`, a map
+/// from week start (`2026-10-19`) to that week's chips and note. Weeks before the current one are never read
+/// back and are dropped at the next write, so the box resets when the week rolls over.
+class WeekFeedbackStore {
+  WeekFeedbackStore({required this.clock, FlutterSecureStorage? storage})
+    : _storage = storage ?? const FlutterSecureStorage();
+
+  /// Today, for deciding which weeks are over.
+  final DateTime Function() clock;
+  final FlutterSecureStorage _storage;
+
+  static String keyFor(String userId) => 'glean_week_feedback.$userId';
+
+  Future<WeekFeedback?> read(String userId, DateTime weekStart) async {
+    final String week = _week(weekStart);
+    if (week.compareTo(_currentWeek()) < 0) return null;
+    return WeekFeedback._fromJson((await _weeks(userId))[week]);
+  }
+
+  Future<void> write(
+    String userId,
+    DateTime weekStart,
+    WeekFeedback feedback,
+  ) async {
+    final Map<String, dynamic> weeks = await _weeks(userId);
+    final String current = _currentWeek();
+    // ISO dates order as strings: everything before this week is over.
+    weeks.removeWhere((String week, _) => week.compareTo(current) < 0);
+    final String week = _week(weekStart);
+    if (feedback._storable) {
+      weeks[week] = feedback._toJson();
+    } else {
+      weeks.remove(week);
+    }
+    if (weeks.isEmpty) {
+      await _storage.delete(key: keyFor(userId));
+    } else {
+      await _storage.write(key: keyFor(userId), value: jsonEncode(weeks));
+    }
+  }
+
+  String _currentWeek() => _week(clock());
+
+  Future<Map<String, dynamic>> _weeks(String userId) async {
+    final String? raw = await _storage.read(key: keyFor(userId));
+    if (raw == null) return <String, dynamic>{};
+    try {
+      final Object? decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    } on FormatException {
+      // A value this build cannot read is treated as nothing set; the next write replaces it.
+      return <String, dynamic>{};
+    }
+  }
+
+  static String _week(DateTime date) {
+    final DateTime start = startOfWeek(date);
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${start.year}-${two(start.month)}-${two(start.day)}';
+  }
+}
+
+final weekFeedbackStoreProvider = Provider<WeekFeedbackStore>(
+  (Ref ref) => WeekFeedbackStore(clock: ref.watch(clockProvider)),
+);
 
 /// One week's selection. Keyed by the week's start (`startOfWeek`), so when the week rolls over the Plan tab
 /// reads a new, empty selection and last week's is never sent again.
@@ -99,26 +197,59 @@ class WeekFeedbackController extends Notifier<WeekFeedback> {
 
   final DateTime weekStart;
 
+  bool _edited = false;
+  Future<void> _writes = Future<void>.value();
+
   @override
-  WeekFeedback build() => const WeekFeedback();
+  WeekFeedback build() {
+    _edited = false;
+    final String? userId = ref.watch(
+      authControllerProvider.select((s) => s.userId),
+    );
+    if (userId != null) unawaited(_restore(userId));
+    return const WeekFeedback();
+  }
+
+  /// Reads the saved selection back. A tap that lands before the read finishes wins: it is newer.
+  Future<void> _restore(String userId) async {
+    final WeekFeedback? saved = await ref
+        .read(weekFeedbackStoreProvider)
+        .read(userId, weekStart);
+    if (saved == null || _edited || !ref.mounted) return;
+    state = saved;
+  }
+
+  void _update(WeekFeedback next) {
+    _edited = true;
+    state = next;
+    final String? userId = ref.read(authControllerProvider).userId;
+    if (userId == null) return;
+    final WeekFeedbackStore store = ref.read(weekFeedbackStoreProvider);
+    // One write at a time, in order, so a fast run of taps can never leave an older selection saved last.
+    _writes = _writes.then((_) => store.write(userId, weekStart, next)).catchError((
+      Object _,
+    ) {
+      // Best effort: the selection still applies to this launch, it just is not kept for the next one.
+    });
+  }
 
   void toggle(FeedbackChip chip) {
     final Set<FeedbackChip> next = Set<FeedbackChip>.of(state.chips);
     if (!next.remove(chip)) next.add(chip);
-    state = state._copy(chips: next);
+    _update(state._copy(chips: next));
   }
 
   void setNote(String note) {
     if (note == state.note) return;
-    state = state._copy(note: note, noteUnused: false);
+    _update(state._copy(note: note, noteUnused: false));
   }
 
-  void clear() => state = const WeekFeedback();
+  void clear() => _update(const WeekFeedback());
 
   /// Records what the plan did with the note it was sent. A note edited since then is a different note, so
   /// the outcome is ignored for it.
   void noteOutcome({required String? sentNote, required String? outcome}) {
     if (sentNote == null || sentNote != state.note.trim()) return;
-    state = state._copy(noteUnused: _droppedNoteOutcomes.contains(outcome));
+    _update(state._copy(noteUnused: _droppedNoteOutcomes.contains(outcome)));
   }
 }
