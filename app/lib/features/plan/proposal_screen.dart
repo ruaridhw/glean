@@ -1,6 +1,10 @@
 /// The V3 proposal screen (direction A, full-screen review): Generate opens it immediately in its working
 /// state, progress lines arrive on the poll, and the proposal is reviewed before anything is saved. Add to
 /// plan commits the whole review in one transaction; Back discards it and cancels the session.
+///
+/// When the agent asks its one question, the working state gives way to a focused question step ([QuestionStep]);
+/// Send or "Skip, just plan" returns to the progress, which then says what was answered. Back on the step
+/// discards and cancels, exactly as it does on the working state.
 library;
 
 import 'dart:async';
@@ -24,6 +28,7 @@ import 'generate_failure.dart';
 import 'presentation.dart';
 import 'providers/generate_week_controller.dart';
 import 'widgets/proposal_meal_card.dart';
+import 'widgets/question_step.dart';
 
 class ProposalScreen extends ConsumerStatefulWidget {
   const ProposalScreen({super.key});
@@ -206,8 +211,18 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
       case GenerateProposalPhase.idle:
         return const Center(child: Text('Nothing to review.'));
       case GenerateProposalPhase.working:
+        return _WorkingBody(
+          slots: state.slots,
+          progress: state.progress,
+          reply: state.reply,
+        );
       case GenerateProposalPhase.question:
-        return _WorkingBody(slots: state.slots, progress: state.progress);
+        return QuestionStep(
+          question: state.question!,
+          onSend: ({String? option, String? note}) =>
+              unawaited(_controller.answerQuestion(option: option, note: note)),
+          onSkip: () => unawaited(_controller.skipQuestion()),
+        );
       case GenerateProposalPhase.failed:
         return _FailedBody(
           failure:
@@ -328,12 +343,14 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
     );
   }
 
-  Widget _bottomBar(GenerateProposalState state) {
+  /// Null on the question step, which carries its own Skip and Send.
+  Widget? _bottomBar(GenerateProposalState state) {
     final AppTokens tokens = context.tokens;
     final List<Widget> actions;
     switch (state.phase) {
-      case GenerateProposalPhase.working:
       case GenerateProposalPhase.question:
+        return null;
+      case GenerateProposalPhase.working:
         actions = <Widget>[
           OutlinedButton(
             onPressed: () => unawaited(_close()),
@@ -434,10 +451,17 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _WorkingBody extends StatelessWidget {
-  const _WorkingBody({required this.slots, required this.progress});
+  const _WorkingBody({
+    required this.slots,
+    required this.progress,
+    required this.reply,
+  });
 
   final int slots;
   final List<String> progress;
+
+  /// The household's answer to the agent's question, once there was one; a skip says nothing.
+  final GenerateQuestionReply? reply;
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +486,45 @@ class _WorkingBody extends StatelessWidget {
             ),
           ),
         ),
+        if (reply case final GenerateQuestionReply answered
+            when !answered.skipped) ...<Widget>[
+          SizedBox(height: tokens.spacing.sm),
+          _ReplyCard(reply: answered),
+        ],
       ],
+    );
+  }
+}
+
+/// What the household answered, under the progress once the question step gives way to it. A note the backend
+/// could not use is named here, and the option still counts.
+class _ReplyCard extends StatelessWidget {
+  const _ReplyCard({required this.reply});
+
+  final GenerateQuestionReply reply;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppTokens tokens = context.tokens;
+    final TextStyle? muted = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final String? option = reply.option;
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(tokens.spacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (option != null)
+              Text('You answered: $option.', style: muted)
+            else if (!reply.noteDropped)
+              Text('You answered with a note.', style: muted),
+            if (reply.noteDropped)
+              Text("Couldn't use that note.", style: muted),
+          ],
+        ),
+      ),
     );
   }
 }
