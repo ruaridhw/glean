@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from glean.meal_plan.eligibility import CookedMeal, apply_recency_floor, recency_penalty
+from glean.meal_plan.eligibility import CookedMeal, apply_recency_floor, recency_penalty, recipe_history
 
 NOW = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
 
@@ -411,3 +411,32 @@ def test_a_later_title_only_thumbs_up_cancels_an_older_id_matched_thumbs_down() 
     )
 
     assert "rec_a" not in result.disliked
+
+
+def test_the_history_lookup_reads_one_household_the_way_the_floor_does() -> None:
+    # The scorer needs a cook's age and its latest thumb for the recipes it was offered, without deciding
+    # anything about them: one seam for both, so the age the floor relaxed on is the age the scorer reads.
+    titles = {"rec_a": "Lentil Bake", "rec_b": "Tofu Noodles", "rec_c": "Fish Pie"}
+    cooked = [
+        CookedMeal(recipe_id="rec_a", title="Lentil Bake", cooked_at=NOW - timedelta(days=50), rating="up"),
+        # No recipe id: an older plan entry, matched by title.
+        CookedMeal(recipe_id=None, title="  tofu   noodles ", cooked_at=NOW - timedelta(days=3), rating="down"),
+        # A later unrated cook of the first recipe must not erase its thumb.
+        CookedMeal(recipe_id="rec_a", title="Lentil Bake", cooked_at=NOW - timedelta(days=4)),
+    ]
+
+    history = recipe_history(["rec_a", "rec_b", "rec_c"], titles=titles, cooked=cooked, now=NOW)
+    floor = apply_recency_floor(["rec_a", "rec_b", "rec_c", "rec_d"], titles=titles, cooked=cooked, now=NOW, slots=1)
+
+    assert history.days_since_cooked == {"rec_a": 4.0, "rec_b": 3.0}
+    assert history.latest_rating == {"rec_a": "up", "rec_b": "down"}
+    assert dict(floor.days_since_cooked) == {"rec_a": 4.0}  # rec_b is thumbs down, so not eligible
+    assert dict(floor.latest_rating) == {"rec_a": "up"}
+    assert floor.disliked == ("rec_b",)
+
+
+def test_a_recipe_the_history_never_mentions_has_no_age_and_no_rating() -> None:
+    history = recipe_history(["rec_a"], titles={"rec_a": "Lentil Bake"}, cooked=[], now=NOW)
+
+    assert history.days_since_cooked == {}
+    assert history.latest_rating == {}
