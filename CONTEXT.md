@@ -74,6 +74,10 @@ _Avoid_: last rating, current rating, score
 A week the planner suggests, with a reason per meal and a reason kind, that the household reviews and swaps before anything is saved to the plan (ADR 0019).
 _Avoid_: suggestion list, generated plan, result
 
+**Human feedback**:
+What the household tells the planner about this one week: chips (quick weeknights, use up the fridge, something new, healthier, comfort food, lighter, guests, same as last week) and an optional note. Nothing is set by default, and it resets when the week rolls over. The note reaches the planner only if the injection screen accepts it as a food preference; otherwise it is dropped and the chips still apply.
+_Avoid_: preferences, settings, prompt
+
 **Alternative**:
 The one other meal offered beside a card, so a slot can be swapped on the phone without generating again. It is always a recipe that was eligible for this week and is not already in the week.
 _Avoid_: backup, second choice
