@@ -379,6 +379,26 @@ void main() {
     expect(targets.single.maxPerWeek, 3);
   });
 
+  gleanWidgetTest('Undo of a removed protein target is refused, keeping the '
+      'newer target for that protein', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+
+    await tester.tap(find.byTooltip('Remove fish · at least 2 a week'));
+    await tester.pumpAndSettle();
+    await openProteinDialog(tester);
+    await fillProtein(tester, protein: 'fish', min: '3');
+    await tester.tap(find.byKey(const Key('profile.entry.save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('fish already has a target'), findsOneWidget);
+    final List<ProteinTarget> targets = (await stored(tester))!.proteinTargets;
+    expect(targets.map(proteinTargetLabel), <String>[
+      'fish · at least 3 a week',
+    ]);
+  });
+
   gleanWidgetTest('changing a target opens with its protein and counts and '
       'saves in place', (tester) async {
     await pumpProfile(tester, seed: _filled);

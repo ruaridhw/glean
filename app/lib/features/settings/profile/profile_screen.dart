@@ -189,12 +189,21 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         );
         return removedAt;
       },
+      // An Undo that would repeat an item added since (for a protein target, any newer target for that
+      // protein) is refused and says so: the newer choice was made on purpose and stays.
       undo: (int removedAt) async {
         if (removedAt == -1) return;
+        bool refused = false;
         await _profiles.update(
           userId: _userId,
-          change: (HouseholdProfile p) => list.insertAt(p, removedAt, item),
+          change: (HouseholdProfile p) {
+            refused = list.isTakenBy(p, item);
+            return refused ? p : list.insertAt(p, removedAt, item);
+          },
         );
+        if (refused && _messenger.mounted) {
+          GleanSnackBar.showOn(_messenger, list.takenMessage(item));
+        }
       },
       message: message ?? 'Removed $label',
       failureMessage: failureMessage ?? 'Could not remove $label. Try again.',

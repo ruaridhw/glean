@@ -295,6 +295,35 @@ void main() {
       ]);
     });
 
+    test('putting a removed target back is skipped when its protein has a '
+        'target again, whatever its counts', () {
+      const ProfileList<ProteinTarget> list = ProfileLists.proteinTargets;
+      final HouseholdProfile newer = _filled.copyWith(
+        proteinTargets: const <ProteinTarget>[
+          ProteinTarget(protein: 'fish', minPerWeek: 3),
+        ],
+      );
+      final HouseholdProfile undone = list.insertAt(
+        newer,
+        0,
+        const ProteinTarget(protein: 'fish', minPerWeek: 1, maxPerWeek: 2),
+      );
+      expect(undone, same(newer));
+      expect(
+        list.isTakenBy(
+          newer,
+          const ProteinTarget(protein: 'fish', maxPerWeek: 1),
+        ),
+        isTrue,
+      );
+      expect(
+        list.takenMessage(
+          const ProteinTarget(protein: 'turkey_or_duck', maxPerWeek: 1),
+        ),
+        'turkey or duck already has a target',
+      );
+    });
+
     test('a target needs a bound, counts run 1 to 7, and at least is not '
         'above at most', () {
       expect(proteinTargetError(null, null), 'Give at least or at most');
