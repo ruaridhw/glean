@@ -36,6 +36,7 @@ __all__ = [
     "HEALTHIER_CHIP",
     "LIGHTER_CHIP",
     "CandidateRecipe",
+    "DuplicateRecipeIds",
     "PlanGap",
     "PlanPenalty",
     "PlanScore",
@@ -405,6 +406,10 @@ class UnknownRecipeIds(KeyError):
     """A plan named a recipe the caller's context does not describe: the ids and the facts disagree."""
 
 
+class DuplicateRecipeIds(ValueError):
+    """A plan named the same recipe twice: one week cannot cook it in two slots, and its terms would double."""
+
+
 def score_meal_plan(
     recipe_ids: Sequence[str],
     ctx: ScoringContext,
@@ -713,8 +718,12 @@ class _Scorer:
 
 
 def _require_known(recipe_ids: Sequence[str], ctx: ScoringContext) -> None:
-    """Refuse a plan or a metric naming recipes the caller did not describe: the ids and the facts disagree."""
-    missing = sorted(set(recipe_ids) - ctx.recipes.keys())
+    """Refuse a plan or a metric naming a recipe twice, or one the caller did not describe."""
+    ids = list(recipe_ids)
+    repeated = sorted(recipe_id for recipe_id, count in Counter(ids).items() if count > 1)
+    if repeated:
+        raise DuplicateRecipeIds(f"a plan cannot name the same recipe twice: {repeated}")
+    missing = sorted(set(ids) - ctx.recipes.keys())
     if missing:
         raise UnknownRecipeIds(missing)
 
