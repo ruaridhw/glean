@@ -150,10 +150,14 @@ class SessionStore(Protocol):
         """
         ...
 
-    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+    def enqueue_swap(
+        self, user_sub: str, session_id: str, message: SwapMessage, *, note_dropped: bool = False
+    ) -> SwapRecord:
         """Queue a swap on a session with a proposal, and return it.
 
-        Accepted only from `done`, or from a `failed` that still holds its proposal (a swap whose worker died).
+        *message* carries the note the route's screen passed, never the note as typed; *note_dropped* says the
+        household wrote one the screen dropped. Accepted only from `done`, or from a `failed` that still holds its
+        proposal (a swap whose worker died).
         The session moves to `queued` with the swap as its newest, and the finished run's owner and lease are
         cleared so the next delivery claims it fresh. Raises `UnknownSessionError` for no such session, and
         `MessageRefusedError` when a run or swap is still going, there is no proposal, or the slot is not one
@@ -209,12 +213,14 @@ def swap_refusal(record: SessionRecord) -> MessageRefusal | None:
     return MessageRefusal.BUSY
 
 
-def queued_swap(record: SessionRecord, message: SwapMessage) -> tuple[SessionRecord, SwapRecord]:
+def queued_swap(
+    record: SessionRecord, message: SwapMessage, *, note_dropped: bool = False
+) -> tuple[SessionRecord, SwapRecord]:
     """*record* with *message* queued, or the refusal both stores raise."""
     refusal = swap_refusal(record)
     if refusal is not None:
         raise MessageRefusedError(refusal)
-    queued = record.with_swap(message)
+    queued = record.with_swap(message, note_dropped=note_dropped)
     if queued is None:
         raise MessageRefusedError(MessageRefusal.UNKNOWN_SLOT)
     return queued
@@ -318,11 +324,13 @@ class InMemorySessionStore:
         self._write(record.model_copy(update={"status": SessionStatus.CANCELLED}))
         return True
 
-    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+    def enqueue_swap(
+        self, user_sub: str, session_id: str, message: SwapMessage, *, note_dropped: bool = False
+    ) -> SwapRecord:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
-        updated, swap = queued_swap(record, message)
+        updated, swap = queued_swap(record, message, note_dropped=note_dropped)
         self._write(
             updated.model_copy(
                 update={"status": SessionStatus.QUEUED, "owner": None, "lease_until": None, "error": None}

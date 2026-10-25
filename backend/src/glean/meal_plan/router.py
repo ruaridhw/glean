@@ -12,15 +12,21 @@ from glean.llm import LLMRouter
 from glean.meal_plan import service
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.rate_limit import enforce_ai_rate_limit
+from glean.screening import screen
 from glean.sessions.models import (
     AgentSession,
+    AnswerMessage,
     HouseholdMessage,
     MessageAccepted,
     SessionCreated,
     SessionError,
     SessionErrorCode,
+    SessionRecord,
     SessionRequest,
+    SessionStatus,
     SessionView,
+    SkipMessage,
+    SwapMessage,
 )
 from glean.sessions.store import (
     MessageRefusal,
@@ -28,6 +34,7 @@ from glean.sessions.store import (
     SessionStore,
     SessionTooLargeError,
     UnknownSessionError,
+    swap_refusal,
     utcnow,
 )
 
@@ -124,32 +131,81 @@ def post_session_message(
     user_sub: Annotated[str, Depends(verify_cognito_token)],
     sessions: Annotated[SessionStore, Depends(get_session_store)],
     dispatch: Annotated[Callable[[AgentSession], None], Depends(get_session_dispatcher)],
+    decisions: Annotated[DecisionClient, Depends(get_decision_client)],
 ) -> MessageAccepted:
-    """A household message for one session: a swap (V10). Appends it, re-enqueues the session, 202. One paid call.
+    """A household message for one session: a swap (V10), or an answer or a skip (V11). 202. One paid call.
 
-    A swap replaces one meal of a finished proposal, with the other slots locked; only one runs at a time.
-    Scoped to the caller like every session route: another user's session is not found.
+    Branches on the message's type before any status check: a swap needs a finished proposal and no swap
+    running; an answer or a skip needs the run parked on its question. A note is screened here, before anything
+    stores it, and only what the screen passed is kept. Scoped to the caller: another user's session is not found.
     """
-    try:
-        swap = sessions.enqueue_swap(user_sub, session_id, message)
-    except UnknownSessionError as error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
-    except MessageRefusedError as error:
-        code, detail = _MESSAGE_REFUSALS[error.reason]
-        raise HTTPException(status_code=code, detail=detail) from error
     record = sessions.get(user_sub, session_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session")
+    match message:
+        case SwapMessage():
+            return _swap(record, message, sessions=sessions, dispatch=dispatch, decisions=decisions)
+        case AnswerMessage() | SkipMessage():
+            return _answer_or_skip(record)
+
+
+def _swap(
+    record: SessionRecord,
+    message: SwapMessage,
+    *,
+    sessions: SessionStore,
+    dispatch: Callable[[AgentSession], None],
+    decisions: DecisionClient,
+) -> MessageAccepted:
+    """Queue a swap: refuse what cannot be swapped before paying for the screen, then screen, store and send it.
+
+    A swap replaces one meal of a finished proposal, with the other slots locked; only one runs at a time.
+    """
+    refusal = swap_refusal(record) or (
+        MessageRefusal.UNKNOWN_SLOT if record.swap_position(message.slot) is None else None
+    )
+    if refusal is not None:
+        code, detail = _MESSAGE_REFUSALS[refusal]
+        raise HTTPException(status_code=code, detail=detail)
+    written = (message.note or "").strip()
+    screened = screen(written, decision_client=decisions)
+    note_dropped = bool(written) and not screened.passed
     try:
-        dispatch(AgentSession(session_id=session_id, user_sub=user_sub, request=record.request))
+        swap = sessions.enqueue_swap(
+            record.user_sub,
+            record.session_id,
+            message.model_copy(update={"note": screened.text}),
+            note_dropped=note_dropped,
+        )
+    except UnknownSessionError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
+    except MessageRefusedError as error:
+        # Lost a race with another swap between the read above and the conditional write.
+        code, detail = _MESSAGE_REFUSALS[error.reason]
+        raise HTTPException(status_code=code, detail=detail) from error
+    try:
+        dispatch(AgentSession(session_id=record.session_id, user_sub=record.user_sub, request=record.request))
     except Exception as error:
         # Queued, but nothing will run it. Fail the session as the create route does: the proposal stays on the
         # item, the swap reads as failed, and the next swap is accepted.
-        sessions.fail_if_abandoned(user_sub, session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
+        sessions.fail_if_abandoned(
+            record.user_sub, record.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED)
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Couldn't find another meal right now. Try again."
         ) from error
-    return MessageAccepted(session_id=session_id, swap_id=swap.swap_id)
+    return MessageAccepted(session_id=record.session_id, swap_id=swap.swap_id, note_dropped=note_dropped)
+
+
+def _answer_or_skip(record: SessionRecord) -> MessageAccepted:
+    """An answer or a skip resumes a run parked on its question, and nothing else.
+
+    No run parks before V11 (`ask_household`), which screens the answer's note, stores the outcome as the
+    pending answer and re-enqueues the session here. Until then every answer or skip meets the status rule.
+    """
+    if record.status is not SessionStatus.WAITING_FOR_USER:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no question waiting for an answer.")
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This session cannot take an answer yet.")
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

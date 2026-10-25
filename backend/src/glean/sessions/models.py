@@ -13,7 +13,7 @@ from __future__ import annotations
 import gzip
 from datetime import datetime  # noqa: TC003 - Pydantic resolves this annotation when the model is built
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -164,10 +164,10 @@ class AgentSession(BaseModel):
 
 
 class SwapMessage(BaseModel):
-    """A household message asking for another meal in one slot of the proposal (spec §6.2 "Swap").
+    """A household message asking for another meal in one slot of the proposal (spec §6.2 "Swap", V10).
 
-    `slot` is the corpus id of the meal on the card. `note` is what the household typed, if anything: it is
-    screened before any model reads it, and passed only as data.
+    `slot` is the corpus id of the meal on the card. `note` is what the household typed, if anything: the route
+    screens it before anything stores it, and only what passes is kept and passed to a model, as data.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -179,9 +179,29 @@ class SwapMessage(BaseModel):
     )
 
 
-# What POST /meal-plan/sessions/{id}/messages takes. V11 widens it to a discriminated union on `type`:
-# `Annotated[SwapMessage | AnswerMessage | SkipMessage, Field(discriminator="type")]`.
-HouseholdMessage = SwapMessage
+class AnswerMessage(BaseModel):
+    """The household's answer to the agent's one question (V11): an option, a note, or both."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["answer"]
+    option: str | None = Field(default=None, max_length=200, description="The option chosen, as offered.")
+    note: str | None = Field(
+        default=None, max_length=MAX_SWAP_NOTE_CHARS, description="Free text with the answer: screened, then data."
+    )
+
+
+class SkipMessage(BaseModel):
+    """ "Skip, just plan": resume the parked run without an answer (V11)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["skip"]
+
+
+# What POST /meal-plan/sessions/{id}/messages takes: one union, discriminated on `type`. The route branches on
+# the type before any status check: a swap needs a finished proposal, an answer or a skip a parked question.
+type HouseholdMessage = Annotated[SwapMessage | AnswerMessage | SkipMessage, Field(discriminator="type")]
 
 
 class SwapState(StrEnum):
@@ -207,7 +227,9 @@ class SwapRecord(BaseModel):
     swap_id: int
     slot: str
     position: int = Field(description="Index into the result's suggestions of the slot being swapped.")
-    note: str | None = Field(default=None, description="As typed. Never shown back, never sent to a model unscreened.")
+    note: str | None = Field(
+        default=None, description="The note the screen passed, or None. A dropped note is never stored."
+    )
     state: SwapState = SwapState.PENDING
     note_use: SwapNoteUse = SwapNoteUse.NONE
 
@@ -256,8 +278,12 @@ class SessionRecord(BaseModel):
         replaced = [swap for swap in self.swaps if swap.slot == slot and swap.state is SwapState.DONE]
         return replaced[-1].position if replaced else None
 
-    def with_swap(self, message: SwapMessage) -> tuple[SessionRecord, SwapRecord] | None:
-        """This record with *message* queued as its newest swap, or None when the slot is not in the proposal."""
+    def with_swap(self, message: SwapMessage, *, note_dropped: bool = False) -> tuple[SessionRecord, SwapRecord] | None:
+        """This record with *message* queued as its newest swap, or None when the slot is not in the proposal.
+
+        *message* carries the screened note only; *note_dropped* records that the household wrote one the screen
+        dropped, which the card reports as "Couldn't use that note".
+        """
         position = self.swap_position(message.slot)
         if position is None:
             return None
@@ -265,7 +291,8 @@ class SessionRecord(BaseModel):
             swap_id=(self.swaps[-1].swap_id + 1) if self.swaps else 1,
             slot=message.slot,
             position=position,
-            note=(message.note or "").strip() or None,
+            note=(note := (message.note or "").strip() or None),
+            note_use=SwapNoteUse.USED if note else SwapNoteUse.DROPPED if note_dropped else SwapNoteUse.NONE,
         )
         return self.model_copy(update={"swaps": [*self.swaps, swap][-MAX_SWAPS_KEPT:]}), swap
 
@@ -298,10 +325,14 @@ class SessionCreated(BaseModel):
 
 
 class MessageAccepted(BaseModel):
-    """202 from POST /meal-plan/sessions/{id}/messages: the swap is queued; poll the session for it."""
+    """202 from POST /meal-plan/sessions/{id}/messages: the message is queued; poll the session for its outcome."""
 
     session_id: str
-    swap_id: int
+    swap_id: int | None = Field(default=None, description="Set for a swap: the id its outcome carries on the poll.")
+    note_dropped: bool = Field(
+        default=False,
+        description='True when the message carried a note the screen dropped ("Couldn\'t use that note").',
+    )
 
 
 class SwapView(BaseModel):
@@ -372,6 +403,7 @@ __all__ = [
     "MAX_PROGRESS_LINES",
     "SESSION_TTL_HOURS",
     "AgentSession",
+    "AnswerMessage",
     "HouseholdMessage",
     "MessageAccepted",
     "SessionCreated",
@@ -381,6 +413,7 @@ __all__ = [
     "SessionRequest",
     "SessionStatus",
     "SessionView",
+    "SkipMessage",
     "SwapMessage",
     "SwapNoteUse",
     "SwapRecord",
