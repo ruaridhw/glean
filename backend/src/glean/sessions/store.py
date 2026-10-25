@@ -71,6 +71,12 @@ def lease_seconds_for(remaining_seconds: float) -> int:
 # template test checks the visibility timeout covers it.
 MAX_LEASE_SECONDS = WORKER_TIMEOUT_SECONDS + LEASE_GRACE_SECONDS
 
+# How long a queued swap may wait for its first delivery before a new swap may replace it. A message that exists
+# is received at once and claimed inside one invocation; even a receive that failed before the claim is back
+# after one visibility timeout. A swap still `queued` past both was never sent (the route died between storing
+# it and dispatching it), and without this it would refuse every later swap until the item expired.
+STALE_QUEUED_SWAP_SECONDS = QUEUE_VISIBILITY_SECONDS + MAX_LEASE_SECONDS
+
 # The dead-letter queue's visibility timeout: how often a dead letter that found a live run is retried.
 # It must cover the DLQ handler's own 30 s timeout, and be short enough that the session is failed
 # within about a minute of the lease lapsing (so about 3 minutes after a crash, inside the app's cap).
@@ -156,8 +162,9 @@ class SessionStore(Protocol):
         """Queue a swap on a session with a proposal, and return it.
 
         *message* carries the note the route's screen passed, never the note as typed; *note_dropped* says the
-        household wrote one the screen dropped. Accepted only from `done`, or from a `failed` that still holds its
-        proposal (a swap whose worker died).
+        household wrote one the screen dropped. Accepted only from `done`, from a `failed` that still holds its
+        proposal (a swap whose worker died), or over a swap queued at least `STALE_QUEUED_SWAP_SECONDS` ago that no
+        delivery took, which is marked failed (abandoned). The swap's `queued_at` is the store's own clock.
         The session moves to `queued` with the swap as its newest, and the finished run's owner and lease are
         cleared so the next delivery claims it fresh. Raises `UnknownSessionError` for no such session, and
         `MessageRefusedError` when a run or swap is still going, there is no proposal, or the slot is not one
@@ -205,23 +212,37 @@ class MessageRefusedError(ValueError):
         self.reason = reason
 
 
-def swap_refusal(record: SessionRecord) -> MessageRefusal | None:
-    """Why *record* cannot take a swap now, or None when it can (before the slot is checked)."""
+def swap_refusal(record: SessionRecord, *, now: int) -> MessageRefusal | None:
+    """Why *record* cannot take a swap at epoch *now*, or None when it can (before the slot is checked).
+
+    A swap queued longer than `STALE_QUEUED_SWAP_SECONDS` ago that no delivery ever claimed does not block: the
+    new swap replaces it.
+    """
     if record.status is SessionStatus.DONE or (record.status is SessionStatus.FAILED and record.result is not None):
         return None if record.result is not None else MessageRefusal.NO_PROPOSAL
     if record.status.terminal:
         return MessageRefusal.NO_PROPOSAL
+    pending = record.pending_swap
+    if (
+        record.status is SessionStatus.QUEUED
+        and record.result is not None
+        and pending is not None
+        and pending.queued_at is not None
+        and now - pending.queued_at >= STALE_QUEUED_SWAP_SECONDS
+    ):
+        return None
     return MessageRefusal.BUSY
 
 
 def queued_swap(
-    record: SessionRecord, message: SwapMessage, *, note_dropped: bool = False
+    record: SessionRecord, message: SwapMessage, *, now: datetime, note_dropped: bool = False
 ) -> tuple[SessionRecord, SwapRecord]:
     """*record* with *message* queued, or the refusal both stores raise."""
-    refusal = swap_refusal(record)
+    epoch = int(now.timestamp())
+    refusal = swap_refusal(record, now=epoch)
     if refusal is not None:
         raise MessageRefusedError(refusal)
-    queued = record.with_swap(message, note_dropped=note_dropped)
+    queued = record.with_swap(message, now=epoch, note_dropped=note_dropped)
     if queued is None:
         raise MessageRefusedError(MessageRefusal.UNKNOWN_SLOT)
     return queued
@@ -331,7 +352,7 @@ class InMemorySessionStore:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
-        updated, swap = queued_swap(record, message, note_dropped=note_dropped)
+        updated, swap = queued_swap(record, message, now=self._clock(), note_dropped=note_dropped)
         self._write(
             updated.model_copy(
                 update={"status": SessionStatus.QUEUED, "owner": None, "lease_until": None, "error": None}

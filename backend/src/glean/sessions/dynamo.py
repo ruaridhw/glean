@@ -258,7 +258,7 @@ class DynamoSessionStore:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
-        updated, swap = queued_swap(record, message, note_dropped=note_dropped)
+        updated, swap = queued_swap(record, message, now=self._clock(), note_dropped=note_dropped)
         # The status read above is the lock: the write only lands while the session is still where it was
         # read, with the same swap history, so two swaps sent at once cannot both be queued.
         won = self._update(
@@ -281,7 +281,7 @@ class DynamoSessionStore:
         latest = self.get(user_sub, session_id)
         if latest is None:
             raise UnknownSessionError(session_id)
-        raise MessageRefusedError(swap_refusal(latest) or MessageRefusal.BUSY)
+        raise MessageRefusedError(swap_refusal(latest, now=int(self._clock().timestamp())) or MessageRefusal.BUSY)
 
     def finish_swap(
         self, user_sub: str, session_id: str, result: MealPlanResult, swap: SwapRecord, *, owner: str
