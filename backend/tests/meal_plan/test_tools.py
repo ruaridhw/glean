@@ -27,6 +27,7 @@ from glean.meal_plan.tools import (
     UnknownRecipeIds,
     _greedy_plan,
     _Scorer,
+    _tie_break_ranks,
     chosen_vs_best_gap,
     chosen_vs_best_ratio,
     create_candidate_meal_plans,
@@ -602,10 +603,12 @@ def test_a_balanced_week_does_not_put_two_chickens_in_it() -> None:
     assert proteins.count(MainProtein.CHICKEN) == 1
 
 
-def test_local_search_improves_on_the_greedy_fill() -> None:
-    # Greedy's third slot takes a second fish, which makes its second slot the wrong partner: the rice repeat it
-    # brought is still there, and swapping it for the stronger beef-and-pasta week only pays once the second fish
-    # is already in. Greedy never looks back, so the local search's one swap is what earns the extra 1.3.
+def local_search_trap() -> tuple[ScoringContext, list[str]]:
+    """The pool where greedy strands itself: its third slot takes a second fish, so its second slot is wrong.
+
+    The rice repeat the second slot brought is still there, and swapping it for the stronger beef-and-pasta week
+    only pays once the second fish is already in. Greedy never looks back; one swap earns the extra 1.3.
+    """
     ctx = context(
         candidate(
             "curry",
@@ -648,8 +651,12 @@ def test_local_search_improves_on_the_greedy_fill() -> None:
             pantry_fit=6.9,
         ),
     )
-    ids = ["curry", "thai-beef", "thai-fish", "italian-fish", "italian-beef"]
-    greedy = _greedy_plan(_Scorer(ctx, ScorerWeights()), ids, 3, dict.fromkeys(ids, 0.0))
+    return ctx, ["curry", "thai-beef", "thai-fish", "italian-fish", "italian-beef"]
+
+
+def test_local_search_improves_on_the_greedy_fill() -> None:
+    ctx, ids = local_search_trap()
+    greedy = _greedy_plan(_Scorer(ctx, ScorerWeights()), ids, 3, _tie_break_ranks(ids, 0))
     assert greedy == ["italian-fish", "thai-beef", "thai-fish"]
     (best,) = create_candidate_meal_plans(ids, 3, ctx, k=1)
     assert set(best.recipe_ids) == {"italian-fish", "italian-beef", "thai-fish"}
@@ -680,12 +687,26 @@ def test_generation_rejects_an_id_the_context_does_not_describe() -> None:
 
 
 def test_the_swap_search_stops_at_its_evaluation_budget(monkeypatch) -> None:
-    # The budget is what bounds the tool's time on a pool with a neighbourhood far larger than a week needs.
+    # With no budget the tool returns the greedy fill untouched, which is what makes the budget a real bound.
+    ctx, ids = local_search_trap()
+    greedy = _greedy_plan(_Scorer(ctx, ScorerWeights()), ids, 3, _tie_break_ranks(ids, 0))
     monkeypatch.setattr(tools_module, "_MAX_SWAP_EVALUATIONS", 0)
-    ctx = week(pool=6)
-    plans = create_candidate_meal_plans([f"recipe-{index}" for index in range(6)], 3, ctx)
-    assert len(plans) == 2
-    assert all(len(plan.recipes) == 3 for plan in plans)
+    (unsearched,) = create_candidate_meal_plans(ids, 3, ctx, k=1)
+    assert unsearched.recipe_ids == tuple(greedy)
+    monkeypatch.setattr(tools_module, "_MAX_SWAP_EVALUATIONS", 2000)
+    (searched,) = create_candidate_meal_plans(ids, 3, ctx, k=1)
+    assert searched.total > unsearched.total
+
+
+def test_the_improving_swap_found_before_the_budget_ran_out_is_kept(monkeypatch) -> None:
+    # The budget can run out mid-pass. The swap already found in that pass is a real improvement, so dropping it
+    # would make the budget change the answer rather than just bound the time.
+    ctx, ids = local_search_trap()
+    greedy = _greedy_plan(_Scorer(ctx, ScorerWeights()), ids, 3, _tie_break_ranks(ids, 0))
+    monkeypatch.setattr(tools_module, "_MAX_SWAP_EVALUATIONS", 4)  # the fourth trial finds the one swap that pays
+    (budgeted,) = create_candidate_meal_plans(ids, 3, ctx, k=1)
+    assert set(budgeted.recipe_ids) == {"italian-fish", "italian-beef", "thai-fish"}
+    assert budgeted.total > score_meal_plan(greedy, ctx).total
 
 
 def test_generating_two_weeks_of_seven_is_well_under_a_hundred_milliseconds() -> None:

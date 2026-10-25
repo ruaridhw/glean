@@ -769,7 +769,9 @@ def _local_search(
         for position in range(len(best)):
             for incoming in unused:
                 if evaluations >= _MAX_SWAP_EVALUATIONS:
-                    return tuple(best)
+                    # The budget ran out mid-pass: keep the best swap this pass already found rather than
+                    # throw away a real improvement, or the budget would change the answer, not just the time.
+                    return tuple(best if improvement is None else improvement[2])
                 evaluations += 1
                 trial = [*best]
                 trial[position] = incoming
