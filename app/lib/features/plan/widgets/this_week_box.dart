@@ -144,6 +144,13 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
                       label: Text(chip.label),
                       selected: feedback.chips.contains(chip),
                       onSelected: (_) => controller.toggle(chip),
+                      // The gate's dark fill and a check, so a chip that is on cannot be mistaken for one off.
+                      showCheckmark: true,
+                      selectedColor: theme.colorScheme.inverseSurface,
+                      checkmarkColor: theme.colorScheme.onInverseSurface,
+                      labelStyle: feedback.chips.contains(chip)
+                          ? TextStyle(color: theme.colorScheme.onInverseSurface)
+                          : null,
                     ),
                 ],
               ),
