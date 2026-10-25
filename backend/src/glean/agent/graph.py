@@ -1,19 +1,26 @@
-"""The V7 graph: `prepare -> plan <-> act -> finalise`, the agent working the week (spec §6.2).
+"""The agent graph: `prepare -> plan <-> act -> finalise`, the agent working the week (spec §6.2, V7, V11).
 
 - **prepare** runs `meal_plan.pipeline.prepare`, which samples the candidates and has the scorer build two
   candidate weeks with the week's chips, so the model starts with a balanced week in hand. The week's note was
   screened before the graph was invoked (`runtime`): the state holds only the screen's `feedback`, and only a
   note that passed reaches the model, as data.
 - **plan** is the only LLM node. It returns one typed `NextAction` through structured output (ADR 0012):
-  `call_tool` or `propose`. An answer that does not parse is counted and the model is asked again, up to
-  `MAX_INVALID_ACTIONS` times; a provider failure ends the loop.
+  `call_tool`, `ask_household` or `propose`. An answer that does not parse, or that is refused (a second
+  question, or one with nothing to tap), is counted and the model is asked again, up to `MAX_INVALID_ACTIONS`
+  times; a provider failure ends the loop.
 - **act** runs the chosen tool through its adapter, writes the tool's progress line first, and appends a
-  compact result for the next `plan` turn. Recipes a tool found widen what the week may use.
+  compact result for the next `plan` turn. Recipes a tool found widen what the week may use. For the
+  household's question it calls LangGraph's `interrupt()` instead: the checkpoint holds the run, the runtime
+  parks the session as `waiting_for_user`, and the answer or the skip resumes `act` from the top with
+  `Command(resume=...)`, so nothing before the interrupt in that node may have an effect. The answer reaches
+  the next turn like a tool result, under `data`: the household's words are data, never instructions.
 - **finalise** validates the proposal exactly as the sync route does (ids offered or found, nothing already
   planned, the count), re-scores the chosen week against the scorer's best and records the drift, and writes
   the proposal.
 
-**The budget is in the state.** At most `MAX_TOOL_CALLS` tool calls, and the run's 90 s (`RunGuard`). When
+**The budget is in the state.** At most `MAX_TOOL_CALLS` tool calls, at most `MAX_QUESTIONS` question, and the
+session's 90 s of working time (`RunGuard`; the seconds spent before the question are `working_seconds`, so the
+household's thinking time is not counted). When
 either is spent, or the model or a tool errors, `finalise` writes the degraded week instead: the scorer's best
 week with template reasons, `degraded: true`. Once `prepare` has run there is always such a week, so from then
 on a run never ends `model_error`.
@@ -38,9 +45,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph  # noqa: TID251 - this module owns LangGraph
+from langgraph.types import interrupt  # noqa: TID251
 
 from glean.agent import adapters
-from glean.agent.actions import TOOL_CALL, CallTool, PlanStep, Propose, ProposeReplacement, SwapStep
+from glean.agent.actions import (
+    TOOL_CALL,
+    AskHousehold,
+    CallTool,
+    PlanStep,
+    Propose,
+    ProposeReplacement,
+    SwapStep,
+)
 from glean.agent.control import BudgetSpent
 from glean.agent.errors import AgentError, model_error_for
 from glean.agent.prompts import (
@@ -60,7 +76,16 @@ from glean.meal_plan.schemas import (
     MealPlanResult,
 )
 from glean.observability import logger
-from glean.sessions.models import SessionError, SessionErrorCode, SwapState
+from glean.sessions.models import (
+    MAX_OPTION_CHARS,
+    MAX_OPTIONS,
+    MAX_QUESTION_CHARS,
+    HouseholdReply,
+    PendingQuestion,
+    SessionError,
+    SessionErrorCode,
+    SwapState,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -72,8 +97,9 @@ if TYPE_CHECKING:
     from glean.agent.deps import AgentDeps
     from glean.recipes.corpus import RecipeCorpusStore
 
-# Spec §6.2's agent budget: at most 8 tool calls in one session.
+# Spec §6.2's agent budget: at most 8 tool calls and 1 question in one session.
 MAX_TOOL_CALLS = 8
+MAX_QUESTIONS = 1
 # A swap looks for one meal, not a week: a search for what the note asks, a closer look, a score.
 MAX_SWAP_TOOL_CALLS = 3
 # Answers that do not parse as a NextAction, asked again before the run gives up on the model.
@@ -115,6 +141,11 @@ class PlanState(TypedDict, total=False):
     transcript: list[dict[str, Any]]
     # The tool call `plan` chose and `act` has not yet run.
     pending: dict[str, Any] | None
+    # The household question `plan` chose (a bounded `PendingQuestion`), until `act` hears the answer.
+    question: dict[str, Any] | None
+    questions_asked: int
+    # The session's working seconds when it asked its question; the resumed attempt's budget starts there.
+    working_seconds: float
     proposal: dict[str, Any] | None
     tool_calls: int
     invalid_actions: int
@@ -221,17 +252,33 @@ class _Nodes:
             return _degrade(DegradedReason.TIME_BUDGET)
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         calls_left = max(MAX_TOOL_CALLS - tool_calls, 0)
+        asked = state.get("questions_asked", 0)
         step = self._ask(
             PlanStep,
             AGENT_SYSTEM_PROMPT,
-            lambda results: user_message(prepared.user, tool_results=results, tool_calls_left=calls_left),
+            lambda results: user_message(
+                prepared.user,
+                tool_results=results,
+                tool_calls_left=calls_left,
+                questions_left=max(MAX_QUESTIONS - asked, 0),
+            ),
             transcript,
             invalid=state.get("invalid_actions", 0),
+            refuse=lambda action: _refused(action, asked=asked),
         )
         if not isinstance(step, _Answer):
             return step
         action = step.action
         update: PlanState = {"invalid_actions": step.invalid, "transcript": transcript}
+        if isinstance(action, AskHousehold):
+            logger.info("the agent asked the household a question", extra={"tool_calls": tool_calls})
+            return {
+                **update,
+                "pending": None,
+                "question": _bounded(action).model_dump(mode="json"),
+                "questions_asked": asked + 1,
+                "working_seconds": self._guard.spent(),
+            }
         if isinstance(action, Propose):
             return {**update, "proposal": action.proposal.model_dump(mode="json"), "pending": None}
         if not isinstance(action, CallTool):
@@ -249,11 +296,13 @@ class _Nodes:
         transcript: list[dict[str, Any]],
         *,
         invalid: int,
+        refuse: Callable[[Any], str | None] | None = None,
     ) -> _Answer | PlanState:
-        """Ask the model for its next action, again after an answer that does not parse; or give up.
+        """Ask the model for its next action, again after an answer that does not parse or is refused; or give up.
 
-        `transcript` gains a line per unparseable answer, so the model sees what it got wrong. A provider failure
-        is not retried: the scorer's week is a better use of what is left of the budget than a second wait.
+        `transcript` gains a line per unparseable answer, and per answer *refuse* turns down (the week's plan
+        refuses a second question, or one with nothing to tap), so the model sees what it got wrong. A provider
+        failure is not retried: the scorer's week is a better use of what is left of the budget than a second wait.
         """
         while True:
             try:
@@ -267,23 +316,28 @@ class _Nodes:
                 )
             except ValueError as exc:
                 # The answer was not a NextAction (pydantic's and the parser's errors are both ValueErrors).
-                invalid += 1
-                error = str(exc)[:_ERROR_CHARS]
-                logger.warning("the model's answer was not a valid action", extra={"invalid_actions": invalid})
-                if self._guard.remaining_ms() <= 0:
-                    # The time ran out, whatever the answer was: a spent budget, as at any other step.
-                    return _degrade(DegradedReason.TIME_BUDGET, invalid_actions=invalid, transcript=transcript)
-                if invalid > MAX_INVALID_ACTIONS:
-                    return _degrade(DegradedReason.INVALID_ACTIONS, invalid_actions=invalid, transcript=transcript)
-                transcript.append({"error": f"Your last answer was not a valid action: {error}"})
-                continue
+                error = f"Your last answer was not a valid action: {str(exc)[:_ERROR_CHARS]}"
             except Exception as exc:  # a provider failure: the scorer's week, never a failed session
                 reason = model_error_for(exc).code.value
                 logger.exception("the model call failed; writing the scorer's week", extra={"reason": reason})
                 return _degrade(reason, invalid_actions=invalid, transcript=transcript)
-            return _Answer(step.action, invalid)
+            else:
+                refusal = None if refuse is None else refuse(step.action)
+                if refusal is None:
+                    return _Answer(step.action, invalid)
+                error = refusal
+            invalid += 1
+            logger.warning("the model's answer was not a valid action", extra={"invalid_actions": invalid})
+            if self._guard.remaining_ms() <= 0:
+                # The time ran out, whatever the answer was: a spent budget, as at any other step.
+                return _degrade(DegradedReason.TIME_BUDGET, invalid_actions=invalid, transcript=transcript)
+            if invalid > MAX_INVALID_ACTIONS:
+                return _degrade(DegradedReason.INVALID_ACTIONS, invalid_actions=invalid, transcript=transcript)
+            transcript.append({"error": error})
 
     def act(self, state: PlanState) -> PlanState:
+        if state.get("question"):
+            return _hear(state)
         call = TOOL_CALL.validate_python(state["pending"])
         try:
             # Written before the tool runs: a cancel refuses it, so no tool runs after the household cancels.
@@ -458,7 +512,7 @@ class _Nodes:
 class _Answer:
     """A parsed action, and how many answers before it did not parse."""
 
-    action: CallTool | Propose | ProposeReplacement
+    action: CallTool | AskHousehold | Propose | ProposeReplacement
     invalid: int
 
 
@@ -511,13 +565,62 @@ def _route_start(state: PlanState) -> str:
 
 
 def _after_plan(state: PlanState) -> str:
-    if state.get("pending"):
+    if state.get("pending") or state.get("question"):
         return "act"
     return "swap_finalise" if state.get("swap") else "finalise"
 
 
 def _after_act(state: PlanState) -> str:
     return "swap_plan" if state.get("swap") else "plan"
+
+
+def _refused(action: Any, *, asked: int) -> str | None:
+    """Why a well-formed action may still not be taken, said to the model; None when it may."""
+    if not isinstance(action, AskHousehold):
+        return None
+    if asked >= MAX_QUESTIONS:
+        return "You have already asked your one question this session. Plan with what you know."
+    if not any(option.strip() for option in action.options):
+        return "A question needs at least one option for the household to tap."
+    return None
+
+
+def _bounded(action: AskHousehold) -> PendingQuestion:
+    """The question as the session item holds it: clipped, its options de-duplicated and capped."""
+    options: list[str] = []
+    for option in action.options:
+        clipped = option.strip()[:MAX_OPTION_CHARS]
+        if clipped and clipped not in options:
+            options.append(clipped)
+    return PendingQuestion(
+        question=action.question.strip()[:MAX_QUESTION_CHARS],
+        options=options[:MAX_OPTIONS],
+        why=action.why.strip()[:MAX_QUESTION_CHARS],
+    )
+
+
+def _hear(state: PlanState) -> PlanState:
+    """Park the run on the question, and on resume record the household's answer for the next `plan` turn.
+
+    `interrupt` checkpoints and stops the run the first time; the runtime then parks the session. When the
+    answer arrives as `Command(resume=reply)`, LangGraph runs this node again from the top and `interrupt`
+    returns the reply instead. Nothing may happen before it, or it would happen twice.
+
+    The answer joins the transcript as a tool result does, under `data`: the option and the screened note in
+    their own typed fields, never as instructions, and a skip as `skipped: true` with neither.
+    """
+    question = state["question"]
+    reply = HouseholdReply.model_validate(interrupt(question))
+    answer = {
+        "skipped": reply.skipped,
+        "option": None if reply.skipped else reply.option,
+        "note": None if reply.skipped else reply.note,
+    }
+    logger.info("the household answered", extra={"skipped": reply.skipped, "note_dropped": reply.note_dropped})
+    return {
+        "question": None,
+        "transcript": bounded_transcript([*(state.get("transcript") or []), {"question": question, "data": answer}]),
+    }
 
 
 def _swap_context(state: PlanState, prepared: pipeline.PreparedPlan) -> dict[str, Any]:
@@ -549,6 +652,7 @@ def _session_metrics(
     return {
         "tool_calls": state.get("tool_calls", 0),
         "invalid_actions": state.get("invalid_actions", 0),
+        "questions_asked": state.get("questions_asked", 0),
         "degraded": result.degraded,
         "degraded_reason": reason,
         "note_outcome": None if prepared.feedback.note_outcome is None else prepared.feedback.note_outcome.value,
@@ -566,6 +670,14 @@ def swap_outcome_of(state: Mapping[str, Any], swap_id: int) -> dict[str, Any] | 
 def result_of(state: Mapping[str, Any]) -> MealPlanResult:
     """The plan the `finalise` node wrote into the graph state."""
     return MealPlanResult.model_validate(state["result"])
+
+
+def outcome_of(state: Mapping[str, Any]) -> MealPlanResult | PendingQuestion:
+    """What a week's run ended with: the plan `finalise` wrote, or the question `act` interrupted it on."""
+    interrupts = state.get("__interrupt__")
+    if interrupts:
+        return PendingQuestion.model_validate(interrupts[0].value)
+    return result_of(state)
 
 
 def session_metrics_of(state: Mapping[str, Any]) -> dict[str, Any]:

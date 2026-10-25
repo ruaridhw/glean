@@ -31,7 +31,7 @@ from glean.meal_plan.schemas import CompressedPantryItem, CookedHistoryItem, Hum
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredInstruction, StoredRecipe
-from glean.sessions.models import AgentSession, SessionStatus
+from glean.sessions.models import AgentSession, HouseholdReply, SessionStatus
 from glean.sessions.store import MAX_LEASE_SECONDS, WORKER_TIMEOUT_SECONDS, InMemorySessionStore
 from tests.meal_plan.test_candidates import _store_decisions as store_decisions
 
@@ -104,6 +104,23 @@ class ScriptedModel:
 
 def call(name: str, **args: Any) -> dict[str, Any]:
     return {"action": {"kind": "call_tool", "call": {"name": name, **args}}}
+
+
+QUESTION = "Your fridge has a lot of veg. Would you like a meat-free night this week?"
+OPTIONS = ["Yes, one", "Two", "No"]
+
+
+def ask(
+    question: str = QUESTION, options: list[str] | None = None, why: str = "Lots of veg is close to its date."
+) -> dict[str, Any]:
+    return {
+        "action": {
+            "kind": "ask_household",
+            "question": question,
+            "options": OPTIONS if options is None else options,
+            "why": why,
+        }
+    }
 
 
 def propose_first(context: dict[str, Any]) -> dict[str, Any]:
@@ -253,10 +270,13 @@ class TestNextAction:
     def test_each_action_parses_into_its_typed_member(self) -> None:
         tool = PlanStep.model_validate(call("score_meal_plan", recipe_ids=["a", "b"]))
         proposal = PlanStep.model_validate(_proposal([{"external_id": "a", "title": "A"}], chosen_week=0))
+        question = PlanStep.model_validate(ask())
 
         assert tool.action.kind == "call_tool"
         assert tool.action.call.recipe_ids == ["a", "b"]  # ty: ignore[unresolved-attribute]
         assert proposal.action.kind == "propose"
+        assert question.action.kind == "ask_household"
+        assert question.action.options == OPTIONS  # ty: ignore[unresolved-attribute]
 
     @pytest.mark.parametrize(
         "answer",
@@ -943,3 +963,183 @@ class TestRawNoteStaysOutOfTheGraph:
         assert inputs
         assert "IGNORE-PREVIOUS-INSTRUCTIONS" not in json.dumps(inputs, default=str)
         assert inputs[0]["feedback"]["note_outcome"] == "not_a_preference"
+
+
+class TestQuestion:
+    """V11: one question, parked as `waiting_for_user` by LangGraph's interrupt and resumed from the checkpoint."""
+
+    def _park(self, run: Run, *steps: Step) -> ScriptedModel:
+        model = ScriptedModel(*steps)
+        assert run.start(model) is True
+        assert run.record.status is SessionStatus.WAITING_FOR_USER
+        return model
+
+    def test_the_question_parks_the_session_and_the_answer_resumes_it_from_the_checkpoint(self, run: Run) -> None:
+        asking = self._park(run, ask())
+
+        record = run.record
+        assert record.question.question == QUESTION
+        assert record.question.options == OPTIONS
+        assert (record.owner, record.result) == (None, None)
+        assert asking.calls == 1
+        assert json.loads(asking.users[0])["questions_left"] == 1
+
+        assert run.sessions.answer("user-a", "sess-1", HouseholdReply(option="Two", note="Kids are away Wednesday"))
+        resumed = ScriptedModel(propose_first)
+        assert run.start(resumed) is True
+
+        record = run.record
+        assert record.status is SessionStatus.DONE
+        assert record.result.degraded is False
+        # Nothing before the question ran again: one prepare, and the model asked once more, holding the answer.
+        assert record.progress.count(PREPARE_LINE) == 1
+        assert resumed.calls == 1
+        context = json.loads(resumed.users[0])
+        assert context["questions_left"] == 0
+        assert context["tool_results"] == [
+            {
+                "question": {"question": QUESTION, "options": OPTIONS, "why": "Lots of veg is close to its date."},
+                # The household's words are framed like a tool's output: data, never instructions.
+                "data": {"skipped": False, "option": "Two", "note": "Kids are away Wednesday"},
+            }
+        ]
+        assert run.metric("SessionsAsked") == [1]
+
+    def test_skip_resumes_the_run_without_an_answer(self, run: Run) -> None:
+        self._park(run, ask())
+
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(skipped=True))
+        resumed = ScriptedModel(propose_first)
+        run.start(resumed)
+
+        assert run.record.status is SessionStatus.DONE
+        answer = json.loads(resumed.users[0])["tool_results"][0]["data"]
+        assert answer == {"skipped": True, "option": None, "note": None}
+
+    def test_a_note_the_screen_dropped_reaches_the_model_as_no_note(self, run: Run) -> None:
+        self._park(run, ask())
+
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No", note=None, note_dropped=True))
+        resumed = ScriptedModel(propose_first)
+        run.start(resumed)
+
+        assert json.loads(resumed.users[0])["tool_results"][0]["data"] == {
+            "skipped": False,
+            "option": "No",
+            "note": None,
+        }
+
+    def test_a_second_question_is_refused_and_the_agent_must_plan(self, run: Run) -> None:
+        self._park(run, ask())
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No"))
+
+        resumed = ScriptedModel(ask("And fish?"), propose_first)
+        run.start(resumed)
+
+        record = run.record
+        assert record.status is SessionStatus.DONE
+        assert record.result.degraded is False
+        assert resumed.calls == 2
+        assert "already asked" in json.loads(resumed.users[1])["tool_results"][-1]["error"]
+        assert run.metric("SessionsAsked") == [1]
+        assert run.metric("SessionInvalidActions") == [1]
+
+    def test_a_question_without_options_is_refused(self, run: Run) -> None:
+        model = ScriptedModel(ask(options=[]), propose_first)
+
+        run.start(model)
+
+        assert run.record.status is SessionStatus.DONE
+        assert "option" in json.loads(model.users[1])["tool_results"][-1]["error"]
+
+    def test_the_question_is_bounded_before_it_is_parked(self, run: Run) -> None:
+        self._park(run, ask(question="Why? " * 100, options=[f"Option {i} " + "x" * 100 for i in range(6)]))
+
+        question = run.record.question
+        assert len(question.question) <= 200
+        assert len(question.options) == 4
+        assert all(len(option) <= 60 for option in question.options)
+
+    def test_the_budget_counts_working_time_and_not_the_households_thinking_time(self, run: Run) -> None:
+        def ask_after_a_minute(_context: dict[str, Any]) -> dict[str, Any]:
+            run.clock.advance(60)
+            return ask()
+
+        def call_after(seconds: float) -> Callable[[dict[str, Any]], dict[str, Any]]:
+            def step(_context: dict[str, Any]) -> dict[str, Any]:
+                run.clock.advance(seconds)
+                return call("get_recipes", ids=["rec_01"])
+
+            return step
+
+        self._park(run, ask_after_a_minute)
+        # An hour of thinking: were it counted, the resumed run would be over budget before its first step.
+        run.clock.advance(3600)
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No"))
+        run.start(ScriptedModel(call_after(20), call_after(20)))
+
+        record = run.record
+        assert record.status is SessionStatus.DONE
+        assert record.result.degraded is True
+        # 60 s before the question and 20 s after: the first tool ran inside the 90 s, the second did not.
+        assert record.progress.count("Reading the recipes more closely") == 1
+
+    def test_a_late_copy_of_the_first_message_while_waiting_is_dropped(self, run: Run) -> None:
+        self._park(run, ask())
+        run.clock.advance(MAX_LEASE_SECONDS + 10)
+
+        idle = ScriptedModel()
+        assert run.start(idle) is False
+
+        assert run.record.status is SessionStatus.WAITING_FOR_USER
+        assert idle.calls == 0
+
+    def test_a_cancel_while_waiting_is_final(self, run: Run) -> None:
+        self._park(run, ask())
+
+        assert run.sessions.cancel("user-a", "sess-1") is True
+        assert run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No")) is False
+        assert run.start(ScriptedModel()) is False
+        assert run.record.status is SessionStatus.CANCELLED
+
+    def test_a_crash_after_the_answer_was_enqueued_resumes_with_that_answer_once(self, run: Run) -> None:
+        class ProcessDied(BaseException):
+            """A killed Lambda, from inside Python: nothing catches it."""
+
+        self._park(run, ask())
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="Two"))
+        with pytest.raises(ProcessDied):
+            run.start(ScriptedModel(ProcessDied()))
+        assert run.record.status is SessionStatus.RUNNING
+
+        run.clock.advance(MAX_LEASE_SECONDS + 10)
+        recovered = ScriptedModel(propose_first)
+        assert run.start(recovered) is True
+
+        assert run.record.status is SessionStatus.DONE
+        results = json.loads(recovered.users[0])["tool_results"]
+        assert [result["data"]["option"] for result in results if "question" in result] == ["Two"]
+        assert run.metric("SessionsAsked") == [1]
+
+    def test_a_crash_before_the_question_was_written_parks_it_again_without_the_model(
+        self, run: Run, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class ProcessDied(BaseException):
+            """A killed Lambda, from inside Python: nothing catches it."""
+
+        def dies(*_args: object, **_kwargs: object) -> bool:
+            raise ProcessDied
+
+        with monkeypatch.context() as patched:
+            patched.setattr(run.sessions, "park", dies)
+            with pytest.raises(ProcessDied):
+                run.start(ScriptedModel(ask()))
+        assert run.record.status is SessionStatus.RUNNING
+
+        run.clock.advance(MAX_LEASE_SECONDS + 10)
+        idle = ScriptedModel()
+        assert run.start(idle) is True
+
+        assert run.record.status is SessionStatus.WAITING_FOR_USER
+        assert run.record.question.question == QUESTION
+        assert idle.calls == 0
