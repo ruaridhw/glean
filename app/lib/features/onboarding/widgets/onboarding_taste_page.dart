@@ -193,7 +193,12 @@ class _OnboardingTastePageState extends ConsumerState<OnboardingTastePage> {
               ],
               if (state.pending) _ThinkingRow(),
               if (state.failure case final Object failure)
-                _FailureRow(message: failureCopy(failure), onRetry: _retry),
+                _FailureRow(
+                  message: failureCopy(failure),
+                  // A rejected answer is already back in the composer, so the way forward is the corrected
+                  // Send or Skip: replaying the rejected wording could only be rejected again.
+                  onRetry: failure is ApiValidationException ? null : _retry,
+                ),
               if (state.done case final InterviewDone done?)
                 _SummaryCard(summary: done.summary),
             ],
@@ -478,13 +483,15 @@ class _ThinkingRow extends StatelessWidget {
   }
 }
 
-/// A failed turn, in plain words with a Retry. Nothing about it is internal: the household only has to know
-/// the question did not reach Glean.
+/// A failed turn, in plain words, with a Retry when re-sending the same thing could work. Nothing about it is
+/// internal: the household only has to know the question did not reach Glean.
 class _FailureRow extends StatelessWidget {
-  const _FailureRow({required this.message, required this.onRetry});
+  const _FailureRow({required this.message, this.onRetry});
 
   final String message;
-  final VoidCallback onRetry;
+
+  /// `null` when Retry would send exactly what just failed.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -507,11 +514,13 @@ class _FailureRow extends StatelessWidget {
                 color: theme.colorScheme.onErrorContainer,
               ),
             ),
-            SizedBox(height: tokens.spacing.sm),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(onPressed: onRetry, child: const Text('Retry')),
-            ),
+            if (onRetry case final VoidCallback retry) ...<Widget>[
+              SizedBox(height: tokens.spacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(onPressed: retry, child: const Text('Retry')),
+              ),
+            ],
           ],
         ),
       ),
