@@ -10,7 +10,7 @@ Two promises sit here, both from spec §6.2:
   household's question holds no attempt at all, so the household's thinking time is never on any clock;
   the time spent *before* the question rides the graph state (`working_seconds`), and the attempt that
   resumes it starts its budget that much spent (`RunBudget.carry`). A household that never answers spends
-  nothing: the session stays parked until its TTL expires the item and the checkpoint.
+  nothing: the session stays parked until its TTL expires the item, and later the checkpoint.
 - **The lease, and the household's cancel.** The lease is taken once, at claim, and never extended
   (`sessions.store.LEASE_SECONDS`): it is shorter than the queue's visibility timeout, so any
   redelivered copy of a message finds a lapsed lease and takes over, while a duplicate copy delivered

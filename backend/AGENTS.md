@@ -332,7 +332,9 @@ cancelled run adds at most one more read, at the step that notices.
 - **The 90 s are working time.** No attempt exists while the household thinks, so no clock runs; the
   working seconds spent before the question ride the graph state (`working_seconds`) and the resuming
   attempt's budget starts that much spent (`RunBudget.carry`). A household that never answers leaves the
-  session parked until the 24 h TTL expires the item and its checkpoints; the app polls again only after it
+  session parked until the 24 h TTL expires the item. Checkpoints live twice the session TTL
+  (`agent.checkpoint.checkpoint_ttl_seconds`), because nothing rewrites a parked run's checkpoint and a
+  late answer's resume must still find the interrupt; the app polls again only after it
   sends its answer, so its five-minute `stalled` cap never counts the wait.
 - **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
