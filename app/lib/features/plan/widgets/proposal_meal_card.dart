@@ -292,36 +292,41 @@ class ProposalMealCard extends StatelessWidget {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     final FindAnotherState? finding = this.finding;
     if (finding != null) {
+      // A live region, so a screen reader announces each progress line as the swap works.
       return Card(
-        child: Padding(
-          padding: EdgeInsets.all(tokens.spacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text('Finding another…', style: textTheme.titleMedium),
-              if (finding.note != null) ...<Widget>[
-                SizedBox(height: tokens.spacing.xs),
-                Text(
-                  'Your note: "${finding.note}"',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+        child: Semantics(
+          container: true,
+          liveRegion: true,
+          child: Padding(
+            padding: EdgeInsets.all(tokens.spacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Finding another…', style: textTheme.titleMedium),
+                if (finding.note != null) ...<Widget>[
+                  SizedBox(height: tokens.spacing.xs),
+                  Text(
+                    'Your note: "${finding.note}"',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
+                ],
+                SizedBox(height: tokens.spacing.sm),
+                ProposalProgressLines(
+                  lines: finding.progress,
+                  waiting: 'Asking for another dinner',
                 ),
+                if (onCancelFindAnother != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: onCancelFindAnother,
+                      child: const Text('Cancel'),
+                    ),
+                  ),
               ],
-              SizedBox(height: tokens.spacing.sm),
-              ProposalProgressLines(
-                lines: finding.progress,
-                waiting: 'Asking for another dinner',
-              ),
-              if (onCancelFindAnother != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: onCancelFindAnother,
-                    child: const Text('Cancel'),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       );
@@ -364,12 +369,16 @@ class ProposalMealCard extends StatelessWidget {
             ],
             if (notice != null) ...<Widget>[
               SizedBox(height: tokens.spacing.xs),
-              Text(
-                notice!.text,
-                style: textTheme.bodySmall?.copyWith(
-                  color: notice!.problem
-                      ? colorScheme.error
-                      : colorScheme.onSurfaceVariant,
+              // Announced when it appears: the swap's outcome is not otherwise read out.
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  notice!.text,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: notice!.problem
+                        ? colorScheme.error
+                        : colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],

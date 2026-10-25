@@ -128,6 +128,18 @@ AppTestHarness _harness(SwapBackend backend) => AppTestHarness(
   ],
 );
 
+/// Whether [finder] sits inside a live region, which a screen reader announces when it changes.
+bool _announced(WidgetTester tester, Finder finder) => find
+    .ancestor(
+      of: finder,
+      matching: find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is Semantics && (widget.properties.liveRegion ?? false),
+      ),
+    )
+    .evaluate()
+    .isNotEmpty;
+
 Finder _inCard(int index, Finder finder) => find.descendant(
   of: find.byKey(ValueKey<String>('suggestion-$index')),
   matching: finder,
@@ -194,6 +206,10 @@ void main() {
       expect(_inCard(1, find.text('Finding another…')), findsOneWidget);
       expect(_inCard(1, find.text('Your note: "$_note"')), findsOneWidget);
       expect(_inCard(1, find.text('Reading your note')), findsOneWidget);
+      expect(
+        _announced(tester, _inCard(1, find.text('Reading your note'))),
+        isTrue,
+      );
       // Add waits for the swap: saving now would save the meal the household asked to replace.
       expect(find.text('Finishing your swap…'), findsOneWidget);
       // The first run's lines belong to the first run, not to this card.
@@ -512,6 +528,7 @@ void main() {
       await _findAnother(tester, 1);
 
       expect(_inCard(1, find.text(failure.copy)), findsOneWidget);
+      expect(_announced(tester, _inCard(1, find.text(failure.copy))), isTrue);
       final Text line = tester.widget<Text>(
         _inCard(1, find.text(failure.copy)),
       );
