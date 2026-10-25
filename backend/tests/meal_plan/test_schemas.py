@@ -8,9 +8,14 @@ from pydantic import ValidationError
 from glean.meal_plan.schemas import (
     MAX_COOKED_HISTORY_ITEMS,
     MAX_COOKED_NOTE_LENGTH,
+    MAX_FEEDBACK_NOTE_LENGTH,
     CookedHistoryItem,
+    FeedbackNoteOutcome,
+    HumanFeedback,
     MealPlanRequest,
+    MealPlanResult,
 )
+from glean.meal_plan.tools import FeedbackChip
 
 
 def test_a_cooked_at_without_an_offset_is_read_as_utc() -> None:
@@ -105,3 +110,56 @@ def test_the_history_bound_leaves_room_for_too_old_dislikes() -> None:
     assert len(request_with(MAX_COOKED_HISTORY_ITEMS).cooked_history) == MAX_COOKED_HISTORY_ITEMS
     with pytest.raises(ValidationError):
         request_with(MAX_COOKED_HISTORY_ITEMS + 1)
+
+
+# --- human feedback: the week's chips and an optional note (V9) ----------------------------------------
+
+
+def _request(**fields: object) -> MealPlanRequest:
+    return MealPlanRequest.model_validate(
+        {
+            "source": "corpus",
+            "pantry": [],
+            "purchase_tolerance": 0.5,
+            "meals_per_week": 3,
+            "dietary_flags": [],
+            "max_active_time_mins": None,
+            **fields,
+        }
+    )
+
+
+def test_a_request_without_feedback_has_none() -> None:
+    assert _request().human_feedback is None
+
+
+def test_feedback_carries_chips_and_a_note() -> None:
+    request = _request(human_feedback={"chips": ["lighter", "quick_weeknights"], "note": "Kids away on Wednesday"})
+
+    assert request.human_feedback == HumanFeedback(
+        chips=[FeedbackChip.LIGHTER, FeedbackChip.QUICK_WEEKNIGHTS], note="Kids away on Wednesday"
+    )
+
+
+def test_a_chip_sent_twice_counts_once() -> None:
+    feedback = HumanFeedback.model_validate({"chips": ["lighter", "lighter", "guests"]})
+
+    assert feedback.chips == [FeedbackChip.LIGHTER, FeedbackChip.GUESTS]
+
+
+def test_an_unknown_chip_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        HumanFeedback.model_validate({"chips": ["make_it_free"]})
+
+
+def test_the_note_is_bounded() -> None:
+    HumanFeedback(note="x" * MAX_FEEDBACK_NOTE_LENGTH)
+    with pytest.raises(ValidationError):
+        HumanFeedback(note="x" * (MAX_FEEDBACK_NOTE_LENGTH + 1))
+
+
+def test_a_result_says_nothing_about_a_note_by_default() -> None:
+    assert MealPlanResult(suggestions=[]).feedback_note is None
+    assert MealPlanResult(suggestions=[], feedback_note="not_a_preference").feedback_note is (
+        FeedbackNoteOutcome.NOT_A_PREFERENCE
+    )

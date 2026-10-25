@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from glean.meal_plan.tools import FeedbackChip
 from glean.recipes.attributes import DishType, MainCarb, MainProtein
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
@@ -19,6 +20,9 @@ Rating = Literal["up", "down"]
 # cannot be used as a free-text channel. Counted in Unicode code points, which is what Pydantic's
 # `max_length` and the app's note sheet both count -- not grapheme clusters.
 MAX_COOKED_NOTE_LENGTH = 500
+# The week's note: a line, such as "kids are away Wednesday, something spicy then", not a letter. Short on purpose,
+# because it is the one free text a household sends a model on every Generate.
+MAX_FEEDBACK_NOTE_LENGTH = 200
 
 
 class CompressedPantryItem(BaseModel):
@@ -92,6 +96,37 @@ class CookedHistoryItem(BaseModel):
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
+class HumanFeedback(BaseModel):
+    """What the household told the planner about this week: chips, and an optional note (spec 6.5).
+
+    Every chip is optional and none is the default. What a chip does to the week lives in
+    `meal_plan.tools.FeedbackChip`. The note is screened before any model reads it (`meal_plan.feedback`): a note
+    that fails is dropped and the chips still apply.
+    """
+
+    chips: list[FeedbackChip] = Field(
+        default_factory=list, max_length=len(FeedbackChip), description="The week's chips; a repeat counts once."
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=MAX_FEEDBACK_NOTE_LENGTH,
+        description="The household's note for this week. Screened for prompt injection; used only if it passes.",
+    )
+
+    @field_validator("chips")
+    @classmethod
+    def _each_chip_once(cls, chips: list[FeedbackChip]) -> list[FeedbackChip]:
+        return list(dict.fromkeys(chips))
+
+
+class FeedbackNoteOutcome(StrEnum):
+    """What happened to the week's note. The app says "Couldn't use that note" for either kind of drop."""
+
+    USED = "used"
+    NOT_A_PREFERENCE = "not_a_preference"
+    UNAVAILABLE = "unavailable"
+
+
 class MealPlanRequest(BaseModel):
     source: Literal["saved", "corpus"] = Field(
         default="saved",
@@ -142,6 +177,10 @@ class MealPlanRequest(BaseModel):
         ge=1,
         le=480,
         description="Maximum active cooking time in minutes; null means no limit",
+    )
+    human_feedback: HumanFeedback | None = Field(
+        default=None,
+        description="This week's chips and note; null, the default, when the household set nothing.",
     )
 
 
@@ -351,5 +390,12 @@ class MealPlanResult(BaseModel):
         description=(
             "True when finalise fell back to the scorer's picks with template text. It looks like any other "
             "proposal; degradation is recorded in logs and evals, not shown to the household."
+        ),
+    )
+    feedback_note: FeedbackNoteOutcome | None = Field(
+        default=None,
+        description=(
+            "What became of the week's note: used, or dropped and why. Null when no note was sent. The app shows "
+            '"Couldn\'t use that note" for a drop; the chips apply either way.'
         ),
     )

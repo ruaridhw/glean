@@ -228,7 +228,7 @@ def test_corpus_mode_returns_the_proposal_additively(tmp_path) -> None:
         _corpus_request(), llm_router=llm_router, corpus=_corpus(tmp_path), rng=random.Random(0)
     ).model_dump(mode="json")
 
-    assert set(result) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
+    assert set(result) == {"suggestions", "week_summary", "planned_alternatives", "degraded", "feedback_note"}
     assert result["week_summary"] == "Two easy dinners."
     assert result["degraded"] is False
     assert result["planned_alternatives"] == []
@@ -275,6 +275,7 @@ def test_meal_plan_endpoint_accepts_corpus_requests_without_recipe_history(
         "week_summary": NO_MEALS_WEEK_SUMMARY,
         "planned_alternatives": [],
         "degraded": False,
+        "feedback_note": None,
     }
 
 
