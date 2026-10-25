@@ -54,9 +54,10 @@ or newly failed. So a session sits at most one dead-letter retry (about a minute
 lapsing — about 3 minutes after a crash, or immediately after the owner's own 120 s timeout — which is
 still inside the app's five-minute cap. A crashed run comes back within about 2.5 minutes.
 
-One run also has a budget: 90 s (§6.2). It is checked before every graph step, the one blocking call
-(the model) gets only what is left of it, and spending it ends the session `failed / model_error`
-until V6's scorer exists to supply the degraded plan.
+One run also has a budget: 90 s and 8 tool calls (§6.2). It is checked before every graph step, the
+one blocking call (the model) gets only what is left of it, and spending it -- like a model or tool
+error -- ends the session with the degraded plan: the scorer's best week with template reasons. Only a
+budget spent before the scorer has run, in `prepare`, ends `failed / model_error`.
 
 **Considered options.**
 
@@ -106,6 +107,7 @@ until V6's scorer exists to supply the degraded plan.
   the table is the agent's to replace.
 - **The synchronous endpoint stays** until the phone runs a build that uses sessions, then goes in a
   follow-up PR. Both paths call `meal_plan.pipeline`, so they cannot drift while both exist.
-- **No degraded plan in V1.** `SessionsDegraded` is reserved for V7's fallback (the scorer's best plan
-  with template reasons); the CloudWatch metrics emitted today are started, completed, failed and
-  wall time.
+- **A degraded plan is still a plan.** `SessionsDegraded` counts V7's fallback (the scorer's best week
+  with template reasons), which the household cannot tell apart; with started, completed, failed,
+  cancelled, wall time and the per-session tool calls, invalid answers and drift, it is how a
+  regression in the agent shows up at all.
