@@ -86,6 +86,45 @@ void main() {
       expect(proposalLabels(attributes), <String>['25 min']);
     });
 
+    test('a badge never repeats a word already in the row', () {
+      // A pasta dish's carb and its dish type both said "pasta" before this rule; 6 of the 50 sample
+      // recipes are pasta dishes, so it showed up often.
+      expect(
+        proposalLabels(
+          const MealPlanAttributes(mainCarb: 'pasta', dishType: 'pasta_dish'),
+        ),
+        <String>['pasta'],
+      );
+      // The same overlap for rice, where the dish badge would add only the word "dish".
+      expect(
+        proposalLabels(
+          const MealPlanAttributes(mainCarb: 'rice', dishType: 'rice_dish'),
+        ),
+        <String>['rice'],
+      );
+      // A badge that shares no word is kept: wraps and handheld describe different things.
+      expect(
+        proposalLabels(
+          const MealPlanAttributes(
+            mainCarb: 'bread_or_wraps',
+            dishType: 'handheld',
+          ),
+        ),
+        <String>['wraps', 'handheld'],
+      );
+      // Dropping one badge never drops the time.
+      expect(
+        proposalLabels(
+          const MealPlanAttributes(
+            mainCarb: 'pasta',
+            dishType: 'pasta_dish',
+            activeTimeMins: 25,
+          ),
+        ),
+        <String>['pasta', '25 min'],
+      );
+    });
+
     test(
       'a meal an older backend sent, or one not measured yet, has no badges',
       () {
