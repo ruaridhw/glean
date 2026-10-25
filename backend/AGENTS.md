@@ -50,7 +50,12 @@ src/glean/
 ├── recipes/          # GET /recipes/search, GET /recipes/{id}
 │                     # POST /recipes/import-url (LLM-parsed web scrape)
 │                     # unit_backfill.py: one-off corpus re-parse (scripts/backfill_recipe_units.py, local fs only)
-└── meal_plan/        # POST /meal-plan — LLM meal-plan generation
+└── meal_plan/        # POST /meal-plan — LLM meal-plan generation, saved mode and corpus mode
+                      # eligibility.py: the six-week recency floor, pure and store-free (the future
+                      #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
+                      #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
+                      #   hard constraints (dietary decisions, planned meals, time cap) are applied first
+                      #   and never relax. history comes in on the request as `cooked_history`.
 ```
 
 ### Structured output only
