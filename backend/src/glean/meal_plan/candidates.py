@@ -492,16 +492,23 @@ def _take_distinct(picked: list[RecipeSummary], shuffled: Sequence[RecipeSummary
 
 
 def _near_duplicate(a: RecipeSummary, b: RecipeSummary) -> bool:
-    # The corpus holds variants of one dish (chicken breast / thigh / meat-free); offering several
-    # wastes candidate slots and the model tends to pick them together.
+    return near_duplicate_ingredients(a.ingredient_names, b.ingredient_names)
+
+
+def near_duplicate_ingredients(a: Iterable[str], b: Iterable[str]) -> bool:
+    """Whether two ingredient lists are one dish's variants (chicken breast / thigh / meat-free).
+
+    Offering several wastes candidate slots and the model tends to pick them together. Public because
+    `tools.get_eligible_recipes` suppresses the same near-duplicates the sampler does.
+    """
     ingredients_a, ingredients_b = _ingredient_set(a), _ingredient_set(b)
     if not ingredients_a or not ingredients_b:
         return False
     return len(ingredients_a & ingredients_b) / len(ingredients_a | ingredients_b) >= _NEAR_DUPLICATE_OVERLAP
 
 
-def _ingredient_set(summary: RecipeSummary) -> set[str]:
-    return {" ".join(_TOKEN_RE.findall(name.casefold())) for name in summary.ingredient_names}
+def _ingredient_set(names: Iterable[str]) -> set[str]:
+    return {" ".join(_TOKEN_RE.findall(name.casefold())) for name in names}
 
 
 def _recipes_using(corpus: RecipeCorpusStore, pantry_name: str) -> set[str]:
