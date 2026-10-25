@@ -645,6 +645,26 @@ void main() {
     expect((await stored(tester))!.household, 'Two adults, two kids');
   });
 
+  gleanWidgetTest('a pending save that fails after the screen is torn down '
+      'without losing focus does not throw', (tester) async {
+    await pumpProfile(tester, seed: _filled);
+    await tester.runAsync(
+      () => harness.db.customStatement(
+        'CREATE TRIGGER fail_profile_update BEFORE UPDATE ON household_profiles '
+        "BEGIN SELECT RAISE(ABORT, 'test failure'); END",
+      ),
+    );
+
+    await tester.enterText(labeledTextField("Who's at the table"), 'Just me');
+    // Unmount everything at once, as a sign-out redirect would: the field flushes from dispose and the
+    // failure lands after the screen is gone.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(tester.takeException(), isNull);
+    expect((await stored(tester))!.household, 'Two adults, two kids');
+  });
+
   gleanWidgetTest('a failed save says so and leaves the profile as it was', (
     tester,
   ) async {

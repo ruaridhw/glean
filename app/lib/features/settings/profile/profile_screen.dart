@@ -72,15 +72,22 @@ class _ProfileContent extends ConsumerStatefulWidget {
 }
 
 class _ProfileContentState extends ConsumerState<_ProfileContent> {
-  // Captured once: a free-text field still saves while this screen is being popped, when `ref` is gone.
-  late final HouseholdProfileRepository _profiles = ref.read(
-    householdProfileRepositoryProvider,
-  );
-  late final String _userId = ref.read(currentUserIdProvider);
-  late final GleanLogger? _logger = ref.read(gleanLoggerProvider);
+  // Read up front, never lazily: a free-text field still saves (and a failure still logs and reports) while
+  // this screen is being torn down, when `ref` and ancestor lookups are no longer allowed.
+  late final HouseholdProfileRepository _profiles;
+  late final String _userId;
+  late final GleanLogger? _logger;
 
   /// The app-wide messenger, which outlives this screen, so a save that fails after Back is still reported.
   late ScaffoldMessengerState _messenger;
+
+  @override
+  void initState() {
+    super.initState();
+    _profiles = ref.read(householdProfileRepositoryProvider);
+    _userId = ref.read(currentUserIdProvider);
+    _logger = ref.read(gleanLoggerProvider);
+  }
 
   @override
   void didChangeDependencies() {
