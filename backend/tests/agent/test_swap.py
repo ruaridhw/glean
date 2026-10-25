@@ -431,3 +431,18 @@ class TestLease:
 
         assert out in model.users(SwapStep)[0]["swap"]["unavailable_ids"]
         assert out not in [s.external_id for s in swap_run.record.result.suggestions]
+
+
+class TestWorker:
+    def test_the_worker_resumes_a_session_whose_swap_is_queued(self, swap_run: SwapRun) -> None:
+        from glean.sessions.queue import SessionMessage  # noqa: PLC0415
+        from glean.worker import handle_record  # noqa: PLC0415
+
+        swap_run.swap()
+        body = SessionMessage(session_id="sess-1", user_sub="user-a").model_dump_json()
+        model = Model(swap=[replace_with(a_free_candidate)])
+
+        assert handle_record({"body": body, "receiptHandle": "r-1"}, swap_run.deps(model)) is True
+
+        assert swap_run.view.swap.state is SwapState.DONE  # ty: ignore[possibly-missing-attribute]
+        assert len(model.users(SwapStep)) == 1

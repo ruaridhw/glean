@@ -14,13 +14,22 @@ from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.rate_limit import enforce_ai_rate_limit
 from glean.sessions.models import (
     AgentSession,
+    HouseholdMessage,
+    MessageAccepted,
     SessionCreated,
     SessionError,
     SessionErrorCode,
     SessionRequest,
     SessionView,
 )
-from glean.sessions.store import SessionStore, SessionTooLargeError, utcnow
+from glean.sessions.store import (
+    MessageRefusal,
+    MessageRefusedError,
+    SessionStore,
+    SessionTooLargeError,
+    UnknownSessionError,
+    utcnow,
+)
 
 router = APIRouter(prefix="/meal-plan", tags=["meal-plan"], dependencies=[Depends(verify_cognito_token)])
 
@@ -90,6 +99,57 @@ def get_session(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session")
     return SessionView.from_record(record, after=after)
+
+
+# What each refusal tells the app. 409 is "not now" (the app keeps the card as it was), 422 "never for this slot".
+_MESSAGE_REFUSALS: dict[MessageRefusal, tuple[int, str]] = {
+    MessageRefusal.BUSY: (status.HTTP_409_CONFLICT, "Another swap is still running. Try again when it finishes."),
+    MessageRefusal.NO_PROPOSAL: (status.HTTP_409_CONFLICT, "This session has no proposal to change."),
+    MessageRefusal.UNKNOWN_SLOT: (
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "That meal isn't one this proposal suggested. Meals already in your plan are never replaced.",
+    ),
+}
+
+
+@router.post(
+    "/sessions/{session_id}/messages",
+    response_model=MessageAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(enforce_ai_rate_limit)],
+)
+def post_session_message(
+    session_id: Annotated[str, _SESSION_ID],
+    message: HouseholdMessage,
+    user_sub: Annotated[str, Depends(verify_cognito_token)],
+    sessions: Annotated[SessionStore, Depends(get_session_store)],
+    dispatch: Annotated[Callable[[AgentSession], None], Depends(get_session_dispatcher)],
+) -> MessageAccepted:
+    """A household message for one session: a swap (V10). Appends it, re-enqueues the session, 202. One paid call.
+
+    A swap replaces one meal of a finished proposal, with the other slots locked; only one runs at a time.
+    Scoped to the caller like every session route: another user's session is not found.
+    """
+    try:
+        swap = sessions.enqueue_swap(user_sub, session_id, message)
+    except UnknownSessionError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
+    except MessageRefusedError as error:
+        code, detail = _MESSAGE_REFUSALS[error.reason]
+        raise HTTPException(status_code=code, detail=detail) from error
+    record = sessions.get(user_sub, session_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session")
+    try:
+        dispatch(AgentSession(session_id=session_id, user_sub=user_sub, request=record.request))
+    except Exception as error:
+        # Queued, but nothing will run it. Fail the session as the create route does: the proposal stays on the
+        # item, the swap reads as failed, and the next swap is accepted.
+        sessions.fail_if_abandoned(user_sub, session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Couldn't find another meal right now. Try again."
+        ) from error
+    return MessageAccepted(session_id=session_id, swap_id=swap.swap_id)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
