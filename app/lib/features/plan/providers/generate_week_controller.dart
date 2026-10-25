@@ -174,6 +174,8 @@ class GenerateProposalState {
     this.result,
     this.failure,
     this.question,
+    this.sendingReply = false,
+    this.questionError,
     this.reply,
     this.swaps = const <int, MealPlanRecipe>{},
     this.plannedSwaps = const <int, MealPlanRecipe>{},
@@ -203,6 +205,13 @@ class GenerateProposalState {
 
   /// The agent's question while [phase] is [GenerateProposalPhase.question].
   final MealPlanSessionQuestion? question;
+
+  /// True while the answer (or the skip) is on its way. The step stays up, its buttons disabled, until the server
+  /// has it, so a send that fails loses neither the question nor what was chosen.
+  final bool sendingReply;
+
+  /// Why the last send failed, shown on the step beside Send and Skip so either can be tried again.
+  final String? questionError;
 
   /// What the household answered, once it has.
   final GenerateQuestionReply? reply;
@@ -264,6 +273,9 @@ class GenerateProposalState {
     GenerateFailure? failure,
     MealPlanSessionQuestion? question,
     bool clearQuestion = false,
+    bool? sendingReply,
+    String? questionError,
+    bool clearQuestionError = false,
     GenerateQuestionReply? reply,
     Map<int, MealPlanRecipe>? swaps,
     Map<int, MealPlanRecipe>? plannedSwaps,
@@ -284,6 +296,10 @@ class GenerateProposalState {
     result: result ?? this.result,
     failure: failure ?? this.failure,
     question: clearQuestion ? null : question ?? this.question,
+    sendingReply: sendingReply ?? this.sendingReply,
+    questionError: clearQuestionError
+        ? null
+        : questionError ?? this.questionError,
     reply: reply ?? this.reply,
     swaps: swaps ?? this.swaps,
     plannedSwaps: plannedSwaps ?? this.plannedSwaps,
@@ -334,6 +350,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   }) async {
     if (state.inFlight) return;
     if (slots <= 0) return;
+    // A session a failed attempt left behind may still be running (a lost poll, a stalled cap): cancel it before
+    // paying for a new one, so it cannot finish unseen beside the next. A proposal's session is already done.
+    final String? leftOver = state.phase == GenerateProposalPhase.failed
+        ? state.sessionId
+        : null;
     final int attempt = ++_attempt;
     _cursor = 0;
     state = GenerateProposalState(
@@ -342,6 +363,8 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       slots: slots,
       servings: servings,
     );
+    if (leftOver != null) await _cancelSession(leftOver);
+    if (attempt != _attempt) return;
     await _run(attempt, weekStart: weekStart, slots: slots, servings: servings);
   }
 
@@ -407,34 +430,49 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     GenerateQuestionReply reply,
   ) async {
     final String? sessionId = state.sessionId;
-    if (state.phase != GenerateProposalPhase.question || sessionId == null) {
+    if (state.phase != GenerateProposalPhase.question ||
+        state.sendingReply ||
+        sessionId == null) {
       return;
     }
     final int attempt = _attempt;
-    // The step gives way to the progress at once, as the gate draws it; the send happens behind it.
-    state = state._copy(
-      phase: GenerateProposalPhase.working,
-      clearQuestion: true,
-      reply: reply,
-    );
+    state = state._copy(sendingReply: true, clearQuestionError: true);
+    var noteDropped = false;
     try {
       final MealPlanMessageAccepted accepted = await ref
           .read(apiClientProvider)
           .sendMealPlanSessionMessage(sessionId, message);
-      if (!_owns(attempt)) return;
-      if (accepted.noteDropped) {
-        state = state._copy(reply: reply._withNoteDropped());
-      }
+      noteDropped = accepted.noteDropped;
     } on ApiException catch (error) {
-      // 409: the session is no longer waiting, because this answer already landed (a retried send) or it moved
-      // on. Polling shows which; anything else is a failure to show.
+      // 409: the session is no longer waiting, because this answer already landed (a send that timed out after the
+      // server took it, then retried) or it moved on. Polling shows which.
       if (error is! ApiServerException || error.statusCode != 409) {
-        _fail(attempt, GenerateFailure.fromApi(error));
+        if (_asking(attempt)) {
+          // Keep the question and what was chosen: Send or Skip can be tried again, and nothing new is paid for.
+          state = state._copy(
+            sendingReply: false,
+            questionError: error is ApiRateLimitException
+                ? GenerateFailure.fromApi(error).message
+                : "Couldn't send that. Try again.",
+          );
+        }
         return;
       }
     }
+    if (!_asking(attempt)) return;
+    // The server has it: the step gives way to the progress, which says what was answered.
+    state = state._copy(
+      phase: GenerateProposalPhase.working,
+      clearQuestion: true,
+      sendingReply: false,
+      reply: noteDropped ? reply._withNoteDropped() : reply,
+    );
     await _poll(attempt, sessionId);
   }
+
+  /// Whether [attempt] still owns the question step: Back cancels it while a send is in flight.
+  bool _asking(int attempt) =>
+      attempt == _attempt && state.phase == GenerateProposalPhase.question;
 
   /// Locally takes the suggestion's alternative, or puts the original back. No network and no write.
   void swapSuggestion(int index) {

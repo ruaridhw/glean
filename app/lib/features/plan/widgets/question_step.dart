@@ -17,9 +17,17 @@ class QuestionStep extends StatefulWidget {
     required this.question,
     required this.onSend,
     required this.onSkip,
+    this.sending = false,
+    this.error,
   });
 
   final MealPlanSessionQuestion question;
+
+  /// True while the answer is on its way: both buttons wait, and the choice stays as it is.
+  final bool sending;
+
+  /// Why the last send failed; Send and Skip stay available to try again.
+  final String? error;
   final void Function({String? option, String? note}) onSend;
   final VoidCallback onSkip;
 
@@ -47,7 +55,7 @@ class _QuestionStepState extends State<QuestionStep> {
   }
 
   void _send() {
-    if (!_canSend) return;
+    if (!_canSend || widget.sending) return;
     final String note = _note.text.trim();
     widget.onSend(option: _option, note: note.isEmpty ? null : note);
   }
@@ -109,6 +117,17 @@ class _QuestionStepState extends State<QuestionStep> {
             ),
           ),
         ),
+        if (widget.error case final String error)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                error,
+                style: textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+              ),
+            ),
+          ),
         // A Wrap, like the screen's own bar: at a narrow width with large text the two actions stack instead of
         // overflowing.
         SafeArea(
@@ -122,11 +141,11 @@ class _QuestionStepState extends State<QuestionStep> {
               runSpacing: tokens.spacing.sm,
               children: <Widget>[
                 OutlinedButton(
-                  onPressed: widget.onSkip,
+                  onPressed: widget.sending ? null : widget.onSkip,
                   child: const Text('Skip, just plan'),
                 ),
                 FilledButton(
-                  onPressed: _canSend ? _send : null,
+                  onPressed: _canSend && !widget.sending ? _send : null,
                   child: const Text('Send'),
                 ),
               ],
