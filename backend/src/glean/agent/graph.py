@@ -228,7 +228,9 @@ class _Nodes:
         return {
             "pending": None,
             "prepared": outcome.prepared.model_dump(mode="json"),
-            "transcript": bounded_transcript([*(state.get("transcript") or []), _entry(state["pending"], outcome)]),
+            "transcript": bounded_transcript(
+                [*(state.get("transcript") or []), _entry(call.model_dump(mode="json"), outcome)]
+            ),
             "tool_calls": tool_calls,
         }
 
