@@ -159,8 +159,14 @@ class ScorerWeights:
     # "Whole food": the "healthier" chip doubles it. If V9 also maps a predicate to that chip, both apply, so
     # its predicate mapping is the place to keep it from counting twice.
     healthier_multiplier: float = 2.0
-    # "'Lighter' chip": -1 per recipe above the week's median calories, where nutrition exists.
+    # "'Lighter' chip": -1 per recipe above `lighter_reference_kcal`, once the chip is on.
     lighter: float = -1.0
+    # That reference: the corpus median of STATED per-serving calories, 672 kcal. Derived from the 2026-10-24 prod
+    # corpus export, where 362 of its 632 recipes state nutrition on their own page (the labeller's estimates for
+    # the other 270 are excluded); their median is 672.5, rounded down to 672. Owner decision 2026-10-25: a fixed
+    # reference, not the week's own median, so a plan can no longer make itself look light by choosing light
+    # recipes, which the V6 eval saw it do.
+    lighter_reference_kcal: int = 672
     # "Protein targets from the profile": -4 per miss, such as fish at least once.
     protein_target_miss: float = -4.0
 
@@ -593,7 +599,7 @@ class _Scorer:
         return cached
 
     def _lighter_offenders(self, recipe_ids: Sequence[str]) -> tuple[tuple[str, ...], str]:
-        """The recipes that do not come under the week's calorie reference, and what that reference was.
+        """The recipes above the fixed calorie reference, and what that reference is. Empty without the chip.
 
         A recipe with no stated calories counts as above the reference: an unknown figure must never let a recipe
         look lighter than one whose figure is known, or a plan could buy its way past the chip by choosing
@@ -601,18 +607,13 @@ class _Scorer:
         """
         if LIGHTER_CHIP not in self._ctx.chips:
             return (), ""
-        calories = {recipe_id: self._ctx.recipes[recipe_id].calories_per_serving for recipe_id in recipe_ids}
-        known = [value for value in calories.values() if value is not None]
-        median = _median(known) if known else None
+        reference = self._weights.lighter_reference_kcal
         above = tuple(
             recipe_id
-            for recipe_id, value in calories.items()
-            if value is None or (median is not None and value > median)
+            for recipe_id in recipe_ids
+            if (calories := self._ctx.recipes[recipe_id].calories_per_serving) is None or calories > reference
         )
-        if not above:
-            return (), ""
-        detail = f"median {median:g} kcal" if median is not None else "no stated calories in the week"
-        return above, detail
+        return above, f"above {reference:g} kcal" if above else ""
 
     def _target_misses(self, recipe_ids: Sequence[str]) -> list[tuple[ProteinTarget, int, int]]:
         """Every protein target the plan misses, with the count it reached: more fish, fewer pork."""
@@ -652,13 +653,6 @@ def _require_known(recipe_ids: Sequence[str], ctx: ScoringContext) -> None:
     missing = sorted(set(recipe_ids) - ctx.recipes.keys())
     if missing:
         raise UnknownRecipeIds(missing)
-
-
-def _median(values: list[float]) -> float:
-    """The median of a non-empty list: the week's own middle calories, which the lighter term compares against."""
-    ordered = sorted(values)
-    middle = len(ordered) // 2
-    return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def _tie_break_ranks(pool: Sequence[str], seed: int) -> dict[str, float]:
