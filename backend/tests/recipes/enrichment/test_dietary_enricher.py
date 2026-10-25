@@ -102,14 +102,21 @@ def test_a_corpus_filled_by_f1s_migration_produces_no_requests(tmp_path: Path, r
 
 
 def test_planning_excludes_the_same_recipes_before_and_after_a_run(tmp_path: Path) -> None:
+    """A prod-shaped run: every enricher, not just dietary, must leave the dietary decisions untouched."""
     corpus = _blob_corpus(tmp_path)
     _store_current_answers(corpus)
     before = {flag: _ids(corpus, flag) for flag in DIETARY_FLAGS}
     assert before["tree-nut-free"] == {"rec_tomato"}  # the stored probability already decided this
 
-    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
+    report = run_enrichment(corpus, FakeDecisionApi().client())
 
     assert {flag: _ids(corpus, flag) for flag in DIETARY_FLAGS} == before
+    # The default really did ask every family, so the invariant is exercised on the path prod takes: the
+    # attribute and active-time questions were newly stored, and the dietary answers stayed as they were.
+    assert report.question("attribute:main_protein").current == 2
+    assert report.question("active_time:bucket").current == 2
+    assert report.question("dietary:vegan").current == 2
+    assert report.coverage == 1.0
 
 
 def test_a_probability_the_model_is_unsure_about_is_still_stored_and_decided_at_read_time(tmp_path: Path) -> None:
