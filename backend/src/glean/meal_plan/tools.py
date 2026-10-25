@@ -50,6 +50,7 @@ __all__ = [
     "HEALTHIER_CHIP",
     "LIGHTER_CHIP",
     "MAX_FILTER_LIMIT",
+    "NARROWING_CHIPS",
     "CandidateRecipe",
     "CorpusRecipe",
     "DuplicateRecipeIds",
@@ -75,6 +76,7 @@ __all__ = [
     "Term",
     "TermScore",
     "UnknownRecipeIds",
+    "chip_narrows",
     "chosen_vs_best_gap",
     "chosen_vs_best_ratio",
     "create_candidate_meal_plans",
@@ -93,14 +95,19 @@ class FeedbackChip(StrEnum):
     feedback match" +2 through its predicate (`CHIP_PREDICATES`) or through a fact about the recipe's history,
     or it changes one row of the table:
 
-    - `quick_weeknights`: +2 for 30 minutes hands-on or less (`QUICK_WEEKNIGHT_MINS`).
+    - `quick_weeknights`: narrows the offer to V5's time-cap rule at 30 minutes (`chip_narrows`), else +2 for 30
+      minutes hands-on or less (`QUICK_WEEKNIGHT_MINS`).
     - `use_up_the_fridge`: pantry fit, urgency-weighted already, is doubled (`use_up_the_fridge_multiplier`).
     - `something_new`: +2 for a recipe the household's history never mentions.
     - `healthier`: doubles whole food (`healthier_multiplier`), with no predicate, so it never pays twice.
-    - `comfort_food`: +2 for the warming dish types (`COMFORT_DISH_TYPES`).
+    - `comfort_food`: narrows the offer to the warming dish types (`COMFORT_DISH_TYPES`), else +2 for one.
     - `lighter`: turns on the calories row against the fixed reference, with no predicate either.
-    - `guests`: +2 for dishes that serve a table (`GUEST_DISH_TYPES`). It does not change servings: the app
-      sets those when the week is added, and the request carries none.
+    - `guests`: narrows the offer to dishes that serve a table (`GUEST_DISH_TYPES`), else +2 for one. It does not
+      change servings: the app sets those when the week is added, and the request carries none.
+
+    A narrowing chip (`NARROWING_CHIPS`) narrows only while at least three fresh recipes per slot pass it; when
+    fewer would, the offer stays whole and the chip pays its +2 here instead (owner decision 2026-10-25). The
+    sampler (`candidates.sample_corpus_candidates`) applies it and logs which happened.
     - `same_as_last_week`: +2 for a recipe cooked in the last seven days. The six-week floor would leave those
       out, so this chip lifts it for them alone (`pipeline`), and never for a thumbs-down recipe.
     """
@@ -192,6 +199,8 @@ QUICK_WEEKNIGHT_MINS = 30
 COMFORT_DISH_TYPES = (DishType.PIE_OR_BAKE, DishType.SOUP_OR_STEW, DishType.CURRY, DishType.PASTA_DISH)
 # "Guests": dishes that are made whole and served at the table: a roast or traybake, a pie, a curry, a paella.
 GUEST_DISH_TYPES = (DishType.ROAST_OR_TRAYBAKE, DishType.PIE_OR_BAKE, DishType.CURRY, DishType.RICE_DISH)
+# The chips that narrow the offer when the pool can afford it (owner decision 2026-10-25): the ones with a clear rule.
+NARROWING_CHIPS = (FeedbackChip.QUICK_WEEKNIGHTS, FeedbackChip.COMFORT_FOOD, FeedbackChip.GUESTS)
 # "Same as last week": a cook this recent counts as last week's.
 LAST_WEEK_DAYS = 7
 
@@ -923,6 +932,20 @@ CHIP_PREDICATES: Mapping[str, Predicate] = MappingProxyType(
         ),
     }
 )
+
+
+def chip_narrows(chip: FeedbackChip, attributes: RecipeAttributes, *, total_time_mins: int | None) -> bool:
+    """Whether one recipe passes a narrowing chip's rule (`NARROWING_CHIPS`).
+
+    Quick weeknights is V5's time-cap rule at `QUICK_WEEKNIGHT_MINS`, the same rule the household's own cap uses:
+    the bucket's bound, total time when no bucket is known, and an unknown time passes. Comfort food and guests
+    are their dish-type predicates, so an unknown dish type never passes.
+    """
+    if chip == FeedbackChip.QUICK_WEEKNIGHTS:
+        return attributes.fits_time_cap(QUICK_WEEKNIGHT_MINS, total_time_mins=total_time_mins)
+    if chip not in NARROWING_CHIPS:
+        raise ValueError(f"{chip} does not narrow the offer")
+    return CHIP_PREDICATES[chip.value].matches(attributes)
 
 
 @dataclass(frozen=True, slots=True)

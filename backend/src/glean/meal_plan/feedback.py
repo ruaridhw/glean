@@ -28,17 +28,22 @@ if TYPE_CHECKING:
 # checks every chip has a line, and the scorer, not this text, is what moves the week.
 CHIP_GUIDANCE: dict[FeedbackChip, str] = {
     FeedbackChip.QUICK_WEEKNIGHTS: (
-        f"Quick weeknights: favour dinners with {QUICK_WEEKNIGHT_MINS} minutes hands-on or less "
+        f"Quick weeknights: dinners with {QUICK_WEEKNIGHT_MINS} minutes hands-on or less. The candidates are already "
+        f"narrowed to them when the pool allowed; any recipe you add should be too "
         f"(get_eligible_recipes include active_time lte {QUICK_WEEKNIGHT_MINS})."
     ),
     FeedbackChip.USE_UP_THE_FRIDGE: "Use up the fridge: pantry items, the urgent ones first, count double this week.",
     FeedbackChip.SOMETHING_NEW: "Something new: favour recipes the household has not cooked before.",
     FeedbackChip.HEALTHIER: "Healthier: whole-food dinners count double this week.",
-    FeedbackChip.COMFORT_FOOD: "Comfort food: favour pies and bakes, soups and stews, curries and pasta dishes.",
+    FeedbackChip.COMFORT_FOOD: (
+        "Comfort food: pies and bakes, soups and stews, curries and pasta dishes. The candidates are already "
+        "narrowed to them when the pool allowed."
+    ),
     FeedbackChip.LIGHTER: "Lighter: favour dinners under the usual calories; an unknown figure is not light.",
     FeedbackChip.GUESTS: (
-        "Guests: someone is coming for dinner. Favour dishes that serve a table: roasts and traybakes, pies, "
-        "curries, rice dishes. Servings are set by the app, so do not change them."
+        "Guests: someone is coming for dinner. Dishes that serve a table: roasts and traybakes, pies, curries, rice "
+        "dishes; the candidates are already narrowed to them when the pool allowed. Servings are set by the app, "
+        "so do not change them."
     ),
     FeedbackChip.SAME_AS_LAST_WEEK: (
         "Same as last week: the household wants last week's dinners again. Recipes cooked in the last seven days "

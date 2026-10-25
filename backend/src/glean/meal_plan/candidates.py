@@ -41,7 +41,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from glean.meal_plan.dietary_decisions import CALIBRATED_DIETARY, DietaryDecisions, DietaryDecisionStore
-from glean.meal_plan.eligibility import apply_recency_floor
+from glean.meal_plan.eligibility import MIN_ELIGIBLE_PER_SLOT, apply_recency_floor
 from glean.observability import logger
 from glean.recipes.answers import content_fingerprint
 from glean.recipes.attributes import RecipeAttributes
@@ -49,7 +49,7 @@ from glean.recipes.enrichment.projection_attributes import attributes_from_answe
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from glean.meal_plan.eligibility import CookedMeal
     from glean.recipes.answers import RecipeAnswer
@@ -134,6 +134,7 @@ def sample_corpus_candidates(
     pool_size: int = PANTRY_POOL_SIZE,
     guarantee_max: int = GUARANTEE_MAX,
     preferred_ids: Collection[str] = (),
+    narrowing: Mapping[str, Callable[[RecipeAttributes, int | None], bool]] | None = None,
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
@@ -144,12 +145,13 @@ def sample_corpus_candidates(
     so they reach the candidate list only after every fresh recipe, and they carry `cooked_days_ago` so
     the model sees them as the fallback they are. `preferred_ids` (last week's dinners, under the "same as
     last week" chip) are offered right after the urgent guarantee, when they are fresh and eligible.
+    `narrowing` maps a chip to its rule (`tools.chip_narrows`); see `_narrowed` for when it applies.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
     diet_excluded = dietary_excluded_ids(corpus, all_recipes, dietary_flags)
     # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
-    attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None else {}
+    attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None or narrowing else {}
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
     # floor must never bring back a recipe a flag, the time cap or an already-planned meal ruled out.
     eligible = {
@@ -159,6 +161,10 @@ def sample_corpus_candidates(
         and _fits_time(summary, max_total_time_mins, attributes.get(summary.external_id, RecipeAttributes()))
         and summary.external_id not in diet_excluded
     }
+    if narrowing:
+        eligible = _narrowed(
+            eligible, narrowing, attributes=attributes, cooked=cooked, now=now or datetime.now(UTC), slots=slots
+        )
     floor = apply_recency_floor(
         eligible,
         titles={external_id: summary.title for external_id, summary in eligible.items()},
@@ -278,6 +284,51 @@ def _fill_from(
     if not remaining or len(picked) >= sample_size:
         return
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in rng.sample(remaining, len(remaining))], sample_size)
+
+
+def _narrowed(
+    eligible: Mapping[str, RecipeSummary],
+    narrowing: Mapping[str, Callable[[RecipeAttributes, int | None], bool]],
+    *,
+    attributes: Mapping[str, RecipeAttributes],
+    cooked: Sequence[CookedMeal],
+    now: datetime,
+    slots: int,
+) -> dict[str, RecipeSummary]:
+    """The hard-constraint pool, narrowed by each chip in turn while at least three fresh recipes per slot pass.
+
+    Counted on fresh recipes (the six-week floor's), so a chip never forces the floor to relax and offer a
+    recent repeat. A chip that would leave too few is skipped, and pays its +2 in the scorer instead; each chip
+    is decided on what the chips before it left. Hard constraints were applied before this, so narrowing can
+    only remove recipes.
+    """
+    narrowed = dict(eligible)
+    fresh = set(
+        apply_recency_floor(
+            narrowed,
+            titles={external_id: summary.title for external_id, summary in narrowed.items()},
+            cooked=cooked,
+            now=now,
+            slots=slots,
+        ).fresh
+    )
+    needed = MIN_ELIGIBLE_PER_SLOT * slots
+    for chip, passes in narrowing.items():
+        kept = {
+            external_id
+            for external_id, summary in narrowed.items()
+            if passes(attributes.get(external_id, RecipeAttributes()), summary.total_time_mins)
+        }
+        if len(kept & fresh) >= needed:
+            narrowed = {external_id: summary for external_id, summary in narrowed.items() if external_id in kept}
+            fresh &= kept
+            logger.info("a chip narrowed the offer", extra={"chip": chip, "recipes": len(narrowed)})
+        else:
+            logger.info(
+                "a chip fell back to its score term",
+                extra={"chip": chip, "fresh_matching": len(kept & fresh), "needed": needed},
+            )
+    return narrowed
 
 
 def _fill_partition(
