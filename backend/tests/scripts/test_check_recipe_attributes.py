@@ -227,9 +227,48 @@ def test_an_answer_under_the_marked_bar_reads_as_unsure_even_though_its_label_is
 
     assert attribute.unsure_at(0.85) == 0  # inside cuisine's shipped bar: the label shows
     assert attribute.unsure_at(0.90) == 1  # raised above it: the answer is there but untrusted
-    assert "1 answer(s) fall below the marked 0.80 bar" not in "".join(
-        check_recipe_attributes.render_comparison(comparison).splitlines()
+
+
+def test_the_report_marks_each_attribute_at_the_bar_production_reads_it_with() -> None:
+    """Cuisine ships at 0.85 and whole food at 0.90, so one shared mark would misreport both."""
+    answers = {
+        "rec_a": {"cuisine": {"value": "thai", "probability": 0.84}},
+        "rec_b": {"whole_food": {"value": "whole", "probability": 0.89}},
+    }
+    labels = {
+        "rec_a": {"cuisine": "thai"},
+        "rec_b": {"whole_food": "whole"},
+    }
+
+    rendered = check_recipe_attributes.render_comparison(check_recipe_attributes.compare_answers(answers, labels))
+    cuisine = _block(rendered, "cuisine:")
+    whole_food = _block(rendered, "whole_food:")
+
+    assert "1 answer(s) fall below the marked 0.85 bar" in cuisine
+    assert "*0.85" in cuisine  # the marker sits on cuisine's shipped bar, not on 0.80
+    assert "1 answer(s) fall below the marked 0.90 bar" in whole_food
+    assert "*0.90" in whole_food
+    assert "Marked bar: each attribute's shipped bar" in rendered
+
+
+def test_an_explicit_bar_marks_every_attribute_for_a_what_if() -> None:
+    answers = {"rec_a": {"cuisine": {"value": "thai", "probability": 0.74}}}
+
+    rendered = check_recipe_attributes.render_comparison(
+        check_recipe_attributes.compare_answers(answers, {"rec_a": {"cuisine": "thai"}}),
+        production_bar=0.80,
     )
+
+    assert "Marked bar: 0.80 for every attribute" in rendered
+    assert "1 answer(s) fall below the marked 0.80 bar" in _block(rendered, "cuisine:")
+
+
+def _block(rendered: str, heading: str) -> str:
+    """The lines of one attribute's section, up to the blank line that ends it."""
+    lines = rendered.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith(heading))
+    end = next((index for index in range(start, len(lines)) if not lines[index].strip()), len(lines))
+    return "\n".join(lines[start:end])
 
 
 def test_a_recipe_the_labels_do_not_cover_is_never_scored() -> None:

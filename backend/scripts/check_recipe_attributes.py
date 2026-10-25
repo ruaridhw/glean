@@ -89,6 +89,9 @@ DEFAULT_TARGET_ACCURACY = 0.95
 DEFAULT_MIN_ACCEPTED = 20
 # The z for a 95% Wilson interval, used to rank bars when none meets the target.
 _WILSON_Z = 1.96
+# The bar each attribute ships with, so the report marks what production actually reads rather than one bar
+# for all six. `--bar` overrides every mark, for weighing one candidate bar across the board.
+SHIPPED_BARS: dict[str, float] = {**MEASURED_BARS, "active_time": ACTIVE_TIME_BAR}
 
 
 def main(argv: Sequence[str] | None = None, *, client: DecisionClient | None = None) -> int:
@@ -123,7 +126,7 @@ def _enrich(args: argparse.Namespace, *, client: DecisionClient | None) -> int:
                 "enriched_at": datetime.now(UTC).isoformat(),
                 # What the run declared, for the record. It does not affect what is stored: every answer keeps
                 # its top option, so the compare step can replay any bar over it.
-                "bars": {**MEASURED_BARS, "active_time": ACTIVE_TIME_BAR},
+                "bars": SHIPPED_BARS,
                 "answers": answers,
             },
             indent=2,
@@ -380,21 +383,30 @@ def _compare(args: argparse.Namespace) -> int:
 def render_comparison(
     comparison: Comparison,
     *,
-    production_bar: float = DEFAULT_ATTRIBUTE_BAR,
+    production_bar: float | None = None,
     step: float = BAR_STEP,
     target: float = DEFAULT_TARGET_ACCURACY,
     min_accepted: int = DEFAULT_MIN_ACCEPTED,
     sample: str | None = None,
     enriched_at: str | None = None,
 ) -> str:
-    """The report: per attribute, its confusion table, then every bar's accuracy and coverage."""
+    """The report: per attribute, its confusion table, then every bar's accuracy and coverage.
+
+    Each attribute is marked at the bar production reads it with (`SHIPPED_BARS`) unless `production_bar` is
+    given, which marks one candidate bar across every attribute.
+    """
     lines = []
     if sample:
         lines.append(f"Sample: {sample}   Enriched: {enriched_at or 'unknown'}")
+    marked = (
+        f"Marked bar: {production_bar:.2f} for every attribute"
+        if production_bar is not None
+        else "Marked bar: each attribute's shipped bar"
+    )
     lines.extend(
         [
             f"Recipes labelled: {len(comparison.labels)}   Bars replayed: {MIN_ATTRIBUTE_BAR:.2f} to "
-            f"{BAR_CEILING:.2f} by {step:.2f}   Marked bar: {production_bar:.2f}",
+            f"{BAR_CEILING:.2f} by {step:.2f}   {marked}",
             "",
         ]
     )
@@ -406,7 +418,12 @@ def render_comparison(
         lines.append("")
 
     for attribute_comparison in comparison.attributes:
-        lines.extend(_attribute_lines(attribute_comparison, production_bar=production_bar))
+        lines.extend(
+            _attribute_lines(
+                attribute_comparison,
+                marked_bar=_marked_bar(attribute_comparison.attribute, production_bar),
+            )
+        )
 
     lines.append(
         f"Chosen bars (the lowest bar at {target:.0%} accuracy or better on at least {min_accepted} answers; "
@@ -427,7 +444,14 @@ def render_comparison(
     return "\n".join(lines)
 
 
-def _attribute_lines(comparison: AttributeComparison, *, production_bar: float) -> list[str]:
+def _marked_bar(attribute: str, production_bar: float | None) -> float:
+    """The bar this attribute's row is marked at: the override, or the bar it actually ships with."""
+    if production_bar is not None:
+        return production_bar
+    return SHIPPED_BARS.get(attribute, DEFAULT_ATTRIBUTE_BAR)
+
+
+def _attribute_lines(comparison: AttributeComparison, *, marked_bar: float) -> list[str]:
     lines = [f"{comparison.attribute}: {comparison.labelled} labelled, {comparison.answered} answered"]
     if not comparison.confused:
         return [*lines, "  nothing accepted at any bar", ""]
@@ -439,11 +463,11 @@ def _attribute_lines(comparison: AttributeComparison, *, production_bar: float) 
         cells = [str(comparison.confused.get((truth, value), 0)).ljust(width) for value in values]
         lines.append(f"  {truth.ljust(width)}  " + "  ".join(cells))
     lines.append(
-        f"  pred is what was stored; {comparison.unsure_at(production_bar)} answer(s) fall below the marked "
-        f"{production_bar:.2f} bar and read as unsure"
+        f"  pred is what was stored; {comparison.unsure_at(marked_bar)} answer(s) fall below the marked "
+        f"{marked_bar:.2f} bar and read as unsure"
     )
     for result in comparison.bars:
-        marker = "*" if abs(result.bar - production_bar) < 1e-9 else " "
+        marker = "*" if abs(result.bar - marked_bar) < 1e-9 else " "
         lines.append(
             f"  {marker}{result.bar:.2f}  accepted {result.accepted:>3}  accuracy {result.accuracy:6.1%}  "
             f"coverage {result.coverage:6.1%}"
@@ -486,7 +510,12 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     compare.add_argument("--answers", type=Path, default=None, help="Answers file; defaults beside the sample.")
     compare.add_argument("--labels", type=Path, default=None, help="Labels file; defaults beside the sample.")
     compare.add_argument("--report", type=Path, default=None, help="Also write the report here.")
-    compare.add_argument("--bar", type=float, default=DEFAULT_ATTRIBUTE_BAR, help="The bar the report marks.")
+    compare.add_argument(
+        "--bar",
+        type=float,
+        default=None,
+        help="Mark this bar for every attribute. Default: each attribute's shipped bar.",
+    )
     compare.add_argument("--step", type=float, default=BAR_STEP, help="How finely the bars are replayed.")
     compare.add_argument(
         "--target",

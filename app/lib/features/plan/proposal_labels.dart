@@ -45,9 +45,9 @@ const Map<String, String> _carbLabels = <String, String>{
 
 /// Short display words for the G1 dish types.
 ///
-/// `pasta_dish` is not "pasta": a pasta dish's card already says "pasta" for its carb, and two identical
-/// badges read like a mistake (6 of the 50 sample recipes are pasta dishes). It keeps the shape instead,
-/// which is what the dish badge is for.
+/// `pasta_dish` maps to "pasta" like the carb does, and `proposalLabels` drops the repeat: a pasta dish's card
+/// says "pasta" once, from its carb, which is the more specific fact. The word stays here so a dish type the
+/// backend sends without a carb still gets a badge rather than none.
 const Map<String, String> _dishLabels = <String, String>{
   'curry': 'curry',
   'stir_fry': 'stir-fry',
