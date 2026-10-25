@@ -485,6 +485,40 @@ def test_a_minutes_predicate_compares_the_active_time_bucket() -> None:
     assert Predicate(PredicateField.ACTIVE_TIME, PredicateOp.GTE, ("45",)).matches(slow)
 
 
+@pytest.mark.parametrize(
+    ("bucket", "op", "limit", "expected"),
+    [
+        (ActiveTimeBucket.UP_TO_15, PredicateOp.LTE, "15", True),
+        (ActiveTimeBucket.UP_TO_15, PredicateOp.GTE, "15", False),
+        (ActiveTimeBucket.UP_TO_15, PredicateOp.GTE, "0", True),
+        (ActiveTimeBucket.FROM_15_TO_30, PredicateOp.LTE, "15", False),
+        (ActiveTimeBucket.FROM_15_TO_30, PredicateOp.LTE, "30", True),
+        (ActiveTimeBucket.FROM_15_TO_30, PredicateOp.GTE, "15", True),
+        (ActiveTimeBucket.FROM_15_TO_30, PredicateOp.GTE, "30", False),
+        (ActiveTimeBucket.FROM_30_TO_45, PredicateOp.LTE, "30", False),
+        (ActiveTimeBucket.FROM_30_TO_45, PredicateOp.LTE, "45", True),
+        (ActiveTimeBucket.FROM_30_TO_45, PredicateOp.GTE, "30", True),
+        (ActiveTimeBucket.FROM_30_TO_45, PredicateOp.GTE, "45", False),
+        (ActiveTimeBucket.FROM_45_TO_60, PredicateOp.LTE, "45", False),
+        (ActiveTimeBucket.FROM_45_TO_60, PredicateOp.LTE, "60", True),
+        (ActiveTimeBucket.FROM_45_TO_60, PredicateOp.GTE, "45", True),
+        (ActiveTimeBucket.FROM_45_TO_60, PredicateOp.GTE, "60", False),
+        (ActiveTimeBucket.OVER_60, PredicateOp.LTE, "60", False),
+        (ActiveTimeBucket.OVER_60, PredicateOp.LTE, "120", False),
+        (ActiveTimeBucket.OVER_60, PredicateOp.GTE, "60", True),
+        (ActiveTimeBucket.OVER_60, PredicateOp.GTE, "120", False),
+        (ActiveTimeBucket.UNSURE, PredicateOp.LTE, "60", False),
+        (ActiveTimeBucket.UNSURE, PredicateOp.GTE, "30", False),
+    ],
+)
+def test_a_minutes_predicate_compares_the_right_end_of_the_bucket(bucket, op, limit, expected) -> None:
+    # `lte N` asks whether the bucket's upper bound comes under N; `gte N` whether its lower bound reaches N. A
+    # bucket is only certified on the end that can promise it, so "60+" never satisfies `lte`, and "15-30" is
+    # not "at least 30 minutes".
+    predicate = Predicate(PredicateField.ACTIVE_TIME, op, (limit,))
+    assert predicate.matches(RecipeAttributes(active_time=bucket)) is expected
+
+
 def test_a_minutes_predicate_only_applies_to_active_time() -> None:
     with pytest.raises(ValueError, match="active_time"):
         Predicate(PredicateField.CUISINE, PredicateOp.LTE, ("30",))
