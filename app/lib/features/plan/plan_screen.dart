@@ -1,4 +1,4 @@
-/// The Plan tab: a week-scoped dinner plan. See `providers/generate_week_controller.dart` for generation,
+/// The Plan tab: a week-scoped dinner plan, with the "This week" box (chips, a note and Generate) on top. See `providers/generate_week_controller.dart` for generation,
 /// `actions.dart` for the cooked/delete mutations, and `presentation.dart`/`compression.dart`/`food_groups.dart`
 /// for the pure logic this screen renders.
 library;
@@ -22,11 +22,11 @@ import 'package:glean/design_system/design_system.dart';
 
 import 'actions.dart';
 import 'presentation.dart';
-import 'widgets/generate_button.dart';
 import 'widgets/plan_expiry_banner.dart';
 import 'widgets/plan_progress_card.dart';
 import 'widgets/plan_slot_row.dart';
 import 'widgets/plan_week_pager.dart';
+import 'widgets/this_week_box.dart';
 
 class PlanScreen extends ConsumerStatefulWidget {
   const PlanScreen({super.key});
@@ -162,15 +162,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Plan'),
-        actions: <Widget>[
-          Padding(
-            padding: EdgeInsets.only(right: tokens.spacing.md),
-            child: PlanGenerateButton(weekStart: _weekStart),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Plan')),
       body: SafeArea(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
@@ -181,6 +173,12 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
                 : ListView(
                     padding: EdgeInsets.all(tokens.spacing.lg),
                     children: <Widget>[
+                      // Keyed by week: each week has its own chips and note, and its own open/closed box.
+                      ThisWeekBox(
+                        key: ValueKey<DateTime>(_weekStart),
+                        weekStart: _weekStart,
+                      ),
+                      SizedBox(height: tokens.spacing.md),
                       PlanWeekPager(
                         weekStart: _weekStart,
                         onPrevious: _goToPreviousWeek,
