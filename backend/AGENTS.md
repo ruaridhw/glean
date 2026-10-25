@@ -329,6 +329,9 @@ cancelled run adds at most one more read, at the step that notices.
   from the checkpoint without a model call; a late copy of the first message finds the session parked
   (`ClaimResult.WAITING`) and is acknowledged; the dead-letter handler leaves a parked session alone
   (`AbandonResult.WAITING`).
+  Accepted, as on `create`: a worker that dies between `resume`'s `answer` write and its send leaves the
+  session `queued` with no message until its TTL; the app's fresh five-minute cap then shows `stalled` and
+  Retry starts again. The note limit (`MAX_NOTE_CHARS`) is in code points, the unit the app clips by.
 - **The 90 s are working time.** No attempt exists while the household thinks, so no clock runs; the
   working seconds spent before the question ride the graph state (`working_seconds`) and the resuming
   attempt's budget starts that much spent (`RunBudget.carry`). A household that never answers leaves the

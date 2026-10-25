@@ -778,3 +778,13 @@ def test_an_answer_that_cannot_be_queued_fails_the_session_and_says_so(
     record = sessions.get("user-a", session_id)
     assert record.status is SessionStatus.FAILED
     assert record.error.code is SessionErrorCode.WORKER_FAILED
+
+
+def test_the_note_limit_counts_code_points_as_the_app_does(
+    api: TestClient, asking: AskingRouter, screen_passes: Screen
+) -> None:
+    """The app clips the note by code points (runes); 500 emoji are 500 here too, never a surprise 422."""
+    session_id = _parked(api)
+
+    assert _send(api, session_id, {"type": "answer", "note": "🥕" * 501}).status_code == 422
+    assert _send(api, session_id, {"type": "answer", "note": "🥕" * 500}).status_code == 202
