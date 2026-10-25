@@ -24,7 +24,7 @@ from glean.meal_plan.schemas import (
     MealPlanSuggestion,
     ReasonKind,
 )
-from glean.meal_plan.tools import Rating
+from glean.meal_plan.tools import LIGHTER_CHIP, Rating
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.corpus import RecipeCorpusStore
@@ -673,7 +673,9 @@ def test_the_model_is_given_the_two_weeks_with_the_rows_that_scored_them(tmp_pat
     assert {candidate["external_id"] for candidate in message["candidates"]} == set(prepared.offered_ids)
 
 
-def test_a_recipe_states_its_calories_only_when_its_page_did(tmp_path: Path) -> None:
+def test_stated_calories_are_read_only_when_the_lighter_chip_is_on(tmp_path: Path) -> None:
+    # No request can select a chip until V9, and calories are the one input only the lighter term reads, so a
+    # Generate must not pay up to 25 recipe reads for it. Today's prepare therefore reads none of them.
     corpus = _corpus(tmp_path)
     first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
     fed = first.offered_ids[0]
@@ -682,12 +684,30 @@ def test_a_recipe_states_its_calories_only_when_its_page_did(tmp_path: Path) -> 
     corpus.save(stored.model_copy(update={"nutrition": StoredNutrition(calories=640, protein_g=30)}))
 
     prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
-    facts = {fact.recipe_id: fact for fact in prepared.facts}
+    with_chip = pipeline._stated_calories(corpus, [fed, first.offered_ids[1]], chips=frozenset({LIGHTER_CHIP}))
 
-    assert facts[fed].calories_per_serving == 640
-    assert [fact.calories_per_serving for fact in prepared.facts if fact.recipe_id != fed] == [
-        None for fact in prepared.facts if fact.recipe_id != fed
-    ]
+    assert {fact.recipe_id: fact.calories_per_serving for fact in prepared.facts}[fed] is None
+    assert with_chip == {fed: 640, first.offered_ids[1]: None}
+
+
+def test_a_recipe_whose_calories_cannot_be_read_is_unknown_rather_than_a_failed_generate(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    unreadable, readable = first.offered_ids[0], first.offered_ids[1]
+    stored = corpus.get(readable)
+    assert stored is not None
+    corpus.save(stored.model_copy(update={"nutrition": StoredNutrition(calories=520)}))
+    original_get = corpus.get
+
+    def get(external_id: str):
+        if external_id == unreadable:
+            raise ConnectionError("the blob store went away")
+        return original_get(external_id)
+
+    corpus.get = get  # type: ignore[method-assign]
+    calories = pipeline._stated_calories(corpus, [unreadable, readable], chips=frozenset({LIGHTER_CHIP}))
+
+    assert calories == {unreadable: None, readable: 520}
 
 
 def _week_draft(prepared: pipeline.PreparedPlan, index: int, **overrides: object) -> CorpusMealPlanResponse:
