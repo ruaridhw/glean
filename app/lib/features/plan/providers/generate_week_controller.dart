@@ -392,6 +392,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     );
 
     final api = ref.read(apiClientProvider);
+    if (_cancelledSwapMayRun) {
+      // The cancelled swap may have written lines since the last poll. Start this swap's cursor past them, so the
+      // card shows only its own: if the old swap is still running, the server refuses this one anyway.
+      try {
+        final MealPlanSessionUpdate latest = await api.getMealPlanSession(
+          sessionId,
+          after: state.cursor,
+        );
+        if (!_findsAnother(attempt, find)) return;
+        state = state._copy(cursor: latest.nextCursor);
+      } on ApiException catch (_) {
+        // A missed read only risks showing an old line; the swap itself can still go ahead.
+      }
+    }
     final MealPlanMessageAccepted accepted;
     try {
       accepted = await api.sendMealPlanSessionMessage(
