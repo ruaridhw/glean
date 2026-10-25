@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import boto3
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +11,11 @@ from glean.config import Settings, get_settings
 from glean.dependencies import verify_cognito_token
 from glean.main import app
 from glean.rate_limit import limiter
+from glean.screening import clear_screen_cache
 from tests.infra.cfn import recipes_table_properties
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 RECIPES_TABLE_NAME = "glean-recipes-test"
 _REGION = "eu-west-2"
@@ -49,6 +55,14 @@ def auth_headers() -> dict[str, str]:
 @pytest.fixture(autouse=True)
 def _fresh_rate_limit_window() -> None:
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _cold_screen_cache() -> Iterator[None]:
+    """The screen's cache lives on the module, so a test must never inherit another test's answers."""
+    clear_screen_cache()
+    yield
+    clear_screen_cache()
 
 
 @pytest.fixture
