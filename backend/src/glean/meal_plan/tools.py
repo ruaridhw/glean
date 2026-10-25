@@ -142,16 +142,20 @@ class ScorerWeights:
     rating_down: float = -8.0
     # "Ratings": thumbs up, +1 once past six weeks.
     rating_up_after_six_weeks: float = 1.0
-    # "Same main_protein twice": -3 per extra occurrence.
-    repeat_main_protein: float = -3.0
+    # "Same main_protein twice": the table's first guess was -3 per extra occurrence. The owner set -5 on
+    # 2026-10-25 after the V6 eval's weight sweep: -5 passes every pool-passable protein gate (16/16, against
+    # 15/16 at -3). On its own it costs one carb gate, which the whole-food change below recovers.
+    repeat_main_protein: float = -5.0
     # "Same main_carb twice": -2 per extra.
     repeat_main_carb: float = -2.0
     # "Same dish_type twice": -2 per extra.
     repeat_dish_type: float = -2.0
     # "Same cuisine twice": -1 per extra.
     repeat_cuisine: float = -1.0
-    # "Whole food": +1 `whole`, 0 `mixed`, 0 `processed`.
-    whole_food: float = 1.0
+    # "Whole food": the table's first guess was +1 for `whole`, 0 for `mixed` and 0 for `processed`. The owner
+    # set +0.5 on 2026-10-25 because +1 outvoted variety: at -5 protein, +1 holds 19/22 carb gates where +0.5
+    # holds 20/22, and the protein gates stay 16/16 either way.
+    whole_food: float = 0.5
     # "Whole food": the "healthier" chip doubles it. If V9 also maps a predicate to that chip, both apply, so
     # its predicate mapping is the place to keep it from counting twice.
     healthier_multiplier: float = 2.0

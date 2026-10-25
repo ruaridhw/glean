@@ -107,11 +107,11 @@ def test_the_weights_are_the_scorer_table_defaults() -> None:
     assert weights.recency_weeks_10_to_12 == -1.0
     assert weights.rating_down == -8.0
     assert weights.rating_up_after_six_weeks == 1.0
-    assert weights.repeat_main_protein == -3.0
+    assert weights.repeat_main_protein == -5.0
     assert weights.repeat_main_carb == -2.0
     assert weights.repeat_dish_type == -2.0
     assert weights.repeat_cuisine == -1.0
-    assert weights.whole_food == 1.0
+    assert weights.whole_food == 0.5
     assert weights.healthier_multiplier == 2.0
     assert weights.lighter == -1.0
     assert weights.protein_target_miss == -4.0
@@ -177,14 +177,14 @@ def test_a_chip_with_no_predicate_yet_earns_nothing() -> None:
     assert score(["a"], ctx).points(Term.FEEDBACK_CHIP) == 0.0
 
 
-def test_whole_food_earns_one_only_when_the_recipe_is_whole() -> None:
+def test_whole_food_earns_its_half_point_only_when_the_recipe_is_whole() -> None:
     ctx = context(
         candidate("whole", whole_food=WholeFood.WHOLE),
         candidate("mixed", whole_food=WholeFood.MIXED),
         candidate("processed", whole_food=WholeFood.PROCESSED),
         candidate("unknown"),
     )
-    assert score(["whole"], ctx).points(Term.WHOLE_FOOD) == 1.0
+    assert score(["whole"], ctx).points(Term.WHOLE_FOOD) == 0.5
     assert score(["mixed"], ctx).points(Term.WHOLE_FOOD) == 0.0
     assert score(["processed"], ctx).points(Term.WHOLE_FOOD) == 0.0
     assert score(["unknown"], ctx).points(Term.WHOLE_FOOD) == 0.0
@@ -192,8 +192,8 @@ def test_whole_food_earns_one_only_when_the_recipe_is_whole() -> None:
 
 def test_the_healthier_chip_doubles_whole_food() -> None:
     ctx = context(candidate("a", whole_food=WholeFood.WHOLE), chips=frozenset({"healthier"}))
-    assert score(["a"], ctx).points(Term.WHOLE_FOOD) == 2.0
-    assert score(["a"], context(candidate("a", whole_food=WholeFood.WHOLE))).points(Term.WHOLE_FOOD) == 1.0
+    assert score(["a"], ctx).points(Term.WHOLE_FOOD) == 1.0
+    assert score(["a"], context(candidate("a", whole_food=WholeFood.WHOLE))).points(Term.WHOLE_FOOD) == 0.5
 
 
 # --- recency and ratings ----------------------------------------------------------------------------------
@@ -251,14 +251,14 @@ def test_an_unrated_recipe_earns_nothing_from_ratings() -> None:
 # --- plan penalties: repeats ------------------------------------------------------------------------------
 
 
-def test_repeated_main_proteins_cost_three_for_every_extra() -> None:
+def test_repeated_main_proteins_cost_five_for_every_extra() -> None:
     ctx = context(
         candidate("one", main_protein=MainProtein.CHICKEN),
         candidate("two", main_protein=MainProtein.CHICKEN),
         candidate("three", main_protein=MainProtein.CHICKEN),
     )
     plan = score(["one", "two", "three"], ctx)
-    assert plan.points(Term.REPEAT_MAIN_PROTEIN) == -6.0
+    assert plan.points(Term.REPEAT_MAIN_PROTEIN) == -10.0
     (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.REPEAT_MAIN_PROTEIN]
     assert penalty.recipe_ids == ("two", "three")
     assert penalty.detail == "chicken"
@@ -395,7 +395,7 @@ def test_a_plans_total_is_its_recipe_terms_plus_its_penalties() -> None:
     plan = score(["a", "b"], ctx)
     assert sum(recipe.total for recipe in plan.recipes) == 1.5
     assert plan.total == sum(recipe.total for recipe in plan.recipes) + sum(p.points for p in plan.penalties)
-    assert plan.total == -1.5
+    assert plan.total == -3.5
     assert plan.recipe_ids == ("a", "b")
 
 
