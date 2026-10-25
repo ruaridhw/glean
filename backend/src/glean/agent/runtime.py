@@ -14,6 +14,14 @@ order -- a pending answer or skip (V11), then a pending swap, then a finished gr
   takes over a crashed swap resumes it from the checkpoint, or publishes the outcome a finished checkpoint
   holds.
 
+- **Asking (V11).** A run that stops on the agent's question is parked: `waiting_for_user`, holding the
+  question, with no owner and no lease, so the household's thinking time is nobody's budget and no
+  worker waits on it. `resume` stores the answer (or the skip) with one conditional write that queues the
+  session; the delivery's claim reads it from the item, and the run continues from the interrupt with
+  `Command(resume=reply)` and the working seconds it had already spent. A crash after that resumes the same
+  way, because the reply stays on the item; a crash before the question was written finds the interrupt in
+  the checkpoint and parks it again without asking the model. A delivery that finds the session parked is
+  acknowledged.
 - **Claiming.** The store hands out an owner token and a lease in the same conditional write that
   moves the session to `running`, or that takes over a run whose lease has lapsed. The lease is anchored
   to this invocation's own deadline, so it can never outlive its worker. A delivery for a finished
@@ -26,8 +34,9 @@ order -- a pending answer or skip (V11), then a pending swap, then a finished gr
   again — a crash between the last node and the session write must not buy a second model call. With
   no usable checkpoint it starts fresh. A resumed run whose session was cancelled in the meantime finds
   it terminal at the claim and stops before doing any work.
-- **Ending.** Every run leaves `done` or `failed`: a typed refusal, a model failure, a spent budget or a
-  bug each write a code. A run that lost its lease writes nothing, because another attempt owns it now.
+- **Ending.** Every run leaves `done`, `failed` or parked on its question: a typed refusal, a model
+  failure, a spent budget or a bug each write a code. A run that lost its lease writes nothing, because
+  another attempt owns it now.
 - **Cancelling.** `cancel` writes `cancelled` and nothing else (spec §6.3). Cancel is a terminal status,
   so every owner-conditioned write refuses it: the guard's progress write is refused, which is how the
   run notices at its next step and stops (`SessionCancelled`, one read to tell a cancel from a lost
@@ -42,17 +51,21 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from aws_lambda_powertools.metrics import MetricUnit
+from langgraph.types import Command  # noqa: TID251 - this module owns LangGraph
 from pydantic import ValidationError
 
 from glean.agent.control import LostOwnership, RunGuard
 from glean.agent.errors import AgentError, SessionCancelled
-from glean.agent.graph import MAX_TOOL_CALLS, build_graph, result_of, session_metrics_of, swap_outcome_of
+from glean.agent.graph import MAX_TOOL_CALLS, build_graph, outcome_of, session_metrics_of, swap_outcome_of
 from glean.meal_plan.feedback import screen_feedback, without_note
 from glean.meal_plan.schemas import MealPlanResult
 from glean.observability import logger, metrics
 from glean.sessions.models import (
     AgentSession,
+    AnswerMessage,
     ClaimResult,
+    HouseholdReply,
+    PendingQuestion,
     SessionError,
     SessionErrorCode,
     SessionStatus,
@@ -72,12 +85,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from glean.agent.deps import AgentDeps
-    from glean.sessions.models import HouseholdMessage, SessionRecord, SwapRecord
+    from glean.sessions.models import HouseholdMessage, SessionRecord, SkipMessage, SwapRecord
     from glean.sessions.store import SessionStore
 
 # CloudWatch metric names, all in the `Glean` namespace:
 #   SessionsStarted, SessionsCompleted, SessionsFailed, SessionsDegraded, SessionsCancelled  Count
 #   SessionWallTime                                                                         Milliseconds
+#   SessionsAsked (a run parked on the household's question, V11)                           Count
 #   SessionToolCalls, SessionInvalidActions (per completed session)                         Count
 #   SessionDrift (chosen week's shortfall from the scorer's best, spec §6.6)                Percent
 # A degraded week is a fallback the household never sees (spec §6.5), so the count is how a regression
@@ -87,6 +101,7 @@ COMPLETED = "SessionsCompleted"
 FAILED = "SessionsFailed"
 DEGRADED = "SessionsDegraded"
 CANCELLED = "SessionsCancelled"
+ASKED = "SessionsAsked"
 WALL_TIME = "SessionWallTime"
 TOOL_CALLS = "SessionToolCalls"
 INVALID_ACTIONS = "SessionInvalidActions"
@@ -142,9 +157,11 @@ def resume(
                 user_sub, session_id, message, note_rejection=note_rejection
             ).swap_id
         case _:
-            # V11 stores an answer or a skip as the pending answer of a run parked on its question, here. No run
-            # parks before then, so there is never one to resume.
-            raise MessageRefusedError(MessageRefusal.NO_QUESTION)
+            # An answer or a skip: one conditional write that holds the reply and queues the parked run. A
+            # duplicate, late or post-cancel answer finds the session no longer waiting and changes nothing.
+            swap_id = None
+            if not sessions.answer(user_sub, session_id, _reply_of(message, note_rejection=note_rejection)):
+                raise MessageRefusedError(MessageRefusal.NO_QUESTION)
     record = sessions.get(user_sub, session_id)
     if record is None:
         raise UnknownSessionError(session_id)
@@ -158,6 +175,21 @@ def resume(
         raise MessageNotSent(session_id) from error
     logger.info("session resumed with a household message", extra={"session_id": session_id, "type": message.type})
     return swap_id
+
+
+def _reply_of(message: AnswerMessage | SkipMessage, *, note_rejection: str | None) -> HouseholdReply:
+    """The answer as the item keeps it and the graph reads it: the option and only the screened note.
+
+    An answer left with nothing once the screen dropped its note is planned as a skip.
+    """
+    if not isinstance(message, AnswerMessage):
+        return HouseholdReply(skipped=True)
+    return HouseholdReply(
+        skipped=message.option is None and message.note is None,
+        option=message.option,
+        note=message.note,
+        note_dropped=note_rejection is not None,
+    )
 
 
 def start(session: AgentSession, deps: AgentDeps) -> bool:
@@ -201,6 +233,12 @@ def _claim(session: AgentSession, deps: AgentDeps, *, owner: str) -> tuple[Sessi
     if outcome is ClaimResult.FINISHED:
         logger.info("session has already finished; dropping this delivery", extra={"session_id": session.session_id})
         return None
+    if outcome is ClaimResult.WAITING:
+        # Parked on the household's question: the answer brings its own message, so this one has nothing to do.
+        logger.info(
+            "session is waiting for the household; dropping this delivery", extra={"session_id": session.session_id}
+        )
+        return None
     # The claim is the authority: one read of what it won, so the message and the proposal are the item's own.
     record = deps.sessions.get(session.user_sub, session.session_id)
     if record is None:
@@ -215,7 +253,7 @@ def _plan(session: AgentSession, record: SessionRecord, deps: AgentDeps, *, owne
     guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic, resumed=resumed)
     try:
         state = _run(session, record, deps, guard=guard, resume=resumed)
-        result = result_of(state)
+        ended = outcome_of(state)
     except SessionCancelled:
         _cancelled(deps, session, "the run stopped at its next step")
     except LostOwnership:
@@ -232,23 +270,14 @@ def _plan(session: AgentSession, record: SessionRecord, deps: AgentDeps, *, owne
         logger.exception("meal plan session failed unexpectedly", extra={"session_id": session.session_id})
         _failed(deps, session, SessionError(code=SessionErrorCode.WORKER_FAILED), owner=owner)
     else:
-        try:
-            _completed(
-                deps,
-                session,
-                result,
-                owner=owner,
-                session_metrics=session_metrics_of(state),
-                wall_ms=int((time.monotonic() - started) * 1000),
-            )
-        except SessionTooLargeError:
-            # The plan is real but the item cannot hold it, and there is nowhere else to put it: fail the
-            # session with a code the app can act on instead of raising into SQS.
-            logger.error(
-                "the plan would not fit the session item; failing the session",
-                extra={"session_id": session.session_id},
-            )
-            _failed(deps, session, SessionError(code=SessionErrorCode.MODEL_ERROR), owner=owner)
+        _publish(
+            deps,
+            session,
+            ended,
+            owner=owner,
+            session_metrics=session_metrics_of(state),
+            wall_ms=int((time.monotonic() - started) * 1000),
+        )
     finally:
         # Every attempt that started reports its wall time, so provider and worker failures are in the
         # latency distribution too, not only the runs that worked.
@@ -354,9 +383,12 @@ def _run(
         "configurable": {"thread_id": session.session_id},
         # One LangSmith trace per session: the metadata lands on the graph's run and its children (the model
         # calls included). The per-session counts are `finalise`'s output, `session_metrics`, in the same trace.
-        "metadata": {"session_id": session.session_id, "agent_graph": "v10", "max_tool_calls": MAX_TOOL_CALLS},
+        "metadata": {"session_id": session.session_id, "agent_graph": "v11", "max_tool_calls": MAX_TOOL_CALLS},
     }
     snapshot = graph.get_state(config)  # ty: ignore[invalid-argument-type]
+    # The 90 s are working time: a run that asked its question already spent some, and the household's
+    # thinking time since then is on no clock at all.
+    guard.carry(float(snapshot.values.get("working_seconds") or 0.0))
     # What the item holds, then what the previous attempt left behind, decides how this one starts:
     #   1. a pending answer or skip -> resume the run parked on its question (V11, `Command(resume=...)`);
     #   2. a pending swap -> continue it, republish it, or run it from its input (`_swap_state`);
@@ -364,6 +396,13 @@ def _run(
     #      session write was lost (a crash there must not buy a second model call);
     #   4. otherwise as before: pending nodes -> continue them (no new input), so completed steps are not paid
     #      for twice; nothing usable -> start fresh.
+    if snapshot.interrupts:
+        if record.reply is None:
+            # The attempt that asked died before the session said so: park it again, without the model.
+            logger.info("parking the session's question again", extra={"session_id": session.session_id})
+            return graph.invoke(None, config=config)  # ty: ignore[invalid-argument-type]
+        logger.info("resuming a session with the household's answer", extra={"session_id": session.session_id})
+        return graph.invoke(Command(resume=record.reply.model_dump(mode="json")), config=config)  # ty: ignore[invalid-argument-type]
     swap = record.pending_swap
     if swap is not None:
         config["metadata"]["swap_id"] = swap.swap_id
@@ -385,6 +424,39 @@ def _run(
         },
         config=config,  # ty: ignore[invalid-argument-type]
     )
+
+
+def _publish(
+    deps: AgentDeps,
+    session: AgentSession,
+    ended: MealPlanResult | PendingQuestion,
+    *,
+    owner: str,
+    session_metrics: Mapping[str, Any],
+    wall_ms: int,
+) -> None:
+    """Write what the run ended with: park the session on its question, or complete it with its plan."""
+    if isinstance(ended, PendingQuestion):
+        _parked(deps, session, ended, owner=owner)
+        return
+    try:
+        _completed(deps, session, ended, owner=owner, session_metrics=session_metrics, wall_ms=wall_ms)
+    except SessionTooLargeError:
+        # The plan is real but the item cannot hold it, and there is nowhere else to put it: fail the
+        # session with a code the app can act on instead of raising into SQS.
+        logger.error(
+            "the plan would not fit the session item; failing the session", extra={"session_id": session.session_id}
+        )
+        _failed(deps, session, SessionError(code=SessionErrorCode.MODEL_ERROR), owner=owner)
+
+
+def _parked(deps: AgentDeps, session: AgentSession, question: PendingQuestion, *, owner: str) -> None:
+    """Show the household the question and let go of the session until it answers."""
+    if not deps.sessions.park(session.user_sub, session.session_id, question, owner=owner):
+        _refused_write(deps, session, what="question")
+        return
+    metrics.add_metric(name=ASKED, unit=MetricUnit.Count, value=1)
+    logger.info("meal plan session is waiting for the household", extra={"session_id": session.session_id})
 
 
 def _swap_state(

@@ -6,11 +6,12 @@ the choice of tool, its arguments and the final proposal are all validated data 
 typed: a filter's fields and operators are the tools' own allowlist enums, so a field outside it is a
 validation error, never a query.
 
-**Extension point (V11).** `ask_household` -- a question and its options -- joins the union as a third
-member, `AskHousehold(kind="ask_household", question=..., options=[...])`. The graph routes it to `act`, which
-calls LangGraph's `interrupt()` and parks the run as `waiting_for_user` until `resume(session_id, message)`
-arrives. It is deliberately not here yet: no route resumes a session, and an action the graph cannot carry
-out must not be one the model can choose.
+**Asking the household (V11).** `ask_household` -- a question, its options and why -- is the third member. The
+graph routes it to `act`, which calls LangGraph's `interrupt()` and parks the run as `waiting_for_user` until
+the household's answer, or its skip, arrives as `Command(resume=...)`. At most one per session: a second is
+refused like an answer that does not parse, so the agent plans with what it has. Its fields carry no schema
+bounds, because structured output is not trusted to keep them; the graph clips the question before it is
+parked (`sessions.models.MAX_QUESTION_CHARS` and its neighbours).
 """
 
 from collections.abc import Callable
@@ -176,7 +177,18 @@ class Propose(BaseModel):
     proposal: CorpusMealPlanResponse
 
 
-type NextAction = Annotated[CallTool | Propose, Field(discriminator="kind")]
+class AskHousehold(BaseModel):
+    """Ask the household one question, when a real gap would otherwise be a guess. At most once per session."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["ask_household"]
+    question: str = Field(description="One short question the household can answer at a glance")
+    options: list[str] = Field(description="Two to four short answers to tap, such as 'Yes, one', 'Two', 'No'")
+    why: str = Field(description="The gap you hit, in one sentence; the household may see it")
+
+
+type NextAction = Annotated[CallTool | AskHousehold | Propose, Field(discriminator="kind")]
 
 
 class PlanStep(BaseModel):

@@ -6,6 +6,11 @@ Two promises sit here, both from spec §6.2:
   (`BudgetSpent`), and hands the remaining time to the one blocking call (the model), so a run ends inside
   the worker's two-minute timeout with a typed outcome rather than being killed mid-flight. The graph turns
   a spent budget into the scorer's degraded week once one exists, so only `prepare` can fail on it.
+- **Working time, not thinking time (V11).** The 90 s are the session's working time. A run parked on the
+  household's question holds no attempt at all, so the household's thinking time is never on any clock;
+  the time spent *before* the question rides the graph state (`working_seconds`), and the attempt that
+  resumes it starts its budget that much spent (`RunBudget.carry`). A household that never answers spends
+  nothing: the session stays parked until its TTL expires the item and the checkpoint.
 - **The lease, and the household's cancel.** The lease is taken once, at claim, and never extended
   (`sessions.store.LEASE_SECONDS`): it is shorter than the queue's visibility timeout, so any
   redelivered copy of a message finds a lapsed lease and takes over, while a duplicate copy delivered
@@ -56,7 +61,16 @@ class RunBudget:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._clock = clock
+        self._seconds = seconds
         self._deadline = clock() + seconds
+
+    def carry(self, seconds: float) -> None:
+        """Count *seconds* an earlier attempt of this session already worked, before its question parked it."""
+        self._deadline -= seconds
+
+    def spent(self) -> float:
+        """Working seconds so far: this attempt's, plus any carried from before the question."""
+        return self._seconds - (self._deadline - self._clock())
 
     def remaining(self) -> float:
         return max(0.0, self._deadline - self._clock())
@@ -155,3 +169,11 @@ class RunGuard:
     def remaining_ms(self) -> int:
         """How much of the budget the model call may use."""
         return self._budget.remaining_ms()
+
+    def carry(self, seconds: float) -> None:
+        """Resume a parked session's budget where its question left it."""
+        self._budget.carry(seconds)
+
+    def spent(self) -> float:
+        """The session's working seconds so far, recorded in the state when it asks its question."""
+        return self._budget.spent()
