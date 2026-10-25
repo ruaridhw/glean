@@ -131,6 +131,45 @@ void main() {
     },
   );
 
+  gleanWidgetTest(
+    'a selected chip is dark, checked and announced as selected',
+    (tester) async {
+      await open(tester);
+      await toggleBox(tester);
+
+      await tester.tap(chip(FeedbackChip.lighter));
+      await tester.pumpAndSettle();
+
+      final ColorScheme scheme = Theme.of(
+        tester.element(chip(FeedbackChip.lighter)),
+      ).colorScheme;
+      final FilterChip on = tester.widget<FilterChip>(
+        chip(FeedbackChip.lighter),
+      );
+      expect(on.selected, isTrue);
+      expect(on.selectedColor, scheme.inverseSurface);
+      expect(on.showCheckmark, isTrue);
+      expect(
+        tester.getSemantics(chip(FeedbackChip.lighter)),
+        matchesSemantics(
+          isSelected: true,
+          hasSelectedState: true,
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          isFocusable: true,
+          hasTapAction: true,
+          hasFocusAction: true,
+          label: 'Lighter',
+        ),
+      );
+      expect(
+        tester.widget<FilterChip>(chip(FeedbackChip.guests)).selected,
+        isFalse,
+      );
+    },
+  );
+
   gleanWidgetTest('tapping a chip again clears it', (tester) async {
     await open(tester);
     await toggleBox(tester);
