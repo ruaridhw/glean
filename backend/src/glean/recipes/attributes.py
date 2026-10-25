@@ -303,17 +303,19 @@ class RecipeAttributes(BaseModel):
     def fits_time_cap(self, cap_mins: int | None, *, total_time_mins: int | None) -> bool:
         """Whether the household's time cap admits this recipe.
 
-        The cap is compared against the bucket's upper bound (spec 6.1). With no bucket — not enriched yet,
-        or below its bar — it falls back to total time, as the filter did before V5. An unknown total time
-        passes, as it did before: a missing field is not evidence the recipe is slow.
+        The cap is compared against the bucket's upper bound (spec 6.1). `OVER_60` means at least an hour of
+        hands-on work, so a cap under 60 rejects it however short its total time is; a cap of an hour or more
+        can't be decided by the bucket alone, so it falls through to total time. With no bucket — not enriched
+        yet, or below its bar — total time decides, as it did before V5. An unknown total time passes, as it
+        did before: a missing field is not evidence the recipe is slow.
         """
         if cap_mins is None:
             return True
+        if self.active_time is ActiveTimeBucket.OVER_60 and cap_mins < 60:
+            return False
         bound = self.active_time_upper_bound_mins
         if bound is not None:
             return bound <= cap_mins
-        if self.active_time is ActiveTimeBucket.OVER_60:
-            return False  # at least an hour of hands-on time cannot fit any cap we would be asked for
         return total_time_mins is None or total_time_mins <= cap_mins
 
 

@@ -274,8 +274,10 @@ def test_each_attribute_names_the_question_its_answer_is_stored_under() -> None:
         ({"active_time": "15-30"}, 40, 30, True),
         ({"active_time": "15-30"}, 40, 29, False),
         ({"active_time": "<=15"}, 60, 15, True),
-        # 60+ has no upper bound, so no finite cap certifies it.
-        ({"active_time": "60+"}, 60, 60, False),
+        # 60+ has no upper bound; a cap under an hour rejects it outright, above that the total time decides.
+        ({"active_time": "60+"}, 70, 120, True),
+        ({"active_time": "60+"}, 200, 45, False),
+        ({"active_time": "60+"}, None, 120, True),  # nothing known but "at least an hour", and the cap is above it
         # No bucket yet: fall back to total time, as the filter did before V5.
         ({}, 40, 45, True),
         ({}, 40, 35, False),

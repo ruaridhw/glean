@@ -999,21 +999,28 @@ def test_the_time_cap_compares_against_the_buckets_upper_bound(tmp_path) -> None
     assert offered(29) == []
 
 
-def test_a_bucket_with_no_upper_bound_never_fits_a_cap(tmp_path) -> None:
-    corpus = _corpus(tmp_path, [("rec_project", "Weekend Project", ["beef", "pastry"], 200)])
+def test_a_sixty_plus_bucket_rejects_a_cap_under_an_hour_and_lets_total_time_decide_above_it(tmp_path) -> None:
+    """`60+` says at least an hour of hands-on work, so a 45-minute cap is out; a longer cap's bound is the total."""
+    corpus = _corpus(tmp_path, [("rec_project", "Weekend Project", ["beef", "pastry"], 90)])
     _enrich(corpus, "rec_project", "60+")
 
-    candidates = sample_corpus_candidates(
-        corpus,
-        pantry=_pantry(),
-        dietary_flags=[],
-        max_total_time_mins=180,
-        exclude_external_ids=[],
-        rng=random.Random(0),
-        sample_size=10,
-    )
+    def offered(cap: int) -> list[str]:
+        return [
+            candidate.external_id
+            for candidate in sample_corpus_candidates(
+                corpus,
+                pantry=_pantry(),
+                dietary_flags=[],
+                max_total_time_mins=cap,
+                exclude_external_ids=[],
+                rng=random.Random(0),
+                sample_size=10,
+            )
+        ]
 
-    assert candidates == []
+    assert offered(45) == []
+    assert offered(120) == ["rec_project"]  # its total time is 90, and 90 fits inside 120
+    assert offered(80) == []  # the total time still has to fit
 
 
 def test_a_recipe_with_no_active_time_answer_still_falls_back_to_total_time(tmp_path) -> None:
