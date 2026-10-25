@@ -241,6 +241,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// must not touch the state it no longer owns.
   int _attempt = 0;
 
+  /// Bumped by every "Find another" and by cancelling one, so a swap's poll that returns after it was cancelled
+  /// or replaced changes nothing.
+  int _finds = 0;
+
   @override
   GenerateProposalState build() => const GenerateProposalState();
 
@@ -356,6 +360,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     final String trimmed = note?.trim() ?? '';
     final String? sent = trimmed.isEmpty ? null : trimmed;
     final int attempt = _attempt;
+    final int find = ++_finds;
     state = before._copy(
       findingAnother: FindAnotherState(index: index, note: sent),
       cardNotices: Map<int, String>.of(before.cardNotices)..remove(index),
@@ -371,6 +376,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     } on ApiException catch (error) {
       _endFind(
         attempt,
+        find,
         index,
         notice: error is ApiRateLimitException
             ? GenerateFailure.fromApi(error).message
@@ -384,9 +390,9 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     );
     final DateTime startedAt = poller.now();
     var cursor = state.cursor;
-    while (_findsAnother(attempt, index)) {
+    while (_findsAnother(attempt, find)) {
       if (poller.now().difference(startedAt) >= poller.cap) {
-        _endFind(attempt, index, notice: swapFailedCopy);
+        _endFind(attempt, find, index, notice: swapFailedCopy);
         return;
       }
       try {
@@ -394,7 +400,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
           sessionId,
           after: cursor,
         );
-        if (!_findsAnother(attempt, index)) return;
+        if (!_findsAnother(attempt, find)) return;
         cursor = update.nextCursor;
         state = state._copy(
           cursor: cursor,
@@ -404,18 +410,18 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         if (swap != null &&
             swap.swapId == accepted.swapId &&
             swap.state != MealPlanSwapState.pending) {
-          _land(attempt, index, swap, noteDropped: accepted.noteDropped);
+          _land(attempt, find, index, swap, noteDropped: accepted.noteDropped);
           return;
         }
         if (update.status == MealPlanSessionStatus.failed) {
-          _endFind(attempt, index, notice: swapFailedCopy);
+          _endFind(attempt, find, index, notice: swapFailedCopy);
           return;
         }
         if (update.status == MealPlanSessionStatus.cancelled) return;
       } on ApiException catch (error) {
         // As for the run: a 404 cannot recover, anything else is one missed poll and the cap ends it.
         if (error is ApiServerException && error.statusCode == 404) {
-          _endFind(attempt, index, notice: swapFailedCopy);
+          _endFind(attempt, find, index, notice: swapFailedCopy);
           return;
         }
       }
@@ -441,13 +447,22 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     );
   }
 
-  bool _findsAnother(int attempt, int index) =>
-      attempt == _attempt &&
-      state.phase == GenerateProposalPhase.proposal &&
-      state.findingAnother?.index == index;
+  /// Stops watching the swap in flight and puts its card back as it was. The server may still finish that swap;
+  /// its result is ignored, and the next swap sends the week on screen, so nothing it wrote can reach this review.
+  void cancelFindAnother() {
+    if (state.findingAnother == null) return;
+    _finds++;
+    state = state._copy(clearFindingAnother: true);
+  }
 
-  void _endFind(int attempt, int index, {String? notice}) {
-    if (!_findsAnother(attempt, index)) return;
+  bool _findsAnother(int attempt, int find) =>
+      attempt == _attempt &&
+      find == _finds &&
+      state.phase == GenerateProposalPhase.proposal &&
+      state.findingAnother != null;
+
+  void _endFind(int attempt, int find, int index, {String? notice}) {
+    if (!_findsAnother(attempt, find)) return;
     state = state._copy(
       clearFindingAnother: true,
       cardNotices: <int, String>{...state.cardNotices, index: ?notice},
@@ -458,6 +473,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// card. The rest of the review, and any local swap on another card, stays as the household left it.
   void _land(
     int attempt,
+    int find,
     int index,
     MealPlanSessionSwap swap, {
     bool noteDropped = false,
@@ -465,13 +481,13 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     final MealPlanResponse? result = state.result;
     final MealPlanRecipe? replacement = swap.replacement;
     if (swap.state == MealPlanSwapState.noReplacement) {
-      _endFind(attempt, index, notice: swapNothingElseCopy);
+      _endFind(attempt, find, index, notice: swapNothingElseCopy);
       return;
     }
     if (swap.state != MealPlanSwapState.done ||
         replacement == null ||
         result == null) {
-      _endFind(attempt, index, notice: swapFailedCopy);
+      _endFind(attempt, find, index, notice: swapFailedCopy);
       return;
     }
     state = state._copy(
@@ -484,6 +500,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     );
     _endFind(
       attempt,
+      find,
       index,
       notice: noteDropped || swap.note == MealPlanSwapNote.dropped
           ? swapNoteDroppedCopy
@@ -514,7 +531,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     final GenerateProposalState attempt = state;
     final MealPlanResponse? result = attempt.result;
     final DateTime? weekStart = attempt.weekStart;
-    if (result == null || weekStart == null || attempt.saving) {
+    // A swap in flight would change the week after it was saved: Add waits for it (or for its Cancel).
+    if (result == null ||
+        weekStart == null ||
+        attempt.saving ||
+        attempt.findingAnother != null) {
       return const GenerateSaveIgnored();
     }
     // A save that Back discards while it is still resolving must never reach the transaction.

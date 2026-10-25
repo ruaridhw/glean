@@ -303,6 +303,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
             notice: state.cardNotices[index],
             replaced: state.isReplaced(index),
             onUndoReplacement: () => _controller.undoReplacement(index),
+            onCancelFindAnother: _controller.cancelFindAnother,
             onFindAnother: (String? note) {
               setState(() => _openSwaps.remove(index));
               unawaited(_controller.findAnother(index, note: note));
@@ -339,14 +340,25 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
         ];
       case GenerateProposalPhase.proposal when state.hasProposal:
         final int count = state.result!.suggestions.length;
+        // A swap still running would change the week after it was saved, so Add waits for it (or its Cancel).
+        final bool swapping = state.findingAnother != null;
         actions = <Widget>[
+          if (swapping)
+            Text(
+              'Finishing your swap…',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           OutlinedButton(
             onPressed: state.saving ? null : () => unawaited(_close()),
             child: const Text('Discard'),
           ),
           SizedBox(width: tokens.spacing.sm),
           FilledButton(
-            onPressed: state.saving ? null : () => unawaited(_addToPlan()),
+            onPressed: state.saving || swapping
+                ? null
+                : () => unawaited(_addToPlan()),
             child: Text(
               count == 0
                   ? 'Save changes'
