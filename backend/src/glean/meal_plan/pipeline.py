@@ -106,6 +106,11 @@ _TEMPLATE_ALTERNATIVE_REASON = "Another option from this week's shortlist."
 NO_MEALS_WEEK_SUMMARY = "No dinners for this week."
 
 _MAX_CANDIDATE_INGREDIENTS = 12
+# Recipe text is third-party, so what of it reaches a prompt or a checkpoint is clipped: a title in the model's
+# message, an ingredient name, and a title kept on the prepared plan (a card shows at most this much of one).
+_PROMPT_TITLE_CHARS = 120
+_PROMPT_NAME_CHARS = 60
+_STORED_TITLE_CHARS = 200
 # The scorer's tie-break seed is drawn from the request's rng: wide enough that two Generates rarely agree.
 _SCORER_SEED_RANGE = 2**31
 # How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
@@ -294,10 +299,13 @@ def prepare(
         "candidates": [
             {
                 "external_id": candidate.external_id,
-                "title": candidate.title,
-                "cuisine": candidate.summary.cuisine,
+                "title": _clip(candidate.title, _PROMPT_TITLE_CHARS),
+                "cuisine": candidate.summary.cuisine and _clip(candidate.summary.cuisine, _PROMPT_NAME_CHARS),
                 "total_time_mins": candidate.summary.total_time_mins,
-                "ingredients": candidate.summary.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS],
+                "ingredients": [
+                    _clip(name, _PROMPT_NAME_CHARS)
+                    for name in candidate.summary.ingredient_names[:_MAX_CANDIDATE_INGREDIENTS]
+                ],
                 # Null for a recipe the household has not cooked recently; a number marks a fallback.
                 "cooked_days_ago": None if candidate.cooked_days_ago is None else round(candidate.cooked_days_ago),
                 "urgent_pantry_items": [
@@ -328,7 +336,7 @@ def prepare(
             ]
             for candidate in candidates
         },
-        titles={candidate.external_id: candidate.title for candidate in candidates},
+        titles={candidate.external_id: _clip(candidate.title, _STORED_TITLE_CHARS) for candidate in candidates},
         planned=planned,
         attributes={
             candidate.external_id: _proposal_attributes(
@@ -431,8 +439,8 @@ def widen(prepared: PreparedPlan, found: Sequence[tools.EligibleRecipe], *, corp
     them never weakens what `finalise` guarantees. Each gets the facts `prepare` measures for a candidate --
     attributes, stated calories (only when the lighter chip reads them), pantry fit on the offered set's own
     scale, cook age and thumb, the urgent items it uses (which the unused-urgent-item row reads) -- so a swap
-    the agent tests with `score_meal_plan` is scored like the
-    candidate it replaces. Recipes already offered, or already in the plan, are left as they are.
+    the agent tests with `score_meal_plan` is scored like the candidate it replaces. Recipes already offered,
+    or already in the plan, are left as they are.
     """
     known = set(prepared.offered_ids) | set(prepared.excluded_ids)
     new = [recipe for recipe in {entry.recipe_id: entry for entry in found}.values() if recipe.recipe_id not in known]
@@ -446,7 +454,10 @@ def widen(prepared: PreparedPlan, found: Sequence[tools.EligibleRecipe], *, corp
     return prepared.model_copy(
         update={
             "offered_ids": [*prepared.offered_ids, *(recipe.recipe_id for recipe in new)],
-            "titles": {**prepared.titles, **{recipe.recipe_id: recipe.title for recipe in new}},
+            "titles": {
+                **prepared.titles,
+                **{recipe.recipe_id: _clip(recipe.title, _STORED_TITLE_CHARS) for recipe in new},
+            },
             "urgent_uses": {
                 **prepared.urgent_uses,
                 **{
@@ -533,7 +544,8 @@ def _week_payload(weeks: Sequence[balance.CandidateWeek], *, titles: dict[str, s
         {
             "index": index,
             "meals": [
-                {"external_id": recipe_id, "title": titles.get(recipe_id, recipe_id)} for recipe_id in week.recipe_ids
+                {"external_id": recipe_id, "title": _clip(titles.get(recipe_id, recipe_id), _PROMPT_TITLE_CHARS)}
+                for recipe_id in week.recipe_ids
             ],
             "score": round(week.total, 2),
             "terms": {term: round(points, 2) for term, points in week.terms.items()},
@@ -713,6 +725,13 @@ def degraded(prepared: PreparedPlan) -> MealPlanResult:
     result = finalise(prepared, draft)
     logger.warning("meal plan fell back to the scorer's best week", extra={"count": len(result.suggestions)})
     return result.model_copy(update={"degraded": True})
+
+
+def _clip(text: str, chars: int) -> str:
+    """*text* cut to *chars* characters, marked when it was cut."""
+    if len(text) <= chars:
+        return text
+    return f"{text[: chars - 1]}…"
 
 
 def _week_summary(summary: str, *, count: int) -> str:
