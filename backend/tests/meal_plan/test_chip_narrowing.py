@@ -200,3 +200,30 @@ def test_narrowing_counts_only_recipes_the_time_cap_allows(tmp_path) -> None:
     offered = _offered(corpus, _request(["quick_weeknights"], max_active_time_mins=15))
 
     assert offered == {f"rec_ten_{i}" for i in range(6)}
+
+
+def test_same_as_last_week_wins_over_a_narrowing_chip(tmp_path) -> None:
+    # Last week's salad is not comfort food, but the household asked for last week again: it stays on offer.
+    recipes: dict[str, tuple[int, str | None]] = {f"rec_pie_{i}": (40, "pie_or_bake") for i in range(6)}
+    recipes |= {"rec_salad_last_week": (40, "salad_or_bowl"), "rec_salad_other": (40, "salad_or_bowl")}
+    corpus = _corpus(tmp_path, recipes)
+    cooked = [{"recipe_id": "rec_salad_last_week", "title": "Dinner rec_salad_last_week", "cooked_at": NOW.isoformat()}]
+
+    offered = _offered(corpus, _request(["comfort_food", "same_as_last_week"], cooked_history=cooked))
+
+    assert "rec_salad_last_week" in offered
+    assert "rec_salad_other" not in offered
+    assert {f"rec_pie_{i}" for i in range(6)} <= offered
+
+
+def test_last_weeks_dinners_do_not_count_towards_a_chip_they_do_not_match(tmp_path) -> None:
+    # Five pies and last week's salad for two slots: the salad stays, but comfort food has only five matches,
+    # fewer than three per slot, so it falls back to its score term and the other salad is offered too.
+    recipes: dict[str, tuple[int, str | None]] = {f"rec_pie_{i}": (40, "pie_or_bake") for i in range(5)}
+    recipes |= {"rec_salad_last_week": (40, "salad_or_bowl"), "rec_salad_other": (40, "salad_or_bowl")}
+    corpus = _corpus(tmp_path, recipes)
+    cooked = [{"recipe_id": "rec_salad_last_week", "title": "Dinner rec_salad_last_week", "cooked_at": NOW.isoformat()}]
+
+    offered = _offered(corpus, _request(["comfort_food", "same_as_last_week"], cooked_history=cooked))
+
+    assert {"rec_salad_last_week", "rec_salad_other"} <= offered
