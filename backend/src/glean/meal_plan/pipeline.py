@@ -17,6 +17,10 @@ queues or LangGraph: the steps take plain values, and the LLM call goes through 
   wrote -- plus `uses_up`, a `reason_kind`, and one alternative per card and per planned corpus meal.
 - **degraded** is the fallback the graph writes when the model's answer keeps nothing: the sampler's
   best candidates with template text, every field of the proposal filled, flagged `degraded`.
+
+The agent's tools (V7) meet the prepared plan here too: `tool_context` hands `meal_plan.tools` the corpus
+and the request's hard constraints, `widen` lets a recipe a tool found be planned, scored and shown, and
+`plan_drift` measures a chosen week against the scorer's best.
 """
 
 from __future__ import annotations
@@ -29,8 +33,14 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from glean.llm import Feature
-from glean.meal_plan import balance
-from glean.meal_plan.candidates import PantryItem, recipe_attributes, sample_corpus_candidates, urgent_pantry_uses
+from glean.meal_plan import balance, tools
+from glean.meal_plan.candidates import (
+    PantryItem,
+    dietary_excluded_ids,
+    recipe_attributes,
+    sample_corpus_candidates,
+    urgent_pantry_uses,
+)
 from glean.meal_plan.eligibility import CookedMeal, recipe_history
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
@@ -55,6 +65,7 @@ if TYPE_CHECKING:
 
     from glean.llm import LLMRouter
     from glean.recipes.corpus import RecipeCorpusStore
+    from glean.recipes.stored import StoredIngredient
 
 CORPUS_MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
 Choose dinners to cook this week from the candidate recipes provided.
@@ -193,6 +204,13 @@ class PreparedPlan(BaseModel):
             "charge this generation for leaving them out (spec 6.2, #122)."
         ),
     )
+    pantry_fit_scale: float | None = Field(
+        default=None,
+        description=(
+            "The factor that scaled the offered recipes' raw pantry fit to the scorer's +3, so a recipe the agent "
+            "finds later (`widen`) is scaled the same way. Null on a checkpoint written before V7."
+        ),
+    )
 
     @property
     def has_candidates(self) -> bool:
@@ -210,18 +228,8 @@ def prepare(
     request_now = now or datetime.now(UTC)
     # The phone measured `expires_in_days` from its own local date; without it, fall back to the server's.
     reference_date = request.local_date or request_now.date()
-    pantry = [
-        PantryItem(name=item.name, urgency_score=item.urgency_score, expires_in_days=item.expires_in_days)
-        for item in request.pantry
-    ]
-    # `cooked_history`'s ratings decide what may be offered (a thumbs-down recipe never is), and nothing
-    # else here reads them. Its notes go no further than this function's argument: the only path a note
-    # will take into a prompt is the screened human-feedback channel, which is not built yet. Until that
-    # screen exists the note is stored on the phone and validated on the wire, and that is all.
-    cooked = [
-        CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at, rating=meal.rating)
-        for meal in request.cooked_history
-    ]
+    pantry = _pantry_items(request)
+    cooked = _cooked_meals(request)
     candidates = sample_corpus_candidates(
         corpus,
         pantry=pantry,
@@ -332,7 +340,162 @@ def prepare(
         facts=facts,
         weeks=list(weeks),
         urgent_items_already_used=list(already_used),
+        pantry_fit_scale=balance.pantry_fit_scale(candidate.pantry_fit for candidate in candidates),
     )
+
+
+def _pantry_items(request: MealPlanRequest) -> list[PantryItem]:
+    return [
+        PantryItem(name=item.name, urgency_score=item.urgency_score, expires_in_days=item.expires_in_days)
+        for item in request.pantry
+    ]
+
+
+def _cooked_meals(request: MealPlanRequest) -> list[CookedMeal]:
+    """The history window as planning reads it: what was cooked, when, and its thumb.
+
+    `cooked_history`'s ratings decide what may be offered (a thumbs-down recipe never is), and nothing else
+    here reads them. Its notes go no further than this function's argument: the only path a note will take
+    into a prompt is the screened human-feedback channel, which is not built yet. Until that screen exists
+    the note is stored on the phone and validated on the wire, and that is all.
+    """
+    return [
+        CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at, rating=meal.rating)
+        for meal in request.cooked_history
+    ]
+
+
+def tool_context(
+    request: MealPlanRequest,
+    *,
+    corpus: RecipeCorpusStore,
+    now: datetime | None = None,
+    seed: int = 0,
+) -> tools.EligibilityContext:
+    """The corpus and this request's hard constraints, as the agent's corpus tools read them (V7).
+
+    The same reads `prepare` makes -- the summaries, the stored attribute answers, the dietary decisions -- so a
+    recipe the agent finds is held to exactly the constraints the offered candidates were. Text search is the
+    corpus's own full-text index, and a full read is one recipe blob. Notes never enter it (`_cooked_meals`).
+    """
+    summaries = corpus.search(per_page=_ALL_RECIPES)[0]
+    attributes = recipe_attributes(corpus, summaries)
+
+    def search(text: str) -> set[str]:
+        return {summary.external_id for summary in corpus.search(q=text, per_page=_ALL_RECIPES)[0]}
+
+    def load_full(recipe_id: str) -> tools.FullRecipe | None:
+        recipe = corpus.get(recipe_id)
+        if recipe is None:
+            return None
+        return (
+            tuple(_ingredient_line(ingredient) for ingredient in recipe.ingredients),
+            tuple(step.text for step in recipe.instructions),
+        )
+
+    return tools.EligibilityContext(
+        recipes=tuple(
+            tools.CorpusRecipe(
+                recipe_id=summary.external_id,
+                title=summary.title,
+                cuisine=summary.cuisine,
+                total_time_mins=summary.total_time_mins,
+                ingredient_names=tuple(summary.ingredient_names),
+                attributes=attributes.get(summary.external_id, RecipeAttributes()),
+            )
+            for summary in summaries
+        ),
+        slots=request.meals_per_week,
+        now=now or datetime.now(UTC),
+        dietary_excluded_ids=dietary_excluded_ids(corpus, summaries, request.dietary_flags),
+        planned_ids=frozenset(request.exclude_external_ids),
+        max_active_mins=request.max_active_time_mins,
+        cooked=tuple(_cooked_meals(request)),
+        pantry=tuple(_pantry_items(request)),
+        seed=seed,
+        text_search=search,
+        load_full=load_full,
+    )
+
+
+def _ingredient_line(ingredient: StoredIngredient) -> str:
+    amount = f"{ingredient.quantity:g} {ingredient.unit}".strip() if ingredient.quantity else ingredient.unit
+    line = f"{amount} {ingredient.canonical_name}".strip()
+    return f"{line}, {ingredient.preparation}" if ingredient.preparation else line
+
+
+def widen(prepared: PreparedPlan, found: Sequence[tools.EligibleRecipe], *, corpus: RecipeCorpusStore) -> PreparedPlan:
+    """Let the plan use recipes a tool found: `finalise` accepts them, and the scorer and the cards know them.
+
+    `get_eligible_recipes` already held every one of them to the hard constraints and the floor, so adding
+    them never weakens what `finalise` guarantees. Each gets the facts `prepare` measures for a candidate --
+    attributes, stated calories (only when the lighter chip reads them), pantry fit on the offered set's own
+    scale, cook age and thumb, the urgent items it uses (which the unused-urgent-item row reads) -- so a swap
+    the agent tests with `score_meal_plan` is scored like the
+    candidate it replaces. Recipes already offered, or already in the plan, are left as they are.
+    """
+    known = set(prepared.offered_ids) | set(prepared.excluded_ids)
+    new = [recipe for recipe in {entry.recipe_id: entry for entry in found}.values() if recipe.recipe_id not in known]
+    if not new:
+        return prepared
+    scale = prepared.pantry_fit_scale
+    if scale is None:
+        scale = balance.pantry_fit_scale(recipe.pantry_fit for recipe in new)
+    # The same chips `prepare` scored with: stated calories are read only when the lighter chip reads them.
+    calories = _stated_calories(corpus, [recipe.recipe_id for recipe in new], chips=frozenset())
+    return prepared.model_copy(
+        update={
+            "offered_ids": [*prepared.offered_ids, *(recipe.recipe_id for recipe in new)],
+            "titles": {**prepared.titles, **{recipe.recipe_id: recipe.title for recipe in new}},
+            "urgent_uses": {
+                **prepared.urgent_uses,
+                **{
+                    recipe.recipe_id: [
+                        UrgentUse(name=item.name, expires_in_days=item.expires_in_days) for item in recipe.urgent_items
+                    ]
+                    for recipe in new
+                },
+            },
+            "attributes": {
+                **prepared.attributes,
+                **{
+                    recipe.recipe_id: _proposal_attributes(recipe.attributes, total_time_mins=recipe.total_time_mins)
+                    for recipe in new
+                },
+            },
+            "facts": [
+                *prepared.facts,
+                *(
+                    balance.RecipeFacts(
+                        recipe_id=recipe.recipe_id,
+                        attributes=recipe.attributes.as_mapping(),
+                        calories_per_serving=calories.get(recipe.recipe_id),
+                        pantry_fit=recipe.pantry_fit * scale,
+                        days_since_cooked=recipe.days_since_cooked,
+                        rating=None if recipe.rating is None else tools.Rating(recipe.rating),
+                        offered_after_floor_relaxed=recipe.offered_after_floor_relaxed,
+                        urgent_items=tuple(item.name for item in recipe.urgent_items),
+                    )
+                    for recipe in new
+                ),
+            ],
+        }
+    )
+
+
+def plan_drift(prepared: PreparedPlan, chosen_ids: Sequence[str]) -> tools.PlanGap | None:
+    """How far a chosen week falls short of the scorer's best one (spec 6.6), or None with nothing scored.
+
+    A prepared plan from before V6 carries no weeks, so there is no best week to compare against.
+    """
+    if not prepared.weeks:
+        return None
+    return balance.drift(chosen_ids, prepared.weeks[0].recipe_ids, scoring_context_of(prepared))
+
+
+def scoring_context_of(prepared: PreparedPlan) -> tools.ScoringContext:
+    """The scorer's view of a prepared week: its facts, less the urgent items a planned meal already uses up."""
+    return balance.scoring_context(prepared.facts, urgent_items_already_used=prepared.urgent_items_already_used)
 
 
 def _stated_calories(
@@ -490,12 +653,10 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
     An older checkpoint's prepared plan carries no weeks (it was written before V6), so there is nothing
     scored to compare against and no line is written.
     """
-    if not prepared.weeks:
+    gap = plan_drift(prepared, [pick.external_id for pick in choices])
+    if gap is None:
         return
-    context = balance.scoring_context(prepared.facts, urgent_items_already_used=prepared.urgent_items_already_used)
-    best_ids = prepared.weeks[0].recipe_ids
     chosen_ids = [pick.external_id for pick in choices]
-    gap = balance.drift(chosen_ids, best_ids, context)
     # Only a week that exists can be "the one the model meant": an index outside the offer is an error about the
     # answer, not a disagreement between the answer and the meals, so it does not also draw the mismatch warning.
     matches: bool | None = None
