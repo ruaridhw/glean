@@ -68,6 +68,9 @@ class RecipeFacts(BaseModel):
             "the ones a week could use, and the ones it leaves out are penalised (spec 6.2, #122)."
         ),
     )
+    cooked_last_week: bool = Field(
+        default=False, description="Cooked in the last seven days, and back only because of 'same as last week'."
+    )
 
     def scorer_input(self) -> CandidateRecipe:
         """The plain dataclass `score_meal_plan` takes, with the attributes typed and `unsure` where empty."""
@@ -79,6 +82,7 @@ class RecipeFacts(BaseModel):
             days_since_cooked=self.days_since_cooked,
             rating=self.rating,
             offered_after_floor_relaxed=self.offered_after_floor_relaxed,
+            cooked_last_week=self.cooked_last_week,
         )
 
 
@@ -139,6 +143,7 @@ def facts_from(
     calories: Mapping[str, float | None],
     history: RecipeHistory,
     urgent_items: Mapping[str, Sequence[str]] | None = None,
+    last_week: Collection[str] = frozenset(),
 ) -> list[RecipeFacts]:
     """One `RecipeFacts` per offered recipe: the scorer's whole view of what the household may be offered.
 
@@ -146,7 +151,7 @@ def facts_from(
     how long ago it was cooked. `history` supplies every candidate's cook age and latest thumb, so the
     recency and rating rows can be scored for the fresh candidates too. `urgent_items` is V4's name per recipe
     of the pantry items going off within three days it uses, which is what the week either uses or is charged
-    for leaving (spec 6.2, #122).
+    for leaving (spec 6.2, #122). `last_week` are the recipes the "same as last week" chip lifted the floor for.
     """
     scale = pantry_fit_scale(candidate.pantry_fit for candidate in offered)
     return [
@@ -159,6 +164,7 @@ def facts_from(
             rating=_rating(history.latest_rating.get(recipe.external_id)),
             offered_after_floor_relaxed=recipe.cooked_days_ago is not None,
             urgent_items=tuple((urgent_items or {}).get(recipe.external_id, ())),
+            cooked_last_week=recipe.external_id in last_week,
         )
         for recipe in offered
     ]

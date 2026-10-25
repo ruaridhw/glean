@@ -133,6 +133,7 @@ def sample_corpus_candidates(
     sample_size: int = SAMPLE_SIZE,
     pool_size: int = PANTRY_POOL_SIZE,
     guarantee_max: int = GUARANTEE_MAX,
+    preferred_ids: Collection[str] = (),
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
@@ -141,7 +142,8 @@ def sample_corpus_candidates(
     `cooked` is the household's history window and `slots` the number of meals this request plans;
     together they drive `eligibility.apply_recency_floor`. Recipes it relaxed back in are offered last,
     so they reach the candidate list only after every fresh recipe, and they carry `cooked_days_ago` so
-    the model sees them as the fallback they are.
+    the model sees them as the fallback they are. `preferred_ids` (last week's dinners, under the "same as
+    last week" chip) are offered right after the urgent guarantee, when they are fresh and eligible.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
@@ -201,6 +203,8 @@ def sample_corpus_candidates(
         limit=guarantee_limit,
     )
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in guaranteed], guarantee_limit)
+    preferred = [eligible[recipe_id] for recipe_id in sorted(preferred_ids) if recipe_id in fresh]
+    _take_distinct(picked, preferred, sample_size)
 
     _fill_partition(
         picked,
