@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/token_storage.dart';
 import 'package:glean/auth/tokens.dart';
@@ -70,6 +71,23 @@ void main() {
       },
     );
 
+    test(
+      'clearAll still removes the tokens when listing the household data fails',
+      () async {
+        final TokenStorage failing = TokenStorage(
+          secureStorage: _ReadAllFails(),
+        );
+        await failing.saveTokens(tokens);
+
+        await failing.clearAll();
+
+        final StoredTokenValues stored = await failing.readTokens();
+        expect(stored.accessToken, isNull);
+        expect(stored.refreshToken, isNull);
+        expect(stored.userSub, isNull);
+      },
+    );
+
     test('clearTokensKeepIdentity keeps the household data', () async {
       const FlutterSecureStorage secure = FlutterSecureStorage();
       const String key =
@@ -97,4 +115,17 @@ void main() {
       },
     );
   });
+}
+
+/// The plugin's in-memory store, except that listing every key fails.
+class _ReadAllFails extends FlutterSecureStorage {
+  @override
+  Future<Map<String, String>> readAll({
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async => throw PlatformException(code: 'keystore', message: 'unavailable');
 }
