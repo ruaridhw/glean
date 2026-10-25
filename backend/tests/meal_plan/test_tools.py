@@ -773,7 +773,9 @@ def test_the_improving_swap_found_before_the_budget_ran_out_is_kept(monkeypatch)
     assert budgeted.total > score_meal_plan(greedy, ctx).total
 
 
-def test_generating_two_weeks_of_seven_is_well_under_a_hundred_milliseconds() -> None:
+def test_the_first_two_weeks_of_seven_are_well_under_a_hundred_milliseconds() -> None:
+    # The first call, not a warmed one: every call builds its own `_Scorer`, so its caches start empty in the
+    # graph as well, and phase 2 pays this time on the first Generate of each session.
     pool = [f"recipe-{index}" for index in range(120)]
     ctx = context(
         *(
@@ -788,12 +790,11 @@ def test_generating_two_weeks_of_seven_is_well_under_a_hundred_milliseconds() ->
             for index, recipe_id in enumerate(pool)
         )
     )
-    create_candidate_meal_plans(pool, 7, ctx, seed=0)  # warm the caches the way the graph will have them warm
     started = time.perf_counter()
     plans = create_candidate_meal_plans(pool, 7, ctx, seed=0)
     elapsed = time.perf_counter() - started
     assert len(plans) == 2
-    assert elapsed < 0.1, f"two weeks of seven from 120 candidates took {elapsed * 1000:.1f} ms"
+    assert elapsed < 0.1, f"the first two weeks of seven from 120 candidates took {elapsed * 1000:.1f} ms"
 
 
 def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
