@@ -23,21 +23,22 @@ void main() {
   final List<Map<String, dynamic>> sent = <Map<String, dynamic>>[];
   String? feedbackNote;
 
+  // The backend at its HTTP boundary: records what Generate sent, and answers with [feedbackNote].
+  http.Client backend() => sessionRoutes((http.Request request) async {
+    sent.add(jsonDecode(request.body) as Map<String, dynamic>);
+    return http.Response(
+      jsonEncode(<String, dynamic>{
+        'suggestions': <Object>[],
+        'feedback_note': feedbackNote,
+      }),
+      200,
+    );
+  });
+
   setUp(() {
     sent.clear();
     feedbackNote = null;
-    h = AppTestHarness(
-      httpClient: sessionRoutes((http.Request request) async {
-        sent.add(jsonDecode(request.body) as Map<String, dynamic>);
-        return http.Response(
-          jsonEncode(<String, dynamic>{
-            'suggestions': <Object>[],
-            'feedback_note': feedbackNote,
-          }),
-          200,
-        );
-      }),
-    );
+    h = AppTestHarness(httpClient: backend());
   });
   tearDown(() => h.dispose());
 
@@ -344,6 +345,54 @@ void main() {
       isNull,
     );
   });
+
+  gleanWidgetTest(
+    'a note with skin-toned emoji is clipped by code points, so Generate never sends more than the backend takes',
+    (tester) async {
+      await open(tester);
+      await toggleBox(tester);
+      // 150 letters and 30 "thumbs up, medium skin tone": 180 visible characters, 210 code points.
+      final String typed = '${'a' * 150}${'👍🏽' * 30}';
+
+      await tester.enterText(note(), typed);
+      await tester.pumpAndSettle();
+      await generateAndComeBack(tester);
+
+      final String sentNote =
+          (sent.single['human_feedback'] as Map<String, dynamic>)['note']
+              as String;
+      expect(sentNote.runes.length, lessThanOrEqualTo(maxWeekNoteLength));
+      expect(sentNote, '${'a' * 150}${'👍🏽' * 25}');
+    },
+  );
+
+  gleanWidgetTest(
+    'an over-long note saved by an older build is clipped when it loads',
+    (tester) async {
+      final DateTime week = startOfWeek(DateTime.now());
+      String two(int value) => value.toString().padLeft(2, '0');
+      final String key = '${week.year}-${two(week.month)}-${two(week.day)}';
+      await h.dispose();
+      FlutterSecureStorage.setMockInitialValues(<String, String>{
+        WeekFeedbackStore.keyFor('test-user'): jsonEncode(<String, dynamic>{
+          key: <String, dynamic>{
+            'chips': <String>['lighter'],
+            'note': '👍🏽' * 150,
+            'note_unused': false,
+          },
+        }),
+      });
+      h = AppTestHarness(keepSecureStorage: true, httpClient: backend());
+      await open(tester);
+
+      await generateAndComeBack(tester);
+
+      final String sentNote =
+          (sent.single['human_feedback'] as Map<String, dynamic>)['note']
+              as String;
+      expect(sentNote, '👍🏽' * 100);
+    },
+  );
 
   test('each week has its own selection, so a new week starts empty', () {
     final ProviderContainer container = h.container;

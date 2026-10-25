@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/design_system/design_system.dart';
 
@@ -150,13 +151,15 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
               TextField(
                 key: const ValueKey<String>('this-week-note'),
                 controller: _note,
-                maxLength: maxWeekNoteLength,
+                // The bound counts code points, the unit the backend counts (`clipWeekNote`).
+                inputFormatters: const <TextInputFormatter>[
+                  _WeekNoteFormatter(),
+                ],
                 minLines: 1,
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: '+ Add a note',
-                  counterText: '',
                 ),
                 onChanged: controller.setNote,
               ),
@@ -174,6 +177,25 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Keeps the note within [maxWeekNoteLength] code points as it is typed or pasted.
+class _WeekNoteFormatter extends TextInputFormatter {
+  const _WeekNoteFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final String kept = clipWeekNote(newValue.text);
+    if (kept == newValue.text) return newValue;
+    return TextEditingValue(
+      text: kept,
+      selection: TextSelection.collapsed(offset: kept.length),
+      composing: TextRange.empty,
     );
   }
 }
