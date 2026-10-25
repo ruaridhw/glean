@@ -906,3 +906,45 @@ def test_a_relaxed_recipe_that_only_the_other_week_has_is_never_a_swap(tmp_path:
 
     assert all(alternative is not None for alternative in alternatives)
     assert relaxed not in {alternative.external_id for alternative in alternatives if alternative}
+
+
+def test_prepare_feeds_the_urgent_items_into_the_scorer(tmp_path: Path) -> None:
+    # The unused-urgent row is only as good as its input: V4's urgent uses, by item name, per offered recipe.
+    prepared = _prepared(
+        tmp_path,
+        pantry=[
+            {"id": 1, "name": "coriander", "quantity": 50, "unit": "g", "urgency_score": 150.0, "expires_in_days": 2},
+            # Four days out: V4's three-day rule does not make it urgent, so the scorer hears nothing about it.
+            {"id": 2, "name": "haddock", "quantity": 200, "unit": "g", "urgency_score": 90.0, "expires_in_days": 4},
+        ],
+    )
+    facts = {fact.recipe_id: fact for fact in prepared.facts}
+
+    assert facts["rec_coriander_chicken"].urgent_items == ("coriander",)
+    assert all("haddock" not in fact.urgent_items for fact in prepared.facts)
+    assert prepared.weeks[0].recipe_ids  # the week still balances around the urgent item
+    assert balance.unused_urgent_items(prepared.weeks[0]) == ()
+
+
+def test_a_week_that_can_use_the_only_urgent_recipe_takes_it(tmp_path: Path) -> None:
+    # Owner decision 2026-10-25: the row is what makes the generator take the salmon recipe even when its fit
+    # is the weaker of two, because leaving the salmon to go off costs the week more than the fit it gains.
+    prepared = _prepared(
+        tmp_path,
+        meals_per_week=2,
+        pantry=[
+            {"id": 1, "name": "haddock", "quantity": 200, "unit": "g", "urgency_score": 80.0, "expires_in_days": 2}
+        ],
+        exclude_external_ids=[
+            "rec_coriander_chicken",
+            "rec_tofu_noodles",
+            "rec_chickpea_curry",
+            "rec_slow_roast",
+        ],
+    )
+    fishy = {fact.recipe_id: fact for fact in prepared.facts}["rec_fish_pie"]
+    assert fishy.urgent_items == ("haddock",)
+    assert "rec_fish_pie" in prepared.offered_ids
+
+    assert "rec_fish_pie" in prepared.weeks[0].recipe_ids
+    assert balance.unused_urgent_items(prepared.weeks[0]) == ()

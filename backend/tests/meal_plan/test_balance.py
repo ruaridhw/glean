@@ -11,12 +11,15 @@ from datetime import UTC, datetime
 
 from glean.meal_plan.balance import (
     PANTRY_FIT_TOP,
+    CandidateWeek,
     RecipeFacts,
     drift,
     facts_from,
+    score_meal_plan,
     scored_weeks,
     scoring_context,
     stated_calories,
+    unused_urgent_items,
 )
 from glean.meal_plan.candidates import OfferedRecipe
 from glean.meal_plan.eligibility import RecipeHistory
@@ -233,3 +236,34 @@ def test_a_repeated_pick_is_scored_once_when_the_drift_is_measured() -> None:
     ids = [entry.recipe_id for entry in built]
 
     assert drift(["rec_0", "rec_0"], ids, context).gap == drift(["rec_0"], ids, context).gap
+
+
+def test_a_fact_carries_the_urgent_items_the_recipe_uses() -> None:
+    built = facts_from(
+        [offered("rec_a", pantry_fit=2.0), offered("rec_b")],
+        attributes={},
+        calories={},
+        history=RecipeHistory(days_since_cooked={}, latest_rating={}),
+        urgent_items={"rec_a": ("coriander",)},
+    )
+
+    assert [entry.urgent_items for entry in built] == [("coriander",), ()]
+    # The context is where the scorer reads them, keyed by recipe: an item a week leaves unused is a penalty.
+    assert scoring_context(built).urgent_item_uses == {"rec_a": ("coriander",)}
+
+
+def test_a_one_slot_week_takes_the_urgent_recipe_the_row_charges_for() -> None:
+    built = facts(MainProtein.CHICKEN, MainProtein.FISH, fit=[3.0, 1.0])
+    built[1] = built[1].model_copy(update={"urgent_items": ("salmon fillet",)})
+    context = scoring_context(built)
+
+    # Two points behind on fit, but leaving the pool's only urgent item unused costs four, so the week takes it.
+    week = scored_weeks(context, ["rec_0", "rec_1"], 1, seed=0)[0]
+
+    assert week.recipe_ids == ["rec_1"]
+    assert unused_urgent_items(week) == ()
+    assert "unused_urgent_item" not in week.terms
+    # And the week that does skip it is charged, which is the row the model and the logs see.
+    skipped = CandidateWeek.from_score(score_meal_plan(["rec_0"], context))
+    assert unused_urgent_items(skipped) == ("salmon fillet",)
+    assert skipped.terms["unused_urgent_item"] == -4.0

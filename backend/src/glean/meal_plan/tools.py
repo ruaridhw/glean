@@ -110,6 +110,7 @@ class Term(StrEnum):
     REPEAT_CUISINE = "repeat_cuisine"
     LIGHTER = "lighter"
     PROTEIN_TARGET = "protein_target"
+    UNUSED_URGENT_ITEM = "unused_urgent_item"
 
 
 # The active-time buckets as the minutes they span, so a predicate can compare the end that can promise it.
@@ -191,6 +192,13 @@ class ScorerWeights:
     lighter_reference_kcal: int = 672
     # "Protein targets from the profile": -4 per miss, such as fish at least once.
     protein_target_miss: float = -4.0
+    # A plan-level row of the owner's adding (decision 2026-10-25), in the shape of the protein-target one: -4
+    # per urgent pantry item (expiring within V4's three days) that a candidate recipe uses and the week does
+    # not. The V6 eval found the need: once attributes exist, pantry fit -- worth at most +3 and spread across
+    # the staples every recipe uses -- cannot beat a repeat penalty, so urgent coverage fell from 10/10 to 8/10
+    # and the h08 salmon recipe lost at +2.45 fit against a -5 second-fish penalty. This row targets #122's
+    # criterion directly, without inflating pantry fit against variety.
+    unused_urgent_item: float = -4.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,8 +300,10 @@ class Predicate:
 class ScoringContext:
     """Everything the scorer reads, built by the caller from the session: no store, no profile read, no model.
 
-    `recipes` holds one `CandidateRecipe` per candidate id. The rest are the optional profile inputs (spec 6.4)
-    and the week's feedback chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
+    `recipes` holds one `CandidateRecipe` per candidate id. `urgent_item_uses` is V4's per-recipe urgent items:
+    the items in the offered pool that go off within three days, so "the pool can use this item" is what makes
+    leaving it unused a penalty. The rest are the optional profile inputs (spec 6.4) and the week's feedback
+    chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
     predicate earns nothing (and the two chips the scorer reads by name still work: `healthier` doubles the whole
     food term, `lighter` turns on the calories term).
     """
@@ -305,6 +315,7 @@ class ScoringContext:
     protein_targets: tuple[ProteinTarget, ...] = ()
     chips: frozenset[str] = frozenset()
     chip_predicates: Mapping[str, Predicate] = field(default_factory=dict)
+    urgent_item_uses: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,6 +531,9 @@ class _Scorer:
             weights.repeat_dish_type,
             weights.repeat_cuisine,
         )
+        # Every urgent item at least one candidate uses: the ones a week could have used, and so the ones it
+        # can be charged for leaving out.
+        self._pool_urgent_items = frozenset(item for items in ctx.urgent_item_uses.values() for item in items)
         self._recipes: dict[str, RecipeScore] = {}
         self._totals: dict[str, float] = {}
         self._values: dict[str, tuple[str, str, str, str]] = {}
@@ -632,6 +646,10 @@ class _Scorer:
                 )
             )
         penalties.extend(
+            PlanPenalty(term=Term.UNUSED_URGENT_ITEM, points=self._weights.unused_urgent_item, detail=item)
+            for item in self._unused_urgent_items(recipe_ids)
+        )
+        penalties.extend(
             PlanPenalty(
                 term=Term.PROTEIN_TARGET,
                 points=self._weights.protein_target_miss * misses,
@@ -684,6 +702,17 @@ class _Scorer:
         )
         return above, f"above {reference:g} kcal" if above else ""
 
+    def _unused_urgent_items(self, recipe_ids: Sequence[str]) -> tuple[str, ...]:
+        """The pool's urgent items that no recipe in the week uses, in name order.
+
+        The pool is the offered candidates, so an item nothing in the offer uses is nobody's to use and costs
+        nothing (spec §6.2 step 4, #122's rule).
+        """
+        if not self._pool_urgent_items:
+            return ()
+        used = {item for recipe_id in recipe_ids for item in self._ctx.urgent_item_uses.get(recipe_id, ())}
+        return tuple(sorted(self._pool_urgent_items - used))
+
     def _target_misses(self, recipe_ids: Sequence[str]) -> list[tuple[ProteinTarget, int, int]]:
         """Every protein target the plan misses, with the count it reached: more fish, fewer pork."""
         if not self._ctx.protein_targets:
@@ -714,6 +743,7 @@ class _Scorer:
         points += self._weights.protein_target_miss * sum(
             misses for _target, _count, misses in self._target_misses(recipe_ids)
         )
+        points += self._weights.unused_urgent_item * len(self._unused_urgent_items(recipe_ids))
         return points
 
 
