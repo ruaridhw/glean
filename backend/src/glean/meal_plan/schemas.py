@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from glean.meal_plan.tools import FeedbackChip
+from glean.observability import logger
 from glean.recipes.attributes import DishType, MainCarb, MainProtein
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
@@ -112,6 +113,21 @@ class HumanFeedback(BaseModel):
         max_length=MAX_FEEDBACK_NOTE_LENGTH,
         description="The household's note for this week. Screened for prompt injection; used only if it passes.",
     )
+
+    @field_validator("chips", mode="before")
+    @classmethod
+    def _ignore_unknown_chips(cls, chips: object) -> object:
+        """Drop a chip this backend does not know, so a newer app's chip costs that chip, not the whole Generate."""
+        if not isinstance(chips, list):
+            return chips
+        known = {chip.value for chip in FeedbackChip}
+        unknown = [chip for chip in chips if isinstance(chip, str) and chip not in known]
+        if unknown:
+            logger.warning(
+                "ignoring feedback chips this backend does not know",
+                extra={"unknown_chips": [chip[:40] for chip in unknown[: len(FeedbackChip)]]},
+            )
+        return [chip for chip in chips if not (isinstance(chip, str) and chip not in known)]
 
     @field_validator("chips")
     @classmethod

@@ -194,4 +194,5 @@ clear_screen_cache  # screening.py, called by the tests to start from a cold cac
 
 # meal_plan/schemas.py (V9): the week feedback
 _each_chip_once  # Pydantic field validator (HumanFeedback.chips)
+_ignore_unknown_chips  # Pydantic field validator (HumanFeedback.chips)
 feedback_note  # MealPlanResult field, read by the app
