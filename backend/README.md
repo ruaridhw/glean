@@ -73,7 +73,9 @@ because it is one sample: `main_protein` 0.80, `main_carb` 0.80, `dish_type` 0.8
 types at 97.6%, 36/36 cuisines at 0.85 with 100%, and 25/25 whole-food answers at 0.90 with 96%. Active time
 stays at 0.80 and is the one bar the check did not move: the model is rarely confident about hands-on work
 (35 of the 50 answers were below even the floor), so below its bar the answer is `unsure` and the household's
-time filter falls back to total time, as it did before V5.
+time filter falls back to total time, as it did before V5. In practice that is almost every recipe: 35 of the
+sample's 50 answers scored under even the 0.7 floor, and at the shipped 0.80 the check accepted one answer and
+it was wrong, so the time bucket is close to inert until a second sample says otherwise.
 
 Retuning a bar needs no re-ask and no paid run: the stored answers keep the model's own option and
 probability, and the new bar is applied when they are read. The only things that force another enrichment run

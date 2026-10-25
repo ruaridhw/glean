@@ -123,8 +123,10 @@ def test_each_bucket_states_its_upper_bound(bucket, bound) -> None:
     ("label", "bucket"),
     [
         ("<=15", ActiveTimeBucket.UP_TO_15),
+        ("\u226415", ActiveTimeBucket.UP_TO_15),  # the spec's own spelling of the first bucket
         ("<15", ActiveTimeBucket.UP_TO_15),
         ("15-30", ActiveTimeBucket.FROM_15_TO_30),
+        ("15to30", ActiveTimeBucket.FROM_15_TO_30),
         ("15\u201330", ActiveTimeBucket.FROM_15_TO_30),  # the en dash a labeller's table writes
         ("30-45", ActiveTimeBucket.FROM_30_TO_45),
         ("45\u201360 min", ActiveTimeBucket.FROM_45_TO_60),

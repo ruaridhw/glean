@@ -177,10 +177,14 @@ class ActiveTimeBucket(StrEnum):
 
     @classmethod
     def from_text(cls, value: Any) -> ActiveTimeBucket:
-        """The bucket a label spells, tolerating the ways one gets written (`<15`, an en dash range, `60 min+`)."""
+        """The bucket a label spells, in the ways one gets written.
+
+        Tolerates the spec's `\u2264` ("at most"), a plain `<`, an en dash range, "15to30" and a trailing unit, because
+        a label is written by hand and a bucket it names should score rather than read as unreadable.
+        """
         if not isinstance(value, str):
             return cls.UNSURE
-        text = value.strip().casefold().replace("\u2013", "-").replace(" ", "")
+        text = value.strip().casefold().replace("\u2013", "-").replace("\u2264", "<=").replace(" ", "")
         for unit in ("minutes", "minute", "mins", "min"):
             text = text.replace(unit, "")
         return _BUCKET_SPELLINGS.get(text, cls.UNSURE)
@@ -188,10 +192,12 @@ class ActiveTimeBucket(StrEnum):
 
 _BUCKET_SPELLINGS: dict[str, ActiveTimeBucket] = {
     "<=15": ActiveTimeBucket.UP_TO_15,
+    "\u226415": ActiveTimeBucket.UP_TO_15,  # the spec's own "\u226415" spelling
     "<15": ActiveTimeBucket.UP_TO_15,
     "0-15": ActiveTimeBucket.UP_TO_15,
     "under15": ActiveTimeBucket.UP_TO_15,
     "15-30": ActiveTimeBucket.FROM_15_TO_30,
+    "15to30": ActiveTimeBucket.FROM_15_TO_30,
     "30-45": ActiveTimeBucket.FROM_30_TO_45,
     "45-60": ActiveTimeBucket.FROM_45_TO_60,
     "60+": ActiveTimeBucket.OVER_60,
