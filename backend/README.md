@@ -114,6 +114,13 @@ uv run python scripts/enrich_corpus.py --table glean-recipes-prod \
     --bucket glean-recipe-cache-prod-<account> --i-am-the-owner
 ```
 
+Each proposal line carries the meal's `attributes` — main protein, main carb, dish type and a hands-on time — so
+the app's cards can label it ("chicken · rice · curry · 35 min"). Only known values ride the wire: an
+attribute the model was not confident about is null and the card shows no chip for it, and the time is the
+active-time bucket's upper bound, or the recipe's total time when no bucket is known. They are measured from
+the corpus's answers before the model chooses, so a chosen meal and the alternative offered for it both carry
+their own.
+
 The run prints a per-question coverage table (current / stale / missing / failed / unsure, requests made,
 how many current answers are labelled and how many are stored `unsure`, and how many recipes state a prep
 time), writes answers in checkpoints so an interrupted run resumes where it stopped, and rebuilds the
