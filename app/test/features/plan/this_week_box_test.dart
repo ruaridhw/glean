@@ -44,7 +44,7 @@ void main() {
   });
   tearDown(() => h.dispose());
 
-  Future<void> open(WidgetTester tester) async {
+  Future<void> open(WidgetTester tester, {int meals = 3}) async {
     await h.container
         .read(userConfigRepositoryProvider)
         .save(
@@ -52,7 +52,7 @@ void main() {
             id: h.userId,
             purchaseTolerance: 0.5,
             preferredServings: 2,
-            mealsPerWeek: 3,
+            mealsPerWeek: meals,
             dietaryFlags: const [],
             maxActiveTimeMins: null,
           ),
@@ -263,21 +263,34 @@ void main() {
 
   for (final double scale in <double>[1.0, 2.0]) {
     gleanWidgetTest(
-      'Generate stays visible on a 320 px phone at ${scale}x text, open or closed',
+      'Generate stays pinned on a 320 px phone at ${scale}x text, open or closed, however far the plan scrolls',
       (tester) async {
         tester.view.physicalSize = const Size(320, 640);
         tester.view.devicePixelRatio = 1;
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.view.reset);
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await open(tester);
+        // A full week, so the plan is longer than the screen and really scrolls.
+        await open(tester, meals: 7);
+        Future<void> scrollToTheEnd() async {
+          await tester.drag(find.byType(ListView), const Offset(0, -3000));
+          await tester.pumpAndSettle();
+        }
 
         expect(tester.takeException(), isNull);
         expect(generate().hitTestable(), findsOneWidget);
+        await scrollToTheEnd();
+        expect(find.byTooltip('Next week').hitTestable(), findsNothing);
+        expect(generate().hitTestable(), findsOneWidget);
 
+        await tester.drag(find.byType(ListView), const Offset(0, 3000));
+        await tester.pumpAndSettle();
         await toggleBox(tester);
 
         expect(tester.takeException(), isNull);
+        expect(generate().hitTestable(), findsOneWidget);
+        await scrollToTheEnd();
+        expect(chip(FeedbackChip.lighter).hitTestable(), findsNothing);
         expect(generate().hitTestable(), findsOneWidget);
       },
     );

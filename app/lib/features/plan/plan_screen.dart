@@ -170,48 +170,76 @@ class _PlanScreenState extends ConsumerState<PlanScreen>
             key: ValueKey<bool>(loading),
             child: loading
                 ? const ListSkeleton(headerHeight: 88)
-                : ListView(
-                    padding: EdgeInsets.all(tokens.spacing.lg),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      // Keyed by week: each week has its own chips and note, and its own open/closed box.
-                      ThisWeekBox(
-                        key: ValueKey<DateTime>(_weekStart),
-                        weekStart: _weekStart,
-                      ),
-                      SizedBox(height: tokens.spacing.md),
-                      PlanWeekPager(
-                        weekStart: _weekStart,
-                        onPrevious: _goToPreviousWeek,
-                        onNext: _goToNextWeek,
-                      ),
-                      SizedBox(height: tokens.spacing.md),
-                      PlanProgressCard(
-                        planned: entries
-                            .where((entry) => !entry.isCooked)
-                            .length,
-                        target: target,
-                        remaining: remaining,
-                      ),
-                      SizedBox(height: tokens.spacing.lg),
-                      Text(
-                        'Dinners',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      SizedBox(height: tokens.spacing.sm),
-                      for (final PlanSlot slot in slots)
-                        Padding(
-                          padding: EdgeInsets.only(bottom: tokens.spacing.sm),
-                          child: PlanSlotRow(
-                            key: ValueKey<String>(slot.key),
-                            slot: slot,
-                            onEmptyTap: () => onAddDinnerTapped(context, ref),
-                            onOpen: _openRecipe,
-                          ),
+                      // Pinned: the box's header holds Generate, which stays on screen however far the week
+                      // scrolls. Keyed by week, like the panel: each week has its own chips, note and box.
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          tokens.spacing.lg,
+                          tokens.spacing.lg,
+                          tokens.spacing.lg,
+                          0,
                         ),
-                      if (nudge != null) ...<Widget>[
-                        SizedBox(height: tokens.spacing.md),
-                        PlanExpiryBanner(nudge: nudge),
-                      ],
+                        child: ThisWeekHeader(
+                          key: ValueKey<DateTime>(_weekStart),
+                          weekStart: _weekStart,
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            tokens.spacing.lg,
+                            0,
+                            tokens.spacing.lg,
+                            tokens.spacing.lg,
+                          ),
+                          children: <Widget>[
+                            ThisWeekPanel(
+                              key: ValueKey<DateTime>(_weekStart),
+                              weekStart: _weekStart,
+                            ),
+                            SizedBox(height: tokens.spacing.md),
+                            PlanWeekPager(
+                              weekStart: _weekStart,
+                              onPrevious: _goToPreviousWeek,
+                              onNext: _goToNextWeek,
+                            ),
+                            SizedBox(height: tokens.spacing.md),
+                            PlanProgressCard(
+                              planned: entries
+                                  .where((entry) => !entry.isCooked)
+                                  .length,
+                              target: target,
+                              remaining: remaining,
+                            ),
+                            SizedBox(height: tokens.spacing.lg),
+                            Text(
+                              'Dinners',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            SizedBox(height: tokens.spacing.sm),
+                            for (final PlanSlot slot in slots)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: tokens.spacing.sm,
+                                ),
+                                child: PlanSlotRow(
+                                  key: ValueKey<String>(slot.key),
+                                  slot: slot,
+                                  onEmptyTap: () =>
+                                      onAddDinnerTapped(context, ref),
+                                  onOpen: _openRecipe,
+                                ),
+                              ),
+                            if (nudge != null) ...<Widget>[
+                              SizedBox(height: tokens.spacing.md),
+                              PlanExpiryBanner(nudge: nudge),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   ),
           ),
