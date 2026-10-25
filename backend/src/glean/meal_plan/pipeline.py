@@ -464,22 +464,22 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
     best_ids = prepared.weeks[0].recipe_ids
     chosen_ids = [pick.external_id for pick in choices]
     gap = balance.drift(chosen_ids, best_ids, context)
-    named = None if chosen_week is None else chosen_week
+    # Only a week that exists can be "the one the model meant": an index outside the offer is an error about the
+    # answer, not a disagreement between the answer and the meals, so it does not also draw the mismatch warning.
     matches: bool | None = None
-    if named is not None:
-        if 0 <= named < len(prepared.weeks):
-            matches = set(chosen_ids) == set(prepared.weeks[named].recipe_ids)
+    if chosen_week is not None:
+        if 0 <= chosen_week < len(prepared.weeks):
+            matches = set(chosen_ids) == set(prepared.weeks[chosen_week].recipe_ids)
+            if not matches:
+                logger.warning(
+                    "model named one candidate week and returned another week's meals; keeping its meals",
+                    extra={"chosen_week": chosen_week},
+                )
         else:
-            matches = False
             logger.error(
                 "model named a candidate week that was not offered; keeping its meals",
-                extra={"chosen_week": named, "weeks": len(prepared.weeks)},
+                extra={"chosen_week": chosen_week, "weeks": len(prepared.weeks)},
             )
-    if matches is False:
-        logger.warning(
-            "model named one candidate week and returned another week's meals; keeping its meals",
-            extra={"chosen_week": named},
-        )
     logger.info(
         "meal plan drift from the scorer's best week",
         extra={
@@ -487,7 +487,7 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
             "scale": round(gap.scale, 3),
             "fraction": round(gap.fraction, 4),
             "within_15_percent": gap.within_15_percent,
-            "chosen_week": named,
+            "chosen_week": chosen_week,
             "week_matches": matches,
             "best_week_score": round(prepared.weeks[0].total, 3),
         },
