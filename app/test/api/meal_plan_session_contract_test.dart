@@ -84,4 +84,41 @@ void main() {
     expect(update.status, MealPlanSessionStatus.unknown);
     expect(update.isTerminal, isFalse);
   });
+
+  group('the shared session-messages contract', () {
+    test('every message type gets one 202 body; swap_id is null unless a '
+        'swap started', () {
+      final accepted = MealPlanMessageAccepted.fromJson(<String, dynamic>{
+        'session_id': 's1',
+        'swap_id': null,
+        'note_dropped': true,
+      });
+
+      expect(accepted.sessionId, 's1');
+      expect(accepted.swapId, isNull);
+      expect(accepted.noteDropped, isTrue);
+      expect(
+        MealPlanMessageAccepted.fromJson(<String, dynamic>{
+          'session_id': 's1',
+          'swap_id': 3,
+          'note_dropped': false,
+        }).swapId,
+        3,
+      );
+    });
+
+    test('an answer and a skip are members of the one sealed message', () {
+      const List<MealPlanSessionMessage> messages = <MealPlanSessionMessage>[
+        AnswerMessage(option: 'Two', note: 'Kids away'),
+        AnswerMessage(note: 'Fish please'),
+        SkipMessage(),
+      ];
+
+      expect(messages.map((message) => message.toJson()), <Object>[
+        {'type': 'answer', 'option': 'Two', 'note': 'Kids away'},
+        {'type': 'answer', 'note': 'Fish please'},
+        {'type': 'skip'},
+      ]);
+    });
+  });
 }
