@@ -642,9 +642,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(
-        'Could not save your profile — you can set it up later in Settings.',
-      ),
+      find.text('Could not save your profile. Try again, or Skip all.'),
       findsOneWidget,
     );
     expect(await rig.savedProfile(), isNull);
