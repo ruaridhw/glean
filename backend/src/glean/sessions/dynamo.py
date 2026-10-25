@@ -13,6 +13,10 @@ invocation deadline (`sessions.store.lease_seconds_for`), so it always ends when
 certainly has. Every later write is conditioned on the token, so a worker that has been taken over
 cannot finish someone else's run.
 
+V11's question rides the same item: `park` (owner-conditioned) writes `question` and removes the owner and
+the lease, and `answer` is conditioned on `waiting_for_user`, so only one answer ever queues the resume.
+Both are JSON strings, like `result`.
+
 The dead-letter handler goes through `fail_if_abandoned`, whose update also requires the lease to have
 lapsed, and which reports `STILL_LIVE` rather than a plain False so the handler can keep its message
 instead of acknowledging a run that is still working.
@@ -37,6 +41,8 @@ from glean.sessions.models import (
     AbandonResult,
     AgentSession,
     ClaimResult,
+    HouseholdReply,
+    PendingQuestion,
     SessionError,
     SessionRecord,
     SessionStatus,
@@ -73,6 +79,8 @@ _LEASE = "#lease"
 _RESULT = "#result"
 _SWAPS = "#swaps"
 _SWAP_LIST: TypeAdapter[list[SwapRecord]] = TypeAdapter(list[SwapRecord])
+_QUESTION = "#question"
+_REPLY = "#reply"
 
 _CONDITIONAL_FAILURE = "ConditionalCheckFailedException"
 # The attempt may start when the session is queued, or when it is running but its lease has lapsed. An
@@ -151,6 +159,8 @@ class DynamoSessionStore:
             raise UnknownSessionError(session_id)
         if record.status.terminal:
             return ClaimResult.FINISHED
+        if record.status is SessionStatus.WAITING_FOR_USER:
+            return ClaimResult.WAITING
         resumed = record.status is SessionStatus.RUNNING
         if resumed and not self._lease_lapsed(record, now):
             return ClaimResult.OWNED_ELSEWHERE
@@ -176,6 +186,8 @@ class DynamoSessionStore:
         latest = self.get(user_sub, session_id)
         if latest is None:
             raise UnknownSessionError(session_id)
+        if latest.status is SessionStatus.WAITING_FOR_USER:
+            return ClaimResult.WAITING
         return ClaimResult.FINISHED if latest.status.terminal else ClaimResult.OWNED_ELSEWHERE
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
@@ -193,6 +205,36 @@ class DynamoSessionStore:
                 ":start": updated.progress_start,
                 ":running": SessionStatus.RUNNING.value,
                 ":owner": owner,
+            },
+        )
+
+    def park(self, user_sub: str, session_id: str, question: PendingQuestion, *, owner: str) -> bool:
+        return self._update(
+            user_sub,
+            session_id,
+            update=(
+                "SET #status = :waiting, #question = :question, updated_at = :now, #ttl = :ttl "
+                "REMOVE #owner, #lease, #reply"
+            ),
+            condition="#status = :running AND #owner = :owner",
+            values={
+                ":waiting": SessionStatus.WAITING_FOR_USER.value,
+                ":running": SessionStatus.RUNNING.value,
+                ":owner": owner,
+                ":question": question.model_dump_json(),
+            },
+        )
+
+    def answer(self, user_sub: str, session_id: str, reply: HouseholdReply) -> bool:
+        return self._update(
+            user_sub,
+            session_id,
+            update="SET #status = :queued, #reply = :reply, updated_at = :now, #ttl = :ttl",
+            condition="#status = :waiting",
+            values={
+                ":queued": SessionStatus.QUEUED.value,
+                ":waiting": SessionStatus.WAITING_FOR_USER.value,
+                ":reply": reply.model_dump_json(),
             },
         )
 
@@ -321,6 +363,8 @@ class DynamoSessionStore:
             return AbandonResult.MISSING
         if record.status.terminal:
             return AbandonResult.FINISHED
+        if record.status is SessionStatus.WAITING_FOR_USER:
+            return AbandonResult.WAITING
         if not _lease_lapsed(record, self._clock()):
             return AbandonResult.STILL_LIVE
         moved = self._update(
@@ -328,7 +372,7 @@ class DynamoSessionStore:
             session_id,
             update="SET #status = :failed, #error = :error, updated_at = :now, #ttl = :ttl",
             condition=(
-                "#status <> :done AND #status <> :failed AND #status <> :cancelled "
+                "#status <> :done AND #status <> :failed AND #status <> :cancelled AND #status <> :waiting "
                 "AND (attribute_not_exists(#lease) OR #lease < :now_epoch)"
             ),
             values={
@@ -337,6 +381,8 @@ class DynamoSessionStore:
                 # A cancelled session is terminal like a finished one: a dead letter that raced the
                 # household's DELETE must not rewrite it as a failure.
                 ":cancelled": SessionStatus.CANCELLED.value,
+                # A parked session is waiting on the household, not abandoned.
+                ":waiting": SessionStatus.WAITING_FOR_USER.value,
                 ":error": error.model_dump_json(),
                 ":now_epoch": int(self._clock().timestamp()),
             },
@@ -348,6 +394,8 @@ class DynamoSessionStore:
         latest = self.get(user_sub, session_id)
         if latest is None:
             return AbandonResult.MISSING
+        if latest.status is SessionStatus.WAITING_FOR_USER:
+            return AbandonResult.WAITING
         return AbandonResult.FINISHED if latest.status.terminal else AbandonResult.STILL_LIVE
 
     @staticmethod
@@ -373,6 +421,8 @@ class DynamoSessionStore:
             _LEASE: "lease_until",
             _RESULT: "result",
             _SWAPS: "swaps",
+            _QUESTION: "question",
+            _REPLY: "reply",
         }
         try:
             self._client.update_item(
@@ -404,6 +454,8 @@ def _blob(value: Any) -> bytes:
 def _record(item: dict[str, Any]) -> SessionRecord:
     result = item.get("result")
     error = item.get("error")
+    question = item.get("question")
+    reply = item.get("reply")
     lease = item.get("lease_until")
     swaps = item.get("swaps")
     return SessionRecord(
@@ -418,6 +470,8 @@ def _record(item: dict[str, Any]) -> SessionRecord:
         result=None if result is None else MealPlanResult.model_validate_json(result),
         error=None if error is None else SessionError.model_validate_json(error),
         swaps=[] if swaps is None else _SWAP_LIST.validate_json(swaps),
+        question=None if question is None else PendingQuestion.model_validate_json(question),
+        reply=None if reply is None else HouseholdReply.model_validate_json(reply),
         created_at=datetime.fromisoformat(item["created_at"]),
         updated_at=datetime.fromisoformat(item["updated_at"]),
         ttl=int(item["ttl"]),

@@ -12,6 +12,13 @@ The store owns three rules so no caller can break them:
   every second.
 - **One swap at a time** (V10). A swap message moves a session with a proposal back to `queued`, in one
   conditional write; while it is queued or running a second swap is refused, so the status is the lock.
+- **A parked session belongs to nobody (V11).** `park` moves the owner's `running` session to
+  `waiting_for_user` with the agent's question and drops the owner and the lease, because nothing runs it
+  while the household thinks. `answer` is the only way out besides cancel: one conditional write
+  `waiting_for_user -> queued` holding the reply, so a duplicate or late answer is refused, and the
+  answer's own queue message claims the session like a fresh run. A late copy of the first message finds
+  it parked (`ClaimResult.WAITING`) and is acknowledged; the dead-letter handler leaves it alone. A
+  household that never answers leaves it parked until the TTL expires the item.
 """
 
 from __future__ import annotations
@@ -28,6 +35,8 @@ from glean.sessions.models import (
     AbandonResult,
     AgentSession,
     ClaimResult,
+    HouseholdReply,
+    PendingQuestion,
     SessionError,
     SessionRecord,
     SessionStatus,
@@ -124,6 +133,17 @@ class SessionStore(Protocol):
         A line that arrives after a cancel is refused too: a cancelled session writes nothing more, so
         the graph stops at the next step rather than leaving one progress line behind it.
         """
+        ...
+
+    def park(self, user_sub: str, session_id: str, question: PendingQuestion, *, owner: str) -> bool:
+        """Park the owner's running session on *question*: `waiting_for_user`, no owner, no lease.
+
+        False when this attempt no longer owns it, or the household cancelled.
+        """
+        ...
+
+    def answer(self, user_sub: str, session_id: str, reply: HouseholdReply) -> bool:
+        """Record the household's *reply* and queue the session for its resume. False unless it was waiting."""
         ...
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
@@ -319,6 +339,8 @@ class InMemorySessionStore:
             raise UnknownSessionError(session_id)
         if record.status.terminal:
             return ClaimResult.FINISHED
+        if record.status is SessionStatus.WAITING_FOR_USER:
+            return ClaimResult.WAITING
         if record.status is SessionStatus.RUNNING and not self._lease_lapsed(record, now):
             return ClaimResult.OWNED_ELSEWHERE
         resumed = record.status is SessionStatus.RUNNING
@@ -338,6 +360,30 @@ class InMemorySessionStore:
         if record is None:
             return False
         self._write(record.appended(list(lines)))
+        return True
+
+    def park(self, user_sub: str, session_id: str, question: PendingQuestion, *, owner: str) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
+            return False
+        self._write(
+            record.model_copy(
+                update={
+                    "status": SessionStatus.WAITING_FOR_USER,
+                    "question": question,
+                    "reply": None,
+                    "owner": None,
+                    "lease_until": None,
+                }
+            )
+        )
+        return True
+
+    def answer(self, user_sub: str, session_id: str, reply: HouseholdReply) -> bool:
+        record = self.get(user_sub, session_id)
+        if record is None or record.status is not SessionStatus.WAITING_FOR_USER:
+            return False
+        self._write(record.model_copy(update={"status": SessionStatus.QUEUED, "reply": reply}))
         return True
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
@@ -411,6 +457,8 @@ class InMemorySessionStore:
             return AbandonResult.MISSING
         if record.status.terminal:
             return AbandonResult.FINISHED
+        if record.status is SessionStatus.WAITING_FOR_USER:
+            return AbandonResult.WAITING
         if not self._lease_lapsed(record, self._clock()):
             return AbandonResult.STILL_LIVE
         self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))

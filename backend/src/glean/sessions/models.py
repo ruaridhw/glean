@@ -47,8 +47,18 @@ RESULT_RESERVE_BYTES = 64 * 1024
 PROGRESS_RESERVE_BYTES = 16 * 1024
 # Keys, timestamps, the owner token, the lease and the error JSON.
 ITEM_OVERHEAD_BYTES = 2 * 1024
-# 409,600 - 65,536 - 16,384 - 2,048 = 325,632.
-MAX_STORED_INPUT_BYTES = MAX_ITEM_BYTES - RESULT_RESERVE_BYTES - PROGRESS_RESERVE_BYTES - ITEM_OVERHEAD_BYTES
+# The agent's one question and the household's reply (V11), both bounded below: about 1.5 KB at most.
+QUESTION_RESERVE_BYTES = 2 * 1024
+# 409,600 - 65,536 - 16,384 - 2,048 - 2,048 = 323,584.
+MAX_STORED_INPUT_BYTES = (
+    MAX_ITEM_BYTES - RESULT_RESERVE_BYTES - PROGRESS_RESERVE_BYTES - ITEM_OVERHEAD_BYTES - QUESTION_RESERVE_BYTES
+)
+
+# The bounds on the agent's question (V11). The model's structured output is not trusted to keep them, so
+# the graph clips what it asked to these before the question is parked in the item.
+MAX_QUESTION_CHARS = 200
+MAX_OPTIONS = 4
+MAX_OPTION_CHARS = 60
 
 
 def stored_inputs(request: MealPlanRequest) -> bytes:
@@ -77,6 +87,7 @@ def item_bytes(*, inputs: int, progress: Sequence[str], result: str | None = Non
         + len((result or "").encode())
         + len((error or "").encode())
         + ITEM_OVERHEAD_BYTES
+        + QUESTION_RESERVE_BYTES
     )
 
 
@@ -105,6 +116,8 @@ class ClaimResult(StrEnum):
     RESUMED = "resumed"
     OWNED_ELSEWHERE = "owned_elsewhere"
     FINISHED = "finished"
+    # Parked on the household's answer (V11): nothing to run until the answer's own message arrives.
+    WAITING = "waiting"
 
 
 class AbandonResult(StrEnum):
@@ -119,6 +132,8 @@ class AbandonResult(StrEnum):
     FINISHED = "finished"
     MISSING = "missing"
     STILL_LIVE = "still_live"
+    # Parked on the household's answer: not abandoned, and the answer's message is what moves it on.
+    WAITING = "waiting"
 
 
 class SessionErrorCode(StrEnum):
@@ -153,6 +168,31 @@ class SessionRequest(MealPlanRequest):
         if value != "corpus":
             raise ValueError('agent sessions plan from the recipe corpus; send source="corpus"')
         return value
+
+
+class PendingQuestion(BaseModel):
+    """The agent's one question (V11, spec §6.2), as the item holds it and the app shows it.
+
+    Bounded by the graph before it is parked (`MAX_QUESTION_CHARS`, `MAX_OPTIONS`, `MAX_OPTION_CHARS`), so the
+    item's `QUESTION_RESERVE_BYTES` covers it.
+    """
+
+    question: str = Field(description="The question, one or two sentences.")
+    options: list[str] = Field(description="The answers the household can tap; one at most is sent back.")
+    why: str = Field(default="", description="Why the agent is asking: the gap it hit, one sentence.")
+
+
+class HouseholdReply(BaseModel):
+    """What the household said to the question: an option and a screened note, or a skip.
+
+    `note` is only ever the screened note: a note the screen dropped is None here with `note_dropped` set, so
+    nothing unscreened reaches the item, the checkpoint or the model.
+    """
+
+    skipped: bool = False
+    option: str | None = None
+    note: str | None = None
+    note_dropped: bool = False
 
 
 class AgentSession(BaseModel):
@@ -272,6 +312,9 @@ class SessionRecord(BaseModel):
     result: MealPlanResult | None = None
     error: SessionError | None = None
     swaps: list[SwapRecord] = Field(default_factory=list, description="The newest last, at most MAX_SWAPS_KEPT.")
+    # The agent's parked question, and then the household's reply to it (V11).
+    question: PendingQuestion | None = None
+    reply: HouseholdReply | None = None
     created_at: datetime
     updated_at: datetime
     ttl: int = Field(description="Epoch seconds DynamoDB expires the item at.")
@@ -420,6 +463,9 @@ class SessionView(BaseModel):
     )
     error: SessionError | None = Field(default=None, description="The typed failure, once the status is failed.")
     swap: SwapView | None = Field(default=None, description="The newest swap, once the household has asked for one.")
+    question: PendingQuestion | None = Field(
+        default=None, description="The agent's question, while the status is waiting_for_user."
+    )
     updated_at: datetime
 
     @classmethod
@@ -433,6 +479,7 @@ class SessionView(BaseModel):
             result=record.result,
             error=record.error,
             swap=SwapView.of(record),
+            question=record.question if record.status is SessionStatus.WAITING_FOR_USER else None,
             updated_at=record.updated_at,
         )
 
@@ -443,7 +490,9 @@ __all__ = [
     "AgentSession",
     "AnswerMessage",
     "HouseholdMessage",
+    "HouseholdReply",
     "MessageAccepted",
+    "PendingQuestion",
     "SessionCreated",
     "SessionError",
     "SessionErrorCode",

@@ -31,6 +31,8 @@ from glean.sessions.models import (
     AbandonResult,
     AgentSession,
     ClaimResult,
+    HouseholdReply,
+    PendingQuestion,
     SessionError,
     SessionErrorCode,
     SessionStatus,
@@ -1020,3 +1022,113 @@ def test_a_swap_on_a_cancelled_session_reads_as_over_not_pending(store: tuple[Se
     assert view.status is SessionStatus.CANCELLED
     assert view.swap is not None
     assert view.swap.state is SwapState.FAILED
+
+
+# --- The agent's one question (V11): park, answer, and what a parked session refuses -----------------------------
+
+
+def _question() -> PendingQuestion:
+    return PendingQuestion(
+        question="Your fridge has a lot of veg. Would you like a meat-free night this week?",
+        options=["Yes, one", "Two", "No"],
+        why="Plenty of vegetables are close to their date.",
+    )
+
+
+def _parked(sessions: SessionStore, clock: Clock) -> None:
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    assert sessions.park("user-a", "sess-1", _question(), owner="attempt-1") is True
+
+
+def test_parking_holds_the_question_and_leaves_the_session_ownerless(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+
+    _parked(sessions, clock)
+
+    record = sessions.get("user-a", "sess-1")
+    assert record.status is SessionStatus.WAITING_FOR_USER
+    assert record.question == _question()
+    # Nothing runs a parked session, so it holds no lease: the answer's own message starts the next attempt.
+    assert (record.owner, record.lease_until) == (None, None)
+    view = SessionView.from_record(record)
+    assert view.question == _question()
+
+
+def test_only_the_owner_may_park_a_session(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    assert sessions.park("user-a", "sess-1", _question(), owner="attempt-2") is False
+    sessions.cancel("user-a", "sess-1")
+    assert sessions.park("user-a", "sess-1", _question(), owner="attempt-1") is False
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.CANCELLED
+
+
+def test_a_parked_session_is_not_claimed_by_a_late_copy_of_its_first_message(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _parked(sessions, clock)
+    clock.advance(seconds=FULL_INVOCATION_LEASE + 1)
+
+    outcome = sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+
+    assert outcome is ClaimResult.WAITING
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.WAITING_FOR_USER
+
+
+def test_an_answer_queues_the_session_once_and_a_duplicate_is_refused(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _parked(sessions, clock)
+    reply = HouseholdReply(option="Yes, one", note="Kids are away Wednesday")
+
+    first = sessions.answer("user-a", "sess-1", reply)
+    duplicate = sessions.answer("user-a", "sess-1", HouseholdReply(skipped=True))
+
+    assert (first, duplicate) == (True, False)
+    record = sessions.get("user-a", "sess-1")
+    assert record.status is SessionStatus.QUEUED
+    assert record.reply == reply
+    # The answered session is an ordinary queued one: the answer's message claims it like a fresh run.
+    assert (
+        sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+        is ClaimResult.STARTED
+    )
+    assert SessionView.from_record(sessions.get("user-a", "sess-1")).question is None
+
+
+def test_an_answer_to_a_session_that_is_not_waiting_is_refused(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    sessions.create(_session(), now=clock.now)
+    assert sessions.answer("user-a", "sess-1", HouseholdReply(skipped=True)) is False
+
+    sessions.claim("user-a", "sess-1", owner="attempt-1", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    sessions.park("user-a", "sess-1", _question(), owner="attempt-1")
+    sessions.cancel("user-a", "sess-1")
+
+    assert sessions.answer("user-a", "sess-1", HouseholdReply(skipped=True)) is False
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.CANCELLED
+
+
+def test_a_parked_session_is_cancellable_and_never_failed_by_a_dead_letter(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _parked(sessions, clock)
+    clock.advance(hours=1)
+
+    outcome = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    # Waiting on the household is not abandonment: the dead letter is acknowledged and the session left alone.
+    assert outcome is AbandonResult.WAITING
+    assert sessions.get("user-a", "sess-1").status is SessionStatus.WAITING_FOR_USER
+    assert sessions.cancel("user-a", "sess-1") is True
+
+
+def test_an_answered_session_whose_message_was_lost_can_be_failed(store: tuple[SessionStore, Clock]) -> None:
+    """The messages route fails the session when it cannot send the answer's message, as create does."""
+    sessions, clock = store
+    _parked(sessions, clock)
+    sessions.answer("user-a", "sess-1", HouseholdReply(skipped=True))
+
+    outcome = sessions.fail_if_abandoned("user-a", "sess-1", SessionError(code=SessionErrorCode.WORKER_FAILED))
+
+    assert outcome is AbandonResult.FAILED
