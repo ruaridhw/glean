@@ -18,12 +18,18 @@ from glean.meal_plan.schemas import (
     CorpusMealPlanResponse,
     CorpusPlannedAlternative,
     MealPlanRequest,
+    MealPlanSuggestion,
     ReasonKind,
 )
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.recipes.enrichment.active_time import active_time_question
+from glean.recipes.enrichment.attributes import attribute_questions
+from glean.recipes.enrichment.enricher import MIN_ATTRIBUTE_BAR
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from glean.sessions.models import MAX_ITEM_BYTES, RESULT_RESERVE_BYTES, item_bytes, stored_input_bytes
+from tests.recipes.enrichment.fakes import SNAPSHOT
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -138,6 +144,14 @@ def test_a_proposal_carries_the_contract_shape(tmp_path: Path) -> None:
         "uses_up",
         "reason_kind",
         "alternative",
+        "attributes",
+    }
+    # The labels a card shows are additive: four fields, all nullable.
+    assert set(dumped["suggestions"][0]["attributes"]) == {
+        "main_protein",
+        "main_carb",
+        "dish_type",
+        "active_time_mins",
     }
     # An alternative is a suggestion that carries no alternative of its own.
     assert set(dumped["suggestions"][0]["alternative"]) == {
@@ -148,7 +162,96 @@ def test_a_proposal_carries_the_contract_shape(tmp_path: Path) -> None:
         "missing_ingredients",
         "uses_up",
         "reason_kind",
+        "attributes",
     }
+
+
+def test_a_card_labels_the_recipe_from_its_measured_attributes(tmp_path: Path) -> None:
+    """Protein, carb, dish type and the active-time upper bound: what V3's card shows (spec 6.5)."""
+    corpus = _corpus(tmp_path)
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    chosen = prepared.offered_ids[0]
+    _enrich(
+        corpus,
+        chosen,
+        main_protein="chicken",
+        main_carb="rice",
+        dish_type="curry",
+        active_time="15-30",
+    )
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    suggestion = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)])).suggestions[0]
+
+    assert suggestion.attributes.model_dump() == {
+        "main_protein": "chicken",
+        "main_carb": "rice",
+        "dish_type": "curry",
+        "active_time_mins": 30,
+    }
+
+
+def test_an_unsure_attribute_is_left_out_rather_than_invented(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    chosen = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW).offered_ids[0]
+    # The model was not confident enough: the answer is `unsure`, which is not a label.
+    _enrich(corpus, chosen, main_protein="unsure", main_carb="rice")
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    suggestion = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)])).suggestions[0]
+
+    assert suggestion.attributes.main_protein is None
+    assert suggestion.attributes.main_carb == "rice"
+
+
+def test_a_recipe_with_no_answers_labels_only_its_total_time(tmp_path: Path) -> None:
+    prepared = _prepared(tmp_path)
+
+    suggestion = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)])).suggestions[0]
+
+    assert suggestion.attributes.model_dump() == {
+        "main_protein": None,
+        "main_carb": None,
+        "dish_type": None,
+        "active_time_mins": 20,  # the corpus fixture's total time; no bucket was measured
+    }
+
+
+def test_a_sixty_plus_bucket_has_no_upper_bound_so_the_card_shows_total_time(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    chosen = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW).offered_ids[0]
+    _enrich(corpus, chosen, active_time="60+")
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    suggestion = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)])).suggestions[0]
+
+    assert suggestion.attributes.active_time_mins == 20
+
+
+def test_an_alternative_carries_its_own_labels_for_the_swap_panel(tmp_path: Path) -> None:
+    """ "Also fish, 25 min": the panel labels the alternative, not the meal it would replace."""
+    corpus = _corpus(tmp_path)
+    first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    chosen, alternative = first.offered_ids[0], first.offered_ids[1]
+    _enrich(corpus, alternative, main_protein="fish", active_time="<=15")
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    result = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, 0)], planned=[]))
+    swap = result.suggestions[0].alternative
+
+    assert swap is not None
+    assert swap.external_id == alternative
+    assert (swap.attributes.main_protein, swap.attributes.active_time_mins) == ("fish", 15)
+    assert chosen != alternative
+
+
+def test_a_payload_without_attributes_still_reads(tmp_path: Path) -> None:
+    """Additive wire change: a proposal written before V5 (or a checkpoint) reads with empty labels."""
+    suggestion = MealPlanSuggestion.model_validate({"external_id": "rec_x", "title": "X", "reason": "Why."})
+
+    assert suggestion.attributes.model_dump() == dict.fromkeys(
+        ["main_protein", "main_carb", "dish_type", "active_time_mins"]
+    )
 
 
 def test_a_planned_meal_alternative_is_a_suggestion_with_no_alternative_of_its_own(tmp_path: Path) -> None:
@@ -421,3 +524,30 @@ def test_the_largest_proposal_fits_the_result_reserve(tmp_path: Path) -> None:
         )
         < MAX_ITEM_BYTES
     )
+
+
+def _enrich(corpus: RecipeCorpusStore, recipe_id: str, **labels: str) -> None:
+    """Store current answers for one recipe, as an enrichment run at the floor bar would.
+
+    `labels` names the attributes to answer (`main_protein="chicken"`, `active_time="15-30"`); the value is
+    what the attribute stores, including `unsure`.
+    """
+    summary = next(entry for entry in corpus.search(per_page=10_000)[0] if entry.external_id == recipe_id)
+    questions = dict(attribute_questions())
+    questions["active_time"] = active_time_question(MIN_ATTRIBUTE_BAR)
+    answers = []
+    for attribute, value in labels.items():
+        question = questions[attribute]
+        answers.append(
+            RecipeAnswer(
+                recipe_id=recipe_id,
+                question=question.name,
+                probability=0.95,
+                value=value,
+                model=SNAPSHOT,
+                content_hash=content_fingerprint(summary.title, summary.ingredient_names),
+                criteria_hash=question.criteria_hash,
+                computed_at=NOW,
+            )
+        )
+    corpus.save_answers(answers)

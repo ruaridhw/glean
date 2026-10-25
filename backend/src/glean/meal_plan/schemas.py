@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from glean.recipes.attributes import DishType, MainCarb, MainProtein
+
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
 COOKED_HISTORY_WINDOW_ITEMS = 200
 # A thumbs down does not expire, so the app sends the cook that carries one however old it is, on top of the
@@ -254,6 +256,27 @@ class UsedUpPantryItem(BaseModel):
     )
 
 
+class MealPlanAttributes(BaseModel):
+    """The recipe attributes a proposal card labels, from the corpus's enrichment answers (V5, spec 6.5).
+
+    Only known values ride the wire: an attribute the decision model was not confident enough about is null,
+    and the card shows no chip for it rather than inventing one. Protein, carb, dish type and a time are the
+    labels the V3 design places; cuisine and whole food are measured too but nothing displays them yet, so
+    they are not here.
+    """
+
+    main_protein: MainProtein | None = Field(default=None, description="G1 main protein; null when unsure.")
+    main_carb: MainCarb | None = Field(default=None, description="G1 main carb; null when unsure.")
+    dish_type: DishType | None = Field(default=None, description="G1 dish type; null when unsure.")
+    active_time_mins: int | None = Field(
+        default=None,
+        description=(
+            "Hands-on minutes to show: the enriched active-time bucket's upper bound, or the recipe's total "
+            "time when no bucket is known. Null when neither is."
+        ),
+    )
+
+
 class MealPlanAlternative(BaseModel):
     """One swap target: a suggestion that carries no alternative of its own."""
 
@@ -265,6 +288,10 @@ class MealPlanAlternative(BaseModel):
     uses_up: list[UsedUpPantryItem] = Field(default_factory=list)
     # Always set on a corpus proposal; saved mode, which the retiring sync route still serves, leaves it at balance.
     reason_kind: ReasonKind = ReasonKind.BALANCE
+    attributes: MealPlanAttributes = Field(
+        default_factory=MealPlanAttributes,
+        description="The swap target's labels, so the panel can show what it is.",
+    )
 
 
 class MealPlanSuggestion(BaseModel):
@@ -282,6 +309,10 @@ class MealPlanSuggestion(BaseModel):
     reason_kind: ReasonKind = ReasonKind.BALANCE
     # The meal to cook instead if the household swaps this one; null when nothing suitable is left.
     alternative: MealPlanAlternative | None = None
+    attributes: MealPlanAttributes = Field(
+        default_factory=MealPlanAttributes,
+        description="The card's labels, from the corpus's enrichment answers; empty when nothing is known.",
+    )
 
 
 class PlannedMealAlternative(BaseModel):

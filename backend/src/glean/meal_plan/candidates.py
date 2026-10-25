@@ -145,7 +145,7 @@ def sample_corpus_candidates(
     flags = [flag.strip().casefold() for flag in dietary_flags]
     decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load(), calibration=CALIBRATED_DIETARY)
     # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
-    attributes = _attributes(all_recipes, corpus) if max_total_time_mins is not None else {}
+    attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None else {}
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
     # floor must never bring back a recipe a flag, the time cap or an already-planned meal ruled out.
     eligible = {
@@ -525,8 +525,11 @@ def _fits_time(summary: RecipeSummary, max_total_time_mins: int | None, attribut
     return attributes.fits_time_cap(max_total_time_mins, total_time_mins=summary.total_time_mins)
 
 
-def _attributes(summaries: Iterable[RecipeSummary], corpus: RecipeCorpusStore) -> dict[str, RecipeAttributes]:
+def recipe_attributes(corpus: RecipeCorpusStore, summaries: Iterable[RecipeSummary]) -> dict[str, RecipeAttributes]:
     """Each summary's attributes, from the same stored answers the projection is built from.
+
+    Public because planning reads attributes through it twice: the sampler for the household's time cap, and
+    `pipeline.prepare` for the labels a proposal card shows.
 
     The answers are read once, not from the projection document: it is the backend's own cache, and the
     seam every backend shares is `answers()`. An answer counts only while it is current for the summary as
