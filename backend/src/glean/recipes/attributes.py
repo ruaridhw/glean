@@ -13,6 +13,7 @@ against the bucket's **upper** bound (`fits_time_cap`), falling back to total ti
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -233,6 +234,10 @@ _CUISINE_SYNONYMS: dict[str, Cuisine] = {
 # The separators a compound corpus value uses: "Thai, Thai-Inspired", "Indian & British".
 _CUISINE_SPLIT = ("/", ",", "&", ";", " and ", " with ")
 
+# A qualifier in brackets, which the G1 table itself uses: "Southeast Asian (other)". It names the region's
+# place in the list, not a different cuisine, so it is dropped before the lookup.
+_CUISINE_QUALIFIER = re.compile(r"\([^)]*\)")
+
 
 def normalise_cuisine(value: Any) -> Cuisine | None:
     """The G1 cuisine a raw string means, or None when it names no cuisine we know.
@@ -246,6 +251,7 @@ def normalise_cuisine(value: Any) -> Cuisine | None:
     for separator in _CUISINE_SPLIT:
         parts = [part for chunk in parts for part in chunk.split(separator)]
     for part in (part.strip() for part in parts):
+        part = _CUISINE_QUALIFIER.sub(" ", part)
         part = part.removesuffix("-inspired").removesuffix(" inspired")
         part = part.replace("-", "").replace("_", "").replace(" ", "")
         if part in _CUISINE_SYNONYMS:

@@ -152,6 +152,8 @@ def test_a_written_bucket_reads_as_its_bucket(label, bucket) -> None:
         ("South-East Asian", Cuisine.SOUTHEAST_ASIAN),
         ("Mexican-Inspired", Cuisine.MEXICAN),
         ("British", Cuisine.BRITISH),
+        ("Southeast Asian (other)", Cuisine.SOUTHEAST_ASIAN),  # the G1 table's own spelling
+        ("South East Asian", Cuisine.SOUTHEAST_ASIAN),
         ("Other", Cuisine.OTHER),
         ("Fusion", None),  # there is no fusion value
         ("Grandma's best", None),
@@ -161,6 +163,40 @@ def test_a_written_bucket_reads_as_its_bucket(label, bucket) -> None:
 )
 def test_one_place_normalises_cuisine_spellings(raw, cuisine) -> None:
     assert normalise_cuisine(raw) is cuisine
+
+
+@pytest.mark.parametrize("cuisine", [value for value in Cuisine if value is not Cuisine.UNSURE])
+def test_every_g1_cuisine_value_normalises_to_itself(cuisine) -> None:
+    assert normalise_cuisine(cuisine.value) is cuisine
+
+
+G1_SPELLINGS = {
+    "British": Cuisine.BRITISH,
+    "Italian": Cuisine.ITALIAN,
+    "French": Cuisine.FRENCH,
+    "Spanish": Cuisine.SPANISH,
+    "Greek": Cuisine.GREEK,
+    "Middle Eastern": Cuisine.MIDDLE_EASTERN,
+    "North African": Cuisine.NORTH_AFRICAN,
+    "Indian": Cuisine.INDIAN,
+    "Thai": Cuisine.THAI,
+    "Vietnamese": Cuisine.VIETNAMESE,
+    "Chinese": Cuisine.CHINESE,
+    "Japanese": Cuisine.JAPANESE,
+    "Korean": Cuisine.KOREAN,
+    "Southeast Asian (other)": Cuisine.SOUTHEAST_ASIAN,
+    "Mexican": Cuisine.MEXICAN,
+    "Caribbean": Cuisine.CARIBBEAN,
+    "American": Cuisine.AMERICAN,
+    "Latin American": Cuisine.LATIN_AMERICAN,
+    "Other": Cuisine.OTHER,
+}
+
+
+@pytest.mark.parametrize(("written", "cuisine"), sorted(G1_SPELLINGS.items()))
+def test_every_cuisine_as_the_g1_table_writes_it_normalises_to_itself(written, cuisine) -> None:
+    """The G1 table writes "Southeast Asian (other)" with a parenthetical; that must not read as unknown."""
+    assert normalise_cuisine(written) is cuisine
 
 
 def test_a_recipe_with_no_answers_is_unsure_everywhere_rather_than_missing_attributes() -> None:
