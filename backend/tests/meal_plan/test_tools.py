@@ -114,6 +114,7 @@ def test_the_weights_are_the_scorer_table_defaults() -> None:
     assert weights.whole_food == 0.5
     assert weights.healthier_multiplier == 2.0
     assert weights.lighter == -1.0
+    assert weights.lighter_reference_kcal == 672
     assert weights.protein_target_miss == -4.0
 
 
@@ -310,17 +311,30 @@ def test_a_repeated_none_carb_still_costs_its_row() -> None:
 # --- plan penalties: the lighter chip and protein targets -------------------------------------------------
 
 
-def test_the_lighter_chip_costs_a_point_per_recipe_above_the_weeks_median() -> None:
+def test_the_lighter_chip_costs_a_point_per_recipe_above_the_fixed_reference() -> None:
     ctx = context(
         candidate("light", calories=400, main_protein=MainProtein.NONE),
-        candidate("middle", calories=500, main_protein=MainProtein.NONE),
-        candidate("heavy", calories=600, main_protein=MainProtein.NONE),
+        candidate("at-the-line", calories=672, main_protein=MainProtein.NONE),
+        candidate("heavy", calories=900, main_protein=MainProtein.NONE),
         chips=frozenset({LIGHTER_CHIP}),
     )
-    plan = score(["light", "middle", "heavy"], ctx)
+    plan = score(["light", "at-the-line", "heavy"], ctx)
     assert plan.points(Term.LIGHTER) == -1.0
     (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.LIGHTER]
     assert penalty.recipe_ids == ("heavy",)
+    assert "672" in penalty.detail
+
+
+def test_a_light_week_is_not_measured_against_its_own_median() -> None:
+    # The reference does not move with the week. Under a week-median rule the heaviest of these three would be
+    # penalised, which is how a plan made itself look light by choosing only light recipes.
+    ctx = context(
+        candidate("light", calories=400, main_protein=MainProtein.NONE),
+        candidate("middle", calories=500, main_protein=MainProtein.NONE),
+        candidate("heavier", calories=600, main_protein=MainProtein.NONE),
+        chips=frozenset({LIGHTER_CHIP}),
+    )
+    assert score(["light", "middle", "heavier"], ctx).points(Term.LIGHTER) == 0.0
 
 
 def test_a_recipe_with_unknown_calories_is_never_under_the_lighter_reference() -> None:
