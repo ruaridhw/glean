@@ -145,8 +145,7 @@ def sample_corpus_candidates(
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
-    flags = [flag.strip().casefold() for flag in dietary_flags]
-    decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load(), calibration=CALIBRATED_DIETARY)
+    diet_excluded = dietary_excluded_ids(corpus, all_recipes, dietary_flags)
     # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
     attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None else {}
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
@@ -156,7 +155,7 @@ def sample_corpus_candidates(
         for summary in all_recipes
         if summary.external_id not in excluded
         and _fits_time(summary, max_total_time_mins, attributes.get(summary.external_id, RecipeAttributes()))
-        and not any(decisions.excludes(summary, flag) for flag in flags)
+        and summary.external_id not in diet_excluded
     }
     floor = apply_recency_floor(
         eligible,
@@ -243,6 +242,23 @@ def sample_corpus_candidates(
         )
         for summary in picked
     ]
+
+
+def dietary_excluded_ids(
+    corpus: RecipeCorpusStore, summaries: Iterable[RecipeSummary], dietary_flags: Sequence[str]
+) -> frozenset[str]:
+    """The recipes the stored dietary decisions rule out for these flags, or that no current decision covers.
+
+    One read of the decision store. The sampler and `pipeline.tool_context` both call it, so the agent's
+    `get_eligible_recipes` and the offered candidates exclude exactly the same recipes.
+    """
+    flags = [flag.strip().casefold() for flag in dietary_flags]
+    if not flags:
+        return frozenset()
+    decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load(), calibration=CALIBRATED_DIETARY)
+    return frozenset(
+        summary.external_id for summary in summaries if any(decisions.excludes(summary, flag) for flag in flags)
+    )
 
 
 def _fill_from(

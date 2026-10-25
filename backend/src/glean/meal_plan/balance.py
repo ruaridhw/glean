@@ -31,7 +31,7 @@ from glean.meal_plan.tools import (
 from glean.recipes.attributes import RecipeAttributes
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from glean.meal_plan.candidates import OfferedRecipe
     from glean.meal_plan.eligibility import RecipeHistory
@@ -148,8 +148,7 @@ def facts_from(
     of the pantry items going off within three days it uses, which is what the week either uses or is charged
     for leaving (spec 6.2, #122).
     """
-    top = max((candidate.pantry_fit for candidate in offered), default=0.0)
-    scale = PANTRY_FIT_TOP / top if top > 0 else 0.0
+    scale = pantry_fit_scale(candidate.pantry_fit for candidate in offered)
     return [
         RecipeFacts(
             recipe_id=recipe.external_id,
@@ -163,6 +162,16 @@ def facts_from(
         )
         for recipe in offered
     ]
+
+
+def pantry_fit_scale(raw_fits: Iterable[float]) -> float:
+    """What one raw urgency-weighted pantry fit is multiplied by, so the strongest of `raw_fits` scores +3.
+
+    Kept on the prepared plan, so a recipe the agent finds later (V7) is scaled by the same factor as the
+    candidates it is compared with, rather than being made the top of a pool of its own.
+    """
+    top = max(raw_fits, default=0.0)
+    return PANTRY_FIT_TOP / top if top > 0 else 0.0
 
 
 def scoring_context(
