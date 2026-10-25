@@ -11,6 +11,7 @@ from glean.dependencies import get_decision_client, get_llm_router, verify_cogni
 from glean.llm import LLMRouter
 from glean.meal_plan import service
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
+from glean.observability import logger
 from glean.rate_limit import enforce_ai_rate_limit
 from glean.screening import ScreenRejection, screen
 from glean.sessions.models import (
@@ -78,17 +79,26 @@ def create_session(
             status_code=422,
             detail="This request is too large to plan from. Trim the recipe or cook history and try again.",
         ) from error
+    _dispatch_or_fail(session, dispatch=dispatch, sessions=sessions)
+    return SessionCreated(session_id=session.session_id)
+
+
+def _dispatch_or_fail(
+    session: AgentSession, *, dispatch: Callable[[AgentSession], None], sessions: SessionStore
+) -> None:
+    """Send the session to the worker; if that fails, fail the session rather than leave the app polling it."""
     try:
         dispatch(session)
     except Exception as error:
         # The session exists but nothing will run it. Fail it here rather than leave the app polling
         # a session that can never move, and let the app offer its retry.
-        sessions.fail_if_abandoned(user_sub, session.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
+        sessions.fail_if_abandoned(
+            session.user_sub, session.session_id, SessionError(code=SessionErrorCode.WORKER_FAILED)
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Couldn't start planning your week. Try again.",
         ) from error
-    return SessionCreated(session_id=session.session_id)
 
 
 @router.get("/sessions/{session_id}", response_model=SessionView)
@@ -153,9 +163,7 @@ def post_session_message(
         case SwapMessage():
             message, note_rejection = _screened_swap(record, message, decisions=decisions)
         case AnswerMessage() | SkipMessage():
-            # V11 screens the answer's note here, the same way, once a run can be parked on its question.
-            if record.status is not SessionStatus.WAITING_FOR_USER:
-                _refuse(MessageRefusal.NO_QUESTION)
+            message, note_rejection = _screened_answer(record, message, decisions=decisions)
     try:
         swap_id = resume(
             session_id, message, user_sub=user_sub, sessions=sessions, dispatch=dispatch, note_rejection=note_rejection
@@ -191,6 +199,35 @@ def _screened_swap(
     dropped = bool(written) and not screened.passed
     rejection = (screened.rejection or ScreenRejection.UNAVAILABLE).value if dropped else None
     return message.model_copy(update={"note": screened.text}), rejection
+
+
+def _screened_answer(
+    record: SessionRecord, message: AnswerMessage | SkipMessage, *, decisions: DecisionClient
+) -> tuple[AnswerMessage | SkipMessage, str | None]:
+    """Refuse an answer the session cannot take before paying for the screen, then screen its note.
+
+    Only a run parked on its question takes one: already answered, cancelled, finished or never asked is a 409, so
+    a retried or late answer changes nothing. An option must be one the question offered. Returns the message
+    carrying only what the screen passed, and why it dropped a note the household wrote (None when it did not).
+    The note reaches the model only as data in the answer's own field.
+    """
+    if record.status is not SessionStatus.WAITING_FOR_USER or record.question is None:
+        _refuse(MessageRefusal.NO_QUESTION)
+    if not isinstance(message, AnswerMessage):
+        return message, None
+    if message.option is not None and message.option not in record.question.options:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="That is not one of the question's options."
+        )
+    written = (message.note or "").strip()
+    if not written:
+        return message.model_copy(update={"note": None}), None
+    screened = screen(written, decision_client=decisions)
+    if screened.passed:
+        return message.model_copy(update={"note": screened.text}), None
+    logger.info("the household's note was not used", extra={"rejection": screened.rejection})
+    rejection = (screened.rejection or ScreenRejection.UNAVAILABLE).value
+    return message.model_copy(update={"note": None}), rejection
 
 
 def _refuse(refusal: MessageRefusal, *, cause: Exception | None = None) -> NoReturn:

@@ -146,6 +146,7 @@ CANCELLED  # SessionStatus member: the app's contract once DELETE /meal-plan/ses
 retry_after_minutes  # SessionError field, read by the app
 created_at  # SessionRecord field, kept for the table's own audit trail
 _plan_from_the_corpus  # Pydantic field validator (SessionRequest.source)
+_says_something  # Pydantic model validator (AnswerMessage: an option or a note)
 writes  # InMemorySessionStore counter, asserted in tests that polling never writes
 # sessions/store.py: the queue and worker numbers template.yaml must declare, and the lease arithmetic
 # between them; all of them are asserted in tests/infra/test_template_async_stack.py.
