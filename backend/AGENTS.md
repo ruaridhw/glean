@@ -154,7 +154,11 @@ src/glean/
 └── meal_plan/        # POST /meal-plan — LLM meal-plan generation, saved mode and corpus mode
                       # /meal-plan/sessions (POST, GET) — the async agent session routes
                       # pipeline.py: corpus mode as prepare -> choose -> finalise, the three steps the
-                      #   sync route runs in order and the agent graph runs as its three nodes
+                      #   sync route runs in order; the agent graph runs prepare and finalise as its
+                      #   first and last nodes, and widens a prepared week with what its tools found
+                      # tools.py: the planner's framework-free tools -- get_eligible_recipes (hard
+                      #   constraints, the floor, a narrowing-only RecipeFilter, the urgent guarantee,
+                      #   ranking), get_recipes, score_meal_plan, create_candidate_meal_plans
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
@@ -254,9 +258,19 @@ complete run makes no reads beyond the lease design's own (the claim and each st
 cancelled one adds exactly one, at the step that notices.
 
 - **`glean/agent` is the only module that may import LangGraph** (ruff `TID251`, per-file exempt for
-  `src/glean/agent/**`). The graph is `prepare -> plan -> finalise` over `meal_plan.pipeline`, so a
-  session and the sync route return the same picks for the same request and seed (the session id
-  seeds the sampler). A wider graph (`plan <-> act`, questions, cancel) changes this module only.
+  `src/glean/agent/**`). The graph is `prepare -> plan <-> act -> finalise` (V7). `prepare` and
+  `finalise` are `meal_plan.pipeline`'s, so the sync route and a session offer the same candidates and
+  validate a week the same way (the session id seeds the sampler). `plan` is the only LLM node and
+  answers a typed `NextAction` (`agent/actions.py`: `call_tool` with typed arguments, or `propose`)
+  through structured output, never provider tool-calling. `act` runs the tool through
+  `agent/adapters.py` over the framework-free `meal_plan.tools`, writes the tool's progress line
+  first, and widens the week with any recipe the tool found. The budget lives in the graph state: at
+  most 8 tool calls and the run's 90 s. A spent budget, a model or tool error, or an answer that
+  keeps nothing ends in the scorer's best week with template reasons (`degraded: true`), so once
+  `prepare` has run a session never ends `model_error`. `finalise` logs each session's tool calls,
+  invalid answers, fallback reason and drift from the scorer's best (CloudWatch `SessionToolCalls`,
+  `SessionInvalidActions`, `SessionDrift`). Asking the household (`ask_household`, V11) is the marked
+  extension point in `agent/actions.py`.
 - **`glean/sessions`** owns the item, the store rules and the queue. Every update refreshes
   `updated_at` and the TTL; `get` never writes. Progress lines are bounded (`MAX_PROGRESS_LINES`),
   and the cursor is an absolute index, so a poll is idempotent. Inputs are stored gzipped, and
