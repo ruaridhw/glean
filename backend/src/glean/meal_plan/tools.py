@@ -720,9 +720,13 @@ def _require_known(recipe_ids: Sequence[str], ctx: ScoringContext) -> None:
 
 
 def _tie_break_ranks(pool: Sequence[str], seed: int) -> dict[str, float]:
-    """One random rank per recipe, so a tie is broken by the seed rather than by the order ids arrived in."""
-    rng = random.Random(seed)  # noqa: S311 - seeded on purpose: the same Generate seed must plan the same week
-    return {recipe_id: rng.random() for recipe_id in pool}
+    """A total order over the pool: the seed shuffled against the ids, never against the order they arrived in.
+
+    The ids are sorted before the shuffle, so two callers who list the same pool differently plan the same week.
+    """
+    order = sorted(pool)
+    random.Random(seed).shuffle(order)  # noqa: S311 - seeded on purpose: one Generate seed plans one week
+    return {recipe_id: float(position) for position, recipe_id in enumerate(order)}
 
 
 def _greedy_plan(scorer: _Scorer, pool: Sequence[str], size: int, ranks: Mapping[str, float]) -> list[str]:
