@@ -333,6 +333,25 @@ class TestLease:
         assert len(model.shown) == 1
         assert swap_run.view.swap.state is SwapState.DONE  # ty: ignore[possibly-missing-attribute]
 
+    def test_a_stale_first_run_delivery_never_publishes_the_old_week_over_swaps(self, swap_run: SwapRun) -> None:
+        """What runs is decided from the item the claim won, so an old message can only do the item's work."""
+        swap_run.swap(position=1)
+        swap_run.deliver(Model(swap=[replace_with(a_free_candidate)]))
+        first = swap_run.record.result.suggestions[1]
+        assert first != swap_run.proposal.suggestions[1]
+        swap_run.proposal = swap_run.record.result
+        swap_run.swap(position=0)
+
+        stale = Model(swap=[replace_with(a_free_candidate)])
+        assert swap_run.deliver(stale) is True
+
+        record = swap_run.record
+        assert record.status is SessionStatus.DONE
+        assert record.result.suggestions[1] == first
+        assert record.result.suggestions[0] != swap_run.proposal.suggestions[0]
+        assert [swap.state for swap in record.swaps] == [SwapState.DONE, SwapState.DONE]
+        assert [schema for schema, _system, _user in stale.shown] == [SwapStep]
+
     def test_a_crash_mid_swap_resumes_from_the_checkpoint_without_repeating_the_tool(self, swap_run: SwapRun) -> None:
         class ProcessDied(BaseException):
             """A killed Lambda, from inside Python: nothing catches it."""
