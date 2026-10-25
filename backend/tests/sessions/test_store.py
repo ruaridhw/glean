@@ -1013,3 +1013,18 @@ def test_the_swap_history_is_bounded(store: tuple[SessionStore, Clock]) -> None:
     assert record is not None
     assert len(record.swaps) == MAX_SWAPS_KEPT
     assert record.swaps[-1].swap_id == MAX_SWAPS_KEPT + 3
+
+
+def test_a_swap_on_a_cancelled_session_reads_as_over_not_pending(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    sessions.enqueue_swap("user-a", "sess-1", _swap())
+
+    assert sessions.cancel("user-a", "sess-1") is True
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    view = SessionView.from_record(record)
+    assert view.status is SessionStatus.CANCELLED
+    assert view.swap is not None
+    assert view.swap.state is SwapState.FAILED

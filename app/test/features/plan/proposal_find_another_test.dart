@@ -531,4 +531,26 @@ void main() {
     );
     expect(find.text('Chicken katsu curry'), findsOneWidget);
   });
+
+  gleanWidgetTest('a swap whose session was cancelled leaves the card usable', (
+    tester,
+  ) async {
+    final backend = SwapBackend(
+      swapPolls: <Future<http.Response> Function()>[
+        () async => _poll(status: 'cancelled', swap: _swap('failed')),
+      ],
+    );
+    final h = _harness(backend);
+    addTearDown(h.dispose);
+
+    await _openProposal(tester, h);
+    await _findAnother(tester, 1);
+
+    expect(find.text('Finding another…'), findsNothing);
+    expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
+    expect(
+      _inCard(1, find.text("Couldn't find another right now. Try again.")),
+      findsOneWidget,
+    );
+  });
 }
