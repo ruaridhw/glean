@@ -7,6 +7,7 @@ on synthetic attributes only: no corpus, no store, no model.
 
 from __future__ import annotations
 
+import random
 import time
 
 import pytest
@@ -666,6 +667,42 @@ def test_the_searchs_penalty_total_is_the_breakdowns_penalty_total() -> None:
     assert scorer._penalty_points(["a", "b", "c"]) == sum(penalty.points for penalty in plan.penalties)
     assert plan.points(Term.LIGHTER) < 0
     assert plan.points(Term.PROTEIN_TARGET) < 0
+
+
+def random_context(rng: random.Random, *, pool_size: int) -> tuple[list[str], ScoringContext]:
+    """A pool drawn the way the eval's households draw one: every G1 value, thin nutrition, some history."""
+    ids = [f"r{index}" for index in range(pool_size)]
+    recipes = {
+        recipe_id: candidate(
+            recipe_id,
+            main_protein=rng.choice(list(MainProtein)),
+            main_carb=rng.choice(list(MainCarb)),
+            dish_type=rng.choice(list(DishType)),
+            cuisine=rng.choice(list(Cuisine)),
+            whole_food=rng.choice(list(WholeFood)),
+            calories=rng.choice([None, 300.0, 500.0, 700.0, 900.0]),
+            pantry_fit=rng.uniform(0.0, 3.0),
+            days_since_cooked=rng.choice([None, 50, 70]),
+        )
+        for recipe_id in ids
+    }
+    chips = frozenset({LIGHTER_CHIP}) if rng.random() < 0.5 else frozenset()
+    ctx = ScoringContext(
+        recipes=recipes, chips=chips, protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=2),)
+    )
+    return ids, ctx
+
+
+def test_the_plans_come_back_best_first_on_any_pool() -> None:
+    # Each plan after the first is a different local optimum (its pool blocks one recipe), so generation order is
+    # not score order: the caller reads plans[0] as the scorer's best, and the eval's drift gate depends on it.
+    rng = random.Random(20261024)
+    for trial in range(60):
+        ids, ctx = random_context(rng, pool_size=rng.choice([8, 10, 12]))
+        for k in (2, 3):
+            plans = create_candidate_meal_plans(ids, rng.choice([4, 5]), ctx, k=k, seed=trial)
+            totals = [plan.total for plan in plans]
+            assert totals == sorted(totals, reverse=True), f"trial {trial} k={k}: {totals}"
 
 
 # --- variety metrics for the eval (spec 6.6) --------------------------------------------------------------

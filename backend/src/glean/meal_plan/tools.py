@@ -439,7 +439,9 @@ def create_candidate_meal_plans(
         # The next plan blocks the week's weakest recipe, so the alternative differs by one swap rather than
         # by losing whatever the seed happened to rank first.
         blockers = deque(sorted(chosen, key=lambda recipe_id: (scorer.base_total(recipe_id), ranks[recipe_id])))
-    return tuple(plans)
+    # Each plan after the first is a different local optimum, so generation order is not score order: the caller
+    # reads plans[0] as the scorer's best. `sorted` is stable, so equal plans keep the order they were found in.
+    return tuple(sorted(plans, key=lambda plan: plan.total, reverse=True))
 
 
 class _Scorer:
