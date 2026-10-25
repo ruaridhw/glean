@@ -1,8 +1,9 @@
 """The V7 graph: `prepare -> plan <-> act -> finalise`, the agent working the week (spec §6.2).
 
-- **prepare** screens the week's note (`meal_plan.feedback`), then runs `meal_plan.pipeline.prepare`, which
-  samples the candidates and has the scorer build two candidate weeks with the week's chips, so the model
-  starts with a balanced week in hand. Only a note that passed the screen reaches the model, as data.
+- **prepare** runs `meal_plan.pipeline.prepare`, which samples the candidates and has the scorer build two
+  candidate weeks with the week's chips, so the model starts with a balanced week in hand. The week's note was
+  screened before the graph was invoked (`runtime`): the state holds only the screen's `feedback`, and only a
+  note that passed reaches the model, as data.
 - **plan** is the only LLM node. It returns one typed `NextAction` through structured output (ADR 0012):
   `call_tool` or `propose`. An answer that does not parse is counted and the model is asked again, up to
   `MAX_INVALID_ACTIONS` times; a provider failure ends the loop.
@@ -37,7 +38,7 @@ from glean.agent.errors import AgentError, model_error_for
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, bounded_transcript, user_message
 from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
-from glean.meal_plan.feedback import screen_feedback
+from glean.meal_plan.feedback import ScreenedFeedback
 from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
 from glean.observability import logger
 from glean.sessions.models import SessionError, SessionErrorCode
@@ -79,7 +80,9 @@ class PlanState(TypedDict, total=False):
     """The graph state. Everything here must survive a JSON round trip in the checkpointer."""
 
     session_id: str
+    # The request without the week's raw note (`feedback.without_note`); the note's screened form is `feedback`.
     request: dict[str, Any]
+    feedback: dict[str, Any] | None
     prepared: dict[str, Any] | None
     # The run so far, as the model reads it: each tool call with its compact result, and any answer of the
     # model's that did not parse.
@@ -149,7 +152,8 @@ class _Nodes:
         request = MealPlanRequest.model_validate(state["request"])
         prepared = pipeline.prepare(
             request,
-            feedback=screen_feedback(request.human_feedback, decision_client=self._deps.decision_client),
+            # A state without `feedback` (none was screened) plans with the chips and no note.
+            feedback=None if state.get("feedback") is None else ScreenedFeedback.model_validate(state["feedback"]),
             corpus=self._deps.corpus_factory(),
             # The session id seeds the sampler, so a resumed run offers the same candidates.
             rng=random.Random(state["session_id"]),  # noqa: S311 - varies recipe sampling, not security

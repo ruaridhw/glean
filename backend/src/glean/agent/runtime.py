@@ -36,6 +36,7 @@ from pydantic import ValidationError
 from glean.agent.control import LostOwnership, RunGuard
 from glean.agent.errors import AgentError, SessionCancelled
 from glean.agent.graph import MAX_TOOL_CALLS, build_graph, result_of, session_metrics_of
+from glean.meal_plan.feedback import screen_feedback, without_note
 from glean.observability import logger, metrics
 from glean.sessions.models import ClaimResult, SessionError, SessionErrorCode, SessionStatus
 from glean.sessions.store import SessionBusyError, SessionTooLargeError, lease_seconds_for
@@ -172,8 +173,15 @@ def _run(session: AgentSession, deps: AgentDeps, *, guard: RunGuard, resume: boo
     if snapshot.values.get("result"):
         logger.info("publishing the plan a crashed attempt had already made", extra={"session_id": session.session_id})
         return snapshot.values
+    # The week's note is screened here, before the graph exists for it: the graph's input, its state, its
+    # checkpoints and its traces carry the screen's outcome and the request without the raw note.
+    feedback = screen_feedback(session.request.human_feedback, decision_client=deps.decision_client)
     return graph.invoke(
-        {"session_id": session.session_id, "request": session.request.model_dump(mode="json")},
+        {
+            "session_id": session.session_id,
+            "request": without_note(session.request).model_dump(mode="json"),
+            "feedback": feedback.model_dump(mode="json"),
+        },
         config=config,  # ty: ignore[invalid-argument-type]
     )
 

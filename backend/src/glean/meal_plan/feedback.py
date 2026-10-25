@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from glean.meal_plan.schemas import FeedbackNoteOutcome, HumanFeedback
+from glean.meal_plan.schemas import FeedbackNoteOutcome, HumanFeedback, MealPlanRequest
 from glean.meal_plan.tools import QUICK_WEEKNIGHT_MINS, FeedbackChip
 from glean.observability import logger
 from glean.screening import ScreenRejection, screen
@@ -112,6 +112,18 @@ def unscreened(feedback: HumanFeedback | None) -> ScreenedFeedback:
         return ScreenedFeedback()
     has_note = bool((feedback.note or "").strip())
     return ScreenedFeedback(chips=feedback.chips, note_outcome=FeedbackNoteOutcome.UNAVAILABLE if has_note else None)
+
+
+def without_note(request: MealPlanRequest) -> MealPlanRequest:
+    """The request with the week's raw note removed, for everything downstream of the screen.
+
+    Once `screen_feedback` has run, the note's only form is the `ScreenedFeedback` it produced: graph state,
+    checkpoints and traced inputs carry this request instead, so a rejected note is kept nowhere.
+    """
+    feedback = request.human_feedback
+    if feedback is None or feedback.note is None:
+        return request
+    return request.model_copy(update={"human_feedback": feedback.model_copy(update={"note": None})})
 
 
 def prompt_payload(screened: ScreenedFeedback) -> dict[str, Any] | None:
