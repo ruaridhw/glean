@@ -18,7 +18,8 @@ from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.deps import AgentDeps
 from glean.agent.runtime import start
 from glean.config import Settings, get_settings
-from glean.dependencies import get_llm_router
+from glean.decisions import DecisionClient
+from glean.dependencies import get_decision_client, get_llm_router
 from glean.llm import LLMRouter
 from glean.observability import logger
 from glean.sessions.factories import session_queue, session_store
@@ -40,6 +41,7 @@ def get_session_dispatcher(
     settings: Annotated[Settings, Depends(get_settings)],
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
     sessions: Annotated[SessionStore, Depends(get_session_store)],
+    decision_client: Annotated[DecisionClient, Depends(get_decision_client)],
 ) -> Callable[[AgentSession], None]:
     """How a `queued` session reaches the agent: a message, or (inline) the run itself."""
     if settings.agent_runner == "inline":
@@ -48,6 +50,7 @@ def get_session_dispatcher(
             checkpointer=_inline_checkpointer(),
             llm_router=llm_router,
             clock=utcnow,
+            decision_client=decision_client,
         )
 
         def run_inline(session: AgentSession) -> None:

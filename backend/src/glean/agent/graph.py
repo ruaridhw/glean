@@ -1,7 +1,8 @@
 """The V7 graph: `prepare -> plan <-> act -> finalise`, the agent working the week (spec §6.2).
 
-- **prepare** is deterministic: `meal_plan.pipeline.prepare` samples the candidates and the scorer builds two
-  candidate weeks, so the model starts with a balanced week in hand.
+- **prepare** screens the week's note (`meal_plan.feedback`), then runs `meal_plan.pipeline.prepare`, which
+  samples the candidates and has the scorer build two candidate weeks with the week's chips, so the model
+  starts with a balanced week in hand. Only a note that passed the screen reaches the model, as data.
 - **plan** is the only LLM node. It returns one typed `NextAction` through structured output (ADR 0012):
   `call_tool` or `propose`. An answer that does not parse is counted and the model is asked again, up to
   `MAX_INVALID_ACTIONS` times; a provider failure ends the loop.
@@ -36,6 +37,7 @@ from glean.agent.errors import AgentError, model_error_for
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, bounded_transcript, user_message
 from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
+from glean.meal_plan.feedback import screen_feedback
 from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
 from glean.observability import logger
 from glean.sessions.models import SessionError, SessionErrorCode
@@ -144,8 +146,10 @@ class _Nodes:
     def prepare(self, state: PlanState) -> PlanState:
         # A budget spent here is `model_error`: there is no scorer week to fall back to yet.
         self._guard.step(PREPARE_LINE)
+        request = MealPlanRequest.model_validate(state["request"])
         prepared = pipeline.prepare(
-            MealPlanRequest.model_validate(state["request"]),
+            request,
+            feedback=screen_feedback(request.human_feedback, decision_client=self._deps.decision_client),
             corpus=self._deps.corpus_factory(),
             # The session id seeds the sampler, so a resumed run offers the same candidates.
             rng=random.Random(state["session_id"]),  # noqa: S311 - varies recipe sampling, not security
@@ -351,6 +355,7 @@ def _session_metrics(
         "invalid_actions": state.get("invalid_actions", 0),
         "degraded": result.degraded,
         "degraded_reason": reason,
+        "note_outcome": None if prepared.feedback.note_outcome is None else prepared.feedback.note_outcome.value,
         "drift_fraction": None if gap is None else round(gap.fraction, 4),
         "drift_within_15_percent": None if gap is None else gap.within_15_percent,
     }
