@@ -96,6 +96,9 @@ if TYPE_CHECKING:
 #   SessionDrift (chosen week's shortfall from the scorer's best, spec §6.6)                Percent
 # A degraded week is a fallback the household never sees (spec §6.5), so the count is how a regression
 # in the model's answer shows up at all. A cancelled one is work the household called off.
+# A session that asks its question runs in two attempts but is one session: the attempt that resumes it does not
+# count SessionsStarted again, the attempt that parks it reports no SessionWallTime, and the resuming attempt's
+# wall time includes the working seconds from before the question (never the household's thinking time).
 STARTED = "SessionsStarted"
 COMPLETED = "SessionsCompleted"
 FAILED = "SessionsFailed"
@@ -249,8 +252,8 @@ def _claim(session: AgentSession, deps: AgentDeps, *, owner: str) -> tuple[Sessi
 def _plan(session: AgentSession, record: SessionRecord, deps: AgentDeps, *, owner: str, resumed: bool) -> None:
     """Run the week to `done` or `failed`."""
     started = time.monotonic()
-    metrics.add_metric(name=STARTED, unit=MetricUnit.Count, value=1)
     guard = RunGuard(deps.sessions, session, owner=owner, monotonic=deps.monotonic, resumed=resumed)
+    ended: MealPlanResult | PendingQuestion | None = None
     try:
         state = _run(session, record, deps, guard=guard, resume=resumed)
         ended = outcome_of(state)
@@ -279,9 +282,7 @@ def _plan(session: AgentSession, record: SessionRecord, deps: AgentDeps, *, owne
             wall_ms=int((time.monotonic() - started) * 1000),
         )
     finally:
-        # Every attempt that started reports its wall time, so provider and worker failures are in the
-        # latency distribution too, not only the runs that worked.
-        metrics.add_metric(name=WALL_TIME, unit=MetricUnit.Milliseconds, value=int((time.monotonic() - started) * 1000))
+        _report_wall_time(started, guard, ended)
 
 
 def _swap(
@@ -396,6 +397,10 @@ def _run(
     #      session write was lost (a crash there must not buy a second model call);
     #   4. otherwise as before: pending nodes -> continue them (no new input), so completed steps are not paid
     #      for twice; nothing usable -> start fresh.
+    if not snapshot.interrupts and record.pending_swap is None:
+        # A session parked on its question was counted when it started; its resume is the same session. A swap
+        # counts SwapsStarted instead.
+        metrics.add_metric(name=STARTED, unit=MetricUnit.Count, value=1)
     if snapshot.interrupts:
         if record.reply is None:
             # The attempt that asked died before the session said so: park it again, without the model.
@@ -424,6 +429,19 @@ def _run(
         },
         config=config,  # ty: ignore[invalid-argument-type]
     )
+
+
+def _report_wall_time(started: float, guard: RunGuard, ended: MealPlanResult | PendingQuestion | None) -> None:
+    """One latency point per session, from the attempt that ends its work.
+
+    Provider and worker failures are in the distribution too, not only the runs that worked. An attempt that
+    parked the session on its question has not ended it, and the attempt that resumes it adds the working
+    seconds from before the question.
+    """
+    if isinstance(ended, PendingQuestion):
+        return
+    wall = time.monotonic() - started + guard.carried()
+    metrics.add_metric(name=WALL_TIME, unit=MetricUnit.Milliseconds, value=int(wall * 1000))
 
 
 def _publish(

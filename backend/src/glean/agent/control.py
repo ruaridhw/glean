@@ -62,11 +62,17 @@ class RunBudget:
     ) -> None:
         self._clock = clock
         self._seconds = seconds
+        self._carried = 0.0
         self._deadline = clock() + seconds
 
     def carry(self, seconds: float) -> None:
         """Count *seconds* an earlier attempt of this session already worked, before its question parked it."""
         self._deadline -= seconds
+        self._carried += seconds
+
+    def carried(self) -> float:
+        """The working seconds an earlier attempt spent before the question; 0 for a session that never asked."""
+        return self._carried
 
     def spent(self) -> float:
         """Working seconds so far: this attempt's, plus any carried from before the question."""
@@ -177,3 +183,7 @@ class RunGuard:
     def spent(self) -> float:
         """The session's working seconds so far, recorded in the state when it asks its question."""
         return self._budget.spent()
+
+    def carried(self) -> float:
+        """The working seconds carried in from before the question, for the session's one wall-time point."""
+        return self._budget.carried()
