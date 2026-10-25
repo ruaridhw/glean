@@ -34,6 +34,7 @@ from glean.sessions.models import (
 )
 from glean.sessions.store import (
     MAX_LEASE_SECONDS,
+    STALE_QUEUED_SWAP_SECONDS,
     WORKER_TIMEOUT_SECONDS,
     MessageRefusal,
     MessageRefusedError,
@@ -511,3 +512,47 @@ class TestResume:
         assert swap_run.record.status is SessionStatus.FAILED
         assert swap_run.record.result == swap_run.proposal
         assert swap_run.view.swap.state is SwapState.FAILED  # ty: ignore[possibly-missing-attribute]
+
+    def test_a_crash_between_storing_a_swap_and_sending_it_does_not_block_the_next(self, swap_run: SwapRun) -> None:
+        class ProcessDied(BaseException):
+            """The API Lambda died after the store write and before the queue send."""
+
+        def dies(_session: Any) -> None:
+            raise ProcessDied
+
+        slots = [meal.external_id for meal in swap_run.proposal.suggestions]
+        with pytest.raises(ProcessDied):
+            resume(
+                "sess-1",
+                SwapMessage(type="swap", slot=slots[1]),
+                user_sub="user-a",
+                sessions=swap_run.sessions,
+                dispatch=dies,
+            )
+        assert swap_run.record.status is SessionStatus.QUEUED
+        with pytest.raises(MessageRefusedError):
+            resume(
+                "sess-1",
+                SwapMessage(type="swap", slot=slots[0]),
+                user_sub="user-a",
+                sessions=swap_run.sessions,
+                dispatch=lambda _s: None,
+            )
+
+        swap_run.clock.advance(STALE_QUEUED_SWAP_SECONDS)
+        sent: list[Any] = []
+        swap_id = resume(
+            "sess-1",
+            SwapMessage(type="swap", slot=slots[0]),
+            user_sub="user-a",
+            sessions=swap_run.sessions,
+            dispatch=sent.append,
+        )
+        model = Model(swap=[replace_with(a_free_candidate)])
+        assert swap_run.deliver(model) is True
+
+        assert swap_id == 2
+        assert [swap.state for swap in swap_run.record.swaps] == [SwapState.FAILED, SwapState.DONE]
+        assert swap_run.record.status is SessionStatus.DONE
+        assert swap_run.record.result.suggestions[0] != swap_run.proposal.suggestions[0]
+        assert swap_run.record.result.suggestions[1] == swap_run.proposal.suggestions[1]

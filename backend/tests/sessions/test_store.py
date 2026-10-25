@@ -46,6 +46,7 @@ from glean.sessions.store import (
     MAX_LEASE_SECONDS,
     QUEUE_VISIBILITY_MARGIN_SECONDS,
     QUEUE_VISIBILITY_SECONDS,
+    STALE_QUEUED_SWAP_SECONDS,
     WORKER_TIMEOUT_SECONDS,
     InMemorySessionStore,
     MessageRefusal,
@@ -747,7 +748,14 @@ def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[Se
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
-    assert swap == SwapRecord(swap_id=1, slot="rec_2", position=1, note="maybe fish", note_use=SwapNoteUse.USED)
+    assert swap == SwapRecord(
+        swap_id=1,
+        slot="rec_2",
+        position=1,
+        note="maybe fish",
+        note_use=SwapNoteUse.USED,
+        queued_at=int(clock.now.timestamp()),
+    )
     assert record.status is SessionStatus.QUEUED
     assert record.pending_swap == swap
     # The proposal stays readable while the swap runs, and the finished run's lease no longer stands in the way
@@ -786,6 +794,47 @@ def test_only_one_swap_runs_at_a_time(store: tuple[SessionStore, Clock]) -> None
     record = sessions.get("user-a", "sess-1")
     assert record is not None
     assert [swap.swap_id for swap in record.swaps] == [1]
+
+
+def test_a_queued_swap_nothing_took_is_replaced_once_the_queue_would_have_taken_it(
+    store: tuple[SessionStore, Clock],
+) -> None:
+    """The route died between storing a swap and sending it: the next swap must not be refused for a day."""
+    sessions, clock = store
+    _done(sessions, clock)
+    lost = sessions.enqueue_swap("user-a", "sess-1", _swap())
+    clock.advance(seconds=STALE_QUEUED_SWAP_SECONDS - 1)
+    with pytest.raises(MessageRefusedError) as still_young:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_1"))
+    clock.advance(seconds=1)
+
+    replacing = sessions.enqueue_swap("user-a", "sess-1", _swap("rec_1"))
+
+    assert still_young.value.reason is MessageRefusal.BUSY
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert record.status is SessionStatus.QUEUED
+    assert record.swaps == [lost.model_copy(update={"state": SwapState.FAILED}), replacing]
+    assert record.pending_swap == replacing
+    assert replacing.queued_at == int(clock.now.timestamp())
+
+
+def test_a_running_swap_is_never_replaced_however_old(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+    sessions.enqueue_swap("user-a", "sess-1", _swap())
+    sessions.claim("user-a", "sess-1", owner="attempt-2", now=clock.now, lease_seconds=FULL_INVOCATION_LEASE)
+    clock.advance(seconds=STALE_QUEUED_SWAP_SECONDS + 60)
+
+    with pytest.raises(MessageRefusedError) as refused:
+        sessions.enqueue_swap("user-a", "sess-1", _swap("rec_1"))
+
+    assert refused.value.reason is MessageRefusal.BUSY
+
+
+def test_the_stale_window_outlasts_a_receive_and_an_invocation() -> None:
+    assert STALE_QUEUED_SWAP_SECONDS >= QUEUE_VISIBILITY_SECONDS + MAX_LEASE_SECONDS
+    assert STALE_QUEUED_SWAP_SECONDS >= 3 * 60
 
 
 def test_a_swap_before_the_proposal_exists_is_refused_as_busy(store: tuple[SessionStore, Clock]) -> None:

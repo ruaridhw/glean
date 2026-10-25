@@ -232,6 +232,9 @@ class SwapRecord(BaseModel):
     )
     state: SwapState = SwapState.PENDING
     note_use: SwapNoteUse = SwapNoteUse.NONE
+    queued_at: int | None = Field(
+        default=None, description="Epoch seconds the swap was queued: how a swap no delivery ever took is told apart."
+    )
 
 
 class SessionRecord(BaseModel):
@@ -278,11 +281,14 @@ class SessionRecord(BaseModel):
         replaced = [swap for swap in self.swaps if swap.slot == slot and swap.state is SwapState.DONE]
         return replaced[-1].position if replaced else None
 
-    def with_swap(self, message: SwapMessage, *, note_dropped: bool = False) -> tuple[SessionRecord, SwapRecord] | None:
+    def with_swap(
+        self, message: SwapMessage, *, now: int, note_dropped: bool = False
+    ) -> tuple[SessionRecord, SwapRecord] | None:
         """This record with *message* queued as its newest swap, or None when the slot is not in the proposal.
 
         *message* carries the screened note only; *note_dropped* records that the household wrote one the screen
-        dropped, which the card reports as "Couldn't use that note".
+        dropped, which the card reports as "Couldn't use that note". A swap still pending here is one the store
+        let this one replace (nothing ever took it), so it is marked failed: abandoned, never run.
         """
         position = self.swap_position(message.slot)
         if position is None:
@@ -293,8 +299,13 @@ class SessionRecord(BaseModel):
             position=position,
             note=(note := (message.note or "").strip() or None),
             note_use=SwapNoteUse.USED if note else SwapNoteUse.DROPPED if note_dropped else SwapNoteUse.NONE,
+            queued_at=now,
         )
-        return self.model_copy(update={"swaps": [*self.swaps, swap][-MAX_SWAPS_KEPT:]}), swap
+        earlier = [
+            entry.model_copy(update={"state": SwapState.FAILED}) if entry.state is SwapState.PENDING else entry
+            for entry in self.swaps
+        ]
+        return self.model_copy(update={"swaps": [*earlier, swap][-MAX_SWAPS_KEPT:]}), swap
 
     def with_swap_finished(self, swap: SwapRecord) -> list[SwapRecord]:
         """The swap history with *swap* written over the entry it finishes."""

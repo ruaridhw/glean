@@ -175,7 +175,7 @@ def _screened_swap(
     Returns the message carrying only what the screen passed, and whether it dropped a note the household
     wrote. The note as typed goes no further than this function.
     """
-    refusal = swap_refusal(record) or (
+    refusal = swap_refusal(record, now=int(utcnow().timestamp())) or (
         MessageRefusal.UNKNOWN_SLOT if record.swap_position(message.slot) is None else None
     )
     if refusal is not None:
