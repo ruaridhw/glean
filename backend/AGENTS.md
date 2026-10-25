@@ -169,7 +169,11 @@ src/glean/
                       #   through the injection screen (dropped, never raw, when it fails or cannot be
                       #   asked; the chips still apply), and prompt_payload is the only feedback a prompt
                       #   carries: the chips with their meanings and an accepted note as data in its own
-                      #   field. The result's `feedback_note` says used / not_a_preference / unavailable
+                      #   field. The result's `feedback_note` says used / not_a_preference / unavailable.
+                      #   The note is screened BEFORE the graph runs (agent.runtime) and before the sync
+                      #   route's traced code: graph input, state, checkpoints and traces carry only
+                      #   `without_note(request)` and the ScreenedFeedback. A chip the backend does not
+                      #   know is ignored with a warning, not a 422
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
