@@ -310,13 +310,6 @@ def test_client_get_recipe_hits_api_when_cache_miss(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_client_active_time_mins() -> None:
-    recipe = RecipeApiRecipe(id="x", name="Test")
-    recipe.meta.active_time = "PT15M"
-    client = RecipeApiClient.__new__(RecipeApiClient)
-    assert client.active_time_mins(recipe) == 15
-
-
 def test_client_total_time_mins() -> None:
     recipe = RecipeApiRecipe(id="x", name="Test")
     recipe.meta.total_time = "PT1H"

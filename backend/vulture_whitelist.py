@@ -171,9 +171,7 @@ _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSON
 HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe side, per ADR 0025
 
 
-# recipes/attributes.py — the G1 attribute contract. Its enum members are read by value (a projection entry,
-# a question's criteria, a label), not by attribute, so the members a caller does not name by hand would read
-# as dead. There are none left: the questions key their criteria on the members, so only these few remain.
-recipe_attributes  # ProjectedRecipe: the typed accessor planning (V6's filter and scorer) reads an entry by
+# The G1 attribute contract's enum members are read by value (a projection entry, a question's criteria, a
+# label) and the questions key their criteria on the members, so no member needs a line here. What is left is
+# a Pydantic validator, which only Pydantic calls.
 _labelled_questions_carry_a_value  # Pydantic model validator (RecipeAnswer: a labelled answer must carry a value)
-active_time_mins  # RecipeOut Pydantic field (serialised in the API response) and recipe_api's client helper
