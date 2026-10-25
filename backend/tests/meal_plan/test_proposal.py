@@ -177,7 +177,7 @@ def test_a_card_labels_the_recipe_from_its_measured_attributes(tmp_path: Path) -
         main_protein="chicken",
         main_carb="rice",
         dish_type="curry",
-        active_time="15-30",
+        active_time="<=15",
     )
 
     prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
@@ -187,7 +187,7 @@ def test_a_card_labels_the_recipe_from_its_measured_attributes(tmp_path: Path) -
         "main_protein": "chicken",
         "main_carb": "rice",
         "dish_type": "curry",
-        "active_time_mins": 30,
+        "active_time_mins": 15,
     }
 
 
@@ -215,6 +215,26 @@ def test_a_recipe_with_no_answers_labels_only_its_total_time(tmp_path: Path) -> 
         "dish_type": None,
         "active_time_mins": 20,  # the corpus fixture's total time; no bucket was measured
     }
+
+
+def test_the_card_never_shows_more_hands_on_minutes_than_the_recipe_takes(tmp_path: Path) -> None:
+    """A 30-45 bucket on a 35-minute recipe is a 35-minute recipe, not a 45-minute one."""
+    corpus = _corpus(tmp_path)
+    corpus.save(
+        StoredRecipe(
+            external_id="rec_quick_ish",
+            title="Quick-ish Bake",
+            ingredients=[StoredIngredient(canonical_name="haddock", quantity=1, unit="each")],
+            total_time_mins=35,
+        )
+    )
+    _enrich(corpus, "rec_quick_ish", active_time="30-45")
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    index = prepared.offered_ids.index("rec_quick_ish")
+    suggestion = pipeline.finalise(prepared, _draft(prepared, suggestions=[_pick(prepared, index)])).suggestions[0]
+
+    assert suggestion.attributes.active_time_mins == 35
 
 
 def test_a_sixty_plus_bucket_has_no_upper_bound_so_the_card_shows_total_time(tmp_path: Path) -> None:

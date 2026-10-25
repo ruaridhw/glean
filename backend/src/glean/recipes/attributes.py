@@ -295,10 +295,18 @@ class RecipeAttributes(BaseModel):
             "active_time": self.active_time.value,
         }
 
-    @property
-    def active_time_upper_bound_mins(self) -> int | None:
-        """The most minutes the active-time bucket can mean, or None when it is unbounded or unknown."""
-        return self.active_time.upper_bound_mins
+    def active_time_mins(self, total_time_mins: int | None) -> int | None:
+        """The most hands-on minutes this recipe can take: the bucket's bound, capped by its total time.
+
+        Hands-on time can never exceed the time the recipe takes overall, so a bucket whose upper bound is
+        above the total is only as slow as the total (a 30-45 estimate on a 35-minute recipe is 35). With no
+        upper bound — `60+`, or nothing measured yet — the total time is the only bound there is; with neither,
+        nothing is known. This is the number the household's cap is compared against and the one a label shows.
+        """
+        bound = self.active_time.upper_bound_mins
+        if total_time_mins is None:
+            return bound
+        return total_time_mins if bound is None else min(bound, total_time_mins)
 
     def fits_time_cap(self, cap_mins: int | None, *, total_time_mins: int | None) -> bool:
         """Whether the household's time cap admits this recipe.
@@ -313,10 +321,8 @@ class RecipeAttributes(BaseModel):
             return True
         if self.active_time is ActiveTimeBucket.OVER_60 and cap_mins < 60:
             return False
-        bound = self.active_time_upper_bound_mins
-        if bound is not None:
-            return bound <= cap_mins
-        return total_time_mins is None or total_time_mins <= cap_mins
+        bound = self.active_time_mins(total_time_mins)
+        return bound is None or bound <= cap_mins
 
 
 def _coerce[EnumT: StrEnum](enum: type[EnumT], value: Any) -> EnumT:

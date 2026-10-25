@@ -495,15 +495,15 @@ def _proposal_attributes(attributes: RecipeAttributes, *, total_time_mins: int |
     """What a proposal card may label: the known values, and the time the card should show.
 
     `unsure` is not a label: a value the model was not confident about is left null so the card shows no chip.
-    The time is the active-time bucket's upper bound — the conservative reading of "up to 30 minutes" — and
-    falls back to the recipe's total time when no bucket is known (not enriched yet, below its bar, or `60+`,
-    which has no upper bound), which is what the time filter shows too.
+    The time is the same number the household's cap is compared against: the active-time bucket's upper bound,
+    capped by the recipe's total time (hands-on work cannot outlast the recipe), and total time alone when no
+    bucket is known (not enriched yet, below its bar, or `60+`, which has no upper bound).
     """
     return MealPlanAttributes(
         main_protein=None if attributes.main_protein is MainProtein.UNSURE else attributes.main_protein,
         main_carb=None if attributes.main_carb is MainCarb.UNSURE else attributes.main_carb,
         dish_type=None if attributes.dish_type is DishType.UNSURE else attributes.dish_type,
-        active_time_mins=attributes.active_time_upper_bound_mins or total_time_mins,
+        active_time_mins=attributes.active_time_mins(total_time_mins),
     )
 
 

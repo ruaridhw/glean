@@ -273,6 +273,11 @@ def test_each_attribute_names_the_question_its_answer_is_stored_under() -> None:
         # The bucket's upper bound is what the cap is compared against, not its lower bound.
         ({"active_time": "15-30"}, 40, 30, True),
         ({"active_time": "15-30"}, 40, 29, False),
+        # A bucket cannot mean more hands-on time than the recipe takes in total: 30-45 on a 35-minute
+        # recipe is a 35-minute recipe, so a 40-minute cap admits it.
+        ({"active_time": "30-45"}, 35, 40, True),
+        ({"active_time": "30-45"}, 35, 34, False),
+        ({"active_time": "30-45"}, 90, 40, False),  # here the bucket's own 45 is the tighter bound
         ({"active_time": "<=15"}, 60, 15, True),
         # 60+ has no upper bound; a cap under an hour rejects it outright, above that the total time decides.
         ({"active_time": "60+"}, 70, 120, True),
@@ -289,6 +294,22 @@ def test_each_attribute_names_the_question_its_answer_is_stored_under() -> None:
 )
 def test_the_time_cap_compares_against_the_buckets_upper_bound(attributes, total, cap, fits) -> None:
     assert RecipeAttributes.from_mapping(attributes).fits_time_cap(cap, total_time_mins=total) is fits
+
+
+@pytest.mark.parametrize(
+    ("attributes", "total", "minutes"),
+    [
+        ({"active_time": "15-30"}, 40, 30),
+        ({"active_time": "30-45"}, 35, 35),  # the total time is the tighter of the two bounds
+        ({"active_time": "<=15"}, 10, 10),
+        ({"active_time": "60+"}, 90, 90),  # no upper bound, so the total is the only bound
+        ({}, 50, 50),  # no bucket: total time, as before V5
+        ({"active_time": "30-45"}, None, 45),
+        ({}, None, None),
+    ],
+)
+def test_hands_on_minutes_are_the_buckets_bound_capped_by_the_total_time(attributes, total, minutes) -> None:
+    assert RecipeAttributes.from_mapping(attributes).active_time_mins(total) == minutes
 
 
 def test_a_projection_entry_exposes_its_attributes_typed() -> None:
