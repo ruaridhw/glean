@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -147,9 +148,18 @@ def test_a_chip_sent_twice_counts_once() -> None:
     assert feedback.chips == [FeedbackChip.LIGHTER, FeedbackChip.GUESTS]
 
 
-def test_an_unknown_chip_is_refused() -> None:
+def test_an_unknown_chip_from_a_newer_app_is_ignored_and_logged(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING):
+        feedback = HumanFeedback.model_validate({"chips": ["spicy_week", "lighter"], "note": "Mild please"})
+
+    assert feedback.chips == [FeedbackChip.LIGHTER]
+    assert feedback.note == "Mild please"
+    assert any(record.message == "ignoring feedback chips this backend does not know" for record in caplog.records)
+
+
+def test_a_chip_that_is_not_a_string_is_still_refused() -> None:
     with pytest.raises(ValidationError):
-        HumanFeedback.model_validate({"chips": ["make_it_free"]})
+        HumanFeedback.model_validate({"chips": [{"chip": "lighter"}]})
 
 
 def test_the_note_is_bounded() -> None:
