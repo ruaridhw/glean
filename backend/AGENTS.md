@@ -212,7 +212,7 @@ DELETE /meal-plan/sessions/{id}    204                              free, never 
 `status` is `queued | running | waiting_for_user | done | failed | cancelled`, and `done`, `failed` and
 `cancelled` are terminal. `error` is `{code, retry_after_minutes}` with `code` one of
 `no_eligible_recipes | rate_limited | model_error | worker_failed | invalid_request`.
-All four routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
+All five routes are scoped to the caller's Cognito sub: one item is keyed `(sub, session id)`, so
 another user's session is a 404 rather than a 403. `POST` refuses `source: "saved"` with a 422 —
 the graph wraps the corpus pipeline only.
 
