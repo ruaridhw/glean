@@ -143,14 +143,17 @@ def test_a_favourite_meal_earns_two() -> None:
 
 
 def test_a_liked_cuisine_and_a_loved_ingredient_earn_one_each() -> None:
+    # The row reads "+1 liked cuisine or loved ingredient": a match is worth a point, so several loved
+    # ingredients in one dish are still one point and cannot out-vote the week's balance.
     ctx = context(
-        candidate("a", cuisine=Cuisine.ITALIAN, loved_ingredients=("basil", "parmesan")),
+        candidate("a", cuisine=Cuisine.ITALIAN, loved_ingredients=("basil", "parmesan", "garlic")),
         liked_cuisines=frozenset({Cuisine.ITALIAN}),
     )
     plan = score(["a"], ctx)
     assert plan.points(Term.LIKED_CUISINE) == 1.0
-    assert plan.points(Term.LOVED_INGREDIENT) == 2.0
-    assert plan.total == 3.0
+    assert plan.points(Term.LOVED_INGREDIENT) == 1.0
+    assert plan.total == 2.0
+    assert score(["a"], context(candidate("a"))).points(Term.LOVED_INGREDIENT) == 0.0
 
 
 def test_an_avoided_cuisine_loses_two() -> None:

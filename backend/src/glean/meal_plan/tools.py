@@ -149,7 +149,7 @@ class ScorerWeights:
     favourite: float = 2.0
     # "Profile affinity": +1 liked cuisine.
     liked_cuisine: float = 1.0
-    # "Profile affinity": +1 loved ingredient, per ingredient of the profile this recipe was matched to.
+    # "Profile affinity": +1 for a loved ingredient match, however many of them one recipe matched.
     loved_ingredient: float = 1.0
     # "Profile affinity": -2 avoided cuisine. Disliked ingredients are a hard exclusion upstream, not a weight.
     avoided_cuisine: float = -2.0
@@ -577,13 +577,18 @@ class _Scorer:
                 Term.FAVOURITE, self._weights.favourite if facts.recipe_id in self._ctx.favourite_recipe_ids else 0.0
             ),
             TermScore(Term.LIKED_CUISINE, self._liked_cuisine(facts)),
-            TermScore(Term.LOVED_INGREDIENT, self._weights.loved_ingredient * len(facts.loved_ingredients)),
+            TermScore(Term.LOVED_INGREDIENT, self._loved_ingredient(facts)),
             TermScore(Term.AVOIDED_CUISINE, self._avoided_cuisine(facts)),
             TermScore(Term.FEEDBACK_CHIP, self._feedback_chips(facts)),
             TermScore(Term.RECENCY, self._recency(facts)),
             TermScore(Term.RATING, self._rating(facts)),
             TermScore(Term.WHOLE_FOOD, self._whole_food(facts)),
         )
+
+    def _loved_ingredient(self, facts: CandidateRecipe) -> float:
+        # The row is "+1 liked cuisine or loved ingredient": a match is a point, so a dish that matched three
+        # loved ingredients still scores one and cannot out-vote the week's balance.
+        return self._weights.loved_ingredient if facts.loved_ingredients else 0.0
 
     def _liked_cuisine(self, facts: CandidateRecipe) -> float:
         return self._weights.liked_cuisine if facts.attributes.cuisine in self._ctx.liked_cuisines else 0.0
