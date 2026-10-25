@@ -22,6 +22,7 @@ import re
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from enum import StrEnum
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal
 
 from glean.meal_plan.candidates import GUARANTEE_MAX, PantryItem, mentions_item, near_duplicate_ingredients
@@ -31,6 +32,7 @@ from glean.recipes.attributes import (
     UNSURE,
     ActiveTimeBucket,
     Cuisine,
+    DishType,
     MainCarb,
     MainProtein,
     RecipeAttributes,
@@ -44,6 +46,7 @@ if TYPE_CHECKING:
     from glean.meal_plan.eligibility import CookedMeal
 
 __all__ = [
+    "CHIP_PREDICATES",
     "HEALTHIER_CHIP",
     "LIGHTER_CHIP",
     "MAX_FILTER_LIMIT",
@@ -53,6 +56,7 @@ __all__ = [
     "EligibilityContext",
     "EligibleRecipe",
     "EligibleRecipes",
+    "FeedbackChip",
     "FilterRejected",
     "PlanGap",
     "PlanPenalty",
@@ -81,10 +85,39 @@ __all__ = [
     "score_meal_plan",
 ]
 
-# The chip names V9 sends on the wire. The scorer reads two of them by name; every other chip earns its +2 only
-# through the predicate the caller maps it to.
-HEALTHIER_CHIP = "healthier"
-LIGHTER_CHIP = "lighter"
+
+class FeedbackChip(StrEnum):
+    """The week's chips (spec 6.5, "Human feedback"), as the app sends them.
+
+    What each one does to the week is decided in this module and nowhere else. A chip either pays the "Human
+    feedback match" +2 through its predicate (`CHIP_PREDICATES`) or through a fact about the recipe's history,
+    or it changes one row of the table:
+
+    - `quick_weeknights`: +2 for 30 minutes hands-on or less (`QUICK_WEEKNIGHT_MINS`).
+    - `use_up_the_fridge`: pantry fit, urgency-weighted already, is doubled (`use_up_the_fridge_multiplier`).
+    - `something_new`: +2 for a recipe the household's history never mentions.
+    - `healthier`: doubles whole food (`healthier_multiplier`), with no predicate, so it never pays twice.
+    - `comfort_food`: +2 for the warming dish types (`COMFORT_DISH_TYPES`).
+    - `lighter`: turns on the calories row against the fixed reference, with no predicate either.
+    - `guests`: +2 for dishes that serve a table (`GUEST_DISH_TYPES`). It does not change servings: the app
+      sets those when the week is added, and the request carries none.
+    - `same_as_last_week`: +2 for a recipe cooked in the last seven days. The six-week floor would leave those
+      out, so this chip lifts it for them alone (`pipeline`), and never for a thumbs-down recipe.
+    """
+
+    QUICK_WEEKNIGHTS = "quick_weeknights"
+    USE_UP_THE_FRIDGE = "use_up_the_fridge"
+    SOMETHING_NEW = "something_new"
+    HEALTHIER = "healthier"
+    COMFORT_FOOD = "comfort_food"
+    LIGHTER = "lighter"
+    GUESTS = "guests"
+    SAME_AS_LAST_WEEK = "same_as_last_week"
+
+
+# The two chips the scorer reads by name in rows of their own.
+HEALTHIER_CHIP = FeedbackChip.HEALTHIER.value
+LIGHTER_CHIP = FeedbackChip.LIGHTER.value
 
 # Six, nine and twelve weeks, in days: the recency bands' boundaries.
 SIX_WEEKS_DAYS = 42
@@ -152,6 +185,16 @@ _ACTIVE_TIME_RANGE: dict[str, tuple[int | None, int | None]] = {
     ActiveTimeBucket.OVER_60.value: (60, None),
 }
 
+# "Quick weeknights": hands-on time at most this many minutes, the bucket boundary G1 drew at half an hour.
+QUICK_WEEKNIGHT_MINS = 30
+# "Comfort food": the warming, filling dish shapes. Roasts and traybakes are left to guests, and a stir fry, a
+# salad or a handheld is a weeknight dish, not a comfort one.
+COMFORT_DISH_TYPES = (DishType.PIE_OR_BAKE, DishType.SOUP_OR_STEW, DishType.CURRY, DishType.PASTA_DISH)
+# "Guests": dishes that are made whole and served at the table: a roast or traybake, a pie, a curry, a paella.
+GUEST_DISH_TYPES = (DishType.ROAST_OR_TRAYBAKE, DishType.PIE_OR_BAKE, DishType.CURRY, DishType.RICE_DISH)
+# "Same as last week": a cook this recent counts as last week's.
+LAST_WEEK_DAYS = 7
+
 # The repeat terms, in the order `_Scorer.repeat_values` gives their attribute values.
 _REPEAT_TERMS = (Term.REPEAT_MAIN_PROTEIN, Term.REPEAT_MAIN_CARB, Term.REPEAT_DISH_TYPE, Term.REPEAT_CUISINE)
 
@@ -207,9 +250,11 @@ class ScorerWeights:
     # set +0.5 on 2026-10-25 because +1 outvoted variety: at -5 protein, +1 holds 19/22 carb gates where +0.5
     # holds 20/22, and the protein gates stay 16/16 either way.
     whole_food: float = 0.5
-    # "Whole food": the "healthier" chip doubles it. If V9 also maps a predicate to that chip, both apply, so
-    # its predicate mapping is the place to keep it from counting twice.
+    # "Whole food": the "healthier" chip doubles it. It has no predicate in `CHIP_PREDICATES`, so it pays once.
     healthier_multiplier: float = 2.0
+    # "Pantry fit": the "use up the fridge" chip doubles it, so a recipe using the week's urgent items outbids the
+    # +2 of any one other chip. A guess like the rest of the table.
+    use_up_the_fridge_multiplier: float = 2.0
     # "'Lighter' chip": -1 per recipe above `lighter_reference_kcal`, once the chip is on.
     lighter: float = -1.0
     # That reference: the corpus median of STATED per-serving calories, 672 kcal. Derived from the 2026-10-24 prod
@@ -236,7 +281,8 @@ class CandidateRecipe:
     `pantry_fit` is the caller's already urgency-weighted, already scaled figure; `days_since_cooked` is None for
     a recipe the household has never cooked; `offered_after_floor_relaxed` says the six-week floor was lowered to
     offer it, which is the only case the recency row's -8 applies; `loved_ingredients` are the profile's loved
-    ingredients this recipe was matched to upstream.
+    ingredients this recipe was matched to upstream. `cooked_last_week` is set only when the "same as last week"
+    chip lifted the floor for this recipe, whose recent cook then no longer counts in `days_since_cooked`.
     """
 
     recipe_id: str
@@ -247,6 +293,7 @@ class CandidateRecipe:
     rating: Rating | None = None
     offered_after_floor_relaxed: bool = False
     loved_ingredients: tuple[str, ...] = ()
+    cooked_last_week: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,9 +379,8 @@ class ScoringContext:
     the items in the offered pool that go off within three days, so "the pool can use this item" is what makes
     leaving it unused a penalty. `urgent_items_already_used` are the ones a meal already in the week uses, which
     cannot be left unused and so are never charged. The rest are the optional profile inputs (spec 6.4) and the
-    week's feedback chips. `chip_predicates` is empty until V9 gives each chip a predicate; a chip with no
-    predicate earns nothing (and the two chips the scorer reads by name still work: `healthier` doubles the whole
-    food term, `lighter` turns on the calories term).
+    week's feedback chips (`FeedbackChip` values). `chip_predicates` defaults to `CHIP_PREDICATES`; a chip the
+    scorer does not know earns nothing.
     """
 
     recipes: Mapping[str, CandidateRecipe] = field(default_factory=dict)
@@ -343,7 +389,7 @@ class ScoringContext:
     avoided_cuisines: frozenset[Cuisine] = frozenset()
     protein_targets: tuple[ProteinTarget, ...] = ()
     chips: frozenset[str] = frozenset()
-    chip_predicates: Mapping[str, Predicate] = field(default_factory=dict)
+    chip_predicates: Mapping[str, Predicate] = field(default_factory=lambda: CHIP_PREDICATES)
     urgent_item_uses: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     urgent_items_already_used: tuple[str, ...] = ()
 
@@ -555,6 +601,9 @@ class _Scorer:
         self._ctx = ctx
         self._weights = weights
         self._healthier = HEALTHIER_CHIP in ctx.chips
+        self._pantry_multiplier = (
+            weights.use_up_the_fridge_multiplier if FeedbackChip.USE_UP_THE_FRIDGE.value in ctx.chips else 1.0
+        )
         self._repeat_weights = (
             weights.repeat_main_protein,
             weights.repeat_main_carb,
@@ -602,7 +651,7 @@ class _Scorer:
     def _terms(self, facts: CandidateRecipe) -> tuple[TermScore, ...]:
         """One recipe's fit: every per-recipe row of the table, in table order."""
         return (
-            TermScore(Term.PANTRY_FIT, self._weights.pantry_fit * facts.pantry_fit),
+            TermScore(Term.PANTRY_FIT, self._weights.pantry_fit * self._pantry_multiplier * facts.pantry_fit),
             TermScore(
                 Term.FAVOURITE, self._weights.favourite if facts.recipe_id in self._ctx.favourite_recipe_ids else 0.0
             ),
@@ -627,12 +676,16 @@ class _Scorer:
         return self._weights.avoided_cuisine if facts.attributes.cuisine in self._ctx.avoided_cuisines else 0.0
 
     def _feedback_chips(self, facts: CandidateRecipe) -> float:
-        satisfied = sum(
-            1
-            for chip in self._ctx.chips
-            if (predicate := self._ctx.chip_predicates.get(chip)) is not None and predicate.matches(facts.attributes)
-        )
-        return self._weights.feedback_chip * satisfied
+        return self._weights.feedback_chip * sum(1 for chip in self._ctx.chips if self._satisfies(chip, facts))
+
+    def _satisfies(self, chip: str, facts: CandidateRecipe) -> bool:
+        """Whether one recipe satisfies one chip: two chips read its history, the rest a predicate."""
+        if chip == FeedbackChip.SOMETHING_NEW:
+            return facts.days_since_cooked is None and not facts.cooked_last_week
+        if chip == FeedbackChip.SAME_AS_LAST_WEEK:
+            return facts.cooked_last_week
+        predicate = self._ctx.chip_predicates.get(chip)
+        return predicate is not None and predicate.matches(facts.attributes)
 
     def _recency(self, facts: CandidateRecipe) -> float:
         days = facts.days_since_cooked
@@ -854,6 +907,22 @@ def _minutes(value: str) -> int | None:
         text = text.removesuffix(suffix)
     text = text.strip()
     return int(text) if text.isdigit() else None
+
+
+# The chips that pay through a predicate on the recipe's attributes. An unknown attribute satisfies none of them.
+CHIP_PREDICATES: Mapping[str, Predicate] = MappingProxyType(
+    {
+        FeedbackChip.QUICK_WEEKNIGHTS.value: Predicate(
+            PredicateField.ACTIVE_TIME, PredicateOp.LTE, (str(QUICK_WEEKNIGHT_MINS),)
+        ),
+        FeedbackChip.COMFORT_FOOD.value: Predicate(
+            PredicateField.DISH_TYPE, PredicateOp.IN, tuple(dish.value for dish in COMFORT_DISH_TYPES)
+        ),
+        FeedbackChip.GUESTS.value: Predicate(
+            PredicateField.DISH_TYPE, PredicateOp.IN, tuple(dish.value for dish in GUEST_DISH_TYPES)
+        ),
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
