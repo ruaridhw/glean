@@ -31,7 +31,7 @@ from glean.meal_plan.tools import (
 from glean.recipes.attributes import RecipeAttributes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
     from glean.meal_plan.candidates import OfferedRecipe
     from glean.meal_plan.eligibility import RecipeHistory
@@ -176,12 +176,16 @@ def scored_weeks(
     return tuple(CandidateWeek.from_score(plan) for plan in plans)
 
 
-def swap_targets(weeks: Sequence[CandidateWeek], chosen_ids: Sequence[str]) -> dict[int, str]:
+def swap_targets(
+    weeks: Sequence[CandidateWeek], chosen_ids: Sequence[str], *, swappable: Collection[str] | None = None
+) -> dict[int, str]:
     """For each slot of `chosen_ids`, the other candidate week's meal, so a card's Swap is the scorer's own.
 
     The other week is a whole week the scorer judged near-best, so the meal in the same slot is the swap most
-    likely to keep the week balanced -- which a spare candidate taken from the end of the offer is not. Empty
-    for a slot the other week has no meal for, or where its meal is already chosen.
+    likely to keep the week balanced -- which a spare candidate taken from the end of the offer is not.
+    `swappable` narrows what may be offered: a recipe the six-week floor relaxed back in is a fallback for the
+    week itself, not a swap worth handing the household (V2's floor). Empty for a slot the other week has no
+    usable meal for, or where its meal is already chosen.
     """
     chosen = set(chosen_ids)
     targets: dict[int, str] = {}
@@ -190,7 +194,7 @@ def swap_targets(weeks: Sequence[CandidateWeek], chosen_ids: Sequence[str]) -> d
             if position >= len(week.recipe_ids):
                 continue
             candidate = week.recipe_ids[position]
-            if candidate not in chosen:
+            if candidate not in chosen and (swappable is None or candidate in swappable):
                 targets[position] = candidate
                 break
     return targets

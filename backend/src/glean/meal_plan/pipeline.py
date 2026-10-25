@@ -408,8 +408,10 @@ def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanR
     chosen = _reconciled(choices, prepared)
     unavailable = excluded | {suggestion.external_id for suggestion in chosen if suggestion.external_id}
     # The other candidate week is a whole balanced week, so its meal in the same slot is the swap that keeps
-    # this one balanced; a spare candidate from the end of the offer is not.
-    swaps = balance.swap_targets(prepared.weeks, [pick.external_id for pick in choices])
+    # this one balanced; a spare candidate from the end of the offer is not. A recipe the floor relaxed back in
+    # stays out of the swap panels: it is a fallback for a tight week, not a suggestion.
+    swappable = _swappable(prepared)
+    swaps = balance.swap_targets(prepared.weeks, [pick.external_id for pick in choices], swappable=swappable)
     suggestions: list[MealPlanSuggestion] = []
     for position, (suggestion, pick) in enumerate(zip(chosen, choices, strict=True)):
         alternative = _alternative_for(
@@ -540,7 +542,7 @@ def _alternative_for(
         )
     if preferred is not None and preferred in set(prepared.offered_ids) and preferred not in unavailable:
         return _as_alternative(_template_alternative(prepared, preferred))
-    spare = next((external_id for external_id in prepared.offered_ids if external_id not in unavailable), None)
+    spare = next((external_id for external_id in _swappable(prepared) if external_id not in unavailable), None)
     if spare is None:
         return None
     return _as_alternative(_template_alternative(prepared, spare))
@@ -591,6 +593,18 @@ def _template_alternative(prepared: PreparedPlan, external_id: str) -> MealPlanS
         ),
         prepared,
     )
+
+
+def _swappable(prepared: PreparedPlan) -> list[str]:
+    """The offered recipes a swap may use: the fresh ones first, then any, when the floor relaxed for everything.
+
+    A recipe offered only because the six-week floor gave way is a last resort for the week itself, so it is not
+    what a card offers as "cook this instead" while a fresh candidate is left.
+    """
+    fresh = [fact.recipe_id for fact in prepared.facts if not fact.offered_after_floor_relaxed]
+    if not fresh:
+        return list(prepared.offered_ids)
+    return fresh + [external_id for external_id in prepared.offered_ids if external_id not in set(fresh)]
 
 
 def _urgent_item_payload(item: PantryItem, *, reference_date: date) -> dict[str, object]:

@@ -814,3 +814,38 @@ def test_a_checkpoint_from_before_v6_falls_back_to_the_samplers_order(tmp_path: 
     result = pipeline.degraded(pipeline.PreparedPlan.model_validate(legacy))
 
     assert [suggestion.external_id for suggestion in result.suggestions] == prepared.offered_ids[:MEALS]
+
+
+def test_a_recipe_the_floor_relaxed_is_not_offered_as_a_swap(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    # A relaxed recipe is a fallback for a tight week, not a suggestion: it is recently cooked, so offering it
+    # as "cook this instead" is exactly the repeat the floor exists to avoid.
+    corpus = _corpus(tmp_path)
+    first = pipeline.prepare(_request(meals_per_week=2), corpus=corpus, rng=random.Random(0), now=NOW)
+    relaxed_id = first.offered_ids[0]
+    # A history that mentions one offered recipe: it is then only offered because the floor gave way.
+    prepared = pipeline.prepare(
+        _request(
+            meals_per_week=2,
+            exclude_external_ids=[external_id for external_id in first.offered_ids if external_id != relaxed_id],
+            cooked_history=[
+                {
+                    "recipe_id": relaxed_id,
+                    "title": first.titles[relaxed_id],
+                    "cooked_at": (NOW - timedelta(days=3)).isoformat(),
+                    "rating": None,
+                }
+            ],
+        ),
+        corpus=corpus,
+        rng=random.Random(0),
+        now=NOW,
+    )
+    facts = {fact.recipe_id: fact for fact in prepared.facts}
+
+    assert facts[relaxed_id].offered_after_floor_relaxed is True
+    result = pipeline.finalise(prepared, _week_draft(prepared, 0))
+    offered_as_swap = {
+        suggestion.alternative.external_id for suggestion in result.suggestions if suggestion.alternative
+    }
+
+    assert relaxed_id not in offered_as_swap
