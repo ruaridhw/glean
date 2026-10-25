@@ -659,3 +659,107 @@ def test_a_recipe_states_its_calories_only_when_its_page_did(tmp_path: Path) -> 
     assert [fact.calories_per_serving for fact in prepared.facts if fact.recipe_id != fed] == [
         None for fact in prepared.facts if fact.recipe_id != fed
     ]
+
+
+def _week_draft(prepared: pipeline.PreparedPlan, index: int, **overrides: object) -> CorpusMealPlanResponse:
+    """The model answering with one of the two candidate weeks, as the prompt asks it to."""
+    week = prepared.weeks[index]
+    return CorpusMealPlanResponse(
+        week_summary="A balanced week.",
+        chosen_week=index,
+        suggestions=[
+            CorpusMealPlanRecipe(
+                external_id=external_id,
+                title=prepared.titles.get(external_id, external_id),
+                reason="Works for this week.",
+                reason_kind=ReasonKind.BALANCE,
+            )
+            for external_id in week.recipe_ids
+        ],
+        **overrides,  # type: ignore[arg-type]
+    )
+
+
+def test_either_candidate_week_is_a_valid_pick(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    prepared = _prepared(tmp_path)
+
+    for index in (0, 1):
+        result = pipeline.finalise(prepared, _week_draft(prepared, index))
+        assert [suggestion.external_id for suggestion in result.suggestions] == prepared.weeks[index].recipe_ids
+
+    drifts = [record for record in caplog.records if record.message == "meal plan drift from the scorer's best week"]
+    assert len(drifts) == 2
+    assert drifts[0].__dict__["chosen_week"] == 0
+    assert drifts[0].__dict__["week_matches"] is True
+    assert drifts[1].__dict__["chosen_week"] == 1
+    assert drifts[1].__dict__["gap"] >= 0
+
+
+def test_a_week_the_scorer_did_not_offer_is_kept_and_measured(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    # A model that composes its own week instead of taking one of the two: the pick stands, and the gap is what
+    # the eval reads as drift. Nothing about the week's validity changes, only what the log records.
+    prepared = _prepared(tmp_path, meals_per_week=2)
+    in_either_week = set(prepared.weeks[0].recipe_ids) | set(prepared.weeks[1].recipe_ids)
+    outside = next(external_id for external_id in prepared.offered_ids if external_id not in in_either_week)
+    composed = [prepared.weeks[0].recipe_ids[0], outside]
+
+    result = pipeline.finalise(
+        prepared,
+        CorpusMealPlanResponse(
+            week_summary="Two dinners.",
+            suggestions=[
+                CorpusMealPlanRecipe(
+                    external_id=external_id,
+                    title=prepared.titles.get(external_id, external_id),
+                    reason="Composed by the model.",
+                    reason_kind=ReasonKind.BALANCE,
+                )
+                for external_id in composed
+            ],
+        ),
+    )
+
+    assert [suggestion.external_id for suggestion in result.suggestions] == composed
+    drift = next(record for record in caplog.records if record.message == "meal plan drift from the scorer's best week")
+    assert drift.__dict__["chosen_week"] is None
+    assert drift.__dict__["week_matches"] is None
+    assert drift.__dict__["gap"] >= 0
+
+
+def test_a_model_that_names_one_week_and_returns_another_keeps_its_meals(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Judgement, not validity: `finalise` keeps what the model returned and records the disagreement.
+    prepared = _prepared(tmp_path)
+    draft = _week_draft(prepared, 1).model_copy(update={"chosen_week": 0})
+
+    result = pipeline.finalise(prepared, draft)
+
+    assert [suggestion.external_id for suggestion in result.suggestions] == prepared.weeks[1].recipe_ids
+    warnings = [record for record in caplog.records if "named one candidate week" in record.message]
+    assert len(warnings) == 1
+
+
+def test_a_model_naming_a_week_that_does_not_exist_is_kept_and_flagged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    prepared = _prepared(tmp_path)
+
+    result = pipeline.finalise(prepared, _week_draft(prepared, 0).model_copy(update={"chosen_week": 7}))
+
+    assert len(result.suggestions) == MEALS
+    errors = [record for record in caplog.records if "not offered" in record.message]
+    assert len(errors) == 1
+
+
+def test_a_plan_checkpointed_before_v6_still_finalises(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    # A session checkpointed before V6 carries a prepared plan with no facts and no weeks: it must resume as it
+    # did then, not fail on the fields it never had.
+    prepared = _prepared(tmp_path)
+    legacy = {key: value for key, value in prepared.model_dump(mode="json").items() if key not in {"facts", "weeks"}}
+
+    resumed = pipeline.PreparedPlan.model_validate(legacy)
+    result = pipeline.finalise(resumed, _draft(resumed))
+
+    assert [suggestion.external_id for suggestion in result.suggestions] == resumed.offered_ids[:MEALS]
+    assert [record for record in caplog.records if record.message.startswith("meal plan drift")] == []
