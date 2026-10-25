@@ -1064,3 +1064,61 @@ def _corpus(tmp_path) -> RecipeCorpusStore:
             )
         )
     return corpus
+
+
+class _ModelThatPicksTheScorersWeek:
+    """The prompt's rule, faked at its boundary: plan exactly the meals of candidate week 0."""
+
+    def __init__(self) -> None:
+        self.weeks: list[dict[str, object]] = []
+
+    def invoke(self, _feature, _schema, *, user: str, **_kwargs) -> CorpusMealPlanResponse:
+        message = json.loads(user)
+        self.weeks = message["candidate_weeks"]
+        first = self.weeks[0]
+        meals = first["meals"]
+        return CorpusMealPlanResponse(
+            chosen_week=0,
+            week_summary="Two dinners the scorer balanced.",
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=meal["external_id"], title=meal["title"], reason="Balanced week.")
+                for meal in meals
+            ],
+        )
+
+
+def test_the_sync_route_plans_one_of_the_scorers_candidate_weeks(
+    client: TestClient, auth_headers: dict[str, str], tmp_path
+) -> None:
+    """The sync route shares the pipeline, so it gets V6's weeks and the model's choice of them too."""
+    corpus = RecipeCorpusStore(FilesystemBlobStore(tmp_path))
+    for external_id, title, ingredient in [
+        ("rec_bolognese", "Beef Bolognese", "beef mince"),
+        ("rec_salmon", "Salmon Teriyaki", "salmon fillet"),
+        ("rec_lentil", "Lentil Bake", "lentils"),
+        ("rec_tofu", "Tofu Noodles", "tofu"),
+        ("rec_chickpea", "Chickpea Curry", "chickpeas"),
+    ]:
+        corpus.save(
+            StoredRecipe(
+                external_id=external_id,
+                title=title,
+                ingredients=[StoredIngredient(canonical_name=ingredient, quantity=1, unit="each")],
+            )
+        )
+    model = _ModelThatPicksTheScorersWeek()
+    app.dependency_overrides[get_llm_router] = lambda: model
+    body = _corpus_request(meals_per_week=2).model_dump(mode="json")
+    del body["recipe_history"]
+
+    with patch("glean.meal_plan.service.RecipeCorpusStore", return_value=corpus):
+        response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 200
+    plan = response.json()
+    assert len(model.weeks) == 2
+    assert [suggestion["external_id"] for suggestion in plan["suggestions"]] == [
+        meal["external_id"]
+        for meal in model.weeks[0]["meals"]  # type: ignore[index]
+    ]
+    assert plan["degraded"] is False
