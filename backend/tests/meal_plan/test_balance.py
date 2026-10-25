@@ -193,7 +193,7 @@ def test_the_week_carries_the_lighter_term_only_when_the_chip_is_on() -> None:
     )[0]
 
     assert "lighter" not in off.terms
-    assert on.terms["lighter"] == -2.0
+    assert on.terms["lighter"] == -4.0
 
 
 def test_the_scorer_varies_proteins_the_offer_led_with() -> None:

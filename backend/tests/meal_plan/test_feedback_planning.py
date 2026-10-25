@@ -100,7 +100,7 @@ def test_the_chips_reach_the_scorer(tmp_path: Path) -> None:
     lighter = _prepare(tmp_path / "lighter", _request(chips=["lighter"]))
 
     assert all(penalty.term != Term.LIGHTER.value for week in plain.weeks for penalty in week.penalties)
-    assert all(week.terms.get(Term.LIGHTER.value) == -2.0 for week in lighter.weeks)
+    assert all(week.terms.get(Term.LIGHTER.value) == -4.0 for week in lighter.weeks)
     assert pipeline.scoring_context_of(lighter).chips == frozenset({"lighter"})
 
 

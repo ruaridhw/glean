@@ -259,13 +259,16 @@ class ScorerWeights:
     # set +0.5 on 2026-10-25 because +1 outvoted variety: at -5 protein, +1 holds 19/22 carb gates where +0.5
     # holds 20/22, and the protein gates stay 16/16 either way.
     whole_food: float = 0.5
-    # "Whole food": the "healthier" chip doubles it. It has no predicate in `CHIP_PREDICATES`, so it pays once.
-    healthier_multiplier: float = 2.0
+    # "Whole food": the "healthier" chip multiplies it. The chip doubled whole food (x2: +1 per whole recipe, the
+    # chip's own share +0.5); the owner doubled the chip's own weight on 2026-10-25, so its share is +1 and a whole
+    # recipe earns 0.5 x 3 = +1.5 under the chip. It has no predicate in `CHIP_PREDICATES`, so it pays once.
+    healthier_multiplier: float = 3.0
     # "Pantry fit": the "use up the fridge" chip doubles it, so a recipe using the week's urgent items outbids the
     # +2 of any one other chip. A guess like the rest of the table.
     use_up_the_fridge_multiplier: float = 2.0
-    # "'Lighter' chip": -1 per recipe above `lighter_reference_kcal`, once the chip is on.
-    lighter: float = -1.0
+    # "'Lighter' chip": the table's -1 per recipe above `lighter_reference_kcal`, doubled to -2 by the owner on
+    # 2026-10-25 after the V9 eval showed -1 barely moved a week. Only while the chip is on.
+    lighter: float = -2.0
     # That reference: the corpus median of STATED per-serving calories, 672 kcal. Derived from the 2026-10-24 prod
     # corpus export, where 362 of its 632 recipes state nutrition on their own page (the labeller's estimates for
     # the other 270 are excluded); their median is 672.5, rounded down to 672. Owner decision 2026-10-25: a fixed

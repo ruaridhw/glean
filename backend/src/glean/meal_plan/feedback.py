@@ -34,7 +34,7 @@ CHIP_GUIDANCE: dict[FeedbackChip, str] = {
     ),
     FeedbackChip.USE_UP_THE_FRIDGE: "Use up the fridge: pantry items, the urgent ones first, count double this week.",
     FeedbackChip.SOMETHING_NEW: "Something new: favour recipes the household has not cooked before.",
-    FeedbackChip.HEALTHIER: "Healthier: whole-food dinners count double this week.",
+    FeedbackChip.HEALTHIER: "Healthier: whole-food dinners count three times over this week.",
     FeedbackChip.COMFORT_FOOD: (
         "Comfort food: pies and bakes, soups and stews, curries and pasta dishes. The candidates are already "
         "narrowed to them when the pool allowed."
