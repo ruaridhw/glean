@@ -31,10 +31,10 @@ void main() {
       ).toJson()['note'],
       isNull,
     );
+    // An answer leaves out what it does not carry; the backend reads a missing field as null.
     expect(const AnswerMessage(option: 'Fish').toJson(), <String, dynamic>{
       'type': 'answer',
       'option': 'Fish',
-      'note': null,
     });
     expect(const SkipMessage().toJson(), <String, dynamic>{'type': 'skip'});
   });
