@@ -14,6 +14,8 @@ class ProfileList<T> {
     required this.write,
     required this.label,
     this.fromText,
+    this.identity,
+    this.alreadyThere,
   });
 
   /// The heading the Profile screen shows above the list.
@@ -28,6 +30,29 @@ class ProfileList<T> {
   /// Builds an item from typed text, given the item it replaces when editing. `null` for lists that are not
   /// edited as plain text.
   final T Function(String text, T? previous)? fromText;
+
+  /// What makes two items the same when it is not their label: a protein target is its protein, whatever its
+  /// counts. `null` means the label.
+  final String Function(T item)? identity;
+
+  /// What to say when [item] cannot go in because the list already has one like it. `null` gives
+  /// "<label> is already there".
+  final String Function(T item)? alreadyThere;
+
+  String _identityOf(T item) => _key(identity?.call(item) ?? label(item));
+
+  /// Whether the list already has an item the same as [item], other than the one at [except].
+  bool isTakenBy(HouseholdProfile profile, T item, {int? except}) {
+    final String wanted = _identityOf(item);
+    final int at = read(
+      profile,
+    ).indexWhere((T other) => _identityOf(other) == wanted);
+    return at != -1 && at != except;
+  }
+
+  /// Why [item] was refused or skipped because the list already has one like it.
+  String takenMessage(T item) =>
+      alreadyThere?.call(item) ?? '${label(item)} is already there';
 
   /// The position of the item whose label is [itemLabel], ignoring case and surrounding space, or -1.
   int indexOf(HouseholdProfile profile, String itemLabel) {
@@ -54,9 +79,9 @@ class ProfileList<T> {
     return at != -1 && at != except;
   }
 
-  /// Appends [item], unless an item with the same label is already there.
+  /// Appends [item], unless the same item is already there.
   HouseholdProfile addItem(HouseholdProfile profile, T item) {
-    if (isTaken(profile, label(item))) return profile;
+    if (isTakenBy(profile, item)) return profile;
     return write(profile, <T>[...read(profile), item]);
   }
 
@@ -69,7 +94,7 @@ class ProfileList<T> {
 
   /// Replaces the item at [index], unless [item] repeats a different item already there.
   HouseholdProfile replaceAt(HouseholdProfile profile, int index, T item) {
-    if (isTaken(profile, label(item), except: index)) return profile;
+    if (isTakenBy(profile, item, except: index)) return profile;
     return write(profile, <T>[...read(profile)]..[index] = item);
   }
 
@@ -85,9 +110,10 @@ class ProfileList<T> {
       write(profile, <T>[...read(profile)]..removeAt(index));
 
   /// Puts [item] back at [index], or at the end when the list has since become shorter than that. Skipped when
-  /// an item with the same label has been added meanwhile, so Undo never makes a second chip.
+  /// the same item (by [identity]) has been added meanwhile, so Undo never makes a second chip or a second
+  /// target for one protein.
   HouseholdProfile insertAt(HouseholdProfile profile, int index, T item) {
-    if (isTaken(profile, label(item))) return profile;
+    if (isTakenBy(profile, item)) return profile;
     final List<T> items = <T>[...read(profile)];
     return write(profile, items..insert(index.clamp(0, items.length), item));
   }
@@ -139,6 +165,8 @@ abstract final class ProfileLists {
         read: _proteinTargets,
         write: _writeProteinTargets,
         label: proteinTargetLabel,
+        identity: _proteinOf,
+        alreadyThere: _proteinTaken,
       );
   static const ProfileList<ProfileNote> notes = ProfileList<ProfileNote>(
     title: 'Things Glean noted',
@@ -191,6 +219,9 @@ HouseholdProfile _writeCuisinesAvoided(
   List<String> items,
 ) => p.copyWith(cuisinesAvoided: items);
 List<ProteinTarget> _proteinTargets(HouseholdProfile p) => p.proteinTargets;
+String _proteinOf(ProteinTarget target) => target.protein;
+String _proteinTaken(ProteinTarget target) =>
+    '${proteinName(target.protein)} already has a target';
 HouseholdProfile _writeProteinTargets(
   HouseholdProfile p,
   List<ProteinTarget> items,
