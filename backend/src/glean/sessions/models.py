@@ -240,6 +240,10 @@ class SwapRecord(BaseModel):
     )
     state: SwapState = SwapState.PENDING
     note_use: SwapNoteUse = SwapNoteUse.NONE
+    note_rejection: str | None = Field(
+        default=None,
+        description="Why the screen dropped the note: not_a_preference, or unavailable (it failed closed).",
+    )
     queued_at: int | None = Field(
         default=None, description="Epoch seconds the swap was queued: how a swap no delivery ever took is told apart."
     )
@@ -292,12 +296,12 @@ class SessionRecord(BaseModel):
         return known - set(self.request.exclude_external_ids)
 
     def with_swap(
-        self, message: SwapMessage, *, position: int, now: int, note_dropped: bool = False
+        self, message: SwapMessage, *, position: int, now: int, note_rejection: str | None = None
     ) -> tuple[SessionRecord, SwapRecord]:
         """This record with *message* queued as its newest swap, its slot at *position* of the week it names.
 
-        *message* carries the screened note only; *note_dropped* records that the household wrote one the screen
-        dropped, which the card reports as "Couldn't use that note". A swap still pending here is one the store
+        *message* carries the screened note only; *note_rejection* records why the screen dropped one the household
+        wrote, which the card reports as "Couldn't use that note". A swap still pending here is one the store
         let this one replace (nothing ever took it), so it is marked failed: abandoned, never run.
         """
         swap = SwapRecord(
@@ -305,7 +309,8 @@ class SessionRecord(BaseModel):
             slot=message.slot,
             position=position,
             note=(note := (message.note or "").strip() or None),
-            note_use=SwapNoteUse.USED if note else SwapNoteUse.DROPPED if note_dropped else SwapNoteUse.NONE,
+            note_use=SwapNoteUse.USED if note else SwapNoteUse.DROPPED if note_rejection else SwapNoteUse.NONE,
+            note_rejection=None if note else note_rejection,
             queued_at=now,
             week=list(message.week),
         )

@@ -770,12 +770,13 @@ def test_a_note_the_screen_dropped_is_recorded_but_never_stored(store: tuple[Ses
     sessions, clock = store
     _done(sessions, clock)
 
-    swap = sessions.enqueue_swap("user-a", "sess-1", _swap(), note_dropped=True)
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap(), note_rejection="not_a_preference")
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
     assert swap.note is None
     assert swap.note_use is SwapNoteUse.DROPPED
+    assert swap.note_rejection == "not_a_preference"
     assert record.swaps == [swap]
 
 

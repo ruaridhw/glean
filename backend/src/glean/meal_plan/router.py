@@ -12,7 +12,7 @@ from glean.llm import LLMRouter
 from glean.meal_plan import service
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.rate_limit import enforce_ai_rate_limit
-from glean.screening import screen
+from glean.screening import ScreenRejection, screen
 from glean.sessions.models import (
     AgentSession,
     AnswerMessage,
@@ -148,17 +148,17 @@ def post_session_message(
     record = sessions.get(user_sub, session_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session")
-    note_dropped = False
+    note_rejection: str | None = None
     match message:
         case SwapMessage():
-            message, note_dropped = _screened_swap(record, message, decisions=decisions)
+            message, note_rejection = _screened_swap(record, message, decisions=decisions)
         case AnswerMessage() | SkipMessage():
             # V11 screens the answer's note here, the same way, once a run can be parked on its question.
             if record.status is not SessionStatus.WAITING_FOR_USER:
                 _refuse(MessageRefusal.NO_QUESTION)
     try:
         swap_id = resume(
-            session_id, message, user_sub=user_sub, sessions=sessions, dispatch=dispatch, note_dropped=note_dropped
+            session_id, message, user_sub=user_sub, sessions=sessions, dispatch=dispatch, note_rejection=note_rejection
         )
     except UnknownSessionError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such session") from error
@@ -169,16 +169,16 @@ def post_session_message(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Couldn't send that right now. Try again."
         ) from error
-    return MessageAccepted(session_id=session_id, swap_id=swap_id, note_dropped=note_dropped)
+    return MessageAccepted(session_id=session_id, swap_id=swap_id, note_dropped=note_rejection is not None)
 
 
 def _screened_swap(
     record: SessionRecord, message: SwapMessage, *, decisions: DecisionClient
-) -> tuple[SwapMessage, bool]:
+) -> tuple[SwapMessage, str | None]:
     """Refuse what cannot be swapped before paying for the screen, then screen the note.
 
-    Returns the message carrying only what the screen passed, and whether it dropped a note the household
-    wrote. The note as typed goes no further than this function.
+    Returns the message carrying only what the screen passed, and why it dropped a note the household wrote
+    (None when there was none to drop). The note as typed goes no further than this function.
     """
     refusal = swap_refusal(record, now=int(utcnow().timestamp()))
     if refusal is not None:
@@ -188,7 +188,9 @@ def _screened_swap(
         _refuse(placement)
     written = (message.note or "").strip()
     screened = screen(written, decision_client=decisions)
-    return message.model_copy(update={"note": screened.text}), bool(written) and not screened.passed
+    dropped = bool(written) and not screened.passed
+    rejection = (screened.rejection or ScreenRejection.UNAVAILABLE).value if dropped else None
+    return message.model_copy(update={"note": screened.text}), rejection
 
 
 def _refuse(refusal: MessageRefusal, *, cause: Exception | None = None) -> NoReturn:
