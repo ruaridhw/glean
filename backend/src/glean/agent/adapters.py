@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from glean.agent.actions import MAX_FULL_IDS, CreateCandidateMealPlans, GetEligibleRecipes, GetRecipes, ScoreMealPlan
 from glean.meal_plan import balance, pipeline, tools
-from glean.recipes.attributes import UNSURE
+from glean.recipes.attributes import UNSURE, Cuisine, normalise_cuisine
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,8 +42,8 @@ _LINE_CHARS = 100
 _SHOWN_METHOD_STEPS = 8
 _SHOWN_STEP_CHARS = 200
 _ERROR_CHARS = 300
-# The words of a free-text search a progress line repeats back.
-_PROGRESS_TEXT_CHARS = 40
+# How many words of a search a progress line looks through for a cuisine it may name.
+_PROGRESS_SEARCH_WORDS = 8
 
 
 @dataclass(frozen=True)
@@ -58,9 +58,9 @@ def progress_line(call: ToolCall) -> str:
     """The human line the session shows while this call runs (spec §6.2, "Progress lines")."""
     match call:
         case GetEligibleRecipes(filter=recipe_filter):
-            text = " ".join((recipe_filter.text or "").split())[:_PROGRESS_TEXT_CHARS].strip()
-            if text:
-                return f"Looking for something {text}"
+            if recipe_filter.text and recipe_filter.text.strip():
+                cuisine = _cuisine_named(recipe_filter.text)
+                return f"Looking for something {cuisine}" if cuisine else "Looking for something different"
             if recipe_filter.uses_pantry:
                 return "Finding dinners that use what you have"
             return "Checking what you cooked recently"
@@ -206,6 +206,21 @@ def _week(week: balance.CandidateWeek) -> dict[str, Any]:
 
 def _best(prepared: pipeline.PreparedPlan) -> float | None:
     return round(prepared.weeks[0].total, 2) if prepared.weeks else None
+
+
+def _cuisine_named(text: str) -> str | None:
+    """The cuisine a search names, as our own label ("Korean"), or None when it names none we know.
+
+    A progress line is shown to the household, and the search text is the model's, which recipe text it has read
+    can steer. So the line never repeats that text: it says only a cuisine from the G1 list, in our spelling.
+    """
+    words = text.casefold().split()[:_PROGRESS_SEARCH_WORDS]
+    for size in (2, 1):
+        for start in range(len(words) - size + 1):
+            cuisine = normalise_cuisine(" ".join(words[start : start + size]))
+            if cuisine is not None and cuisine is not Cuisine.OTHER:
+                return cuisine.value.replace("_", " ").title()
+    return None
 
 
 def _known(value: str) -> str | None:
