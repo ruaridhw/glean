@@ -4,8 +4,9 @@ import 'meal_plan.dart';
 
 part 'meal_plan_session.g.dart';
 
-/// Where a Generate session has got to. [waitingForUser] keeps the proposal screen in its working state: the
-/// question step is V11. [cancelled] is terminal and is what the server reports after the app's DELETE.
+/// Where a Generate session has got to. [waitingForUser] means the agent asked its one question (carried on the
+/// poll as [MealPlanSessionUpdate.question]) and the run is parked until the household answers or skips. [cancelled]
+/// is terminal and is what the server reports after the app's DELETE.
 ///
 /// A status this build does not know parses as [unknown] and is never terminal, so an app meeting a newer
 /// backend keeps polling rather than inventing an outcome.
@@ -79,6 +80,24 @@ enum MealPlanSwapNote {
   unknown,
 }
 
+/// The agent's one question, shown as the focused question step: tap one of [options], add a note, or skip.
+/// [why] is the gap the agent hit; the step does not show it.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class MealPlanSessionQuestion {
+  const MealPlanSessionQuestion({
+    required this.question,
+    this.options = const <String>[],
+    this.why = '',
+  });
+
+  factory MealPlanSessionQuestion.fromJson(Map<String, dynamic> json) =>
+      _$MealPlanSessionQuestionFromJson(json);
+
+  final String question;
+  final List<String> options;
+  final String why;
+}
+
 /// The body of `POST /meal-plan/sessions/{id}/messages`: one union, discriminated on `type`. A swap (V10) asks
 /// for another meal in one card of a finished proposal; an answer or a skip (V11) resumes a run parked on its
 /// question. Any note goes through the backend's screen before anything stores it.
@@ -107,7 +126,8 @@ final class SwapMessage extends MealPlanSessionMessage {
   };
 }
 
-/// The household's answer to the agent's one question: an [option] it offered, a [note], or both.
+/// The household's answer to the agent's one question: an [option] it offered, a [note], or both. The backend screens
+/// the note before the agent sees it; a missing field is left out of the body.
 final class AnswerMessage extends MealPlanSessionMessage {
   const AnswerMessage({this.option, this.note});
 
@@ -117,8 +137,8 @@ final class AnswerMessage extends MealPlanSessionMessage {
   @override
   Map<String, dynamic> toJson() => <String, dynamic>{
     'type': 'answer',
-    'option': option,
-    'note': note,
+    'option': ?option,
+    'note': ?note,
   };
 }
 
@@ -127,7 +147,7 @@ final class SkipMessage extends MealPlanSessionMessage {
   const SkipMessage();
 
   @override
-  Map<String, dynamic> toJson() => <String, dynamic>{'type': 'skip'};
+  Map<String, dynamic> toJson() => const <String, dynamic>{'type': 'skip'};
 }
 
 /// The `202` body from posting a message. [swapId] is set for a swap: the id its outcome carries on the poll.
@@ -186,6 +206,7 @@ class MealPlanSessionUpdate {
     this.result,
     this.error,
     this.swap,
+    this.question,
     this.sessionId,
     this.updatedAt,
   });
@@ -204,6 +225,9 @@ class MealPlanSessionUpdate {
 
   /// The newest swap, once the household has asked for one (V10). Null from a backend without swaps.
   final MealPlanSessionSwap? swap;
+
+  /// The agent's question while the status is [MealPlanSessionStatus.waitingForUser]; null otherwise.
+  final MealPlanSessionQuestion? question;
 
   /// Echoed by the backend for logs; the app already knows the id it is polling.
   final String? sessionId;

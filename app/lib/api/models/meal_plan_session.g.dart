@@ -33,6 +33,22 @@ MealPlanSessionError _$MealPlanSessionErrorFromJson(
   fieldKeyMap: const {'retryAfterMinutes': 'retry_after_minutes'},
 );
 
+MealPlanSessionQuestion _$MealPlanSessionQuestionFromJson(
+  Map<String, dynamic> json,
+) => $checkedCreate('MealPlanSessionQuestion', json, ($checkedConvert) {
+  final val = MealPlanSessionQuestion(
+    question: $checkedConvert('question', (v) => v as String),
+    options: $checkedConvert(
+      'options',
+      (v) =>
+          (v as List<dynamic>?)?.map((e) => e as String).toList() ??
+          const <String>[],
+    ),
+    why: $checkedConvert('why', (v) => v as String? ?? ''),
+  );
+  return val;
+});
+
 MealPlanMessageAccepted _$MealPlanMessageAcceptedFromJson(
   Map<String, dynamic> json,
 ) => $checkedCreate(
@@ -144,6 +160,12 @@ MealPlanSessionUpdate _$MealPlanSessionUpdateFromJson(
         (v) => v == null
             ? null
             : MealPlanSessionSwap.fromJson(v as Map<String, dynamic>),
+      ),
+      question: $checkedConvert(
+        'question',
+        (v) => v == null
+            ? null
+            : MealPlanSessionQuestion.fromJson(v as Map<String, dynamic>),
       ),
       sessionId: $checkedConvert('session_id', (v) => v as String?),
       updatedAt: $checkedConvert(

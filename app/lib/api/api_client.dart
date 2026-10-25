@@ -123,7 +123,8 @@ class GleanApiClient {
 
   /// Sends a household message to a session: a swap (V10), or an answer or a skip (V11). The server answers 202
   /// and resumes the session; poll it for the outcome. One paid call, rate limited. For a swap, a 409 means a
-  /// swap is already running and a 422 that the card's meal cannot be swapped here.
+  /// swap is already running and a 422 that the card's meal cannot be swapped here; for an answer or a skip, a 409
+  /// means the session is no longer waiting (the answer already landed, or it was cancelled).
   Future<MealPlanMessageAccepted> sendMealPlanSessionMessage(
     String sessionId,
     MealPlanSessionMessage message,
