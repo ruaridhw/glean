@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from glean.meal_plan.balance import (
     PANTRY_FIT_TOP,
     RecipeFacts,
+    drift,
     facts_from,
     scored_weeks,
     scoring_context,
@@ -209,3 +210,26 @@ def test_the_scorer_varies_proteins_the_offer_led_with() -> None:
     week = scored_weeks(context, ids, 3, seed=0)[0]
 
     assert distinct_main_proteins(week.recipe_ids, context) > distinct_main_proteins(ids[:3], context)
+
+
+# --- how far a pick fell short ----------------------------------------------------------------------------
+
+
+def test_the_drift_is_the_gap_between_the_pick_and_the_best_week() -> None:
+    built = facts(MainProtein.CHICKEN, MainProtein.FISH, MainProtein.BEEF, fit=[3.0, 1.0, 2.5])
+    context = scoring_context(built)
+    best = scored_weeks(context, [entry.recipe_id for entry in built], 2, seed=0)[0]
+
+    shortfall = drift([best.recipe_ids[1]], best.recipe_ids, context)
+
+    assert shortfall.gap > 0
+    assert shortfall.within_15_percent is False
+    assert drift(best.recipe_ids, best.recipe_ids, context).gap == 0.0
+
+
+def test_a_repeated_pick_is_scored_once_when_the_drift_is_measured() -> None:
+    built = facts(MainProtein.CHICKEN, MainProtein.FISH, fit=[3.0, 2.0])
+    context = scoring_context(built)
+    ids = [entry.recipe_id for entry in built]
+
+    assert drift(["rec_0", "rec_0"], ids, context).gap == drift(["rec_0"], ids, context).gap

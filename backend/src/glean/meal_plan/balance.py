@@ -18,12 +18,15 @@ from pydantic import BaseModel, Field
 
 from glean.meal_plan.tools import (
     CandidateRecipe,
+    PlanGap,
     PlanScore,
     Rating,
     ScorerWeights,
     ScoringContext,
     Term,
+    chosen_vs_best_gap,
     create_candidate_meal_plans,
+    score_meal_plan,
 )
 from glean.recipes.attributes import RecipeAttributes
 
@@ -171,6 +174,16 @@ def scored_weeks(
     """
     plans = create_candidate_meal_plans(recipe_ids, slots, context, weights, k=CANDIDATE_WEEKS, seed=seed)
     return tuple(CandidateWeek.from_score(plan) for plan in plans)
+
+
+def drift(chosen_ids: Sequence[str], best_ids: Sequence[str], context: ScoringContext) -> PlanGap:
+    """How far a chosen week fell short of the scorer's best, for the line `finalise` logs (spec §6.6).
+
+    A repeated pick is scored once: `finalise` keeps the model's list as it wrote it, and the gap is about how
+    good the week is, not about the caller's list hygiene.
+    """
+    chosen = tuple(dict.fromkeys(chosen_ids))
+    return chosen_vs_best_gap(score_meal_plan(chosen, context), score_meal_plan(best_ids, context))
 
 
 def _rating(value: str | None) -> Rating | None:

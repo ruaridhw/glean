@@ -234,6 +234,13 @@ class CorpusMealPlanResponse(BaseModel):
     week_summary: str = Field(
         default="", description="One line summing up the week, shown above the meals; empty when the model has none"
     )
+    chosen_week: int | None = Field(
+        default=None,
+        description=(
+            "Index into candidate_weeks of the week these meals come from: 0 or 1. Null from a model that did not "
+            "say, which the server reads from the meals themselves."
+        ),
+    )
     suggestions: list[CorpusMealPlanRecipe] = Field(description="Ranked candidates that satisfy the constraints.")
     planned_alternatives: list[CorpusPlannedAlternative] = Field(
         default_factory=list,

@@ -404,6 +404,7 @@ def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanR
             extra={"returned": len(kept), "limit": prepared.meals_per_week},
         )
     choices = kept[: prepared.meals_per_week]
+    _log_drift(prepared, choices, draft.chosen_week)
     chosen = _reconciled(choices, prepared)
     unavailable = excluded | {suggestion.external_id for suggestion in chosen if suggestion.external_id}
     suggestions: list[MealPlanSuggestion] = []
@@ -421,6 +422,52 @@ def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanR
         suggestions=suggestions,
         week_summary=_week_summary(draft.week_summary, count=len(suggestions)),
         planned_alternatives=planned_alternatives,
+    )
+
+
+def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], chosen_week: int | None) -> None:
+    """Record how far the model's pick fell short of the scorer's best week (spec §6.6's drift metric).
+
+    The pick is kept exactly as the model wrote it: `finalise` validates ids, not judgement, so this line is
+    what the evals read. A week the scorer itself rated near-best should log a small gap, and a model that
+    composed its own week instead of taking one of the two is what a large gap looks like.
+
+    An older checkpoint's prepared plan carries no weeks (it was written before V6), so there is nothing
+    scored to compare against and no line is written.
+    """
+    if not prepared.weeks:
+        return
+    context = balance.scoring_context(prepared.facts)
+    best_ids = prepared.weeks[0].recipe_ids
+    chosen_ids = [pick.external_id for pick in choices]
+    gap = balance.drift(chosen_ids, best_ids, context)
+    named = None if chosen_week is None else chosen_week
+    matches: bool | None = None
+    if named is not None:
+        if 0 <= named < len(prepared.weeks):
+            matches = set(chosen_ids) == set(prepared.weeks[named].recipe_ids)
+        else:
+            matches = False
+            logger.error(
+                "model named a candidate week that was not offered; keeping its meals",
+                extra={"chosen_week": named, "weeks": len(prepared.weeks)},
+            )
+    if matches is False:
+        logger.warning(
+            "model named one candidate week and returned another week's meals; keeping its meals",
+            extra={"chosen_week": named},
+        )
+    logger.info(
+        "meal plan drift from the scorer's best week",
+        extra={
+            "gap": round(gap.gap, 3),
+            "scale": round(gap.scale, 3),
+            "fraction": round(gap.fraction, 4),
+            "within_15_percent": gap.within_15_percent,
+            "chosen_week": named,
+            "week_matches": matches,
+            "best_week_score": round(prepared.weeks[0].total, 3),
+        },
     )
 
 
