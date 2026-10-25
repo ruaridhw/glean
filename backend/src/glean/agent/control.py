@@ -85,11 +85,15 @@ class RunGuard:
         owner: str,
         monotonic: Callable[[], float] = time.monotonic,
         budget: RunBudget | None = None,
+        resumed: bool = False,
     ) -> None:
         self._sessions = sessions
         self._session = session
         self._owner = owner
         self._budget = budget or RunBudget(clock=monotonic)
+        # A takeover resumes the node the crashed attempt died in, whose line that attempt may already have
+        # written: the first step of this attempt checks before writing it again.
+        self._resumed = resumed
 
     def step(self, line: str | None, *, budget: bool = True) -> None:
         """Called at the start of every graph node: the budget, then the progress line.
@@ -101,13 +105,27 @@ class RunGuard:
         """
         if budget:
             self._budget.check()
+        first_after_resume, self._resumed = self._resumed, False
         if line is None:
             self.check_live()
+            return
+        if first_after_resume and self._already_written(line):
             return
         if not self._sessions.append_progress(
             self._session.user_sub, self._session.session_id, [line], owner=self._owner
         ):
             self._stopped()
+
+    def _already_written(self, line: str) -> bool:
+        """Whether the crashed attempt wrote this node's line before it died. One read, on a takeover only.
+
+        Only the first step of a resumed attempt asks: that is the node the crash interrupted. A later node
+        whose line happens to match the last one (two reads in a row) writes it as usual.
+        """
+        record = self._sessions.get(self._session.user_sub, self._session.session_id)
+        if record is None or record.status is not SessionStatus.RUNNING or record.owner != self._owner:
+            self._stopped(record)
+        return bool(record.progress) and record.progress[-1] == line
 
     def check_live(self) -> None:
         """Stop unless this attempt still owns a running session: one read, no write."""

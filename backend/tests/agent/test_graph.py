@@ -483,6 +483,35 @@ class TestRecovery:
         assert KOREAN_ID in [suggestion.external_id for suggestion in record.result.suggestions]
         assert run.metric("SessionToolCalls") == [2]
 
+    def test_a_crash_mid_tool_resumes_without_writing_the_tools_line_twice(
+        self, run: Run, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class ProcessDied(BaseException):
+            """A killed Lambda, from inside Python: nothing catches it."""
+
+        run_tool = adapters.run_tool
+        runs: list[str] = []
+
+        def dies_the_first_time(*args: Any, **kwargs: Any) -> Any:
+            runs.append("tool")
+            if len(runs) == 1:
+                raise ProcessDied
+            return run_tool(*args, **kwargs)
+
+        monkeypatch.setattr(adapters, "run_tool", dies_the_first_time)
+        with pytest.raises(ProcessDied):
+            run.start(ScriptedModel(call("get_recipes", ids=["rec_01"]), call("get_recipes", ids=["rec_02"])))
+
+        run.clock.advance(MAX_LEASE_SECONDS + 10)
+        # The resumed attempt reruns the interrupted tool, then reads a second recipe: same line, written again.
+        run.start(ScriptedModel(call("get_recipes", ids=["rec_02"]), propose_first))
+
+        record = run.record
+        assert record.status is SessionStatus.DONE
+        assert runs == ["tool", "tool", "tool"]
+        assert record.progress.count("Reading the recipes more closely") == 2
+        assert run.metric("SessionToolCalls") == [2]
+
 
 class TestCancel:
     def test_a_cancel_between_steps_stops_the_run_before_its_tool(self, run: Run) -> None:
