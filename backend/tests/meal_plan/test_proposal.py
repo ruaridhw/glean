@@ -468,7 +468,8 @@ def test_the_degraded_fallback_fills_every_field_from_template_text(tmp_path: Pa
 
     assert result.degraded is True
     assert result.week_summary == "2 dinners for this week."
-    assert [suggestion.external_id for suggestion in result.suggestions] == prepared.offered_ids[:MEALS]
+    # The fallback is the scorer's best week, not the sampler's first N: a degraded run still gets balance.
+    assert [suggestion.external_id for suggestion in result.suggestions] == prepared.weeks[0].recipe_ids
     assert all(suggestion.reason for suggestion in result.suggestions)
     assert all(suggestion.reason_kind in set(ReasonKind) for suggestion in result.suggestions)
     # Every field a proposal carries is filled: a degraded week has alternatives like any other.
@@ -791,3 +792,25 @@ def test_a_plan_checkpointed_before_v6_still_finalises(tmp_path: Path, caplog: p
 
     assert [suggestion.external_id for suggestion in result.suggestions] == resumed.offered_ids[:MEALS]
     assert [record for record in caplog.records if record.message.startswith("meal plan drift")] == []
+
+
+def test_the_fallback_is_the_scorers_best_week_with_no_drift(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    # A run that falls back still gets a balanced week, and the log records no drift: the server took the
+    # scorer's own pick, so there is nothing to measure it against.
+    prepared = _prepared(tmp_path, meals_per_week=3)
+
+    result = pipeline.degraded(prepared)
+
+    assert [suggestion.external_id for suggestion in result.suggestions] == prepared.weeks[0].recipe_ids
+    drift = next(record for record in caplog.records if record.message == "meal plan drift from the scorer's best week")
+    assert drift.__dict__["gap"] == 0.0
+    assert drift.__dict__["chosen_week"] is None
+
+
+def test_a_checkpoint_from_before_v6_falls_back_to_the_samplers_order(tmp_path: Path) -> None:
+    prepared = _prepared(tmp_path)
+    legacy = {key: value for key, value in prepared.model_dump(mode="json").items() if key not in {"facts", "weeks"}}
+
+    result = pipeline.degraded(pipeline.PreparedPlan.model_validate(legacy))
+
+    assert [suggestion.external_id for suggestion in result.suggestions] == prepared.offered_ids[:MEALS]
