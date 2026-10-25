@@ -14,6 +14,7 @@ from glean.agent.checkpoint import build_checkpointer
 from glean.decisions import DecisionClient
 from glean.llm import LLMRouter
 from glean.recipes.corpus import RecipeCorpusStore
+from glean.screening import ScreenRejection, ScreenResult, screen
 from glean.sessions.dynamo import DynamoSessionStore
 from glean.sessions.store import WORKER_TIMEOUT_SECONDS, utcnow
 
@@ -25,6 +26,16 @@ if TYPE_CHECKING:
 
     from glean.config import Settings
     from glean.sessions.store import SessionStore
+
+
+def drop_every_note(_text: str) -> ScreenResult:
+    """The screen when nothing can vouch for a note: drop it, as the real screen does when it is unavailable."""
+    return ScreenResult(text=None, rejection=ScreenRejection.UNAVAILABLE)
+
+
+def decision_screen(client: DecisionClient) -> Callable[[str], ScreenResult]:
+    """The injection screen over *client*: the one question every free-text field asks (`glean.screening`)."""
+    return lambda text: screen(text, decision_client=client)
 
 
 @dataclass(frozen=True)
@@ -45,6 +56,9 @@ class AgentDeps:
     # The injection screen's decisions client, for the week's note. None drops any note unread: the screen
     # fails closed, and the chips still apply.
     decision_client: DecisionClient | None = None
+    # The injection screen a swap note goes through before any model reads it (spec §6.2). Fails closed: a
+    # run assembled without a decision client drops every note rather than using one nothing vouched for.
+    screen: Callable[[str], ScreenResult] = field(default=drop_every_note)
 
 
 def build_deps(
@@ -57,7 +71,8 @@ def build_deps(
 
     *llm_router* is the seam the local queue consumer uses to run without model credits; deployed
     runs leave it None and get the router built from settings. *remaining_seconds* is the Lambda
-    context's own clock, which the claim's lease is anchored to.
+    context's own clock, which the claim's lease is anchored to. Swap notes are screened by the decision
+    model, with the same key the rest of the backend's decisions use.
     """
     return AgentDeps(
         sessions=DynamoSessionStore(
@@ -70,4 +85,5 @@ def build_deps(
         llm_router=llm_router or LLMRouter.from_settings(settings),
         remaining_seconds=remaining_seconds or (lambda: float(WORKER_TIMEOUT_SECONDS)),
         decision_client=DecisionClient(api_key=settings.openrouter_api_key),
+        screen=decision_screen(DecisionClient(api_key=settings.openrouter_api_key)),
     )

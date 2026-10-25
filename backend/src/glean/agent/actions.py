@@ -19,7 +19,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 from glean.meal_plan import tools
-from glean.meal_plan.schemas import CorpusMealPlanResponse
+from glean.meal_plan.schemas import CorpusMealPlanAlternative, CorpusMealPlanResponse
 from glean.meal_plan.tools import MAX_FILTER_LIMIT, PredicateField, PredicateOp
 
 # How much one action may carry. Every tool call is stored in the checkpoint and echoed into the next prompt, so
@@ -185,3 +185,23 @@ class PlanStep(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: NextAction
+
+
+class ProposeReplacement(BaseModel):
+    """A swap's final answer: one recipe for the slot being swapped, and one sentence on why (V10)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["propose_replacement"]
+    replacement: CorpusMealPlanAlternative
+
+
+type SwapAction = Annotated[CallTool | ProposeReplacement, Field(discriminator="kind")]
+
+
+class SwapStep(BaseModel):
+    """The `swap_plan` node's structured output: look something up, or answer with the replacement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: SwapAction

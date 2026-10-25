@@ -196,3 +196,8 @@ clear_screen_cache  # screening.py, called by the tests to start from a cold cac
 _each_chip_once  # Pydantic field validator (HumanFeedback.chips)
 _ignore_unknown_chips  # Pydantic field validator (HumanFeedback.chips)
 feedback_note  # MealPlanResult field, read by the app
+# agent/graph.py (V10): the swap's PlanState keys, merged into the checkpointed state and read with .get()
+swap_note  # PlanState key: the swap note the injection screen passed, the only form a model ever reads
+swap_note_use  # PlanState key: none / used / dropped, written back on the swap for "Couldn't use that note"
+swap_pick  # PlanState key: the replacement the model proposed, before swap_finalise validates it
+swap_outcome  # PlanState key: the swap's finished outcome, keyed by swap id so a crash republishes it
