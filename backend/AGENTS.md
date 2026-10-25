@@ -128,6 +128,8 @@ src/glean/
 ├── dependencies.py   # verify_cognito_token JWKS validation; get_llm_router
 ├── llm.py            # OpenRouter LangChain client; Feature enum; LLMRouter policy
 ├── decisions.py      # Glean Decisions client (DecisionClient): the only caller of /api/alpha/decisions
+├── screening.py      # the injection screen: one pinned `noul` question at SCREEN_BAR (0.9), fails closed;
+│                     #   every household free text a model reads goes through it first
 ├── shopping/         # POST /shopping/parse-description — decision-gated segmentation, one batched parse for cache misses, per-segment parse cache
 ├── observability.py  # Logger + Tracer (aws-lambda-powertools)
 ├── health/router.py  # GET /health
@@ -158,15 +160,22 @@ src/glean/
                       #   first and last nodes, and widens a prepared week with what its tools found
                       # tools.py: the planner's framework-free tools -- get_eligible_recipes (hard
                       #   constraints, the floor, a narrowing-only RecipeFilter, the urgent guarantee,
-                      #   ranking), get_recipes, score_meal_plan, create_candidate_meal_plans
+                      #   ranking), get_recipes, score_meal_plan, create_candidate_meal_plans; and
+                      #   FeedbackChip + CHIP_PREDICATES, the one place a week's chip becomes a predicate
+                      #   or a scorer term (weights in ScorerWeights)
+                      # feedback.py: the week's human feedback (V9) -- screen_feedback runs the note
+                      #   through the injection screen (dropped, never raw, when it fails or cannot be
+                      #   asked; the chips still apply), and prompt_payload is the only feedback a prompt
+                      #   carries: the chips with their meanings and an accepted note as data in its own
+                      #   field. The result's `feedback_note` says used / not_a_preference / unavailable
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
                       #   hard constraints (dietary decisions, planned meals, time cap) are applied first
                       #   and never relax. history comes in on the request as `cooked_history`, carrying
                       #   each cook's rating and note: a recipe whose latest rating is thumbs down never
-                      #   comes back, floor or no floor, and the note never reaches a prompt (screening it
-                      #   is the feedback screen's job, which does not exist yet).
+                      #   comes back, floor or no floor, and a cook's note never reaches a prompt (only the
+                      #   week's note does, and only through feedback.py's screen).
 ```
 
 ### Structured output only
