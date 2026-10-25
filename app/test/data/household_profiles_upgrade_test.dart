@@ -52,11 +52,9 @@ Map<String, List<List<Object?>>> _dump(Database raw) {
 }
 
 void main() {
-  // Version 7 belongs to #196 (the meal-ratings slice) and merges first, so this branch is tested on the one
-  // frozen file it can honestly offer: a real version-6 database. On the rebase, dump a version-7 file from
-  // #196's build, add 7 to this list, and let the schema comparison below prove the merged upgrade lands on the
-  // merged snapshot.
-  for (final int fixtureVersion in <int>[6]) {
+  // A real version-6 file and a real version-7 file (written by the meal-ratings build, #196), so the schema
+  // comparison below proves both upgrade paths land on the merged snapshot.
+  for (final int fixtureVersion in <int>[6, 7]) {
     test('a version $fixtureVersion file upgrades to the current schema with '
         'every row intact and gains an empty household_profiles', () async {
       final File file = await _fixtureFile(fixtureVersion);
@@ -104,9 +102,15 @@ void main() {
       );
       final Map<String, List<List<Object?>>> rowsAfter = _dump(after);
       for (final String table in rowsBefore.keys) {
+        // A later step may append columns (v7 adds `user_config.ratings_explainer_seen`), so each row is compared
+        // on the columns the old file already had.
+        final List<List<Object?>> before = rowsBefore[table]!;
         expect(
-          rowsAfter[table],
-          rowsBefore[table],
+          <List<Object?>>[
+            for (final (int i, List<Object?> row) in rowsAfter[table]!.indexed)
+              row.sublist(0, i < before.length ? before[i].length : row.length),
+          ],
+          before,
           reason: 'every row of $table keeps its values through the upgrade',
         );
       }
