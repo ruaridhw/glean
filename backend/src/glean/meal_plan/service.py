@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from glean.llm import Feature
 from glean.meal_plan import pipeline
+from glean.meal_plan.feedback import screen_feedback
 from glean.meal_plan.schemas import (
     MealPlanRequest,
     MealPlanResponse,
@@ -18,6 +19,7 @@ from glean.recipes.corpus import RecipeCorpusStore
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from glean.decisions import DecisionClient
     from glean.llm import LLMRouter
 
 MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
@@ -42,13 +44,20 @@ def generate_meal_plan(
     request: MealPlanRequest,
     *,
     llm_router: LLMRouter,
+    decision_client: DecisionClient | None = None,
     corpus: RecipeCorpusStore | None = None,
     rng: random.Random | None = None,
     now: datetime | None = None,
 ) -> MealPlanResult:
+    """One meal plan. In corpus mode `decision_client` screens the week's note; without one the note is dropped."""
     if request.source == "corpus":
         return _generate_from_corpus(
-            request, llm_router=llm_router, corpus=corpus or RecipeCorpusStore(), rng=rng or _rng, now=now
+            request,
+            llm_router=llm_router,
+            decision_client=decision_client,
+            corpus=corpus or RecipeCorpusStore(),
+            rng=rng or _rng,
+            now=now,
         )
     return _generate_from_saved(request, llm_router=llm_router)
 
@@ -109,6 +118,7 @@ def _generate_from_corpus(
     request: MealPlanRequest,
     *,
     llm_router: LLMRouter,
+    decision_client: DecisionClient | None,
     corpus: RecipeCorpusStore,
     rng: random.Random,
     now: datetime | None,
@@ -119,7 +129,10 @@ def _generate_from_corpus(
     shape only ever gains fields. The agent's fallback is the graph's (§6.2), because it is the agent
     loop -- not the route -- that runs out of budget or steps.
     """
-    prepared = pipeline.prepare(request, corpus=corpus, rng=rng, now=now)
+    feedback = screen_feedback(request.human_feedback, decision_client=decision_client)
+    prepared = pipeline.prepare(request, corpus=corpus, rng=rng, now=now, feedback=feedback)
     if not prepared.has_candidates:
-        return MealPlanResult(suggestions=[], week_summary=pipeline.NO_MEALS_WEEK_SUMMARY)
+        return MealPlanResult(
+            suggestions=[], week_summary=pipeline.NO_MEALS_WEEK_SUMMARY, feedback_note=feedback.note_outcome
+        )
     return pipeline.finalise(prepared, pipeline.choose(prepared, llm_router=llm_router))

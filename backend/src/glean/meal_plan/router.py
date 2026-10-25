@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 
 from glean.agent import cancel
 from glean.agent.dependencies import get_session_dispatcher, get_session_store
-from glean.dependencies import get_llm_router, verify_cognito_token
+from glean.decisions import DecisionClient
+from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
 from glean.llm import LLMRouter
 from glean.meal_plan import service
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
@@ -31,9 +32,10 @@ _SESSION_ID = Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 def generate_meal_plan(
     request: MealPlanRequest,
     llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
+    decision_client: Annotated[DecisionClient, Depends(get_decision_client)],
 ) -> MealPlanResult:
     """The synchronous plan. Agent sessions have replaced it in the app and it goes in a follow-up PR."""
-    return service.generate_meal_plan(request, llm_router=llm_router)
+    return service.generate_meal_plan(request, llm_router=llm_router, decision_client=decision_client)
 
 
 @router.post(
