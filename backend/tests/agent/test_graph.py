@@ -1084,6 +1084,23 @@ class TestQuestion:
         # 60 s before the question and 20 s after: the first tool ran inside the 90 s, the second did not.
         assert record.progress.count("Reading the recipes more closely") == 1
 
+    def test_a_session_that_asks_is_started_once_and_reports_one_wall_time(self, run: Run) -> None:
+        def ask_after_a_minute(_context: dict[str, Any]) -> dict[str, Any]:
+            run.clock.advance(60)
+            return ask()
+
+        self._park(run, ask_after_a_minute)
+        run.clock.advance(3600)
+        run.sessions.answer("user-a", "sess-1", HouseholdReply(option="No"))
+        run.start(ScriptedModel(propose_first))
+
+        assert run.metric("SessionsStarted") == [1]
+        assert run.metric("SessionsCompleted") == [1]
+        # One latency point for the session: its working time, the minute before the question included and the
+        # hour of thinking left out.
+        [wall_ms] = run.metric("SessionWallTime")
+        assert 60_000 <= wall_ms < 3_600_000
+
     def test_a_late_copy_of_the_first_message_while_waiting_is_dropped(self, run: Run) -> None:
         self._park(run, ask())
         run.clock.advance(MAX_LEASE_SECONDS + 10)
