@@ -747,7 +747,7 @@ def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[Se
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
-    assert swap == SwapRecord(swap_id=1, slot="rec_2", position=1, note="maybe fish")
+    assert swap == SwapRecord(swap_id=1, slot="rec_2", position=1, note="maybe fish", note_use=SwapNoteUse.USED)
     assert record.status is SessionStatus.QUEUED
     assert record.pending_swap == swap
     # The proposal stays readable while the swap runs, and the finished run's lease no longer stands in the way
@@ -755,6 +755,19 @@ def test_a_swap_requeues_a_finished_session_and_records_its_slot(store: tuple[Se
     assert record.result == _proposal()
     assert record.owner is None
     assert record.lease_until is None
+
+
+def test_a_note_the_screen_dropped_is_recorded_but_never_stored(store: tuple[SessionStore, Clock]) -> None:
+    sessions, clock = store
+    _done(sessions, clock)
+
+    swap = sessions.enqueue_swap("user-a", "sess-1", _swap(), note_dropped=True)
+
+    record = sessions.get("user-a", "sess-1")
+    assert record is not None
+    assert swap.note is None
+    assert swap.note_use is SwapNoteUse.DROPPED
+    assert record.swaps == [swap]
 
 
 def test_only_one_swap_runs_at_a_time(store: tuple[SessionStore, Clock]) -> None:

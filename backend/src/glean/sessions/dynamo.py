@@ -252,11 +252,13 @@ class DynamoSessionStore:
             },
         )
 
-    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+    def enqueue_swap(
+        self, user_sub: str, session_id: str, message: SwapMessage, *, note_dropped: bool = False
+    ) -> SwapRecord:
         record = self.get(user_sub, session_id)
         if record is None:
             raise UnknownSessionError(session_id)
-        updated, swap = queued_swap(record, message)
+        updated, swap = queued_swap(record, message, note_dropped=note_dropped)
         # The status read above is the lock: the write only lands while the session is still where it was
         # read, with the same swap history, so two swaps sent at once cannot both be queued.
         won = self._update(
