@@ -79,39 +79,70 @@ enum MealPlanSwapNote {
   unknown,
 }
 
-/// The body of `POST /meal-plan/sessions/{id}/messages` for a swap: find another meal for the card whose meal is
-/// [slot], optionally with a [note]. V11's answer and skip are further message types on the same route.
-@JsonSerializable(
-  fieldRename: FieldRename.snake,
-  createFactory: false,
-  includeIfNull: true,
-)
-class MealPlanSwapMessage {
-  const MealPlanSwapMessage({required this.slot, this.note});
+/// The body of `POST /meal-plan/sessions/{id}/messages`: one union, discriminated on `type`. A swap (V10) asks
+/// for another meal in one card of a finished proposal; an answer or a skip (V11) resumes a run parked on its
+/// question. Any note goes through the backend's screen before anything stores it.
+sealed class MealPlanSessionMessage {
+  const MealPlanSessionMessage();
 
-  /// Always `swap`; the route takes a union discriminated on it.
-  String get type => 'swap';
+  Map<String, dynamic> toJson();
+}
+
+/// Find another meal for the card whose meal is [slot], optionally with a [note].
+final class SwapMessage extends MealPlanSessionMessage {
+  const SwapMessage({required this.slot, this.note});
 
   /// The corpus id of the meal on the card being swapped.
   final String slot;
   final String? note;
 
+  @override
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'type': type,
-    ..._$MealPlanSwapMessageToJson(this),
+    'type': 'swap',
+    'slot': slot,
+    'note': note,
   };
 }
 
-/// The `202` body from posting a swap: which swap to watch for on the session's polls.
-@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
-class MealPlanSwapAccepted {
-  const MealPlanSwapAccepted({required this.sessionId, required this.swapId});
+/// The household's answer to the agent's one question: an [option] it offered, a [note], or both.
+final class AnswerMessage extends MealPlanSessionMessage {
+  const AnswerMessage({this.option, this.note});
 
-  factory MealPlanSwapAccepted.fromJson(Map<String, dynamic> json) =>
-      _$MealPlanSwapAcceptedFromJson(json);
+  final String? option;
+  final String? note;
+
+  @override
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'type': 'answer',
+    'option': option,
+    'note': note,
+  };
+}
+
+/// "Skip, just plan": resume the parked run without an answer.
+final class SkipMessage extends MealPlanSessionMessage {
+  const SkipMessage();
+
+  @override
+  Map<String, dynamic> toJson() => <String, dynamic>{'type': 'skip'};
+}
+
+/// The `202` body from posting a message. [swapId] is set for a swap: the id its outcome carries on the poll.
+/// [noteDropped] is true when the message carried a note the screen dropped ("Couldn't use that note").
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class MealPlanMessageAccepted {
+  const MealPlanMessageAccepted({
+    required this.sessionId,
+    this.swapId,
+    this.noteDropped = false,
+  });
+
+  factory MealPlanMessageAccepted.fromJson(Map<String, dynamic> json) =>
+      _$MealPlanMessageAcceptedFromJson(json);
 
   final String sessionId;
-  final int swapId;
+  final int? swapId;
+  final bool noteDropped;
 }
 
 /// The newest swap on a session, as a poll reports it. [replacement] is the meal now in slot [position] once

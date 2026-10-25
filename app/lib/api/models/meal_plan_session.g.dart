@@ -33,27 +33,24 @@ MealPlanSessionError _$MealPlanSessionErrorFromJson(
   fieldKeyMap: const {'retryAfterMinutes': 'retry_after_minutes'},
 );
 
-Map<String, dynamic> _$MealPlanSwapMessageToJson(
-  MealPlanSwapMessage instance,
-) => <String, dynamic>{
-  'type': instance.type,
-  'slot': instance.slot,
-  'note': instance.note,
-};
-
-MealPlanSwapAccepted _$MealPlanSwapAcceptedFromJson(
+MealPlanMessageAccepted _$MealPlanMessageAcceptedFromJson(
   Map<String, dynamic> json,
 ) => $checkedCreate(
-  'MealPlanSwapAccepted',
+  'MealPlanMessageAccepted',
   json,
   ($checkedConvert) {
-    final val = MealPlanSwapAccepted(
+    final val = MealPlanMessageAccepted(
       sessionId: $checkedConvert('session_id', (v) => v as String),
-      swapId: $checkedConvert('swap_id', (v) => (v as num).toInt()),
+      swapId: $checkedConvert('swap_id', (v) => (v as num?)?.toInt()),
+      noteDropped: $checkedConvert('note_dropped', (v) => v as bool? ?? false),
     );
     return val;
   },
-  fieldKeyMap: const {'sessionId': 'session_id', 'swapId': 'swap_id'},
+  fieldKeyMap: const {
+    'sessionId': 'session_id',
+    'swapId': 'swap_id',
+    'noteDropped': 'note_dropped',
+  },
 );
 
 MealPlanSessionSwap _$MealPlanSessionSwapFromJson(Map<String, dynamic> json) =>

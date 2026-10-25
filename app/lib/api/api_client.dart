@@ -121,12 +121,12 @@ class GleanApiClient {
     );
   }
 
-  /// Asks for another meal in one card of a finished proposal (V10). The server answers 202 with the swap's id
-  /// and resumes the session; poll it for the swap's progress lines and its replacement. One paid call, rate
-  /// limited; a 409 means a swap is already running, a 422 that the card's meal cannot be swapped here.
-  Future<MealPlanSwapAccepted> sendMealPlanSwap(
+  /// Sends a household message to a session: a swap (V10), or an answer or a skip (V11). The server answers 202
+  /// and resumes the session; poll it for the outcome. One paid call, rate limited. For a swap, a 409 means a
+  /// swap is already running and a 422 that the card's meal cannot be swapped here.
+  Future<MealPlanMessageAccepted> sendMealPlanSessionMessage(
     String sessionId,
-    MealPlanSwapMessage message,
+    MealPlanSessionMessage message,
   ) {
     final uri = _uri(
       '/meal-plan/sessions/${Uri.encodeComponent(sessionId)}/messages',
@@ -139,7 +139,7 @@ class GleanApiClient {
         body: jsonEncode(message.toJson()),
       ),
       (dynamic json) =>
-          MealPlanSwapAccepted.fromJson(json as Map<String, dynamic>),
+          MealPlanMessageAccepted.fromJson(json as Map<String, dynamic>),
     );
   }
 

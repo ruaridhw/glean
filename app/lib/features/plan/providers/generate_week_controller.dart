@@ -355,11 +355,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     );
 
     final api = ref.read(apiClientProvider);
-    final MealPlanSwapAccepted accepted;
+    final MealPlanMessageAccepted accepted;
     try {
-      accepted = await api.sendMealPlanSwap(
+      accepted = await api.sendMealPlanSessionMessage(
         sessionId,
-        MealPlanSwapMessage(slot: slot, note: sent),
+        SwapMessage(slot: slot, note: sent),
       );
     } on ApiException catch (error) {
       _endFind(
@@ -397,7 +397,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         if (swap != null &&
             swap.swapId == accepted.swapId &&
             swap.state != MealPlanSwapState.pending) {
-          _land(attempt, index, swap);
+          _land(attempt, index, swap, noteDropped: accepted.noteDropped);
           return;
         }
         if (update.status == MealPlanSessionStatus.failed) {
@@ -449,7 +449,12 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
 
   /// The swap finished: a replacement takes the card's slot (and its own Undo), anything else is a line on the
   /// card. The rest of the review, and any local swap on another card, stays as the household left it.
-  void _land(int attempt, int index, MealPlanSessionSwap swap) {
+  void _land(
+    int attempt,
+    int index,
+    MealPlanSessionSwap swap, {
+    bool noteDropped = false,
+  }) {
     final MealPlanResponse? result = state.result;
     final MealPlanRecipe? replacement = swap.replacement;
     if (swap.state == MealPlanSwapState.noReplacement) {
@@ -473,7 +478,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     _endFind(
       attempt,
       index,
-      notice: swap.note == MealPlanSwapNote.dropped
+      notice: noteDropped || swap.note == MealPlanSwapNote.dropped
           ? swapNoteDroppedCopy
           : null,
     );

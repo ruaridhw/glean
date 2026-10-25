@@ -10,12 +10,35 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
-  test('a swap message is the type, the slot and the note', () {
+  test('each message is its type and its fields, as one union', () {
     expect(
-      const MealPlanSwapMessage(slot: 'rec_a', note: 'maybe fish').toJson(),
+      const SwapMessage(slot: 'rec_a', note: 'maybe fish').toJson(),
       <String, dynamic>{'type': 'swap', 'slot': 'rec_a', 'note': 'maybe fish'},
     );
-    expect(const MealPlanSwapMessage(slot: 'rec_a').toJson()['note'], isNull);
+    expect(const SwapMessage(slot: 'rec_a').toJson()['note'], isNull);
+    expect(const AnswerMessage(option: 'Fish').toJson(), <String, dynamic>{
+      'type': 'answer',
+      'option': 'Fish',
+      'note': null,
+    });
+    expect(const SkipMessage().toJson(), <String, dynamic>{'type': 'skip'});
+  });
+
+  test('the 202 carries the swap id and whether the note was dropped', () {
+    final swap = MealPlanMessageAccepted.fromJson(<String, dynamic>{
+      'session_id': 's1',
+      'swap_id': 2,
+      'note_dropped': true,
+    });
+    expect(swap.swapId, 2);
+    expect(swap.noteDropped, isTrue);
+    final answer = MealPlanMessageAccepted.fromJson(<String, dynamic>{
+      'session_id': 's1',
+      'swap_id': null,
+      'note_dropped': false,
+    });
+    expect(answer.swapId, isNull);
+    expect(answer.noteDropped, isFalse);
   });
 
   test(
@@ -72,17 +95,22 @@ void main() {
       httpClient: MockClient((http.Request request) async {
         sent = request;
         return http.Response(
-          jsonEncode(<String, dynamic>{'session_id': 's 1', 'swap_id': 3}),
+          jsonEncode(<String, dynamic>{
+            'session_id': 's 1',
+            'swap_id': 3,
+            'note_dropped': false,
+          }),
           202,
         );
       }),
       accessTokenProvider: () async => 'token',
     );
 
-    final MealPlanSwapAccepted accepted = await client.sendMealPlanSwap(
-      's 1',
-      const MealPlanSwapMessage(slot: 'rec_a', note: 'fish'),
-    );
+    final MealPlanMessageAccepted accepted = await client
+        .sendMealPlanSessionMessage(
+          's 1',
+          const SwapMessage(slot: 'rec_a', note: 'fish'),
+        );
 
     expect(sent.method, 'POST');
     expect(sent.url.path, '/meal-plan/sessions/s%201/messages');
