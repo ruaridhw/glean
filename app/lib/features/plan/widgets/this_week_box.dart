@@ -158,9 +158,7 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
                 minLines: 1,
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: '+ Add a note',
-                ),
+                decoration: const InputDecoration(hintText: '+ Add a note'),
                 onChanged: controller.setNote,
               ),
             ],

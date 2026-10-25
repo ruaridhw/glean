@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:glean/auth/auth_controller.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -393,6 +394,63 @@ void main() {
       expect(sentNote, '👍🏽' * 100);
     },
   );
+
+  gleanWidgetTest(
+    'a past week is dropped when the box reads, before any edit',
+    (tester) async {
+      await h.dispose();
+      FlutterSecureStorage.setMockInitialValues(<String, String>{
+        WeekFeedbackStore.keyFor('test-user'): jsonEncode(<String, dynamic>{
+          '2026-10-19': <String, dynamic>{
+            'chips': <String>['guests'],
+            'note': 'last week',
+            'note_unused': false,
+          },
+          '2026-10-26': <String, dynamic>{
+            'chips': <String>['lighter'],
+            'note': '',
+            'note_unused': false,
+          },
+        }),
+      });
+      final DateTime now = DateTime(2026, 10, 27, 9);
+      h = AppTestHarness(
+        keepSecureStorage: true,
+        overrides: [clockProvider.overrideWithValue(() => now)],
+      );
+      await open(tester);
+
+      expect(tester.widget<Text>(summary()).data, 'Lighter');
+      final String? stored = await tester.runAsync<String?>(
+        () => const FlutterSecureStorage().read(
+          key: WeekFeedbackStore.keyFor(h.userId),
+        ),
+      );
+      expect((jsonDecode(stored!) as Map<String, dynamic>).keys, <String>[
+        '2026-10-26',
+      ]);
+    },
+  );
+
+  gleanWidgetTest('signing out deletes the stored week feedback', (
+    tester,
+  ) async {
+    await h.dispose();
+    h = AppTestHarness(httpClient: backend());
+    await open(tester);
+    await toggleBox(tester);
+    await tester.tap(chip(FeedbackChip.lighter));
+    await tester.pumpAndSettle();
+    Future<String?> stored() => const FlutterSecureStorage().read(
+      key: WeekFeedbackStore.keyFor(h.userId),
+    );
+    expect(await tester.runAsync<String?>(stored), isNotNull);
+
+    await h.container.read(authControllerProvider.notifier).signOut();
+    await tester.pumpAndSettle();
+
+    expect(await tester.runAsync<String?>(stored), isNull);
+  });
 
   test('each week has its own selection, so a new week starts empty', () {
     final ProviderContainer container = h.container;

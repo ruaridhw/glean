@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/auth/auth_controller.dart' show authControllerProvider;
+import 'package:glean/auth/token_storage.dart' show TokenStorage;
 import 'package:glean/data/models/meal_thumb.dart' show truncateRatingNote;
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/util/week.dart';
@@ -128,8 +129,8 @@ class WeekFeedback {
 }
 
 /// Where the selections are kept between launches: one JSON entry per user in `flutter_secure_storage`, a map
-/// from week start (`2026-10-19`) to that week's chips and note. Weeks before the current one are never read
-/// back and are dropped at the next write, so the box resets when the week rolls over.
+/// from week start (`2026-10-19`) to that week's chips and note. Weeks before the current one are dropped on
+/// every read and write, so the box resets when the week rolls over, and sign-out clears the entry.
 class WeekFeedbackStore {
   WeekFeedbackStore({required this.clock, FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
@@ -138,12 +139,16 @@ class WeekFeedbackStore {
   final DateTime Function() clock;
   final FlutterSecureStorage _storage;
 
-  static String keyFor(String userId) => 'glean_week_feedback.$userId';
+  /// Under [TokenStorage.userDataKeyPrefix], so sign-out clears it.
+  static String keyFor(String userId) =>
+      '${TokenStorage.userDataKeyPrefix}week_feedback.$userId';
 
+  /// The week's saved selection. Past weeks are dropped here too, so an old note is gone at the next launch
+  /// in a new week rather than kept until the next edit.
   Future<WeekFeedback?> read(String userId, DateTime weekStart) async {
-    final String week = _week(weekStart);
-    if (week.compareTo(_currentWeek()) < 0) return null;
-    return WeekFeedback._fromJson((await _weeks(userId))[week]);
+    final Map<String, dynamic> weeks = await _weeks(userId);
+    if (_dropPastWeeks(weeks)) await _save(userId, weeks);
+    return WeekFeedback._fromJson(weeks[_week(weekStart)]);
   }
 
   Future<void> write(
@@ -152,15 +157,26 @@ class WeekFeedbackStore {
     WeekFeedback feedback,
   ) async {
     final Map<String, dynamic> weeks = await _weeks(userId);
-    final String current = _currentWeek();
-    // ISO dates order as strings: everything before this week is over.
-    weeks.removeWhere((String week, _) => week.compareTo(current) < 0);
+    _dropPastWeeks(weeks);
     final String week = _week(weekStart);
     if (feedback._storable) {
       weeks[week] = feedback._toJson();
     } else {
       weeks.remove(week);
     }
+    await _save(userId, weeks);
+  }
+
+  /// Removes every week before this one; true when there was one to remove.
+  bool _dropPastWeeks(Map<String, dynamic> weeks) {
+    final String current = _currentWeek();
+    final int before = weeks.length;
+    // ISO dates order as strings: everything before this week is over.
+    weeks.removeWhere((String week, _) => week.compareTo(current) < 0);
+    return weeks.length != before;
+  }
+
+  Future<void> _save(String userId, Map<String, dynamic> weeks) async {
     if (weeks.isEmpty) {
       await _storage.delete(key: keyFor(userId));
     } else {
