@@ -162,7 +162,9 @@ src/glean/
                       #   constraints, the floor, a narrowing-only RecipeFilter, the urgent guarantee,
                       #   ranking), get_recipes, score_meal_plan, create_candidate_meal_plans; and
                       #   FeedbackChip + CHIP_PREDICATES, the one place a week's chip becomes a predicate
-                      #   or a scorer term (weights in ScorerWeights)
+                      #   or a scorer term (weights in ScorerWeights); quick weeknights, comfort food and
+                      #   guests (NARROWING_CHIPS, chip_narrows) narrow the sampler's offer while three
+                      #   fresh recipes per slot pass, else fall back to their +2 (logged either way)
                       # feedback.py: the week's human feedback (V9) -- screen_feedback runs the note
                       #   through the injection screen (dropped, never raw, when it fails or cannot be
                       #   asked; the chips still apply), and prompt_payload is the only feedback a prompt

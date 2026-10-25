@@ -187,8 +187,10 @@ thumbs-down recipe out of every plan, and a note reaches no model until the feed
 ## The "This week" box
 
 The Plan tab's top box holds the week's human feedback: eight chips and an optional note, with Generate in its
-top right whether the box is open or not. `lib/features/plan/week_feedback.dart` keeps the selection in memory,
-one per week (`weekFeedbackProvider`, keyed by `startOfWeek`), so a new week starts empty and nothing is written
-to the database; closing the app clears it too. What a chip does to the plan is the backend's
+top right whether the box is open or not. `lib/features/plan/week_feedback.dart` keeps one selection per week
+(`weekFeedbackProvider`, keyed by `startOfWeek`) and saves it through `WeekFeedbackStore`: one JSON entry per user
+in `flutter_secure_storage` (the store the tokens use), never the database, so it needs no schema change. It
+survives a restart; a past week is never read back and is dropped at the next write, so a new week starts empty.
+What a chip does to the plan is the backend's
 (`meal_plan.tools.FeedbackChip`). The backend screens the note before any model reads it, and the result's
 `feedback_note` tells the box when to say "Couldn't use that note"; the chips apply either way.
