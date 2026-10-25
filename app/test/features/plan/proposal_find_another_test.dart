@@ -685,4 +685,69 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+  gleanWidgetTest(
+    "a find after a Cancel never shows the cancelled swap's progress lines",
+    (tester) async {
+      final Completer<http.Response> old = Completer<http.Response>();
+      final Completer<http.Response> current = Completer<http.Response>();
+      final backend = SwapBackend(
+        accepts: <http.Response Function()>[
+          () => http.Response(
+            '{"session_id":"s1","swap_id":1,"note_dropped":false}',
+            202,
+          ),
+          () => http.Response(
+            '{"session_id":"s1","swap_id":2,"note_dropped":false}',
+            202,
+          ),
+        ],
+        swapPolls: <Future<http.Response> Function()>[
+          () => old.future,
+          // The cancelled swap finished on the server, writing its lines after the cursor the app last read.
+          () async => _poll(
+            status: 'done',
+            cursor: 6,
+            progress: <String>[
+              'Reading your note',
+              'Looking for something old',
+            ],
+            swap: _swap('done', replacement: _replacement()),
+          ),
+          () async => _poll(
+            status: 'running',
+            cursor: 7,
+            progress: <String>['Finding another dinner'],
+            swap: <String, dynamic>{..._swap('pending'), 'swap_id': 2},
+          ),
+          () => current.future,
+        ],
+      );
+      final h = _harness(backend);
+      addTearDown(h.dispose);
+
+      await _openProposal(tester, h);
+      await _findAnother(tester, 1, settle: false);
+      await tester.tap(_inCard(1, find.text('Cancel')));
+      await tester.pump();
+      await _findAnother(tester, 1, settle: false);
+      await tester.pump();
+
+      expect(_inCard(1, find.text('Finding another…')), findsOneWidget);
+      expect(_inCard(1, find.text('Finding another dinner')), findsOneWidget);
+      expect(find.text('Looking for something old'), findsNothing);
+      expect(find.text('Reading your note'), findsNothing);
+      old.complete(_poll(status: 'running', swap: _swap('pending')));
+      current.complete(
+        _poll(
+          status: 'done',
+          cursor: 8,
+          swap: <String, dynamic>{
+            ..._swap('done', replacement: _replacement()),
+            'swap_id': 2,
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 }
