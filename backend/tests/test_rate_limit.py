@@ -243,7 +243,7 @@ AI_ROUTES = [
         name="meal plan session message",
         path="/meal-plan/sessions/sess-swap/messages",
         boundaries=_swappable_proposals,
-        request_kwargs={"json": {"type": "swap", "slot": "rec_1", "note": None}},
+        request_kwargs={"json": {"type": "swap", "slot": "rec_1", "note": None, "week": ["rec_1"]}},
         success_status=202,
     ),
     AiRoute(

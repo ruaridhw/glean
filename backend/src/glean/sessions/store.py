@@ -201,6 +201,7 @@ class MessageRefusal(StrEnum):
     BUSY = "busy"
     NO_PROPOSAL = "no_proposal"
     UNKNOWN_SLOT = "unknown_slot"
+    INVALID_WEEK = "invalid_week"
     NO_QUESTION = "no_question"
 
 
@@ -234,6 +235,22 @@ def swap_refusal(record: SessionRecord, *, now: int) -> MessageRefusal | None:
     return MessageRefusal.BUSY
 
 
+def swap_placement(record: SessionRecord, message: SwapMessage) -> int | MessageRefusal:
+    """Where *message*'s slot sits in the week it names, or why the swap is refused.
+
+    The slot must be a meal this proposal put on a card (never one already in the plan, ADR 0020). The week must
+    have one id per card, each one this proposal offered, none twice, with the slot among them.
+    """
+    known = record.known_meal_ids()
+    if message.slot not in known:
+        return MessageRefusal.UNKNOWN_SLOT
+    week = message.week
+    cards = len(record.result.suggestions) if record.result is not None else 0
+    if len(week) != cards or len(set(week)) != len(week) or not set(week) <= known or message.slot not in week:
+        return MessageRefusal.INVALID_WEEK
+    return week.index(message.slot)
+
+
 def queued_swap(
     record: SessionRecord, message: SwapMessage, *, now: datetime, note_dropped: bool = False
 ) -> tuple[SessionRecord, SwapRecord]:
@@ -242,10 +259,10 @@ def queued_swap(
     refusal = swap_refusal(record, now=epoch)
     if refusal is not None:
         raise MessageRefusedError(refusal)
-    queued = record.with_swap(message, now=epoch, note_dropped=note_dropped)
-    if queued is None:
-        raise MessageRefusedError(MessageRefusal.UNKNOWN_SLOT)
-    return queued
+    position = swap_placement(record, message)
+    if isinstance(position, MessageRefusal):
+        raise MessageRefusedError(position)
+    return record.with_swap(message, position=position, now=epoch, note_dropped=note_dropped)
 
 
 class SessionBusyError(RuntimeError):

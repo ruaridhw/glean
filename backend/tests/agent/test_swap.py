@@ -120,11 +120,23 @@ class SwapRun(Run):
             remaining_seconds=lambda: float(WORKER_TIMEOUT_SECONDS),
         )
 
-    def swap(self, position: int = 1, note: str | None = NOTE, *, note_dropped: bool = False) -> None:
-        """Queue a swap as the route does: *note* is what the screen passed, *note_dropped* that it dropped one."""
-        slot = self.proposal.suggestions[position].external_id
-        message = SwapMessage(type="swap", slot=slot, note=note)
+    def swap(
+        self,
+        position: int = 1,
+        note: str | None = NOTE,
+        *,
+        note_dropped: bool = False,
+        week: list[str] | None = None,
+    ) -> None:
+        """Queue a swap as the route does: *note* is what the screen passed, *note_dropped* that it dropped one,
+        *week* the cards as the app shows them (the proposal's own meals unless a test says otherwise)."""
+        shown = week or self.week
+        message = SwapMessage(type="swap", slot=shown[position], note=note, week=shown)
         self.sessions.enqueue_swap("user-a", "sess-1", message, note_dropped=note_dropped)
+
+    @property
+    def week(self) -> list[str]:
+        return [meal.external_id or "" for meal in self.proposal.suggestions]
 
     def deliver(self, model: Model) -> bool:
         return start(self.session, self.deps(model))
@@ -214,6 +226,23 @@ class TestReplacement:
 
         assert planned in model.users(SwapStep)[0]["swap"]["unavailable_ids"]
         assert planned not in [s.external_id for s in run.record.result.suggestions]
+
+    def test_the_swap_locks_and_scores_the_week_on_screen_not_the_servers(self, swap_run: SwapRun) -> None:
+        """After a local Undo the app shows the original meal again; the next swap must keep that one."""
+        swap_run.swap(position=1)
+        swap_run.deliver(Model(swap=[replace_with(a_free_candidate)]))
+        original = swap_run.proposal.suggestions[1].external_id
+        assert swap_run.record.result.suggestions[1].external_id != original
+        on_screen = swap_run.week  # the app undid the swap: the original meal is back on its card
+        swap_run.swap(position=0, week=on_screen)
+        model = Model(swap=[replace_with(a_free_candidate)])
+
+        swap_run.deliver(model)
+
+        swap = model.users(SwapStep)[0]["swap"]
+        assert [meal["external_id"] for meal in swap["locked_week"]] == [original]
+        assert original in swap["unavailable_ids"]
+        assert swap_run.record.result.suggestions[0].external_id not in on_screen
 
     def test_the_agent_can_search_for_what_the_note_asks_for(self, swap_run: SwapRun) -> None:
         swap_run.swap(position=0, note="something korean")
@@ -474,7 +503,7 @@ class TestResume:
 
         swap_id = resume(
             "sess-1",
-            SwapMessage(type="swap", slot=slot, note=NOTE),
+            SwapMessage(type="swap", slot=slot, note=NOTE, week=swap_run.week),
             user_sub="user-a",
             sessions=swap_run.sessions,
             dispatch=sent.append,
@@ -503,7 +532,7 @@ class TestResume:
         with pytest.raises(MessageNotSent):
             resume(
                 "sess-1",
-                SwapMessage(type="swap", slot=slot),
+                SwapMessage(type="swap", slot=slot, week=swap_run.week),
                 user_sub="user-a",
                 sessions=swap_run.sessions,
                 dispatch=down,
@@ -524,7 +553,7 @@ class TestResume:
         with pytest.raises(ProcessDied):
             resume(
                 "sess-1",
-                SwapMessage(type="swap", slot=slots[1]),
+                SwapMessage(type="swap", slot=slots[1], week=slots),
                 user_sub="user-a",
                 sessions=swap_run.sessions,
                 dispatch=dies,
@@ -533,7 +562,7 @@ class TestResume:
         with pytest.raises(MessageRefusedError):
             resume(
                 "sess-1",
-                SwapMessage(type="swap", slot=slots[0]),
+                SwapMessage(type="swap", slot=slots[0], week=slots),
                 user_sub="user-a",
                 sessions=swap_run.sessions,
                 dispatch=lambda _s: None,
@@ -543,7 +572,7 @@ class TestResume:
         sent: list[Any] = []
         swap_id = resume(
             "sess-1",
-            SwapMessage(type="swap", slot=slots[0]),
+            SwapMessage(type="swap", slot=slots[0], week=slots),
             user_sub="user-a",
             sessions=swap_run.sessions,
             dispatch=sent.append,

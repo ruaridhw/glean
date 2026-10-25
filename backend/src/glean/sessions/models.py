@@ -177,6 +177,14 @@ class SwapMessage(BaseModel):
     note: str | None = Field(
         default=None, max_length=MAX_SWAP_NOTE_CHARS, description="The swap note, optional: screened, then data."
     )
+    week: list[str] = Field(
+        min_length=1,
+        max_length=7,
+        description=(
+            "The external_id on each card as the app shows it now, in card order, after any local swap or Undo. "
+            "The swap locks and scores against this week; `slot` is one of its ids."
+        ),
+    )
 
 
 class AnswerMessage(BaseModel):
@@ -235,6 +243,9 @@ class SwapRecord(BaseModel):
     queued_at: int | None = Field(
         default=None, description="Epoch seconds the swap was queued: how a swap no delivery ever took is told apart."
     )
+    week: list[str] = Field(
+        default_factory=list, description="The cards' ids as the app showed them when it asked; `slot` at `position`."
+    )
 
 
 class SessionRecord(BaseModel):
@@ -267,32 +278,28 @@ class SessionRecord(BaseModel):
         latest = self.swaps[-1] if self.swaps else None
         return latest if latest is not None and latest.state is SwapState.PENDING else None
 
-    def swap_position(self, slot: str) -> int | None:
-        """Where *slot* sits in the proposal: a meal on a card, or one a swap replaced and the app swapped back.
+    def known_meal_ids(self) -> set[str]:
+        """Every id this proposal ever put on a card: its meals, their alternatives, and what swaps replaced.
 
-        Meals already in the plan are not in the suggestions and never were, so they have no position: a swap
-        never replaces them (ADR 0020).
+        Meals already in the plan are not among them: they were never a card's meal, so a swap never names one.
         """
-        if self.result is None:
-            return None
-        for index, suggestion in enumerate(self.result.suggestions):
-            if suggestion.external_id == slot:
-                return index
-        replaced = [swap for swap in self.swaps if swap.slot == slot and swap.state is SwapState.DONE]
-        return replaced[-1].position if replaced else None
+        known = {swap.slot for swap in self.swaps}
+        if self.result is not None:
+            for suggestion in self.result.suggestions:
+                known |= {suggestion.external_id} if suggestion.external_id else set()
+                if suggestion.alternative is not None and suggestion.alternative.external_id:
+                    known.add(suggestion.alternative.external_id)
+        return known - set(self.request.exclude_external_ids)
 
     def with_swap(
-        self, message: SwapMessage, *, now: int, note_dropped: bool = False
-    ) -> tuple[SessionRecord, SwapRecord] | None:
-        """This record with *message* queued as its newest swap, or None when the slot is not in the proposal.
+        self, message: SwapMessage, *, position: int, now: int, note_dropped: bool = False
+    ) -> tuple[SessionRecord, SwapRecord]:
+        """This record with *message* queued as its newest swap, its slot at *position* of the week it names.
 
         *message* carries the screened note only; *note_dropped* records that the household wrote one the screen
         dropped, which the card reports as "Couldn't use that note". A swap still pending here is one the store
         let this one replace (nothing ever took it), so it is marked failed: abandoned, never run.
         """
-        position = self.swap_position(message.slot)
-        if position is None:
-            return None
         swap = SwapRecord(
             swap_id=(self.swaps[-1].swap_id + 1) if self.swaps else 1,
             slot=message.slot,
@@ -300,6 +307,7 @@ class SessionRecord(BaseModel):
             note=(note := (message.note or "").strip() or None),
             note_use=SwapNoteUse.USED if note else SwapNoteUse.DROPPED if note_dropped else SwapNoteUse.NONE,
             queued_at=now,
+            week=list(message.week),
         )
         earlier = [
             entry.model_copy(update={"state": SwapState.FAILED}) if entry.state is SwapState.PENDING else entry

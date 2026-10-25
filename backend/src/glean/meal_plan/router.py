@@ -34,6 +34,7 @@ from glean.sessions.store import (
     SessionStore,
     SessionTooLargeError,
     UnknownSessionError,
+    swap_placement,
     swap_refusal,
     utcnow,
 )
@@ -116,6 +117,10 @@ _MESSAGE_REFUSALS: dict[MessageRefusal, tuple[int, str]] = {
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "That meal isn't one this proposal suggested. Meals already in your plan are never replaced.",
     ),
+    MessageRefusal.INVALID_WEEK: (
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "The week sent with the swap doesn't match this proposal's cards.",
+    ),
     MessageRefusal.NO_QUESTION: (status.HTTP_409_CONFLICT, "There is no question waiting for an answer."),
 }
 
@@ -175,11 +180,12 @@ def _screened_swap(
     Returns the message carrying only what the screen passed, and whether it dropped a note the household
     wrote. The note as typed goes no further than this function.
     """
-    refusal = swap_refusal(record, now=int(utcnow().timestamp())) or (
-        MessageRefusal.UNKNOWN_SLOT if record.swap_position(message.slot) is None else None
-    )
+    refusal = swap_refusal(record, now=int(utcnow().timestamp()))
     if refusal is not None:
         _refuse(refusal)
+    placement = swap_placement(record, message)
+    if isinstance(placement, MessageRefusal):
+        _refuse(placement)
     written = (message.note or "").strip()
     screened = screen(written, decision_client=decisions)
     return message.model_copy(update={"note": screened.text}), bool(written) and not screened.passed

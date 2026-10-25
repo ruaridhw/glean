@@ -371,7 +371,7 @@ class _Nodes:
         except BudgetSpent:
             return _degrade(DegradedReason.TIME_BUDGET)
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
-        swap = _swap_context(state)
+        swap = _swap_context(state, prepared)
         calls_left = max(MAX_SWAP_TOOL_CALLS - tool_calls, 0)
         step = self._ask(
             SwapStep,
@@ -413,7 +413,7 @@ class _Nodes:
             chosen = pipeline.replacement(
                 prepared,
                 pick,
-                locked=[meal["external_id"] for meal in swap.get("locked", [])],
+                locked=list(swap.get("locked", [])),
                 unavailable=set(swap.get("unavailable_ids", [])),
             )
         if chosen is None:
@@ -421,7 +421,12 @@ class _Nodes:
             state_, result, degraded = SwapState.NO_REPLACEMENT, base, True
         else:
             suggestion, degraded = chosen
-            state_, result = SwapState.DONE, pipeline.with_replacement(base, position, suggestion)
+            state_, result = (
+                SwapState.DONE,
+                pipeline.with_replacement(
+                    base, position, suggestion, taken={swap.get("slot", ""), *swap.get("week", [])}
+                ),
+            )
             if degraded and reason is None:
                 reason = DegradedReason.NOTHING_KEPT
         logger.info(
@@ -511,12 +516,16 @@ def _after_act(state: PlanState) -> str:
     return "swap_plan" if state.get("swap") else "plan"
 
 
-def _swap_context(state: PlanState) -> dict[str, Any]:
+def _swap_context(state: PlanState, prepared: pipeline.PreparedPlan) -> dict[str, Any]:
     """The swap as the model reads it: the slot, what stays, what it may not use, and the screened note only."""
     swap = state["swap"] or {}
+
+    def meal(external_id: str) -> dict[str, str]:
+        return {"external_id": external_id, "title": prepared.titles.get(external_id, external_id)}
+
     return {
-        "replacing": swap.get("replacing"),
-        "locked_week": swap.get("locked", []),
+        "replacing": meal(swap.get("slot", "")),
+        "locked_week": [meal(external_id) for external_id in swap.get("locked", [])],
         "unavailable_ids": swap.get("unavailable_ids", []),
         "swap_note": state.get("swap_note"),
     }

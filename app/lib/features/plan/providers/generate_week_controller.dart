@@ -344,8 +344,15 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         index >= result.suggestions.length) {
       return;
     }
-    final String? slot = result.suggestions[index].externalId;
-    if (slot == null) return;
+    // The week as the household sees it: a local alternative or Undo on any card counts, so the server locks
+    // and scores what is on screen, not its own copy of the proposal.
+    final List<String?> shown = <String?>[
+      for (int i = 0; i < result.suggestions.length; i++)
+        before.suggestionAt(i).externalId,
+    ];
+    final String? slot = shown[index];
+    if (slot == null || shown.contains(null)) return;
+    final List<String> week = shown.cast<String>();
     final String trimmed = note?.trim() ?? '';
     final String? sent = trimmed.isEmpty ? null : trimmed;
     final int attempt = _attempt;
@@ -359,7 +366,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     try {
       accepted = await api.sendMealPlanSessionMessage(
         sessionId,
-        SwapMessage(slot: slot, note: sent),
+        SwapMessage(slot: slot, week: week, note: sent),
       );
     } on ApiException catch (error) {
       _endFind(

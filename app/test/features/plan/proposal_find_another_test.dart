@@ -189,6 +189,7 @@ void main() {
         'type': 'swap',
         'slot': 'rec_b',
         'note': _note,
+        'week': <String>['rec_a', 'rec_b'],
       });
       expect(_inCard(1, find.text('Finding another…')), findsOneWidget);
       expect(_inCard(1, find.text('Your note: "$_note"')), findsOneWidget);
@@ -284,6 +285,34 @@ void main() {
       expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
       expect(find.text('Garlic & chilli prawn linguine'), findsNothing);
       expect(find.text('Undo swap'), findsNothing);
+    },
+  );
+
+  gleanWidgetTest(
+    'the swap sends the week on screen, including a local alternative',
+    (tester) async {
+      final backend = SwapBackend(
+        swapPolls: <Future<http.Response> Function()>[
+          () async => _poll(
+            status: 'done',
+            swap: _swap('done', replacement: _replacement()),
+          ),
+        ],
+      );
+      final h = _harness(backend);
+      addTearDown(h.dispose);
+
+      await _openProposal(tester, h);
+      await tester.tap(_inCard(0, find.text('Swap')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use alternative'));
+      await tester.pumpAndSettle();
+      await _findAnother(tester, 1);
+
+      expect(jsonDecode(backend.messages.single.body)['week'], <String>[
+        'rec_a_alt',
+        'rec_b',
+      ]);
     },
   );
 
