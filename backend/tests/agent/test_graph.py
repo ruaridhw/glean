@@ -333,6 +333,11 @@ class TestInvalidActions:
         assert run.metric("SessionInvalidActions") == [MAX_INVALID_ACTIONS + 1]
 
 
+def _finished(caplog: pytest.LogCaptureFixture) -> Any:
+    """The `agent session finished` log record, which carries the session metrics."""
+    return next(record for record in caplog.records if record.getMessage() == "agent session finished")
+
+
 class TestBudget:
     def test_a_ninth_tool_call_ends_in_the_scorers_week(self, run: Run) -> None:
         model = ScriptedModel(*[call("get_recipes", ids=["rec_01"])] * (MAX_TOOL_CALLS + 1))
@@ -386,6 +391,20 @@ class TestBudget:
         assert record.result.degraded is True
         # The first call ran; the one asked for after the deadline did not.
         assert record.progress.count("Reading the recipes more closely") == 1
+
+    def test_time_spent_on_an_unparseable_answer_is_logged_as_the_budget(
+        self, run: Run, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        def slow_and_wrong(_context: dict[str, Any]) -> dict[str, Any]:
+            run.clock.advance(AGENT_RUN_BUDGET_SECONDS + 1)
+            return {"action": {"kind": "nonsense"}}
+
+        with caplog.at_level(logging.INFO):
+            run.start(ScriptedModel(slow_and_wrong))
+
+        assert run.record.result.degraded is True
+        assert _finished(caplog).degraded_reason == "time_budget"
+        assert _finished(caplog).invalid_actions == 1
 
     def test_a_provider_error_mid_loop_is_the_scorers_week_not_model_error(self, run: Run) -> None:
         model = ScriptedModel(call("get_recipes", ids=["rec_01"]), RuntimeError("provider fell over"))
