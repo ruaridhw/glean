@@ -102,6 +102,51 @@ class EligibleRecipes:
 
 
 @dataclass(frozen=True)
+class RecipeHistory:
+    """A household's history resolved against one set of recipe ids, for the floor and for the scorer.
+
+    Both keys are recipe ids, matched by id or by title exactly as the floor matches them, so V6's scorer reads
+    a cook's age and its latest thumb the same way the floor did when it decided what to offer.
+    """
+
+    days_since_cooked: Mapping[str, float]
+    latest_rating: Mapping[str, str]
+
+
+def recipe_history(
+    recipe_ids: Iterable[str],
+    *,
+    titles: Mapping[str, str],
+    cooked: Iterable[CookedMeal],
+    now: datetime,
+) -> RecipeHistory:
+    """How long ago each of `recipe_ids` was cooked, and the thumb on its latest rated cook.
+
+    A recipe the history never mentions has no entry in either map, which is what "never cooked" means; a cook
+    with no rating leaves the last thumb standing. The scorer's recency and rating terms read this, and
+    `apply_recency_floor` decides from it, so the two cannot disagree about one history.
+    """
+    ids = list(dict.fromkeys(recipe_ids))
+    latest = _latest_cooks(cooked, now=now)
+    return RecipeHistory(
+        days_since_cooked=MappingProxyType(
+            {
+                recipe_id: days
+                for recipe_id in ids
+                if (days := _days_since_cooked(recipe_id, titles, latest)) is not None
+            }
+        ),
+        latest_rating=MappingProxyType(
+            {
+                recipe_id: rating
+                for recipe_id in ids
+                if (rating := _latest_rating(recipe_id, titles, latest)) is not None
+            }
+        ),
+    )
+
+
+@dataclass(frozen=True)
 class _LatestCook:
     """The housekeeping one identity key's cooks leave: how long ago, and the newest thumb on one."""
 
@@ -125,17 +170,15 @@ def apply_recency_floor(
     `titles` maps each eligible recipe id to its title, for history rows that carry no id.
     """
     ids = list(dict.fromkeys(eligible_ids))
-    latest = _latest_cooks(cooked, now=now)
+    history = recipe_history(ids, titles=titles, cooked=cooked, now=now)
     # Thumbs down is a hard constraint, like a dietary flag: the floor hedges about repeats, never about
     # a recipe the household said not to cook again, so these are dropped before it relaxes.
-    disliked = tuple(recipe_id for recipe_id in ids if _latest_rating(recipe_id, titles, latest) == RATING_DOWN)
+    disliked = tuple(recipe_id for recipe_id in ids if history.latest_rating.get(recipe_id) == RATING_DOWN)
     kept = [recipe_id for recipe_id in ids if recipe_id not in set(disliked)]
-    ages = {
-        recipe_id: days for recipe_id in kept if (days := _days_since_cooked(recipe_id, titles, latest)) is not None
-    }
-    ratings = {
-        recipe_id: rating for recipe_id in kept if (rating := _latest_rating(recipe_id, titles, latest)) is not None
-    }
+    # A dropped recipe is not eligible, so it carries no age or rating into what the floor reports.
+    kept_ids = set(kept)
+    ages = {recipe_id: days for recipe_id, days in history.days_since_cooked.items() if recipe_id in kept_ids}
+    ratings = {recipe_id: rating for recipe_id, rating in history.latest_rating.items() if recipe_id in kept_ids}
     fresh = [recipe_id for recipe_id in kept if recipe_id not in ages or ages[recipe_id] > window_days]
     recent = [
         (recipe_id, ages[recipe_id]) for recipe_id in kept if recipe_id in ages and ages[recipe_id] <= window_days
