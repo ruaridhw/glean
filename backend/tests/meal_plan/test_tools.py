@@ -451,6 +451,30 @@ def test_a_not_in_predicate_holds_for_everything_else() -> None:
     assert not predicate.matches(attributes(whole_food=WholeFood.PROCESSED))
 
 
+def test_a_predicate_on_an_unknown_attribute_matches_nothing() -> None:
+    # An unknown value is not evidence of anything, so it satisfies no predicate, `not_in` included: otherwise a
+    # chip would pay +2 to every recipe the enrichers have not reached, which is the bulk of the corpus.
+    unknown = attributes()
+    assert not Predicate(PredicateField.MAIN_PROTEIN, PredicateOp.IN, ("fish",)).matches(unknown)
+    assert not Predicate(PredicateField.MAIN_PROTEIN, PredicateOp.NOT_IN, ("fish",)).matches(unknown)
+    assert not Predicate(PredicateField.WHOLE_FOOD, PredicateOp.NOT_IN, ("processed",)).matches(unknown)
+    assert not Predicate(PredicateField.ACTIVE_TIME, PredicateOp.IN, ("15-30",)).matches(unknown)
+
+
+def test_a_not_in_chip_earns_nothing_on_an_un_enriched_recipe() -> None:
+    predicate = Predicate(PredicateField.WHOLE_FOOD, PredicateOp.NOT_IN, ("processed",))
+    un_enriched = context(
+        candidate("unknown"), chips=frozenset({"healthier"}), chip_predicates={"healthier": predicate}
+    )
+    assert score(["unknown"], un_enriched).points(Term.FEEDBACK_CHIP) == 0.0
+    whole = context(
+        candidate("whole", whole_food=WholeFood.WHOLE),
+        chips=frozenset({"healthier"}),
+        chip_predicates={"healthier": predicate},
+    )
+    assert score(["whole"], whole).points(Term.FEEDBACK_CHIP) == 2.0
+
+
 def test_a_minutes_predicate_compares_the_active_time_bucket() -> None:
     quick = RecipeAttributes(active_time=ActiveTimeBucket.FROM_15_TO_30)
     slow = RecipeAttributes(active_time=ActiveTimeBucket.FROM_45_TO_60)

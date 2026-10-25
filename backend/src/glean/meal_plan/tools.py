@@ -240,7 +240,12 @@ class Predicate:
                 raise ValueError(f"{self.op.value} takes exactly one number of minutes, not {self.values!r}")
 
     def matches(self, attributes: RecipeAttributes) -> bool:
-        """Whether these attributes satisfy the predicate. An attribute that isn't known satisfies nothing."""
+        """Whether these attributes satisfy the predicate.
+
+        An attribute that isn't known satisfies nothing, `not_in` included: an unknown value is not evidence of
+        anything, so it must not earn a chip. Every chip pays +2 for a match, and most of the corpus is not
+        enriched yet, so a `not_in` predicate read the other way would pay every un-enriched recipe.
+        """
         if self.op in (PredicateOp.LTE, PredicateOp.GTE):
             bound = attributes.active_time_upper_bound_mins
             limit = _minutes(self.values[0])
@@ -248,6 +253,8 @@ class Predicate:
                 return False
             return bound <= limit if self.op is PredicateOp.LTE else bound >= limit
         value = attributes.as_mapping()[self.field.value]
+        if value == UNSURE:
+            return False
         values = {candidate.casefold() for candidate in self.values}
         return value in values if self.op is PredicateOp.IN else value not in values
 
