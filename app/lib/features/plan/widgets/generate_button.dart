@@ -61,8 +61,7 @@ class PlanGenerateButton extends ConsumerWidget {
       return;
     }
     ref.read(hapticsProvider).mediumImpact();
-    if (ref.read(generateWeekControllerProvider).phase !=
-        GenerateProposalPhase.working) {
+    if (!ref.read(generateWeekControllerProvider).inFlight) {
       // Starts synchronously into its working state, so the screen's first frame is the progress face.
       unawaited(
         ref

@@ -48,7 +48,8 @@ class GenerateSessionPoller {
   final Duration interval;
 
   /// The cap on a run. A session that never reports a terminal status (the network died between create and the
-  /// last poll) ends the attempt as `stalled` rather than spinning forever.
+  /// last poll) ends the attempt as `stalled` rather than spinning forever. Nothing polls while the agent's question
+  /// is on screen, and the cap starts again from the answer: the household's thinking time is never counted.
   final Duration cap;
 }
 
@@ -59,8 +60,29 @@ final generateSessionPollerProvider = Provider<GenerateSessionPoller>(
   ),
 );
 
-/// Which face the proposal screen is showing. The question step is V11: `waiting_for_user` stays [working].
-enum GenerateProposalPhase { idle, working, proposal, failed }
+/// Which face the proposal screen is showing. [question] is the focused question step: the agent asked its one
+/// question, the session is parked as `waiting_for_user`, and nothing polls until the household answers or skips.
+enum GenerateProposalPhase { idle, working, question, proposal, failed }
+
+/// What the household did with the agent's question, so the working face can say "You answered: Two." once the
+/// step gives way to the progress again. [noteDropped] is set when the backend could not use the note.
+class GenerateQuestionReply {
+  const GenerateQuestionReply({
+    this.option,
+    this.skipped = false,
+    this.noteDropped = false,
+  });
+
+  final String? option;
+  final bool skipped;
+  final bool noteDropped;
+
+  GenerateQuestionReply _withNoteDropped() => GenerateQuestionReply(
+    option: option,
+    skipped: skipped,
+    noteDropped: true,
+  );
+}
 
 /// What one Add to plan request did. The screen acts only on [GenerateSaveSaved]: a request refused because a
 /// save is already in flight, or one whose review was discarded, must not close the review or show a snackbar.
@@ -151,6 +173,8 @@ class GenerateProposalState {
     this.progress = const <String>[],
     this.result,
     this.failure,
+    this.question,
+    this.reply,
     this.swaps = const <int, MealPlanRecipe>{},
     this.plannedSwaps = const <int, MealPlanRecipe>{},
     this.saving = false,
@@ -176,6 +200,12 @@ class GenerateProposalState {
   /// Set when the attempt ended in a failure. With [result] present it is a failed save, and Retry saves again
   /// rather than planning a new week.
   final GenerateFailure? failure;
+
+  /// The agent's question while [phase] is [GenerateProposalPhase.question].
+  final MealPlanSessionQuestion? question;
+
+  /// What the household answered, once it has.
+  final GenerateQuestionReply? reply;
 
   /// Index into `result.suggestions` -> the alternative the user chose. An absent index is the original pick.
   final Map<int, MealPlanRecipe> swaps;
@@ -213,6 +243,12 @@ class GenerateProposalState {
 
   bool isSwapped(int index) => swaps.containsKey(index);
 
+  /// True while an attempt is under way: planning, or parked on the agent's question. A second Generate must not
+  /// start over either.
+  bool get inFlight =>
+      phase == GenerateProposalPhase.working ||
+      phase == GenerateProposalPhase.question;
+
   /// True when there is a proposal to show but nothing the user asked to change, so Add to plan has no work: a
   /// done session with an empty suggestion list is the no-meals edge state.
   bool get hasProposal =>
@@ -226,6 +262,9 @@ class GenerateProposalState {
     List<String>? progress,
     MealPlanResponse? result,
     GenerateFailure? failure,
+    MealPlanSessionQuestion? question,
+    bool clearQuestion = false,
+    GenerateQuestionReply? reply,
     Map<int, MealPlanRecipe>? swaps,
     Map<int, MealPlanRecipe>? plannedSwaps,
     bool? saving,
@@ -244,6 +283,8 @@ class GenerateProposalState {
     progress: progress ?? this.progress,
     result: result ?? this.result,
     failure: failure ?? this.failure,
+    question: clearQuestion ? null : question ?? this.question,
+    reply: reply ?? this.reply,
     swaps: swaps ?? this.swaps,
     plannedSwaps: plannedSwaps ?? this.plannedSwaps,
     saving: saving ?? this.saving,
@@ -270,6 +311,14 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   /// refusal means "wait for it", not "something went wrong".
   bool _cancelledSwapMayRun = false;
 
+  /// Where the next poll of the current session starts, kept while the question is on screen so the poll that
+  /// follows the answer does not repeat progress lines.
+  int _cursor = 0;
+
+  /// The week's note this attempt sent with its request, so the poll that ends it (which may follow the answer to
+  /// the agent's question) can tell the week box whether the note was used.
+  String? _sentWeekNote;
+
   @override
   GenerateProposalState build() => const GenerateProposalState();
 
@@ -283,9 +332,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     required int slots,
     required int servings,
   }) async {
-    if (state.phase == GenerateProposalPhase.working) return;
+    if (state.inFlight) return;
     if (slots <= 0) return;
     final int attempt = ++_attempt;
+    _cursor = 0;
     state = GenerateProposalState(
       phase: GenerateProposalPhase.working,
       weekStart: weekStart,
@@ -330,6 +380,60 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     } on ApiException catch (_) {
       // Best effort: the discard is already local.
     }
+  }
+
+  /// Sends the household's answer to the agent's question (an option, a note, or both) and returns to the
+  /// progress. The poll that follows has a fresh cap: the time spent on the question is never counted.
+  Future<void> answerQuestion({String? option, String? note}) {
+    final String? trimmed = note?.trim();
+    final String? sentNote = trimmed == null || trimmed.isEmpty
+        ? null
+        : trimmed;
+    if (option == null && sentNote == null) return Future<void>.value();
+    return _sendReply(
+      AnswerMessage(option: option, note: sentNote),
+      GenerateQuestionReply(option: option),
+    );
+  }
+
+  /// "Skip, just plan": the run resumes without an answer.
+  Future<void> skipQuestion() => _sendReply(
+    const SkipMessage(),
+    const GenerateQuestionReply(skipped: true),
+  );
+
+  Future<void> _sendReply(
+    MealPlanSessionMessage message,
+    GenerateQuestionReply reply,
+  ) async {
+    final String? sessionId = state.sessionId;
+    if (state.phase != GenerateProposalPhase.question || sessionId == null) {
+      return;
+    }
+    final int attempt = _attempt;
+    // The step gives way to the progress at once, as the gate draws it; the send happens behind it.
+    state = state._copy(
+      phase: GenerateProposalPhase.working,
+      clearQuestion: true,
+      reply: reply,
+    );
+    try {
+      final MealPlanMessageAccepted accepted = await ref
+          .read(apiClientProvider)
+          .sendMealPlanSessionMessage(sessionId, message);
+      if (!_owns(attempt)) return;
+      if (accepted.noteDropped) {
+        state = state._copy(reply: reply._withNoteDropped());
+      }
+    } on ApiException catch (error) {
+      // 409: the session is no longer waiting, because this answer already landed (a retried send) or it moved
+      // on. Polling shows which; anything else is a failure to show.
+      if (error is! ApiServerException || error.statusCode != 409) {
+        _fail(attempt, GenerateFailure.fromApi(error));
+        return;
+      }
+    }
+    await _poll(attempt, sessionId);
   }
 
   /// Locally takes the suggestion's alternative, or puts the original back. No network and no write.
@@ -772,6 +876,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         servings: servings,
       );
       if (!_owns(attempt)) return;
+      _sentWeekNote = request.humanFeedback?.note;
 
       final api = ref.read(apiClientProvider);
       final MealPlanSessionCreated session;
@@ -787,12 +892,21 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         return;
       }
       state = state._copy(sessionId: session.sessionId);
+      await _poll(attempt, session.sessionId);
+    } catch (error) {
+      _fail(attempt, GenerateFailure.from(error));
+    }
+  }
 
+  /// Polls [sessionId] every second until it ends, asks its question, or the cap passes. The cap is measured from
+  /// this call, so a poll loop restarted after the household's answer never counts the time it spent answering.
+  Future<void> _poll(int attempt, String sessionId) async {
+    try {
+      final api = ref.read(apiClientProvider);
       final GenerateSessionPoller poller = ref.read(
         generateSessionPollerProvider,
       );
       final DateTime startedAt = poller.now();
-      var cursor = 0;
       while (true) {
         if (poller.now().difference(startedAt) >= poller.cap) {
           _fail(attempt, const GenerateFailure(GenerateFailureKind.stalled));
@@ -800,11 +914,11 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         }
         try {
           final MealPlanSessionUpdate update = await api.getMealPlanSession(
-            session.sessionId,
-            after: cursor,
+            sessionId,
+            after: _cursor,
           );
           if (!_owns(attempt)) return;
-          cursor = update.nextCursor;
+          _cursor = update.nextCursor;
           switch (update.status) {
             case MealPlanSessionStatus.done:
               final MealPlanResponse? result = update.result;
@@ -820,15 +934,18 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
                 phase: GenerateProposalPhase.proposal,
                 progress: <String>[...state.progress, ...update.progress],
                 result: result,
-                cursor: cursor,
+                cursor: _cursor,
               );
               // The box says "Couldn't use that note" when the screen dropped it; the chips applied anyway.
-              ref
-                  .read(weekFeedbackProvider(weekStart).notifier)
-                  .noteOutcome(
-                    sentNote: request.humanFeedback?.note,
-                    outcome: result.feedbackNote,
-                  );
+              final DateTime? weekStart = state.weekStart;
+              if (weekStart != null) {
+                ref
+                    .read(weekFeedbackProvider(weekStart).notifier)
+                    .noteOutcome(
+                      sentNote: _sentWeekNote,
+                      outcome: result.feedbackNote,
+                    );
+              }
               return;
             case MealPlanSessionStatus.failed:
               _fail(
@@ -844,9 +961,19 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
               // failure to show. The screen was already left.
               if (attempt == _attempt) state = const GenerateProposalState();
               return;
+            case MealPlanSessionStatus.waitingForUser
+                when update.question != null:
+              // The agent asked its one question: show it and stop polling. The answer (or the skip) resumes the
+              // run, and polling with it, from this cursor.
+              state = state._copy(
+                phase: GenerateProposalPhase.question,
+                question: update.question,
+                progress: <String>[...state.progress, ...update.progress],
+              );
+              return;
             default:
-              // queued, running, waiting_for_user (the question is V11) or a status this build does not know:
-              // keep the working state and poll again.
+              // queued, running, a waiting session with no question to show, or a status this build does not
+              // know: keep the working state and poll again.
               if (update.progress.isNotEmpty) {
                 state = state._copy(
                   progress: <String>[...state.progress, ...update.progress],

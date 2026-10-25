@@ -206,6 +206,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
       case GenerateProposalPhase.idle:
         return const Center(child: Text('Nothing to review.'));
       case GenerateProposalPhase.working:
+      case GenerateProposalPhase.question:
         return _WorkingBody(slots: state.slots, progress: state.progress);
       case GenerateProposalPhase.failed:
         return _FailedBody(
@@ -332,6 +333,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
     final List<Widget> actions;
     switch (state.phase) {
       case GenerateProposalPhase.working:
+      case GenerateProposalPhase.question:
         actions = <Widget>[
           OutlinedButton(
             onPressed: () => unawaited(_close()),
