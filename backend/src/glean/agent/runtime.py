@@ -1,8 +1,9 @@
 """Run one session: claim it, run the graph, write the outcome; and cancel one.
 
-`start` is what the worker and the inline runner call for every queue delivery, and `cancel` is what the
-DELETE route uses. A household message (`POST .../messages`) is stored on the item and re-enqueues the
-session, so resuming with it is just another delivery: what the claim won decides what runs, in `_run`'s
+The interface is spec §6.2's three calls. `start` is what the worker and the inline runner call for every
+queue delivery; `resume` is what the messages route calls with a household message (a swap now, an answer or a
+skip with V11); `cancel` is what the DELETE route uses. `resume` stores the message on the item and re-enqueues
+the session, so the work it asks for is just another delivery: what the claim won decides what runs, in `_run`'s
 order -- a pending answer or skip (V11), then a pending swap, then a finished graph, then as before.
 
 - **Resuming with a swap** (V10). A swap message re-queues a finished session, and its delivery claims it
@@ -50,19 +51,28 @@ from glean.meal_plan.feedback import screen_feedback, without_note
 from glean.meal_plan.schemas import MealPlanResult
 from glean.observability import logger, metrics
 from glean.sessions.models import (
+    AgentSession,
     ClaimResult,
     SessionError,
     SessionErrorCode,
     SessionStatus,
+    SwapMessage,
     SwapState,
 )
-from glean.sessions.store import SessionBusyError, SessionTooLargeError, lease_seconds_for
+from glean.sessions.store import (
+    MessageRefusal,
+    MessageRefusedError,
+    SessionBusyError,
+    SessionTooLargeError,
+    UnknownSessionError,
+    lease_seconds_for,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from glean.agent.deps import AgentDeps
-    from glean.sessions.models import AgentSession, SessionRecord, SwapRecord
+    from glean.sessions.models import HouseholdMessage, SessionRecord, SwapRecord
     from glean.sessions.store import SessionStore
 
 # CloudWatch metric names, all in the `Glean` namespace:
@@ -103,6 +113,51 @@ def cancel(session_id: str, *, user_sub: str, sessions: SessionStore) -> bool:
         extra={"session_id": session_id},
     )
     return moved
+
+
+class MessageNotSent(RuntimeError):
+    """The message was stored but the queue would not take it. The session was failed, so its proposal stays and
+    the next message is accepted."""
+
+
+def resume(
+    session_id: str,
+    message: HouseholdMessage,
+    *,
+    user_sub: str,
+    sessions: SessionStore,
+    dispatch: Callable[[AgentSession], None],
+    note_dropped: bool = False,
+) -> int | None:
+    """Resume *session_id* with a household message: store it on the item and re-enqueue the session.
+
+    *message* carries only what the route's screen passed; *note_dropped* says the household wrote a note the
+    screen dropped. Returns the swap's id for a swap. Raises `UnknownSessionError` for no such session,
+    `MessageRefusedError` when the session cannot take this message now, and `MessageNotSent` when the queue
+    would not take it. The worker picks the message up from the item (`start`), never from the queue body.
+    """
+    match message:
+        case SwapMessage():
+            swap_id: int | None = sessions.enqueue_swap(
+                user_sub, session_id, message, note_dropped=note_dropped
+            ).swap_id
+        case _:
+            # V11 stores an answer or a skip as the pending answer of a run parked on its question, here. No run
+            # parks before then, so there is never one to resume.
+            raise MessageRefusedError(MessageRefusal.NO_QUESTION)
+    record = sessions.get(user_sub, session_id)
+    if record is None:
+        raise UnknownSessionError(session_id)
+    try:
+        dispatch(AgentSession(session_id=session_id, user_sub=user_sub, request=record.request))
+    except Exception as error:
+        # Stored, but nothing will run it. Fail the session as create does: the proposal stays on the item, the
+        # swap reads as failed, and the next message is accepted.
+        sessions.fail_if_abandoned(user_sub, session_id, SessionError(code=SessionErrorCode.WORKER_FAILED))
+        logger.exception("the queue would not take a session message", extra={"session_id": session_id})
+        raise MessageNotSent(session_id) from error
+    logger.info("session resumed with a household message", extra={"session_id": session_id, "type": message.type})
+    return swap_id
 
 
 def start(session: AgentSession, deps: AgentDeps) -> bool:

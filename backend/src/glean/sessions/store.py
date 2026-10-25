@@ -194,6 +194,7 @@ class MessageRefusal(StrEnum):
     BUSY = "busy"
     NO_PROPOSAL = "no_proposal"
     UNKNOWN_SLOT = "unknown_slot"
+    NO_QUESTION = "no_question"
 
 
 class MessageRefusedError(ValueError):
