@@ -441,11 +441,33 @@ def test_every_recipe_carries_the_terms_that_were_evaluated() -> None:
     assert Term.WHOLE_FOOD in terms
 
 
-def test_a_term_with_no_attribute_in_the_g1_set_is_skipped_with_a_reason() -> None:
-    plan = score(["a"], context(candidate("a")))
-    (skipped,) = plan.skipped_terms
-    assert skipped.term == "hearty_repeat"
-    assert "richness" in skipped.reason
+def test_every_row_of_the_scorer_table_is_scored() -> None:
+    # Every term the table names reaches the breakdown, so no row is silently absent from the score. There is no
+    # heartiness row: G1 dropped richness, and the table has no "3+ hearty" term to read.
+    ctx = context(
+        candidate(
+            "a",
+            main_protein=MainProtein.CHICKEN,
+            main_carb=MainCarb.RICE,
+            dish_type=DishType.CURRY,
+            cuisine=Cuisine.INDIAN,
+            calories=900,
+        ),
+        candidate(
+            "b",
+            main_protein=MainProtein.CHICKEN,
+            main_carb=MainCarb.RICE,
+            dish_type=DishType.CURRY,
+            cuisine=Cuisine.INDIAN,
+            calories=900,
+        ),
+        chips=frozenset({LIGHTER_CHIP}),
+        protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=1),),
+    )
+    plan = score(["a", "b"], ctx)
+    scored = {term_score.term for recipe in plan.recipes for term_score in recipe.terms}
+    scored |= {penalty.term for penalty in plan.penalties}
+    assert scored == set(Term)
 
 
 def test_a_plan_naming_a_recipe_the_caller_did_not_describe_is_an_error() -> None:
