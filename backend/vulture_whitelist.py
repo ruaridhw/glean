@@ -201,3 +201,4 @@ feedback_note  # MealPlanResult field, read by the app
 swap_note  # PlanState key: the swap note the injection screen passed, the only form a model ever reads
 swap_pick  # PlanState key: the replacement the model proposed, before swap_finalise validates it
 swap_outcome  # PlanState key: the swap's finished outcome, keyed by swap id so a crash republishes it
+note_dropped  # MessageAccepted field: the 202 tells the app the screen dropped the note ("Couldn't use that note")
