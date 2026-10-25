@@ -286,19 +286,25 @@ def test_repeated_carbs_dish_types_and_cuisines_cost_their_own_row() -> None:
     assert plan.total == -5.0
 
 
-@pytest.mark.parametrize(
-    ("main_carb", "dish_type", "cuisine"),
-    [(MainCarb.NONE, DishType.UNSURE, Cuisine.UNSURE), (MainCarb.UNSURE, DishType.UNSURE, Cuisine.UNSURE)],
-)
-def test_repeated_carbs_and_unknown_attributes_are_exempt(main_carb, dish_type, cuisine) -> None:
+def test_repeated_unknown_attributes_are_exempt() -> None:
     ctx = context(
-        candidate("a", main_carb=main_carb, dish_type=dish_type, cuisine=cuisine),
-        candidate("b", main_carb=main_carb, dish_type=dish_type, cuisine=cuisine),
+        candidate("a"),
+        candidate("b"),
     )
     plan = score(["a", "b"], ctx)
     assert plan.points(Term.REPEAT_MAIN_CARB) == 0.0
     assert plan.points(Term.REPEAT_DISH_TYPE) == 0.0
     assert plan.points(Term.REPEAT_CUISINE) == 0.0
+
+
+def test_a_repeated_none_carb_still_costs_its_row() -> None:
+    # The spec's carb row carries no exemption: a dish with no carb is still a repeated carb choice, and a
+    # gluten-free week of four `none`-carb dinners is exactly the week the carb gate exists to catch.
+    ctx = context(candidate("a", main_carb=MainCarb.NONE), candidate("b", main_carb=MainCarb.NONE))
+    plan = score(["a", "b"], ctx)
+    assert plan.points(Term.REPEAT_MAIN_CARB) == -2.0
+    (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.REPEAT_MAIN_CARB]
+    assert penalty.detail == "none"
 
 
 # --- plan penalties: the lighter chip and protein targets -------------------------------------------------
