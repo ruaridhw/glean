@@ -215,3 +215,45 @@ def test_a_widened_recipe_from_last_week_is_flagged(tmp_path: Path) -> None:
     facts = {fact.recipe_id: fact for fact in widened.facts}
     assert facts[LAST_WEEK].cooked_last_week is True
     assert not any(fact.cooked_last_week for recipe_id, fact in facts.items() if recipe_id != LAST_WEEK)
+
+
+def test_same_as_last_week_offers_a_dinner_also_cooked_earlier_in_the_six_weeks(tmp_path: Path) -> None:
+    # A regular: cooked 3 and 20 days ago. Every cook of it has to leave the floor's history, not just last week's.
+    prepared = _prepare(
+        tmp_path,
+        _request(
+            chips=["same_as_last_week"],
+            cooked_history=[_cooked(LAST_WEEK, days_ago=3), _cooked(LAST_WEEK, days_ago=20)],
+        ),
+    )
+
+    assert LAST_WEEK in prepared.offered_ids
+    assert prepared.last_week_ids == [LAST_WEEK]
+
+
+def test_same_as_last_week_never_lifts_a_recipe_whose_latest_thumb_is_down(tmp_path: Path) -> None:
+    prepared = _prepare(
+        tmp_path,
+        _request(
+            chips=["same_as_last_week"],
+            cooked_history=[_cooked(LAST_WEEK, days_ago=3), _cooked(LAST_WEEK, days_ago=20, rating="down")],
+        ),
+    )
+
+    assert LAST_WEEK not in prepared.offered_ids
+    assert prepared.last_week_ids == []
+
+
+def test_a_later_thumbs_up_cancels_an_older_thumbs_down_for_same_as_last_week(tmp_path: Path) -> None:
+    prepared = _prepare(
+        tmp_path,
+        _request(
+            chips=["same_as_last_week"],
+            cooked_history=[
+                _cooked(LAST_WEEK, days_ago=3, rating="up"),
+                _cooked(LAST_WEEK, days_ago=30, rating="down"),
+            ],
+        ),
+    )
+
+    assert LAST_WEEK in prepared.offered_ids
