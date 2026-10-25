@@ -553,4 +553,47 @@ void main() {
       findsOneWidget,
     );
   });
+
+  test(
+    'Undo swap puts back the alternative the card was showing before the swap',
+    () async {
+      final backend = SwapBackend(
+        swapPolls: <Future<http.Response> Function()>[
+          () async => _poll(
+            status: 'done',
+            swap: _swap('done', replacement: _replacement()),
+          ),
+        ],
+      );
+      final h = _harness(backend);
+      addTearDown(h.dispose);
+      final GenerateWeekController controller = h.container.read(
+        generateWeekControllerProvider.notifier,
+      );
+      GenerateProposalState state() =>
+          h.container.read(generateWeekControllerProvider);
+
+      await controller.generate(
+        weekStart: startOfWeek(DateTime.now()),
+        slots: 2,
+        servings: 2,
+      );
+      controller.swapSuggestion(1);
+      expect(state().suggestionAt(1).title, 'Chickpea & spinach dal');
+
+      await controller.findAnother(1);
+      expect(state().suggestionAt(1).title, 'Garlic & chilli prawn linguine');
+      expect(
+        jsonDecode(backend.messages.single.body)['slot'],
+        'rec_b_alt',
+        reason: 'the swap replaces the meal on screen',
+      );
+
+      controller.undoReplacement(1);
+      expect(state().suggestionAt(1).title, 'Chickpea & spinach dal');
+      expect(state().isSwapped(1), isTrue);
+      controller.swapSuggestion(1);
+      expect(state().suggestionAt(1).title, 'Black bean tacos');
+    },
+  );
 }
