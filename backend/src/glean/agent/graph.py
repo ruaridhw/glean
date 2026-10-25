@@ -305,7 +305,13 @@ def _agents_best_week(state: PlanState, prepared: pipeline.PreparedPlan) -> list
     Every week a `score_meal_plan` or `create_candidate_meal_plans` result holds is a candidate, re-scored here
     from the facts rather than read from the rounded result. "As good" is spec §6.6's drift gate: within 15% of
     the scorer's best. Below that the agent's work was a detour, and the scorer's week is the better fallback.
+
+    The agent's week must also be as long as the scorer's best. The drift gate alone cannot see a short week: in
+    a pool where nothing scores, one dinner is "within 15%" of four, and the household would get one.
     """
+    if not prepared.weeks:
+        return None
+    size = len(prepared.weeks[0].recipe_ids)
     weeks: list[list[str]] = []
     for entry in state.get("transcript") or []:
         data = entry.get("data") or {}
@@ -316,12 +322,9 @@ def _agents_best_week(state: PlanState, prepared: pipeline.PreparedPlan) -> list
     usable = [
         week
         for week in weeks
-        if 0 < len(week) <= prepared.meals_per_week
-        and len(set(week)) == len(week)
-        and set(week) <= offered
-        and not set(week) & excluded
+        if len(week) == size and len(set(week)) == len(week) and set(week) <= offered and not set(week) & excluded
     ]
-    if not usable or not prepared.weeks:
+    if not usable:
         return None
     gaps = [(pipeline.plan_drift(prepared, week), week) for week in usable]
     gap, best = min(((gap, week) for gap, week in gaps if gap is not None), key=lambda item: item[0].gap)
