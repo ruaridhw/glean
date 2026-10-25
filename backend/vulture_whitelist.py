@@ -188,3 +188,6 @@ within_15_percent  # PlanGap: the eval's within-15% gate, read by the evals (6.6
 # agent/graph.py (V7): PlanState keys LangGraph merges into the checkpointed state; nodes read them with .get()
 invalid_actions  # PlanState key: answers that did not parse as a NextAction, counted for the session metrics
 degraded_reason  # PlanState key: why finalise wrote the scorer's week, logged with the session metrics
+
+# screening.py (the injection screen, ported unchanged from the taste interview)
+clear_screen_cache  # screening.py, called by the tests to start from a cold cache
