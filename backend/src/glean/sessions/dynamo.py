@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import boto3
 from botocore.exceptions import ClientError
+from pydantic import TypeAdapter
 
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.sessions.models import (
@@ -39,21 +40,29 @@ from glean.sessions.models import (
     SessionError,
     SessionRecord,
     SessionStatus,
+    SwapRecord,
     item_bytes,
     stored_input_bytes,
     stored_inputs,
 )
 from glean.sessions.store import (
+    MessageRefusal,
+    MessageRefusedError,
     SessionExistsError,
     SessionTooLargeError,
     UnknownSessionError,
     lease_from,
+    queued_swap,
+    swap_refusal,
+    swaps_json,
     ttl_from,
     utcnow,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from glean.sessions.models import SwapMessage
 
 # Every attribute name in an update expression is aliased: `status`, `ttl` and `error` are reserved words.
 _STATUS = "#status"
@@ -62,6 +71,8 @@ _ERROR = "#error"
 _OWNER = "#owner"
 _LEASE = "#lease"
 _RESULT = "#result"
+_SWAPS = "#swaps"
+_SWAP_LIST: TypeAdapter[list[SwapRecord]] = TypeAdapter(list[SwapRecord])
 
 _CONDITIONAL_FAILURE = "ConditionalCheckFailedException"
 # The attempt may start when the session is queued, or when it is running but its lease has lapsed. An
@@ -241,6 +252,67 @@ class DynamoSessionStore:
             },
         )
 
+    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+        record = self.get(user_sub, session_id)
+        if record is None:
+            raise UnknownSessionError(session_id)
+        updated, swap = queued_swap(record, message)
+        # The status read above is the lock: the write only lands while the session is still where it was
+        # read, with the same swap history, so two swaps sent at once cannot both be queued.
+        won = self._update(
+            user_sub,
+            session_id,
+            update=(
+                "SET #status = :queued, #swaps = :swaps, updated_at = :now, #ttl = :ttl REMOVE #owner, #lease, #error"
+            ),
+            condition="#status = :read_status AND "
+            + ("#swaps = :read_swaps" if record.swaps else "attribute_not_exists(#swaps)"),
+            values={
+                ":queued": SessionStatus.QUEUED.value,
+                ":swaps": swaps_json(updated.swaps),
+                ":read_status": record.status.value,
+                **({":read_swaps": swaps_json(record.swaps)} if record.swaps else {}),
+            },
+        )
+        if won:
+            return swap
+        latest = self.get(user_sub, session_id)
+        if latest is None:
+            raise UnknownSessionError(session_id)
+        raise MessageRefusedError(swap_refusal(latest) or MessageRefusal.BUSY)
+
+    def finish_swap(
+        self, user_sub: str, session_id: str, result: MealPlanResult, swap: SwapRecord, *, owner: str
+    ) -> bool:
+        record = self.get(user_sub, session_id)
+        if record is None or record.owner != owner or record.status is not SessionStatus.RUNNING:
+            return False
+        swaps = swaps_json(record.with_swap_finished(swap))
+        if (
+            item_bytes(
+                inputs=stored_input_bytes(record.request),
+                progress=record.progress,
+                result=result.model_dump_json() + swaps,
+            )
+            > MAX_ITEM_BYTES
+        ):
+            raise SessionTooLargeError(session_id)
+        return self._update(
+            user_sub,
+            session_id,
+            update=(
+                "SET #status = :done, #result = :result, #swaps = :swaps, updated_at = :now, #ttl = :ttl REMOVE #error"
+            ),
+            condition="#status = :running AND #owner = :owner",
+            values={
+                ":done": SessionStatus.DONE.value,
+                ":running": SessionStatus.RUNNING.value,
+                ":owner": owner,
+                ":result": result.model_dump_json(),
+                ":swaps": swaps,
+            },
+        )
+
     def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
         record = self.get(user_sub, session_id)
         if record is None:
@@ -298,6 +370,7 @@ class DynamoSessionStore:
             _OWNER: "owner",
             _LEASE: "lease_until",
             _RESULT: "result",
+            _SWAPS: "swaps",
         }
         try:
             self._client.update_item(
@@ -330,6 +403,7 @@ def _record(item: dict[str, Any]) -> SessionRecord:
     result = item.get("result")
     error = item.get("error")
     lease = item.get("lease_until")
+    swaps = item.get("swaps")
     return SessionRecord(
         session_id=item["sk"],
         user_sub=item["pk"],
@@ -341,6 +415,7 @@ def _record(item: dict[str, Any]) -> SessionRecord:
         progress_start=int(item.get("progress_start", 0)),
         result=None if result is None else MealPlanResult.model_validate_json(result),
         error=None if error is None else SessionError.model_validate_json(error),
+        swaps=[] if swaps is None else _SWAP_LIST.validate_json(swaps),
         created_at=datetime.fromisoformat(item["created_at"]),
         updated_at=datetime.fromisoformat(item["updated_at"]),
         ttl=int(item["ttl"]),

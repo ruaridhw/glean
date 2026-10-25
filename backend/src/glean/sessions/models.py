@@ -13,11 +13,11 @@ from __future__ import annotations
 import gzip
 from datetime import datetime  # noqa: TC003 - Pydantic resolves this annotation when the model is built
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
+from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult, MealPlanSuggestion
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -27,6 +27,13 @@ SESSION_TTL_HOURS = 24
 # How many progress lines one item keeps. The bound is a safety net: V1's graph writes three, V7's
 # tools a handful, and a runaway loop must not grow an item without limit. Older lines are dropped.
 MAX_PROGRESS_LINES = 50
+
+# A swap note is a sentence or two ("something lighter, maybe prawns"), the same bound V8 puts on a rating note.
+MAX_SWAP_NOTE_CHARS = 500
+# How many swaps one item remembers. Each is a few hundred bytes (its slot and its note, never a recipe: the
+# replacement lives in the result), and the history only serves to find a slot the app swapped back locally
+# and to keep a swapped-out meal from coming straight back, so the oldest drop out.
+MAX_SWAPS_KEPT = 20
 
 # DynamoDB refuses an item over 400 KB, and the whole item is one write: the inputs, the progress lines
 # and the result share that budget. Nothing in the schemas bounds a model's prose, so both ends are
@@ -156,6 +163,55 @@ class AgentSession(BaseModel):
     request: MealPlanRequest
 
 
+class SwapMessage(BaseModel):
+    """A household message asking for another meal in one slot of the proposal (spec §6.2 "Swap").
+
+    `slot` is the corpus id of the meal on the card. `note` is what the household typed, if anything: it is
+    screened before any model reads it, and passed only as data.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["swap"]
+    slot: str = Field(min_length=1, max_length=64, description="external_id of the proposal meal to replace.")
+    note: str | None = Field(
+        default=None, max_length=MAX_SWAP_NOTE_CHARS, description="The swap note, optional: screened, then data."
+    )
+
+
+# What POST /meal-plan/sessions/{id}/messages takes. V11 widens it to a discriminated union on `type`:
+# `Annotated[SwapMessage | AnswerMessage | SkipMessage, Field(discriminator="type")]`.
+HouseholdMessage = SwapMessage
+
+
+class SwapState(StrEnum):
+    """Where one swap is. Only `pending` is unfinished; the others say what the card shows."""
+
+    PENDING = "pending"
+    DONE = "done"
+    NO_REPLACEMENT = "no_replacement"
+    FAILED = "failed"
+
+
+class SwapNoteUse(StrEnum):
+    """What became of the swap note: none was sent, it was used, or the screen dropped it."""
+
+    NONE = "none"
+    USED = "used"
+    DROPPED = "dropped"
+
+
+class SwapRecord(BaseModel):
+    """One swap as the item keeps it. The replacement itself is in the result, at `position`."""
+
+    swap_id: int
+    slot: str
+    position: int = Field(description="Index into the result's suggestions of the slot being swapped.")
+    note: str | None = Field(default=None, description="As typed. Never shown back, never sent to a model unscreened.")
+    state: SwapState = SwapState.PENDING
+    note_use: SwapNoteUse = SwapNoteUse.NONE
+
+
 class SessionRecord(BaseModel):
     """The whole session item: what the worker reads, and what the app polls.
 
@@ -175,9 +231,47 @@ class SessionRecord(BaseModel):
     progress_start: int = 0
     result: MealPlanResult | None = None
     error: SessionError | None = None
+    swaps: list[SwapRecord] = Field(default_factory=list, description="The newest last, at most MAX_SWAPS_KEPT.")
     created_at: datetime
     updated_at: datetime
     ttl: int = Field(description="Epoch seconds DynamoDB expires the item at.")
+
+    @property
+    def pending_swap(self) -> SwapRecord | None:
+        """The swap a delivery has to run, if the newest one has not finished."""
+        latest = self.swaps[-1] if self.swaps else None
+        return latest if latest is not None and latest.state is SwapState.PENDING else None
+
+    def swap_position(self, slot: str) -> int | None:
+        """Where *slot* sits in the proposal: a meal on a card, or one a swap replaced and the app swapped back.
+
+        Meals already in the plan are not in the suggestions and never were, so they have no position: a swap
+        never replaces them (ADR 0020).
+        """
+        if self.result is None:
+            return None
+        for index, suggestion in enumerate(self.result.suggestions):
+            if suggestion.external_id == slot:
+                return index
+        replaced = [swap for swap in self.swaps if swap.slot == slot and swap.state is SwapState.DONE]
+        return replaced[-1].position if replaced else None
+
+    def with_swap(self, message: SwapMessage) -> tuple[SessionRecord, SwapRecord] | None:
+        """This record with *message* queued as its newest swap, or None when the slot is not in the proposal."""
+        position = self.swap_position(message.slot)
+        if position is None:
+            return None
+        swap = SwapRecord(
+            swap_id=(self.swaps[-1].swap_id + 1) if self.swaps else 1,
+            slot=message.slot,
+            position=position,
+            note=(message.note or "").strip() or None,
+        )
+        return self.model_copy(update={"swaps": [*self.swaps, swap][-MAX_SWAPS_KEPT:]}), swap
+
+    def with_swap_finished(self, swap: SwapRecord) -> list[SwapRecord]:
+        """The swap history with *swap* written over the entry it finishes."""
+        return [swap if entry.swap_id == swap.swap_id else entry for entry in self.swaps]
 
     @property
     def next_cursor(self) -> int:
@@ -203,6 +297,48 @@ class SessionCreated(BaseModel):
     session_id: str
 
 
+class MessageAccepted(BaseModel):
+    """202 from POST /meal-plan/sessions/{id}/messages: the swap is queued; poll the session for it."""
+
+    session_id: str
+    swap_id: int
+
+
+class SwapView(BaseModel):
+    """The newest swap, as the card working on it reads it."""
+
+    swap_id: int
+    slot: str
+    position: int
+    state: SwapState = Field(description="pending | done | no_replacement | failed")
+    note: SwapNoteUse = Field(description="none | used | dropped; dropped is the card's 'Couldn't use that note'.")
+    replacement: MealPlanSuggestion | None = Field(
+        default=None, description="The meal now in the slot, once the swap is done."
+    )
+
+    @classmethod
+    def of(cls, record: SessionRecord) -> SwapView | None:
+        if not record.swaps:
+            return None
+        swap = record.swaps[-1]
+        state = swap.state
+        if state is SwapState.PENDING and record.status is SessionStatus.FAILED:
+            # The worker died with it, or the queue never took it: the dead-letter handler (or the route) failed
+            # the session. The proposal is still there, so the card shows the swap's error, not the week's.
+            state = SwapState.FAILED
+        replacement = None
+        if state is SwapState.DONE and record.result is not None and swap.position < len(record.result.suggestions):
+            replacement = record.result.suggestions[swap.position]
+        return cls(
+            swap_id=swap.swap_id,
+            slot=swap.slot,
+            position=swap.position,
+            state=state,
+            note=swap.note_use,
+            replacement=replacement,
+        )
+
+
 class SessionView(BaseModel):
     """GET /meal-plan/sessions/{id}: everything the app needs to render one poll."""
 
@@ -214,6 +350,7 @@ class SessionView(BaseModel):
         default=None, description="The plan, once the status is done. Same shape as POST /meal-plan."
     )
     error: SessionError | None = Field(default=None, description="The typed failure, once the status is failed.")
+    swap: SwapView | None = Field(default=None, description="The newest swap, once the household has asked for one.")
     updated_at: datetime
 
     @classmethod
@@ -226,6 +363,7 @@ class SessionView(BaseModel):
             next_cursor=next_cursor,
             result=record.result,
             error=record.error,
+            swap=SwapView.of(record),
             updated_at=record.updated_at,
         )
 
@@ -234,6 +372,8 @@ __all__ = [
     "MAX_PROGRESS_LINES",
     "SESSION_TTL_HOURS",
     "AgentSession",
+    "HouseholdMessage",
+    "MessageAccepted",
     "SessionCreated",
     "SessionError",
     "SessionErrorCode",
@@ -241,4 +381,9 @@ __all__ = [
     "SessionRequest",
     "SessionStatus",
     "SessionView",
+    "SwapMessage",
+    "SwapNoteUse",
+    "SwapRecord",
+    "SwapState",
+    "SwapView",
 ]

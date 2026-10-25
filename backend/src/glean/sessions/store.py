@@ -10,12 +10,15 @@ The store owns three rules so no caller can break them:
   owner token, so a worker that lost its lease cannot finish a run someone else is now driving.
 - **Every update refreshes `updated_at` and the TTL.** `get` never writes, because the app polls it
   every second.
+- **One swap at a time** (V10). A swap message moves a session with a proposal back to `queued`, in one
+  conditional write; while it is queued or running a second swap is refused, so the status is the lock.
 """
 
 from __future__ import annotations
 
 import math
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 from glean.sessions.models import (
@@ -28,6 +31,7 @@ from glean.sessions.models import (
     SessionError,
     SessionRecord,
     SessionStatus,
+    SwapRecord,
     item_bytes,
     stored_input_bytes,
 )
@@ -36,6 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from glean.meal_plan.schemas import MealPlanResult
+    from glean.sessions.models import SwapMessage
 
 # The numbers the queue and the worker must agree on. `template.yaml` declares them, and
 # tests/infra/test_template_async_stack.py checks the template against these constants.
@@ -145,6 +150,27 @@ class SessionStore(Protocol):
         """
         ...
 
+    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+        """Queue a swap on a session with a proposal, and return it.
+
+        Accepted only from `done`, or from a `failed` that still holds its proposal (a swap whose worker died).
+        The session moves to `queued` with the swap as its newest, and the finished run's owner and lease are
+        cleared so the next delivery claims it fresh. Raises `UnknownSessionError` for no such session, and
+        `MessageRefusedError` when a run or swap is still going, there is no proposal, or the slot is not one
+        of its meals.
+        """
+        ...
+
+    def finish_swap(
+        self, user_sub: str, session_id: str, result: MealPlanResult, swap: SwapRecord, *, owner: str
+    ) -> bool:
+        """End a swap: the proposal as it now stands, and the swap's outcome. `done` either way.
+
+        Owner-conditioned like `complete`, and size-checked the same way. A swap that found nothing writes the
+        proposal back unchanged: a failed swap never costs the household the week on screen.
+        """
+        ...
+
 
 class SessionExistsError(ValueError):
     """That session id is already in the table."""
@@ -156,6 +182,42 @@ class SessionTooLargeError(ValueError):
 
 class UnknownSessionError(KeyError):
     """No session with that id for this user."""
+
+
+class MessageRefusal(StrEnum):
+    """Why a household message was not queued."""
+
+    BUSY = "busy"
+    NO_PROPOSAL = "no_proposal"
+    UNKNOWN_SLOT = "unknown_slot"
+
+
+class MessageRefusedError(ValueError):
+    """The session cannot take this message now; `reason` says why."""
+
+    def __init__(self, reason: MessageRefusal) -> None:
+        super().__init__(reason.value)
+        self.reason = reason
+
+
+def swap_refusal(record: SessionRecord) -> MessageRefusal | None:
+    """Why *record* cannot take a swap now, or None when it can (before the slot is checked)."""
+    if record.status is SessionStatus.DONE or (record.status is SessionStatus.FAILED and record.result is not None):
+        return None if record.result is not None else MessageRefusal.NO_PROPOSAL
+    if record.status.terminal:
+        return MessageRefusal.NO_PROPOSAL
+    return MessageRefusal.BUSY
+
+
+def queued_swap(record: SessionRecord, message: SwapMessage) -> tuple[SessionRecord, SwapRecord]:
+    """*record* with *message* queued, or the refusal both stores raise."""
+    refusal = swap_refusal(record)
+    if refusal is not None:
+        raise MessageRefusedError(refusal)
+    queued = record.with_swap(message)
+    if queued is None:
+        raise MessageRefusedError(MessageRefusal.UNKNOWN_SLOT)
+    return queued
 
 
 class SessionBusyError(RuntimeError):
@@ -256,6 +318,39 @@ class InMemorySessionStore:
         self._write(record.model_copy(update={"status": SessionStatus.CANCELLED}))
         return True
 
+    def enqueue_swap(self, user_sub: str, session_id: str, message: SwapMessage) -> SwapRecord:
+        record = self.get(user_sub, session_id)
+        if record is None:
+            raise UnknownSessionError(session_id)
+        updated, swap = queued_swap(record, message)
+        self._write(
+            updated.model_copy(
+                update={"status": SessionStatus.QUEUED, "owner": None, "lease_until": None, "error": None}
+            )
+        )
+        return swap
+
+    def finish_swap(
+        self, user_sub: str, session_id: str, result: MealPlanResult, swap: SwapRecord, *, owner: str
+    ) -> bool:
+        record = self._owned(user_sub, session_id, owner)
+        if record is None:
+            return False
+        swaps = record.with_swap_finished(swap)
+        if (
+            item_bytes(
+                inputs=stored_input_bytes(record.request),
+                progress=record.progress,
+                result=result.model_dump_json() + swaps_json(swaps),
+            )
+            > MAX_ITEM_BYTES
+        ):
+            raise SessionTooLargeError(session_id)
+        self._write(
+            record.model_copy(update={"status": SessionStatus.DONE, "result": result, "swaps": swaps, "error": None})
+        )
+        return True
+
     def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:
         record = self.get(user_sub, session_id)
         if record is None:
@@ -284,3 +379,8 @@ class InMemorySessionStore:
             update={"updated_at": now, "ttl": ttl_from(now, self._ttl_hours)}
         )
         self.writes += 1
+
+
+def swaps_json(swaps: Sequence[SwapRecord]) -> str:
+    """The swap history as the item stores it: one JSON string."""
+    return "[" + ",".join(swap.model_dump_json() for swap in swaps) + "]"
