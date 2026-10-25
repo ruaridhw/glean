@@ -14,11 +14,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/auth/auth_controller.dart' show authControllerProvider;
+import 'package:glean/data/models/meal_thumb.dart' show truncateRatingNote;
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/util/week.dart';
 
-/// The note's limit, in Unicode code points: the backend's `MAX_FEEDBACK_NOTE_LENGTH`.
+/// The note's limit, in Unicode code points: the backend's `MAX_FEEDBACK_NOTE_LENGTH`. Flutter's `maxLength`
+/// counts grapheme clusters, which a skin-toned emoji makes smaller than the code-point count, so the note is
+/// clipped with [clipWeekNote] instead.
 const int maxWeekNoteLength = 200;
+
+/// [note] cut to at most [maxWeekNoteLength] code points, never splitting a visible character.
+String clipWeekNote(String note) =>
+    truncateRatingNote(note, limit: maxWeekNoteLength);
 
 enum FeedbackChip {
   quickWeeknights('quick_weeknights', 'Quick weeknights'),
@@ -103,7 +110,8 @@ class WeekFeedback {
           for (final FeedbackChip chip in FeedbackChip.values)
             if (chips.contains(chip.wire)) chip,
       },
-      note: note is String ? note : '',
+      // An older build counted the note differently and may have saved a longer one.
+      note: note is String ? clipWeekNote(note) : '',
       noteUnused: json['note_unused'] == true,
     );
   }
@@ -240,8 +248,9 @@ class WeekFeedbackController extends Notifier<WeekFeedback> {
   }
 
   void setNote(String note) {
-    if (note == state.note) return;
-    _update(state._copy(note: note, noteUnused: false));
+    final String clipped = clipWeekNote(note);
+    if (clipped == state.note) return;
+    _update(state._copy(note: clipped, noteUnused: false));
   }
 
   void clear() => _update(const WeekFeedback());
