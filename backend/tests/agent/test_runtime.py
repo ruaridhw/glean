@@ -1075,7 +1075,6 @@ def test_a_degraded_run_is_counted_in_cloudwatch(tmp_path: Any, monkeypatch: pyt
         "SessionsDegraded",
         "SessionToolCalls",
         "SessionInvalidActions",
-        "SessionDrift",
         "SessionWallTime",
     ]
 
