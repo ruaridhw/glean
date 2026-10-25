@@ -33,7 +33,7 @@ from glean.agent import adapters
 from glean.agent.actions import TOOL_CALL, CallTool, PlanStep, Propose
 from glean.agent.control import BudgetSpent
 from glean.agent.errors import AgentError, model_error_for
-from glean.agent.prompts import AGENT_SYSTEM_PROMPT, user_message
+from glean.agent.prompts import AGENT_SYSTEM_PROMPT, bounded_transcript, user_message
 from glean.llm import Feature
 from glean.meal_plan import pipeline
 from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
@@ -228,7 +228,9 @@ class _Nodes:
         return {
             "pending": None,
             "prepared": outcome.prepared.model_dump(mode="json"),
-            "transcript": [*(state.get("transcript") or []), {"call": state["pending"], "result": outcome.result}],
+            "transcript": bounded_transcript(
+                [*(state.get("transcript") or []), {"call": state["pending"], "result": outcome.result}]
+            ),
             "tool_calls": tool_calls,
         }
 

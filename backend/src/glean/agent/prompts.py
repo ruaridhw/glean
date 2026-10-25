@@ -52,6 +52,39 @@ Rules for the proposal:
 - Set chosen_week to the candidate week your meals come from (0 or 1), or null if you changed it."""
 
 
+# The tool transcript's share of every prompt, and of the checkpoint that stores it. Each result is already
+# bounded per call (`adapters`); this bounds the run as a whole, so eight calls cost about what three do.
+TRANSCRIPT_BUDGET_BYTES = 48_000
+_SUMMARISED = "An older result, left out to keep this message short. Call the tool again if you need it."
+
+
+def bounded_transcript(entries: list[dict[str, Any]], *, budget: int = TRANSCRIPT_BUDGET_BYTES) -> list[dict[str, Any]]:
+    """The transcript within *budget* bytes of JSON: the oldest results summarised first, then dropped.
+
+    The newest entry is always kept whole: it is what the model has just asked for, and the per-call bounds keep
+    it inside the budget on its own.
+    """
+    bounded = list(entries)
+    for index in range(len(bounded) - 1):
+        if _size(bounded) <= budget:
+            return bounded
+        bounded[index] = _summarised(bounded[index])
+    while len(bounded) > 1 and _size(bounded) > budget:
+        bounded.pop(0)
+    return bounded
+
+
+def _summarised(entry: dict[str, Any]) -> dict[str, Any]:
+    call = entry.get("call")
+    if call is None:
+        return entry
+    return {"call": {"name": call.get("name")}, "summarised": _SUMMARISED}
+
+
+def _size(entries: list[dict[str, Any]]) -> int:
+    return len(json.dumps(entries, default=str).encode())
+
+
 def user_message(prepared_user: str, *, tool_results: list[dict[str, Any]], tool_calls_left: int) -> str:
     """The prepared plan's message, with this run's tool results and its remaining calls added."""
     context = json.loads(prepared_user)

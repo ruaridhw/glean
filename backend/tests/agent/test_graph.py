@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from glean.agent import runtime, start
-from glean.agent.actions import PlanStep
+from glean.agent.actions import MAX_FULL_IDS, PlanStep
 from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.control import AGENT_RUN_BUDGET_SECONDS
 from glean.agent.deps import AgentDeps
@@ -25,7 +25,7 @@ from glean.agent.graph import FINALISE_LINE, MAX_INVALID_ACTIONS, MAX_TOOL_CALLS
 from glean.meal_plan.schemas import CompressedPantryItem, CookedHistoryItem, MealPlanRequest
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
-from glean.recipes.stored import StoredIngredient, StoredRecipe
+from glean.recipes.stored import StoredIngredient, StoredInstruction, StoredRecipe
 from glean.sessions.models import AgentSession, SessionStatus
 from glean.sessions.store import MAX_LEASE_SECONDS, WORKER_TIMEOUT_SECONDS, InMemorySessionStore
 
@@ -178,14 +178,16 @@ def _session() -> AgentSession:
 class Run:
     """One session's store, clock and deps, so a test can start it, crash it and start it again."""
 
-    def __init__(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    def __init__(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch, corpus: Callable[[Any], RecipeCorpusStore] | None = None
+    ) -> None:
         self.clock = Clock()
         self.sessions = InMemorySessionStore(clock=self.clock.wall)
         self.sessions.create(_session(), now=self.clock.now)
         self.checkpointer = in_memory_checkpointer()
         self.metrics = Metrics()
         self.root = tmp_path
-        _corpus(tmp_path)
+        (corpus or _corpus)(tmp_path)
         monkeypatch.setattr(runtime, "metrics", self.metrics)
 
     def deps(self, model: ScriptedModel) -> AgentDeps:
@@ -210,6 +212,12 @@ class Run:
 
     def metric(self, name: str) -> list[Any]:
         return self.metrics.recorded.get(name, [])
+
+    def checkpoint_bytes(self) -> int:
+        """The latest checkpoint's state as JSON: what one DynamoDB checkpoint item has to hold."""
+        saved = self.checkpointer.get_tuple({"configurable": {"thread_id": "sess-1"}})
+        assert saved is not None
+        return len(json.dumps(saved.checkpoint["channel_values"], default=str).encode())
 
 
 @pytest.fixture
@@ -430,3 +438,55 @@ class TestFreeText:
 
         assert model.calls == 3
         assert all(NOTE not in user for user in model.users)
+
+
+def _hostile_corpus(root: Any, count: int = 200) -> RecipeCorpusStore:
+    """A corpus as long as an importer could make it: every title, line and step far past any real recipe."""
+    corpus = RecipeCorpusStore(FilesystemBlobStore(root))
+    for index in range(count):
+        corpus.save(
+            StoredRecipe(
+                external_id=f"rec_{index:03d}",
+                title=f"Dish {index:03d} " + "very long title words " * 60,
+                cuisine="british",
+                total_time_mins=30,
+                ingredients=[
+                    StoredIngredient(canonical_name=f"item{index}x{line} " + "and more " * 25, quantity=1, unit="each")
+                    for line in range(30)
+                ],
+                instructions=[
+                    StoredInstruction(step_number=step, phase="cook", text="Stir and wait. " * 80) for step in range(20)
+                ],
+            )
+        )
+    return corpus
+
+
+class TestBounds:
+    def test_a_worst_case_loop_keeps_every_prompt_and_the_checkpoint_bounded(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = Run(tmp_path, monkeypatch, corpus=_hostile_corpus)
+
+        def read_found_in_full(context: dict[str, Any]) -> dict[str, Any]:
+            found = [
+                row["external_id"]
+                for entry in context["tool_results"]
+                for row in entry.get("result", {}).get("recipes", [])
+            ]
+            return call("get_recipes", ids=found[-MAX_FULL_IDS:], detail="full")
+
+        searches = [call("get_eligible_recipes", filter={"text": f"dish {n}", "limit": 120}) for n in range(4)]
+        model = ScriptedModel(
+            *[step for search in searches for step in (search, read_found_in_full)],
+            propose_first,
+        )
+
+        run.start(model)
+
+        assert run.record.status is SessionStatus.DONE
+        assert run.metric("SessionToolCalls") == [MAX_TOOL_CALLS]
+        # Eight maximal calls over recipes hundreds of KB long: every prompt and the checkpoint stay small.
+        largest_prompt = max(len(user.encode()) for user in model.users)
+        assert largest_prompt < 100_000, largest_prompt
+        assert run.checkpoint_bytes() < 200_000, run.checkpoint_bytes()
