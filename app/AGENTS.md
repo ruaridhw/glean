@@ -187,12 +187,15 @@ thumbs-down recipe out of every plan, and a note reaches no model until the feed
 ## The "This week" box
 
 The Plan tab's top box holds the shown week's human feedback: eight chips and an optional note (at most 200 code
-points, clipped by `clipWeekNote`, not `maxLength`). Its header (`ThisWeekHeader`: the week's title, the summary,
-Generate top right) is pinned above the scrolling plan in both box states; the open panel (`ThisWeekPanel`) is the
+points, not `maxLength`'s graphemes: an edit that would cross it is refused whole, and a longer saved note is
+clipped by `clipWeekNote` when it loads). Its header (`ThisWeekHeader`: the week's title, the summary,
+Generate top right, and "Couldn't use that note" when the last plan dropped it) is pinned above the scrolling plan
+in both box states; the open panel (`ThisWeekPanel`) is the
 first item of the plan. `lib/features/plan/week_feedback.dart` keeps one selection per week
 (`weekFeedbackProvider`, keyed by `startOfWeek`) and saves it through `WeekFeedbackStore`: one JSON entry per user
 in `flutter_secure_storage` under `TokenStorage.userDataKeyPrefix`, never the database, so it needs no schema
-change. It survives a restart; past weeks are dropped on every read and write, so a new week starts empty, and
-`TokenStorage.clearAll` (sign-out) deletes every key under that prefix. What a chip does to the plan is the backend's
+change. Its reads and writes run one at a time on a fresh read of the entry. It survives a restart; past weeks
+are dropped on every read and write, so a new week starts empty, and
+`TokenStorage.clearAll` (sign-out) deletes every key under that prefix, after the session keys. What a chip does to the plan is the backend's
 (`meal_plan.tools.FeedbackChip`). The backend screens the note before any model reads it, and the result's
 `feedback_note` tells the box when to say "Couldn't use that note"; the chips apply either way.
