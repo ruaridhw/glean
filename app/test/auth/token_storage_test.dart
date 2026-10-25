@@ -53,6 +53,35 @@ void main() {
     });
 
     test(
+      'clearAll removes the household data kept beside the tokens',
+      () async {
+        const FlutterSecureStorage secure = FlutterSecureStorage();
+        await secure.write(
+          key: '${TokenStorage.userDataKeyPrefix}week_feedback.user-sub-123',
+          value: '{}',
+        );
+        await storage.saveTokens(tokens);
+
+        await storage.clearAll();
+
+        expect(await secure.readAll(), <String, String>{
+          'unrelated_key': 'keep',
+        });
+      },
+    );
+
+    test('clearTokensKeepIdentity keeps the household data', () async {
+      const FlutterSecureStorage secure = FlutterSecureStorage();
+      const String key =
+          '${TokenStorage.userDataKeyPrefix}week_feedback.user-sub-123';
+      await secure.write(key: key, value: '{}');
+
+      await storage.clearTokensKeepIdentity();
+
+      expect(await secure.read(key: key), '{}');
+    });
+
+    test(
       'clearTokensKeepIdentity clears tokens but keeps userSub/email',
       () async {
         await storage.saveTokens(tokens);

@@ -46,6 +46,11 @@ class TokenStorage {
   ];
   static const List<String> _identityKeys = <String>[_keyUserSub, _keyEmail];
 
+  /// Keys under this prefix are the signed-in household's own data kept outside the database (the Plan tab's
+  /// week feedback, for one). [clearAll] removes every one of them, so sign-out leaves none behind; on iOS the
+  /// Keychain would otherwise keep them through an uninstall too.
+  static const String userDataKeyPrefix = 'glean_user_data.';
+
   Future<StoredTokenValues> readTokens() async {
     final List<String?> values = await Future.wait<String?>(<Future<String?>>[
       _secureStorage.read(key: _keyAccess),
@@ -82,8 +87,11 @@ class TokenStorage {
 
   /// Clears every stored value, including identity. The only sign-out path: iOS Keychain items survive
   /// uninstall/reinstall.
-  Future<void> clearAll() =>
-      _deleteKeys(<String>[..._tokenKeys, ..._identityKeys]);
+  Future<void> clearAll() async {
+    final Iterable<String> userData = (await _secureStorage.readAll()).keys
+        .where((String key) => key.startsWith(userDataKeyPrefix));
+    await _deleteKeys(<String>[..._tokenKeys, ..._identityKeys, ...userData]);
+  }
 
   /// Clears the access/refresh/id tokens and their expiry, but **keeps**
   /// `userSub`/`email`. Used when a refresh fails: the session can no longer
