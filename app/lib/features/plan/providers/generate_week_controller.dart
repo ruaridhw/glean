@@ -1,6 +1,10 @@
 /// Corpus generation is one reviewed proposal (ADR 0019): create a backend session, poll it to a terminal
 /// status while the proposal screen shows its progress, then save the whole week in one transaction when the
 /// user taps Add to plan. Nothing reaches the plan before that tap, and a swap is local until it too is saved.
+///
+/// "Find another" (V10) asks the same session for a replacement for one card: the card shows the swap's own
+/// progress lines while the rest of the review stays usable, and the replacement lands in that card's slot with
+/// an Undo swap that is local. One swap runs at a time.
 library;
 
 import 'dart:async';
@@ -89,6 +93,31 @@ final class GenerateSaveFailed extends GenerateSaveOutcome {
   final GenerateFailure failure;
 }
 
+/// The one "Find another" in flight: which card, the note it was sent with, and the swap's progress lines.
+class FindAnotherState {
+  const FindAnotherState({
+    required this.index,
+    this.note,
+    this.progress = const <String>[],
+  });
+
+  /// Index into `result.suggestions` of the card being swapped.
+  final int index;
+  final String? note;
+  final List<String> progress;
+
+  FindAnotherState withProgress(List<String> lines) => FindAnotherState(
+    index: index,
+    note: note,
+    progress: <String>[...progress, ...lines],
+  );
+}
+
+/// The card copy for a swap's outcomes. Plain words, never a status code.
+const String swapFailedCopy = "Couldn't find another right now. Try again.";
+const String swapNothingElseCopy = 'Nothing else fits this slot right now.';
+const String swapNoteDroppedCopy = "Couldn't use that note";
+
 /// Everything one Generate attempt holds: its arguments, its progress, its proposal, and the local swaps the
 /// user has made but not saved. A swap is a suggestion, not a write; [swaps] and [plannedSwaps] stay in memory
 /// until Add to plan commits them.
@@ -106,6 +135,10 @@ class GenerateProposalState {
     this.plannedSwaps = const <int, MealPlanRecipe>{},
     this.saving = false,
     this.committing = false,
+    this.cursor = 0,
+    this.findingAnother,
+    this.replacedFrom = const <int, MealPlanRecipe>{},
+    this.cardNotices = const <int, String>{},
   });
 
   final GenerateProposalPhase phase;
@@ -139,6 +172,20 @@ class GenerateProposalState {
   /// discarded underneath a commit.
   final bool committing;
 
+  /// The session's poll cursor after the last poll, so a swap's polls show only that swap's lines.
+  final int cursor;
+
+  /// The "Find another" in flight, if any. Only one runs at a time.
+  final FindAnotherState? findingAnother;
+
+  /// Index -> the meal a "Find another" replaced, which Undo swap puts back. Local, like every swap.
+  final Map<int, MealPlanRecipe> replacedFrom;
+
+  /// Index -> one plain line on that card: a swap's error, "nothing else fits", or "Couldn't use that note".
+  final Map<int, String> cardNotices;
+
+  bool isReplaced(int index) => replacedFrom.containsKey(index);
+
   /// The meal a card shows: the chosen alternative when there is one, else the server's suggestion.
   MealPlanRecipe suggestionAt(int index) =>
       swaps[index] ?? result!.suggestions[index];
@@ -162,6 +209,11 @@ class GenerateProposalState {
     Map<int, MealPlanRecipe>? plannedSwaps,
     bool? saving,
     bool? committing,
+    int? cursor,
+    FindAnotherState? findingAnother,
+    bool clearFindingAnother = false,
+    Map<int, MealPlanRecipe>? replacedFrom,
+    Map<int, String>? cardNotices,
   }) => GenerateProposalState(
     phase: phase ?? this.phase,
     weekStart: weekStart,
@@ -175,6 +227,12 @@ class GenerateProposalState {
     plannedSwaps: plannedSwaps ?? this.plannedSwaps,
     saving: saving ?? this.saving,
     committing: committing ?? this.committing,
+    cursor: cursor ?? this.cursor,
+    findingAnother: clearFindingAnother
+        ? null
+        : findingAnother ?? this.findingAnother,
+    replacedFrom: replacedFrom ?? this.replacedFrom,
+    cardNotices: cardNotices ?? this.cardNotices,
   );
 }
 
@@ -269,6 +327,171 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     if (next.remove(entryId) == null) next[entryId] = alternative;
     state = state._copy(plannedSwaps: next);
   }
+
+  /// "Find another" for card [index]: sends a swap, with [note] if one was typed, and follows it on the session's
+  /// polls until the replacement lands in the same slot. Ignored while another swap runs, while saving, or with
+  /// no proposal. Every outcome but a replacement leaves the card as it was, with a plain line saying why.
+  Future<void> findAnother(int index, {String? note}) async {
+    final GenerateProposalState before = state;
+    final MealPlanResponse? result = before.result;
+    final String? sessionId = before.sessionId;
+    if (before.phase != GenerateProposalPhase.proposal ||
+        result == null ||
+        sessionId == null ||
+        before.findingAnother != null ||
+        before.saving ||
+        index < 0 ||
+        index >= result.suggestions.length) {
+      return;
+    }
+    final String? slot = result.suggestions[index].externalId;
+    if (slot == null) return;
+    final String trimmed = note?.trim() ?? '';
+    final String? sent = trimmed.isEmpty ? null : trimmed;
+    final int attempt = _attempt;
+    state = before._copy(
+      findingAnother: FindAnotherState(index: index, note: sent),
+      cardNotices: Map<int, String>.of(before.cardNotices)..remove(index),
+    );
+
+    final api = ref.read(apiClientProvider);
+    final MealPlanSwapAccepted accepted;
+    try {
+      accepted = await api.sendMealPlanSwap(
+        sessionId,
+        MealPlanSwapMessage(slot: slot, note: sent),
+      );
+    } on ApiException catch (error) {
+      _endFind(
+        attempt,
+        index,
+        notice: error is ApiRateLimitException
+            ? GenerateFailure.fromApi(error).message
+            : swapFailedCopy,
+      );
+      return;
+    }
+
+    final GenerateSessionPoller poller = ref.read(
+      generateSessionPollerProvider,
+    );
+    final DateTime startedAt = poller.now();
+    var cursor = state.cursor;
+    while (_findsAnother(attempt, index)) {
+      if (poller.now().difference(startedAt) >= poller.cap) {
+        _endFind(attempt, index, notice: swapFailedCopy);
+        return;
+      }
+      try {
+        final MealPlanSessionUpdate update = await api.getMealPlanSession(
+          sessionId,
+          after: cursor,
+        );
+        if (!_findsAnother(attempt, index)) return;
+        cursor = update.nextCursor;
+        state = state._copy(
+          cursor: cursor,
+          findingAnother: state.findingAnother!.withProgress(update.progress),
+        );
+        final MealPlanSessionSwap? swap = update.swap;
+        if (swap != null &&
+            swap.swapId == accepted.swapId &&
+            swap.state != MealPlanSwapState.pending) {
+          _land(attempt, index, swap);
+          return;
+        }
+        if (update.status == MealPlanSessionStatus.failed) {
+          _endFind(attempt, index, notice: swapFailedCopy);
+          return;
+        }
+        if (update.status == MealPlanSessionStatus.cancelled) return;
+      } on ApiException catch (error) {
+        // As for the run: a 404 cannot recover, anything else is one missed poll and the cap ends it.
+        if (error is ApiServerException && error.statusCode == 404) {
+          _endFind(attempt, index, notice: swapFailedCopy);
+          return;
+        }
+      }
+      await poller.sleep(poller.interval);
+    }
+  }
+
+  /// Puts back the meal "Find another" replaced on card [index]. Local and instant, like every swap.
+  void undoReplacement(int index) {
+    final MealPlanResponse? result = state.result;
+    final MealPlanRecipe? previous = state.replacedFrom[index];
+    if (result == null ||
+        previous == null ||
+        index >= result.suggestions.length) {
+      return;
+    }
+    state = state._copy(
+      result: _withSuggestion(result, index, previous),
+      replacedFrom: Map<int, MealPlanRecipe>.of(state.replacedFrom)
+        ..remove(index),
+      swaps: Map<int, MealPlanRecipe>.of(state.swaps)..remove(index),
+      cardNotices: Map<int, String>.of(state.cardNotices)..remove(index),
+    );
+  }
+
+  bool _findsAnother(int attempt, int index) =>
+      attempt == _attempt &&
+      state.phase == GenerateProposalPhase.proposal &&
+      state.findingAnother?.index == index;
+
+  void _endFind(int attempt, int index, {String? notice}) {
+    if (!_findsAnother(attempt, index)) return;
+    state = state._copy(
+      clearFindingAnother: true,
+      cardNotices: <int, String>{...state.cardNotices, index: ?notice},
+    );
+  }
+
+  /// The swap finished: a replacement takes the card's slot (and its own Undo), anything else is a line on the
+  /// card. The rest of the review, and any local swap on another card, stays as the household left it.
+  void _land(int attempt, int index, MealPlanSessionSwap swap) {
+    final MealPlanResponse? result = state.result;
+    final MealPlanRecipe? replacement = swap.replacement;
+    if (swap.state == MealPlanSwapState.noReplacement) {
+      _endFind(attempt, index, notice: swapNothingElseCopy);
+      return;
+    }
+    if (swap.state != MealPlanSwapState.done ||
+        replacement == null ||
+        result == null) {
+      _endFind(attempt, index, notice: swapFailedCopy);
+      return;
+    }
+    state = state._copy(
+      result: _withSuggestion(result, index, replacement),
+      replacedFrom: <int, MealPlanRecipe>{
+        ...state.replacedFrom,
+        index: result.suggestions[index],
+      },
+      swaps: Map<int, MealPlanRecipe>.of(state.swaps)..remove(index),
+    );
+    _endFind(
+      attempt,
+      index,
+      notice: swap.note == MealPlanSwapNote.dropped
+          ? swapNoteDroppedCopy
+          : null,
+    );
+  }
+
+  MealPlanResponse _withSuggestion(
+    MealPlanResponse result,
+    int index,
+    MealPlanRecipe meal,
+  ) => MealPlanResponse(
+    suggestions: <MealPlanRecipe>[
+      for (int i = 0; i < result.suggestions.length; i++)
+        i == index ? meal : result.suggestions[i],
+    ],
+    weekSummary: result.weekSummary,
+    plannedAlternatives: result.plannedAlternatives,
+    degraded: result.degraded,
+  );
 
   /// Saves the whole review in one transaction: the new meals (with any local swaps applied) into the empty
   /// slots, and a swapped planned meal by updating its own entry. Nothing is written before this call.
@@ -495,6 +718,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
                 phase: GenerateProposalPhase.proposal,
                 progress: <String>[...state.progress, ...update.progress],
                 result: result,
+                cursor: cursor,
               );
               // The box says "Couldn't use that note" when the screen dropped it; the chips applied anyway.
               ref
