@@ -249,9 +249,11 @@ class _Nodes:
                 result = None
         if result is None:
             # Spec §6.2's fallback: the scorer's best week with template text, flagged degraded so the logs
-            # and the evals see it. The household sees an ordinary proposal (spec §6.5).
-            logger.warning("writing the scorer's best week", extra={"reason": reason})
-            result = pipeline.degraded(prepared)
+            # and the evals see it. The household sees an ordinary proposal (spec §6.5). An agent stopped for
+            # asking one tool too many keeps the best week it had scored, when that week is as good.
+            week = _agents_best_week(state, prepared) if reason == DegradedReason.TOOL_BUDGET else None
+            logger.warning("writing a fallback week", extra={"reason": reason, "agents_week": week is not None})
+            result = pipeline.degraded(prepared, week=week)
         metrics = _session_metrics(state, prepared, result, reason)
         logger.info("agent session finished", extra=metrics)
         return {"result": result.model_dump(mode="json"), "session_metrics": metrics}
@@ -274,6 +276,35 @@ def _entry(call: dict[str, Any], outcome: adapters.ToolOutcome) -> dict[str, Any
     if "error" in outcome.result:
         return {"call": call, "error": outcome.result["error"]}
     return {"call": call, "data": outcome.result}
+
+
+def _agents_best_week(state: PlanState, prepared: pipeline.PreparedPlan) -> list[str] | None:
+    """The best week the agent scored before its tool budget ran out, if it is as good as the scorer's best.
+
+    Every week a `score_meal_plan` or `create_candidate_meal_plans` result holds is a candidate, re-scored here
+    from the facts rather than read from the rounded result. "As good" is spec §6.6's drift gate: within 15% of
+    the scorer's best. Below that the agent's work was a detour, and the scorer's week is the better fallback.
+    """
+    weeks: list[list[str]] = []
+    for entry in state.get("transcript") or []:
+        data = entry.get("data") or {}
+        if "week" in data:
+            weeks.append(data["week"]["recipe_ids"])
+        weeks.extend(week["recipe_ids"] for week in data.get("weeks", []))
+    offered, excluded = set(prepared.offered_ids), set(prepared.excluded_ids)
+    usable = [
+        week
+        for week in weeks
+        if 0 < len(week) <= prepared.meals_per_week
+        and len(set(week)) == len(week)
+        and set(week) <= offered
+        and not set(week) & excluded
+    ]
+    if not usable or not prepared.weeks:
+        return None
+    gaps = [(pipeline.plan_drift(prepared, week), week) for week in usable]
+    gap, best = min(((gap, week) for gap, week in gaps if gap is not None), key=lambda item: item[0].gap)
+    return best if gap.within_15_percent else None
 
 
 def _after_plan(state: PlanState) -> str:

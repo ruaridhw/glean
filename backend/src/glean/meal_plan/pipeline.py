@@ -699,8 +699,8 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
     )
 
 
-def degraded(prepared: PreparedPlan) -> MealPlanResult:
-    """The fallback proposal: the scorer's best week, with template text throughout.
+def degraded(prepared: PreparedPlan, *, week: Sequence[str] | None = None) -> MealPlanResult:
+    """The fallback proposal: the scorer's best week, or *week* when the caller has a better one, with template text.
 
     Spec §6.2's fallback, for a run whose model step gave nothing usable (and, from V7, one that spent its
     budget or errored). Since V6 that week is the scorer's own, so a run that falls back still gets a balanced
@@ -708,8 +708,13 @@ def degraded(prepared: PreparedPlan) -> MealPlanResult:
     the sampler's order as it did then. It is a proposal like any other -- a summary, a reason kind per meal, an
     alternative per card and per planned meal -- so the household cannot tell; `degraded` and the logs are the
     only record (spec §6.5).
+
+    *week* is the agent's own best week when its tool budget ran out (V7): `finalise` validates it like any
+    answer, so an id that was not offered or found is dropped exactly as it would be from a proposal.
     """
     best = prepared.weeks[0].recipe_ids if prepared.weeks else prepared.offered_ids[: prepared.meals_per_week]
+    if week:
+        best = list(week)
     draft = CorpusMealPlanResponse(
         week_summary="",
         suggestions=[
@@ -723,7 +728,10 @@ def degraded(prepared: PreparedPlan) -> MealPlanResult:
         ],
     )
     result = finalise(prepared, draft)
-    logger.warning("meal plan fell back to the scorer's best week", extra={"count": len(result.suggestions)})
+    logger.warning(
+        "meal plan fell back to a scored week",
+        extra={"count": len(result.suggestions), "week": "agent" if week else "scorer"},
+    )
     return result.model_copy(update={"degraded": True})
 
 

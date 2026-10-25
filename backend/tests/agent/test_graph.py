@@ -346,6 +346,31 @@ class TestBudget:
         assert run.metric("SessionToolCalls") == [MAX_TOOL_CALLS]
         assert run.metric("SessionsDegraded") == [1]
 
+    @pytest.mark.parametrize(("swap_in", "kept"), [("another_onion_dish", "agent"), ("korean", "scorer")])
+    def test_a_ninth_tool_call_keeps_the_agents_best_week_when_it_is_as_good(
+        self, run: Run, swap_in: str, kept: str
+    ) -> None:
+        """N3: the agent's work survives a refused call when its week is within 15% of the scorer's best."""
+        swapped: list[str] = []
+
+        def score_a_swap(context: dict[str, Any]) -> dict[str, Any]:
+            best = [meal["external_id"] for meal in context["candidate_weeks"][0]["meals"]]
+            in_weeks = {meal["external_id"] for week in context["candidate_weeks"] for meal in week["meals"]}
+            spare = next(c["external_id"] for c in context["candidates"] if c["external_id"] not in in_weeks)
+            # Every onion dish fits the pantry alike, so swapping one for another costs nothing; the Korean dish
+            # uses no onion and gives up half the week's pantry fit.
+            swapped.extend([*best[:-1], spare if swap_in == "another_onion_dish" else KOREAN_ID])
+            return call("score_meal_plan", recipe_ids=swapped)
+
+        steps = [call("get_eligible_recipes", filter={"text": "korean"}), score_a_swap]
+        steps += [call("get_recipes", ids=["rec_01"])] * (MAX_TOOL_CALLS - 1)
+        run.start(ScriptedModel(*steps))
+
+        result = run.record.result
+        assert result.degraded is True
+        planned = [suggestion.external_id for suggestion in result.suggestions]
+        assert (planned == swapped) is (kept == "agent")
+
     def test_spending_the_90_seconds_mid_loop_ends_in_the_scorers_week(self, run: Run) -> None:
         def slow(_context: dict[str, Any]) -> dict[str, Any]:
             run.clock.advance(AGENT_RUN_BUDGET_SECONDS + 1)
