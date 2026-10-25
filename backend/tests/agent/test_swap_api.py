@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from glean.agent.actions import PlanStep, SwapStep
-from glean.agent.dependencies import get_session_dispatcher, get_session_store
+from glean.agent.dependencies import _inline_checkpointer, get_session_dispatcher, get_session_store
 from glean.config import Settings, get_settings
 from glean.decisions import DecisionClient
 from glean.dependencies import get_decision_client, get_llm_router, verify_cognito_token
@@ -217,6 +217,10 @@ def test_a_note_the_screen_drops_is_never_stored_and_never_reaches_the_model(
     assert after["swap"]["state"] == "done"
     assert after["swap"]["note"] == "dropped"
     assert all(injection not in system and injection not in user for _schema, system, user in router.users)
+    # Nor is it in the graph's input, its state, or any checkpoint the swap wrote.
+    checkpoints = list(_inline_checkpointer().list({"configurable": {"thread_id": view["session_id"]}}))
+    assert checkpoints, "the swap ran through the session's own checkpointed thread"
+    assert all(injection not in repr(checkpoint) for checkpoint in checkpoints)
 
 
 def test_a_note_that_passes_is_stored_screened_and_reaches_the_model_as_data(
@@ -230,6 +234,9 @@ def test_a_note_that_passes_is_stored_screened_and_reaches_the_model_as_data(
     swap_users = [json.loads(user) for schema, _system, user in router.users if schema is SwapStep]
     assert swap_users[0]["swap"]["swap_note"] == NOTE
     assert all(NOTE not in system for _schema, system, _user in router.users)
+    # The checkpoints carry the screened note: what the rejected-note test looks for is really there to find.
+    checkpoints = list(_inline_checkpointer().list({"configurable": {"thread_id": view["session_id"]}}))
+    assert any(NOTE in repr(checkpoint) for checkpoint in checkpoints)
 
 
 @pytest.mark.parametrize("body", [{"type": "answer", "option": "Fish", "note": None}, {"type": "skip"}])
