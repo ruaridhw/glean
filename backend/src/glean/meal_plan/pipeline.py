@@ -477,13 +477,16 @@ def _log_drift(prepared: PreparedPlan, choices: Sequence[CorpusMealPlanRecipe], 
 
 
 def degraded(prepared: PreparedPlan) -> MealPlanResult:
-    """The fallback proposal: the best candidates the sampler offered, with template text throughout.
+    """The fallback proposal: the scorer's best week, with template text throughout.
 
-    Spec §6.2's fallback, for a run whose model step gave nothing usable (and, from V7, one that spent
-    its budget or errored). It is a proposal like any other -- a summary, a reason kind per meal, an
-    alternative per card and per planned meal -- so the household cannot tell; `degraded` and the logs
-    are the only record (spec §6.5).
+    Spec §6.2's fallback, for a run whose model step gave nothing usable (and, from V7, one that spent its
+    budget or errored). Since V6 that week is the scorer's own, so a run that falls back still gets a balanced
+    week rather than the sampler's first N; a prepared plan from before V6 carries no weeks and falls back to
+    the sampler's order as it did then. It is a proposal like any other -- a summary, a reason kind per meal, an
+    alternative per card and per planned meal -- so the household cannot tell; `degraded` and the logs are the
+    only record (spec §6.5).
     """
+    best = prepared.weeks[0].recipe_ids if prepared.weeks else prepared.offered_ids[: prepared.meals_per_week]
     draft = CorpusMealPlanResponse(
         week_summary="",
         suggestions=[
@@ -493,11 +496,11 @@ def degraded(prepared: PreparedPlan) -> MealPlanResult:
                 reason=_TEMPLATE_MEAL_REASON,
                 reason_kind=ReasonKind.URGENT_ITEM if _urgent_items(prepared, external_id) else ReasonKind.BALANCE,
             )
-            for external_id in prepared.offered_ids[: prepared.meals_per_week]
+            for external_id in best
         ],
     )
     result = finalise(prepared, draft)
-    logger.warning("meal plan fell back to the sampler's picks", extra={"count": len(result.suggestions)})
+    logger.warning("meal plan fell back to the scorer's best week", extra={"count": len(result.suggestions)})
     return result.model_copy(update={"degraded": True})
 
 
