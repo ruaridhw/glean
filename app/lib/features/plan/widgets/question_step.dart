@@ -84,7 +84,14 @@ class _QuestionStepState extends State<QuestionStep> {
                     ),
                   ),
                   SizedBox(height: tokens.spacing.sm),
-                  Text(widget.question.question, style: textTheme.titleLarge),
+                  // The step's heading for a screen reader, as its title is for the eye.
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      widget.question.question,
+                      style: textTheme.titleLarge,
+                    ),
+                  ),
                   SizedBox(height: tokens.spacing.md),
                   Wrap(
                     spacing: tokens.spacing.sm,
@@ -110,8 +117,9 @@ class _QuestionStepState extends State<QuestionStep> {
                     inputFormatters: const <TextInputFormatter>[
                       _NoteFormatter(),
                     ],
+                    // A label, not a hint: it stays (and stays announced) once the note has text.
                     decoration: const InputDecoration(
-                      hintText: 'Add a note (optional)',
+                      labelText: 'Add a note (optional)',
                     ),
                   ),
                 ],

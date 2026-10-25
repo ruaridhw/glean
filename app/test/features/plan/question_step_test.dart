@@ -153,6 +153,30 @@ void main() {
   );
 
   gleanWidgetTest(
+    'the question is a heading and the note keeps its label once typed in',
+    (tester) async {
+      final SemanticsHandle semantics = tester.ensureSemantics();
+      final h = AppTestHarness(
+        httpClient: questionBackend(requests: <http.Request>[]),
+      );
+      addTearDown(h.dispose);
+      await openQuestion(tester, h);
+
+      expect(
+        tester.getSemantics(find.text(question)),
+        isSemantics(isHeader: true),
+      );
+      await tester.enterText(find.byType(TextField), 'Kids are away');
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration!.labelText,
+        'Add a note (optional)',
+      );
+      semantics.dispose();
+    },
+  );
+
+  gleanWidgetTest(
     'Send returns to the progress, says what was answered, then shows the week',
     (tester) async {
       final requests = <http.Request>[];
