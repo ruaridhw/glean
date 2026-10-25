@@ -41,6 +41,28 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def test_the_questions_wording_is_frozen_so_a_refactor_does_not_re_ask_the_corpus() -> None:
+    """Criteria hashes are what stored answers reply to: changing them would re-ask 632 recipes per question.
+
+    These literals are the wording as V5 ships it. A deliberate rewording updates the literal with the PR
+    that makes it; an accidental one (a reordered criteria dict, a renamed option) fails here first.
+    """
+    frozen = {
+        "attribute:main_protein": "da264e1316fb351ac97f730d8d0773236d744ba94526f8be69d51bf9fb12bd6b",
+        "attribute:main_carb": "7a15d9b33fd6b5df49753ef3dfb0ef5da3207123c0b8c0c04cc56d7d12606b6d",
+        "attribute:dish_type": "99d9cc77826fd6cc9badeedbbf8c141caf0670100dd0a30b47c459fb23b48bf1",
+        "attribute:cuisine": "ea34656ef2865516a0a85bd291b52b7728e257a1af693a77c86f21a2c0376c8d",
+        "attribute:whole_food": "7bb64033fe9e3f832aa77a7f4471b8278d7c5a86b2b54ce0a9a94002834db2fa",
+        "active_time:bucket": "d36513eedb634867e1c379c3fdc7fab6ce10b4ae632f867c404c05fd68cd9440",
+    }
+
+    asserted = {
+        question.name: question.criteria_hash for question in (*ATTRIBUTE_ENRICHER.questions(), active_time_question())
+    }
+
+    assert asserted == frozen
+
+
 def test_the_attribute_enricher_asks_the_five_g1_attributes() -> None:
     questions = ATTRIBUTE_ENRICHER.questions()
 

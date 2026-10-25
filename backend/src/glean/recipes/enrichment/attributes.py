@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from glean.decisions import ChoiceQuestion, ScoreQuestion
-from glean.recipes.attributes import ATTRIBUTE_QUESTIONS, WholeFood
+from glean.recipes.attributes import ATTRIBUTE_QUESTIONS, Cuisine, DishType, MainCarb, MainProtein, WholeFood
 from glean.recipes.enrichment.enricher import (
     DEFAULT_ATTRIBUTE_BAR,
     Acceptance,
@@ -51,18 +51,28 @@ _PROTEIN = ChoiceQuestion(
         "when two or more proteins carry it equally."
     ),
     criteria={
-        "chicken": "Chicken is the centre: breast, thigh, wings, mince, or a chicken stock it is built on.",
-        "turkey_or_duck": "Turkey or duck is the centre, including mince, breast and legs.",
-        "beef": "Beef is the centre: steak, mince, brisket, ribs, meatballs.",
-        "pork": "Pork is the centre, including bacon, ham and pork charcuterie such as chorizo or salami.",
-        "lamb": "Lamb or mutton is the centre: chops, shoulder, mince, kofta.",
-        "fish": "Fish is the centre: salmon, cod, tuna, haddock, anchovy or tinned fish.",
-        "seafood": "Shellfish or molluscs are the centre: prawns, mussels, squid, crab.",
-        "beans_and_pulses": "Beans, lentils, chickpeas or other pulses are the protein.",
-        "tofu_or_plant_protein": "Tofu, tempeh, seitan, Quorn or a meat-free substitute is the protein.",
-        "vegetarian_other": "An egg-led or cheese-led dish, such as an omelette, frittata or macaroni cheese.",
-        "mixed": "Two or more proteins carry the dish equally, such as a mixed grill or a fish-and-prawn pie.",
-        "none": "No protein is central: a side, a sauce, a leaf salad or a plain dessert.",
+        MainProtein.CHICKEN.value: (
+            "Chicken is the centre: breast, thigh, wings, mince, or a chicken stock it is built on."
+        ),
+        MainProtein.TURKEY_OR_DUCK.value: "Turkey or duck is the centre, including mince, breast and legs.",
+        MainProtein.BEEF.value: "Beef is the centre: steak, mince, brisket, ribs, meatballs.",
+        MainProtein.PORK.value: (
+            "Pork is the centre, including bacon, ham and pork charcuterie such as chorizo or salami."
+        ),
+        MainProtein.LAMB.value: "Lamb or mutton is the centre: chops, shoulder, mince, kofta.",
+        MainProtein.FISH.value: "Fish is the centre: salmon, cod, tuna, haddock, anchovy or tinned fish.",
+        MainProtein.SEAFOOD.value: "Shellfish or molluscs are the centre: prawns, mussels, squid, crab.",
+        MainProtein.BEANS_AND_PULSES.value: "Beans, lentils, chickpeas or other pulses are the protein.",
+        MainProtein.TOFU_OR_PLANT_PROTEIN.value: (
+            "Tofu, tempeh, seitan, Quorn or a meat-free substitute is the protein."
+        ),
+        MainProtein.VEGETARIAN_OTHER.value: (
+            "An egg-led or cheese-led dish, such as an omelette, frittata or macaroni cheese."
+        ),
+        MainProtein.MIXED.value: (
+            "Two or more proteins carry the dish equally, such as a mixed grill or a fish-and-prawn pie."
+        ),
+        MainProtein.NONE.value: "No protein is central: a side, a sauce, a leaf salad or a plain dessert.",
     },
 )
 
@@ -75,13 +85,13 @@ _CARB = ChoiceQuestion(
         "carbohydrate is central."
     ),
     criteria={
-        "rice": "Rice is the base or the accompaniment the dish is built around.",
-        "pasta": "Pasta, including spaghetti, penne, lasagne sheets, gnocchi and orzo.",
-        "noodles": "Noodles: egg, rice, udon, soba, vermicelli, instant.",
-        "potato": "Potato: boiled, roasted, mashed, chipped or in a potato salad.",
-        "bread_or_wraps": "Bread, buns, wraps, tortillas, pittas, tacos, sandwiches and toast.",
-        "other_grains": "Couscous, quinoa, bulgur, polenta, barley, freekeh or another grain.",
-        "none": "No carbohydrate is central: a soup, a salad, a protein with vegetables.",
+        MainCarb.RICE.value: "Rice is the base or the accompaniment the dish is built around.",
+        MainCarb.PASTA.value: "Pasta, including spaghetti, penne, lasagne sheets, gnocchi and orzo.",
+        MainCarb.NOODLES.value: "Noodles: egg, rice, udon, soba, vermicelli, instant.",
+        MainCarb.POTATO.value: "Potato: boiled, roasted, mashed, chipped or in a potato salad.",
+        MainCarb.BREAD_OR_WRAPS.value: "Bread, buns, wraps, tortillas, pittas, tacos, sandwiches and toast.",
+        MainCarb.OTHER_GRAINS.value: "Couscous, quinoa, bulgur, polenta, barley, freekeh or another grain.",
+        MainCarb.NONE.value: "No carbohydrate is central: a soup, a salad, a protein with vegetables.",
     },
 )
 
@@ -94,17 +104,21 @@ _DISH_TYPE = ChoiceQuestion(
         "fit."
     ),
     criteria={
-        "curry": "A spiced dish with a sauce, served with rice or bread.",
-        "stir_fry": "Ingredients tossed over high heat in a wok or wide pan, usually with noodles or rice.",
-        "pasta_dish": "Pasta as the body of the dish, with a sauce, a bake or a toss.",
-        "soup_or_stew": "A liquid-led dish, simmered: soup, stew, chilli, casserole, dal.",
-        "roast_or_traybake": "Everything roasted together on a tray, or a joint roasted whole.",
-        "salad_or_bowl": "Served cold or warm as a salad or a grain bowl, assembled rather than cooked together.",
-        "handheld": "Eaten in the hand: burgers, wraps, tacos, sandwiches, pittas, flatbreads.",
-        "pie_or_bake": "A pastry case, a crumble, a gratin or a layered oven bake.",
-        "rice_dish": "Rice cooked into the dish: risotto, pilaf, paella, fried rice, biryani.",
-        "pan_or_grill": "A protein or vegetable cooked in a pan or on a grill and served with its sides.",
-        "other": "None of these shapes: a dessert, a drink, a sauce, a breakfast.",
+        DishType.CURRY.value: "A spiced dish with a sauce, served with rice or bread.",
+        DishType.STIR_FRY.value: (
+            "Ingredients tossed over high heat in a wok or wide pan, usually with noodles or rice."
+        ),
+        DishType.PASTA_DISH.value: "Pasta as the body of the dish, with a sauce, a bake or a toss.",
+        DishType.SOUP_OR_STEW.value: "A liquid-led dish, simmered: soup, stew, chilli, casserole, dal.",
+        DishType.ROAST_OR_TRAYBAKE.value: "Everything roasted together on a tray, or a joint roasted whole.",
+        DishType.SALAD_OR_BOWL.value: (
+            "Served cold or warm as a salad or a grain bowl, assembled rather than cooked together."
+        ),
+        DishType.HANDHELD.value: "Eaten in the hand: burgers, wraps, tacos, sandwiches, pittas, flatbreads.",
+        DishType.PIE_OR_BAKE.value: "A pastry case, a crumble, a gratin or a layered oven bake.",
+        DishType.RICE_DISH.value: "Rice cooked into the dish: risotto, pilaf, paella, fried rice, biryani.",
+        DishType.PAN_OR_GRILL.value: "A protein or vegetable cooked in a pan or on a grill and served with its sides.",
+        DishType.OTHER.value: "None of these shapes: a dessert, a drink, a sauce, a breakfast.",
     },
 )
 
@@ -117,25 +131,29 @@ _CUISINE = ChoiceQuestion(
         "(roasts, pies, fish and chips, shepherd's pie) rather than for a dish adopted from elsewhere."
     ),
     criteria={
-        "british": "British and Irish home cooking: roasts, pies, stews, fish and chips, puddings.",
-        "italian": "Italian: pasta, risotto, pizza and Italian-inspired bakes and sauces.",
-        "french": "French: bistro dishes, gratins, sauces, quiches, Provençal cooking.",
-        "spanish": "Spanish: tapas, paella, chorizo-led dishes, patatas bravas.",
-        "greek": "Greek and Cypriot: souvlaki, moussaka, halloumi, Greek salads.",
-        "middle_eastern": "Middle Eastern: Levantine, Turkish, Persian and Israeli cooking, mezze, tagines.",
-        "north_african": "North African: Moroccan, Tunisian, Algerian and Egyptian cooking, harissa, couscous.",
-        "indian": "Indian and Pakistani: curries, dal, biryani, dosa, tandoori dishes.",
-        "thai": "Thai: curries, stir-fries, salads and soups with fish sauce, lime and chilli.",
-        "vietnamese": "Vietnamese: pho, banh mi, fresh rolls, caramel-braised dishes.",
-        "chinese": "Chinese: stir-fries, braises, dumplings, Sichuan and Cantonese dishes.",
-        "japanese": "Japanese: sushi, ramen, donburi, teriyaki, katsu.",
-        "korean": "Korean: kimchi and gochujang-led dishes, bibimbap, bulgogi.",
-        "southeast_asian": "Southeast Asian outside Thailand and Vietnam: Indonesian, Malaysian, Filipino.",
-        "mexican": "Mexican: tacos, enchiladas, salsas, beans and corn-led dishes.",
-        "caribbean": "Caribbean: Jamaican and Trinidadian cooking, jerk, rice and peas, curries.",
-        "american": "American: burgers, barbecue, mac and cheese, Southern and diner dishes.",
-        "latin_american": "Latin American outside Mexico: Peruvian, Brazilian, Argentinian, Colombian.",
-        "other": "A regional cuisine this list does not name, or a dish that genuinely mixes traditions.",
+        Cuisine.BRITISH.value: "British and Irish home cooking: roasts, pies, stews, fish and chips, puddings.",
+        Cuisine.ITALIAN.value: "Italian: pasta, risotto, pizza and Italian-inspired bakes and sauces.",
+        Cuisine.FRENCH.value: "French: bistro dishes, gratins, sauces, quiches, Provençal cooking.",
+        Cuisine.SPANISH.value: "Spanish: tapas, paella, chorizo-led dishes, patatas bravas.",
+        Cuisine.GREEK.value: "Greek and Cypriot: souvlaki, moussaka, halloumi, Greek salads.",
+        Cuisine.MIDDLE_EASTERN.value: (
+            "Middle Eastern: Levantine, Turkish, Persian and Israeli cooking, mezze, tagines."
+        ),
+        Cuisine.NORTH_AFRICAN.value: (
+            "North African: Moroccan, Tunisian, Algerian and Egyptian cooking, harissa, couscous."
+        ),
+        Cuisine.INDIAN.value: "Indian and Pakistani: curries, dal, biryani, dosa, tandoori dishes.",
+        Cuisine.THAI.value: "Thai: curries, stir-fries, salads and soups with fish sauce, lime and chilli.",
+        Cuisine.VIETNAMESE.value: "Vietnamese: pho, banh mi, fresh rolls, caramel-braised dishes.",
+        Cuisine.CHINESE.value: "Chinese: stir-fries, braises, dumplings, Sichuan and Cantonese dishes.",
+        Cuisine.JAPANESE.value: "Japanese: sushi, ramen, donburi, teriyaki, katsu.",
+        Cuisine.KOREAN.value: "Korean: kimchi and gochujang-led dishes, bibimbap, bulgogi.",
+        Cuisine.SOUTHEAST_ASIAN.value: "Southeast Asian outside Thailand and Vietnam: Indonesian, Malaysian, Filipino.",
+        Cuisine.MEXICAN.value: "Mexican: tacos, enchiladas, salsas, beans and corn-led dishes.",
+        Cuisine.CARIBBEAN.value: "Caribbean: Jamaican and Trinidadian cooking, jerk, rice and peas, curries.",
+        Cuisine.AMERICAN.value: "American: burgers, barbecue, mac and cheese, Southern and diner dishes.",
+        Cuisine.LATIN_AMERICAN.value: "Latin American outside Mexico: Peruvian, Brazilian, Argentinian, Colombian.",
+        Cuisine.OTHER.value: "A regional cuisine this list does not name, or a dish that genuinely mixes traditions.",
     },
 )
 
