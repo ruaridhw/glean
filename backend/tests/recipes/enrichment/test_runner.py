@@ -15,7 +15,6 @@ from glean.decisions import DECISION_MODEL, DecisionModel
 from glean.meal_plan.dietary_decisions import DietaryDecisions, DietaryDecisionStore
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
-from glean.recipes.attributes import UNSURE
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
 from glean.recipes.dynamo_corpus import DynamoCorpusBackend, ProjectionPublishError
 from glean.recipes.enrichment import (
@@ -173,22 +172,24 @@ def test_a_run_reports_only_the_enrichers_it_was_given(tmp_path) -> None:
     assert report.coverage == 1.0
 
 
-def test_an_answer_below_the_bar_is_stored_as_unsure_and_is_not_asked_again(tmp_path) -> None:
+def test_an_answer_under_its_bar_is_stored_as_the_top_option_and_reported_unsure(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    # The fake answers 0.9; a 0.95 bar is above it, so the top option is not trusted.
+    # The fake answers 0.9; a 0.95 bar is above it, so the option it chose is not trusted.
     strict = (DIETARY_ENRICHER, DinnerEnricher(threshold=0.95))
 
-    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=strict)
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=strict)
 
     stored = {(answer.recipe_id, answer.question): answer for answer in corpus.answers()}
     dinner = stored[("rec_pesto", DINNER)]
-    assert (dinner.value, dinner.probability) == (UNSURE, 0.9)  # stored, and honestly unsure
+    assert (dinner.value, dinner.probability) == ("dinner", 0.9)  # what the model said, kept as said
+    # The bar is read-time: the report counts it unsure without re-asking or re-paying for it.
+    assert (report.question(DINNER).current, report.question(DINNER).unsure) == (2, 2)
     # Dietary stores the probability itself and lets the bar decide at read time, so it is untouched.
     assert stored[("rec_pesto", "dietary:vegetarian")].value is None
 
     asked_again = FakeDecisionApi()
     report = run_enrichment(corpus, asked_again.client(), enrichers=strict)
-    assert asked_again.requests == []  # `unsure` is an answer: nothing is re-asked or re-paid for
+    assert asked_again.requests == []  # the answer exists: nothing is re-asked or re-paid for
     assert report.question(DINNER).current == 2
 
 

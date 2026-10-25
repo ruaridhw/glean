@@ -2,8 +2,9 @@
 
 The second enricher exists so the runner is tested as a pipeline of two families of questions rather than
 against dietary alone, and so the acceptance hook is exercised by a rule that is not dietary's: a `choice`
-question with a high bar, below which `unsure` is stored (exactly the shape V5's attribute questions take,
-ADR 0025). It answers in the endpoint's wire format, so the tests cross the same seam the real client does.
+question whose top option is stored with its probability, and whose bar decides at read time whether that
+option is trusted (exactly the shape V5's attribute questions take, ADR 0025). It answers in the endpoint's
+wire format, so the tests cross the same seam the real client does.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from glean.decisions import (
     DecisionClient,
     DecisionModel,
 )
-from glean.recipes.attributes import UNSURE
 from glean.recipes.corpus import BlobCorpusBackend
 from glean.recipes.enrichment import Acceptance, ConfidenceBar, EnrichmentQuestion, SafeSide, StoredValue
 
@@ -118,14 +118,13 @@ class FakeDecisionApi:
         return next(request for request in self.requests if request["state"]["recipe_title"] == title)
 
 
-def bared_choice(name: str, bar: ConfidenceBar) -> Acceptance:
-    """Accept the top option only at or above the bar, and store `unsure` below it (V5's attribute rule)."""
+def bared_choice(name: str) -> Acceptance:
+    """Store the top option (V5's attribute rule): the bar is applied when the answer is read, not here."""
 
     def accept(decision) -> StoredValue:
         answer = decision.choice(name)
         top = max(answer.probabilities, key=lambda option: answer.probabilities[option])
-        probability = answer.probabilities[top]
-        return StoredValue(probability=probability, value=top if probability >= bar.threshold else UNSURE)
+        return StoredValue(probability=answer.probabilities[top], value=top)
 
     return accept
 
@@ -143,7 +142,7 @@ def dinner_question(*, threshold: float = 0.8, instructions: str | None = None) 
             },
         ),
         bar=bar,
-        accept=bared_choice(DINNER, bar),
+        accept=bared_choice(DINNER),
     )
 
 

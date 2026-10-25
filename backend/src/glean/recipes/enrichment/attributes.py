@@ -1,10 +1,11 @@
 """The attribute enricher: what each recipe is made of, how it is shaped, and where it comes from (G1).
 
 Five questions per recipe: a `choice` for `main_protein`, `main_carb`, `dish_type` and `cuisine`, and a
-`score` for `whole_food`. All five are accepted through one rule: the top option is taken only at or above
-the attribute's bar (0.8 by default, tunable per attribute, never below 0.7), and below it the answer is
-stored as `unsure`. `unsure` is a real answer — it stops the recipe being re-asked, and it earns no variety
-credit and no penalty in the scorer — which is why the runner needs no special case for it.
+`score` for `whole_food`. Every answer stores the option the model chose and the probability that chose it;
+whether that option is *trusted* is decided at read time by the attribute's bar (0.8 by default, tunable per
+attribute, never below 0.7). Under the bar the answer reads as `unsure`, which is a real answer — it stops
+the recipe being re-asked and earns no variety credit and no penalty — and, because the bar is applied on
+read, retuning it takes effect at once instead of waiting for a re-run.
 
 The option sets are `recipes/attributes.py`'s G1 enums, so a stored value is already the value the filter,
 the scorer and the check-sample tooling name. The wording lives here because a question's criteria hash is
@@ -23,9 +24,9 @@ from glean.recipes.enrichment.enricher import (
     Acceptance,
     EnrichmentQuestion,
     attribute_bar,
-    choice_above_bar,
-    level_above_bar,
     method_state,
+    top_choice,
+    top_level,
 )
 
 if TYPE_CHECKING:
@@ -34,7 +35,14 @@ if TYPE_CHECKING:
     from glean.decisions import Question
     from glean.recipes.stored import StoredRecipe
 
-__all__ = ["ATTRIBUTE_ENRICHER", "MEASURED_BARS", "WHOLE_FOOD_LEVELS", "AttributeEnricher", "attribute_questions"]
+__all__ = [
+    "ATTRIBUTE_ENRICHER",
+    "MEASURED_BARS",
+    "WHOLE_FOOD_LEVELS",
+    "AttributeEnricher",
+    "attribute_questions",
+    "attribute_questions_by_name",
+]
 
 # The whole-food scale's order: lowest level first, which is the order a `score` question's criteria take.
 WHOLE_FOOD_LEVELS: tuple[WholeFood, ...] = (WholeFood.PROCESSED, WholeFood.MIXED, WholeFood.WHOLE)
@@ -46,9 +54,9 @@ WHOLE_FOOD_LEVELS: tuple[WholeFood, ...] = (WholeFood.PROCESSED, WholeFood.MIXED
 # at 0.85, 100%; whole_food 25/25 at 0.90, 96%. dish_type accepts the most at 0.75 (43/43, 97.7%) but 0.80 is
 # the spec's starting bar and the extra acceptance was one recipe, so it stays where G1 put it.
 #
-# A bar is not part of a question's criteria hash, so retuning one does not re-ask the corpus: the stored
-# answers keep the values the old bar accepted, and a lower bar cannot recover a label that was stored as
-# `unsure`. Rerun the enrichment after a retune if the difference matters to planning.
+# A bar is not part of a question's criteria hash, and it is applied when an answer is read, not when it is
+# stored: retuning one therefore takes effect on the next read with no re-ask — raising it turns the labels it
+# now rejects into `unsure`, lowering it recovers labels stored under the old bar.
 MEASURED_BARS: dict[str, float] = {
     "main_protein": 0.80,
     "main_carb": 0.80,
@@ -227,13 +235,13 @@ class AttributeEnricher:
         return self.bars.get(attribute, MEASURED_BARS.get(attribute, DEFAULT_ATTRIBUTE_BAR))
 
     def question_for(self, attribute: str) -> EnrichmentQuestion:
-        """The question for one attribute, with its bar and its accept-above-the-bar rule."""
+        """The question for one attribute, with its bar and the rule that stores the model's answer."""
         bar = attribute_bar(self.threshold(attribute))
         name = ATTRIBUTE_QUESTIONS[attribute]
         acceptance: Acceptance = (
-            level_above_bar(name, bar, [level.value for level in WHOLE_FOOD_LEVELS])
+            top_level(name, [level.value for level in WHOLE_FOOD_LEVELS])
             if attribute == "whole_food"
-            else choice_above_bar(name, bar)
+            else top_choice(name)
         )
         return EnrichmentQuestion(name=name, question=_QUESTIONS[attribute], bar=bar, accept=acceptance)
 
@@ -245,3 +253,14 @@ def attribute_questions(bars: Mapping[str, float] | None = None) -> dict[str, En
     """The attribute questions by attribute name, for the read side, the tooling and the tests."""
     enricher = ATTRIBUTE_ENRICHER if bars is None else AttributeEnricher(bars=bars)
     return {attribute: enricher.question_for(attribute) for attribute in _ASKED}
+
+
+def attribute_questions_by_name(
+    bars: Mapping[str, float] | None = None,
+) -> dict[str, EnrichmentQuestion]:
+    """The same questions keyed by their stored question name, which is the key an answer carries.
+
+    `attributes_from_answers` reads a mapping keyed this way, so a caller that changes a bar (the check tool,
+    a test) passes this rather than the attribute-keyed view.
+    """
+    return {question.name: question for question in attribute_questions(bars).values()}

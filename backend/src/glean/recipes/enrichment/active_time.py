@@ -6,9 +6,10 @@ starts. So active time is estimated for every recipe (spec 6.1, "Enrichers") and
 it is, as `StoredRecipe.prep_time_mins`.
 
 The question is a `score` over the method, with the stated prep and total times in the state as hints. The
-answer is bucketed: a level is accepted at or above the same bar every attribute uses (0.8 by default, never
-below 0.7), and below it `unsure` is stored, which makes the household's time cap fall back to total time as
-it did before V5.
+answer is bucketed: the bucket the model chose and its probability are stored, and the same bar every
+attribute uses (0.8 by default, never below 0.7) decides at read time whether that bucket is trusted. Under
+it the answer reads as `unsure`, which makes the household's time cap fall back to total time as it did
+before V5.
 """
 
 from __future__ import annotations
@@ -22,8 +23,8 @@ from glean.recipes.enrichment.enricher import (
     DEFAULT_ATTRIBUTE_BAR,
     EnrichmentQuestion,
     attribute_bar,
-    level_above_bar,
     method_state,
+    top_level,
 )
 
 if TYPE_CHECKING:
@@ -62,11 +63,12 @@ _QUESTION = ScoreQuestion(
 )
 
 
-# Active time keeps the 0.8 the spec starts at, and it is the one bar the 50-recipe check did not move: the
-# model is rarely confident about hands-on work (35 of the sample's 50 answers were below even the 0.7 floor,
-# and the 15 it accepted at 0.70 were right 86.7% of the time). Rather than lower a bar to harvest those, the
-# spec's rule stands: below the bar the answer is `unsure`, and the household's time cap falls back to total
-# time, which is what it did before V5. A second sample is what would change this.
+# Active time keeps the 0.8 the spec starts at, and it is the one bar the 50-recipe check did not move. The
+# model is rarely confident about hands-on work: 35 of the sample's 50 answers were under even the 0.7 floor,
+# at 0.70 the 15 it accepted were right 86.7% of the time, and at the shipped 0.80 the sample accepted a single
+# answer and that one was wrong (it said 15-30 where the label was "<=15", the safe direction). So the time
+# bucket is close to inert in practice: nearly every recipe reads as `unsure` and the household's cap falls
+# back to total time, which is what it did before V5. A second sample is what would change this.
 ACTIVE_TIME_BAR = DEFAULT_ATTRIBUTE_BAR
 
 
@@ -96,7 +98,7 @@ def active_time_question(threshold: float = ACTIVE_TIME_BAR) -> EnrichmentQuesti
         name=ACTIVE_TIME_QUESTION,
         question=_QUESTION,
         bar=bar,
-        accept=level_above_bar(ACTIVE_TIME_QUESTION, bar, [bucket.value for bucket in BUCKETS]),
+        accept=top_level(ACTIVE_TIME_QUESTION, [bucket.value for bucket in BUCKETS]),
     )
 
 

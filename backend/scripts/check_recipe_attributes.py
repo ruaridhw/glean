@@ -14,11 +14,12 @@ this repo, and the answers and labels sit beside it, never committed: recipe tex
 The default paths are the sample directory's sibling `v5-check/`, so a sample exported as `.../v5-sample/`
 puts the answers at `.../v5-check/answers.json` and reads the labels from `.../v5-check/opus-labels.json`.
 
-**The enrich step runs at the floor bar, not production's 0.8.** The point of the sample is to choose the
-bar, and a bar can only be chosen from answers that keep their top option as far down as G1 allows (0.7).
-The compare step then replays every bar from 0.7 to 0.95 and reports, per attribute, the accuracy of the
-answers each bar accepts and how much of the sample those answers cover. What is chosen here is what the
-enrichers get declared with; the answers themselves are a measurement, not corpus data.
+**A stored answer is the model's answer, and the bar is a policy over it.** Every answer keeps the option the
+model chose and the probability that chose it, whatever bar was declared when it was asked, so one paid run
+is enough to replay every candidate bar: the compare step applies each bar from 0.7 to 0.95 to those stored
+probabilities and reports, per attribute, the accuracy of the answers each bar accepts and how much of the
+sample they cover. What is chosen here goes into `MEASURED_BARS`; the answers themselves are a measurement,
+not corpus data.
 
 Labels schema (what the independent labeller writes; values are the G1 table's, and `unsure` is allowed):
 
@@ -52,8 +53,8 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.attributes import ATTRIBUTE_QUESTIONS, UNSURE, RecipeAttributes
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
 from glean.recipes.enrichment import run_enrichment
-from glean.recipes.enrichment.active_time import ActiveTimeEnricher
-from glean.recipes.enrichment.attributes import AttributeEnricher
+from glean.recipes.enrichment.active_time import ACTIVE_TIME_BAR, ACTIVE_TIME_ENRICHER
+from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER, MEASURED_BARS
 from glean.recipes.enrichment.enricher import DEFAULT_ATTRIBUTE_BAR, MIN_ATTRIBUTE_BAR
 from glean.recipes.stored import StoredRecipe
 
@@ -114,9 +115,9 @@ def _enrich(args: argparse.Namespace, *, client: DecisionClient | None) -> int:
             {
                 "sample": str(args.sample),
                 "enriched_at": datetime.now(UTC).isoformat(),
-                # The floor is deliberate: choosing a bar needs the top option's probability, and 0.7 is the
-                # lowest bar G1 allows, so nothing above the floor is thrown away.
-                "bars": dict.fromkeys(ATTRIBUTES, MIN_ATTRIBUTE_BAR),
+                # What the run declared, for the record. It does not affect what is stored: every answer keeps
+                # its top option, so the compare step can replay any bar over it.
+                "bars": {**MEASURED_BARS, "active_time": ACTIVE_TIME_BAR},
                 "answers": answers,
             },
             indent=2,
@@ -132,11 +133,8 @@ def _enrich(args: argparse.Namespace, *, client: DecisionClient | None) -> int:
 
 
 def _sample_enrichers() -> tuple[Enricher, ...]:
-    """The V5 enrichers at G1's floor, so every answer's top option is kept for the bar to be chosen from."""
-    return (
-        AttributeEnricher(bars=dict.fromkeys(ATTRIBUTES, MIN_ATTRIBUTE_BAR)),
-        ActiveTimeEnricher(threshold=MIN_ATTRIBUTE_BAR),
-    )
+    """The two V5 enrichers as this build declares them; the stored answers keep every top option anyway."""
+    return (ATTRIBUTE_ENRICHER, ACTIVE_TIME_ENRICHER)
 
 
 def _stored_answers(corpus: RecipeCorpusStore, recipe_id: str) -> dict[str, dict[str, Any]]:
@@ -199,11 +197,16 @@ class AttributeComparison:
     truths: Counter[str] = field(default_factory=Counter)
     confused: Counter[tuple[str, str]] = field(default_factory=Counter)
     bars: list[BarResult] = field(default_factory=list)
+    # (label, the answer's stored value, its probability), so a bar can be applied after the fact.
+    pairs: list[tuple[str, str, float]] = field(default_factory=list)
 
-    @property
-    def unsure(self) -> int:
-        """Answers stored as `unsure`, which no bar accepts and so no accuracy is claimed for."""
-        return max(self.answered - sum(self.confused.values()), 0)
+    def unsure_at(self, bar: float) -> int:
+        """Answers that read as `unsure` under `bar`: stored `unsure`, or under the bar.
+
+        This is what a reader of the corpus would not see: their labels are in the store but the bar does not
+        trust them. It is the number to watch when a bar is raised.
+        """
+        return sum(1 for _truth, value, probability in self.pairs if value == UNSURE or probability < bar)
 
     @property
     def best(self) -> BarResult | None:
@@ -255,18 +258,17 @@ def compare_answers(
             labelled=len(compared),
             answered=sum(1 for recipe_id in compared if attribute in answers.get(recipe_id, {})),
         )
-        pairs: list[tuple[str, str, float]] = []
         for recipe_id in compared:
             truth = truths[recipe_id][attribute]
             prediction = answers.get(recipe_id, {}).get(attribute)
             value = str(prediction["value"]) if prediction is not None else UNSURE
             probability = float(prediction["probability"]) if prediction is not None else 0.0
             comparison.truths[truth] += 1
-            pairs.append((truth, value, probability))
+            comparison.pairs.append((truth, value, probability))
             if value != UNSURE:
                 comparison.confused[(truth, value)] += 1
         for bar in bars:
-            accepted = [pair for pair in pairs if pair[1] != UNSURE and pair[2] >= bar]
+            accepted = [pair for pair in comparison.pairs if pair[1] != UNSURE and pair[2] >= bar]
             comparison.bars.append(
                 BarResult(
                     bar=bar,
@@ -396,7 +398,10 @@ def _attribute_lines(comparison: AttributeComparison, *, production_bar: float) 
     for truth in truths:
         cells = [str(comparison.confused.get((truth, value), 0)).ljust(width) for value in values]
         lines.append(f"  {truth.ljust(width)}  " + "  ".join(cells))
-    lines.append(f"  pred is what was stored; {comparison.unsure} answer(s) were stored unsure")
+    lines.append(
+        f"  pred is what was stored; {comparison.unsure_at(production_bar)} answer(s) fall below the marked "
+        f"{production_bar:.2f} bar and read as unsure"
+    )
     for result in comparison.bars:
         marker = "*" if abs(result.bar - production_bar) < 1e-9 else " "
         lines.append(

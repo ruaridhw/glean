@@ -49,11 +49,12 @@ __all__ = [
     "UncalibratedModelError",
     "answer_state",
     "attribute_bar",
-    "choice_above_bar",
-    "level_above_bar",
+    "current_value",
     "method_state",
     "question_hash",
     "recipe_state",
+    "top_choice",
+    "top_level",
 ]
 
 
@@ -62,7 +63,7 @@ class UncalibratedModelError(Exception):
 
 
 # What an acceptance rule stores for one question: the probability that decided the answer, and — for a
-# `choice` or `score` question — the value it accepted (a label, a bucket, or `unsure`). A `noul` answer is
+# `choice` or `score` question — the option it chose (a label or a bucket, trusted or not). A `noul` answer is
 # its probability, so its value stays None and pre-V5 dietary lines are unchanged (ADR 0025, spec 6.1).
 @dataclass(frozen=True)
 class StoredValue:
@@ -73,9 +74,9 @@ class StoredValue:
 
 
 # Given the whole decision, return what to store, or None when the enricher would rather the question stayed
-# open than stored an answer. None means "ask again next run", and it is not `unsure`: an attribute below its
-# bar still stores a value, because "we asked and are not sure" is an answer that stops the question being
-# re-asked and paid for on every run.
+# open than stored an answer. None means "ask again next run", and it is not `unsure`: an answer under its
+# question's bar is still stored, because "we asked and are not sure" is an answer that stops the question
+# being re-asked and paid for on every run.
 type Acceptance = Callable[[Decision], StoredValue | None]
 
 
@@ -94,7 +95,11 @@ class ConfidenceBar:
 
     One field pair covers both kinds of bar, so the runner, the coverage report and a reviewer read the
     same fact: dietary questions are safe at `LOW` (a recipe that probably breaks no flag), so 0.3 is an
-    exclusion threshold; attribute questions are safe at `HIGH`, so 0.8 is a floor.
+    exclusion threshold; attribute questions are safe at `HIGH`, so 0.8 is the probability a stored label
+    needs to be read rather than read as `unsure`.
+
+    Both bars are applied when an answer is **read**, never when it is stored: a stored answer is what the
+    model said, and the bar is the policy over it (`current_value`).
     """
 
     threshold: float
@@ -176,24 +181,25 @@ def attribute_bar(threshold: float = DEFAULT_ATTRIBUTE_BAR) -> ConfidenceBar:
     return ConfidenceBar(threshold=threshold, safe_side=SafeSide.HIGH)
 
 
-def choice_above_bar(name: str, bar: ConfidenceBar) -> Acceptance:
-    """Accept a `choice` question's top option at or above the bar, and store `unsure` below it.
+def top_choice(name: str) -> Acceptance:
+    """Store a `choice` question's top option and the probability that chose it, whatever the bar says.
 
-    Below the bar the answer still exists, so it is stored: `unsure` is what stops a recipe being re-asked
-    (and re-paid for) on every run, and it is what the spec means by "earns no variety credit and no
-    penalty". The stored probability is the top option's, so a later bar can be retuned from what is stored.
+    The bar is applied when the answer is **read** (`current_value`), not here, so the stored answer is the
+    model's actual answer and the bar is a policy over it. That is what makes retuning a bar work: raising it
+    hides the labels it now rejects, lowering it recovers ones it used to reject, and neither re-asks the
+    corpus or pays for another call. Dietary has always worked this way — its probability is stored and its
+    threshold decides at read time — and this is the same rule for the questions that answer with a value.
     """
 
     def accept(decision: Decision) -> StoredValue:
         answer = decision.choice(name)
         top = max(answer.probabilities, key=lambda option: answer.probabilities[option])
-        probability = answer.probabilities[top]
-        return StoredValue(probability=probability, value=top if probability >= bar.threshold else UNSURE)
+        return StoredValue(probability=answer.probabilities[top], value=top)
 
     return accept
 
 
-def level_above_bar(name: str, bar: ConfidenceBar, levels: Sequence[str]) -> Acceptance:
+def top_level(name: str, levels: Sequence[str]) -> Acceptance:
     """The same rule for a `score` question, whose answer is the level with the highest probability.
 
     `levels` is the question's own level order (`criteria[0]` first), so the stored value is the level's
@@ -203,10 +209,22 @@ def level_above_bar(name: str, bar: ConfidenceBar, levels: Sequence[str]) -> Acc
     def accept(decision: Decision) -> StoredValue:
         answer = decision.score(name)
         top = max(answer.probabilities, key=lambda index: answer.probabilities[index])
-        probability = answer.probabilities[top]
-        return StoredValue(probability=probability, value=levels[top] if probability >= bar.threshold else UNSURE)
+        return StoredValue(probability=answer.probabilities[top], value=levels[top])
 
     return accept
+
+
+def current_value(question: EnrichmentQuestion, answer: RecipeAnswer, *, content_hash: str) -> str | None:
+    """What `answer` reads as under the question's **current** bar, or None when it isn't a current answer.
+
+    `unsure` comes back for an answer whose stored probability is under today's bar: the answer exists, but the
+    question does not trust it enough to label the recipe. Because the decision is made here and not when the
+    answer was stored, a bar change takes effect on the next read — raising one makes existing labels read as
+    `unsure`, lowering one recovers a label that was stored below the old bar — with no re-enrichment.
+    """
+    if answer.value is None or not question.is_current(answer, content_hash=content_hash):
+        return None
+    return answer.value if answer.probability >= question.bar.threshold else UNSURE
 
 
 class AnswerState(StrEnum):

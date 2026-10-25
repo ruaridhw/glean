@@ -32,7 +32,15 @@ def test_the_enrich_step_asks_the_model_about_the_sample_and_writes_the_answers(
     assert code == 0
     answers_path = tmp_path / "v5-check" / "answers.json"
     written = json.loads(answers_path.read_text())
-    assert written["bars"] == dict.fromkeys(ATTRIBUTES, 0.7)  # the floor: the bar is chosen afterwards
+    # The bars this build ships, recorded for the report; they do not decide what is stored.
+    assert written["bars"] == {
+        "main_protein": 0.8,
+        "main_carb": 0.8,
+        "dish_type": 0.8,
+        "cuisine": 0.85,
+        "whole_food": 0.9,
+        "active_time": 0.8,
+    }
     assert set(written["answers"]["rec_one"]) == set(ATTRIBUTES)
     assert written["answers"]["rec_one"]["main_protein"]["value"] == "chicken"  # the fake's top option, at 0.9
     assert written["answers"]["rec_one"]["active_time"]["value"] == "60+"
@@ -155,19 +163,33 @@ def test_the_best_bar_prefers_accuracy_then_coverage_then_the_looser_bar() -> No
     assert (attribute.at(0.85).accepted, attribute.at(0.85).accuracy) == (2, 1.0)
     assert attribute.best is not None
     assert attribute.best.bar == 0.85
-    assert attribute.unsure == 0
+    assert attribute.unsure_at(0.85) == 2  # the two answers the stricter bar no longer trusts
 
 
-def test_an_unsure_answer_is_counted_as_unsure_and_accepted_by_no_bar() -> None:
+def test_an_unsure_answer_is_accepted_by_no_bar_and_counts_as_unsure() -> None:
     answers = {"rec_a": {"cuisine": {"value": "unsure", "probability": 0.6}}}
 
     comparison = check_recipe_attributes.compare_answers(answers, {"rec_a": {"cuisine": "thai"}})
     attribute = comparison.attribute("cuisine")
 
-    assert (attribute.answered, attribute.unsure) == (1, 1)
+    assert (attribute.answered, attribute.unsure_at(0.8)) == (1, 1)
     assert all(result.accepted == 0 for result in attribute.bars)
     assert attribute.best is not None
     assert attribute.best.accepted == 0
+
+
+def test_an_answer_under_the_marked_bar_reads_as_unsure_even_though_its_label_is_stored() -> None:
+    """The stored answer is the model's top option, so raising the bar hides it without re-asking."""
+    answers = {"rec_a": {"cuisine": {"value": "thai", "probability": 0.86}}}
+
+    comparison = check_recipe_attributes.compare_answers(answers, {"rec_a": {"cuisine": "thai"}})
+    attribute = comparison.attribute("cuisine")
+
+    assert attribute.unsure_at(0.85) == 0  # inside cuisine's shipped bar: the label shows
+    assert attribute.unsure_at(0.90) == 1  # raised above it: the answer is there but untrusted
+    assert "1 answer(s) fall below the marked 0.80 bar" not in "".join(
+        check_recipe_attributes.render_comparison(comparison).splitlines()
+    )
 
 
 def test_a_recipe_the_labels_do_not_cover_is_never_scored() -> None:

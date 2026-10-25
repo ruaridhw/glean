@@ -33,7 +33,13 @@ from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
 from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
 from glean.recipes.enrichment.coverage import AnswerFailure, CoverageReport, QuestionCoverage
 from glean.recipes.enrichment.dietary import DIETARY_ENRICHER
-from glean.recipes.enrichment.enricher import AnswerState, UncalibratedModelError, answer_state, recipe_state
+from glean.recipes.enrichment.enricher import (
+    AnswerState,
+    UncalibratedModelError,
+    answer_state,
+    current_value,
+    recipe_state,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -322,10 +328,9 @@ def _report(
             if state is AnswerState.CURRENT:
                 counts.current += 1
                 # Counted for the scorer's sake: `unsure` earns no variety credit, so a high count is the
-                # report saying the corpus is plannable but not yet described.
-                if any(
-                    answer.value == UNSURE and question.is_current(answer, content_hash=content_hash) for answer in held
-                ):
+                # report saying the corpus is plannable but not yet described. Read under the current bar, so
+                # a retuned bar shows up here without another run.
+                if any(current_value(question, answer, content_hash=content_hash) == UNSURE for answer in held):
                     counts.unsure += 1
                 continue
             gap = True

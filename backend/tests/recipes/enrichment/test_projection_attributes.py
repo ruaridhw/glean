@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.attributes import ActiveTimeBucket, Cuisine, MainProtein, RecipeAttributes, WholeFood
 from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
-from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
+from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER, attribute_questions_by_name
 from glean.recipes.enrichment.dietary import dietary_enrichment_questions
 from glean.recipes.enrichment.projection_attributes import attributes_from_answers
 from glean.recipes.projection import build_projection
@@ -78,6 +78,27 @@ def test_an_answer_about_other_content_does_not_reach_the_projection() -> None:
     assert attributes_from_answers([stale], content_hash=CONTENT).cuisine is Cuisine.UNSURE
 
 
+def test_a_bar_raised_above_a_stored_answers_probability_reads_it_as_unsure() -> None:
+    answer = _answer("run", "attribute:main_protein", "chicken", probability=0.82)
+    raised = attribute_questions_by_name({"main_protein": 0.90})
+
+    attributes = attributes_from_answers([answer], content_hash=CONTENT, questions=raised)
+
+    assert attributes.main_protein is MainProtein.UNSURE
+
+
+def test_a_bar_lowered_under_a_stored_answers_probability_reads_its_label_again() -> None:
+    """A label stored under an older, looser bar comes back when the bar is lowered — with no re-ask."""
+
+    answer = _answer("run", "attribute:main_protein", "chicken", probability=0.72)
+    lowered = attribute_questions_by_name({"main_protein": 0.71})
+
+    assert attributes_from_answers([answer], content_hash=CONTENT).main_protein is MainProtein.UNSURE
+    assert (
+        attributes_from_answers([answer], content_hash=CONTENT, questions=lowered).main_protein is MainProtein.CHICKEN
+    )
+
+
 def test_a_dietary_answer_carries_no_attribute() -> None:
     dietary = _answer("run", dietary_enrichment_questions()["vegan"].name, "unsure", content_hash=CONTENT)
 
@@ -119,11 +140,12 @@ def _answer(
     content_hash: str = CONTENT,
     criteria_hash: str | None = None,
     model: str = SNAPSHOT,
+    probability: float = 0.95,
 ) -> RecipeAnswer:
     return RecipeAnswer(
         recipe_id=recipe_id,
         question=question_name,
-        probability=0.86,
+        probability=probability,
         value=value,
         model=model,
         content_hash=content_hash,

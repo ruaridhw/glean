@@ -7,14 +7,17 @@ through the runner. No HTTP here: the acceptance rule is a pure function of the 
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
 
 from glean.decisions import DECISION_MODEL, ChoiceAnswer, Decision, ScoreAnswer, Usage
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.attributes import (
     ACTIVE_TIME_QUESTION,
+    UNSURE,
     ActiveTimeBucket,
     Cuisine,
     DishType,
@@ -29,13 +32,14 @@ from glean.recipes.enrichment import (
     DIETARY_ENRICHER,
     EnrichmentError,
     SafeSide,
+    current_value,
     run_enrichment,
 )
 from glean.recipes.enrichment.active_time import active_time_question
 from glean.recipes.enrichment.attributes import WHOLE_FOOD_LEVELS, AttributeEnricher, attribute_questions
 from glean.recipes.enrichment.enricher import MIN_ATTRIBUTE_BAR, attribute_bar
 from glean.recipes.stored import StoredIngredient, StoredInstruction, StoredRecipe
-from tests.recipes.enrichment.fakes import FakeDecisionApi
+from tests.recipes.enrichment.fakes import SNAPSHOT, FakeDecisionApi
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -147,19 +151,30 @@ def test_an_attribute_at_or_above_its_bar_stores_the_top_option() -> None:
     assert (answer.probability, answer.value) == (0.8, "chicken")
 
 
-def test_an_attribute_below_its_bar_stores_unsure_with_the_probability_that_failed_it() -> None:
+def test_an_attribute_below_its_bar_stores_its_top_option_and_its_probability() -> None:
+    """The bar is applied when the answer is read, so what is stored is what the model actually said."""
     answer = attribute_questions()["main_protein"].accept(
         _decision(_choice("attribute:main_protein", "chicken", {"chicken": 0.79, "beef": 0.21}))
     )
 
-    assert (answer.probability, answer.value) == (0.79, "unsure")
+    assert (answer.probability, answer.value) == (0.79, "chicken")
 
 
-def test_a_tuned_bar_moves_the_line_for_that_attribute() -> None:
+def test_a_tuned_bar_moves_the_line_when_the_answer_is_read_not_when_it_is_stored() -> None:
+    """A retune needs no re-ask: the same stored answer reads differently under a different bar."""
     decision = _decision(_choice("attribute:cuisine", "thai", {"thai": 0.76, "italian": 0.24}))
+    stored = attribute_questions()["cuisine"].accept(decision)
+    answer = _stored_answer("attribute:cuisine", stored.value, stored.probability)
 
-    assert attribute_questions()["cuisine"].accept(decision).value == "unsure"  # 0.76 is under cuisine's 0.85
-    assert attribute_questions(bars={"cuisine": 0.75})["cuisine"].accept(decision).value == "thai"
+    def read(bars: dict[str, float]) -> str | None:
+        question = next(
+            question for question in attribute_questions(bars=bars).values() if question.name == "attribute:cuisine"
+        )
+        return current_value(question, answer, content_hash=CONTENT)
+
+    assert read({}) == UNSURE  # the shipped 0.85
+    assert read({"cuisine": 0.75}) == "thai"  # lower it and the label comes back
+    assert read({"cuisine": 0.90}) == UNSURE  # raise it and a label it now rejects goes
 
 
 def test_whole_food_accepts_the_level_with_the_highest_probability() -> None:
@@ -174,21 +189,26 @@ def test_a_confidence_that_clears_one_attributes_bar_can_miss_anothers() -> None
     """The measured bars differ: 0.86 is enough for cuisine (0.85) and not for whole food (0.90)."""
     questions = attribute_questions()
 
-    cuisine = questions["cuisine"].accept(
-        _decision(_choice("attribute:cuisine", "thai", {"thai": 0.86, "italian": 0.14}))
+    def read(attribute: str, value: str) -> str | None:
+        return current_value(
+            questions[attribute], _stored_answer(questions[attribute].name, value, 0.86), content_hash=CONTENT
+        )
+
+    assert read("cuisine", "thai") == "thai"
+    assert read("whole_food", "whole") == UNSURE
+
+
+def test_whole_food_below_its_bar_is_stored_and_reads_as_unsure() -> None:
+    questions = attribute_questions()
+    stored = questions["whole_food"].accept(_decision(_score("attribute:whole_food", {0: 0.1, 1: 0.6, 2: 0.3})))
+
+    assert (stored.probability, stored.value) == (0.6, "mixed")
+    assert (
+        current_value(
+            questions["whole_food"], _stored_answer("attribute:whole_food", stored.value, 0.6), content_hash=CONTENT
+        )
+        == UNSURE
     )
-    whole_food = questions["whole_food"].accept(_decision(_score("attribute:whole_food", {0: 0.05, 1: 0.09, 2: 0.86})))
-
-    assert cuisine.value == "thai"
-    assert whole_food.value == "unsure"
-
-
-def test_whole_food_below_its_bar_is_unsure_rather_than_a_guess() -> None:
-    answer = attribute_questions()["whole_food"].accept(
-        _decision(_score("attribute:whole_food", {0: 0.1, 1: 0.6, 2: 0.3}))
-    )
-
-    assert (answer.probability, answer.value) == (0.6, "unsure")
 
 
 def test_the_active_time_enricher_asks_one_bucketed_score() -> None:
@@ -221,12 +241,15 @@ def test_each_active_time_level_is_the_bucket_it_sits_at(level: int, bucket: Act
     assert answer.value == bucket.value
 
 
-def test_active_time_below_its_bar_falls_back_to_unsure_which_the_filter_reads_as_total_time() -> None:
-    answer = active_time_question().accept(
-        _decision(_score(ACTIVE_TIME_QUESTION, {0: 0.1, 1: 0.45, 2: 0.3, 3: 0.1, 4: 0.05}))
-    )
+def test_active_time_below_its_bar_reads_as_unsure_which_the_filter_reads_as_total_time() -> None:
+    question = active_time_question()
+    stored = question.accept(_decision(_score(ACTIVE_TIME_QUESTION, {0: 0.1, 1: 0.45, 2: 0.3, 3: 0.1, 4: 0.05})))
 
-    assert (answer.probability, answer.value) == (0.45, "unsure")
+    assert (stored.probability, stored.value) == (0.45, "15-30")
+    assert (
+        current_value(question, _stored_answer(ACTIVE_TIME_QUESTION, stored.value, 0.45), content_hash=CONTENT)
+        == UNSURE
+    )
 
 
 def test_the_active_time_bar_is_tunable_but_not_below_the_floor() -> None:
@@ -354,3 +377,25 @@ def _corpus(tmp_path: Path) -> RecipeCorpusStore:
         )
     )
     return corpus
+
+
+CONTENT = content_fingerprint("Synthetic Traybake", ["basil pesto"])
+
+
+def _stored_answer(question_name: str, value: str | None, probability: float) -> RecipeAnswer:
+    """An answer as the store holds it, for reading under a bar (the store is not involved in the bar)."""
+    return RecipeAnswer(
+        recipe_id="rec_synthetic",
+        question=question_name,
+        probability=probability,
+        value=value,
+        model=SNAPSHOT,
+        content_hash=CONTENT,
+        criteria_hash=_criteria_hash_of(question_name),
+        computed_at=datetime(2026, 10, 22, tzinfo=UTC),
+    )
+
+
+def _criteria_hash_of(question_name: str) -> str:
+    questions = {question.name: question for question in (*ATTRIBUTE_ENRICHER.questions(), active_time_question())}
+    return questions[question_name].criteria_hash

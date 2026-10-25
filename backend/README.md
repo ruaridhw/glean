@@ -58,11 +58,14 @@ runner asks every recipe only what is missing or stale, in a single request per 
 are `dietary` (six `noul` questions, ADR 0011's thresholds unchanged), `attributes` (four `choice` questions
 and one `score`) and `active-time` (one `score`, answered as one of five minute buckets).
 
-**Confidence bars.** No answer is accepted because it is the top option. A dietary answer is its
-probability, and its threshold decides exclusions when planning reads it. An attribute's answer stores the
-value it accepted, and only at or above its bar; below the bar it stores `unsure`, which is a real answer:
-the recipe is not re-asked, and the scorer gives it no variety credit and no penalty. A bar may never be
-declared below 0.7 — a declaration below the floor is an error, not a quiet weakening.
+**Confidence bars.** No answer is accepted because it is the top option, and no bar is applied when an answer
+is stored: a stored answer is what the model said — a probability for a `noul` question, and the option it
+chose plus that option's probability for a `choice` or `score` question. The bar decides when planning
+**reads** the answer, so an attribute reads as `unsure` under its bar: a real answer, which stops the recipe
+being re-asked and gives it no variety credit and no penalty. A bar may never be declared below 0.7 — a
+declaration below the floor is an error, not a quiet weakening. Because the bar is read-time, retuning one
+takes effect on the next read with no re-enrichment: raising it turns the labels it now rejects into
+`unsure`, and lowering it recovers labels stored under the old bar.
 
 The bars ship from the 50-recipe check (`MEASURED_BARS` in `recipes/enrichment/attributes.py`), provisional
 because it is one sample: `main_protein` 0.80, `main_carb` 0.80, `dish_type` 0.80, `cuisine` 0.85,
@@ -72,9 +75,10 @@ stays at 0.80 and is the one bar the check did not move: the model is rarely con
 (35 of the 50 answers were below even the floor), so below its bar the answer is `unsure` and the household's
 time filter falls back to total time, as it did before V5.
 
-A bar is not part of a question's criteria hash, so **retuning a bar does not re-ask the corpus**: stored
-answers keep the values the old bar accepted, and lowering a bar cannot recover a label that was stored as
-`unsure`. Re-run the enrichment after a retune if the difference matters to planning.
+Retuning a bar needs no re-ask and no paid run: the stored answers keep the model's own option and
+probability, and the new bar is applied when they are read. The only things that force another enrichment run
+are a wording change (a question's criteria hash) or a model bump — which is also why the check sample needs
+one run to measure every candidate bar.
 
 **The stated time is prep time.** Q3 found the field the corpus calls an active time is really schema.org
 `prepTime` (35% of recipes, median 10 minutes against a 35-minute median total), so it is now
@@ -149,8 +153,8 @@ then replays every bar from 0.7 to 0.95 and reports, per attribute, the accuracy
 accepts, its coverage, a confusion table, and the bar that earns the best accuracy:
 
 ```bash
-# adopt the measured bars by editing MEASURED_BARS in recipes/enrichment/attributes.py, then re-run the
-# enrichment (a bar change does not re-ask the corpus by itself)
+# adopt the measured bars by editing MEASURED_BARS in recipes/enrichment/attributes.py: they are read-time
+# thresholds, so the next read applies them and the corpus is not re-asked
 make check-attributes SAMPLE=<sample-dir>          # paid: needs OPENROUTER_API_KEY
 
 # the same two steps by hand; compare makes no model calls and needs no key

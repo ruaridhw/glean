@@ -32,11 +32,12 @@ from glean.recipes.enrichment.enricher import (
     UncalibratedModelError,
     answer_state,
     attribute_bar,
-    choice_above_bar,
-    level_above_bar,
+    current_value,
     method_state,
     question_hash,
     recipe_state,
+    top_choice,
+    top_level,
 )
 from glean.recipes.enrichment.runner import (
     CHECKPOINT_EVERY,
@@ -78,10 +79,11 @@ __all__ = [
     "answer_state",
     "attribute_bar",
     "attribute_questions",
-    "choice_above_bar",
-    "level_above_bar",
+    "current_value",
     "method_state",
     "question_hash",
     "recipe_state",
     "run_enrichment",
+    "top_choice",
+    "top_level",
 ]
