@@ -1,4 +1,4 @@
-"""What one run needs: a session store, a checkpointer, an LLM router, the corpus and a clock.
+"""What one run needs: a session store, a checkpointer, an LLM router, the screen, the corpus and a clock.
 
 Assembled in two places: the worker (`build_deps`) and the routes' inline runner. Tests replace the
 whole object, so nothing below ever reaches AWS.
@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from glean.agent.checkpoint import build_checkpointer
+from glean.decisions import DecisionClient
 from glean.llm import LLMRouter
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.sessions.dynamo import DynamoSessionStore
@@ -41,6 +42,9 @@ class AgentDeps:
     # How long this attempt still has, taken from the Lambda context in a deployed run. The claim's lease
     # is anchored to it, so the lease always ends when this worker certainly has.
     remaining_seconds: Callable[[], float] = field(default=lambda: float(WORKER_TIMEOUT_SECONDS))
+    # The injection screen's decisions client, for the week's note. None drops any note unread: the screen
+    # fails closed, and the chips still apply.
+    decision_client: DecisionClient | None = None
 
 
 def build_deps(
@@ -65,4 +69,5 @@ def build_deps(
         checkpointer=build_checkpointer(settings),
         llm_router=llm_router or LLMRouter.from_settings(settings),
         remaining_seconds=remaining_seconds or (lambda: float(WORKER_TIMEOUT_SECONDS)),
+        decision_client=DecisionClient(api_key=settings.openrouter_api_key),
     )
