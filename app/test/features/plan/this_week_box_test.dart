@@ -12,6 +12,7 @@ import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/util/week.dart';
+import 'package:glean/features/plan/presentation.dart';
 import 'package:glean/features/plan/week_feedback.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
@@ -490,6 +491,31 @@ void main() {
 
     expect(await tester.runAsync<String?>(stored), isNull);
   });
+
+  gleanWidgetTest(
+    'another week\'s box is titled with its dates and keeps its own chips',
+    (tester) async {
+      await open(tester);
+      await toggleBox(tester);
+      await tester.tap(chip(FeedbackChip.guests));
+      await tester.pumpAndSettle();
+      Finder title() => find.byKey(const ValueKey<String>('this-week-title'));
+      expect(tester.widget<Text>(title()).data, 'This week');
+
+      await tester.tap(find.byTooltip('Next week'));
+      await tester.pumpAndSettle();
+
+      final DateTime next = shiftWeeks(startOfWeek(DateTime.now()), 1);
+      expect(tester.widget<Text>(title()).data, weekRangeLabel(next));
+      expect(tester.widget<Text>(summary()).data, 'Nothing set');
+
+      await tester.tap(find.byTooltip('Previous week'));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<Text>(title()).data, 'This week');
+      expect(tester.widget<Text>(summary()).data, 'Guests');
+    },
+  );
 
   test('each week has its own selection, so a new week starts empty', () {
     final ProviderContainer container = h.container;

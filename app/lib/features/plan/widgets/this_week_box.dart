@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/design_system/design_system.dart';
 
+import '../presentation.dart';
 import '../week_feedback.dart';
 import 'generate_button.dart';
 
@@ -78,7 +79,11 @@ class _ThisWeekBoxState extends ConsumerState<ThisWeekBox> {
                 children: <Widget>[
                   Flexible(
                     child: Text(
-                      'This week',
+                      // The week this box steers: "This week" for the current one, else its dates.
+                      isCurrentWeek(widget.weekStart)
+                          ? 'This week'
+                          : weekRangeLabel(widget.weekStart),
+                      key: const ValueKey<String>('this-week-title'),
                       style: theme.textTheme.titleMedium,
                       overflow: TextOverflow.ellipsis,
                     ),
