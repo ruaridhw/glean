@@ -114,3 +114,13 @@ def test_tool_context_holds_the_agent_to_the_requests_hard_constraints(tmp_path:
     assert "rec_01" not in found
     assert ctx.load_full is not None
     assert ctx.load_full("rec_02") == (("2 g ingredient2", "1 each onion"), ("Cook it.",))
+
+
+def test_the_agents_scores_discount_an_urgent_item_a_planned_meal_already_uses(tmp_path: Path) -> None:
+    """V6's rule, held by the agent's scoring too: a week is not charged for an item a planned meal uses up."""
+    corpus = _corpus(tmp_path)
+    request = _request(exclude_external_ids=["rec_01"])  # an odd index: it uses the kale, which goes off soon
+    prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
+
+    assert prepared.urgent_items_already_used == ["kale"]
+    assert pipeline.scoring_context_of(prepared).urgent_items_already_used == ("kale",)

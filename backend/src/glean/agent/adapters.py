@@ -182,7 +182,7 @@ def _details(details: tools.RecipeDetails) -> dict[str, Any]:
 def _scored(recipe_ids: Sequence[str], prepared: pipeline.PreparedPlan) -> dict[str, Any]:
     """The week's score and breakdown, or why it cannot be scored: an id the plan may not use, or a repeat."""
     try:
-        score = tools.score_meal_plan(recipe_ids, balance.scoring_context(prepared.facts))
+        score = tools.score_meal_plan(recipe_ids, pipeline.scoring_context_of(prepared))
     except tools.UnknownRecipeIds as exc:
         return {"error": clip(f"these ids are not recipes you may plan: {exc.args[0]}", _ERROR_CHARS)}
     except tools.DuplicateRecipeIds as exc:
@@ -193,7 +193,7 @@ def _scored(recipe_ids: Sequence[str], prepared: pipeline.PreparedPlan) -> dict[
 def _weeks(recipe_ids: Sequence[str], prepared: pipeline.PreparedPlan, *, seed: int) -> dict[str, Any]:
     try:
         weeks = balance.scored_weeks(
-            balance.scoring_context(prepared.facts), recipe_ids, prepared.meals_per_week, seed=seed
+            pipeline.scoring_context_of(prepared), recipe_ids, prepared.meals_per_week, seed=seed
         )
     except tools.UnknownRecipeIds as exc:
         return {"error": clip(f"these ids are not recipes you may plan: {exc.args[0]}", _ERROR_CHARS)}
