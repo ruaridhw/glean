@@ -545,14 +545,11 @@ class _Scorer:
             for value, ids in group.items()
             if len(ids) > 1
         ]
-        above, median = self._lighter_offenders(recipe_ids)
+        above, detail = self._lighter_offenders(recipe_ids)
         if above:
             penalties.append(
                 PlanPenalty(
-                    term=Term.LIGHTER,
-                    points=self._weights.lighter * len(above),
-                    recipe_ids=above,
-                    detail=f"median {median:g} kcal",
+                    term=Term.LIGHTER, points=self._weights.lighter * len(above), recipe_ids=above, detail=detail
                 )
             )
         penalties.extend(
@@ -591,19 +588,27 @@ class _Scorer:
             )
         return cached
 
-    def _lighter_offenders(self, recipe_ids: Sequence[str]) -> tuple[tuple[str, ...], float]:
-        """The recipes above the week's own median calories, and that median. Empty without the chip."""
+    def _lighter_offenders(self, recipe_ids: Sequence[str]) -> tuple[tuple[str, ...], str]:
+        """The recipes that do not come under the week's calorie reference, and what that reference was.
+
+        A recipe with no stated calories counts as above the reference: an unknown figure must never let a recipe
+        look lighter than one whose figure is known, or a plan could buy its way past the chip by choosing
+        recipes nobody measured (V6 eval finding 2, owner decision 2026-10-25).
+        """
         if LIGHTER_CHIP not in self._ctx.chips:
-            return (), 0.0
-        known = [
-            (recipe_id, calories)
-            for recipe_id in recipe_ids
-            if (calories := self._ctx.recipes[recipe_id].calories_per_serving) is not None
-        ]
-        if not known:
-            return (), 0.0
-        median = _median([calories for _recipe_id, calories in known])
-        return tuple(recipe_id for recipe_id, calories in known if calories > median), median
+            return (), ""
+        calories = {recipe_id: self._ctx.recipes[recipe_id].calories_per_serving for recipe_id in recipe_ids}
+        known = [value for value in calories.values() if value is not None]
+        median = _median(known) if known else None
+        above = tuple(
+            recipe_id
+            for recipe_id, value in calories.items()
+            if value is None or (median is not None and value > median)
+        )
+        if not above:
+            return (), ""
+        detail = f"median {median:g} kcal" if median is not None else "no stated calories in the week"
+        return above, detail
 
     def _target_misses(self, recipe_ids: Sequence[str]) -> list[tuple[ProteinTarget, int, int]]:
         """Every protein target the plan misses, with the count it reached: more fish, fewer pork."""
@@ -630,7 +635,7 @@ class _Scorer:
             weight * sum(len(ids) - 1 for ids in group.values() if len(ids) > 1)
             for weight, group in zip(self._repeat_weights, self._occurrences(recipe_ids), strict=True)
         )
-        above, _median = self._lighter_offenders(recipe_ids)
+        above, _detail = self._lighter_offenders(recipe_ids)
         points += self._weights.lighter * len(above)
         points += self._weights.protein_target_miss * sum(
             misses for _target, _count, misses in self._target_misses(recipe_ids)

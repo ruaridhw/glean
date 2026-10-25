@@ -323,19 +323,28 @@ def test_the_lighter_chip_costs_a_point_per_recipe_above_the_weeks_median() -> N
     assert penalty.recipe_ids == ("heavy",)
 
 
-def test_the_lighter_chip_only_counts_where_nutrition_exists() -> None:
+def test_a_recipe_with_unknown_calories_is_never_under_the_lighter_reference() -> None:
+    # An unknown figure must not make a recipe look lighter than one whose figure is known, or a plan can buy
+    # its way past the chip by picking recipes nobody measured.
     ctx = context(
-        candidate("known", calories=900, main_protein=MainProtein.NONE),
-        candidate("unknown", main_protein=MainProtein.NONE),
+        candidate("light", calories=400, main_protein=MainProtein.NONE),
+        candidate("unmeasured", main_protein=MainProtein.NONE),
         chips=frozenset({LIGHTER_CHIP}),
     )
-    assert score(["known", "unknown"], ctx).points(Term.LIGHTER) == 0.0
-    no_nutrition = context(
-        candidate("a", main_protein=MainProtein.NONE),
-        candidate("b", main_protein=MainProtein.NONE),
+    plan = score(["light", "unmeasured"], ctx)
+    (penalty,) = [penalty for penalty in plan.penalties if penalty.term is Term.LIGHTER]
+    assert penalty.recipe_ids == ("unmeasured",)
+    assert plan.points(Term.LIGHTER) == -1.0
+
+
+def test_a_week_with_no_stated_calories_counts_every_recipe_as_above() -> None:
+    ctx = context(
+        candidate("unmeasured", main_protein=MainProtein.NONE),
+        candidate("also-unmeasured", main_protein=MainProtein.NONE),
         chips=frozenset({LIGHTER_CHIP}),
     )
-    assert score(["a", "b"], no_nutrition).points(Term.LIGHTER) == 0.0
+    plan = score(["unmeasured", "also-unmeasured"], ctx)
+    assert plan.points(Term.LIGHTER) == -2.0
 
 
 def test_the_lighter_term_is_absent_without_the_chip() -> None:
