@@ -79,16 +79,22 @@ def run_tool(
     corpus: RecipeCorpusStore,
     now: datetime,
     session_id: str,
+    context: tools.EligibilityContext | None = None,
 ) -> ToolOutcome:
-    """Run one tool call for this session. A refusal is an `error` result, not an exception."""
-    seed = zlib.crc32(session_id.encode())
+    """Run one tool call for this session. A refusal is an `error` result, not an exception.
+
+    *context* is the corpus as the corpus tools read it (`tool_context`, which reads every summary, answer and
+    decision), built once per run and passed back in by the caller; without it, it is built for this call.
+    """
+    seed = session_seed(session_id)
     match call:
         case GetEligibleRecipes(filter=recipe_filter):
-            return _eligible(recipe_filter, prepared=prepared, request=request, corpus=corpus, now=now, seed=seed)
+            ctx = context or pipeline.tool_context(request, corpus=corpus, now=now, seed=seed)
+            return _eligible(recipe_filter, prepared=prepared, ctx=ctx, corpus=corpus)
         case GetRecipes(ids=ids, detail=detail):
             if detail == "full" and len(ids) > MAX_FULL_IDS:
                 return ToolOutcome({"error": f"ask for at most {MAX_FULL_IDS} recipes in full at a time"}, prepared)
-            ctx = pipeline.tool_context(request, corpus=corpus, now=now, seed=seed)
+            ctx = context or pipeline.tool_context(request, corpus=corpus, now=now, seed=seed)
             return ToolOutcome(_details(tools.get_recipes(ids, detail, ctx)), prepared)
         case ScoreMealPlan(recipe_ids=recipe_ids):
             return ToolOutcome(_scored(recipe_ids, prepared), prepared)
@@ -97,18 +103,21 @@ def run_tool(
     raise AssertionError(f"no adapter for {call!r}")
 
 
+def session_seed(session_id: str) -> int:
+    """The tools' tie-break seed for one session: stable, so a resumed run ranks exactly as the first did."""
+    return zlib.crc32(session_id.encode())
+
+
 def _eligible(
     recipe_filter: RecipeFilterArgs,
     *,
     prepared: pipeline.PreparedPlan,
-    request: MealPlanRequest,
+    ctx: tools.EligibilityContext,
     corpus: RecipeCorpusStore,
-    now: datetime,
-    seed: int,
 ) -> ToolOutcome:
     try:
         narrowing = recipe_filter.recipe_filter()
-        found = tools.get_eligible_recipes(narrowing, pipeline.tool_context(request, corpus=corpus, now=now, seed=seed))
+        found = tools.get_eligible_recipes(narrowing, ctx)
     except ValueError as exc:  # FilterRejected, or a predicate its field does not take
         return ToolOutcome({"error": clip(str(exc), _ERROR_CHARS)}, prepared)
     shown = found.recipes[:SHOWN_RECIPES]
