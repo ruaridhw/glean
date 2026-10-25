@@ -7,9 +7,12 @@ writer. Only the model's answer is a value this file writes by hand, because the
 
 from __future__ import annotations
 
+import json
 import random
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
+
+import pytest
 
 from glean.meal_plan import pipeline
 from glean.meal_plan.schemas import (
@@ -21,13 +24,14 @@ from glean.meal_plan.schemas import (
     MealPlanSuggestion,
     ReasonKind,
 )
+from glean.meal_plan.tools import Rating
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.enrichment.active_time import active_time_question
 from glean.recipes.enrichment.attributes import attribute_questions
 from glean.recipes.enrichment.enricher import MIN_ATTRIBUTE_BAR
-from glean.recipes.stored import StoredIngredient, StoredRecipe
+from glean.recipes.stored import StoredIngredient, StoredNutrition, StoredRecipe
 from glean.sessions.models import MAX_ITEM_BYTES, RESULT_RESERVE_BYTES, item_bytes, stored_input_bytes
 from tests.recipes.enrichment.fakes import SNAPSHOT
 
@@ -571,3 +575,87 @@ def _enrich(corpus: RecipeCorpusStore, recipe_id: str, **labels: str) -> None:
             )
         )
     corpus.save_answers(answers)
+
+
+# --- V6: the scorer's inputs and the two weeks the model picks between ------------------------------------
+
+
+def test_prepare_builds_the_scorers_inputs_from_the_offer(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    herby = "rec_coriander_chicken"
+    _enrich(corpus, herby, main_protein="chicken", main_carb="rice", whole_food="whole")
+    prepared = pipeline.prepare(
+        _request(
+            pantry=[{"id": 1, "name": "coriander", "quantity": 50, "unit": "g", "urgency_score": 150.0}],
+            cooked_history=[
+                {
+                    "recipe_id": "rec_lentil_bake",
+                    "title": "Lentil Bake",
+                    "cooked_at": (NOW - timedelta(days=60)).isoformat(),
+                    "rating": "up",
+                }
+            ],
+        ),
+        corpus=corpus,
+        rng=random.Random(0),
+        now=NOW,
+    )
+
+    assert [fact.recipe_id for fact in prepared.facts] == prepared.offered_ids
+    facts = {fact.recipe_id: fact for fact in prepared.facts}
+    # The pantry fit is scaled so the offer's strongest match is worth about +3, as the scorer's row says.
+    assert facts[herby].pantry_fit == 3.0
+    assert max(fact.pantry_fit for fact in prepared.facts) == 3.0
+    assert facts[herby].attributes["main_protein"] == "chicken"
+    assert facts[herby].attributes["main_carb"] == "rice"
+    assert facts[herby].attributes["whole_food"] == "whole"
+    # A recipe nothing has measured reads as unsure, so it earns no variety credit and no penalty.
+    assert facts["rec_tofu_noodles"].attributes["main_protein"] == "unsure"
+    # The history's age and thumb reach the scorer without it re-deciding the floor.
+    assert facts["rec_lentil_bake"].days_since_cooked == pytest.approx(60.0)
+    assert facts["rec_lentil_bake"].rating == Rating.UP
+    assert not any(fact.offered_after_floor_relaxed for fact in prepared.facts)
+    assert first.offered_ids != []  # the offer is unchanged by enriching and by the history
+
+
+def test_prepare_offers_two_weeks_of_the_weeks_size(tmp_path: Path) -> None:
+    prepared = _prepared(tmp_path)
+    offered = set(prepared.offered_ids)
+
+    assert len(prepared.weeks) == 2
+    assert all(len(week.recipe_ids) == MEALS for week in prepared.weeks)
+    assert all(set(week.recipe_ids) <= offered for week in prepared.weeks)
+    assert set(prepared.weeks[0].recipe_ids) != set(prepared.weeks[1].recipe_ids)
+    assert prepared.weeks[0].total >= prepared.weeks[1].total
+
+
+def test_the_model_is_given_the_two_weeks_with_the_rows_that_scored_them(tmp_path: Path) -> None:
+    prepared = _prepared(tmp_path)
+
+    message = json.loads(prepared.user)
+
+    assert [week["index"] for week in message["candidate_weeks"]] == [0, 1]
+    first = message["candidate_weeks"][0]
+    assert [meal["external_id"] for meal in first["meals"]] == prepared.weeks[0].recipe_ids
+    assert first["meals"][0]["title"] == prepared.titles[prepared.weeks[0].recipe_ids[0]]
+    assert first["score"] == round(prepared.weeks[0].total, 2)
+    # The prompt still carries every candidate, because an alternative may be any of them.
+    assert {candidate["external_id"] for candidate in message["candidates"]} == set(prepared.offered_ids)
+
+
+def test_a_recipe_states_its_calories_only_when_its_page_did(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    first = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    fed = first.offered_ids[0]
+    stored = corpus.get(fed)
+    assert stored is not None
+    corpus.save(stored.model_copy(update={"nutrition": StoredNutrition(calories=640, protein_g=30)}))
+
+    prepared = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(0), now=NOW)
+    facts = {fact.recipe_id: fact for fact in prepared.facts}
+
+    assert facts[fed].calories_per_serving == 640
+    assert [fact.calories_per_serving for fact in prepared.facts if fact.recipe_id != fed] == [
+        None for fact in prepared.facts if fact.recipe_id != fed
+    ]

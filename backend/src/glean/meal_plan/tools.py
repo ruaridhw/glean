@@ -207,7 +207,7 @@ class CandidateRecipe:
     attributes: RecipeAttributes = field(default_factory=RecipeAttributes)
     calories_per_serving: float | None = None
     pantry_fit: float = 0.0
-    days_since_cooked: int | None = None
+    days_since_cooked: float | None = None
     rating: Rating | None = None
     offered_after_floor_relaxed: bool = False
     loved_ingredients: tuple[str, ...] = ()

@@ -29,8 +29,9 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from glean.llm import Feature
+from glean.meal_plan import balance
 from glean.meal_plan.candidates import PantryItem, recipe_attributes, sample_corpus_candidates, urgent_pantry_uses
-from glean.meal_plan.eligibility import CookedMeal
+from glean.meal_plan.eligibility import CookedMeal, recipe_history
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanRecipe,
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from glean.llm import LLMRouter
+    from glean.meal_plan.candidates import OfferedRecipe
     from glean.recipes.corpus import RecipeCorpusStore
 
 CORPUS_MEAL_PLAN_SYSTEM_PROMPT = """You are a meal planning assistant for the Glean app.
@@ -66,7 +68,12 @@ Rules:
   adds the date itself, so any day you write will be wrong.
 - Respect dietary_flags by checking each candidate's ingredients; skip any candidate that conflicts
 - Respect purchase_tolerance (0.0 = only pantry ingredients; 1.0 = any recipe)
-- Vary cuisines and main ingredients across the week
+- candidate_weeks lists two weeks that are already balanced for this household: the scorer built each one so
+  no protein, carb, dish type or cuisine repeats more than the week can afford, and each week's score and term
+  rows say how well it fits. Choose exactly ONE of those weeks and plan exactly its meals -- do not mix the two
+  weeks together, and do not plan a meal that is outside the week you chose. Say which week you chose in
+  chosen_week (0 or 1). If you have a real reason to prefer one, the weeks differ by design; otherwise take the
+  first, which the scorer rated highest.
 - Prefer candidates whose cooked_days_ago is null. A non-null value means the household cooked that recipe
   that many days ago and it is offered only because too few fresh candidates remained; choose one of the
   others whenever one fits.
@@ -88,6 +95,8 @@ _TEMPLATE_ALTERNATIVE_REASON = "Another option from this week's shortlist."
 NO_MEALS_WEEK_SUMMARY = "No dinners for this week."
 
 _MAX_CANDIDATE_INGREDIENTS = 12
+# The scorer's tie-break seed is drawn from the request's rng: wide enough that two Generates rarely agree.
+_SCORER_SEED_RANGE = 2**31
 # How many urgent items one canonical sentence names; the rest still reach the app in `uses_up`.
 _MAX_NAMED_URGENT_ITEMS = 3
 # Sentence ends: the punctuation with any closing quotes or brackets that belong to it, then the space
@@ -162,6 +171,21 @@ class PreparedPlan(BaseModel):
             "chooses, so a chosen meal and an alternative the server picks both carry them."
         ),
     )
+    facts: list[balance.RecipeFacts] = Field(
+        default_factory=list,
+        description=(
+            "Per offered external_id, what the scorer reads: attributes, stated calories, the scaled pantry fit, "
+            "the cook age and thumb, and whether the six-week floor relaxed. Empty on a checkpoint written "
+            "before V6, which finalises exactly as it did then."
+        ),
+    )
+    weeks: list[balance.CandidateWeek] = Field(
+        default_factory=list,
+        description=(
+            "The candidate weeks the model chooses between, best first, each with the rows that scored it. "
+            "Empty when no candidate was offered, and on a checkpoint written before V6."
+        ),
+    )
 
     @property
     def has_candidates(self) -> bool:
@@ -187,6 +211,10 @@ def prepare(
     # else here reads them. Its notes go no further than this function's argument: the only path a note
     # will take into a prompt is the screened human-feedback channel, which is not built yet. Until that
     # screen exists the note is stored on the phone and validated on the wire, and that is all.
+    cooked = [
+        CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at, rating=meal.rating)
+        for meal in request.cooked_history
+    ]
     candidates = sample_corpus_candidates(
         corpus,
         pantry=pantry,
@@ -194,15 +222,7 @@ def prepare(
         max_total_time_mins=request.max_active_time_mins,
         exclude_external_ids=request.exclude_external_ids,
         rng=rng,
-        cooked=[
-            CookedMeal(
-                recipe_id=meal.recipe_id,
-                title=meal.title,
-                cooked_at=meal.cooked_at,
-                rating=meal.rating,
-            )
-            for meal in request.cooked_history
-        ],
+        cooked=cooked,
         slots=request.meals_per_week,
         now=request_now,
     )
@@ -210,6 +230,25 @@ def prepare(
     # One read of the corpus's answers for the whole proposal: the labels a card shows are facts about the
     # recipe, so they are measured here rather than asked of the model.
     measured = recipe_attributes(corpus, [candidate.summary for candidate in candidates])
+    facts = balance.facts_from(
+        candidates,
+        attributes=measured,
+        calories=_stated_calories(corpus, candidates),
+        history=recipe_history(
+            [candidate.external_id for candidate in candidates],
+            titles={candidate.external_id: candidate.title for candidate in candidates},
+            cooked=cooked,
+            now=request_now,
+        ),
+    )
+    # Drawn after the sampler, so the offered list does not depend on how many numbers the scorer's tie-break
+    # takes; one seed still plans one week, which is what a resumed session needs.
+    weeks = balance.scored_weeks(
+        balance.scoring_context(facts),
+        [candidate.external_id for candidate in candidates],
+        request.meals_per_week,
+        seed=rng.randrange(_SCORER_SEED_RANGE),
+    )
     planned = _planned_corpus_meals(corpus, request.exclude_external_ids)
     logger.info(
         "generating corpus meal plan",
@@ -218,6 +257,7 @@ def prepare(
             "candidates": len(candidates),
             "urgent_pantry_items": len({item.name for items in urgent_uses.values() for item in items}),
             "planned_meals": len(planned),
+            "candidate_weeks": len(weeks),
         },
     )
     context = {
@@ -243,6 +283,8 @@ def prepare(
         "dietary_flags": request.dietary_flags,
         # Meals already in the week, which the model may offer an alternative for but never replace.
         "planned_meals": [meal.model_dump() for meal in planned],
+        # The weeks the scorer already balanced, which the model picks between rather than composing a week.
+        "candidate_weeks": _week_payload(weeks, titles={c.external_id: c.title for c in candidates}),
     }
     return PreparedPlan(
         user=json.dumps(context, default=str),
@@ -266,7 +308,44 @@ def prepare(
             )
             for candidate in candidates
         },
+        facts=facts,
+        weeks=list(weeks),
     )
+
+
+def _stated_calories(corpus: RecipeCorpusStore, candidates: Sequence[OfferedRecipe]) -> dict[str, float | None]:
+    """The per-serving calories each offered recipe's own page stated, read one recipe at a time.
+
+    The search index and the projection carry a summary, not nutrition, so this is one read per candidate --
+    at most `candidates.SAMPLE_SIZE` of them, once per Generate. A recipe with no stated nutrition has no
+    entry to give, and the scorer treats that as unknown rather than as light (spec §6.1).
+    """
+    return {
+        candidate.external_id: balance.stated_calories(corpus.get(candidate.external_id)) for candidate in candidates
+    }
+
+
+def _week_payload(weeks: Sequence[balance.CandidateWeek], *, titles: dict[str, str]) -> list[dict[str, object]]:
+    """The candidate weeks as the model reads them: the meals, and what each week was credited and charged.
+
+    The numbers are rounded because they are prompt text, not arithmetic: a model comparing 12.40000001 with
+    12.39999998 learns nothing, and the log keeps the exact figures.
+    """
+    return [
+        {
+            "index": index,
+            "meals": [
+                {"external_id": recipe_id, "title": titles.get(recipe_id, recipe_id)} for recipe_id in week.recipe_ids
+            ],
+            "score": round(week.total, 2),
+            "terms": {term: round(points, 2) for term, points in week.terms.items()},
+            "penalties": [
+                f"{penalty.term} {penalty.points:+g}" + (f" ({penalty.detail})" if penalty.detail else "")
+                for penalty in week.penalties
+            ],
+        }
+        for index, week in enumerate(weeks)
+    ]
 
 
 def _planned_corpus_meals(corpus: RecipeCorpusStore, excluded_ids: Sequence[str]) -> list[PlannedMeal]:
