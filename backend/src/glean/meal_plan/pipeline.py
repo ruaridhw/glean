@@ -409,9 +409,9 @@ def finalise(prepared: PreparedPlan, draft: CorpusMealPlanResponse) -> MealPlanR
     unavailable = excluded | {suggestion.external_id for suggestion in chosen if suggestion.external_id}
     # The other candidate week is a whole balanced week, so its meal in the same slot is the swap that keeps
     # this one balanced; a spare candidate from the end of the offer is not. A recipe the floor relaxed back in
-    # stays out of the swap panels: it is a fallback for a tight week, not a suggestion.
-    swappable = _swappable(prepared)
-    swaps = balance.swap_targets(prepared.weeks, [pick.external_id for pick in choices], swappable=swappable)
+    # stays out of the swap panels entirely -- it is a fallback for a tight week, not a suggestion -- which is
+    # also when the scorer puts one in a week at all.
+    swaps = balance.swap_targets(prepared.weeks, [pick.external_id for pick in choices], swappable=_fresh_ids(prepared))
     suggestions: list[MealPlanSuggestion] = []
     for position, (suggestion, pick) in enumerate(zip(chosen, choices, strict=True)):
         alternative = _alternative_for(
@@ -542,7 +542,7 @@ def _alternative_for(
         )
     if preferred is not None and preferred in set(prepared.offered_ids) and preferred not in unavailable:
         return _as_alternative(_template_alternative(prepared, preferred))
-    spare = next((external_id for external_id in _swappable(prepared) if external_id not in unavailable), None)
+    spare = next((external_id for external_id in _spare_order(prepared) if external_id not in unavailable), None)
     if spare is None:
         return None
     return _as_alternative(_template_alternative(prepared, spare))
@@ -595,11 +595,22 @@ def _template_alternative(prepared: PreparedPlan, external_id: str) -> MealPlanS
     )
 
 
-def _swappable(prepared: PreparedPlan) -> list[str]:
-    """The offered recipes a swap may use: the fresh ones first, then any, when the floor relaxed for everything.
+def _fresh_ids(prepared: PreparedPlan) -> set[str] | None:
+    """The offered recipes a swap may use: the fresh ones, never one the six-week floor relaxed back in.
 
-    A recipe offered only because the six-week floor gave way is a last resort for the week itself, so it is not
-    what a card offers as "cook this instead" while a fresh candidate is left.
+    A relaxed recipe is a fallback for a tight week, not what a card offers as "cook this instead" while a fresh
+    candidate is left. None for a checkpoint written before V6, which carries no facts and so no verdict to apply.
+    """
+    if not prepared.facts:
+        return None
+    return {fact.recipe_id for fact in prepared.facts if not fact.offered_after_floor_relaxed}
+
+
+def _spare_order(prepared: PreparedPlan) -> list[str]:
+    """The offered recipes in the order the spare fallback takes them: fresh first, then any.
+
+    The fallback only runs when the scorer's own swap is unusable (already chosen, or used by another card), so
+    there it is better to offer a relaxed recipe than nothing at all.
     """
     fresh = [fact.recipe_id for fact in prepared.facts if not fact.offered_after_floor_relaxed]
     if not fresh:
