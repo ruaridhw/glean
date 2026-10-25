@@ -15,7 +15,7 @@ from datetime import datetime  # noqa: TC003 - Pydantic resolves this annotation
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult, MealPlanSuggestion
 
@@ -59,6 +59,8 @@ MAX_STORED_INPUT_BYTES = (
 MAX_QUESTION_CHARS = 200
 MAX_OPTIONS = 4
 MAX_OPTION_CHARS = 60
+# A household note, the same bound as a cooked-history note.
+MAX_NOTE_CHARS = 500
 
 
 def stored_inputs(request: MealPlanRequest) -> bytes:
@@ -228,19 +230,25 @@ class SwapMessage(BaseModel):
 
 
 class AnswerMessage(BaseModel):
-    """The household's answer to the agent's one question (V11): an option, a note, or both."""
+    """`POST /meal-plan/sessions/{id}/messages` with an answer: one of the options, a note, or both."""
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["answer"]
-    option: str | None = Field(default=None, max_length=200, description="The option chosen, as offered.")
+    option: str | None = Field(default=None, max_length=MAX_OPTION_CHARS, description="One of the question's options.")
     note: str | None = Field(
-        default=None, max_length=MAX_SWAP_NOTE_CHARS, description="Free text with the answer: screened, then data."
+        default=None, max_length=MAX_NOTE_CHARS, description="Free text; screened before the agent sees it."
     )
+
+    @model_validator(mode="after")
+    def _says_something(self) -> AnswerMessage:
+        if self.option is None and not (self.note or "").strip():
+            raise ValueError('an answer needs an option or a note; send {"type": "skip"} to skip')
+        return self
 
 
 class SkipMessage(BaseModel):
-    """ "Skip, just plan": resume the parked run without an answer (V11)."""
+    """`POST /meal-plan/sessions/{id}/messages` with "Skip, just plan": the run resumes without an answer."""
 
     model_config = ConfigDict(extra="forbid")
 
