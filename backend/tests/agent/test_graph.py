@@ -669,3 +669,49 @@ class TestInvariants:
         swaps = [suggestion.alternative.external_id for suggestion in result.suggestions if suggestion.alternative]
         assert planned == [KOREAN_ID]
         assert not {"rec_nutty", "rec_slow"} & {*planned, *swaps}
+
+
+class TestEdges:
+    def test_a_proposal_that_arrives_after_the_deadline_is_kept(self, run: Run) -> None:
+        """`finalise` spends no budget, so a week the model finished late is still the household's."""
+
+        def late(context: dict[str, Any]) -> dict[str, Any]:
+            run.clock.advance(AGENT_RUN_BUDGET_SECONDS + 1)
+            return propose_first(context)
+
+        run.start(ScriptedModel(late))
+
+        assert run.record.status is SessionStatus.DONE
+        assert run.record.result.degraded is False
+
+    def test_a_tool_that_raises_ends_in_the_scorers_week(
+        self, run: Run, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        def broken(*_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError("a bug in a tool")
+
+        monkeypatch.setattr(adapters, "run_tool", broken)
+
+        with caplog.at_level(logging.INFO):
+            run.start(ScriptedModel(call("get_recipes", ids=["rec_01"])))
+
+        assert run.record.status is SessionStatus.DONE
+        assert run.record.result.degraded is True
+        assert _finished(caplog).degraded_reason == "tool_error"
+
+    def test_a_recipe_only_read_with_get_recipes_cannot_be_planned(self, run: Run) -> None:
+        """Reading a recipe is not finding it: only `get_eligible_recipes` widens what the week may use."""
+
+        def proposes_what_it_read(context: dict[str, Any]) -> dict[str, Any]:
+            assert KOREAN_ID not in [candidate["external_id"] for candidate in context["candidates"]]
+            meals = [{"external_id": KOREAN_ID, "title": "Bibimbap bowl"}, *context["candidate_weeks"][0]["meals"][:1]]
+            return _proposal(meals, chosen_week=None)
+
+        run.start(ScriptedModel(call("get_recipes", ids=[KOREAN_ID]), proposes_what_it_read))
+
+        result = run.record.result
+        planned = [suggestion.external_id for suggestion in result.suggestions]
+        swaps = [suggestion.alternative.external_id for suggestion in result.suggestions if suggestion.alternative]
+        assert KOREAN_ID not in planned
+        assert KOREAN_ID not in swaps
+        assert len(planned) == 1
