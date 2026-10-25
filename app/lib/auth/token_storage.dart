@@ -88,9 +88,15 @@ class TokenStorage {
   /// Clears every stored value, including identity. The only sign-out path: iOS Keychain items survive
   /// uninstall/reinstall.
   Future<void> clearAll() async {
-    final Iterable<String> userData = (await _secureStorage.readAll()).keys
-        .where((String key) => key.startsWith(userDataKeyPrefix));
-    await _deleteKeys(<String>[..._tokenKeys, ..._identityKeys, ...userData]);
+    // The session first: signing out must never depend on listing anything else.
+    await _deleteKeys(<String>[..._tokenKeys, ..._identityKeys]);
+    try {
+      final Iterable<String> userData = (await _secureStorage.readAll()).keys
+          .where((String key) => key.startsWith(userDataKeyPrefix));
+      await _deleteKeys(userData.toList());
+    } on Exception {
+      // Best effort: the household data outlives this sign-out, and the tokens are already gone.
+    }
   }
 
   /// Clears the access/refresh/id tokens and their expiry, but **keeps**
