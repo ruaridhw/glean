@@ -73,12 +73,15 @@ class WeekFeedback {
       if (chips.contains(chip)) chip,
   ];
 
-  /// The collapsed box's one line: "Nothing set", or the chips and whether there is a note.
+  /// The collapsed box's one line: "Nothing set", or the chips and whether there is a note. A dropped note
+  /// leads the line, so a narrow screen's ellipsis can only ever cut chips, never the news that it was dropped.
   String get summary {
     if (isEmpty) return 'Nothing set';
+    final bool dropped = hasNote && noteUnused;
     return <String>[
+      if (dropped) "Note couldn't be used",
       for (final FeedbackChip chip in orderedChips) chip.label,
-      if (hasNote) noteUnused ? "note couldn't be used" : 'note',
+      if (hasNote && !dropped) 'note',
     ].join(' · ');
   }
 

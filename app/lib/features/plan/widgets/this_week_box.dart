@@ -127,32 +127,48 @@ class ThisWeekHeader extends ConsumerWidget {
       shape: _boxShape(tokens, theme, feedback, top: true, open: open),
       child: Padding(
         padding: EdgeInsets.all(tokens.spacing.md),
-        child: stacked
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  toggle,
-                  SizedBox(height: tokens.spacing.sm),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: PlanGenerateButton(weekStart: weekStart),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      toggle,
+                      SizedBox(height: tokens.spacing.sm),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: PlanGenerateButton(weekStart: weekStart),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      Expanded(child: toggle),
+                      SizedBox(width: tokens.spacing.sm),
+                      PlanGenerateButton(weekStart: weekStart),
+                    ],
                   ),
-                ],
-              )
-            : Row(
-                children: <Widget>[
-                  Expanded(child: toggle),
-                  SizedBox(width: tokens.spacing.sm),
-                  PlanGenerateButton(weekStart: weekStart),
-                ],
+            // In the header, so it shows with the box closed too, which is how every launch starts.
+            if (feedback.noteUnused && feedback.hasNote) ...<Widget>[
+              SizedBox(height: tokens.spacing.sm),
+              Text(
+                "Couldn't use that note. Your chips still apply.",
+                key: const ValueKey<String>('this-week-note-unused'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// The open half of the box, at the top of the scrolling plan under the pinned header: the chips, the note,
-/// and "Couldn't use that note" when the last plan dropped it. Nothing when the box is closed.
+/// The open half of the box, at the top of the scrolling plan under the pinned header: the chips and the note.
+/// "Couldn't use that note" lives in the header, so it shows either way. Nothing when the box is closed.
 class ThisWeekPanel extends ConsumerWidget {
   const ThisWeekPanel({super.key, required this.weekStart});
 
@@ -256,16 +272,6 @@ class _OpenPanelState extends ConsumerState<_OpenPanel> {
               decoration: const InputDecoration(hintText: '+ Add a note'),
               onChanged: controller.setNote,
             ),
-            if (feedback.noteUnused && feedback.hasNote) ...<Widget>[
-              SizedBox(height: tokens.spacing.sm),
-              Text(
-                "Couldn't use that note. Your chips still apply.",
-                key: const ValueKey<String>('this-week-note-unused'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            ],
           ],
         ),
       ),
