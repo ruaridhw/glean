@@ -418,20 +418,30 @@ def _floor_history(
 ) -> tuple[list[CookedMeal], frozenset[str]]:
     """The history the six-week floor reads, and the recipes the "same as last week" chip lifted it for.
 
-    Without the chip this is `_cooked_meals` unchanged. With it, a cook from the last `LAST_WEEK_DAYS` days is
-    left out of the floor's history, so that recipe is fresh again, unless it carried a thumbs down: a dislike
-    never comes back. Only cooks with a corpus id can be lifted, because the chip's scorer term reads the id.
+    Without the chip this is `_cooked_meals` unchanged. With it, a recipe cooked in the last `LAST_WEEK_DAYS` days
+    is lifted: every one of its cooks leaves the floor's history, so a regular cooked last week and three weeks
+    before is fresh again too. A recipe whose latest rating is a thumbs down is never lifted, so the dislike rule
+    still applies to it; one whose later thumbs up cancelled an older down is. Only cooks with a corpus id can be
+    lifted, because the chip's scorer term reads the id.
     """
     cooked = _cooked_meals(request)
     if tools.FeedbackChip.SAME_AS_LAST_WEEK not in feedback.chips:
         return cooked, frozenset()
     since = now - timedelta(days=tools.LAST_WEEK_DAYS)
-    lifted = [
-        meal for meal in cooked if meal.recipe_id is not None and meal.cooked_at >= since and meal.rating != "down"
-    ]
-    disliked = {meal.recipe_id for meal in cooked if meal.rating == "down"}
-    last_week = frozenset(meal.recipe_id for meal in lifted if meal.recipe_id not in disliked)
-    return [meal for meal in cooked if meal not in lifted], last_week
+    latest_thumb: dict[str, tuple[datetime, str]] = {}
+    for meal in cooked:
+        if meal.recipe_id is not None and meal.rating is not None:
+            seen = latest_thumb.get(meal.recipe_id)
+            if seen is None or meal.cooked_at > seen[0]:
+                latest_thumb[meal.recipe_id] = (meal.cooked_at, meal.rating)
+    last_week = frozenset(
+        meal.recipe_id
+        for meal in cooked
+        if meal.recipe_id is not None
+        and meal.cooked_at >= since
+        and latest_thumb.get(meal.recipe_id, (since, "none"))[1] != "down"
+    )
+    return [meal for meal in cooked if meal.recipe_id not in last_week], last_week
 
 
 def tool_context(
