@@ -113,6 +113,15 @@ class FindAnotherState {
   );
 }
 
+/// What a card showed right before "Find another" replaced its meal, which Undo swap puts back exactly: the
+/// server's meal for that slot and, if the household had taken it, the card's alternative.
+class ReplacedMeal {
+  const ReplacedMeal({required this.suggestion, this.alternativeShown});
+
+  final MealPlanRecipe suggestion;
+  final MealPlanRecipe? alternativeShown;
+}
+
 /// The card copy for a swap's outcomes. Plain words, never a status code.
 const String swapFailedCopy = "Couldn't find another right now. Try again.";
 const String swapNothingElseCopy = 'Nothing else fits this slot right now.';
@@ -137,7 +146,7 @@ class GenerateProposalState {
     this.committing = false,
     this.cursor = 0,
     this.findingAnother,
-    this.replacedFrom = const <int, MealPlanRecipe>{},
+    this.replacedFrom = const <int, ReplacedMeal>{},
     this.cardNotices = const <int, String>{},
   });
 
@@ -178,8 +187,9 @@ class GenerateProposalState {
   /// The "Find another" in flight, if any. Only one runs at a time.
   final FindAnotherState? findingAnother;
 
-  /// Index -> the meal a "Find another" replaced, which Undo swap puts back. Local, like every swap.
-  final Map<int, MealPlanRecipe> replacedFrom;
+  /// Index -> what the card showed before a "Find another" replaced it, which Undo swap puts back. Local, like
+  /// every swap.
+  final Map<int, ReplacedMeal> replacedFrom;
 
   /// Index -> one plain line on that card: a swap's error, "nothing else fits", or "Couldn't use that note".
   final Map<int, String> cardNotices;
@@ -212,7 +222,7 @@ class GenerateProposalState {
     int? cursor,
     FindAnotherState? findingAnother,
     bool clearFindingAnother = false,
-    Map<int, MealPlanRecipe>? replacedFrom,
+    Map<int, ReplacedMeal>? replacedFrom,
     Map<int, String>? cardNotices,
   }) => GenerateProposalState(
     phase: phase ?? this.phase,
@@ -433,20 +443,24 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     }
   }
 
-  /// Puts back the meal "Find another" replaced on card [index]. Local and instant, like every swap.
+  /// Puts card [index] back exactly as it was before "Find another" replaced its meal: the alternative, if the
+  /// household had taken it, else the meal. Local and instant, like every swap.
   void undoReplacement(int index) {
     final MealPlanResponse? result = state.result;
-    final MealPlanRecipe? previous = state.replacedFrom[index];
+    final ReplacedMeal? previous = state.replacedFrom[index];
     if (result == null ||
         previous == null ||
         index >= result.suggestions.length) {
       return;
     }
+    final MealPlanRecipe? alternative = previous.alternativeShown;
     state = state._copy(
-      result: _withSuggestion(result, index, previous),
-      replacedFrom: Map<int, MealPlanRecipe>.of(state.replacedFrom)
+      result: _withSuggestion(result, index, previous.suggestion),
+      replacedFrom: Map<int, ReplacedMeal>.of(state.replacedFrom)
         ..remove(index),
-      swaps: Map<int, MealPlanRecipe>.of(state.swaps)..remove(index),
+      swaps: Map<int, MealPlanRecipe>.of(state.swaps)
+        ..remove(index)
+        ..addAll(<int, MealPlanRecipe>{index: ?alternative}),
       cardNotices: Map<int, String>.of(state.cardNotices)..remove(index),
     );
   }
@@ -496,9 +510,12 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     }
     state = state._copy(
       result: _withSuggestion(result, index, replacement),
-      replacedFrom: <int, MealPlanRecipe>{
+      replacedFrom: <int, ReplacedMeal>{
         ...state.replacedFrom,
-        index: result.suggestions[index],
+        index: ReplacedMeal(
+          suggestion: result.suggestions[index],
+          alternativeShown: state.swaps[index],
+        ),
       },
       swaps: Map<int, MealPlanRecipe>.of(state.swaps)..remove(index),
     );
