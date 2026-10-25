@@ -296,6 +296,17 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
             alternative: result.suggestions[index].alternative,
             swapped: state.isSwapped(index),
             swapOpen: _openSwaps.contains(index),
+            finding: state.findingAnother?.index == index
+                ? state.findingAnother
+                : null,
+            findAnotherEnabled: state.findingAnother == null && !state.saving,
+            notice: state.cardNotices[index],
+            replaced: state.isReplaced(index),
+            onUndoReplacement: () => _controller.undoReplacement(index),
+            onFindAnother: (String? note) {
+              setState(() => _openSwaps.remove(index));
+              unawaited(_controller.findAnother(index, note: note));
+            },
             onToggleSwap: () {
               if (state.isSwapped(index)) {
                 _controller.swapSuggestion(index);
@@ -418,7 +429,6 @@ class _WorkingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppTokens tokens = context.tokens;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return ListView(
       padding: EdgeInsets.all(tokens.spacing.lg),
       children: <Widget>[
@@ -433,58 +443,7 @@ class _WorkingBody extends StatelessWidget {
                   style: textTheme.titleMedium,
                 ),
                 SizedBox(height: tokens.spacing.sm),
-                if (progress.isEmpty)
-                  Row(
-                    children: <Widget>[
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: tokens.spacing.sm),
-                      Text(
-                        'Getting started',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  for (int i = 0; i < progress.length; i++)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          SizedBox(
-                            width: 20,
-                            child: i == progress.length - 1
-                                ? const Padding(
-                                    padding: EdgeInsets.only(top: 2),
-                                    child: SizedBox(
-                                      width: 12,
-                                      height: 12,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  )
-                                : Icon(
-                                    Icons.check_rounded,
-                                    size: 16,
-                                    color: colorScheme.primary,
-                                  ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              progress[i],
-                              style: textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                ProposalProgressLines(lines: progress),
               ],
             ),
           ),

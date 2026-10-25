@@ -901,7 +901,8 @@ void main() {
   );
 
   gleanWidgetTest(
-    'an older backend result shows no summary and no swap, and still adds',
+    'an older backend result shows no summary and no alternative, and still '
+    'adds',
     (tester) async {
       final h = AppTestHarness(
         httpClient: proposalBackend(
@@ -916,8 +917,14 @@ void main() {
 
       await openProposal(tester, h);
       expect(find.text('This week'), findsNothing);
-      expect(find.text('Swap'), findsNothing);
       expect(find.text('Old soup'), findsOneWidget);
+      // With no alternative on the wire the panel offers only "Find another", never an invented alternative.
+      await tester.tap(find.text('Swap'));
+      await tester.pumpAndSettle();
+      expect(find.text('Use alternative'), findsNothing);
+      expect(find.text('Find another'), findsOneWidget);
+      await tester.tap(find.text('Swap'));
+      await tester.pumpAndSettle();
       expect(
         find.byType(ProposalAttributeLabels),
         findsNothing,
