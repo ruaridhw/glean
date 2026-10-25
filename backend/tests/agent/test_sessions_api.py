@@ -43,6 +43,7 @@ from glean.sessions.store import (
     ttl_from,
     utcnow,
 )
+from tests.agent.fakes import proposed
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -80,11 +81,16 @@ class CandidatesRouter:
             raise self._fails_with
         context = json.loads(user)
         offered = context["candidates"][: self._limit or context["meals_per_week"]]
-        return CorpusMealPlanResponse(
-            suggestions=[
-                CorpusMealPlanRecipe(external_id=c["external_id"], title=c["title"], reason="Uses pantry items well.")
-                for c in offered
-            ]
+        return proposed(
+            _schema,
+            CorpusMealPlanResponse(
+                suggestions=[
+                    CorpusMealPlanRecipe(
+                        external_id=c["external_id"], title=c["title"], reason="Uses pantry items well."
+                    )
+                    for c in offered
+                ]
+            ),
         )
 
     def model_id_for(self, _feature: object, **_kwargs: object) -> str:
@@ -113,12 +119,15 @@ class _InventingRouter:
     """A model that answers with recipes nobody offered, so `finalise` keeps nothing."""
 
     def invoke(self, _feature: object, _schema: type, *, user: str, **_kwargs: object) -> CorpusMealPlanResponse:
-        return CorpusMealPlanResponse(
-            week_summary="An invented week.",
-            suggestions=[
-                CorpusMealPlanRecipe(external_id=f"rec_invented_{n}", title=f"Invented {n}", reason="Made up.")
-                for n in range(MEALS)
-            ],
+        return proposed(
+            _schema,
+            CorpusMealPlanResponse(
+                week_summary="An invented week.",
+                suggestions=[
+                    CorpusMealPlanRecipe(external_id=f"rec_invented_{n}", title=f"Invented {n}", reason="Made up.")
+                    for n in range(MEALS)
+                ],
+            ),
         )
 
     def model_id_for(self, _feature: object, **_kwargs: object) -> str:
@@ -270,23 +279,27 @@ def test_a_session_with_nothing_eligible_fails_with_no_eligible_recipes(
     assert router.calls == 0
 
 
-def test_a_failing_model_ends_the_session_as_model_error(api: TestClient) -> None:
+def test_a_failing_model_ends_the_session_with_the_scorers_week(api: TestClient) -> None:
+    """V7: the scorer's week exists before the model is asked, so a model failure is never `model_error`."""
     api.app.dependency_overrides[get_llm_router] = lambda: CandidatesRouter(fails_with=RuntimeError("boom"))
 
     view = _plan_to_completion(api, _body())
 
-    assert view["status"] == "failed"
-    assert view["error"]["code"] == "model_error"
+    assert view["status"] == "done"
+    assert view["error"] is None
+    assert view["result"]["degraded"] is True
 
 
-def test_a_throttled_model_ends_the_session_rate_limited_with_the_wait(api: TestClient) -> None:
+def test_a_throttled_model_still_ends_the_session_with_the_scorers_week(api: TestClient) -> None:
+    """A provider 429 mid-run is the model's failure, not the household's: they get the degraded week."""
     throttle = _throttled(retry_after="120")
     api.app.dependency_overrides[get_llm_router] = lambda: CandidatesRouter(fails_with=throttle)
 
     view = _plan_to_completion(api, _body())
 
-    assert view["status"] == "failed"
-    assert view["error"] == {"code": "rate_limited", "retry_after_minutes": 2}
+    assert view["status"] == "done"
+    assert view["error"] is None
+    assert view["result"]["degraded"] is True
 
 
 def test_another_users_session_is_not_found(api: TestClient) -> None:

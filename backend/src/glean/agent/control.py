@@ -2,9 +2,10 @@
 
 Two promises sit here, both from spec §6.2:
 
-- **The 90 s budget.** `RunBudget` refuses to start another step once the deadline has passed, and hands
-  the remaining time to the one blocking call (the model), so a run ends inside the worker's two-minute
-  timeout with a typed outcome rather than being killed mid-flight.
+- **The 90 s budget.** `RunBudget` refuses to start another step once the deadline has passed
+  (`BudgetSpent`), and hands the remaining time to the one blocking call (the model), so a run ends inside
+  the worker's two-minute timeout with a typed outcome rather than being killed mid-flight. The graph turns
+  a spent budget into the scorer's degraded week once one exists, so only `prepare` can fail on it.
 - **The lease, and the household's cancel.** The lease is taken once, at claim, and never extended
   (`sessions.store.LEASE_SECONDS`): it is shorter than the queue's visibility timeout, so any
   redelivered copy of a message finds a lapsed lease and takes over, while a duplicate copy delivered
@@ -38,6 +39,13 @@ class LostOwnership(Exception):
     """Another attempt took this session over; this one stops without writing anything."""
 
 
+class BudgetSpent(AgentError):
+    """The run's 90 s are spent. Before a scorer plan exists that is `model_error`; after, the degraded week."""
+
+    def __init__(self) -> None:
+        super().__init__(budget_spent())
+
+
 class RunBudget:
     """The wall-clock budget of one run, checked before each graph step."""
 
@@ -57,9 +65,9 @@ class RunBudget:
         return int(self.remaining() * 1000)
 
     def check(self) -> None:
-        """Raise when the budget is spent, so the run ends `failed` instead of being killed."""
+        """Raise `BudgetSpent` when the budget is spent, so the run ends itself instead of being killed."""
         if self.remaining() <= 0:
-            raise AgentError(budget_spent())
+            raise BudgetSpent
 
 
 class RunGuard:
@@ -83,9 +91,18 @@ class RunGuard:
         self._owner = owner
         self._budget = budget or RunBudget(clock=monotonic)
 
-    def step(self, line: str) -> None:
-        """Called at the start of every graph node."""
-        self._budget.check()
+    def step(self, line: str | None, *, budget: bool = True) -> None:
+        """Called at the start of every graph node: the budget, then the progress line.
+
+        `line=None` checks the budget only: the agent's later `plan` turns write nothing of their own, and the
+        `act` or `finalise` node that follows each one writes (and so checks ownership and cancel) before any
+        tool runs or any result is written. `budget=False` is for `finalise`, which must still write the
+        degraded week after the budget is spent.
+        """
+        if budget:
+            self._budget.check()
+        if line is None:
+            return
         if not self._sessions.append_progress(
             self._session.user_sub, self._session.session_id, [line], owner=self._owner
         ):

@@ -16,6 +16,7 @@ import pytest
 from moto import mock_aws
 
 from glean.agent import runtime, start
+from glean.agent.actions import PlanStep
 from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.control import AGENT_RUN_BUDGET_SECONDS
 from glean.agent.deps import AgentDeps
@@ -46,6 +47,7 @@ from glean.sessions.store import (
     lease_seconds_for,
 )
 from glean.worker import dlq_handler, handle_record, handler
+from tests.agent.fakes import proposed
 from tests.infra.cfn import sessions_table_properties
 
 if TYPE_CHECKING:
@@ -111,11 +113,14 @@ class PicksOneCandidate:
         if self._fails_with is not None:
             raise self._fails_with
         context = json.loads(user)
-        return CorpusMealPlanResponse(
-            suggestions=[
-                CorpusMealPlanRecipe(external_id=c["external_id"], title=c["title"], reason="Fine.")
-                for c in context["candidates"][:1]
-            ]
+        return proposed(
+            _schema,
+            CorpusMealPlanResponse(
+                suggestions=[
+                    CorpusMealPlanRecipe(external_id=c["external_id"], title=c["title"], reason="Fine.")
+                    for c in context["candidates"][:1]
+                ]
+            ),
         )
 
     def model_id_for(self, _feature: object, **_kwargs: object) -> str:
@@ -147,8 +152,11 @@ class InventsRecipes(PicksOneCandidate):
 
     def invoke(self, _feature: object, _schema: type, *, user: str, **_kwargs: object) -> CorpusMealPlanResponse:
         self.calls += 1
-        return CorpusMealPlanResponse(
-            suggestions=[CorpusMealPlanRecipe(external_id="rec_invented", title="Invented", reason="Made up.")]
+        return proposed(
+            _schema,
+            CorpusMealPlanResponse(
+                suggestions=[CorpusMealPlanRecipe(external_id="rec_invented", title="Invented", reason="Made up.")]
+            ),
         )
 
 
@@ -495,26 +503,37 @@ def test_a_takeover_with_no_checkpoint_starts_the_run_fresh(tmp_path: Any) -> No
     assert router.calls == 1
 
 
-def test_a_run_that_spends_its_budget_ends_failed_with_a_code(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    """S1: the 90 s budget is enforced, so a slow run ends itself instead of being killed by the Lambda."""
+def test_a_run_that_spends_its_budget_ends_with_the_scorers_week(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S1: the 90 s budget is enforced, so a slow run ends itself instead of being killed by the Lambda.
+
+    From V7 a spent budget is the degraded fallback, not a failure: the scorer's week already exists. The model
+    asked for a tool, so the next step (`act`) is the one that finds the budget gone; no tool runs.
+    """
     monkeypatch.setattr(runtime, "metrics", MetricsRecorder())
     clock = FakeClock()
     sessions = _queued_store(clock=clock)
 
     class SlowModel(PicksOneCandidate):
-        def invoke(self, feature: object, schema: type, *, user: str, **kwargs: object) -> CorpusMealPlanResponse:
+        def invoke(self, feature: object, schema: type, *, user: str, **kwargs: object) -> PlanStep:
             # The provider takes longer than the budget it was given: it cannot, so the deadline check
-            # between steps is what turns this into a typed failure at the next step.
+            # between steps is what ends the loop at the next step.
+            self.calls += 1
             clock.advance(seconds=AGENT_RUN_BUDGET_SECONDS + 1)
-            return super().invoke(feature, schema, user=user, **kwargs)
+            return PlanStep.model_validate(
+                {"action": {"kind": "call_tool", "call": {"name": "get_eligible_recipes", "filter": {}}}}
+            )
 
     handle_record(_record("sess-1"), _deps(sessions, tmp_path, SlowModel(), clock))
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
     assert clock.seconds > AGENT_RUN_BUDGET_SECONDS
-    assert record.status is SessionStatus.FAILED
-    assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
+    assert record.status is SessionStatus.DONE
+    assert record.result is not None
+    assert record.result.degraded is True
+    assert "Checking what you cooked recently" not in record.progress
 
 
 def test_the_model_is_given_what_is_left_of_the_budget(tmp_path: Any) -> None:
@@ -575,14 +594,17 @@ class _ReasonModel(PicksOneCandidate):
 
     def invoke(self, feature: object, schema: type, *, user: str, **kwargs: Any) -> CorpusMealPlanResponse:
         context = json.loads(user)
-        return CorpusMealPlanResponse(
-            suggestions=[
-                CorpusMealPlanRecipe(
-                    external_id=context["candidates"][0]["external_id"],
-                    title=context["candidates"][0]["title"],
-                    reason=secrets.token_hex(self._reason_bytes // 2),
-                )
-            ]
+        return proposed(
+            schema,
+            CorpusMealPlanResponse(
+                suggestions=[
+                    CorpusMealPlanRecipe(
+                        external_id=context["candidates"][0]["external_id"],
+                        title=context["candidates"][0]["title"],
+                        reason=secrets.token_hex(self._reason_bytes // 2),
+                    )
+                ]
+            ),
         )
 
 
@@ -881,7 +903,8 @@ def test_a_claim_that_fails_for_another_reason_is_raised_so_the_message_is_retri
         handle_record(_record("sess-1"), _deps(sessions, tmp_path))
 
 
-def test_a_model_failure_ends_the_session_with_its_code(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_model_failure_ends_the_session_with_the_scorers_week(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """V7: once `prepare` has built the scorer's weeks, a provider failure is the degraded week, never `model_error`."""
     monkeypatch.setattr(runtime, "metrics", MetricsRecorder())
     sessions = _queued_store()
 
@@ -889,8 +912,10 @@ def test_a_model_failure_ends_the_session_with_its_code(tmp_path: Any, monkeypat
 
     record = sessions.get("user-a", "sess-1")
     assert record is not None
-    assert record.status is SessionStatus.FAILED
-    assert record.error == SessionError(code=SessionErrorCode.MODEL_ERROR)
+    assert record.status is SessionStatus.DONE
+    assert record.error is None
+    assert record.result is not None
+    assert record.result.degraded is True
 
 
 def test_every_attempt_is_counted_in_cloudwatch_including_its_wall_time(
@@ -901,18 +926,27 @@ def test_every_attempt_is_counted_in_cloudwatch_including_its_wall_time(
     sessions = _queued_store("sess-1", "sess-fail")
 
     handle_record(_record("sess-1"), _deps(sessions, tmp_path))
-    doomed = PicksOneCandidate(fails_with=RuntimeError("boom"))
-    handle_record(_record("sess-fail"), _deps(sessions, tmp_path, doomed))
+    # An empty corpus offers nothing, so this one fails `no_eligible_recipes` before the scorer runs.
+    doomed = _with(
+        _deps(sessions, tmp_path), corpus_factory=lambda: RecipeCorpusStore(FilesystemBlobStore(tmp_path / "e"))
+    )
+    handle_record(_record("sess-fail"), doomed)
 
     assert recorder.names == [
         "SessionsStarted",
         "SessionsCompleted",
+        "SessionToolCalls",
+        "SessionInvalidActions",
+        "SessionDrift",
         "SessionWallTime",
         "SessionsStarted",
         "SessionsFailed",
         "SessionWallTime",
     ]
-    assert all(value >= 0 for value in recorder.values[2::3])
+    wall_times = [
+        value for name, value in zip(recorder.names, recorder.values, strict=True) if name == "SessionWallTime"
+    ]
+    assert all(value >= 0 for value in wall_times)
 
 
 def test_a_provider_throttle_is_rate_limited_with_the_minutes_it_asked_for() -> None:
@@ -1035,7 +1069,15 @@ def test_a_degraded_run_is_counted_in_cloudwatch(tmp_path: Any, monkeypatch: pyt
     assert record.status is SessionStatus.DONE
     assert record.result is not None
     assert record.result.degraded is True
-    assert recorder.names == ["SessionsStarted", "SessionsCompleted", "SessionsDegraded", "SessionWallTime"]
+    assert recorder.names == [
+        "SessionsStarted",
+        "SessionsCompleted",
+        "SessionsDegraded",
+        "SessionToolCalls",
+        "SessionInvalidActions",
+        "SessionDrift",
+        "SessionWallTime",
+    ]
 
 
 def test_a_message_for_a_cancelled_session_is_acknowledged_and_runs_nothing(tmp_path: Any) -> None:

@@ -1,7 +1,7 @@
 """The planning agent, as one deep module. LangGraph, the checkpointer and the prompts stay inside.
 
-Call `start(session)` with a claimed session and it runs `prepare -> plan -> finalise` to a terminal
-status in the session store; call `cancel(session_id)` and the run in flight stops writing at its next
+Call `start(session)` with a claimed session and it runs `prepare -> plan <-> act -> finalise` to a
+terminal status in the session store; call `cancel(session_id)` and the run in flight stops writing at its next
 step. Nothing outside `glean.agent` imports LangGraph (ruff `TID251`), so replacing the graph with a
 hand-written loop would change this package and nothing else.
 
