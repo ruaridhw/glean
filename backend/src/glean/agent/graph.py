@@ -35,7 +35,7 @@ from glean.agent.control import BudgetSpent
 from glean.agent.errors import AgentError, model_error_for
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, bounded_transcript, user_message
 from glean.llm import Feature
-from glean.meal_plan import pipeline
+from glean.meal_plan import pipeline, tools
 from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
 from glean.observability import logger
 from glean.sessions.models import SessionError, SessionErrorCode
@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from glean.agent.control import RunGuard
     from glean.agent.deps import AgentDeps
+    from glean.recipes.corpus import RecipeCorpusStore
 
 # Spec §6.2's agent budget: at most 8 tool calls in one session.
 MAX_TOOL_CALLS = 8
@@ -124,6 +125,21 @@ class _Nodes:
     def __init__(self, deps: AgentDeps, guard: RunGuard) -> None:
         self._deps = deps
         self._guard = guard
+        # The corpus and the tools' view of it, read once per run at the first tool call (N6): every summary,
+        # answer and decision, which no tool call changes. Not checkpointed; a resumed run reads them again.
+        self._corpus: RecipeCorpusStore | None = None
+        self._context: tools.EligibilityContext | None = None
+
+    def _tools(self, state: PlanState) -> tuple[RecipeCorpusStore, tools.EligibilityContext]:
+        if self._corpus is None or self._context is None:
+            self._corpus = self._deps.corpus_factory()
+            self._context = pipeline.tool_context(
+                MealPlanRequest.model_validate(state["request"]),
+                corpus=self._corpus,
+                now=self._deps.clock(),
+                seed=adapters.session_seed(state["session_id"]),
+            )
+        return self._corpus, self._context
 
     def prepare(self, state: PlanState) -> PlanState:
         # A budget spent here is `model_error`: there is no scorer week to fall back to yet.
@@ -212,13 +228,15 @@ class _Nodes:
         except BudgetSpent:
             return _degrade(DegradedReason.TIME_BUDGET)
         try:
+            corpus, context = self._tools(state)
             outcome = adapters.run_tool(
                 call,
                 prepared=pipeline.PreparedPlan.model_validate(state["prepared"]),
                 request=MealPlanRequest.model_validate(state["request"]),
-                corpus=self._deps.corpus_factory(),
-                now=self._deps.clock(),
+                corpus=corpus,
+                now=context.now,
                 session_id=state["session_id"],
+                context=context,
             )
         except Exception:  # a bug in a tool, not a refusal (those are results): the scorer's week
             logger.exception("a tool call failed; writing the scorer's week", extra={"tool": call.name})

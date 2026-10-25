@@ -23,6 +23,7 @@ from glean.agent.control import AGENT_RUN_BUDGET_SECONDS
 from glean.agent.deps import AgentDeps
 from glean.agent.graph import FINALISE_LINE, MAX_INVALID_ACTIONS, MAX_TOOL_CALLS, PLAN_LINE, PREPARE_LINE
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT
+from glean.meal_plan import pipeline
 from glean.meal_plan.schemas import CompressedPantryItem, CookedHistoryItem, MealPlanRequest
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -291,6 +292,27 @@ class TestActLoop:
         assert last["tool_calls_left"] == MAX_TOOL_CALLS - 2
         assert run.metric("SessionToolCalls") == [2]
         assert run.metric("SessionInvalidActions") == [0]
+
+    def test_the_tools_read_the_corpus_once_per_run(self, run: Run, monkeypatch: pytest.MonkeyPatch) -> None:
+        built: list[str] = []
+        tool_context = pipeline.tool_context
+
+        def counted(*args: Any, **kwargs: Any) -> Any:
+            built.append("context")
+            return tool_context(*args, **kwargs)
+
+        monkeypatch.setattr(pipeline, "tool_context", counted)
+        model = ScriptedModel(
+            call("get_eligible_recipes", filter={"text": "korean"}),
+            call("get_recipes", ids=[KOREAN_ID]),
+            call("get_eligible_recipes", filter={}),
+            propose_first,
+        )
+
+        run.start(model)
+
+        assert run.metric("SessionToolCalls") == [3]
+        assert built == ["context"]
 
     def test_a_filter_that_tries_to_widen_comes_back_as_an_error_the_model_reads(self, run: Run) -> None:
         model = ScriptedModel(call("get_eligible_recipes", filter={"limit": 500}), propose_first)
