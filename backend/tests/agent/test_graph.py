@@ -350,6 +350,8 @@ class TestBudget:
         assert record.progress.count("Reading the recipes more closely") == MAX_TOOL_CALLS
         assert run.metric("SessionToolCalls") == [MAX_TOOL_CALLS]
         assert run.metric("SessionsDegraded") == [1]
+        # A degraded run's drift is not the agent's choice, so it is not reported as one.
+        assert run.metric("SessionDrift") == []
 
     @pytest.mark.parametrize(("swap_in", "kept"), [("another_onion_dish", "agent"), ("korean", "scorer")])
     def test_a_ninth_tool_call_keeps_the_agents_best_week_when_it_is_as_good(

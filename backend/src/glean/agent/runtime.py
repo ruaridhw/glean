@@ -199,7 +199,9 @@ def _completed(
     if "tool_calls" in session_metrics:
         metrics.add_metric(name=TOOL_CALLS, unit=MetricUnit.Count, value=session_metrics["tool_calls"])
         metrics.add_metric(name=INVALID_ACTIONS, unit=MetricUnit.Count, value=session_metrics["invalid_actions"])
-    if session_metrics.get("drift_fraction") is not None:
+    # Drift measures the agent's own choice, so a degraded run -- the scorer's week, or the agent's kept at a
+    # refused call -- reports none: counted as 0 it would pull the median towards a choice nobody made.
+    if session_metrics.get("drift_fraction") is not None and not result.degraded:
         metrics.add_metric(name=DRIFT, unit=MetricUnit.Percent, value=session_metrics["drift_fraction"] * 100)
     logger.info(
         "meal plan session completed",
