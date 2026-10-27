@@ -31,7 +31,7 @@ from pydantic import BaseModel
 from glean.meal_plan.candidates import mentions_item
 from glean.observability import logger
 from glean.recipes.attributes import Cuisine
-from glean.screening import ScreenRejection, screen
+from glean.screening import ScreenRejection, screen_many
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -238,36 +238,77 @@ _OUTCOME_FOR: dict[ScreenRejection, ProfileTextOutcome] = {
 class ScreenedProfile(BaseModel):
     """The profile's free text after the screen, in JSON so the graph's input and checkpoints can carry it.
 
-    `text` holds the clipped free-text fields (`_free_text`) only when the screen passed them, and is the only
-    profile free text any planning prompt may carry. `outcome` is None when there was no free text to screen.
+    `text` holds the clipped free-text fields (`_free_text`) that passed, and is the only profile free text any
+    planning prompt may carry. `outcome` is None when there was nothing to screen, `used` when every text passed, and
+    otherwise why the first dropped one was dropped; `dropped` counts the texts left out.
     """
 
     text: dict[str, Any] | None = None
     outcome: ProfileTextOutcome | None = None
+    dropped: int = 0
+
+
+# The short lists a prompt shows, screened together as one text: each entry is at most a few words, so one of them
+# alone says little to the screen, and together they are still shorter than one note.
+_LIST_FIELDS = ("favourite_meals", "loved_ingredients", "disliked_ingredients", "cuisines_liked", "cuisines_avoided")
 
 
 def screen_profile(profile: PlanningProfile | None, *, decision_client: DecisionClient | None) -> ScreenedProfile:
-    """Screen the free text a prompt would show of *profile*, as one note: one decision call per Generate.
+    """Screen each free-text field a prompt would show of *profile* on its own, and keep only the ones that pass.
 
-    The lists, favourites, habits, household and the newest notes are the household's own words, so they go
-    through the injection screen like the week's note (backend AGENTS.md, "Free text a model will read"). Any of
-    it failing drops all of it from the prompt; the enum fields, the exclusion and the scorer still apply. The
-    log records the outcome and the probability, never the text.
+    The short lists are one text, and habits, household and each note are one text each, so every screen reads a text
+    no longer than one field: the length the screen's bar was calibrated on (backend AGENTS.md, "Free text a model
+    will read"). Each fails closed alone: a field that is rejected, or cannot be screened, is dropped and the rest
+    stay. The screens run in parallel, and the per-text cache keeps an unchanged profile at no decision calls. The
+    log records counts only, never the text.
     """
     text = _free_text(profile)
     if not text:
         return ScreenedProfile()
+    units = _screen_units(text)
     if decision_client is None:
         logger.warning("no decision client to screen the profile; leaving its free text out of the prompt")
-        return ScreenedProfile(outcome=ProfileTextOutcome.UNAVAILABLE)
-    result = screen(_as_note(text), decision_client=decision_client)
-    outcome = (
-        ProfileTextOutcome.USED if result.passed else _OUTCOME_FOR[result.rejection or ScreenRejection.UNAVAILABLE]
-    )
+        return ScreenedProfile(outcome=ProfileTextOutcome.UNAVAILABLE, dropped=len(units))
+    results = screen_many([unit for unit, _field, _value in units], decision_client=decision_client)
+    kept: dict[str, Any] = {}
+    rejections: list[ScreenRejection] = []
+    for (_unit, field, value), result in zip(units, results, strict=True):
+        if result.passed:
+            _keep(kept, field, value)
+        else:
+            rejections.append(result.rejection or ScreenRejection.UNAVAILABLE)
+    outcome = _outcome(rejections)
     logger.info(
-        "the profile's free text was screened", extra={"outcome": outcome.value, "probability": result.probability}
+        "the profile's free text was screened",
+        extra={"outcome": outcome.value, "screened": len(units), "dropped": len(rejections)},
     )
-    return ScreenedProfile(text=text if result.passed else None, outcome=outcome)
+    return ScreenedProfile(text=kept or None, outcome=outcome, dropped=len(rejections))
+
+
+def _screen_units(text: dict[str, Any]) -> list[tuple[str, str, Any]]:
+    """Each text the screen reads, as (text, the field it fills, what to keep if it passes)."""
+    lists = {name: text[name] for name in _LIST_FIELDS if name in text}
+    units = [("\n".join(entry for entries in lists.values() for entry in entries), "lists", lists)] if lists else []
+    units += [(text[name], name, text[name]) for name in ("habits", "household") if name in text]
+    units += [(note["text"], "notes", note) for note in text.get("notes", [])]
+    return units
+
+
+def _keep(kept: dict[str, Any], field: str, value: Any) -> None:
+    if field == "lists":
+        kept.update(value)
+    elif field == "notes":
+        kept.setdefault("notes", []).append(value)
+    else:
+        kept[field] = value
+
+
+def _outcome(rejections: list[ScreenRejection]) -> ProfileTextOutcome:
+    if not rejections:
+        return ProfileTextOutcome.USED
+    if ScreenRejection.NOT_A_PREFERENCE in rejections:
+        return ProfileTextOutcome.NOT_A_PREFERENCE
+    return ProfileTextOutcome.UNAVAILABLE
 
 
 def prompt_payload(profile: PlanningProfile | None, screened: ScreenedProfile) -> dict[str, Any] | None:
@@ -316,14 +357,3 @@ def _free_text(profile: PlanningProfile | None) -> dict[str, Any]:
         "notes": [{"date": note.date.isoformat(), "text": note.text} for note in newest],
     }
     return {name: value for name, value in fields.items() if value}
-
-
-def _as_note(text: dict[str, Any]) -> str:
-    """The free text as one note for the screen: every string the prompt would show, one per line."""
-    lines: list[str] = []
-    for value in text.values():
-        if isinstance(value, str):
-            lines.append(value)
-        else:
-            lines.extend(entry if isinstance(entry, str) else entry["text"] for entry in value)
-    return "\n".join(lines)

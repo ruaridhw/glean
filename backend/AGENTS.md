@@ -190,7 +190,7 @@ src/glean/
                       #   and rank the offer: fresh eligible favourites are offered with last week's dinners, and
                       #   each liked cuisine or protein minimum reserves a few places (pipeline.PROFILE_RESERVE);
                       #   and `household_profile` in the prompt carries the enum fields always and the free text
-                      #   only after screen_profile passed it (one screen per Generate, fail closed). Like the
+                      #   only as screen_profile passed it (each field its own screen, in parallel, each failing closed). Like the
                       #   week's note, the profile's prose is screened before the graph and the sync route's traced
                       #   code, which then hold `without_profile_text(request)` and the ScreenedProfile
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
@@ -429,7 +429,8 @@ merged back after the model call. The interview only guarantees that the text it
 screened. Any route that hands a profile to a model later — sessions, eligibility, the scorer, feedback
 notes — screens that free text first or sends only the enum fields (`spice_tolerance`, `protein_targets`).
 Planning does both (`meal_plan.household.screen_profile`): the enum fields always reach `household_profile`, and its
-free text only when one screen of all of it passed.
+free text field by field (the short lists together, habits, household, each note), each screened on its own through
+`screening.screen_many` and dropped alone if it fails.
 
 The 0.9 bar is not yet calibrated on real traffic. The question and bar are pinned by
 `tests/profile/test_screening.py`; measure a change with

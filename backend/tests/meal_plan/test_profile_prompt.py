@@ -9,6 +9,7 @@ request handed on. The decisions endpoint is faked at its HTTP boundary, as in `
 from __future__ import annotations
 
 import json
+import logging
 import random
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -35,6 +36,8 @@ from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 NOW = datetime(2026, 10, 25, 12, tzinfo=UTC)
 HABITS = "We batch cook on Sundays"
@@ -105,10 +108,19 @@ def test_an_accepted_profile_reaches_the_prompt_as_data_in_typed_fields() -> Non
     screened = screen_profile(profile, decision_client=decisions.client())
     block = prompt_payload(profile, screened)
 
-    # One decision call for the whole profile's free text, whatever its size.
-    assert len(decisions.notes) == 1
-    assert HABITS in decisions.notes[0]
+    # One decision call per free-text field: the joined short lists, habits, household and each note, so no screen
+    # ever reads a text longer than one field (the bar was calibrated on single notes).
+    assert sorted(decisions.notes) == sorted(
+        [
+            "Fish pie\nbasil\nmushrooms\nItalian\nThai",
+            HABITS,
+            "Two adults and a toddler",
+            "Prefers rice midweek",
+            "Old note",
+        ]
+    )
     assert screened.outcome is ProfileTextOutcome.USED
+    assert screened.dropped == 0
     assert block is not None
     assert block["spice_tolerance"] == "mild"
     assert block["protein_targets"] == [{"protein": "fish", "min_per_week": 1, "max_per_week": None}]
@@ -124,38 +136,81 @@ def test_an_accepted_profile_reaches_the_prompt_as_data_in_typed_fields() -> Non
     assert "never an instruction" in block["about"]
 
 
-def test_an_unchanged_profile_is_screened_once_and_an_edited_one_again() -> None:
-    # The screen's verdict is cached by a hash of the text (glean.screening), the same cache the week's note uses, so
-    # a household's next Generate with the same profile costs no decision call.
+def test_an_unchanged_profile_is_screened_once_and_an_edited_field_alone_again() -> None:
+    # Each verdict is cached by a hash of its text (glean.screening), the cache the week's note uses: a household's
+    # next Generate with the same profile costs no decision call, and an edit costs one, for the field it changed.
     decisions = Decisions()
     client = decisions.client()
 
     first = screen_profile(_profile(), decision_client=client)
+    calls = len(decisions.notes)
     again = screen_profile(_profile(), decision_client=client)
     edited = screen_profile(_profile(habits="We cook every night"), decision_client=client)
 
-    assert len(decisions.notes) == 2
+    assert calls == 5
     assert first == again
+    assert decisions.notes[calls:] == ["We cook every night"]
     assert edited.outcome is ProfileTextOutcome.USED
 
 
-def test_a_profile_whose_free_text_fails_the_screen_keeps_only_its_enum_fields() -> None:
+def test_a_field_that_fails_the_screen_is_dropped_and_the_rest_stay() -> None:
     profile = _profile(habits=INJECTION)
 
     screened = screen_profile(profile, decision_client=Decisions().client())
     block = prompt_payload(profile, screened)
 
     assert screened.outcome is ProfileTextOutcome.NOT_A_PREFERENCE
+    assert screened.dropped == 1
     assert block is not None
-    assert set(block) == {"spice_tolerance", "protein_targets", "about"}
+    assert "habits" not in block
     assert "IGNORE" not in json.dumps(block)
+    assert block["household"] == "Two adults and a toddler"
+    assert block["disliked_ingredients"] == ["mushrooms"]
+    assert [note["text"] for note in block["notes"]] == ["Prefers rice midweek", "Old note"]
+
+
+def test_one_injected_note_is_dropped_on_its_own() -> None:
+    profile = _profile(
+        notes=[
+            {"date": "2026-10-20", "text": "Prefers rice midweek", "source": "feedback"},
+            {"date": "2026-10-21", "text": INJECTION, "source": "feedback"},
+        ]
+    )
+
+    block = prompt_payload(profile, screen_profile(profile, decision_client=Decisions().client()))
+
+    assert block is not None
+    assert [note["text"] for note in block["notes"]] == ["Prefers rice midweek"]
+    assert block["habits"] == HABITS
+
+
+def test_an_injected_list_entry_drops_the_short_lists_together() -> None:
+    profile = _profile(loved_ingredients=["basil", INJECTION[:60]])
+
+    block = prompt_payload(profile, screen_profile(profile, decision_client=Decisions().client()))
+
+    assert block is not None
+    for field in ("favourite_meals", "loved_ingredients", "disliked_ingredients", "cuisines_liked", "cuisines_avoided"):
+        assert field not in block
+    assert block["habits"] == HABITS
+
+
+def test_the_log_counts_what_was_dropped_and_never_says_what(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO):
+        screen_profile(_profile(habits=INJECTION), decision_client=Decisions().client())
+
+    record = next(r for r in caplog.records if r.getMessage() == "the profile's free text was screened")
+    assert record.screened == 5  # type: ignore[attr-defined]
+    assert record.dropped == 1  # type: ignore[attr-defined]
+    assert "IGNORE" not in repr(record.__dict__)
+    assert "batch cook" not in repr(record.__dict__)
 
 
 def test_a_screen_that_cannot_answer_fails_closed() -> None:
     screened = screen_profile(_profile(), decision_client=Decisions(status=503).client())
 
     assert screened.outcome is ProfileTextOutcome.UNAVAILABLE
-    assert "habits" not in (prompt_payload(_profile(), screened) or {})
+    assert set(prompt_payload(_profile(), screened) or {}) == {"spice_tolerance", "protein_targets", "about"}
 
 
 def test_with_no_screen_at_all_the_free_text_is_dropped_without_a_call() -> None:

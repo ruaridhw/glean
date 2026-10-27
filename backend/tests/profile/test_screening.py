@@ -309,3 +309,43 @@ def _noul(probability: float, request: httpx.Request) -> httpx.Response:
         },
         request=request,
     )
+
+
+class _BrokenDecisions:
+    """A decision client that fails one way for one text and answers the rest."""
+
+    def __init__(self, *, raises: str = "", slow: str = "") -> None:
+        self.raises, self.slow = raises, slow
+
+    def decide(self, state: dict, _questions: dict) -> object:
+        import time  # noqa: PLC0415
+
+        from glean.decisions import Decision  # noqa: PLC0415
+
+        note = state["note"]
+        if note == self.raises:
+            raise RuntimeError("the client broke")
+        if note == self.slow:
+            time.sleep(0.5)
+        return Decision.model_validate(
+            {
+                "id": "d",
+                "model": "typesafe/jev-1.14-20261014",
+                "provider": "TypeSafe",
+                "answers": {"is_food_preference": {"type": "noul", "noul": 0.97}},
+                "usage": {"input_tokens": 1, "output_tokens": 1, "cost": 0.0},
+            }
+        )
+
+
+def test_screen_many_fails_each_text_closed_on_its_own() -> None:
+    from glean.screening import ScreenRejection, screen_many  # noqa: PLC0415
+
+    client = _BrokenDecisions(raises="broken", slow="slow")
+
+    results = screen_many(["fine", "broken", "slow", "fine", ""], decision_client=client, budget_s=0.2)  # ty: ignore[invalid-argument-type]
+
+    assert [result.passed for result in results] == [True, False, False, True, False]
+    assert results[1].rejection is ScreenRejection.UNAVAILABLE
+    assert results[2].rejection is ScreenRejection.UNAVAILABLE
+    assert results[4].rejection is None

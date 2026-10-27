@@ -16,6 +16,7 @@ import hashlib
 import threading
 import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -145,3 +146,37 @@ def screen(text: str, *, decision_client: DecisionClient) -> ScreenResult:
     )
     _remember(key, result)
     return result
+
+
+# A request's screens run together and share this much of its time; one that has not answered by then is dropped.
+SCREEN_MANY_BUDGET_S = 8.0
+_MAX_PARALLEL_SCREENS = 8
+
+
+def screen_many(
+    texts: list[str], *, decision_client: DecisionClient, budget_s: float = SCREEN_MANY_BUDGET_S
+) -> list[ScreenResult]:
+    """Screen each of *texts* on its own, in parallel, in order: one verdict per text, each failing closed.
+
+    Each text is one note to the screen, so its verdict is the one the bar was calibrated on, and a cached text costs
+    nothing. A screen that raises or has not answered within *budget_s* comes back `UNAVAILABLE`: dropped, like a
+    rejection. Distinct texts are asked once.
+    """
+    distinct = sorted({text for text in texts if text.strip()})
+    if not distinct:
+        return [_NOTHING_TO_SCREEN for _text in texts]
+    pool = ThreadPoolExecutor(max_workers=max(1, min(len(distinct), _MAX_PARALLEL_SCREENS)))
+    try:
+        futures = {text: pool.submit(screen, text, decision_client=decision_client) for text in distinct}
+        wait(futures.values(), timeout=budget_s)
+    finally:
+        # A screen still running outlives the request rather than holding it open; its text is dropped either way.
+        pool.shutdown(wait=False, cancel_futures=True)
+    verdicts: dict[str, ScreenResult] = {}
+    for text, future in futures.items():
+        if future.done() and not future.cancelled() and future.exception() is None:
+            verdicts[text] = future.result()
+        else:
+            logger.warning("a screen did not answer in time or failed; dropping its text")
+            verdicts[text] = ScreenResult(text=None, rejection=ScreenRejection.UNAVAILABLE)
+    return [verdicts.get(text, _NOTHING_TO_SCREEN) for text in texts]
