@@ -291,6 +291,27 @@ class ReasonKind(StrEnum):
     ANSWER = "answer"
 
 
+class NoteEvidence(StrEnum):
+    """What a profile note rests on (V15): a rated cook, the answer to the agent's question, or a swap note."""
+
+    RATING = "rating"
+    ANSWER = "answer"
+    SWAP_NOTE = "swap_note"
+
+
+class ProfileNote(BaseModel):
+    """A short, durable fact the agent inferred about the household, for it to Keep or dismiss (spec §6.4).
+
+    The household's profile never gains one without a Keep. Its bounds are checked by
+    `meal_plan.profile_notes`, not the schema, because structured output is not trusted to keep them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(description="One short sentence about the household, such as 'You prefer rice over pasta'")
+    evidence: NoteEvidence = Field(description="What it rests on: rating, answer or swap_note")
+
+
 class CorpusMealPlanAlternative(BaseModel):
     """A candidate the model offers instead of the one it chose, for the card's Swap."""
 
@@ -468,5 +489,12 @@ class MealPlanResult(BaseModel):
         description=(
             "What became of the week's note: used, or dropped and why. Null when no note was sent. The app shows "
             '"Couldn\'t use that note" for a drop; the chips apply either way.'
+        ),
+    )
+    profile_notes: list[ProfileNote] = Field(
+        default_factory=list,
+        description=(
+            "What the agent noticed about the household, for the 'Glean noted' card: at most three, each with "
+            "evidence from this session. Empty on a degraded plan; a swap carries the proposal's notes unchanged."
         ),
     )
