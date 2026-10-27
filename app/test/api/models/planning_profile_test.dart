@@ -42,32 +42,30 @@ void main() {
     expect(json.containsKey('interviewed_at'), isFalse);
   });
 
-  test(
-    'lists keep their first twenty entries, each at most sixty code points',
-    () {
-      final Map<String, dynamic> json = planningProfileJson(
-        HouseholdProfile(
-          lovedIngredients: <String>[for (int n = 0; n < 25; n++) 'item $n'],
-          dislikedIngredients: <String>['🍄' * 70],
-          favouriteMeals: <FavouriteMeal>[
-            for (int n = 0; n < 25; n++) FavouriteMeal(text: 'x' * 80),
-          ],
-        ),
-      )!;
+  test('lists keep their first twenty entries, each at most sixty code points', () {
+    final Map<String, dynamic> json = planningProfileJson(
+      HouseholdProfile(
+        lovedIngredients: <String>[for (int n = 0; n < 25; n++) 'item $n'],
+        dislikedIngredients: <String>['🍄' * 70],
+        favouriteMeals: <FavouriteMeal>[
+          for (int n = 0; n < 25; n++) FavouriteMeal(text: 'x' * 150),
+        ],
+      ),
+    )!;
 
-      expect(json['loved_ingredients'], hasLength(maxPlanningListEntries));
-      expect((json['loved_ingredients'] as List<String>).last, 'item 19');
-      // An emoji is one code point however many UTF-16 units it takes: the backend counts code points.
-      expect(
-        (json['disliked_ingredients'] as List<String>).single.runes,
-        hasLength(60),
-      );
-      final List<Map<String, dynamic>> meals =
-          (json['favourite_meals'] as List<Map<String, dynamic>>);
-      expect(meals, hasLength(20));
-      expect((meals.first['text'] as String).length, 60);
-    },
-  );
+    expect(json['loved_ingredients'], hasLength(maxPlanningListEntries));
+    expect((json['loved_ingredients'] as List<String>).last, 'item 19');
+    // An emoji is one code point however many UTF-16 units it takes: the backend counts code points.
+    expect(
+      (json['disliked_ingredients'] as List<String>).single.runes,
+      hasLength(60),
+    );
+    final List<Map<String, dynamic>> meals =
+        (json['favourite_meals'] as List<Map<String, dynamic>>);
+    expect(meals, hasLength(20));
+    // A favourite may be as long as a corpus title, which it is matched against: 120, not the lists' 60.
+    expect((meals.first['text'] as String).length, 120);
+  });
 
   test('free text is at most five hundred code points', () {
     final Map<String, dynamic> json = planningProfileJson(
