@@ -349,3 +349,17 @@ def test_screen_many_fails_each_text_closed_on_its_own() -> None:
     assert results[1].rejection is ScreenRejection.UNAVAILABLE
     assert results[2].rejection is ScreenRejection.UNAVAILABLE
     assert results[4].rejection is None
+
+
+def test_the_screen_never_logs_an_error_body_that_echoes_the_note(caplog: pytest.LogCaptureFixture) -> None:
+    import logging  # noqa: PLC0415
+
+    note = "kids-hate-mushrooms-household-text"
+    echo = httpx.Response(400, json={"error": {"message": f"bad state: {note}"}})
+
+    with caplog.at_level(logging.WARNING):
+        result = screen(note, decision_client=_client(response=echo))
+
+    assert not result.passed
+    assert note not in caplog.text
+    assert note not in "".join(str(record.exc_info) for record in caplog.records)

@@ -346,6 +346,18 @@ class TestTransportFailures:
         assert "429" in str(caught.value)
         assert API_KEY not in str(caught.value)
 
+    def test_a_caller_that_opts_in_gets_a_short_scrubbed_excerpt_of_the_body(self) -> None:
+        # Only a caller that sends no household text (the enrichment runner sends recipe text) may opt in.
+        state, questions = _probe()
+        explained = _respond_with({"error": {"message": f"schema mismatch {API_KEY} " + "x" * 500}}, status=400)
+
+        with pytest.raises(DecisionHTTPError) as caught:
+            _client(explained).decide(state, questions, error_excerpt=True)
+
+        assert "schema mismatch" in str(caught.value)
+        assert API_KEY not in str(caught.value)
+        assert len(str(caught.value)) < 300
+
     def test_an_http_error_never_carries_the_body_which_may_echo_the_household_text(self) -> None:
         # The message is logged with exc_info; an error body that quoted the note would put profile text in the logs.
         state, questions = _probe()
