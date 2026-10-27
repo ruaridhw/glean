@@ -174,8 +174,9 @@ class PlanningProfile(BaseModel):
     """The household profile (spec 6.4) as planning reads it: the device's own JSON, bounded for the wire.
 
     Disliked ingredients are a hard exclusion (`meal_plan.household`), the favourites, likes and protein targets are
-    scorer terms, and the free text reaches a prompt only once the injection screen passed it. Keys this backend
-    does not know are ignored, so a newer app's profile costs that key, not the Generate.
+    scorer terms, and the free text reaches a prompt only once the injection screen passed it. A top-level key this
+    backend does not know is ignored, so a newer app's profile costs that key, not the Generate; but a note or a
+    protein target is the profile's own strict shape (`profile.schemas`), so an unknown key inside one is a 422.
     """
 
     version: int = 1
