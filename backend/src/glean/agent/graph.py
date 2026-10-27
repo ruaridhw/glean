@@ -71,7 +71,7 @@ from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
 from glean.meal_plan.household import ScreenedProfile
-from glean.meal_plan.profile_notes import SessionEvidence, kept_notes, known_notes
+from glean.meal_plan.profile_notes import MAX_PROFILE_NOTES, SessionEvidence, kept_notes, known_notes
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanResponse,
@@ -168,6 +168,8 @@ class PlanState(TypedDict, total=False):
     swap: dict[str, Any] | None
     swap_note: str | None
     swap_pick: dict[str, Any] | None
+    # The notes the swap's `propose_replacement` carried, before `swap_finalise` keeps those its note supports.
+    swap_profile_notes: list[dict[str, Any]]
     swap_outcome: dict[str, Any] | None
 
 
@@ -442,6 +444,7 @@ class _Nodes:
             "prepared": prepared,
             "swap_note": note,
             "swap_pick": None,
+            "swap_profile_notes": [],
             "swap_outcome": None,
             "transcript": [],
             "pending": None,
@@ -477,7 +480,12 @@ class _Nodes:
         action = step.action
         update: PlanState = {"invalid_actions": step.invalid, "transcript": transcript}
         if isinstance(action, ProposeReplacement):
-            return {**update, "swap_pick": action.replacement.model_dump(mode="json"), "pending": None}
+            return {
+                **update,
+                "swap_pick": action.replacement.model_dump(mode="json"),
+                "swap_profile_notes": [note.model_dump(mode="json") for note in action.profile_notes],
+                "pending": None,
+            }
         if not isinstance(action, CallTool):
             return _degrade(DegradedReason.INVALID_ACTIONS, **update)
         if tool_calls >= MAX_SWAP_TOOL_CALLS:
@@ -519,6 +527,8 @@ class _Nodes:
             )
             if degraded and reason is None:
                 reason = DegradedReason.NOTHING_KEPT
+            if not degraded:
+                result = _with_swap_notes(state, result)
         logger.info(
             "agent swap finished",
             extra={
@@ -673,6 +683,24 @@ def _swap_context(state: PlanState, prepared: pipeline.PreparedPlan) -> dict[str
     }
 
 
+def _with_swap_notes(state: PlanState, result: MealPlanResult) -> MealPlanResult:
+    """*result* with the notes this swap may add: resting only on its own screened note, after the proposal's.
+
+    The proposal's notes stay as they were; a swap's note that repeats one of them, or one the profile knows, is
+    dropped, and together they are still at most `MAX_PROFILE_NOTES`. A swap the scorer finished adds none.
+    """
+    held = result.profile_notes
+    notes, dropped = kept_notes(
+        [ProfileNote.model_validate(note) for note in state.get("swap_profile_notes") or []],
+        SessionEvidence(rated=False, answered=False, swap_note=bool(state.get("swap_note"))),
+        known=[*known_notes(MealPlanRequest.model_validate(state["request"])), *(note.text for note in held)],
+        limit=MAX_PROFILE_NOTES - len(held),
+    )
+    if notes or dropped:
+        logger.info("swap profile notes", extra={"profile_notes_kept": len(notes), "profile_notes_dropped": dropped})
+    return result.model_copy(update={"profile_notes": [*held, *notes]})
+
+
 def _session_evidence(state: PlanState) -> SessionEvidence:
     """What this run holds that a profile note may rest on (V15)."""
     request = MealPlanRequest.model_validate(state["request"])
@@ -680,8 +708,8 @@ def _session_evidence(state: PlanState) -> SessionEvidence:
         # The rated cooks the model was shown, so a note never rests on one it could not see.
         rated=bool(rated_meals(request.cooked_history)),
         answered=bool(state.get("answered")),
-        # A week's run never has one: a swap comes after the proposal and carries its notes unchanged.
-        swap_note=bool(state.get("swap_note")),
+        # A week's run never has one: a swap's own notes are checked against its note in `swap_finalise`.
+        swap_note=False,
     )
 
 

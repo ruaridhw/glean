@@ -9,7 +9,8 @@ household sees them as "Glean noted" and Keeps or dismisses each; nothing reache
   already holds or has dismissed (`known_notes`);
 - its evidence must exist in this session (`SessionEvidence`): a rated cook in the history window, an answered
   question (V11), or a screened swap note (V10);
-- at most `MAX_PROFILE_NOTES`, the first that pass.
+- at most `MAX_PROFILE_NOTES`, the first that pass. A swap (V10) may add notes resting on its own screened
+  swap note, merged after the proposal's and within the same total.
 
 A note that fails is dropped, never repaired, and counted by reason for the session's log.
 """
@@ -63,9 +64,13 @@ def known_notes(request: MealPlanRequest) -> list[str]:
 
 
 def kept_notes(
-    notes: Iterable[ProfileNote], evidence: SessionEvidence, *, known: Iterable[str] = ()
+    notes: Iterable[ProfileNote],
+    evidence: SessionEvidence,
+    *,
+    known: Iterable[str] = (),
+    limit: int = MAX_PROFILE_NOTES,
 ) -> tuple[list[ProfileNote], dict[str, int]]:
-    """The notes the household may see, and how many were dropped for each reason."""
+    """The notes the household may see, at most *limit*, and how many were dropped for each reason."""
     kept: list[ProfileNote] = []
     seen: set[str] = set()
     held = {note_key(text) for text in known}
@@ -83,7 +88,7 @@ def kept_notes(
             reason = "known"
         elif not evidence.has(note.evidence):
             reason = "no_evidence"
-        elif len(kept) >= MAX_PROFILE_NOTES:
+        elif len(kept) >= limit:
             reason = "over_limit"
         if reason is not None:
             dropped[reason] += 1

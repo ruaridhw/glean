@@ -266,8 +266,9 @@ nothing reaches the profile unless the household taps Keep. `propose` may carry 
 keeps at most three (`meal_plan.profile_notes`): trimmed, at most 120 code points, no empties or
 case-insensitive repeats, and each resting on evidence this session holds -- a rated corpus cook (shown to
 the model as `rated_meals`, title and thumb only), an answered question, or a swap note. The rest are
-dropped and counted in the `agent session finished` log. A degraded week carries none; a swap keeps the
-proposal's notes unchanged.
+dropped and counted in the `agent session finished` log. A degraded week carries none. A swap keeps the
+proposal's notes and may add its own (`propose_replacement.profile_notes`), resting only on that swap's screened
+note, after the proposal's, deduplicated and within the same three; a swap the scorer finished adds none.
 
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
 conditional `queued -> running`, runs `agent.start`, and writes `done` or `failed`. Liveness is the
