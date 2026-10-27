@@ -1,4 +1,76 @@
+# The whole backend locally: the API, and the async stack behind POST /meal-plan/sessions.
+#
+#   make start-backend-docker
+#
+# `bootstrap` builds what CloudFormation builds in a deployed stack -- the DynamoDB tables, the
+# session queue and its dead-letter queue -- from backend/template.yaml itself, and seeds four sample
+# recipes into the shared corpus so a session can complete without the production corpus.
+#
+# `worker` is the same image as `backend`, running the local queue consumer over ElasticMQ with the
+# model stubbed out, so a run costs nothing. Set AGENT_LLM_STUB=0 on the worker to use the real model
+# (it then needs OPENROUTER_API_KEY from backend/.env, and the corpus, which locally is `.cache/`).
+
+x-agent-stack-environment: &agent-stack-environment
+  # The endpoint URLs only exist inside the compose network, so the API and the worker must be
+  # containers too; `make start-backend` runs on the host and cannot see them.
+  # DynamoDB Local and ElasticMQ accept any credentials, but botocore still wants some to sign with.
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_DEFAULT_REGION: eu-west-2
+  DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
+  SQS_ENDPOINT_URL: http://elasticmq:9324
+  AGENT_SESSIONS_TABLE: glean-agent-sessions-dev
+  AGENT_CHECKPOINTS_TABLE: glean-agent-checkpoints-dev
+  AGENT_SESSION_QUEUE_URL: http://elasticmq:9324/000000000000/glean-agent-sessions-dev
+  AGENT_SESSION_TTL_HOURS: "24"
+  CATALOGUE_TABLE: glean-catalogue-dev
+
+# Settings requires these even where nothing uses them: the bootstrap seeds the corpus and the
+# worker only consumes the queue, so neither needs a real key.
+x-local-placeholders: &local-placeholders
+  OPENROUTER_API_KEY: local-stub
+  RECIPE_API_KEY: local-stub
+  COGNITO_USER_POOL_ID: local-stub
+  COGNITO_APP_CLIENT_ID: local-stub
+  S3_RECEIPTS_BUCKET: local-stub
+
 services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "${DYNAMODB_LOCAL_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8000 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:latest
+    ports:
+      - "${ELASTICMQ_PORT:-9325}:9324"
+
+  bootstrap:
+    build:
+      context: ./backend
+      target: runtime
+    environment:
+      ENVIRONMENT: dev
+      GLEAN_TEMPLATE: /app/template.yaml
+      <<: [*agent-stack-environment, *local-placeholders]
+    volumes:
+      - ./backend/scripts/local_async_bootstrap.py:/app/local_async_bootstrap.py:ro
+      - ./backend/template.yaml:/app/template.yaml:ro
+      # A named volume, not a bind mount: the image's directory is owned by the unprivileged user the
+      # container runs as, and a bind mount would be owned by whoever ran `docker compose`.
+      - recipe-corpus:/app/.cache/glean_recipe_cache
+    depends_on:
+      - dynamodb-local
+      - elasticmq
+    command: ["python", "/app/local_async_bootstrap.py"]
+    restart: "no"
+
   backend:
     build:
       context: ./backend
@@ -8,7 +80,33 @@ services:
         required: false
     environment:
       ENVIRONMENT: dev
+      <<: [*agent-stack-environment, *local-placeholders]
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
-      - ./backend/.cache/glean_recipe_cache:/app/.cache/glean_recipe_cache
+      - recipe-corpus:/app/.cache/glean_recipe_cache
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+      target: runtime
+    environment:
+      ENVIRONMENT: dev
+      # The model is stubbed, so a local run needs no credits: the stub picks the first candidates.
+      AGENT_LLM_STUB: "1"
+      AGENT_RUNNER: queue
+      <<: [*agent-stack-environment, *local-placeholders]
+    volumes:
+      - recipe-corpus:/app/.cache/glean_recipe_cache
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    command: ["python", "-m", "glean.dev.worker_loop"]
+    restart: unless-stopped
+
+volumes:
+  # The local recipe corpus, shared by the bootstrap (which seeds it), the API and the worker.
+  recipe-corpus:

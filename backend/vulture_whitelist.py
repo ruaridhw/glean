@@ -128,3 +128,22 @@ normalise_names  # POST /catalogue/normalise route
 # catalogue/router.py: sync response fields and the route handler are read by FastAPI / the app
 groups  # CatalogueSyncResponse field
 sync_catalogue  # GET /catalogue route
+
+# agent sessions: the async stack's entry points, and the fields the app reads off a poll
+handler  # glean.worker.handler, referenced by template.yaml
+dlq_handler  # glean.worker.dlq_handler, referenced by template.yaml
+create_session  # FastAPI route handler (POST /meal-plan/sessions)
+get_session  # FastAPI route handler (GET /meal-plan/sessions/{id})
+WAITING_FOR_USER  # SessionStatus member: the app's contract, written once the agent can ask a question (V11)
+retry_after_minutes  # SessionError field, read by the app
+created_at  # SessionRecord field, kept for the table's own audit trail
+_plan_from_the_corpus  # Pydantic field validator (SessionRequest.source)
+writes  # InMemorySessionStore counter, asserted in tests that polling never writes
+# sessions/store.py: the queue and worker numbers template.yaml must declare, and the lease arithmetic
+# between them; all of them are asserted in tests/infra/test_template_async_stack.py.
+QUEUE_VISIBILITY_SECONDS
+WORKER_TIMEOUT_SECONDS
+LAMBDA_INIT_SECONDS
+QUEUE_VISIBILITY_MARGIN_SECONDS
+MAX_LEASE_SECONDS
+DEAD_LETTER_VISIBILITY_SECONDS  # the dead-letter queue's retry cadence, asserted in the template test

@@ -85,6 +85,7 @@ class Sandbox:
                 "LangSmithTracing": "true",
                 "LangSmithEndpoint": "https://eu.api.smith.langchain.com",
                 "RateLimitPerHour": "60",
+                "AgentSessionTtlHours": "24",
                 "GitSha": stamp,
             },
             lambda_env={
@@ -92,6 +93,7 @@ class Sandbox:
                 "LANGSMITH_TRACING": "true",
                 "LANGSMITH_ENDPOINT": "https://eu.api.smith.langchain.com",
                 "RATE_LIMIT_PER_HOUR": "60",
+                "AGENT_SESSION_TTL_HOURS": "24",
                 "GIT_SHA": stamp,
             },
             tags={"commit": stamp},

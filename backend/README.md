@@ -44,6 +44,17 @@ sets `LANGSMITH_API_KEY` in-process before LangChain calls are created.
 
 ### Deploying to prod
 
+**If the change touches `infra/bootstrap.yaml`, re-apply the bootstrap stack first.** The deploy role's
+permissions live there, and CloudFormation creates the tables, queues and Lambdas with that role's
+credentials, so a release that adds a resource fails until the role can manage it:
+
+```bash
+ALERT_EMAIL=<the same address as last time> infra/bootstrap.sh
+```
+
+That re-applies `glean-bootstrap` (the GitHub OIDC provider, `GleanDeployPolicyProd` and the DynamoDB budget).
+Pass the same `AlertEmail` as before, or the budget alert gains a second subscriber.
+
 Prod is deployed from CI on every push to `main` that touches `backend/`. For a manual deploy:
 
 ```bash
@@ -69,7 +80,42 @@ From the repo root:
 make start-backend-docker
 ```
 
-This builds the production backend image and starts FastAPI on `http://localhost:8000`, bound to all interfaces inside the container. The image installs only runtime dependencies, runs as a non-root user, and starts with `uvicorn`. The Compose service loads `backend/.env` when present and sets `ENVIRONMENT=dev` for local auth bypass.
+This brings up the whole backend: FastAPI on `http://localhost:8000` and the async stack behind
+`POST /meal-plan/sessions`.
+
+| Service | What it is |
+| --- | --- |
+| `backend` | The production image, serving the API. `ENVIRONMENT=dev` bypasses Cognito and loads `backend/.env` when present. |
+| `worker` | The same image, running `glean.dev.worker_loop`: a queue consumer over ElasticMQ with the model stubbed (`AGENT_LLM_STUB=1`), so a run costs nothing. |
+| `dynamodb-local` | `amazon/dynamodb-local`, in memory. |
+| `elasticmq` | An SQS stand-in for the session queue. |
+| `bootstrap` | Builds the tables, the queue and its dead-letter queue **from `template.yaml`**, then seeds four sample recipes into the shared corpus. Runs once, before the API and worker. |
+
+A whole session, end to end:
+
+```bash
+curl -s localhost:8000/meal-plan/sessions -H 'content-type: application/json' -d '{
+  "source": "corpus", "pantry": [{"id": 1, "name": "coriander", "quantity": 50, "unit": "g", "urgency_score": 150}],
+  "purchase_tolerance": 0.3, "meals_per_week": 3, "dietary_flags": [], "max_active_time_mins": null
+}' | jq -r .session_id | xargs -I{} curl -s localhost:8000/meal-plan/sessions/{} | jq
+```
+
+Set `AGENT_LLM_STUB=0` on the worker to use the real model instead, which needs `OPENROUTER_API_KEY`
+in `backend/.env`.
+
+A run that dies mid-graph is recoverable: the attempt that owns a session takes a lease at claim and
+never extends it, measured against its own invocation deadline rather than a constant, and the queue
+(150 s visibility) hands the message out again about 2.5 minutes after a crash. The new attempt takes
+the lapsed lease over and resumes from the LangGraph checkpoint. That is inside the app's five-minute
+cap, which is why the app shows `stalled` only when the network, not the worker, gave up. A delivery
+that finds another attempt still running fails rather than returning, so the message it was holding is
+never deleted unfinished — on the dead-letter queue too, where the handler raises while a live run owns
+the session and retries every 60 s until it can fail it.
+
+Only the containers can reach `dynamodb-local` and `elasticmq`. `make start-backend` runs on the
+host, so it cannot enqueue: set `AGENT_RUNNER=inline` in `backend/.env` to run sessions in the
+request instead of on a worker. That mode is also what unit tests and evals use, and it keeps
+sessions in memory and the checkpointer in process.
 
 ### Testing
 

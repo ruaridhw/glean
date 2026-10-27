@@ -12,6 +12,7 @@ import 'api_exception.dart';
 import 'models/catalogue.dart';
 import 'models/diagnostics.dart';
 import 'models/meal_plan.dart';
+import 'models/meal_plan_session.dart';
 import 'models/receipts.dart';
 import 'models/recipes.dart';
 import 'models/shopping.dart';
@@ -85,8 +86,12 @@ class GleanApiClient {
 
   // --- Meal plan ---
 
-  Future<MealPlanResponse> generateMealPlan(MealPlanRequest request) {
-    final uri = _uri('/meal-plan');
+  /// Starts a Generate run. The backend queues it and returns at once with the id to poll (202), so the call is
+  /// bounded by the request timeout rather than by how long planning takes.
+  Future<MealPlanSessionCreated> createMealPlanSession(
+    MealPlanRequest request,
+  ) {
+    final uri = _uri('/meal-plan/sessions');
     return _send(
       uri,
       () async => httpClient.post(
@@ -94,7 +99,25 @@ class GleanApiClient {
         headers: await _jsonHeaders(),
         body: jsonEncode(request.toJson()),
       ),
-      (dynamic json) => MealPlanResponse.fromJson(json as Map<String, dynamic>),
+      (dynamic json) =>
+          MealPlanSessionCreated.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  /// One poll of a Generate run. [after] is the cursor from the previous poll, so progress lines are not
+  /// repeated; pass 0 for the first poll.
+  Future<MealPlanSessionUpdate> getMealPlanSession(
+    String sessionId, {
+    int after = 0,
+  }) {
+    final uri = _uri('/meal-plan/sessions/${Uri.encodeComponent(sessionId)}', {
+      if (after > 0) 'after': '$after',
+    });
+    return _send(
+      uri,
+      () async => httpClient.get(uri, headers: await _authHeaders()),
+      (dynamic json) =>
+          MealPlanSessionUpdate.fromJson(json as Map<String, dynamic>),
     );
   }
 
@@ -324,6 +347,7 @@ class GleanApiClient {
     if (status == 429) {
       throw ApiRateLimitException(
         _detailMessage(response) ?? 'Too many requests',
+        retryAfterMinutes: _retryAfterMinutes(response),
       );
     }
     if (status == 422) {
@@ -363,6 +387,21 @@ class GleanApiClient {
         reason: 'the body has an unexpected shape (${error.runtimeType})',
       );
     }
+  }
+
+  /// The server's `Retry-After` in whole minutes, when it sends one as a number of seconds. The rate-limit
+  /// message names a wait, so prefer the server's figure over the caller's default; a missing or unparsable
+  /// header (an HTTP date, say) leaves the caller to choose.
+  /// The server's `Retry-After`, in whole minutes, when it sends one as a number of seconds (`60`). The
+  /// rate-limit message names a wait, so the server's figure beats the caller's default: seconds round up, and
+  /// never round down to "0 minutes". A missing header, or one carrying an HTTP date, leaves the caller to choose.
+  int? _retryAfterMinutes(http.Response response) {
+    final String? header = response.headers['retry-after'];
+    if (header == null) return null;
+    final int? seconds = int.tryParse(header.trim());
+    if (seconds == null) return null;
+    if (seconds <= 0) return 1;
+    return (seconds / 60).ceil();
   }
 
   dynamic _detail(http.Response response) {

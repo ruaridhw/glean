@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 
 import '../../support/harness.dart';
+import '../../support/session_backend.dart';
 
 class MockCorpusHttp extends Mock implements http.Client {}
 
@@ -42,21 +43,22 @@ void main() {
         jsonDecode(call.namedArguments[#body] as String)
             as Map<String, dynamic>,
       );
-      return http.Response(
-        jsonEncode({
-          'suggestions': [
-            for (final id in ids)
-              {
-                'recipe_id': null,
-                'external_id': id,
-                'title': id,
-                'reason': 'Pantry fit',
-              },
-          ],
-        }),
-        200,
-      );
+      return http.Response(jsonEncode({'session_id': 'session-1'}), 202);
     });
+    stubSessionPolls(
+      client,
+      result: {
+        'suggestions': [
+          for (final id in ids)
+            {
+              'recipe_id': null,
+              'external_id': id,
+              'title': id,
+              'reason': 'Pantry fit',
+            },
+        ],
+      },
+    );
   }
 
   void detail(String id, {int status = 200}) {
@@ -431,42 +433,43 @@ void main() {
     },
   );
 
-  test(
-    'pending spans detail fetch and duplicate picks never overfill',
-    () async {
-      suggest(['rec_new', 'rec_new']);
-      final pending = Completer<http.Response>();
-      when(
-        () => client.get(any(), headers: any(named: 'headers')),
-      ).thenAnswer((_) => pending.future);
-      final controller = harness.container.read(
-        generateWeekControllerProvider.notifier,
-      );
-      final operation = controller.generate(
-        weekStart: week,
-        slots: 2,
-        servings: 2,
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      await harness.container.pump();
-      expect(
-        harness.container.read(generateWeekControllerProvider).isLoading,
-        isTrue,
-      );
-      await controller.generate(weekStart: week, slots: 2, servings: 2);
-      pending.complete(
-        http.Response(
-          jsonEncode({'external_id': 'rec_new', 'title': 'Beans'}),
-          200,
-        ),
-      );
-      await operation;
-      final entries = await harness.container
-          .read(planRepositoryProvider)
-          .getWeek(userId: harness.userId, weekStart: week);
-      expect(entries, hasLength(1));
-    },
-  );
+  test('pending spans detail fetch and duplicate picks never overfill', () async {
+    suggest(['rec_new', 'rec_new']);
+    final pending = Completer<http.Response>();
+    // The detail fetch, not a session poll: the session stub above stays in place.
+    when(
+      () => client.get(
+        any(that: predicate<Uri>((uri) => uri.path == '/recipes/rec_new')),
+        headers: any(named: 'headers'),
+      ),
+    ).thenAnswer((_) => pending.future);
+    final controller = harness.container.read(
+      generateWeekControllerProvider.notifier,
+    );
+    final operation = controller.generate(
+      weekStart: week,
+      slots: 2,
+      servings: 2,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await harness.container.pump();
+    expect(
+      harness.container.read(generateWeekControllerProvider).isLoading,
+      isTrue,
+    );
+    await controller.generate(weekStart: week, slots: 2, servings: 2);
+    pending.complete(
+      http.Response(
+        jsonEncode({'external_id': 'rec_new', 'title': 'Beans'}),
+        200,
+      ),
+    );
+    await operation;
+    final entries = await harness.container
+        .read(planRepositoryProvider)
+        .getWeek(userId: harness.userId, weekStart: week);
+    expect(entries, hasLength(1));
+  });
 
   gleanWidgetTest('zero corpus picks show retry feedback, never success', (
     tester,

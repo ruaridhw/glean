@@ -12,6 +12,7 @@ import 'package:glean/features/plan/providers/generate_week_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:mocktail/mocktail.dart';
 import '../support/harness.dart';
+import '../support/session_backend.dart';
 
 class MHttp extends Mock implements http.Client {}
 
@@ -149,8 +150,9 @@ void main() {
         payload =
             jsonDecode(call.namedArguments[#body] as String)
                 as Map<String, dynamic>;
-        return http.Response('{"suggestions":[]}', 200);
+        return http.Response('{"session_id":"session-1"}', 202);
       });
+      stubSessionPolls(client, result: {'suggestions': <Object?>[]});
       await h.container
           .read(generateWeekControllerProvider.notifier)
           .generate(weekStart: week, slots: 2, servings: 1);
@@ -562,6 +564,20 @@ void main() {
         requestSeen.complete();
         return pending.future;
       });
+      stubSessionPolls(
+        client,
+        result: {
+          'suggestions': [
+            for (final id in ids)
+              {
+                'recipe_id': null,
+                'external_id': id,
+                'title': 'Dinner',
+                'reason': 'fit',
+              },
+          ],
+        },
+      );
       final op = h.container
           .read(generateWeekControllerProvider.notifier)
           .generate(weekStart: week, slots: 3, servings: 1);
@@ -578,22 +594,7 @@ void main() {
               maxActiveTimeMins: null,
             ),
           );
-      pending.complete(
-        http.Response(
-          jsonEncode({
-            'suggestions': [
-              for (final id in ids)
-                {
-                  'recipe_id': null,
-                  'external_id': id,
-                  'title': 'Dinner',
-                  'reason': 'fit',
-                },
-            ],
-          }),
-          200,
-        ),
-      );
+      pending.complete(http.Response('{"session_id":"session-1"}', 202));
       await op;
       expect(
         await h.container

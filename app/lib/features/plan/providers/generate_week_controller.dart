@@ -1,15 +1,18 @@
-/// Corpus generation is one pending operation: fetch/save first, then persist entries and shopping gaps in one
-/// transaction.
+/// Corpus generation is one pending operation: create a backend session, poll it to a terminal status, then
+/// fetch/save and persist entries and shopping gaps in one transaction.
 library;
 
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/meal_plan.dart';
+import 'package:glean/api/models/meal_plan_session.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
 import 'package:glean/data/models/recipe_view.dart';
+import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/providers/recipe_proposal.dart';
@@ -17,8 +20,54 @@ import 'package:glean/data/util/week.dart';
 
 import '../compression.dart';
 import '../food_groups.dart';
+import '../generate_failure.dart';
+
+/// How the session loop waits and measures. Injected so a test can drive the whole 1 s cadence and the 5 min cap
+/// without real delays: production sleeps for real and reads the wall clock.
+class GenerateSessionPoller {
+  const GenerateSessionPoller({
+    required this.sleep,
+    required this.now,
+    this.interval = const Duration(seconds: 1),
+    this.cap = const Duration(minutes: 5),
+  });
+
+  final Future<void> Function(Duration) sleep;
+  final DateTime Function() now;
+
+  /// The polling cadence the session design settles on. Polling faster would multiply the backend's read
+  /// traffic for no visible gain (V1 shows a spinner, not progress lines).
+  final Duration interval;
+
+  /// The V1 cap on a run. A session that never reports a terminal status (the network died between create and
+  /// the last poll) ends the attempt as `stalled` rather than spinning forever.
+  final Duration cap;
+}
+
+final generateSessionPollerProvider = Provider<GenerateSessionPoller>(
+  (ref) => GenerateSessionPoller(
+    sleep: (Duration duration) => Future<void>.delayed(duration),
+    now: ref.watch(clockProvider),
+  ),
+);
+
+/// The arguments of one Generate attempt, kept so the error snackbar's Retry can repeat exactly the same one. A
+/// failed attempt never writes, so the slots it asked for are still the right ones.
+class _GenerateArgs {
+  const _GenerateArgs({
+    required this.weekStart,
+    required this.slots,
+    required this.servings,
+  });
+
+  final DateTime weekStart;
+  final int slots;
+  final int servings;
+}
 
 class GenerateWeekController extends AsyncNotifier<int> {
+  _GenerateArgs? _lastAttempt;
+
   @override
   FutureOr<int> build() => 0;
 
@@ -28,9 +77,25 @@ class GenerateWeekController extends AsyncNotifier<int> {
     required int servings,
   }) async {
     if (state.isLoading) return;
+    _lastAttempt = _GenerateArgs(
+      weekStart: weekStart,
+      slots: slots,
+      servings: servings,
+    );
     state = const AsyncLoading<int>();
     state = await AsyncValue.guard(
       () => _generate(weekStart: weekStart, slots: slots, servings: servings),
+    );
+  }
+
+  /// Repeats the last attempt, for the failure snackbar's Retry action.
+  Future<void> retry() async {
+    final _GenerateArgs? last = _lastAttempt;
+    if (last == null) return;
+    await generate(
+      weekStart: last.weekStart,
+      slots: last.slots,
+      servings: last.servings,
     );
   }
 
@@ -98,9 +163,7 @@ class GenerateWeekController extends AsyncNotifier<int> {
       maxActiveTimeMins: config.maxActiveTimeMins,
       localDate: formatDate(now),
     );
-    final MealPlanResponse response = await ref
-        .read(apiClientProvider)
-        .generateMealPlan(request);
+    final MealPlanResponse response = await _runSession(request);
 
     final resolved = <RecipeView>[];
     final seenIds = <int>{};
@@ -169,6 +232,61 @@ class GenerateWeekController extends AsyncNotifier<int> {
       }
       return inserted;
     });
+  }
+
+  /// Creates a session and polls it to a terminal status, then returns the meal plan it produced. Every way the
+  /// attempt can end is a [GenerateFailure], so the Plan tab renders one catalogue however it failed.
+  Future<MealPlanResponse> _runSession(MealPlanRequest request) async {
+    final api = ref.read(apiClientProvider);
+    final GenerateSessionPoller poller = ref.read(
+      generateSessionPollerProvider,
+    );
+    final MealPlanSessionCreated session;
+    try {
+      session = await api.createMealPlanSession(request);
+    } on ApiException catch (error) {
+      throw GenerateFailure.fromApi(error);
+    }
+    final DateTime startedAt = poller.now();
+    var cursor = 0;
+    while (true) {
+      if (poller.now().difference(startedAt) >= poller.cap) {
+        throw const GenerateFailure(GenerateFailureKind.stalled);
+      }
+      try {
+        final MealPlanSessionUpdate update = await api.getMealPlanSession(
+          session.sessionId,
+          after: cursor,
+        );
+        cursor = update.nextCursor;
+        switch (update.status) {
+          case MealPlanSessionStatus.done:
+            final MealPlanResponse? result = update.result;
+            // A done session that carries no plan is a broken response, not an empty week.
+            if (result == null) {
+              throw const GenerateFailure(GenerateFailureKind.unknown);
+            }
+            return result;
+          case MealPlanSessionStatus.failed:
+            throw GenerateFailure.fromCode(
+              update.error?.code,
+              retryAfterMinutes: update.error?.retryAfterMinutes,
+            );
+          default:
+            // queued, running, waiting_for_user (V3 answers those) or a status this build does not know:
+            // poll again.
+            break;
+        }
+      } on ApiException catch (error) {
+        // A 404 means the server holds no such session (expired, or never this user's); polling cannot
+        // recover it. Anything else is one missed poll, not a failed run: keep polling, and let the cap end
+        // the run if they never stop.
+        if (error is ApiServerException && error.statusCode == 404) {
+          throw const GenerateFailure(GenerateFailureKind.unknown);
+        }
+      }
+      await poller.sleep(poller.interval);
+    }
   }
 }
 

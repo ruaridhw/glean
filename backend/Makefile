@@ -1,9 +1,16 @@
 # SAM BuildMethod: makefile targets
 # SAM calls `make build-<LogicalId>` and expects output in $(ARTIFACTS_DIR)
 
-.PHONY: build-GleanFunction build-PreSignUpFunction
+.PHONY: build-GleanFunction build-AgentWorkerFunction build-AgentDeadLetterFunction build-PreSignUpFunction
 
-build-GleanFunction:
+# The API, the worker and the dead-letter handler are one bundle: all of src/glean plus every runtime
+# dependency. They are separate functions (different handlers, timeouts and policies) but not separate
+# code, and the worker imports the agent module, which imports LangGraph — so a copy of only its
+# entrypoint would not run.
+.PHONY: build-backend-bundle
+build-GleanFunction build-AgentWorkerFunction build-AgentDeadLetterFunction: build-backend-bundle
+
+build-backend-bundle:
 	uv export --frozen --no-dev --no-editable -o requirements.txt
 	uv pip install \
 		--no-installer-metadata \

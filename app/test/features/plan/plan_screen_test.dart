@@ -8,8 +8,8 @@ import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import '../../support/harness.dart';
+import '../../support/session_backend.dart';
 
 void main() {
   late AppTestHarness h;
@@ -313,7 +313,7 @@ void main() {
       final response = Completer<http.Response>();
       var requests = 0;
       h = AppTestHarness(
-        httpClient: MockClient((_) {
+        httpClient: sessionRoutes((_) {
           requests++;
           return response.future;
         }),
