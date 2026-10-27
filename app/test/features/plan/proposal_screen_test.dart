@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/meal_thumb.dart';
+import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/recipes_repository.dart';
 import 'package:glean/data/util/week.dart';
@@ -15,6 +16,7 @@ import 'package:glean/features/plan/widgets/proposal_meal_card.dart';
 import 'package:glean/router/app_routes.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:riverpod/misc.dart' show Override;
 
 import '../../support/harness.dart';
 import '../../support/session_backend.dart';
@@ -671,6 +673,11 @@ void main() {
 
         final h = AppTestHarness(
           httpClient: proposalBackend(result: sampleResult()),
+          // A week across two months has the longest app-bar label ("26 Oct – 1 Nov"); pinned so the
+          // check does not pass or fail with the calendar.
+          overrides: <Override>[
+            clockProvider.overrideWithValue(() => DateTime(2026, 10, 27, 12)),
+          ],
         );
         addTearDown(h.dispose);
 
@@ -678,7 +685,7 @@ void main() {
         expect(
           tester.takeException(),
           isNull,
-          reason: 'the bottom action bar must wrap, not overflow',
+          reason: 'neither the app bar nor the bottom action bar may overflow',
         );
         expect(find.text('Add 2 dinners to plan'), findsOneWidget);
 

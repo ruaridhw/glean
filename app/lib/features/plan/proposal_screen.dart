@@ -171,13 +171,24 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
           ),
           title: const Text('Plan this week'),
           actions: <Widget>[
+            // Capped and scaled down, not left at its natural width: a week that spans two months
+            // ("26 Oct – 1 Nov") at 2x text is wider than a 320 px screen, and the app bar's actions Row
+            // overflows. At ordinary sizes it fits the cap and renders unchanged.
             Padding(
               padding: EdgeInsets.only(right: context.tokens.spacing.md),
               child: Center(
-                child: Text(
-                  weekRangeLabel(weekStart),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.4,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      weekRangeLabel(weekStart),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ),
               ),
