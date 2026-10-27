@@ -116,6 +116,7 @@ class MealPlanRequest {
     this.cookedHistory = const [],
     this.localDate,
     this.humanFeedback,
+    this.profile,
   });
 
   /// Top-N urgency-scored pantry items (staples and zero-quantity items
@@ -151,6 +152,9 @@ class MealPlanRequest {
 
   /// This week's chips and note; null when nothing is set.
   final HumanFeedbackRequest? humanFeedback;
+
+  /// The household profile, already bounded for the wire (`planningProfileJson`); null when there is none.
+  final Map<String, dynamic>? profile;
 
   Map<String, dynamic> toJson() => _$MealPlanRequestToJson(this);
 }
