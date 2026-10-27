@@ -707,6 +707,15 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Use alternative'));
         await tester.pumpAndSettle();
+        // A tall card can leave its own title row scrolled out of the built range; bring it back first.
+        await tester.scrollUntilVisible(
+          find.text('Swap back'),
+          -200,
+          scrollable: find.descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          ),
+        );
         expect(find.text('Swap back'), findsOneWidget);
         expect(
           tester.takeException(),
