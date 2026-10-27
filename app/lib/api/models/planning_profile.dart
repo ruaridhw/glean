@@ -1,7 +1,8 @@
 /// The household profile as `POST /meal-plan` and `POST /meal-plan/sessions` send it, as `profile`.
 ///
 /// The backend refuses (422) a profile past these bounds rather than clipping it, so the app clips on the way out:
-/// the first [maxPlanningListEntries] entries of each list, each string at most [maxPlanningTextChars] code points,
+/// the first [maxPlanningListEntries] entries of each list, each string at most [maxPlanningTextChars] code points
+/// (a favourite meal [maxPlanningFavouriteChars], because it is matched against corpus titles),
 /// the two free-text fields at most [maxPlanningParagraphChars], and only the newest [maxPlanningNotes] notes, each
 /// at most [maxPlanningNoteChars]. Code points, not UTF-16 units, because that is what the backend counts. The
 /// numbers mirror `PlanningProfile` in the backend's `meal_plan/schemas.py`.
@@ -11,6 +12,7 @@ import '../../data/models/household_profile.dart';
 
 const int maxPlanningListEntries = 20;
 const int maxPlanningTextChars = 60;
+const int maxPlanningFavouriteChars = 120;
 const int maxPlanningParagraphChars = 500;
 const int maxPlanningNotes = 20;
 const int maxPlanningNoteChars = 200;
@@ -28,7 +30,7 @@ Map<String, dynamic>? planningProfileJson(HouseholdProfile? profile) {
         maxPlanningListEntries,
       ))
         <String, dynamic>{
-          'text': _clip(meal.text, maxPlanningTextChars),
+          'text': _clip(meal.text, maxPlanningFavouriteChars),
           'recipe_id': meal.recipeId,
         },
     ],

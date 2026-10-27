@@ -84,9 +84,12 @@ def test_a_list_entry_longer_than_the_bound_is_refused_in_code_points(field: str
         PlanningProfile.model_validate(_profile(**{field: ["🍄" * (MAX_PLANNING_TEXT_CHARS + 1)]}))
 
 
-def test_a_favourite_meal_longer_than_the_bound_is_refused() -> None:
+def test_a_favourite_meal_may_be_as_long_as_a_corpus_title_but_no_longer() -> None:
+    # 120 code points, the interview's own bound: an unmatched favourite matches by exact title, and a third of the
+    # corpus's titles are longer than the 60 the other lists allow.
+    PlanningProfile.model_validate(_profile(favourite_meals=[{"text": "🍲" * 120}]))
     with pytest.raises(ValidationError):
-        PlanningProfile.model_validate(_profile(favourite_meals=[{"text": "x" * (MAX_PLANNING_TEXT_CHARS + 1)}]))
+        PlanningProfile.model_validate(_profile(favourite_meals=[{"text": "x" * 121}]))
 
 
 @pytest.mark.parametrize("field", ["habits", "household"])

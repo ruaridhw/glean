@@ -180,7 +180,7 @@ src/glean/
                       #   `without_note(request)` and the ScreenedFeedback. A chip the backend does not
                       #   know is ignored with a warning, not a 422
                       # household.py: the household profile as planning reads it (V13b). The request's
-                      #   `profile` (schemas.PlanningProfile: lists <= 20 x 60 code points, habits and household
+                      #   `profile` (schemas.PlanningProfile: lists <= 20 x 60 code points, favourites 120, habits and household
                       #   <= 500, the newest 20 notes <= 200; past that a 422, never a clip) is used three ways:
                       #   disliked ingredients are a hard constraint beside the dietary decisions, in the sampler
                       #   and get_eligible_recipes, before the floor (whole words, plurals folded, "nut" never hits

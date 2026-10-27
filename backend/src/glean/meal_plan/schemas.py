@@ -33,6 +33,9 @@ MAX_PLANNING_TEXT_CHARS = 60
 MAX_PLANNING_PARAGRAPH_CHARS = 500
 MAX_PLANNING_NOTES = 20
 MAX_PLANNING_NOTE_CHARS = 200
+# A favourite meal is matched to a corpus recipe by its exact title when the interview found no recipe id, and a third
+# of the corpus's titles are longer than 60, so it takes the interview's own 120 (owner ruling 2026-10-27).
+MAX_PLANNING_FAVOURITE_CHARS = 120
 
 _PlanningText = Annotated[str, Field(min_length=1, max_length=MAX_PLANNING_TEXT_CHARS)]
 
@@ -157,7 +160,7 @@ class FeedbackNoteOutcome(StrEnum):
 class PlanningFavourite(BaseModel):
     """A favourite dinner, and the corpus recipe the interview matched it to, if any."""
 
-    text: _PlanningText
+    text: str = Field(min_length=1, max_length=MAX_PLANNING_FAVOURITE_CHARS)
     recipe_id: str | None = Field(default=None, max_length=200)
 
 
