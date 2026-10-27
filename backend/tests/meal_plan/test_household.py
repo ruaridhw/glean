@@ -51,6 +51,41 @@ def test_a_dislike_never_matches_inside_another_word(dislike: str, ingredient: s
     assert not mentions_disliked([ingredient], dislike)
 
 
+@pytest.mark.parametrize(
+    ("dislike", "ingredient"),
+    [
+        ("olives", "olive oil"),
+        ("olive", "extra virgin olive oil"),
+        ("pepper", "black pepper"),
+        ("peppers", "freshly ground black pepper"),
+        ("pepper", "white pepper"),
+        ("pepper", "ground pepper"),
+        ("pepper", "cracked black pepper"),
+        ("pepper", "peppercorns"),
+    ],
+)
+def test_a_staple_phrase_never_triggers_the_bare_dislike_of_its_modifier(dislike: str, ingredient: str) -> None:
+    # A household that dislikes olives still cooks with olive oil; one that dislikes peppers still seasons.
+    assert not mentions_disliked([ingredient], dislike)
+
+
+@pytest.mark.parametrize(
+    ("dislike", "ingredient"),
+    [
+        ("olive oil", "olive oil"),
+        ("black pepper", "cracked black pepper"),
+        ("olives", "olive oil and black olives"),
+        ("pepper", "red pepper"),
+        ("peppers", "black pepper, roasted peppers"),
+        ("oil", "olive oil"),
+    ],
+)
+def test_the_stop_list_only_ever_spares_the_staple_itself(dislike: str, ingredient: str) -> None:
+    # A dislike that names the phrase, an ingredient that also names the disliked thing, or a dislike of the head
+    # word still excludes: the list is small because a dislike may be an allergy.
+    assert mentions_disliked([ingredient], dislike)
+
+
 def test_a_blank_dislike_matches_nothing() -> None:
     assert not mentions_disliked(["mushrooms"], "  ")
 
