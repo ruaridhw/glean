@@ -258,6 +258,21 @@ void main() {
     },
   );
 
+  gleanWidgetTest(
+    'a dismiss that cannot be remembered still hides the note and adds none',
+    (tester) async {
+      final h = await open(tester);
+      await h.failInsertsOn('household_profiles');
+
+      await tester.tap(_inRow(_kids, find.byIcon(Icons.close_rounded)));
+      await tester.pumpAndSettle();
+
+      expect(_row(_kids), findsNothing);
+      expect(_row(_rice), findsOneWidget);
+      expect(await profile(h), isNull);
+    },
+  );
+
   gleanWidgetTest('the card goes once every note is handled', (tester) async {
     final h = await open(tester);
 
