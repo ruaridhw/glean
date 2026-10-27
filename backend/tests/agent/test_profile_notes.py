@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from glean.agent import graph, start
+from glean.agent.actions import MAX_ACTION_NOTE_CHARS, MAX_ACTION_NOTES, PlanStep, SwapStep
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, SWAP_SYSTEM_PROMPT
 from glean.sessions.models import HouseholdReply, SessionStatus, SwapMessage
 from tests.agent.test_graph import NOTE, NOW, Run, ScriptedModel, _request, ask, propose_first
@@ -360,3 +361,46 @@ class TestPrompt:
             {"title": "Synthetic dish 00", "rating": "up"},
         ]
         assert NOTE not in model.users[0]
+
+
+class TestActionBounds:
+    """What an action may carry is bounded before it is checkpointed; `kept_notes` then keeps at most three."""
+
+    @staticmethod
+    def _week(notes: list[dict[str, str]]) -> dict[str, Any]:
+        return {
+            "action": {
+                "kind": "propose",
+                "proposal": {"suggestions": [{"external_id": "a", "title": "A", "reason": "R."}]},
+                "profile_notes": notes,
+            }
+        }
+
+    @staticmethod
+    def _swap(notes: list[dict[str, str]]) -> dict[str, Any]:
+        return {
+            "action": {
+                "kind": "propose_replacement",
+                "replacement": {"external_id": "a", "title": "A", "reason": "R."},
+                "profile_notes": notes,
+            }
+        }
+
+    @pytest.mark.parametrize(("schema", "wrap"), [(PlanStep, "_week"), (SwapStep, "_swap")])
+    def test_ten_notes_of_five_hundred_characters_parse(self, schema: Any, wrap: str) -> None:
+        notes = [{"text": "n" * MAX_ACTION_NOTE_CHARS, "evidence": "rating"}] * MAX_ACTION_NOTES
+
+        assert len(schema.model_validate(getattr(self, wrap)(notes)).action.profile_notes) == MAX_ACTION_NOTES
+
+    @pytest.mark.parametrize(("schema", "wrap"), [(PlanStep, "_week"), (SwapStep, "_swap")])
+    @pytest.mark.parametrize(
+        "notes",
+        [
+            [{"text": "n", "evidence": "rating"}] * (MAX_ACTION_NOTES + 1),
+            [{"text": "n" * (MAX_ACTION_NOTE_CHARS + 1), "evidence": "rating"}],
+        ],
+        ids=["too many", "too long"],
+    )
+    def test_more_or_longer_notes_do_not_parse(self, schema: Any, wrap: str, notes: list[dict[str, str]]) -> None:
+        with pytest.raises(ValueError, match="validation error"):
+            schema.model_validate(getattr(self, wrap)(notes))
