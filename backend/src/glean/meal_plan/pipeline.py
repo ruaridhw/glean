@@ -526,6 +526,15 @@ def _floor_history(
     return [meal for meal in cooked if meal.recipe_id not in last_week], last_week
 
 
+def corpus_titles(corpus: RecipeCorpusStore, recipe_ids: Sequence[str]) -> dict[str, str]:
+    """The corpus's own title for each of *recipe_ids* it holds, from the search index planning already reads."""
+    wanted = set(recipe_ids)
+    if not wanted:
+        return {}
+    summaries = corpus.search(per_page=_ALL_RECIPES)[0]
+    return {summary.external_id: summary.title for summary in summaries if summary.external_id in wanted}
+
+
 def tool_context(
     request: MealPlanRequest,
     *,
