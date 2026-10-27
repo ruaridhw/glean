@@ -10,7 +10,8 @@ household sees them as "Glean noted" and Keeps or dismisses each; nothing reache
   goes back into future prompts;
 - no repeats, compared case-insensitively with runs of whitespace as one space, and none the household's profile
   already holds or has dismissed (`known_notes`);
-- its evidence must exist in this session (`SessionEvidence`): a rated cook in the history window, an answered
+- its evidence must exist in this session (`SessionEvidence`): at least `MIN_RATED_COOKS` rated corpus cooks in
+  the history window, an answered
   question (V11), or a screened swap note (V10);
 - at most `MAX_PROFILE_NOTES`, the first that pass. A swap (V10) may add notes resting on its own screened
   swap note, merged after the proposal's and within the same total.
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
 
 MAX_PROFILE_NOTES = 3
 MAX_PROFILE_NOTE_CHARS = 120
+# One thumb is not a pattern: a rating note needs at least this many rated corpus cooks in the window.
+MIN_RATED_COOKS = 2
 # Control and format characters: nothing a household would type in a one-line note, and a way to hide text.
 _UNPRINTABLE = frozenset({"Cc", "Cf"})
 
