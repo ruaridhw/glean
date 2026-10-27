@@ -9,26 +9,25 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, ValidationError
 
-from glean.decisions import DECISION_MODEL, DecisionError, NoulCriteria, NoulQuestion
+from glean.decisions import DEFAULT_MODEL, DecisionError, DecisionModel, NoulCriteria, NoulQuestion
 from glean.observability import logger
 from glean.recipe_api.blob_store import BlobStore  # noqa: TC001 - runtime annotation
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from glean.decisions import DecisionClient
     from glean.recipes.corpus import RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
 
-_CURRENT_MODEL = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")  # as DecisionClient accepts it
 _EVERYTHING = 1_000_000
 _CHECKPOINT_EVERY = 25
 
@@ -42,29 +41,62 @@ LEGACY_NUT_FREE = "nut-free"
 # Flags the decision model is asked about. Others (Keto, Paleo) are left to the meal-plan model.
 DIETARY_FLAGS = ("vegetarian", "vegan", "dairy-free", "gluten-free", TREE_NUT_FREE, PEANUT_FREE)
 
-# Exclude when the probability that the recipe breaks the flag reaches the threshold.
-# Set from the labelled samples (tests/fixtures/decisions/dietary_sample.json, 63 rows, and dietary_regex_coverage.json,
-# 182 recipes) answered by typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all
-# 632 prod-corpus recipes. Ground truth there is the retailer's ingredient lists, then the maintainer's labels, then
-# two judges and the old regex in agreement:
-#   tree-nut-free: 41 recipes break it, every one scored >= 0.95; 1 of 570 clean recipes scores >= 0.3 (0.84)
-#   peanut-free:   36 recipes break it, every one scored >= 0.86; 1 of 576 clean recipes scores >= 0.3 (0.44)
-# Both thresholds start from the 0.3 the single nut flag used and miss nothing on the corpus; 0.3 sits 0.65 (tree)
-# and 0.56 (peanut) below the lowest violator. On the samples tree-nut-free is clean to 0.11 (a bare korma paste);
-# peanut-free scores dukkah 0.45, praline 0.35 and a bare chilli crisp 0.33 clean-labelled, which it excludes.
-# Only nuts in the ingredients count: a "may contain nuts" warning is ignored, and korma, tikka masala and pasanda
-# pastes are not special (a tree nut is listed in 0 of 9 korma and 1 of 7 tikka masala pastes sold).
-# Preferences sit between the clusters: 0.12 above the highest clean recipe (gluten-free), 0.27 below the
-# lowest violator (gluten-free). 0.50 rather than higher because the gluten-free recipe `rec_d1cddd00fba23e5a`
-# of the prod corpus scores 0.52 and must be excluded.
-TREE_NUT_FREE_THRESHOLD = 0.3
-PEANUT_FREE_THRESHOLD = 0.3
-PREFERENCE_THRESHOLD = 0.5
-THRESHOLDS = {TREE_NUT_FREE: TREE_NUT_FREE_THRESHOLD, PEANUT_FREE: PEANUT_FREE_THRESHOLD}
+# Thresholds, model identity and their provenance live together: a flag's cutoff is only meaningful for the
+# model it was measured against, so the two are one reviewed value rather than separate constants.
+_CALIBRATION_EVIDENCE = """
+Set from the labelled samples (tests/fixtures/decisions/dietary_sample.json, 63 rows, and dietary_regex_coverage.json,
+182 recipes) answered by typesafe/jev-1.14-20261014 on 2026-10-16 under the criteria below, and checked against all
+632 prod-corpus recipes. Ground truth there is the retailer's ingredient lists, then the maintainer's labels, then
+two judges and the old regex in agreement:
+  tree-nut-free: 41 recipes break it, every one scored >= 0.95; 1 of 570 clean recipes scores >= 0.3 (0.84)
+  peanut-free:   36 recipes break it, every one scored >= 0.86; 1 of 576 clean recipes scores >= 0.3 (0.44)
+Both thresholds start from the 0.3 the single nut flag used and miss nothing on the corpus; 0.3 sits 0.65 (tree)
+and 0.56 (peanut) below the lowest violator. On the samples tree-nut-free is clean to 0.11 (a bare korma paste);
+peanut-free scores dukkah 0.45, praline 0.35 and a bare chilli crisp 0.33 clean-labelled, which it excludes.
+Only nuts in the ingredients count: a "may contain nuts" warning is ignored, and korma, tikka masala and pasanda
+pastes are not special (a tree nut is listed in 0 of 9 korma and 1 of 7 tikka masala pastes sold).
+Preferences sit between the clusters: 0.12 above the highest clean recipe (gluten-free), 0.27 below the
+lowest violator (gluten-free). 0.50 rather than higher because the gluten-free recipe `rec_d1cddd00fba23e5a`
+of the prod corpus scores 0.52 and must be excluded.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class DietaryCalibration:
+    """The model whose probabilities the dietary cutoffs were measured on, and the cutoffs themselves.
+
+    `evidence` records what the thresholds were measured against. It is provenance, not proof: a
+    substitution needs its own measurement at its own cutoffs before this value names it.
+    """
+
+    model: DecisionModel
+    thresholds: Mapping[str, float]
+    default_threshold: float
+    evidence: str
+
+    def threshold_for(self, flag: str) -> float:
+        return self.thresholds.get(flag, self.default_threshold)
+
+
+CALIBRATED_DIETARY = DietaryCalibration(
+    model=DEFAULT_MODEL,
+    # Exclude when the probability that the recipe breaks the flag reaches the threshold.
+    thresholds=MappingProxyType({TREE_NUT_FREE: 0.3, PEANUT_FREE: 0.3}),
+    default_threshold=0.5,
+    evidence=_CALIBRATION_EVIDENCE,
+)
+TREE_NUT_FREE_THRESHOLD = CALIBRATED_DIETARY.threshold_for(TREE_NUT_FREE)
+PEANUT_FREE_THRESHOLD = CALIBRATED_DIETARY.threshold_for(PEANUT_FREE)
+PREFERENCE_THRESHOLD = CALIBRATED_DIETARY.default_threshold
+THRESHOLDS = CALIBRATED_DIETARY.thresholds
 
 
 class CorpusUnavailableError(Exception):
     """Candidate selection can't see any corpus recipe, so there is nothing coverage could be measured against."""
+
+
+class UncalibratedModelError(Exception):
+    """The client asks a model the dietary calibration doesn't cover, so its answers can't decide anything yet."""
 
 
 class DietaryDecision(BaseModel):
@@ -117,10 +149,11 @@ class DietaryDecisionStore:
 
 
 class DietaryDecisions:
-    """Stored decisions, looked up by (recipe id, flag)."""
+    """Stored decisions, looked up by (recipe id, flag), read under one calibration."""
 
-    def __init__(self, decisions: list[DietaryDecision]) -> None:
+    def __init__(self, decisions: list[DietaryDecision], *, calibration: DietaryCalibration) -> None:
         self._by_key = {(decision.recipe_id, decision.flag): decision for decision in decisions}
+        self._calibration = calibration
 
     def excludes(self, summary: RecipeSummary, flag: str) -> bool:
         """Whether a stored decision rules the recipe out under `flag` (a normalised flag name).
@@ -134,18 +167,18 @@ class DietaryDecisions:
         if flag not in DIETARY_FLAGS:
             return False
         decision = self._by_key.get((summary.external_id, flag))
-        if decision is None or not _is_current(decision, summary):
+        if decision is None or not _is_current(decision, summary, self._calibration):
             return True
-        return decision.probability >= THRESHOLDS.get(flag, PREFERENCE_THRESHOLD)
+        return decision.probability >= self._calibration.threshold_for(flag)
 
 
-def _is_current(decision: DietaryDecision, summary: RecipeSummary) -> bool:
-    # Thresholds are calibrated to one model version (`model` is the model's dated snapshot of it) and to the
+def _is_current(decision: DietaryDecision, summary: RecipeSummary, calibration: DietaryCalibration) -> bool:
+    # Thresholds are calibrated to one model identity (`model` is the endpoint's dated snapshot of it) and to the
     # criteria text; a decision only speaks for the title and ingredients it was asked about.
     # A flag that is no longer asked about (the old nut-free) can't be current, whatever it was computed under.
     return (
         decision.flag in _QUESTIONS
-        and _CURRENT_MODEL.fullmatch(decision.model) is not None
+        and calibration.model.accepts(decision.model)
         and decision.content_hash == content_fingerprint(summary.title, summary.ingredient_names)
         and decision.criteria_hash == question_hash(_QUESTIONS[decision.flag])
     )
@@ -272,14 +305,21 @@ def produce_missing_decisions(
     corpus: RecipeCorpusStore,
     client: DecisionClient,
     *,
+    calibration: DietaryCalibration = CALIBRATED_DIETARY,
     flags: tuple[str, ...] = DIETARY_FLAGS,
     max_workers: int = 8,
 ) -> CoverageReport:
     """Ask the decision model about each (recipe, flag) lacking a current decision, and store the answers.
 
     One request per recipe carries all its missing flags. A recipe the model can't answer is
-    left uncovered (and so excluded under every flag) and retried on the next run.
+    left uncovered (and so excluded under every flag) and retried on the next run. A client asking a
+    model the calibration doesn't cover is refused before any request or write.
     """
+    if client.model.request != calibration.model.request:
+        raise UncalibratedModelError(
+            f"The dietary calibration is for {calibration.model.request!r}, not {client.model.request!r}: "
+            "measure the new model's cutoffs before it decides anything"
+        )
     store = DietaryDecisionStore(corpus.store)
     # The recipes Generate can select: sample_corpus_candidates searches the same index.
     summaries, _ = corpus.search(per_page=_EVERYTHING)
@@ -287,7 +327,9 @@ def produce_missing_decisions(
         raise CorpusUnavailableError("The corpus search index is missing or empty; coverage can't be measured")
     by_id = {summary.external_id: summary for summary in summaries}
     decisions = {
-        (d.recipe_id, d.flag): d for d in store.load() if d.recipe_id in by_id and _is_current(d, by_id[d.recipe_id])
+        (d.recipe_id, d.flag): d
+        for d in store.load()
+        if d.recipe_id in by_id and _is_current(d, by_id[d.recipe_id], calibration)
     }
     report = CoverageReport(recipes=len(summaries), flags=len(flags))
 

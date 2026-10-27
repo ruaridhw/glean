@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from glean.meal_plan.dietary_decisions import DietaryDecisions, DietaryDecisionStore
+from glean.meal_plan.dietary_decisions import CALIBRATED_DIETARY, DietaryDecisions, DietaryDecisionStore
 from glean.meal_plan.eligibility import apply_recency_floor
 from glean.observability import logger
 
@@ -133,7 +133,7 @@ def sample_corpus_candidates(
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
     flags = [flag.strip().casefold() for flag in dietary_flags]
-    decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load())
+    decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load(), calibration=CALIBRATED_DIETARY)
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
     # floor must never bring back a recipe a flag, the time cap or an already-planned meal ruled out.
     eligible = {
