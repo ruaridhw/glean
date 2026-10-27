@@ -202,6 +202,7 @@ feedback_note  # MealPlanResult field, read by the app
 swap_note  # PlanState key: the swap note the injection screen passed, the only form a model ever reads
 swap_pick  # PlanState key: the replacement the model proposed, before swap_finalise validates it
 swap_outcome  # PlanState key: the swap's finished outcome, keyed by swap id so a crash republishes it
+swap_profile_notes  # PlanState key (V15): the notes a swap's replacement carried, before swap_finalise keeps some
 note_dropped  # MessageAccepted field: the 202 tells the app the screen dropped the note ("Couldn't use that note")
 questions_asked  # PlanState key (V11): how many questions the agent has asked, at most one
 working_seconds  # PlanState key (V11): the working time spent before the question, carried into the resume
