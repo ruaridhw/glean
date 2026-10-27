@@ -120,4 +120,33 @@ void main() {
       },
     ]);
   });
+
+  test('the newest fifty dismissed notes are sent, and one too long for a '
+      'planner note is left out', () {
+    final List<String> dismissed = <String>[
+      for (int i = 0; i < maxPlanningDismissedNotes + 5; i++) 'Dismissed $i',
+    ];
+    final Map<String, dynamic> json = planningProfileJson(
+      HouseholdProfile(
+        habits: 'Quick weeknights',
+        dismissedNotes: <String>[
+          ...dismissed.take(3),
+          // Deleted in Settings, so longer than a planner note can be: the backend would refuse it.
+          'x' * (maxPlanningDismissedNoteChars + 1),
+          ...dismissed.skip(3),
+        ],
+      ),
+    )!;
+
+    expect(json['dismissed_notes'], dismissed.skip(5).toList());
+  });
+
+  test('a profile without dismissed notes sends an empty list', () {
+    expect(
+      planningProfileJson(
+        const HouseholdProfile(habits: 'Quick weeknights'),
+      )!['dismissed_notes'],
+      isEmpty,
+    );
+  });
 }
