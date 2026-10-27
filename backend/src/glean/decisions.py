@@ -46,6 +46,7 @@ class DecisionModel:
 
 
 def _is_identity_of(served: str, base: str) -> bool:
+    # A served id is the base itself or the dated snapshot the endpoint appends to it.
     return served == base or re.fullmatch(rf"{re.escape(base)}-\d{{8}}", served) is not None
 
 
@@ -169,9 +170,6 @@ class Decision(BaseModel):
         if not isinstance(answer, kind):
             raise DecisionResponseError(f"No {kind.__name__} for question {name!r}")
         return answer
-
-
-# The endpoint reports an accepted identity either as-is or as a dated snapshot of it (`<identity>-YYYYMMDD`).
 
 
 def _check_distribution(name: str, probabilities: Mapping[Any, float], allowed: Collection[Any]) -> None:
