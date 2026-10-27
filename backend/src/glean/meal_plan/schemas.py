@@ -1,11 +1,12 @@
 from datetime import UTC, date, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from glean.meal_plan.tools import FeedbackChip
 from glean.observability import logger
+from glean.profile.schemas import ProfileNote, ProteinTarget, SpiceTolerance
 from glean.recipes.attributes import DishType, MainCarb, MainProtein
 
 # Twelve weeks of dinners, with room for a household that cooks twice a day.
@@ -24,6 +25,16 @@ MAX_COOKED_NOTE_LENGTH = 500
 # The week's note: a line, such as "kids are away Wednesday, something spicy then", not a letter. Short on purpose,
 # because it is the one free text a household sends a model on every Generate.
 MAX_FEEDBACK_NOTE_LENGTH = 200
+# The household profile as a Generate sends it (V13b): tighter than the interview's own ceilings, because it rides
+# every Generate and every swap. The app clips to these numbers on the way out (newest notes first), so a request
+# past them is a forged or broken client and is refused with a 422 rather than clipped here. Code points, as above.
+MAX_PLANNING_LIST_ENTRIES = 20
+MAX_PLANNING_TEXT_CHARS = 60
+MAX_PLANNING_PARAGRAPH_CHARS = 500
+MAX_PLANNING_NOTES = 20
+MAX_PLANNING_NOTE_CHARS = 200
+
+_PlanningText = Annotated[str, Field(min_length=1, max_length=MAX_PLANNING_TEXT_CHARS)]
 
 
 class CompressedPantryItem(BaseModel):
@@ -143,6 +154,42 @@ class FeedbackNoteOutcome(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class PlanningFavourite(BaseModel):
+    """A favourite dinner, and the corpus recipe the interview matched it to, if any."""
+
+    text: _PlanningText
+    recipe_id: str | None = Field(default=None, max_length=200)
+
+
+class PlanningNote(ProfileNote):
+    """One of the profile's newest notes, shorter than the profile itself allows."""
+
+    text: str = Field(min_length=1, max_length=MAX_PLANNING_NOTE_CHARS)
+
+
+class PlanningProfile(BaseModel):
+    """The household profile (spec 6.4) as planning reads it: the device's own JSON, bounded for the wire.
+
+    Disliked ingredients are a hard exclusion (`meal_plan.household`), the favourites, likes and protein targets are
+    scorer terms, and the free text reaches a prompt only once the injection screen passed it. Keys this backend
+    does not know are ignored, so a newer app's profile costs that key, not the Generate.
+    """
+
+    version: int = 1
+    favourite_meals: list[PlanningFavourite] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    loved_ingredients: list[_PlanningText] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    disliked_ingredients: list[_PlanningText] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    cuisines_liked: list[_PlanningText] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    cuisines_avoided: list[_PlanningText] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    protein_targets: list[ProteinTarget] = Field(default_factory=list, max_length=MAX_PLANNING_LIST_ENTRIES)
+    spice_tolerance: SpiceTolerance | None = None
+    habits: str = Field(default="", max_length=MAX_PLANNING_PARAGRAPH_CHARS)
+    household: str = Field(default="", max_length=MAX_PLANNING_PARAGRAPH_CHARS)
+    notes: list[PlanningNote] = Field(
+        default_factory=list, max_length=MAX_PLANNING_NOTES, description="The newest notes, newest first."
+    )
+
+
 class MealPlanRequest(BaseModel):
     source: Literal["saved", "corpus"] = Field(
         default="saved",
@@ -197,6 +244,10 @@ class MealPlanRequest(BaseModel):
     human_feedback: HumanFeedback | None = Field(
         default=None,
         description="This week's chips and note; null, the default, when the household set nothing.",
+    )
+    profile: PlanningProfile | None = Field(
+        default=None,
+        description="The household profile from the device; null when there is none or the interview was skipped.",
     )
 
 
