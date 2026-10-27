@@ -229,6 +229,16 @@ def test_a_recipe_the_model_cannot_answer_is_recorded_and_the_run_continues(tmp_
     assert "rec_pesto" in report.render()
 
 
+def test_a_failed_request_records_why_the_endpoint_refused_it(tmp_path) -> None:
+    # The runner sends recipe text only, so it opts in to a short excerpt of the error body for its report.
+    corpus = _blob_corpus(tmp_path)
+    api = FakeDecisionApi(fail_when=lambda body: body["state"]["recipe_title"] == "Pesto Pasta")
+
+    report = run_enrichment(corpus, api.client(), enrichers=BOTH_ENRICHERS)
+
+    assert "boom" in report.failures[0].error
+
+
 def test_an_interrupted_run_resumes_where_it_stopped(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
     crashing = FakeDecisionApi(crash_when=lambda body: body["state"]["recipe_title"] == "Tomato Pasta")

@@ -65,15 +65,22 @@ class DecisionTimeoutError(DecisionError):
     """The decisions endpoint didn't answer within the client's timeout."""
 
 
+# How much of an error body a caller that opted in sees (`DecisionClient.decide(..., error_excerpt=True)`).
+_ERROR_EXCERPT_CHARS = 200
+
+
 class DecisionHTTPError(DecisionError):
     """The decisions endpoint answered with a non-2xx status.
 
-    The status only, never the body: callers log this with `exc_info`, and an error body may quote the state it was
-    sent, which is household text (a screened note, a profile field).
+    The status, and a short excerpt of the body only when the caller opted in: callers log this with `exc_info`,
+    and an error body may quote the state it was sent. A caller whose state carries household text (the injection
+    screen, the shopping parser, catalogue normalisation) never opts in; the enrichment runner, which sends recipe
+    text only, does.
     """
 
-    def __init__(self, status_code: int) -> None:
-        super().__init__(f"Decisions endpoint returned HTTP {status_code}")
+    def __init__(self, status_code: int, excerpt: str | None = None) -> None:
+        detail = f": {excerpt[:_ERROR_EXCERPT_CHARS]}" if excerpt else ""
+        super().__init__(f"Decisions endpoint returned HTTP {status_code}{detail}")
         self.status_code = status_code
 
 
@@ -271,14 +278,18 @@ class DecisionClient:
         )(self._decide)
         self._traced_decide = cast("Any", traced)  # langsmith's wrapper type confuses the checker
 
-    def decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
-        return self._traced_decide(state, questions)
+    def decide(
+        self, state: Mapping[str, Any], questions: Mapping[str, Question], *, error_excerpt: bool = False
+    ) -> Decision:
+        """Ask *questions* about *state*. `error_excerpt` puts a short excerpt of an error body in the exception;
+        leave it off whenever *state* carries household text (`DecisionHTTPError`)."""
+        return self._traced_decide(state, questions, error_excerpt)
 
-    def _decide(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
+    def _decide(self, state: Mapping[str, Any], questions: Mapping[str, Question], error_excerpt: bool) -> Decision:
         if not questions:
             raise ValueError("Ask at least one question")
         try:
-            return self._request(state, questions)
+            return self._request(state, questions, error_excerpt=error_excerpt)
         except DecisionError as exc:
             # Upstream text (HTTP bodies, validation inputs) can echo the key back, and the
             # traced wrapper records the exception, so scrub it and drop the chained causes.
@@ -288,7 +299,7 @@ class DecisionClient:
             exc.__context__ = None
             raise
 
-    def _request(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
+    def _request(self, state: Mapping[str, Any], questions: Mapping[str, Question], *, error_excerpt: bool) -> Decision:
         payload = {
             "model": self.model.request,
             "state": dict(state),
@@ -301,7 +312,7 @@ class DecisionClient:
         except httpx.TransportError as exc:
             raise DecisionError(f"Decisions request failed: {exc}") from exc
         if not response.is_success:
-            raise DecisionHTTPError(response.status_code)
+            raise DecisionHTTPError(response.status_code, response.text if error_excerpt else None)
         try:
             body = response.json()
         except ValueError as exc:

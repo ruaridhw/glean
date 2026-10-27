@@ -171,6 +171,8 @@ def _ask(
     decision = client.decide(
         {**recipe_state(summary), **state},
         {question.name: question.question for question in questions},
+        # The state is recipe text only, so the run's report may say why the endpoint refused it.
+        error_excerpt=True,
     )
     computed_at = datetime.now(UTC)
     content_hash = content_fingerprint(summary.title, summary.ingredient_names)
