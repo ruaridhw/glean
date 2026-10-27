@@ -71,7 +71,13 @@ from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
 from glean.meal_plan.household import ScreenedProfile
-from glean.meal_plan.profile_notes import MAX_PROFILE_NOTES, SessionEvidence, kept_notes, known_notes
+from glean.meal_plan.profile_notes import (
+    MAX_PROFILE_NOTES,
+    MIN_RATED_COOKS,
+    SessionEvidence,
+    kept_notes,
+    known_notes,
+)
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanResponse,
@@ -723,7 +729,7 @@ def _session_evidence(state: PlanState) -> SessionEvidence:
     """What this run holds that a profile note may rest on (V15)."""
     return SessionEvidence(
         # The rated cooks the model was shown, so a note never rests on one it could not see.
-        rated=bool(state.get("rated_meals")),
+        rated=len(state.get("rated_meals") or []) >= MIN_RATED_COOKS,
         answered=bool(state.get("answered")),
         # A week's run never has one: a swap's own notes are checked against its note in `swap_finalise`.
         swap_note=False,
