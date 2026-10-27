@@ -103,9 +103,49 @@ CUISINE_ALIASES: dict[str, Cuisine] = {
 }
 
 
+# Staple phrases in which a disliked word is only a modifier, and the bare dislike each must never trigger: a household
+# that dislikes olives still cooks with olive oil, and one that dislikes peppers still seasons with black pepper.
+# Kept minimal on purpose, because a household may use a dislike for an allergy: a dislike that names the phrase
+# itself ("olive oil", "black pepper") still excludes it, and an ingredient that names the disliked thing as well
+# ("olive oil and black olives") still matches. Owner ruling 2026-10-27, from the V13b eval: "olives" alone left
+# out 270 of the corpus's 632 recipes, nearly all of them for their olive oil.
+STAPLE_PHRASES: dict[str, str] = {
+    "olive oil": "olive",
+    "cracked black pepper": "pepper",
+    "black pepper": "pepper",
+    "white pepper": "pepper",
+    "ground pepper": "pepper",
+    "peppercorns": "pepper",
+}
+_STAPLE_RES = {
+    phrase: re.compile(
+        r"\b" + r"\s+".join(rf"{re.escape(word.removesuffix('s'))}s?" for word in phrase.split()) + r"\b"
+    )
+    for phrase in STAPLE_PHRASES
+}
+
+
 def mentions_disliked(ingredient_names: Iterable[str], dislike: str) -> bool:
-    """Whether any ingredient name uses *dislike* as whole words, plurals folded, never inside another word."""
-    return bool(dislike.strip()) and any(mentions_item(name, dislike) for name in ingredient_names)
+    """Whether any ingredient name uses *dislike* as whole words, plurals folded, never inside another word.
+
+    A `STAPLE_PHRASES` phrase does not count for the bare dislike it lists ("olives" never hits "olive oil").
+    """
+    if not dislike.strip():
+        return False
+    spared = [
+        _STAPLE_RES[phrase]
+        for phrase, word in STAPLE_PHRASES.items()
+        if mentions_item(dislike, word) and mentions_item(word, dislike)
+    ]
+    return any(mentions_item(_without(name, spared), dislike) for name in ingredient_names)
+
+
+def _without(name: str, phrases: Sequence[re.Pattern]) -> str:
+    """*name* with every spared staple phrase blanked out, so only the rest of the line can match a dislike."""
+    text = name.casefold()
+    for phrase in phrases:
+        text = phrase.sub(" ", text)
+    return text
 
 
 def disliked_recipe_ids(recipes: Iterable[tuple[str, Sequence[str]]], dislikes: Sequence[str]) -> frozenset[str]:
