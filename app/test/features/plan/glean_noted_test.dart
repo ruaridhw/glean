@@ -159,6 +159,52 @@ void main() {
   });
 
   gleanWidgetTest(
+    'Keep on a full profile drops the oldest feedback note, never an '
+    'interview note',
+    (tester) async {
+      final h = AppTestHarness(
+        httpClient: proposalBackend(result: _result(notes: <String>[_rice])),
+      );
+      addTearDown(h.dispose);
+      await h.container
+          .read(householdProfileRepositoryProvider)
+          .save(
+            userId: h.userId,
+            profile: HouseholdProfile(
+              notes: <ProfileNote>[
+                const ProfileNote(
+                  date: '2026-10-01',
+                  text: 'Cooks for four',
+                  source: ProfileNoteSource.interview,
+                ),
+                for (int i = 1; i < HouseholdProfile.maxNotes; i++)
+                  ProfileNote(
+                    date: '2026-10-02',
+                    text: 'Feedback $i',
+                    source: ProfileNoteSource.feedback,
+                  ),
+              ],
+            ),
+          );
+      await h.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(_inRow(_rice, find.text('Keep')));
+      await tester.pumpAndSettle();
+
+      final List<String> texts = (await profile(
+        h,
+      ))!.notes.map((ProfileNote note) => note.text).toList();
+      expect(texts, hasLength(HouseholdProfile.maxNotes));
+      expect(texts.first, 'Cooks for four');
+      expect(texts, isNot(contains('Feedback 1')));
+      expect(texts.last, _rice);
+    },
+  );
+
+  gleanWidgetTest(
     'the dismiss hides the note, adds no note, and remembers it was dismissed',
     (tester) async {
       final h = await open(tester);

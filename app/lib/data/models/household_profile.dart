@@ -154,6 +154,9 @@ class HouseholdProfile {
   /// The version this build writes. A document read from elsewhere keeps its own.
   static const int currentVersion = 1;
 
+  /// How many notes the profile holds. The backend refuses a profile with more.
+  static const int maxNotes = 50;
+
   /// How many dismissed notes the profile remembers; the oldest go first. The backend refuses more.
   static const int maxDismissedNotes = 50;
 
@@ -186,6 +189,28 @@ class HouseholdProfile {
     final String key = noteKey(text);
     return notes.any((ProfileNote note) => noteKey(note.text) == key) ||
         dismissedNotes.any((String note) => noteKey(note) == key);
+  }
+
+  /// A copy with [note] kept, newest last, unless a note with the same text is already here. Past [maxNotes] the
+  /// oldest feedback notes go first, so what the household said in the interview stays; only a profile with no
+  /// feedback note left loses its oldest interview note, so the profile never outgrows what the backend takes.
+  HouseholdProfile withKeptNote(ProfileNote note) {
+    final String key = noteKey(note.text);
+    if (notes.any((ProfileNote held) => noteKey(held.text) == key)) {
+      return this;
+    }
+    final List<ProfileNote> kept = <ProfileNote>[...notes, note];
+    while (kept.length > maxNotes) {
+      final int oldestFeedback = kept.indexWhere(
+        (ProfileNote held) => held.source == ProfileNoteSource.feedback,
+      );
+      kept.removeAt(
+        oldestFeedback >= 0 && oldestFeedback < kept.length - 1
+            ? oldestFeedback
+            : 0,
+      );
+    }
+    return copyWith(notes: kept);
   }
 
   /// A copy that remembers [text] as dismissed: once, newest last, and only the newest [maxDismissedNotes].
