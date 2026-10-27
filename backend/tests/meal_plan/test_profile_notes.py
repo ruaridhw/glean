@@ -9,8 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from glean.meal_plan.profile_notes import MAX_PROFILE_NOTE_CHARS, MAX_PROFILE_NOTES, SessionEvidence, kept_notes
-from glean.meal_plan.schemas import NoteEvidence, ProfileNote
+from glean.meal_plan.profile_notes import (
+    MAX_PROFILE_NOTE_CHARS,
+    MAX_PROFILE_NOTES,
+    SessionEvidence,
+    kept_notes,
+    known_notes,
+)
+from glean.meal_plan.schemas import MealPlanRequest, NoteEvidence, ProfileNote
 
 EVERYTHING = SessionEvidence(rated=True, answered=True, swap_note=True)
 
@@ -107,3 +113,25 @@ def test_no_evidence_at_all_keeps_nothing() -> None:
 
     assert kept == []
     assert dropped == {"no_evidence": 3}
+
+
+def test_a_note_the_profile_already_holds_or_the_household_dismissed_is_dropped() -> None:
+    notes = [note("You prefer rice over pasta."), note("Likes fish"), note("The kids avoid chilli")]
+
+    kept, dropped = kept_notes(notes, EVERYTHING, known=["you prefer RICE over pasta.", "  the kids avoid  chilli"])
+
+    assert [n.text for n in kept] == ["Likes fish"]
+    assert dropped == {"known": 2}
+
+
+def test_until_the_session_carries_the_profile_nothing_is_known() -> None:
+    request = MealPlanRequest(
+        source="corpus",
+        pantry=[],
+        purchase_tolerance=0.5,
+        meals_per_week=2,
+        dietary_flags=[],
+        max_active_time_mins=None,
+    )
+
+    assert known_notes(request) == []
