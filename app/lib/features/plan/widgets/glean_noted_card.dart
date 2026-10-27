@@ -52,7 +52,7 @@ class GleanNotedCard extends StatelessWidget {
                 onDismiss: () => onDismiss(note),
               ),
             Text(
-              'From your ratings, answers and swap notes. Kept notes go in your profile.',
+              'From your ratings, answers and swap notes. Kept notes are used in future plans.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
