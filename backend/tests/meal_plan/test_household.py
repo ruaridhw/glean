@@ -12,6 +12,7 @@ from glean.meal_plan.household import (
     disliked_recipe_ids,
     favourite_ids,
     loved_in,
+    match_profile,
     mentions_disliked,
     profile_cuisines,
 )
@@ -226,3 +227,22 @@ def test_a_cuisine_both_liked_and_avoided_is_avoided_only() -> None:
 
     assert liked == frozenset()
     assert avoided == frozenset({Cuisine.THAI})
+
+
+def test_match_profile_finds_every_set_the_tools_read_in_one_pass(caplog: pytest.LogCaptureFixture) -> None:
+    recipes = [
+        ("rec_mushroom", "Mushroom risotto", ("chestnut mushrooms", "olive oil")),
+        ("rec_pie", "Fish pie", ("cod", "fresh basil")),
+        ("rec_other", "Lamb stew", ("lamb", "olive oil")),
+    ]
+
+    with caplog.at_level(logging.INFO):
+        matches = match_profile(
+            recipes, disliked=["mushrooms", "olives"], favourites=[("fish pie", None)], loved=["basil"], log=False
+        )
+
+    assert matches.disliked_ids == frozenset({"rec_mushroom"})
+    assert matches.favourite_ids == frozenset({"rec_pie"})
+    assert matches.loved_ids == frozenset({"rec_pie"})
+    # The offer already logged this session's dislike counts; a search's context does not log them again.
+    assert not [record for record in caplog.records if record.getMessage() == "disliked ingredients left out"]

@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING, Literal
 from glean.meal_plan.candidates import GUARANTEE_MAX, PantryItem, mentions_item, near_duplicate_ingredients
 from glean.meal_plan.eligibility import apply_recency_floor
 from glean.meal_plan.eligibility import recency_penalty as _recency_penalty
-from glean.meal_plan.household import disliked_recipe_ids, favourite_ids, loved_in
 from glean.recipes.attributes import (
     UNSURE,
     ActiveTimeBucket,
@@ -1014,8 +1013,9 @@ class EligibilityContext:
     """The corpus and the session's hard constraints, as plain values the caller built from its store.
 
     `dietary_excluded_ids` is what the stored dietary decisions rule out for the household's flags: deciding it
-    reads the decision store, so the caller does, and the tool applies it. `disliked_ingredients` are the
-    profile's (V13b), a hard constraint beside them. `max_active_mins` is the household's time cap. `cooked` is
+    reads the decision store, so the caller does, and the tool applies it. `disliked_ids` are the recipes the
+    profile's disliked ingredients rule out (V13b), matched by the caller in the same way, and a hard constraint
+    beside them. `max_active_mins` is the household's time cap. `cooked` is
     the history window the six-week floor and the thumbs-down rule read. `text_search` is the corpus's full-text
     search (ids that match); without one, text matches title, cuisine and ingredient words in memory.
     `load_full` reads one recipe's ingredient lines and method for `get_recipes(detail="full")`.
@@ -1025,7 +1025,7 @@ class EligibilityContext:
     slots: int
     now: datetime
     dietary_excluded_ids: frozenset[str] = frozenset()
-    disliked_ingredients: tuple[str, ...] = ()
+    disliked_ids: frozenset[str] = frozenset()
     planned_ids: frozenset[str] = frozenset()
     max_active_mins: int | None = None
     cooked: Sequence[CookedMeal] = ()
@@ -1033,10 +1033,11 @@ class EligibilityContext:
     seed: int = 0
     text_search: Callable[[str], Collection[str]] | None = None
     load_full: Callable[[str], FullRecipe | None] | None = None
-    # The profile's ranking inputs (spec 6.2 step 5): favourites as (text, matched recipe id), loved ingredients, and
-    # liked and avoided cuisines as V5's enum. They rank; only `disliked_ingredients` excludes.
-    favourite_meals: tuple[tuple[str, str | None], ...] = ()
-    loved_ingredients: tuple[str, ...] = ()
+    # The profile's ranking inputs (spec 6.2 step 5): the recipes that are favourites or use a loved ingredient,
+    # matched once per session like `disliked_ids` (`household.match_profile`), and liked and avoided cuisines as
+    # V5's enum. They rank; only `disliked_ids` excludes.
+    favourite_ids: frozenset[str] = frozenset()
+    loved_ids: frozenset[str] = frozenset()
     liked_cuisines: frozenset[Cuisine] = frozenset()
     avoided_cuisines: frozenset[Cuisine] = frozenset()
 
@@ -1142,16 +1143,13 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
     """
     _check_narrows(recipe_filter, ctx)
     by_id = {recipe.recipe_id: recipe for recipe in ctx.recipes}
-    disliked = disliked_recipe_ids(
-        ((recipe.recipe_id, recipe.ingredient_names) for recipe in ctx.recipes), ctx.disliked_ingredients
-    )
     # Sorted, so the floor and the tie-breaks see the same order however the caller listed the corpus.
     hard = [
         recipe
         for recipe_id, recipe in sorted(by_id.items())
         if recipe_id not in ctx.planned_ids
         and recipe_id not in ctx.dietary_excluded_ids
-        and recipe_id not in disliked
+        and recipe_id not in ctx.disliked_ids
         and recipe.attributes.fits_time_cap(ctx.max_active_mins, total_time_mins=recipe.total_time_mins)
     ]
     floor = apply_recency_floor(
@@ -1207,17 +1205,16 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
 def _profile_affinity(recipes: Sequence[CorpusRecipe], ctx: EligibilityContext) -> dict[str, float]:
     """Each recipe's profile points, the scorer's per-recipe rows for it: +2 favourite, +1 liked cuisine or loved
     ingredient (at most +1 for the pair), -2 avoided cuisine. Empty without a profile."""
-    if not (ctx.favourite_meals or ctx.loved_ingredients or ctx.liked_cuisines or ctx.avoided_cuisines):
+    if not (ctx.favourite_ids or ctx.loved_ids or ctx.liked_cuisines or ctx.avoided_cuisines):
         return {}
     weights = ScorerWeights()
-    favourites = favourite_ids(((recipe.recipe_id, recipe.title) for recipe in recipes), ctx.favourite_meals)
     points: dict[str, float] = {}
     for recipe in recipes:
         cuisine = recipe.attributes.cuisine
         liked = cuisine in ctx.liked_cuisines
-        loved = bool(loved_in(recipe.ingredient_names, ctx.loved_ingredients))
+        loved = recipe.recipe_id in ctx.loved_ids
         points[recipe.recipe_id] = (
-            (weights.favourite if recipe.recipe_id in favourites else 0.0)
+            (weights.favourite if recipe.recipe_id in ctx.favourite_ids else 0.0)
             + (weights.liked_cuisine if liked else weights.loved_ingredient if loved else 0.0)
             + (weights.avoided_cuisine if cuisine in ctx.avoided_cuisines else 0.0)
         )
