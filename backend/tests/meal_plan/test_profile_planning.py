@@ -186,3 +186,14 @@ def test_the_agents_search_ranks_a_favourite_first(tmp_path: Path) -> None:
     ctx = pipeline.tool_context(request, corpus=corpus, now=NOW)
 
     assert get_eligible_recipes(RecipeFilter(), ctx).recipes[0].recipe_id == "rec_31"
+
+
+def test_a_protein_minimum_above_the_week_is_clamped_to_the_week(tmp_path: Path) -> None:
+    # Three dinners cannot hold seven fish: an unreachable minimum would charge every week the same constant penalty
+    # (loosening the drift gate's scale) and reserve most of the offer for one protein.
+    request = _request({"protein_targets": [{"protein": "fish", "min_per_week": 7, "max_per_week": 9}]})
+    prepared = pipeline.prepare(request, corpus=_corpus(tmp_path), rng=random.Random(1), now=NOW)
+
+    [target] = pipeline.scoring_context_of(prepared).protein_targets
+
+    assert (target.min_per_week, target.max_per_week) == (3, 9)
