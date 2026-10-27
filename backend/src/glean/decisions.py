@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import httpx
@@ -25,6 +26,30 @@ if TYPE_CHECKING:
 # and those thresholds don't carry over to another version.
 DECISION_MODEL = "typesafe/jev-1.14"
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionModel:
+    """The model a client asks for, and the served identities it accepts back.
+
+    `request` is posted as-is, and is the served identity too unless the endpoint is known to report
+    another. The endpoint can report a different id for the same model — a free route (`:free`) answers
+    under its paid id — so `served` lists those bases, taken from an observed response rather than guessed.
+    """
+
+    request: str
+    served: tuple[str, ...] = ()
+
+    def accepts(self, served: str) -> bool:
+        """Whether a `model` reported by the endpoint is one of this model's known identities."""
+        return any(_is_identity_of(served, base) for base in (self.served or (self.request,)))
+
+
+def _is_identity_of(served: str, base: str) -> bool:
+    return served == base or re.fullmatch(rf"{re.escape(base)}-\d{{8}}", served) is not None
+
+
+DEFAULT_MODEL = DecisionModel(DECISION_MODEL)
 
 
 class DecisionError(Exception):
@@ -146,8 +171,7 @@ class Decision(BaseModel):
         return answer
 
 
-# The endpoint reports the pinned model either as-is or as a dated snapshot of it (`<pinned>-YYYYMMDD`).
-_PINNED_MODEL_REPLY = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")
+# The endpoint reports an accepted identity either as-is or as a dated snapshot of it (`<identity>-YYYYMMDD`).
 
 
 def _check_distribution(name: str, probabilities: Mapping[Any, float], allowed: Collection[Any]) -> None:
@@ -177,7 +201,7 @@ def _parse_answer(name: str, question: Question, raw: Any) -> Answer:
         raise DecisionResponseError(f"Unexpected answer shape for {name!r}: {exc}") from exc
 
 
-def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
+def _parse(body: Any, questions: Mapping[str, Question], model: DecisionModel) -> Decision:
     if not isinstance(body, dict) or not isinstance(body.get("answers"), dict):
         raise DecisionResponseError("Response has no answers object")
     raw_answers = body["answers"]
@@ -196,8 +220,9 @@ def _parse(body: Any, questions: Mapping[str, Question]) -> Decision:
         )
     except ValidationError as exc:
         raise DecisionResponseError(f"Unexpected response envelope: {exc}") from exc
-    if not _PINNED_MODEL_REPLY.fullmatch(decision.model):
-        raise DecisionResponseError(f"Response came from {decision.model!r}, not the pinned {DECISION_MODEL!r}")
+    if not model.accepts(decision.model):
+        pinned = " or ".join(repr(base) for base in (model.served or (model.request,)))
+        raise DecisionResponseError(f"Response came from {decision.model!r}, not the pinned {pinned}")
     return decision
 
 
@@ -218,10 +243,12 @@ class DecisionClient:
         self,
         *,
         api_key: SecretStr,
+        model: DecisionModel = DEFAULT_MODEL,
         timeout_s: float = 15.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._secret = api_key.get_secret_value()
+        self.model = model
         self._http = httpx.Client(
             headers={"Authorization": f"Bearer {self._secret}"},
             timeout=timeout_s,
@@ -232,7 +259,7 @@ class DecisionClient:
         traced = traceable(
             name="decide",
             run_type="chain",
-            metadata={"ls_provider": "openrouter", "ls_model_name": DECISION_MODEL},
+            metadata={"ls_provider": "openrouter", "ls_model_name": model.request},
             process_inputs=lambda inputs: _redact(inputs, self._secret),
             process_outputs=lambda outputs: _redact(outputs, self._secret),
         )(self._decide)
@@ -257,7 +284,7 @@ class DecisionClient:
 
     def _request(self, state: Mapping[str, Any], questions: Mapping[str, Question]) -> Decision:
         payload = {
-            "model": DECISION_MODEL,
+            "model": self.model.request,
             "state": dict(state),
             "questions": {name: question.model_dump() for name, question in questions.items()},
         }
@@ -273,4 +300,4 @@ class DecisionClient:
             body = response.json()
         except ValueError as exc:
             raise DecisionResponseError("Response body isn't JSON") from exc
-        return _parse(body, questions)
+        return _parse(body, questions, self.model)

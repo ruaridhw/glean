@@ -10,11 +10,14 @@ from langsmith import Client, tracing_context
 from pydantic import Field, SecretStr, TypeAdapter, ValidationError
 
 from glean.decisions import (
+    DECISION_MODEL,
     DECISIONS_URL,
+    DEFAULT_MODEL,
     ChoiceQuestion,
     DecisionClient,
     DecisionError,
     DecisionHTTPError,
+    DecisionModel,
     DecisionResponseError,
     DecisionTimeoutError,
     NoulQuestion,
@@ -50,6 +53,12 @@ def _client(handler: Handler) -> DecisionClient:
     return DecisionClient(api_key=SecretStr(API_KEY), transport=httpx.MockTransport(handler))
 
 
+# A free route answers under its paid id, with the usual dated snapshot: the request id and the served
+# identity differ, so the served base is listed from an observed response rather than guessed.
+FREE_ROUTE = DecisionModel("baseten/mammoth-1:free", served=("baseten/mammoth-1",))
+FREE_ROUTE_SERVED = "baseten/mammoth-1-20261021"
+
+
 def _respond_with(body: Any, status: int = 200) -> Handler:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json=body)
@@ -79,6 +88,80 @@ class TestRequest:
 
         with pytest.raises(ValueError, match="at least one question"):
             _client(handler).decide({"recipe_title": "Toast"}, {})
+
+
+class TestExplicitModel:
+    """A client can pin a model other than the package default, without weakening identity checks."""
+
+    def test_the_default_model_is_the_pinned_model_of_the_decisions_endpoint(self) -> None:
+        assert DEFAULT_MODEL.request == DECISION_MODEL
+        assert DEFAULT_MODEL.accepts(DECISION_MODEL)
+        assert DEFAULT_MODEL.accepts(f"{DECISION_MODEL}-20261014")
+        assert not DEFAULT_MODEL.accepts("baseten/mammoth-1-20261021")
+
+    def test_the_configured_model_is_requested_and_its_served_identity_is_accepted(self) -> None:
+        sent: list[dict[str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(json.loads(request.content))
+            body = _recorded_response()
+            body["model"] = FREE_ROUTE_SERVED
+            return httpx.Response(200, json=body)
+
+        state, questions = _probe()
+        client = DecisionClient(api_key=SecretStr(API_KEY), model=FREE_ROUTE, transport=httpx.MockTransport(handler))
+
+        decision = client.decide(state, questions)
+
+        assert [body["model"] for body in sent] == ["baseten/mammoth-1:free"]
+        assert decision.model == FREE_ROUTE_SERVED
+        assert client.model == FREE_ROUTE
+
+    @pytest.mark.parametrize(
+        "served",
+        [
+            "baseten/mammoth-1:free",  # the request id is not what the endpoint reports back
+            DECISION_MODEL,
+            f"{DECISION_MODEL}-20261014",
+            "baseten/mammoth-2-20261021",
+            "baseten/mammoth-1-2026101",
+        ],
+    )
+    def test_a_response_from_an_identity_the_model_does_not_cover_is_rejected(self, served: str) -> None:
+        body = _recorded_response()
+        body["model"] = served
+        state, questions = _probe()
+        client = DecisionClient(
+            api_key=SecretStr(API_KEY), model=FREE_ROUTE, transport=httpx.MockTransport(_respond_with(body))
+        )
+
+        with pytest.raises(DecisionResponseError, match="pinned"):
+            client.decide(state, questions)
+
+    def test_the_traced_run_names_the_model_this_client_asks(self) -> None:
+        runs: list[Any] = []
+
+        class RecordingClient(Client):
+            def create_run(self, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+            def update_run(self, run_id: Any, **kwargs: Any) -> None:
+                runs.append(kwargs)
+
+        body = _recorded_response()
+        body["model"] = FREE_ROUTE_SERVED
+        state, questions = _probe()
+        tracing = RecordingClient(api_key="ls-test", api_url="http://localhost:1", auto_batch_tracing=False)
+        client = DecisionClient(
+            api_key=SecretStr(API_KEY), model=FREE_ROUTE, transport=httpx.MockTransport(_respond_with(body))
+        )
+
+        with tracing_context(enabled=True, client=tracing):
+            client.decide(state, questions)
+
+        named = [run.get("extra", {}).get("metadata", {}).get("ls_model_name") for run in runs if "extra" in run]
+        assert "baseten/mammoth-1:free" in named
+        assert DECISION_MODEL not in named
 
 
 class TestAnswers:
