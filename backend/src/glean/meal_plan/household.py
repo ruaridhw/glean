@@ -212,9 +212,14 @@ def _any_hit(rules: Sequence[_Rule], names: _Names) -> bool:
     return any(rule.hits(names) for rule in rules)
 
 
+# Letters NFKD keeps whole, spelled out the way an English recipe writes them: "bœuf" is "boeuf".
+_LIGATURES = str.maketrans({"œ": "oe", "æ": "ae"})
+
+
 def _folded(text: str) -> str:
-    """Accents off and case folded: "Crème Fraîche" is "creme fraiche"."""
-    return "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char)).casefold()
+    """Accents and ligatures off, case folded: "Crème Fraîche" is "creme fraiche", "Bœuf" is "boeuf"."""
+    stripped = "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char))
+    return stripped.casefold().translate(_LIGATURES)
 
 
 def _words(text: str) -> list[frozenset[str]]:

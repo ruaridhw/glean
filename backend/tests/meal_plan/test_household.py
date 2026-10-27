@@ -101,6 +101,9 @@ def test_the_stop_list_only_ever_spares_the_staple_itself(dislike: str, ingredie
         ("jalapeno", "Jalapeños"),
         ("crème fraîche", "half-fat creme fraiche"),
         ("creme fraiche", "crème fraîche"),
+        ("boeuf", "bœuf bourguignon"),
+        ("bœuf", "boeuf"),
+        ("caesar dressing", "Cæsar dressing"),
     ],
 )
 def test_a_dislike_folds_accents_and_may_be_two_letters(dislike: str, ingredient: str) -> None:
