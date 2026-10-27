@@ -170,42 +170,61 @@ MealPlanPlannedAlternative _$MealPlanPlannedAlternativeFromJson(
   fieldKeyMap: const {'externalId': 'external_id'},
 );
 
-MealPlanResponse _$MealPlanResponseFromJson(Map<String, dynamic> json) =>
-    $checkedCreate(
-      'MealPlanResponse',
-      json,
-      ($checkedConvert) {
-        final val = MealPlanResponse(
-          suggestions: $checkedConvert(
-            'suggestions',
-            (v) => (v as List<dynamic>)
-                .map((e) => MealPlanRecipe.fromJson(e as Map<String, dynamic>))
-                .toList(),
-          ),
-          weekSummary: $checkedConvert(
-            'week_summary',
-            (v) => v as String? ?? '',
-          ),
-          plannedAlternatives: $checkedConvert(
-            'planned_alternatives',
-            (v) =>
-                (v as List<dynamic>?)
-                    ?.map(
-                      (e) => MealPlanPlannedAlternative.fromJson(
-                        e as Map<String, dynamic>,
-                      ),
-                    )
-                    .toList() ??
-                [],
-          ),
-          degraded: $checkedConvert('degraded', (v) => v as bool? ?? false),
-          feedbackNote: $checkedConvert('feedback_note', (v) => v as String?),
-        );
-        return val;
-      },
-      fieldKeyMap: const {
-        'weekSummary': 'week_summary',
-        'plannedAlternatives': 'planned_alternatives',
-        'feedbackNote': 'feedback_note',
-      },
+ProposedProfileNote _$ProposedProfileNoteFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('ProposedProfileNote', json, ($checkedConvert) {
+      final val = ProposedProfileNote(
+        text: $checkedConvert('text', (v) => v as String),
+        evidence: $checkedConvert('evidence', (v) => v as String? ?? ''),
+      );
+      return val;
+    });
+
+MealPlanResponse _$MealPlanResponseFromJson(
+  Map<String, dynamic> json,
+) => $checkedCreate(
+  'MealPlanResponse',
+  json,
+  ($checkedConvert) {
+    final val = MealPlanResponse(
+      suggestions: $checkedConvert(
+        'suggestions',
+        (v) => (v as List<dynamic>)
+            .map((e) => MealPlanRecipe.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      ),
+      weekSummary: $checkedConvert('week_summary', (v) => v as String? ?? ''),
+      plannedAlternatives: $checkedConvert(
+        'planned_alternatives',
+        (v) =>
+            (v as List<dynamic>?)
+                ?.map(
+                  (e) => MealPlanPlannedAlternative.fromJson(
+                    e as Map<String, dynamic>,
+                  ),
+                )
+                .toList() ??
+            [],
+      ),
+      degraded: $checkedConvert('degraded', (v) => v as bool? ?? false),
+      feedbackNote: $checkedConvert('feedback_note', (v) => v as String?),
+      profileNotes: $checkedConvert(
+        'profile_notes',
+        (v) =>
+            (v as List<dynamic>?)
+                ?.map(
+                  (e) =>
+                      ProposedProfileNote.fromJson(e as Map<String, dynamic>),
+                )
+                .toList() ??
+            [],
+      ),
     );
+    return val;
+  },
+  fieldKeyMap: const {
+    'weekSummary': 'week_summary',
+    'plannedAlternatives': 'planned_alternatives',
+    'feedbackNote': 'feedback_note',
+    'profileNotes': 'profile_notes',
+  },
+);
