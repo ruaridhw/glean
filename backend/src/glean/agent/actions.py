@@ -20,7 +20,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 from glean.meal_plan import tools
-from glean.meal_plan.schemas import CorpusMealPlanAlternative, CorpusMealPlanResponse
+from glean.meal_plan.schemas import CorpusMealPlanAlternative, CorpusMealPlanResponse, ProfileNote
 from glean.meal_plan.tools import MAX_FILTER_LIMIT, PredicateField, PredicateOp
 
 # How much one action may carry. Every tool call is stored in the checkpoint and echoed into the next prompt, so
@@ -169,12 +169,17 @@ class CallTool(BaseModel):
 
 
 class Propose(BaseModel):
-    """The final answer: the week, a reason per meal, an alternative per meal, and the summary line."""
+    """The final answer: the week, a reason per meal, an alternative per meal, the summary line, and any notes."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["propose"]
     proposal: CorpusMealPlanResponse
+    # V15. Unbounded here, like the question's fields: `meal_plan.profile_notes` keeps the ones that pass.
+    profile_notes: list[ProfileNote] = Field(
+        default_factory=list,
+        description="At most three durable facts about the household, each with its evidence; usually none",
+    )
 
 
 class AskHousehold(BaseModel):

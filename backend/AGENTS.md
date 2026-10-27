@@ -251,7 +251,8 @@ the graph wraps the corpus pipeline only.
   }],
   "week_summary": "One line for the week; template text when the plan is degraded.",
   "planned_alternatives": [{"external_id": "rec_planned", "alternative": {/* a suggestion */}}],
-  "degraded": false   // true when finalise fell back; the UI must not treat it differently
+  "degraded": false,  // true when finalise fell back; the UI must not treat it differently
+  "profile_notes": [{"text": "You prefer rice over pasta midweek.", "evidence": "rating | answer | swap_note"}]
 }
 ```
 
@@ -259,6 +260,14 @@ An alternative is always an offered, eligible candidate that is not already a ch
 when the model's own alternative is unusable or missing, the server takes the next-best candidate.
 `planned_alternatives` only covers meals already in the week that came from the corpus, because there
 is no corpus recipe to show for the app's own plan entries.
+
+`profile_notes` (V15) is what the agent noticed about the household, for the app's "Glean noted" card;
+nothing reaches the profile unless the household taps Keep. `propose` may carry notes, and `finalise`
+keeps at most three (`meal_plan.profile_notes`): trimmed, at most 120 code points, no empties or
+case-insensitive repeats, and each resting on evidence this session holds -- a rated corpus cook (shown to
+the model as `rated_meals`, title and thumb only), an answered question, or a swap note. The rest are
+dropped and counted in the `agent session finished` log. A degraded week carries none; a swap keeps the
+proposal's notes unchanged.
 
 How a session moves: the route writes `queued` and sends a message; the SQS worker claims it with a
 conditional `queued -> running`, runs `agent.start`, and writes `done` or `failed`. Liveness is the

@@ -136,7 +136,14 @@ def test_a_proposal_carries_the_contract_shape(tmp_path: Path) -> None:
     result = pipeline.finalise(prepared, _draft(prepared))
     dumped = result.model_dump(mode="json")
 
-    assert set(dumped) == {"suggestions", "week_summary", "planned_alternatives", "degraded", "feedback_note"}
+    assert set(dumped) == {
+        "suggestions",
+        "week_summary",
+        "planned_alternatives",
+        "degraded",
+        "feedback_note",
+        "profile_notes",
+    }
     assert dumped["week_summary"] == "Two easy dinners."
     assert dumped["degraded"] is False
     assert set(dumped["suggestions"][0]) == {
