@@ -638,7 +638,7 @@ class _Scorer:
         ) - frozenset(ctx.urgent_items_already_used)
         # A protein the profile wants at least N times may appear N times before the repeat row charges it: the
         # household asked for the second fish, so the soft one-of-each rule must not outbid its own target.
-        self._protein_allowance = {
+        self._protein_allowance: dict[str, int] = {
             target.protein.value: target.min_per_week
             for target in ctx.protein_targets
             if target.min_per_week and target.protein not in _UNCOUNTED_PROTEINS
