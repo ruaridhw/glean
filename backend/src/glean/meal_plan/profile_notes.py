@@ -22,6 +22,7 @@ A note that fails is dropped, never repaired, and counted by reason for the sess
 
 from __future__ import annotations
 
+import hashlib
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
@@ -66,11 +67,18 @@ def note_key(text: str) -> str:
 def known_notes(request: MealPlanRequest) -> list[str]:
     """The note texts the household's profile already holds or has dismissed, so the planner does not repeat them.
 
-    The profile's `notes` and `dismissed_notes` reach the backend with the session request's `profile`. Until the
-    request carries one this is empty, and only the app's own check (it hides a note its profile already has)
-    stops a repeat.
+    The profile's newest notes and its dismissed notes, as the app sends them with `profile`; none without one. These
+    are household prose: the runtime turns them into `note_digest`s before the graph sees them, so no state,
+    checkpoint or prompt carries the text.
     """
-    return []
+    if request.profile is None:
+        return []
+    return [note.text for note in request.profile.notes] + list(request.profile.dismissed_notes)
+
+
+def note_digest(text: str) -> str:
+    """A note's `note_key` as a SHA-256 hex digest: what two notes are compared by without carrying either text."""
+    return hashlib.sha256(note_key(text).encode()).hexdigest()
 
 
 def kept_notes(
@@ -80,10 +88,13 @@ def kept_notes(
     known: Iterable[str] = (),
     limit: int = MAX_PROFILE_NOTES,
 ) -> tuple[list[ProfileNote], dict[str, int]]:
-    """The notes the household may see, at most *limit*, and how many were dropped for each reason."""
+    """The notes the household may see, at most *limit*, and how many were dropped for each reason.
+
+    *known* holds the `note_digest` of every note the household already has or dismissed.
+    """
     kept: list[ProfileNote] = []
     seen: set[str] = set()
-    held = {note_key(text) for text in known}
+    held = set(known)
     dropped: Counter[str] = Counter()
     for note in notes:
         text = " ".join(note.text.split())
@@ -96,7 +107,7 @@ def kept_notes(
             reason = "too_long"
         elif note_key(text) in seen:
             reason = "duplicate"
-        elif note_key(text) in held:
+        elif note_digest(text) in held:
             reason = "known"
         elif not evidence.has(note.evidence):
             reason = "no_evidence"

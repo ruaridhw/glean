@@ -59,6 +59,7 @@ from glean.agent.errors import AgentError, SessionCancelled
 from glean.agent.graph import MAX_TOOL_CALLS, build_graph, outcome_of, session_metrics_of, swap_outcome_of
 from glean.meal_plan.feedback import screen_feedback, without_note
 from glean.meal_plan.household import screen_profile, without_profile_text
+from glean.meal_plan.profile_notes import known_notes, note_digest
 from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.observability import logger, metrics
 from glean.sessions.models import (
@@ -431,9 +432,15 @@ def _run(
             "request": _screened_request(record.request),
             "feedback": feedback.model_dump(mode="json"),
             "profile": profile.model_dump(mode="json"),
+            "known_notes": _known_note_digests(record.request),
         },
         config=config,  # ty: ignore[invalid-argument-type]
     )
+
+
+def _known_note_digests(request: MealPlanRequest) -> list[str]:
+    """The notes the household already has or dismissed, as digests: the graph compares them, never reads them."""
+    return [note_digest(text) for text in known_notes(request)]
 
 
 def _screened_request(request: MealPlanRequest) -> dict[str, Any]:
@@ -512,6 +519,7 @@ def _swap_state(
             # Never the week's raw note or the profile's prose: only the screened outcomes `_run` stored for the first
             # run reach the graph.
             "request": _screened_request(record.request),
+            "known_notes": _known_note_digests(record.request),
             "swap": swap_input(record, swap),
         },
         config=config,

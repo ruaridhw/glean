@@ -269,7 +269,9 @@ nothing reaches the profile unless the household taps Keep. `propose` may carry 
 keeps at most three (`meal_plan.profile_notes`): trimmed, at most 120 code points, no empties or
 case-insensitive repeats, and each resting on evidence this session holds -- at least two distinct rated corpus recipes (shown to
 the model as `rated_meals`: the thumb and the corpus's own title, read on the server, never the app's), an answered question, or a swap note. The rest are
-dropped and counted in the `agent session finished` log. A degraded week carries none. A swap keeps the
+dropped and counted in the `agent session finished` log. A note the profile already holds (its newest notes as
+sent) or the household dismissed (`dismissed_notes`) is dropped as `known`: the runtime passes the graph only their
+`note_digest`s, so no note text rides the state. A degraded week carries none. A swap keeps the
 proposal's notes and may add its own (`propose_replacement.profile_notes`), resting only on that swap's screened
 note, after the proposal's, deduplicated and within the same three; a swap the scorer finished adds none.
 
