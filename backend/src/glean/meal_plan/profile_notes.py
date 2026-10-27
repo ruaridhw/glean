@@ -4,7 +4,10 @@ A `propose` action may carry `profile_notes`: short facts the agent inferred, ea
 household sees them as "Glean noted" and Keeps or dismisses each; nothing reaches the profile without a Keep.
 `kept_notes` is the rule the graph applies before a note is written into the proposal:
 
-- trimmed, then at most `MAX_PROFILE_NOTE_CHARS` code points (the unit the app clips by), never empty;
+- one line: runs of whitespace, newlines and tabs included, become one space, and the ends are trimmed;
+- then at most `MAX_PROFILE_NOTE_CHARS` code points (the unit the app clips by), never empty, and with no control
+  or format character left in it (Unicode Cc, Cf: escapes, zero-width and direction marks), since a kept note
+  goes back into future prompts;
 - no repeats, compared case-insensitively with runs of whitespace as one space, and none the household's profile
   already holds or has dismissed (`known_notes`);
 - its evidence must exist in this session (`SessionEvidence`): a rated cook in the history window, an answered
@@ -17,6 +20,7 @@ A note that fails is dropped, never repaired, and counted by reason for the sess
 
 from __future__ import annotations
 
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -30,6 +34,8 @@ if TYPE_CHECKING:
 
 MAX_PROFILE_NOTES = 3
 MAX_PROFILE_NOTE_CHARS = 120
+# Control and format characters: nothing a household would type in a one-line note, and a way to hide text.
+_UNPRINTABLE = frozenset({"Cc", "Cf"})
 
 
 @dataclass(frozen=True)
@@ -76,10 +82,12 @@ def kept_notes(
     held = {note_key(text) for text in known}
     dropped: Counter[str] = Counter()
     for note in notes:
-        text = note.text.strip()
+        text = " ".join(note.text.split())
         reason = None
         if not text:
             reason = "empty"
+        elif any(unicodedata.category(char) in _UNPRINTABLE for char in text):
+            reason = "invalid"
         elif len(text) > MAX_PROFILE_NOTE_CHARS:
             reason = "too_long"
         elif note_key(text) in seen:
