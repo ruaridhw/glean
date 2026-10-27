@@ -206,6 +206,25 @@ void main() {
     expect(kept.notes.last.text, 'Newest');
   });
 
+  test('every edit keeps the dismissed notes', () {
+    final HouseholdProfile full = HouseholdProfile.fromJson(_full);
+
+    for (final HouseholdProfile edited in <HouseholdProfile>[
+      full.withSpiceTolerance(SpiceTolerance.hot),
+      full.withSpiceTolerance(null),
+      full.copyWith(habits: 'Leftovers on Mondays'),
+      full.withKeptNote(
+        const ProfileNote(
+          date: '2026-10-25',
+          text: 'Likes fish',
+          source: ProfileNoteSource.feedback,
+        ),
+      ),
+    ]) {
+      expect(edited.dismissedNotes, <String>['Likes it very spicy']);
+    }
+  });
+
   test('dismissed notes do not make an empty profile look filled in', () {
     expect(
       const HouseholdProfile(dismissedNotes: <String>['Likes fish']).isEmpty,
