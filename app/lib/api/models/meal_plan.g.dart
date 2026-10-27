@@ -53,6 +53,7 @@ Map<String, dynamic> _$MealPlanRequestToJson(MealPlanRequest instance) =>
       'cooked_history': instance.cookedHistory.map((e) => e.toJson()).toList(),
       'local_date': instance.localDate,
       'human_feedback': instance.humanFeedback?.toJson(),
+      'profile': instance.profile,
     };
 
 UsedUpPantryItem _$UsedUpPantryItemFromJson(Map<String, dynamic> json) =>

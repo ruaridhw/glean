@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api_exception.dart';
 import 'package:glean/api/models/meal_plan.dart';
 import 'package:glean/api/models/meal_plan_session.dart';
+import 'package:glean/api/models/planning_profile.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
@@ -1150,6 +1151,10 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     // The window plus any older cook that still carries a thumbs down: a dislike does not expire.
     final cooked = await plan.plannerHistory(userId: userId);
     final config = await ref.read(userConfigRepositoryProvider).get(userId);
+    // The profile shapes the plan: dislikes are never planned and the scorer leans to the rest.
+    final profile = await ref
+        .read(householdProfileRepositoryProvider)
+        .get(userId);
     final groups = <int, List<String>>{};
     for (final recipe in saved) {
       groups[recipe.id] = await foodGroupsForRecipe(recipes, recipe.id);
@@ -1170,6 +1175,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         .toRequest();
     return MealPlanRequest(
       humanFeedback: feedback,
+      profile: planningProfileJson(profile),
       source: 'corpus',
       excludeExternalIds: excluded.toList(),
       pantry: compressPantry(pantry, now: now),

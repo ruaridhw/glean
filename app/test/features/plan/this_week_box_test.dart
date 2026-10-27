@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/auth/auth_controller.dart';
+import 'package:glean/data/models/household_profile.dart';
 import 'package:glean/data/models/user_config_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -191,6 +192,51 @@ void main() {
     await generateAndComeBack(tester);
 
     expect(sent.single['human_feedback'], isNull);
+  });
+
+  gleanWidgetTest('with no profile Generate sends none', (tester) async {
+    await open(tester);
+
+    await generateAndComeBack(tester);
+
+    expect(sent.single.containsKey('profile'), isTrue);
+    expect(sent.single['profile'], isNull);
+  });
+
+  gleanWidgetTest('Generate sends the stored profile, bounded for the wire', (
+    tester,
+  ) async {
+    await h.container
+        .read(householdProfileRepositoryProvider)
+        .save(
+          userId: h.userId,
+          profile: HouseholdProfile(
+            dislikedIngredients: <String>['mushrooms', 'x' * 80],
+            cuisinesLiked: const <String>['Italian'],
+            proteinTargets: const <ProteinTarget>[
+              ProteinTarget(protein: 'fish', minPerWeek: 1),
+            ],
+            spiceTolerance: SpiceTolerance.mild,
+            habits: 'Quick weeknights',
+          ),
+        );
+    await open(tester);
+
+    await generateAndComeBack(tester);
+
+    final Map<String, dynamic> profile =
+        sent.single['profile'] as Map<String, dynamic>;
+    expect(profile['disliked_ingredients'], <String>['mushrooms', 'x' * 60]);
+    expect(profile['cuisines_liked'], <String>['Italian']);
+    expect(profile['protein_targets'], <Map<String, dynamic>>[
+      <String, dynamic>{
+        'protein': 'fish',
+        'min_per_week': 1,
+        'max_per_week': null,
+      },
+    ]);
+    expect(profile['spice_tolerance'], 'mild');
+    expect(profile['habits'], 'Quick weeknights');
   });
 
   gleanWidgetTest('Generate sends the chips and the trimmed note', (
