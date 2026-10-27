@@ -135,3 +135,26 @@ def test_until_the_session_carries_the_profile_nothing_is_known() -> None:
     )
 
     assert known_notes(request) == []
+
+
+def test_a_kept_note_is_one_line_with_single_spaces() -> None:
+    kept, _ = kept_notes([note("  You prefer\n rice   over\tpasta.  ")], EVERYTHING)
+
+    assert [n.text for n in kept] == ["You prefer rice over pasta."]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Likes fish\x00 on Fridays",  # Cc: a control character
+        "Likes fish\x1b[31m on Fridays",  # Cc: an escape sequence
+        "Likes\u200b fish",  # Cf: a zero-width space
+        "Likes fish\u202e syadirF",  # Cf: a right-to-left override
+        "Likes fish\ufeff",  # Cf: a byte-order mark
+    ],
+)
+def test_a_note_with_a_control_or_format_character_is_dropped_as_invalid(text: str) -> None:
+    kept, dropped = kept_notes([note(text), note("Likes rice")], EVERYTHING)
+
+    assert [n.text for n in kept] == ["Likes rice"]
+    assert dropped == {"invalid": 1}
