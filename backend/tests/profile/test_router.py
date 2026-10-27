@@ -217,6 +217,7 @@ def test_the_finish_returns_the_profile_and_a_two_line_summary(
         "habits",
         "household",
         "notes",
+        "dismissed_notes",
         "interviewed_at",
     }
     assert body["profile"]["version"] == 1
@@ -456,6 +457,18 @@ def test_the_clients_draft_free_text_never_reaches_the_model(
     assert done["profile"]["household"] == DRAFT_INJECTION
     assert done["profile"]["loved_ingredients"] == [DRAFT_INJECTION]
     assert [meal["text"] for meal in done["profile"]["favourite_meals"]] == [DRAFT_INJECTION]
+
+
+def test_the_interview_keeps_the_notes_the_household_dismissed_and_never_sends_them(
+    client: TestClient, auth_headers: dict[str, str], model: FakeRouter
+) -> None:
+    draft = {**PROFILE, "dismissed_notes": ["You like it very spicy."]}
+
+    done = _walk_skipped(client, auth_headers, draft)
+
+    assert "You like it very spicy." not in model.sent_text()
+    assert done["profile"]["dismissed_notes"] == ["You like it very spicy."]
+    assert [note["text"] for note in done["profile"]["notes"]] == ["prefers rice midweek"]
 
 
 def test_the_clients_draft_free_text_never_reaches_the_model_when_the_screen_is_down(

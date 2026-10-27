@@ -603,6 +603,7 @@ def _finished(
         habits=_paragraph(merged.habits),
         household=_paragraph(merged.household),
         notes=list(held.notes)[:_MAX_LIST_ENTRIES],
+        dismissed_notes=list(held.dismissed_notes),
         interviewed_at=now,
     )
 

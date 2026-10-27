@@ -37,6 +37,7 @@ PROFILE_JSON = {
     "habits": "Batch cook on Sundays",
     "household": "Four of us",
     "notes": [{"date": "2026-10-19", "text": "prefers rice midweek", "source": "interview"}],
+    "dismissed_notes": ["You like it very spicy."],
     "interviewed_at": "2026-10-19T18:00:00Z",
 }
 
@@ -59,6 +60,7 @@ def test_the_profile_shape_is_exactly_the_contract() -> None:
         "habits",
         "household",
         "notes",
+        "dismissed_notes",
         "interviewed_at",
     ]
 
@@ -76,6 +78,7 @@ def test_an_empty_profile_is_version_one_with_nothing_known() -> None:
         "habits": "",
         "household": "",
         "notes": [],
+        "dismissed_notes": [],
         "interviewed_at": None,
     }
 
@@ -85,6 +88,22 @@ def test_the_profile_rejects_an_unknown_field_or_version() -> None:
         HouseholdProfile.model_validate({**PROFILE_JSON, "secret": "x"})
     with pytest.raises(ValidationError):
         HouseholdProfile.model_validate({**PROFILE_JSON, "version": 2})
+
+
+def test_a_profile_written_before_dismissed_notes_still_reads() -> None:
+    older = {key: value for key, value in PROFILE_JSON.items() if key != "dismissed_notes"}
+
+    assert HouseholdProfile.model_validate(older).dismissed_notes == []
+
+
+def test_the_dismissed_notes_are_bounded_like_the_notes() -> None:
+    assert HouseholdProfile(dismissed_notes=["Likes fish"] * 50)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(dismissed_notes=["Likes fish"] * 51)
+    with pytest.raises(ValidationError):
+        HouseholdProfile(dismissed_notes=["o" * 121])
+    with pytest.raises(ValidationError):
+        HouseholdProfile(dismissed_notes=[""])
 
 
 def test_a_question_is_always_skippable() -> None:
