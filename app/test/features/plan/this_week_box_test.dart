@@ -203,6 +203,19 @@ void main() {
     expect(sent.single['profile'], isNull);
   });
 
+  gleanWidgetTest(
+    'a profile that cannot be read is sent as none and Generate still goes',
+    (tester) async {
+      await open(tester);
+      // The table is gone: every read of the profile throws, as a corrupt or half-migrated database would.
+      await h.db.customStatement('DROP TABLE household_profiles');
+
+      await generateAndComeBack(tester);
+
+      expect(sent.single['profile'], isNull);
+    },
+  );
+
   gleanWidgetTest('Generate sends the stored profile, bounded for the wire', (
     tester,
   ) async {
