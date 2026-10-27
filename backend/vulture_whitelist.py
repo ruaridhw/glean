@@ -229,7 +229,6 @@ interviewed_at  # HouseholdProfile field, stamped by the service
 skippable  # InterviewQuestion field, always true
 max_turns  # InterviewQuestionResponse field
 dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
-clear_screen_cache  # screening.py, called by the tests to start from a cold cache
 WRITABLE_PROFILE_FIELDS  # schemas.py, the fields an interview question may target
 WritableProfileField  # schemas.py, the narrowed field enum the model schema uses
 _answers_belong_to_this_interview  # Pydantic model validator (InterviewRequest)
