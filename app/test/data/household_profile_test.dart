@@ -143,6 +143,69 @@ void main() {
     expect(profile.knowsNote('Likes fish'), isFalse);
   });
 
+  ProfileNote note(String text, ProfileNoteSource source) =>
+      ProfileNote(date: '2026-10-24', text: text, source: source);
+
+  test('keeping a note appends it once, newest last', () {
+    final HouseholdProfile profile = const HouseholdProfile()
+        .withKeptNote(note('Likes fish', ProfileNoteSource.feedback))
+        .withKeptNote(note(' likes FISH', ProfileNoteSource.feedback));
+
+    expect(profile.notes.map((ProfileNote n) => n.text), <String>[
+      'Likes fish',
+    ]);
+  });
+
+  test('keeping a note past ${HouseholdProfile.maxNotes} drops the oldest '
+      'feedback notes first and keeps every interview note', () {
+    final HouseholdProfile full = HouseholdProfile(
+      notes: <ProfileNote>[
+        note('Interview 0', ProfileNoteSource.interview),
+        for (int i = 0; i < 24; i++)
+          note('Feedback $i', ProfileNoteSource.feedback),
+        for (int i = 1; i < 26; i++)
+          note('Interview $i', ProfileNoteSource.interview),
+      ],
+    );
+    expect(full.notes, hasLength(HouseholdProfile.maxNotes));
+
+    final HouseholdProfile kept = full.withKeptNote(
+      note('Newest', ProfileNoteSource.feedback),
+    );
+
+    expect(kept.notes, hasLength(HouseholdProfile.maxNotes));
+    expect(kept.notes.first.text, 'Interview 0');
+    expect(
+      kept.notes.map((ProfileNote n) => n.text),
+      isNot(contains('Feedback 0')),
+    );
+    expect(kept.notes[1].text, 'Feedback 1');
+    expect(kept.notes.last.text, 'Newest');
+    expect(
+      kept.notes.where(
+        (ProfileNote n) => n.source == ProfileNoteSource.interview,
+      ),
+      hasLength(26),
+    );
+  });
+
+  test('a profile of only interview notes still stays within the cap', () {
+    final HouseholdProfile full = HouseholdProfile(
+      notes: <ProfileNote>[
+        for (int i = 0; i < HouseholdProfile.maxNotes; i++)
+          note('Interview $i', ProfileNoteSource.interview),
+      ],
+    );
+
+    final HouseholdProfile kept = full.withKeptNote(
+      note('Newest', ProfileNoteSource.feedback),
+    );
+
+    expect(kept.notes, hasLength(HouseholdProfile.maxNotes));
+    expect(kept.notes.first.text, 'Interview 1');
+    expect(kept.notes.last.text, 'Newest');
+  });
+
   test('dismissed notes do not make an empty profile look filled in', () {
     expect(
       const HouseholdProfile(dismissedNotes: <String>['Likes fish']).isEmpty,

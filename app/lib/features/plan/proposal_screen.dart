@@ -174,15 +174,8 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
           .read(householdProfileRepositoryProvider)
           .update(
             userId: ref.read(currentUserIdProvider),
-            // A second Keep of the same note (from another proposal) adds nothing.
-            change: (HouseholdProfile profile) =>
-                profile.notes.any(
-                  (ProfileNote held) => noteKey(held.text) == noteKey(text),
-                )
-                ? profile
-                : profile.copyWith(
-                    notes: <ProfileNote>[...profile.notes, note],
-                  ),
+            // A second Keep of the same note adds nothing; a full profile drops its oldest feedback note.
+            change: (HouseholdProfile profile) => profile.withKeptNote(note),
           );
     } catch (error) {
       await logger?.error(
