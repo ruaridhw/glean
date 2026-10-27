@@ -133,14 +133,6 @@ _WORD_RE = re.compile(r"\w+")
 _MIN_WORD_LENGTH = 2
 
 
-def mentions_disliked(ingredient_names: Iterable[str], dislike: str) -> bool:
-    """Whether any ingredient name uses *dislike* as whole words, plurals and accents folded, never inside a word.
-
-    A `STAPLE_PHRASES` phrase does not count for the bare dislike it lists ("olives" never hits "olive oil").
-    """
-    return _Rule.of(dislike).hits(_Names.of(ingredient_names))
-
-
 @dataclass(frozen=True, slots=True)
 class _Names:
     """One recipe's ingredient names, folded and split into words once, however many rules read them."""
