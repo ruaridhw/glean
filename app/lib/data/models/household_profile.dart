@@ -111,6 +111,7 @@ class HouseholdProfile {
     this.habits = '',
     this.household = '',
     this.notes = const <ProfileNote>[],
+    this.dismissedNotes = const <String>[],
     this.interviewedAt,
   });
 
@@ -131,6 +132,7 @@ class HouseholdProfile {
     habits: _text(json['habits']) ?? '',
     household: _text(json['household']) ?? '',
     notes: _objects(json['notes'], ProfileNote.fromJson),
+    dismissedNotes: _strings(json['dismissed_notes']),
     interviewedAt: switch (json['interviewed_at']) {
       final String value => DateTime.tryParse(value)?.toUtc(),
       _ => null,
@@ -152,6 +154,9 @@ class HouseholdProfile {
   /// The version this build writes. A document read from elsewhere keeps its own.
   static const int currentVersion = 1;
 
+  /// How many dismissed notes the profile remembers; the oldest go first. The backend refuses more.
+  static const int maxDismissedNotes = 50;
+
   final int version;
   final List<FavouriteMeal> favouriteMeals;
   final List<String> lovedIngredients;
@@ -169,7 +174,34 @@ class HouseholdProfile {
   /// Free text: who eats, kids, guests.
   final String household;
   final List<ProfileNote> notes;
+
+  /// Notes the planner offered that the household dismissed, newest last, so it does not offer them again.
+  /// Absent from a profile written before they were kept, which reads as none.
+  final List<String> dismissedNotes;
   final DateTime? interviewedAt;
+
+  /// Whether [text] is already a note here, or one the household dismissed: compared case-insensitively, with
+  /// runs of whitespace as one space, as the backend compares them.
+  bool knowsNote(String text) {
+    final String key = noteKey(text);
+    return notes.any((ProfileNote note) => noteKey(note.text) == key) ||
+        dismissedNotes.any((String note) => noteKey(note) == key);
+  }
+
+  /// A copy that remembers [text] as dismissed: once, newest last, and only the newest [maxDismissedNotes].
+  HouseholdProfile withDismissedNote(String text) {
+    final String key = noteKey(text);
+    final List<String> kept = <String>[
+      for (final String note in dismissedNotes)
+        if (noteKey(note) != key) note,
+      text.trim(),
+    ];
+    return _with(
+      dismissedNotes: kept.length > maxDismissedNotes
+          ? kept.sublist(kept.length - maxDismissedNotes)
+          : kept,
+    );
+  }
 
   /// True when the household has told Glean nothing and Glean has kept no notes.
   bool get isEmpty =>
@@ -207,8 +239,26 @@ class HouseholdProfile {
     habits: habits ?? this.habits,
     household: household ?? this.household,
     notes: notes ?? this.notes,
+    dismissedNotes: dismissedNotes,
     interviewedAt: interviewedAt,
   );
+
+  HouseholdProfile _with({required List<String> dismissedNotes}) =>
+      HouseholdProfile(
+        version: version,
+        favouriteMeals: favouriteMeals,
+        lovedIngredients: lovedIngredients,
+        dislikedIngredients: dislikedIngredients,
+        cuisinesLiked: cuisinesLiked,
+        cuisinesAvoided: cuisinesAvoided,
+        proteinTargets: proteinTargets,
+        spiceTolerance: spiceTolerance,
+        habits: habits,
+        household: household,
+        notes: notes,
+        dismissedNotes: dismissedNotes,
+        interviewedAt: interviewedAt,
+      );
 
   HouseholdProfile withSpiceTolerance(SpiceTolerance? value) =>
       HouseholdProfile(
@@ -223,6 +273,7 @@ class HouseholdProfile {
         habits: habits,
         household: household,
         notes: notes,
+        dismissedNotes: dismissedNotes,
         interviewedAt: interviewedAt,
       );
 
@@ -244,11 +295,16 @@ class HouseholdProfile {
     'notes': <Map<String, dynamic>>[
       for (final ProfileNote note in notes) note.toJson(),
     ],
+    'dismissed_notes': dismissedNotes,
     'interviewed_at': interviewedAt?.toUtc().toIso8601String(),
   };
 
   String encode() => jsonEncode(toJson());
 }
+
+/// What two notes are compared by: lower-cased, with runs of whitespace as one space.
+String noteKey(String text) =>
+    text.trim().split(RegExp(r'\s+')).join(' ').toLowerCase();
 
 String? _text(Object? value) => switch (value) {
   final String text when text.trim().isNotEmpty => text.trim(),
