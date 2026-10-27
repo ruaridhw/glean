@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from glean.meal_plan.balance import (
     PANTRY_FIT_TOP,
     CandidateWeek,
+    ProfileScoring,
+    ProfileTarget,
     RecipeFacts,
     drift,
     facts_from,
@@ -27,6 +29,7 @@ from glean.meal_plan.tools import (
     LIGHTER_CHIP,
     Rating,
     ScoringContext,
+    Term,
     distinct_main_proteins,
 )
 from glean.recipes.attributes import Cuisine, DishType, MainCarb, MainProtein, RecipeAttributes, WholeFood
@@ -267,3 +270,45 @@ def test_a_one_slot_week_takes_the_urgent_recipe_the_row_charges_for() -> None:
     skipped = CandidateWeek.from_score(score_meal_plan(["rec_0"], context))
     assert unused_urgent_items(skipped) == ("salmon fillet",)
     assert skipped.terms["unused_urgent_item"] == -4.0
+
+
+def test_the_profile_reaches_the_scorer_as_favourites_cuisines_loved_ingredients_and_protein_targets() -> None:
+    profile = ProfileScoring(
+        liked_cuisines=[Cuisine.ITALIAN],
+        avoided_cuisines=[Cuisine.THAI],
+        protein_targets=[ProfileTarget(protein=MainProtein.FISH, min_per_week=1)],
+    )
+    entries = [
+        RecipeFacts(recipe_id="fav", favourite=True, attributes={"main_protein": "chicken"}),
+        RecipeFacts(recipe_id="italian", attributes={"cuisine": "italian", "main_protein": "beef"}),
+        RecipeFacts(recipe_id="thai", attributes={"cuisine": "thai", "main_protein": "pork"}),
+        RecipeFacts(recipe_id="loved", loved_ingredients=("basil",), attributes={"main_protein": "lamb"}),
+    ]
+    ctx = scoring_context(entries, profile=profile)
+
+    plan = score_meal_plan(["fav", "italian", "thai", "loved"], ctx)
+
+    assert plan.points(Term.FAVOURITE) == 2.0
+    assert plan.points(Term.LIKED_CUISINE) == 1.0
+    assert plan.points(Term.AVOIDED_CUISINE) == -2.0
+    assert plan.points(Term.LOVED_INGREDIENT) == 1.0
+    # No fish in the week, against a target of at least one.
+    assert plan.points(Term.PROTEIN_TARGET) == -4.0
+
+
+def test_a_protein_target_charges_four_per_extra_above_its_ceiling() -> None:
+    profile = ProfileScoring(protein_targets=[ProfileTarget(protein=MainProtein.CHICKEN, max_per_week=1)])
+    entries = [RecipeFacts(recipe_id=f"c{n}", attributes={"main_protein": "chicken"}) for n in range(3)]
+
+    plan = score_meal_plan(["c0", "c1", "c2"], scoring_context(entries, profile=profile))
+
+    assert plan.points(Term.PROTEIN_TARGET) == -8.0
+
+
+def test_without_a_profile_no_profile_term_scores() -> None:
+    entries = [RecipeFacts(recipe_id="a", attributes={"cuisine": "italian"})]
+
+    plan = score_meal_plan(["a"], scoring_context(entries))
+
+    for term in (Term.FAVOURITE, Term.LIKED_CUISINE, Term.AVOIDED_CUISINE, Term.PROTEIN_TARGET):
+        assert plan.points(term) == 0.0
