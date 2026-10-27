@@ -164,6 +164,8 @@ class PlanState(TypedDict, total=False):
     # The rated cooks the model reads for its profile notes, with their titles read from the corpus in `prepare`
     # (never the app's), so a note's rating evidence is exactly what the model was shown.
     rated_meals: list[dict[str, str]]
+    # How many distinct corpus recipes those cooks are: a rating note's evidence.
+    rated_recipes: int
     # Whether the household answered the question rather than skipping it: an answer note's evidence.
     answered: bool
     tool_calls: int
@@ -248,15 +250,14 @@ class _Nodes:
             # "No recipes fit your diet and time limit" and sends the household to Settings.
             raise AgentError(SessionError(code=SessionErrorCode.NO_ELIGIBLE_RECIPES))
         request = MealPlanRequest.model_validate(state["request"])
+        titles = pipeline.corpus_titles(
+            corpus, [item.recipe_id for item in request.cooked_history if item.rating and item.recipe_id]
+        )
         return {
             "prepared": prepared.model_dump(mode="json"),
-            "rated_meals": rated_meals(
-                request.cooked_history,
-                pipeline.corpus_titles(
-                    corpus,
-                    [item.recipe_id for item in request.cooked_history if item.rating and item.recipe_id],
-                ),
-            ),
+            "rated_meals": rated_meals(request.cooked_history, titles),
+            # Distinct recipes, not cooks: two thumbs on one dinner are not a pattern.
+            "rated_recipes": len({item.recipe_id for item in request.cooked_history if item.rating} & set(titles)),
             "transcript": [],
             "tool_calls": 0,
             "invalid_actions": 0,
@@ -729,7 +730,7 @@ def _session_evidence(state: PlanState) -> SessionEvidence:
     """What this run holds that a profile note may rest on (V15)."""
     return SessionEvidence(
         # The rated cooks the model was shown, so a note never rests on one it could not see.
-        rated=len(state.get("rated_meals") or []) >= MIN_RATED_COOKS,
+        rated=state.get("rated_recipes", 0) >= MIN_RATED_COOKS,
         answered=bool(state.get("answered")),
         # A week's run never has one: a swap's own notes are checked against its note in `swap_finalise`.
         swap_note=False,

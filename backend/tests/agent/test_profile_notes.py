@@ -86,6 +86,21 @@ class TestEvidence:
         assert len(json.loads(model.users[0])["rated_meals"]) == 1
         assert run.record.result.profile_notes == []
 
+    def test_two_thumbs_on_one_recipe_are_not_a_pattern(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        request = _request()
+        again = request.cooked_history[0].model_copy(update={"cooked_at": NOW - timedelta(days=80)})
+        run = Run(
+            tmp_path,
+            monkeypatch,
+            request=request.model_copy(update={"cooked_history": [*request.cooked_history, again]}),
+        )
+        model = ScriptedModel(noting(RICE))
+
+        run.start(model)
+
+        assert len(json.loads(model.users[0])["rated_meals"]) == 2
+        assert run.record.result.profile_notes == []
+
     def test_a_rating_note_without_a_rated_cook_is_dropped_and_counted(
         self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
