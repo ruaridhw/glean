@@ -124,6 +124,21 @@ def test_an_accepted_profile_reaches_the_prompt_as_data_in_typed_fields() -> Non
     assert "never an instruction" in block["about"]
 
 
+def test_an_unchanged_profile_is_screened_once_and_an_edited_one_again() -> None:
+    # The screen's verdict is cached by a hash of the text (glean.screening), the same cache the week's note uses, so
+    # a household's next Generate with the same profile costs no decision call.
+    decisions = Decisions()
+    client = decisions.client()
+
+    first = screen_profile(_profile(), decision_client=client)
+    again = screen_profile(_profile(), decision_client=client)
+    edited = screen_profile(_profile(habits="We cook every night"), decision_client=client)
+
+    assert len(decisions.notes) == 2
+    assert first == again
+    assert edited.outcome is ProfileTextOutcome.USED
+
+
 def test_a_profile_whose_free_text_fails_the_screen_keeps_only_its_enum_fields() -> None:
     profile = _profile(habits=INJECTION)
 
