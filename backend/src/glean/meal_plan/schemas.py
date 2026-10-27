@@ -33,6 +33,10 @@ MAX_PLANNING_TEXT_CHARS = 60
 MAX_PLANNING_PARAGRAPH_CHARS = 500
 MAX_PLANNING_NOTES = 20
 MAX_PLANNING_NOTE_CHARS = 200
+# A profile note the planner writes (V15) is at most this many code points; `meal_plan.profile_notes` keeps it so.
+MAX_PROFILE_NOTE_CHARS = 120
+# The dismissed notes the profile remembers (V15): the newest 50, each a planner note the household dismissed.
+MAX_PLANNING_DISMISSED_NOTES = 50
 # A favourite meal is matched to a corpus recipe by its exact title when the interview found no recipe id, and a third
 # of the corpus's titles are longer than 60, so it takes the interview's own 120 (owner ruling 2026-10-27).
 MAX_PLANNING_FAVOURITE_CHARS = 120
@@ -191,6 +195,14 @@ class PlanningProfile(BaseModel):
     household: str = Field(default="", max_length=MAX_PLANNING_PARAGRAPH_CHARS)
     notes: list[PlanningNote] = Field(
         default_factory=list, max_length=MAX_PLANNING_NOTES, description="The newest notes, newest first."
+    )
+    dismissed_notes: list[Annotated[str, Field(min_length=1, max_length=MAX_PROFILE_NOTE_CHARS)]] = Field(
+        default_factory=list,
+        max_length=MAX_PLANNING_DISMISSED_NOTES,
+        description=(
+            "Notes the planner offered and the household dismissed, newest last. Read only to drop a repeat "
+            "(`meal_plan.profile_notes.known_notes`): never shown to a model and never screened."
+        ),
     )
 
 

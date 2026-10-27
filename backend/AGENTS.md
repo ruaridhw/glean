@@ -193,6 +193,9 @@ src/glean/
                       #   only as screen_profile passed it (each field its own screen, in parallel, each failing closed). Like the
                       #   week's note, the profile's prose is screened before the graph and the sync route's traced
                       #   code, which then hold `without_profile_text(request)` and the ScreenedProfile
+                      #   `dismissed_notes` (V15: the newest 50 notes the household dismissed, each <= 120) ride the
+                      #   profile only so the planner can drop a repeat (profile_notes.known_notes): never screened,
+                      #   never in a prompt, blanked by without_profile_text like the rest of its prose
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
