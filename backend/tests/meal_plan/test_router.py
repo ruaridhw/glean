@@ -486,6 +486,26 @@ def test_cooked_history_is_a_bounded_list(client: TestClient, auth_headers: dict
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "profile",
+    [
+        {"disliked_ingredients": [f"item {n}" for n in range(21)]},
+        {"cuisines_liked": ["x" * 61]},
+        {"habits": "x" * 501},
+        {"notes": [{"date": "2026-10-20", "text": "x" * 201, "source": "feedback"}]},
+    ],
+)
+def test_an_over_long_profile_is_refused_not_clipped(
+    client: TestClient, auth_headers: dict[str, str], profile: dict[str, object]
+) -> None:
+    app.dependency_overrides[get_llm_router] = lambda: _ModelThatSuggestsEveryCorpusRecipe()
+    body = {**_corpus_request().model_dump(mode="json"), "profile": profile}
+
+    response = client.post("/meal-plan", headers=auth_headers, json=body)
+
+    assert response.status_code == 422
+
+
 def test_cooked_history_entries_take_a_title_when_the_app_kept_no_recipe_id(
     client: TestClient, auth_headers: dict[str, str], tmp_path, monkeypatch
 ) -> None:

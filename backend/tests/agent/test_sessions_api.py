@@ -462,6 +462,32 @@ def test_the_session_request_takes_the_same_inputs_as_the_synchronous_route(api:
     assert response.status_code == 422
 
 
+def test_an_over_long_profile_is_refused_at_create(api: TestClient) -> None:
+    response = api.post("/meal-plan/sessions", json=_body(profile={"loved_ingredients": ["x"] * 21}))
+
+    assert response.status_code == 422
+
+
+def test_a_session_with_a_profile_plans_around_its_dislikes(api: TestClient) -> None:
+    view = _plan_to_completion(
+        api,
+        _body(
+            profile={
+                "disliked_ingredients": ["coriander"],
+                "spice_tolerance": "mild",
+                "habits": "Quick weeknights",
+                "notes": [{"date": "2026-04-01", "text": "Likes rice", "source": "feedback"}],
+            }
+        ),
+    )
+
+    assert view["status"] == "done"
+    planned = [meal["external_id"] for meal in view["result"]["suggestions"]]
+    # The coriander is the pantry's most urgent item, so only the dislike keeps its recipe out.
+    assert planned
+    assert "rec_coriander_chicken" not in planned
+
+
 def test_a_delivery_that_cannot_be_queued_fails_the_session_and_says_so(
     api: TestClient, sessions: InMemorySessionStore
 ) -> None:
