@@ -1080,3 +1080,51 @@ def _enrich(corpus: RecipeCorpusStore, recipe_id: str, bucket: str) -> None:
             )
         ]
     )
+
+
+def test_a_recipe_using_a_disliked_ingredient_is_never_offered(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_mushroom", "Mushroom Stroganoff", ["beef mince", "chestnut mushrooms"], 30),
+            ("rec_nutmeg", "Beef Lasagne", ["beef mince", "nutmeg"], 40),
+            ("rec_tacos", "Beef Tacos", ["beef mince", "tortilla"], 20),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry=_pantry("mince"),
+        dietary_flags=[],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        disliked_ingredients=["mushrooms", "nut"],
+    )
+
+    assert {candidate.external_id for candidate in candidates} == {"rec_nutmeg", "rec_tacos"}
+
+
+def test_a_dislike_is_excluded_before_the_floor_so_relaxing_it_never_brings_one_back(tmp_path) -> None:
+    corpus = _corpus(
+        tmp_path,
+        [
+            ("rec_olive", "Olive Tapenade Pasta", ["olives", "pasta"], 20),
+            ("rec_recent", "Beef Tacos", ["beef mince", "tortilla"], 20),
+        ],
+    )
+
+    candidates = sample_corpus_candidates(
+        corpus,
+        pantry=_pantry("olives"),
+        dietary_flags=[],
+        max_total_time_mins=None,
+        exclude_external_ids=[],
+        rng=random.Random(0),
+        cooked=[_cooked_meal("rec_recent", "Beef Tacos", days_ago=5)],
+        slots=1,
+        disliked_ingredients=["olive"],
+    )
+
+    assert [candidate.external_id for candidate in candidates] == ["rec_recent"]
+    assert candidates[0].cooked_days_ago is not None

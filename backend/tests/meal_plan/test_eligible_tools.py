@@ -94,6 +94,32 @@ class TestHardConstraints:
 
         assert ids(get_eligible_recipes(RecipeFilter(), ctx)) == ["b"]
 
+    def test_a_disliked_ingredient_is_a_hard_constraint_beside_the_dietary_decisions(self) -> None:
+        corpus = [
+            recipe("mushroom", ingredients=("chestnut mushrooms", "rice")),
+            recipe("nutmeg", ingredients=("nutmeg", "milk")),
+            recipe("plain", ingredients=("cod", "potatoes")),
+        ]
+        ctx = context(corpus, disliked_ingredients=("mushroom", "nut"))
+
+        assert ids(get_eligible_recipes(RecipeFilter(), ctx)) == ["nutmeg", "plain"]
+
+    def test_the_floor_never_brings_back_a_disliked_recipe(self) -> None:
+        # Exclusion comes before the floor: a dislike leaves too few fresh recipes, and the floor relaxes to the
+        # recently cooked one rather than the disliked one.
+        corpus = [recipe("disliked", ingredients=("olives",)), recipe("recent"), recipe("fresh")]
+        ctx = context(corpus, slots=1, cooked=(cooked("recent", 10),), disliked_ingredients=("olive",))
+
+        result = get_eligible_recipes(RecipeFilter(), ctx)
+
+        assert "disliked" not in ids(result)
+
+    def test_a_filter_text_search_cannot_reach_a_disliked_recipe(self) -> None:
+        corpus = [recipe("mushroom", ingredients=("mushrooms",)), recipe("other")]
+        ctx = context(corpus, disliked_ingredients=("mushroom",))
+
+        assert ids(get_eligible_recipes(RecipeFilter(text="mushrooms"), ctx)) == []
+
 
 class TestFloor:
     def test_recipes_cooked_in_six_weeks_are_left_out_while_enough_fresh_ones_remain(self) -> None:

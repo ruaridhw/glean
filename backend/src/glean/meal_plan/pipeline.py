@@ -7,8 +7,8 @@ queues or LangGraph: the steps take plain values, and the LLM call goes through 
 
 - **prepare** is deterministic. It samples the candidate recipes the model will see, files every
   urgent pantry item under the candidates that use it, and writes the model's one user message.
-  Dietary flags, the time cap, meals already planned and the six-week recency floor are applied
-  here (V2 and V4), so the offered set is the dietary guarantee.
+  Dietary flags, the profile's disliked ingredients, the time cap, meals already planned and the
+  six-week recency floor are applied here (V2, V4 and V13b), so the offered set is the dietary guarantee.
 - **choose** is the only LLM step. It asks the model to pick from the candidates, and for the week's
   one-line summary, a reason kind per meal and one alternative per cube and per planned meal.
 - **finalise** rejects anything the model was not offered (ids, already-planned meals, over-long
@@ -275,6 +275,7 @@ def prepare(
         now=request_now,
         preferred_ids=last_week,
         narrowing={chip.value: _narrowing_rule(chip) for chip in screened.chips if chip in tools.NARROWING_CHIPS},
+        disliked_ingredients=_disliked_ingredients(request),
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
     # A meal already in the week uses its items up too, so its urgent ones are not this generation's to use. They
@@ -410,6 +411,11 @@ def _cooked_meals(request: MealPlanRequest) -> list[CookedMeal]:
     ]
 
 
+def _disliked_ingredients(request: MealPlanRequest) -> tuple[str, ...]:
+    """The profile's disliked ingredients: a hard constraint on the offer and on every tool (V13b)."""
+    return () if request.profile is None else tuple(request.profile.disliked_ingredients)
+
+
 def _narrowing_rule(chip: tools.FeedbackChip) -> Callable[[RecipeAttributes, int | None], bool]:
     """One narrowing chip's rule, as the sampler calls it: a recipe's attributes and its total minutes."""
     return lambda attributes, total_time_mins: tools.chip_narrows(chip, attributes, total_time_mins=total_time_mins)
@@ -489,6 +495,7 @@ def tool_context(
         slots=request.meals_per_week,
         now=now or datetime.now(UTC),
         dietary_excluded_ids=dietary_excluded_ids(corpus, summaries, request.dietary_flags),
+        disliked_ingredients=_disliked_ingredients(request),
         planned_ids=frozenset(request.exclude_external_ids),
         max_active_mins=request.max_active_time_mins,
         cooked=tuple(_floor_history(request, unscreened(request.human_feedback), now=now or datetime.now(UTC))[0]),
