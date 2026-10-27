@@ -86,7 +86,7 @@ void main() {
       }
       expect(
         find.text(
-          'From your ratings and answers. Kept notes go in your profile.',
+          'From your ratings, answers and swap notes. Kept notes go in your profile.',
         ),
         findsOneWidget,
       );
