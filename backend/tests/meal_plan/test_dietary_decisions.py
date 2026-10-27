@@ -14,13 +14,14 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from glean.decisions import DECISION_MODEL, DecisionModel
+from glean.decisions import DECISION_MODEL, DEFAULT_MODEL, DecisionModel
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_DECISIONS_KEY,
     DIETARY_FLAGS,
     PREFERENCE_THRESHOLD,
     THRESHOLDS,
+    TREE_NUT_FREE,
     DietaryCalibration,
     DietaryDecision,
     DietaryDecisions,
@@ -253,10 +254,46 @@ def test_the_calibrations_own_thresholds_decide_the_exclusion(tmp_path) -> None:
     assert strict.excludes(summary, "tree-nut-free")
 
 
-def _calibration(model: DecisionModel, *, default_threshold: float = 0.5) -> DietaryCalibration:
+@pytest.mark.parametrize("cutoff", [float("nan"), float("inf"), 0.0, -0.1, 1.0, 1.1])
+def test_a_calibration_rejects_a_cutoff_outside_the_open_unit_interval(cutoff: float) -> None:
+    with pytest.raises(ValueError, match="cutoff"):
+        _calibration(DEFAULT_MODEL, thresholds={TREE_NUT_FREE: cutoff})
+
+    with pytest.raises(ValueError, match="cutoff"):
+        _calibration(DEFAULT_MODEL, default_threshold=cutoff)
+
+
+@pytest.mark.parametrize("evidence", ["", "   \n"])
+def test_a_calibration_needs_provenance_for_its_cutoffs(evidence: str) -> None:
+    with pytest.raises(ValueError, match="evidence"):
+        DietaryCalibration(model=DEFAULT_MODEL, thresholds={}, default_threshold=0.5, evidence=evidence)
+
+
+def test_a_calibration_rejects_a_threshold_for_a_flag_the_model_is_not_asked_about() -> None:
+    with pytest.raises(ValueError, match="keto"):
+        _calibration(DEFAULT_MODEL, thresholds={"keto": 0.3})
+
+
+def test_a_calibration_owns_an_immutable_copy_of_the_cutoffs_it_was_given() -> None:
+    cutoffs = {TREE_NUT_FREE: 0.3}
+    calibration = _calibration(DEFAULT_MODEL, thresholds=cutoffs)
+
+    cutoffs[TREE_NUT_FREE] = 0.9
+
+    assert calibration.threshold_for(TREE_NUT_FREE) == 0.3
+    with pytest.raises(TypeError):
+        calibration.thresholds[TREE_NUT_FREE] = 0.9
+
+
+def _calibration(
+    model: DecisionModel,
+    *,
+    thresholds: dict[str, float] | None = None,
+    default_threshold: float = 0.5,
+) -> DietaryCalibration:
     return DietaryCalibration(
         model=model,
-        thresholds={},
+        thresholds={} if thresholds is None else thresholds,
         default_threshold=default_threshold,
         evidence="Observed responses on neutral samples only: a reference, not a calibration.",
     )

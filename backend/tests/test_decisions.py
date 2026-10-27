@@ -99,6 +99,15 @@ class TestExplicitModel:
         assert DEFAULT_MODEL.accepts(f"{DECISION_MODEL}-20261014")
         assert not DEFAULT_MODEL.accepts("baseten/mammoth-1-20261021")
 
+    def test_the_served_identities_are_an_owned_tuple_a_caller_cannot_change_later(self) -> None:
+        served = ["baseten/mammoth-1"]
+        model = DecisionModel("baseten/mammoth-1:free", served=served)  # type: ignore[arg-type]
+
+        served.append(DECISION_MODEL)
+
+        assert model.served == ("baseten/mammoth-1",)
+        assert not model.accepts(DECISION_MODEL)
+
     def test_the_configured_model_is_requested_and_its_served_identity_is_accepted(self) -> None:
         sent: list[dict[str, Any]] = []
 

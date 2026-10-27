@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -73,6 +74,20 @@ class DietaryCalibration:
     thresholds: Mapping[str, float]
     default_threshold: float
     evidence: str
+
+    def __post_init__(self) -> None:
+        # A cutoff only rules a recipe in or out for the flags the model is asked about, and only when it is
+        # a real probability: NaN or a value past 1 would silently admit everything.
+        unknown = sorted(set(self.thresholds) - set(DIETARY_FLAGS))
+        if unknown:
+            raise ValueError(f"Thresholds for flags the decision model is not asked about: {unknown}")
+        for name, cutoff in (("default", self.default_threshold), *self.thresholds.items()):
+            if not math.isfinite(cutoff) or not 0.0 < cutoff < 1.0:
+                raise ValueError(f"The {name} cutoff must be a finite number between 0 and 1, not {cutoff!r}")
+        if not self.evidence.strip():
+            raise ValueError("A calibration needs evidence for its cutoffs, not a blank string")
+        # Own the cutoffs: a caller's dict must not be able to change what an existing calibration decides.
+        object.__setattr__(self, "thresholds", MappingProxyType(dict(self.thresholds)))
 
     def threshold_for(self, flag: str) -> float:
         return self.thresholds.get(flag, self.default_threshold)

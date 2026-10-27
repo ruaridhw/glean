@@ -40,6 +40,10 @@ class DecisionModel:
     request: str
     served: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        # Own the identities: a caller's list must not be able to widen what this model accepts later.
+        object.__setattr__(self, "served", tuple(self.served))
+
     def accepts(self, served: str) -> bool:
         """Whether a `model` reported by the endpoint is one of this model's known identities."""
         return any(_is_identity_of(served, base) for base in (self.served or (self.request,)))
