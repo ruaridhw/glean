@@ -473,6 +473,27 @@ void main() {
     });
   }
 
+  gleanWidgetTest(
+    'a deleted note is remembered as dismissed, so Glean does not offer it '
+    'again',
+    (tester) async {
+      await pumpProfile(tester, seed: _filled);
+
+      await tester.tap(
+        find.byTooltip('Delete note: Asked for no fish on Mondays'),
+      );
+      await tester.pumpAndSettle();
+
+      final HouseholdProfile after = (await stored(tester))!;
+      expect(
+        after.notes.map((ProfileNote note) => note.text),
+        isNot(contains('Asked for no fish on Mondays')),
+      );
+      expect(after.dismissedNotes, <String>['Asked for no fish on Mondays']);
+      expect(after.knowsNote('asked for no fish on mondays'), isTrue);
+    },
+  );
+
   gleanWidgetTest('a deleted note comes back exactly on Undo', (tester) async {
     await pumpProfile(tester, seed: _filled);
 
