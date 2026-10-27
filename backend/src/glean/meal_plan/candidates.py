@@ -136,6 +136,8 @@ def sample_corpus_candidates(
     preferred_ids: Collection[str] = (),
     narrowing: Mapping[str, Callable[[RecipeAttributes, int | None], bool]] | None = None,
     disliked_ingredients: Sequence[str] = (),
+    favourite_meals: Sequence[tuple[str, str | None]] = (),
+    profile_reserve: Sequence[tuple[Callable[[RecipeAttributes], bool], int]] = (),
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
@@ -147,18 +149,26 @@ def sample_corpus_candidates(
     the model sees them as the fallback they are. `preferred_ids` (last week's dinners, under the "same as
     last week" chip) are offered right after the urgent guarantee, when they are fresh and eligible.
     `narrowing` maps a chip to its rule (`tools.chip_narrows`); see `_narrowed` for when it applies.
-    `disliked_ingredients` are the profile's: a recipe using one is never offered, floor or no floor.
+    `disliked_ingredients` are the profile's: a recipe using one is never offered, floor or no floor. The rest of
+    the profile ranks the offer (spec 6.2 step 5): `favourite_meals` (text, matched recipe id) that are fresh and
+    eligible are offered with `preferred_ids`, and each `profile_reserve` rule (a liked cuisine, a protein minimum)
+    takes up to its count of fresh recipes it matches, in seeded order. Neither draws on `rng` when it is empty, so a
+    household without a profile is offered exactly what it was before.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
     diet_excluded = dietary_excluded_ids(corpus, all_recipes, dietary_flags)
-    from glean.meal_plan.household import disliked_recipe_ids  # noqa: PLC0415 - household imports mentions_item
+    from glean.meal_plan.household import disliked_recipe_ids, favourite_ids  # noqa: PLC0415 - imports mentions_item
 
     disliked = disliked_recipe_ids(
         ((summary.external_id, summary.ingredient_names) for summary in all_recipes), disliked_ingredients
     )
     # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
-    attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None or narrowing else {}
+    attributes = (
+        recipe_attributes(corpus, all_recipes)
+        if max_total_time_mins is not None or narrowing or profile_reserve
+        else {}
+    )
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
     # floor must never bring back a recipe a flag, the time cap or an already-planned meal ruled out.
     eligible = {
@@ -223,8 +233,17 @@ def sample_corpus_candidates(
         limit=guarantee_limit,
     )
     _take_distinct(picked, [eligible[recipe_id] for recipe_id in guaranteed], guarantee_limit)
-    preferred = [eligible[recipe_id] for recipe_id in sorted(preferred_ids) if recipe_id in fresh]
+    favourites = favourite_ids(((recipe_id, summary.title) for recipe_id, summary in eligible.items()), favourite_meals)
+    preferred = [eligible[recipe_id] for recipe_id in sorted({*preferred_ids, *favourites}) if recipe_id in fresh]
     _take_distinct(picked, preferred, sample_size)
+    if profile_reserve:
+        shuffled = sorted(fresh)
+        rng.shuffle(shuffled)
+        for wanted, count in profile_reserve:
+            matching = [
+                eligible[recipe_id] for recipe_id in shuffled if wanted(attributes.get(recipe_id, RecipeAttributes()))
+            ]
+            _take_distinct(picked, matching, min(sample_size, len(picked) + count))
 
     _fill_partition(
         picked,

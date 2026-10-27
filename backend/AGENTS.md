@@ -186,7 +186,9 @@ src/glean/
                       #   and get_eligible_recipes, before the floor (whole words, plurals folded, "nut" never hits
                       #   "nutmeg"; counts per dislike logged, never text); favourites, cuisines (CUISINE_ALIASES to
                       #   V5's enum, unknown ignored and counted), loved ingredients and protein targets are scorer
-                      #   terms (balance.ProfileScoring rides the prepared plan, so widen and swaps score alike);
+                      #   terms (balance.ProfileScoring rides the prepared plan, so widen and swaps score alike),
+                      #   and rank the offer: fresh eligible favourites are offered with last week's dinners, and
+                      #   each liked cuisine or protein minimum reserves a few places (pipeline.PROFILE_RESERVE);
                       #   and `household_profile` in the prompt carries the enum fields always and the free text
                       #   only after screen_profile passed it (one screen per Generate, fail closed). Like the
                       #   week's note, the profile's prose is screened before the graph and the sync route's traced

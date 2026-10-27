@@ -126,7 +126,8 @@ def test_a_favourite_by_matched_id_or_by_title_and_a_loved_ingredient_score_in_t
     prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
     facts = {fact.recipe_id: fact for fact in prepared.facts}
 
-    assert {recipe_id for recipe_id, fact in facts.items() if fact.favourite} <= {"rec_04", "rec_06"}
+    # Both favourites are fresh and eligible, so the offer holds them (spec 6.2 step 5).
+    assert {recipe_id for recipe_id, fact in facts.items() if fact.favourite} == {"rec_04", "rec_06"}
     for recipe_id, fact in facts.items():
         assert fact.loved_ingredients == (() if _disliked(recipe_id) else ("kale",))
     ctx = pipeline.scoring_context_of(prepared)
@@ -135,16 +136,16 @@ def test_a_favourite_by_matched_id_or_by_title_and_a_loved_ingredient_score_in_t
 
 def test_a_recipe_the_agent_finds_is_scored_for_the_profile_like_a_candidate(tmp_path: Path) -> None:
     corpus = _corpus(tmp_path)
-    # The favourites do not change the offer, so a first prepare names a recipe the agent will have to find.
-    offered = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(1), now=NOW).offered_ids
-    target = next(f"rec_{n:02d}" for n in range(0, RECIPES, 2) if f"rec_{n:02d}" not in offered)
-    request = _request(
-        {
-            "favourite_meals": [{"text": f"Synthetic dish {target[-2:]}"}],
-            "loved_ingredients": ["kale"],
+    request = _request({"loved_ingredients": ["kale"]})
+    prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
+    target = next(f"rec_{n:02d}" for n in range(0, RECIPES, 2) if f"rec_{n:02d}" not in prepared.offered_ids)
+    # A favourite the offer could not hold (a full offer, or one cooked too recently) is still a favourite if the
+    # agent finds it: the prepared plan keeps the favourites to match against.
+    prepared = prepared.model_copy(
+        update={
+            "profile": prepared.profile.model_copy(update={"favourites": [(f"Synthetic dish {target[-2:]}", None)]})
         }
     )
-    prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
     ctx = pipeline.tool_context(request, corpus=corpus, now=NOW)
     found = get_eligible_recipes(RecipeFilter(exclude_ids=tuple(prepared.offered_ids)), ctx).recipes
 
