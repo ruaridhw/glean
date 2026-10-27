@@ -6,8 +6,9 @@ household sees them as "Glean noted" and Keeps or dismisses each; nothing reache
 
 - one line: runs of whitespace, newlines and tabs included, become one space, and the ends are trimmed;
 - then at most `MAX_PROFILE_NOTE_CHARS` code points (the unit the app clips by), never empty, and with no control
-  or format character left in it (Unicode Cc, Cf: escapes, zero-width and direction marks), since a kept note
-  goes back into future prompts;
+  or format character, private-use or unassigned code point left in it (Unicode Cc, Cf, Co, Cn: escapes,
+  zero-width and direction marks, characters with no agreed meaning), since a kept note goes back into future
+  prompts;
 - no repeats, compared case-insensitively with runs of whitespace as one space, and none the household's profile
   already holds or has dismissed (`known_notes`);
 - its evidence must exist in this session (`SessionEvidence`): at least `MIN_RATED_COOKS` distinct rated corpus
@@ -37,8 +38,9 @@ MAX_PROFILE_NOTES = 3
 MAX_PROFILE_NOTE_CHARS = 120
 # One thumb is not a pattern: a rating note needs at least this many distinct rated corpus recipes in the window.
 MIN_RATED_COOKS = 2
-# Control and format characters: nothing a household would type in a one-line note, and a way to hide text.
-_UNPRINTABLE = frozenset({"Cc", "Cf"})
+# Control, format, private-use and unassigned characters: nothing a household would type in a one-line note, and
+# ways to hide text or smuggle meaning a reader cannot see.
+_UNPRINTABLE = frozenset({"Cc", "Cf", "Co", "Cn"})
 
 
 @dataclass(frozen=True)
