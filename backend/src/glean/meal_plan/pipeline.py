@@ -108,6 +108,9 @@ Rules:
   rules. Disliked ingredients are already left out of the candidates. A meal chosen because of the profile gets
   the reason_kind profile."""
 
+# How many fresh recipes a liked cuisine reserves in the offer, so the scorer's +1 has something to choose; a protein
+# minimum reserves its own minimum, at least this many. Small beside the 25-recipe offer (spec 6.2 step 5).
+PROFILE_RESERVE = 3
 # The whole corpus as one page, so an already-planned meal's title can be looked up without a read per id.
 _ALL_RECIPES = 1_000_000
 # Template text for a proposal the server had to write itself: spec §6.2's degraded fallback.
@@ -277,6 +280,7 @@ def prepare(
     reference_date = request.local_date or request_now.date()
     pantry = _pantry_items(request)
     cooked, last_week = _floor_history(request, screened, now=request_now)
+    scoring = _profile_scoring(request)
     candidates = sample_corpus_candidates(
         corpus,
         pantry=pantry,
@@ -290,6 +294,8 @@ def prepare(
         preferred_ids=last_week,
         narrowing={chip.value: _narrowing_rule(chip) for chip in screened.chips if chip in tools.NARROWING_CHIPS},
         disliked_ingredients=_disliked_ingredients(request),
+        favourite_meals=scoring.favourites,
+        profile_reserve=_profile_reserve(scoring),
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
     # A meal already in the week uses its items up too, so its urgent ones are not this generation's to use. They
@@ -301,7 +307,6 @@ def prepare(
     # The week's feedback chips, from the screened feedback. An input only a chip reads (stated calories, for
     # lighter) is read only when that chip is on.
     chips = screened.chip_values
-    scoring = _profile_scoring(request)
     facts = balance.facts_from(
         candidates,
         attributes=measured,
@@ -458,6 +463,25 @@ def _profile_scoring(request: MealPlanRequest) -> balance.ProfileScoring:
         favourites=[(meal.text, meal.recipe_id) for meal in profile.favourite_meals],
         loved_ingredients=list(profile.loved_ingredients),
     )
+
+
+def _profile_reserve(
+    scoring: balance.ProfileScoring,
+) -> list[tuple[Callable[[RecipeAttributes], bool], int]]:
+    """The offer's places the profile reserves: `PROFILE_RESERVE` per liked cuisine, and each protein minimum's own."""
+    reserve: list[tuple[Callable[[RecipeAttributes], bool], int]] = [
+        (lambda attributes, cuisine=cuisine: attributes.cuisine is cuisine, PROFILE_RESERVE)
+        for cuisine in scoring.liked_cuisines
+    ]
+    reserve += [
+        (
+            lambda attributes, protein=target.protein: attributes.main_protein is protein,
+            max(target.min_per_week, PROFILE_RESERVE),
+        )
+        for target in scoring.protein_targets
+        if target.min_per_week
+    ]
+    return reserve
 
 
 def _disliked_ingredients(request: MealPlanRequest) -> tuple[str, ...]:
