@@ -179,6 +179,18 @@ src/glean/
                       #   route's traced code: graph input, state, checkpoints and traces carry only
                       #   `without_note(request)` and the ScreenedFeedback. A chip the backend does not
                       #   know is ignored with a warning, not a 422
+                      # household.py: the household profile as planning reads it (V13b). The request's
+                      #   `profile` (schemas.PlanningProfile: lists <= 20 x 60 code points, habits and household
+                      #   <= 500, the newest 20 notes <= 200; past that a 422, never a clip) is used three ways:
+                      #   disliked ingredients are a hard constraint beside the dietary decisions, in the sampler
+                      #   and get_eligible_recipes, before the floor (whole words, plurals folded, "nut" never hits
+                      #   "nutmeg"; counts per dislike logged, never text); favourites, cuisines (CUISINE_ALIASES to
+                      #   V5's enum, unknown ignored and counted), loved ingredients and protein targets are scorer
+                      #   terms (balance.ProfileScoring rides the prepared plan, so widen and swaps score alike);
+                      #   and `household_profile` in the prompt carries the enum fields always and the free text
+                      #   only after screen_profile passed it (one screen per Generate, fail closed). Like the
+                      #   week's note, the profile's prose is screened before the graph and the sync route's traced
+                      #   code, which then hold `without_profile_text(request)` and the ScreenedProfile
                       # eligibility.py: the six-week recency floor, pure and store-free (the future
                       #   `get_eligible_recipes` core). Corpus mode never re-offers a recipe cooked in the
                       #   last 42 days unless honouring that leaves fewer than three recipes per slot; the
@@ -414,6 +426,8 @@ A finished `HouseholdProfile` is **not** screened as a whole: its free text is t
 merged back after the model call. The interview only guarantees that the text it sent the model was
 screened. Any route that hands a profile to a model later — sessions, eligibility, the scorer, feedback
 notes — screens that free text first or sends only the enum fields (`spice_tolerance`, `protein_targets`).
+Planning does both (`meal_plan.household.screen_profile`): the enum fields always reach `household_profile`, and its
+free text only when one screen of all of it passed.
 
 The 0.9 bar is not yet calibrated on real traffic. The question and bar are pinned by
 `tests/profile/test_screening.py`; measure a change with
