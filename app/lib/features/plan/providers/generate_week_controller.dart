@@ -17,6 +17,7 @@ import 'package:glean/api/models/planning_profile.dart';
 import 'package:glean/api/models/recipes.dart';
 import 'package:glean/api/providers/api_providers.dart';
 import 'package:glean/api/providers/recipe_providers.dart';
+import 'package:glean/data/models/household_profile.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/models/recipe_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
@@ -26,6 +27,7 @@ import 'package:glean/data/providers/recipe_proposal.dart';
 import 'package:glean/data/repositories/plan_repository.dart'
     show GeneratedWeekCommit, PlanEntryState, SwappedEntrySnapshot;
 import 'package:glean/data/util/week.dart';
+import 'package:glean/logging/logging.dart';
 
 import '../compression.dart';
 import '../food_groups.dart';
@@ -1151,10 +1153,20 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     // The window plus any older cook that still carries a thumbs down: a dislike does not expire.
     final cooked = await plan.plannerHistory(userId: userId);
     final config = await ref.read(userConfigRepositoryProvider).get(userId);
-    // The profile shapes the plan: dislikes are never planned and the scorer leans to the rest.
-    final profile = await ref
-        .read(householdProfileRepositoryProvider)
-        .get(userId);
+    // The profile shapes the plan: dislikes are never planned and the scorer leans to the rest. One that cannot be
+    // read is logged and left out, so a damaged row costs the profile, not the Generate.
+    HouseholdProfile? profile;
+    try {
+      profile = await ref.read(householdProfileRepositoryProvider).get(userId);
+    } catch (error) {
+      unawaited(
+        ref
+            .read(gleanLoggerProvider)
+            ?.error(
+              'household profile unreadable; planning without it: ${describeError(error)}',
+            ),
+      );
+    }
     final groups = <int, List<String>>{};
     for (final recipe in saved) {
       groups[recipe.id] = await foodGroupsForRecipe(recipes, recipe.id);
