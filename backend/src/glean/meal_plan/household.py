@@ -4,9 +4,11 @@ The profile's four ingredient and cuisine lists are still plain strings (spec 6.
 meet the corpus:
 
 - **Disliked ingredients** are a hard constraint beside the dietary decisions: a recipe whose ingredient names use
-  one, as a whole word with plurals folded (`candidates.mentions_item`, the same rule a pantry match uses), is never
-  offered. "nut" does not hit "nutmeg" or "coconut". `disliked_recipe_ids` logs how many recipes each dislike left
-  out, by position, and never the words.
+  one, as whole words with plurals folded (`candidates.singular_forms`, as a pantry match folds them), accents folded
+  and words of two letters counted ("ox" hits "ox cheek", never "oxtail"), is never offered. A dislike may be an
+  allergy, so this is stricter than pantry matching, which keeps its own three-letter floor. "nut" does not hit
+  "nutmeg" or "coconut". `disliked_recipe_ids` logs how many recipes each dislike left out, by position, and how
+  many dislikes have no word to match, never the words.
 - **Favourite meals** are the corpus recipe the interview matched, or else a recipe whose title is the same after
   normalising case, spacing and punctuation. Never a substring: "Fish pie" is not "Fish pie with peas".
 - **Loved ingredients** are matched like dislikes, and **cuisines** go through `CUISINE_ALIASES` to V5's `Cuisine`
@@ -23,12 +25,13 @@ note per Generate, before anything traced receives it.
 from __future__ import annotations
 
 import re
+import unicodedata
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from glean.meal_plan.candidates import mentions_item
+from glean.meal_plan.candidates import singular_forms
 from glean.observability import logger
 from glean.recipes.attributes import Cuisine
 from glean.screening import ScreenRejection, screen_many
@@ -125,19 +128,43 @@ _STAPLE_RES = {
 }
 
 
+_WORD_RE = re.compile(r"\w+")
+# A dislike may be as short as "ox": two letters is a word here, though the pantry's matcher needs three.
+_MIN_WORD_LENGTH = 2
+
+
 def mentions_disliked(ingredient_names: Iterable[str], dislike: str) -> bool:
-    """Whether any ingredient name uses *dislike* as whole words, plurals folded, never inside another word.
+    """Whether any ingredient name uses *dislike* as whole words, plurals and accents folded, never inside a word.
 
     A `STAPLE_PHRASES` phrase does not count for the bare dislike it lists ("olives" never hits "olive oil").
     """
     if not dislike.strip():
         return False
+    wanted = _words(dislike)
     spared = [
         _STAPLE_RES[phrase]
         for phrase, word in STAPLE_PHRASES.items()
-        if mentions_item(dislike, word) and mentions_item(word, dislike)
+        if _mentions(wanted, _words(word)) and _mentions(_words(word), wanted)
     ]
-    return any(mentions_item(_without(name, spared), dislike) for name in ingredient_names)
+    return any(_mentions(_words(_without(_folded(name), spared)), wanted) for name in ingredient_names)
+
+
+def _folded(text: str) -> str:
+    """Accents off and case folded: "Crème Fraîche" is "creme fraiche"."""
+    return "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char)).casefold()
+
+
+def _words(text: str) -> list[frozenset[str]]:
+    """Each word of *text*, folded, as the set of singulars it could be (`candidates.singular_forms`)."""
+    return [singular_forms(word) for word in _WORD_RE.findall(_folded(text)) if len(word) >= _MIN_WORD_LENGTH]
+
+
+def _mentions(words: Sequence[frozenset[str]], wanted: Sequence[frozenset[str]]) -> bool:
+    """Whether *wanted* appears in *words* as a run of whole words, in order."""
+    if not wanted:
+        return False
+    starts = range(len(words) - len(wanted) + 1)
+    return any(all(words[start + offset] & word for offset, word in enumerate(wanted)) for start in starts)
 
 
 def _without(name: str, phrases: Sequence[re.Pattern]) -> str:
@@ -157,6 +184,7 @@ def disliked_recipe_ids(recipes: Iterable[tuple[str, Sequence[str]]], dislikes: 
     wanted = [dislike for dislike in dislikes if dislike.strip()]
     if not wanted:
         return frozenset()
+    unmatchable = sum(1 for dislike in wanted if not _words(dislike))
     removed_per_dislike = [0] * len(wanted)
     excluded: set[str] = set()
     for recipe_id, names in recipes:
@@ -167,7 +195,13 @@ def disliked_recipe_ids(recipes: Iterable[tuple[str, Sequence[str]]], dislikes: 
             excluded.add(recipe_id)
     logger.info(
         "disliked ingredients left out",
-        extra={"dislikes": len(wanted), "removed_per_dislike": removed_per_dislike, "removed": len(excluded)},
+        extra={
+            "dislikes": len(wanted),
+            "removed_per_dislike": removed_per_dislike,
+            "removed": len(excluded),
+            # Dislikes with no word the matcher can use (a lone letter, only punctuation): they exclude nothing.
+            "unmatchable": unmatchable,
+        },
     )
     return frozenset(excluded)
 

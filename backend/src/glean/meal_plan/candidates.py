@@ -557,7 +557,7 @@ def mentions_item(text: str, item_name: str) -> bool:
 
 
 def _item_words(text: str) -> list[frozenset[str]]:
-    return [_singular_forms(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
+    return [singular_forms(word) for word in _TOKEN_RE.findall(text.casefold()) if len(word) >= _MIN_TOKEN_LENGTH]
 
 
 # Plurals no suffix rule gets right. "-ves" is listed rather than ruled on: "cloves" is "clove".
@@ -575,7 +575,7 @@ _IRREGULAR_SINGULARS = {
 }
 
 
-def _singular_forms(word: str) -> frozenset[str]:
+def singular_forms(word: str) -> frozenset[str]:
     """The word plus every singular an English plural of it could have come from.
 
     A single rule cannot know whether "chillies" came from "chilli" or "chilly", or whether "cookies"
