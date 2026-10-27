@@ -16,9 +16,9 @@ metadata of its own: a recipe is excluded when the stored decision for (recipe, 
 it probably breaks the flag, or when there is no current decision. Flags the decision
 model isn't asked about (Keto, Paleo) are left to the meal-plan model.
 
-Those flags, the household's time cap and the meals already planned are hard
-constraints: `meal_plan.eligibility` applies the six-week recency floor on top of them and
-never relaxes one to satisfy the other.
+Those flags, the profile's disliked ingredients (V13b, `meal_plan.household`), the household's
+time cap and the meals already planned are hard constraints: `meal_plan.eligibility` applies the
+six-week recency floor on top of them and never relaxes one to satisfy the other.
 
 The household's time cap is applied here too, against the enriched active-time
 bucket's upper bound (spec 6.1): the cap is about hands-on work, and a
@@ -135,6 +135,7 @@ def sample_corpus_candidates(
     guarantee_max: int = GUARANTEE_MAX,
     preferred_ids: Collection[str] = (),
     narrowing: Mapping[str, Callable[[RecipeAttributes, int | None], bool]] | None = None,
+    disliked_ingredients: Sequence[str] = (),
 ) -> list[OfferedRecipe]:
     """Up to `sample_size` distinct corpus recipes to offer the meal-plan model.
 
@@ -146,10 +147,16 @@ def sample_corpus_candidates(
     the model sees them as the fallback they are. `preferred_ids` (last week's dinners, under the "same as
     last week" chip) are offered right after the urgent guarantee, when they are fresh and eligible.
     `narrowing` maps a chip to its rule (`tools.chip_narrows`); see `_narrowed` for when it applies.
+    `disliked_ingredients` are the profile's: a recipe using one is never offered, floor or no floor.
     """
     all_recipes, _ = corpus.search(per_page=_EVERYTHING)
     excluded = set(exclude_external_ids)
     diet_excluded = dietary_excluded_ids(corpus, all_recipes, dietary_flags)
+    from glean.meal_plan.household import disliked_recipe_ids  # noqa: PLC0415 - household imports mentions_item
+
+    disliked = disliked_recipe_ids(
+        ((summary.external_id, summary.ingredient_names) for summary in all_recipes), disliked_ingredients
+    )
     # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
     attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None or narrowing else {}
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
@@ -160,6 +167,7 @@ def sample_corpus_candidates(
         if summary.external_id not in excluded
         and _fits_time(summary, max_total_time_mins, attributes.get(summary.external_id, RecipeAttributes()))
         and summary.external_id not in diet_excluded
+        and summary.external_id not in disliked
     }
     if narrowing:
         eligible = _narrowed(

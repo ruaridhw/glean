@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Literal
 from glean.meal_plan.candidates import GUARANTEE_MAX, PantryItem, mentions_item, near_duplicate_ingredients
 from glean.meal_plan.eligibility import apply_recency_floor
 from glean.meal_plan.eligibility import recency_penalty as _recency_penalty
+from glean.meal_plan.household import disliked_recipe_ids
 from glean.recipes.attributes import (
     UNSURE,
     ActiveTimeBucket,
@@ -972,17 +973,18 @@ class EligibilityContext:
     """The corpus and the session's hard constraints, as plain values the caller built from its store.
 
     `dietary_excluded_ids` is what the stored dietary decisions rule out for the household's flags: deciding it
-    reads the decision store, so the caller does, and the tool applies it. `max_active_mins` is the household's
-    time cap. `cooked` is the history window the six-week floor and the thumbs-down rule read. `text_search`
-    is the corpus's full-text search (ids that match); without one, text matches title, cuisine and
-    ingredient words in memory. `load_full` reads one recipe's ingredient lines and method for
-    `get_recipes(detail="full")`.
+    reads the decision store, so the caller does, and the tool applies it. `disliked_ingredients` are the
+    profile's (V13b), a hard constraint beside them. `max_active_mins` is the household's time cap. `cooked` is
+    the history window the six-week floor and the thumbs-down rule read. `text_search` is the corpus's full-text
+    search (ids that match); without one, text matches title, cuisine and ingredient words in memory.
+    `load_full` reads one recipe's ingredient lines and method for `get_recipes(detail="full")`.
     """
 
     recipes: Sequence[CorpusRecipe]
     slots: int
     now: datetime
     dietary_excluded_ids: frozenset[str] = frozenset()
+    disliked_ingredients: tuple[str, ...] = ()
     planned_ids: frozenset[str] = frozenset()
     max_active_mins: int | None = None
     cooked: Sequence[CookedMeal] = ()
@@ -1076,8 +1078,8 @@ class RecipeDetails:
 def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -> EligibleRecipes:
     """The recipes this household may be offered, narrowed by the agent's filter and ranked (spec 6.2).
 
-    1. The hard constraints: the dietary decisions, a thumbs down (V8), the time cap (V5's bucket rule) and the
-       meals already planned. Nothing later can bring one of these back.
+    1. The hard constraints: the dietary decisions, the profile's disliked ingredients (V13b), a thumbs down (V8),
+       the time cap (V5's bucket rule) and the meals already planned. Nothing later can bring one of these back.
     2. The six-week floor (V2): recently cooked recipes are left out unless that leaves fewer than three per
        slot, and then they come back last, carrying the recency penalty.
     3. The agent's filter, which can only narrow.
@@ -1090,12 +1092,16 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
     """
     _check_narrows(recipe_filter, ctx)
     by_id = {recipe.recipe_id: recipe for recipe in ctx.recipes}
+    disliked = disliked_recipe_ids(
+        ((recipe.recipe_id, recipe.ingredient_names) for recipe in ctx.recipes), ctx.disliked_ingredients
+    )
     # Sorted, so the floor and the tie-breaks see the same order however the caller listed the corpus.
     hard = [
         recipe
         for recipe_id, recipe in sorted(by_id.items())
         if recipe_id not in ctx.planned_ids
         and recipe_id not in ctx.dietary_excluded_ids
+        and recipe_id not in disliked
         and recipe.attributes.fits_time_cap(ctx.max_active_mins, total_time_mins=recipe.total_time_mins)
     ]
     floor = apply_recency_floor(
