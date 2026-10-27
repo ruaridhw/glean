@@ -6,6 +6,7 @@ import logging
 
 import pytest
 
+from glean.meal_plan.candidates import mentions_item
 from glean.meal_plan.household import (
     cuisine_for,
     disliked_recipe_ids,
@@ -86,6 +87,31 @@ def test_the_stop_list_only_ever_spares_the_staple_itself(dislike: str, ingredie
     assert mentions_disliked([ingredient], dislike)
 
 
+@pytest.mark.parametrize(
+    ("dislike", "ingredient"),
+    [
+        ("ox", "ox cheek"),
+        ("jalapeño", "sliced jalapeno"),
+        ("jalapeno", "Jalapeños"),
+        ("crème fraîche", "half-fat creme fraiche"),
+        ("creme fraiche", "crème fraîche"),
+    ],
+)
+def test_a_dislike_folds_accents_and_may_be_two_letters(dislike: str, ingredient: str) -> None:
+    assert mentions_disliked([ingredient], dislike)
+
+
+def test_a_two_letter_dislike_is_still_a_whole_word() -> None:
+    assert not mentions_disliked(["oxtail"], "ox")
+    assert not mentions_disliked(["boxed tomatoes"], "ox")
+
+
+def test_pantry_matching_is_unchanged_by_the_dislike_rules() -> None:
+    # The pantry's own matcher keeps its three-letter floor and its accents; only dislikes changed.
+    assert not mentions_item("ox cheek", "ox")
+    assert not mentions_item("sliced jalapeno", "jalapeño")
+
+
 def test_a_blank_dislike_matches_nothing() -> None:
     assert not mentions_disliked(["mushrooms"], "  ")
 
@@ -109,10 +135,20 @@ def test_disliked_recipes_are_every_recipe_using_any_dislike_and_the_log_says_ho
     record = next(record for record in caplog.records if record.getMessage() == "disliked ingredients left out")
     assert record.removed_per_dislike == [2, 1, 0]  # type: ignore[attr-defined]
     assert record.removed == 2  # type: ignore[attr-defined]
+    assert record.unmatchable == 0  # type: ignore[attr-defined]
     # Counts only: neither the household's words nor any recipe's text reaches the log.
     logged = repr(record.__dict__)
     assert "mushroom" not in logged.casefold()
     assert "risotto" not in logged.casefold()
+
+
+def test_a_dislike_with_no_word_to_match_is_counted_in_the_log(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO):
+        excluded = disliked_recipe_ids([("rec_a", ("mushroom",))], ["x", "-", "mushroom"])
+
+    assert excluded == frozenset({"rec_a"})
+    record = next(record for record in caplog.records if record.getMessage() == "disliked ingredients left out")
+    assert record.unmatchable == 2  # type: ignore[attr-defined]
 
 
 def test_no_dislikes_exclude_nothing_and_log_nothing(caplog: pytest.LogCaptureFixture) -> None:
