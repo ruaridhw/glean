@@ -734,6 +734,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     weekSummary: result.weekSummary,
     plannedAlternatives: result.plannedAlternatives,
     degraded: result.degraded,
+    profileNotes: result.profileNotes,
   );
 
   /// Saves the whole review in one transaction: the new meals (with any local swaps applied) into the empty

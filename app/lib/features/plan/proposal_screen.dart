@@ -12,9 +12,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/models/meal_plan.dart';
+import 'package:glean/data/models/household_profile.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
+import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/plan_providers.dart';
+import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/plan_repository.dart'
     show GeneratedWeekCommit;
 import 'package:glean/data/util/week.dart';
@@ -27,6 +30,7 @@ import 'package:go_router/go_router.dart';
 import 'generate_failure.dart';
 import 'presentation.dart';
 import 'providers/generate_week_controller.dart';
+import 'widgets/glean_noted_card.dart';
 import 'widgets/proposal_meal_card.dart';
 import 'widgets/question_step.dart';
 
@@ -43,6 +47,13 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
 
   /// Which already-planned meal's swap panel is open, by plan entry id.
   final Set<int> _openPlannedSwaps = <int>{};
+
+  /// The "Glean noted" notes the household kept or dismissed, by text. A swap keeps the proposal's notes, so
+  /// these stay handled through one.
+  final Set<String> _handledNotes = <String>{};
+
+  /// Notes whose Keep is still saving.
+  final Set<String> _keepingNotes = <String>{};
 
   /// Back and Cancel both discard and cancel; one in flight is enough.
   bool _leaving = false;
@@ -145,6 +156,44 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
       );
     }
   }
+
+  /// Appends [text] to the household profile's notes as feedback: the only way a planner's note reaches it.
+  Future<void> _keepNote(String text) async {
+    if (!_keepingNotes.add(text)) return;
+    setState(() {});
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final GleanLogger? logger = ref.read(gleanLoggerProvider);
+    final ProfileNote note = ProfileNote(
+      date: _isoDate(ref.read(clockProvider)()),
+      text: text,
+      source: ProfileNoteSource.feedback,
+    );
+    try {
+      await ref
+          .read(householdProfileRepositoryProvider)
+          .update(
+            userId: ref.read(currentUserIdProvider),
+            change: (HouseholdProfile profile) =>
+                profile.copyWith(notes: <ProfileNote>[...profile.notes, note]),
+          );
+    } catch (error) {
+      await logger?.error(
+        'keeping a profile note failed: ${describeError(error)}',
+      );
+      if (mounted) setState(() => _keepingNotes.remove(text));
+      GleanSnackBar.showOn(messenger, "Couldn't keep that note. Try again.");
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _keepingNotes.remove(text);
+        _handledNotes.add(text);
+      });
+    }
+    GleanSnackBar.showOn(messenger, 'Kept in your profile');
+  }
+
+  void _dismissNote(String text) => setState(() => _handledNotes.add(text));
 
   void _toggle(Set<int> open, int key) {
     setState(() {
@@ -265,9 +314,24 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
             item.externalId: item.alternative,
         };
 
+    final List<String> notes = <String>[
+      for (final ProposedProfileNote note in result.profileNotes)
+        if (!_handledNotes.contains(note.text)) note.text,
+    ];
+
     return ListView(
       padding: EdgeInsets.all(tokens.spacing.lg),
       children: <Widget>[
+        if (notes.isNotEmpty) ...<Widget>[
+          GleanNotedCard(
+            key: const ValueKey<String>('glean-noted'),
+            notes: notes,
+            keeping: _keepingNotes,
+            onKeep: (String note) => unawaited(_keepNote(note)),
+            onDismiss: _dismissNote,
+          ),
+          SizedBox(height: tokens.spacing.sm),
+        ],
         if (result.weekSummary.isNotEmpty) ...<Widget>[
           _SummaryCard(summary: result.weekSummary),
           SizedBox(height: tokens.spacing.sm),
@@ -421,6 +485,12 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
     );
   }
 }
+
+/// `YYYY-MM-DD` of [moment]'s own calendar day, as a profile note's date is written.
+String _isoDate(DateTime moment) =>
+    '${moment.year.toString().padLeft(4, '0')}-'
+    '${moment.month.toString().padLeft(2, '0')}-'
+    '${moment.day.toString().padLeft(2, '0')}';
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.summary});

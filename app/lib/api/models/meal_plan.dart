@@ -272,6 +272,22 @@ class MealPlanPlannedAlternative {
   final MealPlanRecipe alternative;
 }
 
+/// A fact the planner noticed about the household, offered on the proposal for the household to Keep or dismiss.
+/// It reaches the household profile only through Keep. [evidence] is `rating`, `answer` or `swap_note`; it is
+/// kept as a string because the app does not branch on it.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class ProposedProfileNote {
+  const ProposedProfileNote({required this.text, this.evidence = ''});
+
+  factory ProposedProfileNote.fromJson(Map<String, dynamic> json) =>
+      _$ProposedProfileNoteFromJson(json);
+
+  final String text;
+
+  @JsonKey(defaultValue: '')
+  final String evidence;
+}
+
 /// The proposal a session's `done` status carries. The sync `POST /meal-plan` returns the same shape.
 ///
 /// Every field beyond [suggestions] is additive: old responses parse with an empty summary, no planned
@@ -284,6 +300,7 @@ class MealPlanResponse {
     this.plannedAlternatives = const <MealPlanPlannedAlternative>[],
     this.degraded = false,
     this.feedbackNote,
+    this.profileNotes = const <ProposedProfileNote>[],
   });
 
   factory MealPlanResponse.fromJson(Map<String, dynamic> json) =>
@@ -308,4 +325,9 @@ class MealPlanResponse {
   /// What became of the week's note: `used`, or `not_a_preference` / `unavailable` when it was dropped. Null
   /// when no note was sent, or from a backend that does not screen notes.
   final String? feedbackNote;
+
+  /// What the planner noticed about the household, for the "Glean noted" card. Empty from a degraded plan or
+  /// an older backend.
+  @JsonKey(defaultValue: <ProposedProfileNote>[])
+  final List<ProposedProfileNote> profileNotes;
 }
