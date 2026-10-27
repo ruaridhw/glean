@@ -1,6 +1,6 @@
 // The "Glean noted" card at the top of the proposal: one row per note the planner offers, each with Keep and ✕.
-// Keep appends exactly one note to the household profile; ✕ only hides it; nothing reaches the profile without
-// Keep. Seam: the proposal screen over a real database, with the session backend faked at the HTTP client.
+// Keep appends exactly one note to the household profile; ✕ adds no note and only remembers the dismissal, so
+// it is not offered again; nothing reaches the profile's notes without Keep. Seam: the proposal screen over a real database, with the session backend faked at the HTTP client.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:glean/data/models/household_profile.dart';
@@ -158,18 +158,59 @@ void main() {
     expect(stored.lovedIngredients, <String>['coriander']);
   });
 
-  gleanWidgetTest('the dismiss hides the note and writes nothing', (
-    tester,
-  ) async {
-    final h = await open(tester);
+  gleanWidgetTest(
+    'the dismiss hides the note, adds no note, and remembers it was dismissed',
+    (tester) async {
+      final h = await open(tester);
 
-    await tester.tap(_inRow(_kids, find.byIcon(Icons.close)));
-    await tester.pumpAndSettle();
+      await tester.tap(_inRow(_kids, find.byIcon(Icons.close)));
+      await tester.pumpAndSettle();
 
-    expect(_row(_kids), findsNothing);
-    expect(_row(_rice), findsOneWidget);
-    expect(await profile(h), isNull);
-  });
+      expect(_row(_kids), findsNothing);
+      expect(_row(_rice), findsOneWidget);
+      final HouseholdProfile stored = (await profile(h))!;
+      expect(stored.notes, isEmpty);
+      expect(stored.dismissedNotes, <String>[_kids]);
+    },
+  );
+
+  gleanWidgetTest(
+    'a note the profile already holds, or one dismissed before, is not offered '
+    'again',
+    (tester) async {
+      final h = AppTestHarness(
+        httpClient: proposalBackend(
+          result: _result(
+            notes: <String>[_rice, _kids, 'Likes fish on Fridays'],
+          ),
+        ),
+      );
+      addTearDown(h.dispose);
+      await h.container
+          .read(householdProfileRepositoryProvider)
+          .save(
+            userId: h.userId,
+            profile: const HouseholdProfile(
+              notes: <ProfileNote>[
+                ProfileNote(
+                  date: '2026-10-01',
+                  text: 'you prefer rice over pasta midweek.',
+                  source: ProfileNoteSource.feedback,
+                ),
+              ],
+              dismissedNotes: <String>[_kids],
+            ),
+          );
+      await h.pumpAt(tester, AppRoutes.plan.path);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
+      await tester.pumpAndSettle();
+
+      expect(_row(_rice), findsNothing);
+      expect(_row(_kids), findsNothing);
+      expect(_row('Likes fish on Fridays'), findsOneWidget);
+    },
+  );
 
   gleanWidgetTest('the card goes once every note is handled', (tester) async {
     final h = await open(tester);
@@ -182,7 +223,9 @@ void main() {
 
     expect(_card(), findsNothing);
     expect(find.text('Glean noted'), findsNothing);
-    expect((await profile(h))!.notes, hasLength(1));
+    final HouseholdProfile stored = (await profile(h))!;
+    expect(stored.notes.map((ProfileNote note) => note.text), <String>[_rice]);
+    expect(stored.dismissedNotes, <String>[_kids]);
   });
 
   gleanWidgetTest(

@@ -38,6 +38,7 @@ const Map<String, dynamic> _full = <String, dynamic>{
       'source': 'feedback',
     },
   ],
+  'dismissed_notes': <String>['Likes it very spicy'],
   'interviewed_at': '2026-10-24T10:15:00.000Z',
 };
 
@@ -67,6 +68,7 @@ void main() {
       expect(profile.notes.single.date, '2026-10-24');
       expect(profile.notes.single.text, 'Prefers rice over pasta midweek');
       expect(profile.notes.single.source, ProfileNoteSource.feedback);
+      expect(profile.dismissedNotes, <String>['Likes it very spicy']);
       expect(profile.interviewedAt, DateTime.utc(2026, 10, 24, 10, 15));
 
       expect(profile.toJson(), _full);
@@ -90,6 +92,7 @@ void main() {
       'habits': '',
       'household': '',
       'notes': <dynamic>[],
+      'dismissed_notes': <dynamic>[],
       'interviewed_at': null,
     });
   });
@@ -105,7 +108,46 @@ void main() {
     expect(profile.habits, '');
     expect(profile.household, '');
     expect(profile.notes, isEmpty);
+    expect(profile.dismissedNotes, isEmpty);
     expect(profile.interviewedAt, isNull);
+  });
+
+  test('a dismissed note is kept once, newest last, and only the newest '
+      '${HouseholdProfile.maxDismissedNotes} stay', () {
+    HouseholdProfile profile = const HouseholdProfile();
+    for (int i = 0; i < HouseholdProfile.maxDismissedNotes + 5; i++) {
+      profile = profile.withDismissedNote('Note $i');
+    }
+    profile = profile.withDismissedNote('  note 10 ');
+
+    expect(
+      profile.dismissedNotes,
+      hasLength(HouseholdProfile.maxDismissedNotes),
+    );
+    expect(profile.dismissedNotes.first, 'Note 5');
+    expect(profile.dismissedNotes.last, 'note 10');
+    expect(
+      profile.dismissedNotes.where(
+        (String note) => note.toLowerCase() == 'note 10',
+      ),
+      hasLength(1),
+    );
+  });
+
+  test('a profile knows a note it holds or dismissed, whatever the case or '
+      'spacing', () {
+    final HouseholdProfile profile = HouseholdProfile.fromJson(_full);
+
+    expect(profile.knowsNote('prefers RICE over  pasta midweek'), isTrue);
+    expect(profile.knowsNote(' likes it very spicy'), isTrue);
+    expect(profile.knowsNote('Likes fish'), isFalse);
+  });
+
+  test('dismissed notes do not make an empty profile look filled in', () {
+    expect(
+      const HouseholdProfile(dismissedNotes: <String>['Likes fish']).isEmpty,
+      isTrue,
+    );
   });
 
   test('a document from a newer build still reads: unknown keys and versions '

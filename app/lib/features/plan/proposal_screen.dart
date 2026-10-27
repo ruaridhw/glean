@@ -16,6 +16,7 @@ import 'package:glean/data/models/household_profile.dart';
 import 'package:glean/data/models/meal_plan_entry_view.dart';
 import 'package:glean/data/providers/clock_provider.dart';
 import 'package:glean/data/providers/database_providers.dart';
+import 'package:glean/data/providers/household_profile_providers.dart';
 import 'package:glean/data/providers/plan_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/data/repositories/plan_repository.dart'
@@ -173,8 +174,15 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
           .read(householdProfileRepositoryProvider)
           .update(
             userId: ref.read(currentUserIdProvider),
+            // A second Keep of the same note (from another proposal) adds nothing.
             change: (HouseholdProfile profile) =>
-                profile.copyWith(notes: <ProfileNote>[...profile.notes, note]),
+                profile.notes.any(
+                  (ProfileNote held) => noteKey(held.text) == noteKey(text),
+                )
+                ? profile
+                : profile.copyWith(
+                    notes: <ProfileNote>[...profile.notes, note],
+                  ),
           );
     } catch (error) {
       await logger?.error(
@@ -193,7 +201,25 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
     GleanSnackBar.showOn(messenger, 'Kept in your profile');
   }
 
-  void _dismissNote(String text) => setState(() => _handledNotes.add(text));
+  /// Hides [text] at once and remembers it in the profile as dismissed, so the planner does not offer it again.
+  /// A failed write only means it may be offered again, so the note stays hidden either way.
+  Future<void> _dismissNote(String text) async {
+    setState(() => _handledNotes.add(text));
+    final GleanLogger? logger = ref.read(gleanLoggerProvider);
+    try {
+      await ref
+          .read(householdProfileRepositoryProvider)
+          .update(
+            userId: ref.read(currentUserIdProvider),
+            change: (HouseholdProfile profile) =>
+                profile.withDismissedNote(text),
+          );
+    } catch (error) {
+      await logger?.error(
+        'remembering a dismissed profile note failed: ${describeError(error)}',
+      );
+    }
+  }
 
   void _toggle(Set<int> open, int key) {
     setState(() {
@@ -314,9 +340,13 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
             item.externalId: item.alternative,
         };
 
+    // A note the profile already holds, or one dismissed on an earlier proposal, is not offered again.
+    final HouseholdProfile? profile = ref.watch(householdProfileProvider).value;
     final List<String> notes = <String>[
       for (final ProposedProfileNote note in result.profileNotes)
-        if (!_handledNotes.contains(note.text)) note.text,
+        if (!_handledNotes.contains(note.text) &&
+            !(profile?.knowsNote(note.text) ?? false))
+          note.text,
     ];
 
     return ListView(
@@ -328,7 +358,7 @@ class _ProposalScreenState extends ConsumerState<ProposalScreen> {
             notes: notes,
             keeping: _keepingNotes,
             onKeep: (String note) => unawaited(_keepNote(note)),
-            onDismiss: _dismissNote,
+            onDismiss: (String note) => unawaited(_dismissNote(note)),
           ),
           SizedBox(height: tokens.spacing.sm),
         ],
