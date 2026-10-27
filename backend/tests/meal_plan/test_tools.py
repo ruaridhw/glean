@@ -150,18 +150,39 @@ def test_a_favourite_meal_earns_two() -> None:
     assert score(["a", "b"], ctx).total == 2.0
 
 
-def test_a_liked_cuisine_and_a_loved_ingredient_earn_one_each() -> None:
-    # The row reads "+1 liked cuisine or loved ingredient": a match is worth a point, so several loved
-    # ingredients in one dish are still one point and cannot out-vote the week's balance.
-    ctx = context(
-        candidate("a", cuisine=Cuisine.ITALIAN, loved_ingredients=("basil", "parmesan", "garlic")),
-        liked_cuisines=frozenset({Cuisine.ITALIAN}),
+def test_a_liked_cuisine_or_a_loved_ingredient_earns_one_and_both_together_still_one() -> None:
+    # The row reads "+1 liked cuisine or loved ingredient": the pair is worth at most a point per recipe, so a
+    # dish that is both a liked cuisine and full of loved ingredients cannot out-vote the week's balance.
+    liked = frozenset({Cuisine.ITALIAN})
+    both = score(
+        ["a"],
+        context(
+            candidate("a", cuisine=Cuisine.ITALIAN, loved_ingredients=("basil", "parmesan", "garlic")),
+            liked_cuisines=liked,
+        ),
     )
-    plan = score(["a"], ctx)
-    assert plan.points(Term.LIKED_CUISINE) == 1.0
-    assert plan.points(Term.LOVED_INGREDIENT) == 1.0
-    assert plan.total == 2.0
+    cuisine_only = score(["a"], context(candidate("a", cuisine=Cuisine.ITALIAN), liked_cuisines=liked))
+    loved_only = score(["a"], context(candidate("a", loved_ingredients=("basil",))))
+
+    assert both.points(Term.LIKED_CUISINE) + both.points(Term.LOVED_INGREDIENT) == 1.0
+    assert both.total == 1.0
+    assert cuisine_only.points(Term.LIKED_CUISINE) == 1.0
+    assert loved_only.points(Term.LOVED_INGREDIENT) == 1.0
     assert score(["a"], context(candidate("a"))).points(Term.LOVED_INGREDIENT) == 0.0
+
+
+def test_a_protein_target_for_no_protein_or_an_unknown_one_never_counts() -> None:
+    # "none" and "unsure" are not proteins a week can have more or less of, so a target on one costs nothing.
+    recipes = (candidate("a", main_protein=MainProtein.NONE), candidate("b", main_protein=MainProtein.UNSURE))
+    ctx = context(
+        *recipes,
+        protein_targets=(
+            ProteinTarget(MainProtein.NONE, max_per_week=0),
+            ProteinTarget(MainProtein.UNSURE, min_per_week=3),
+        ),
+    )
+
+    assert score(["a", "b"], ctx).points(Term.PROTEIN_TARGET) == 0.0
 
 
 def test_an_avoided_cuisine_loses_two() -> None:

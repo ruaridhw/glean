@@ -205,6 +205,10 @@ NARROWING_CHIPS = (FeedbackChip.QUICK_WEEKNIGHTS, FeedbackChip.COMFORT_FOOD, Fee
 # "Same as last week": a cook this recent counts as last week's.
 LAST_WEEK_DAYS = 7
 
+# A protein target on these never counts: a dish built around no protein, or one whose protein is not known, is not
+# more or less of any protein (V5's main_protein; the profile can name `none`).
+_UNCOUNTED_PROTEINS = frozenset({MainProtein.NONE, MainProtein.UNSURE})
+
 # The repeat terms, in the order `_Scorer.repeat_values` gives their attribute values.
 _REPEAT_TERMS = (Term.REPEAT_MAIN_PROTEIN, Term.REPEAT_MAIN_CARB, Term.REPEAT_DISH_TYPE, Term.REPEAT_CUISINE)
 
@@ -230,7 +234,8 @@ class ScorerWeights:
     favourite: float = 2.0
     # "Profile affinity": +1 liked cuisine.
     liked_cuisine: float = 1.0
-    # "Profile affinity": +1 for a loved ingredient match, however many of them one recipe matched.
+    # "Profile affinity": +1 for a loved ingredient match, however many of them one recipe matched, and nothing on
+    # top of a liked cuisine: the row is "+1 liked cuisine or loved ingredient", at most +1 per recipe for the pair.
     loved_ingredient: float = 1.0
     # "Profile affinity": -2 avoided cuisine. Disliked ingredients are a hard exclusion upstream, not a weight.
     avoided_cuisine: float = -2.0
@@ -678,9 +683,12 @@ class _Scorer:
         )
 
     def _loved_ingredient(self, facts: CandidateRecipe) -> float:
-        # The row is "+1 liked cuisine or loved ingredient": a match is a point, so a dish that matched three
-        # loved ingredients still scores one and cannot out-vote the week's balance.
-        return self._weights.loved_ingredient if facts.loved_ingredients else 0.0
+        # The row is "+1 liked cuisine or loved ingredient": the pair is a point per recipe, so a dish that matched
+        # three loved ingredients, or a liked cuisine as well, still scores one and cannot out-vote the week's
+        # balance. The liked cuisine takes the point when both match.
+        if not facts.loved_ingredients or self._liked_cuisine(facts):
+            return 0.0
+        return self._weights.loved_ingredient
 
     def _liked_cuisine(self, facts: CandidateRecipe) -> float:
         return self._weights.liked_cuisine if facts.attributes.cuisine in self._ctx.liked_cuisines else 0.0
@@ -821,6 +829,8 @@ class _Scorer:
         )
         misses: list[tuple[ProteinTarget, int, int]] = []
         for target in self._ctx.protein_targets:
+            if target.protein in _UNCOUNTED_PROTEINS:
+                continue
             count = counts[target.protein]
             short = 0
             if target.min_per_week is not None and count < target.min_per_week:
@@ -1023,6 +1033,7 @@ class EligibleRecipe:
     `pantry_fit` is the raw urgency-weighted sum of the pantry items it uses (not yet scaled to the scorer's
     +3); `urgent_items` are those that go off within `URGENT_EXPIRY_DAYS`. `days_since_cooked` and `rating`
     come from the history window, and `offered_after_floor_relaxed` marks a recipe the six-week floor gave back.
+    `ingredient_names` are the corpus's, so a recipe the agent finds is matched to the profile like a candidate.
     """
 
     recipe_id: str
@@ -1036,6 +1047,7 @@ class EligibleRecipe:
     days_since_cooked: float | None = None
     rating: str | None = None
     offered_after_floor_relaxed: bool = False
+    ingredient_names: tuple[str, ...] = ()
 
     @property
     def recency_penalty(self) -> float:
@@ -1258,6 +1270,7 @@ def _eligible(
         days_since_cooked=days_since_cooked,
         rating=rating,
         offered_after_floor_relaxed=relaxed,
+        ingredient_names=recipe.ingredient_names,
     )
 
 

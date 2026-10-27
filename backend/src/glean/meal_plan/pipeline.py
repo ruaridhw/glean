@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from glean.llm import Feature
-from glean.meal_plan import balance, tools
+from glean.meal_plan import balance, household, tools
 from glean.meal_plan.candidates import (
     PantryItem,
     dietary_excluded_ids,
@@ -230,6 +230,13 @@ class PreparedPlan(BaseModel):
             "Empty on a checkpoint written before V9, which plans as it did then."
         ),
     )
+    profile: balance.ProfileScoring = Field(
+        default_factory=balance.ProfileScoring,
+        description=(
+            "The household profile as the scorer reads it: cuisines, protein targets, and the favourites and loved "
+            "ingredients a recipe the agent finds is matched against. Empty without a profile (V13b)."
+        ),
+    )
     last_week_ids: list[str] = Field(
         default_factory=list,
         description=(
@@ -287,6 +294,7 @@ def prepare(
     # The week's feedback chips, from the screened feedback. An input only a chip reads (stated calories, for
     # lighter) is read only when that chip is on.
     chips = screened.chip_values
+    profile = _profile_scoring(request)
     facts = balance.facts_from(
         candidates,
         attributes=measured,
@@ -301,6 +309,13 @@ def prepare(
         # leaving out (spec 6.2, #122).
         urgent_items={external_id: tuple(item.name for item in items) for external_id, items in urgent_uses.items()},
         last_week=last_week,
+        favourites=household.favourite_ids(
+            ((candidate.external_id, candidate.title) for candidate in candidates), profile.favourites
+        ),
+        loved={
+            candidate.external_id: household.loved_in(candidate.summary.ingredient_names, profile.loved_ingredients)
+            for candidate in candidates
+        },
     )
     # Drawn after the sampler, so the offered list does not depend on how many numbers the scorer's tie-break
     # takes; one seed still plans one week, which is what a resumed session needs.
@@ -308,7 +323,7 @@ def prepare(
         # The same inputs the drift line rebuilds from: the week's chips, and the urgent items a planned meal is
         # already using. Without the latter the weeks the model sees would still be pushed toward a second recipe
         # for an item the household is cooking tonight.
-        balance.scoring_context(facts, chips=chips, urgent_items_already_used=already_used),
+        balance.scoring_context(facts, chips=chips, urgent_items_already_used=already_used, profile=profile),
         [candidate.external_id for candidate in candidates],
         request.meals_per_week,
         seed=rng.randrange(_SCORER_SEED_RANGE),
@@ -386,6 +401,7 @@ def prepare(
         urgent_items_already_used=list(already_used),
         pantry_fit_scale=balance.pantry_fit_scale(candidate.pantry_fit for candidate in candidates),
         feedback=screened,
+        profile=profile,
         last_week_ids=sorted(last_week),
     )
 
@@ -409,6 +425,30 @@ def _cooked_meals(request: MealPlanRequest) -> list[CookedMeal]:
         CookedMeal(recipe_id=meal.recipe_id, title=meal.title, cooked_at=meal.cooked_at, rating=meal.rating)
         for meal in request.cooked_history
     ]
+
+
+def _profile_scoring(request: MealPlanRequest) -> balance.ProfileScoring:
+    """The profile's scorer inputs (V13b): cuisines as V5's enum, protein targets, favourites and loved ingredients."""
+    profile = request.profile
+    if profile is None:
+        return balance.ProfileScoring()
+    liked, avoided = household.profile_cuisines(profile.cuisines_liked, profile.cuisines_avoided)
+    return balance.ProfileScoring(
+        liked_cuisines=sorted(liked),
+        avoided_cuisines=sorted(avoided),
+        protein_targets=[
+            balance.ProfileTarget(
+                protein=MainProtein(target.protein.value),
+                min_per_week=target.min_per_week,
+                max_per_week=target.max_per_week,
+            )
+            for target in profile.protein_targets
+            # A target on "no protein" is not one a week can meet or miss (V5's main_protein exempts none).
+            if target.protein.value != MainProtein.NONE.value
+        ],
+        favourites=[(meal.text, meal.recipe_id) for meal in profile.favourite_meals],
+        loved_ingredients=list(profile.loved_ingredients),
+    )
 
 
 def _disliked_ingredients(request: MealPlanRequest) -> tuple[str, ...]:
@@ -532,6 +572,10 @@ def widen(prepared: PreparedPlan, found: Sequence[tools.EligibleRecipe], *, corp
         scale = balance.pantry_fit_scale(recipe.pantry_fit for recipe in new)
     # The same chips `prepare` scored with: stated calories are read only when the lighter chip reads them.
     calories = _stated_calories(corpus, [recipe.recipe_id for recipe in new], chips=prepared.feedback.chip_values)
+    # The same profile matches a candidate got, so a found favourite or loved ingredient scores as it would offered.
+    favourites = household.favourite_ids(
+        ((recipe.recipe_id, recipe.title) for recipe in new), prepared.profile.favourites
+    )
     return prepared.model_copy(
         update={
             "offered_ids": [*prepared.offered_ids, *(recipe.recipe_id for recipe in new)],
@@ -568,6 +612,10 @@ def widen(prepared: PreparedPlan, found: Sequence[tools.EligibleRecipe], *, corp
                         offered_after_floor_relaxed=recipe.offered_after_floor_relaxed,
                         urgent_items=tuple(item.name for item in recipe.urgent_items),
                         cooked_last_week=recipe.recipe_id in last_week,
+                        favourite=recipe.recipe_id in favourites,
+                        loved_ingredients=household.loved_in(
+                            recipe.ingredient_names, prepared.profile.loved_ingredients
+                        ),
                     )
                     for recipe in new
                 ),
@@ -587,11 +635,12 @@ def plan_drift(prepared: PreparedPlan, chosen_ids: Sequence[str]) -> tools.PlanG
 
 
 def scoring_context_of(prepared: PreparedPlan) -> tools.ScoringContext:
-    """The scorer's view of a prepared week: its facts and chips, less the urgent items a planned meal already uses."""
+    """The scorer's view of a prepared week: its facts, chips and profile, less the urgent items a planned meal uses."""
     return balance.scoring_context(
         prepared.facts,
         chips=prepared.feedback.chip_values,
         urgent_items_already_used=prepared.urgent_items_already_used,
+        profile=prepared.profile,
     )
 
 

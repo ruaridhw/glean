@@ -20,6 +20,7 @@ from glean.meal_plan.tools import (
     CandidateRecipe,
     PlanGap,
     PlanScore,
+    ProteinTarget,
     Rating,
     ScorerWeights,
     ScoringContext,
@@ -28,7 +29,7 @@ from glean.meal_plan.tools import (
     create_candidate_meal_plans,
     score_meal_plan,
 )
-from glean.recipes.attributes import RecipeAttributes
+from glean.recipes.attributes import Cuisine, MainProtein, RecipeAttributes
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -71,6 +72,10 @@ class RecipeFacts(BaseModel):
     cooked_last_week: bool = Field(
         default=False, description="Cooked in the last seven days, and back only because of 'same as last week'."
     )
+    favourite: bool = Field(default=False, description="One of the profile's favourite meals (V13b).")
+    loved_ingredients: tuple[str, ...] = Field(
+        default=(), description="The profile's loved ingredients this recipe uses, as whole words (V13b)."
+    )
 
     def scorer_input(self) -> CandidateRecipe:
         """The plain dataclass `score_meal_plan` takes, with the attributes typed and `unsure` where empty."""
@@ -82,8 +87,32 @@ class RecipeFacts(BaseModel):
             days_since_cooked=self.days_since_cooked,
             rating=self.rating,
             offered_after_floor_relaxed=self.offered_after_floor_relaxed,
+            loved_ingredients=self.loved_ingredients,
             cooked_last_week=self.cooked_last_week,
         )
+
+
+class ProfileTarget(BaseModel):
+    """One of the profile's protein targets as the scorer reads it: V5's protein, and a floor, a ceiling or both."""
+
+    protein: MainProtein
+    min_per_week: int | None = None
+    max_per_week: int | None = None
+
+
+class ProfileScoring(BaseModel):
+    """The household profile as the scorer and `pipeline.widen` read it, in JSON so a checkpoint can carry it.
+
+    `liked_cuisines`, `avoided_cuisines` and `protein_targets` are the plan-wide inputs. `favourites` (text and
+    matched recipe id) and `loved_ingredients` are kept so a recipe the agent finds later is matched the same way a
+    candidate was (`meal_plan.household`). Empty without a profile, and on a checkpoint written before V13b.
+    """
+
+    liked_cuisines: list[Cuisine] = Field(default_factory=list)
+    avoided_cuisines: list[Cuisine] = Field(default_factory=list)
+    protein_targets: list[ProfileTarget] = Field(default_factory=list)
+    favourites: list[tuple[str, str | None]] = Field(default_factory=list)
+    loved_ingredients: list[str] = Field(default_factory=list)
 
 
 class WeekPenalty(BaseModel):
@@ -144,6 +173,8 @@ def facts_from(
     history: RecipeHistory,
     urgent_items: Mapping[str, Sequence[str]] | None = None,
     last_week: Collection[str] = frozenset(),
+    favourites: Collection[str] = frozenset(),
+    loved: Mapping[str, tuple[str, ...]] | None = None,
 ) -> list[RecipeFacts]:
     """One `RecipeFacts` per offered recipe: the scorer's whole view of what the household may be offered.
 
@@ -152,6 +183,8 @@ def facts_from(
     recency and rating rows can be scored for the fresh candidates too. `urgent_items` is V4's name per recipe
     of the pantry items going off within three days it uses, which is what the week either uses or is charged
     for leaving (spec 6.2, #122). `last_week` are the recipes the "same as last week" chip lifted the floor for.
+    `favourites` and `loved` are the profile's matches (`meal_plan.household`): the favourite recipe ids, and per
+    recipe the loved ingredients it uses.
     """
     scale = pantry_fit_scale(candidate.pantry_fit for candidate in offered)
     return [
@@ -165,6 +198,8 @@ def facts_from(
             offered_after_floor_relaxed=recipe.cooked_days_ago is not None,
             urgent_items=tuple((urgent_items or {}).get(recipe.external_id, ())),
             cooked_last_week=recipe.external_id in last_week,
+            favourite=recipe.external_id in favourites,
+            loved_ingredients=(loved or {}).get(recipe.external_id, ()),
         )
         for recipe in offered
     ]
@@ -185,14 +220,24 @@ def scoring_context(
     *,
     chips: Collection[str] = frozenset(),
     urgent_items_already_used: Sequence[str] = (),
+    profile: ProfileScoring | None = None,
 ) -> ScoringContext:
-    """The context the scorer reads: the facts, the week's chips, and what is already being used up.
+    """The context the scorer reads: the facts, the week's chips, what is already being used up, and the profile.
 
     `urgent_items_already_used` are the urgent items a meal already in the week uses: the week is not charged for
-    leaving those out, because it is not leaving them out. Profile inputs wait for V13.
+    leaving those out, because it is not leaving them out. `profile` adds the cuisines and protein targets; the
+    favourite and loved-ingredient matches are already on the facts.
     """
+    profile = profile or ProfileScoring()
     return ScoringContext(
         recipes={entry.recipe_id: entry.scorer_input() for entry in facts},
+        favourite_recipe_ids=frozenset(entry.recipe_id for entry in facts if entry.favourite),
+        liked_cuisines=frozenset(profile.liked_cuisines),
+        avoided_cuisines=frozenset(profile.avoided_cuisines),
+        protein_targets=tuple(
+            ProteinTarget(target.protein, min_per_week=target.min_per_week, max_per_week=target.max_per_week)
+            for target in profile.protein_targets
+        ),
         chips=frozenset(chips),
         urgent_item_uses={entry.recipe_id: entry.urgent_items for entry in facts if entry.urgent_items},
         urgent_items_already_used=tuple(urgent_items_already_used),

@@ -15,6 +15,7 @@ from glean.meal_plan import pipeline
 from glean.meal_plan.schemas import CorpusMealPlanAlternative, MealPlanRequest
 from glean.meal_plan.tools import RecipeFilter, get_eligible_recipes
 from glean.recipe_api.blob_store import FilesystemBlobStore
+from glean.recipes.attributes import Cuisine, MainProtein
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
@@ -107,3 +108,71 @@ def test_a_swap_never_brings_in_a_disliked_recipe_even_when_the_model_names_one(
     suggestion, degraded = chosen
     assert degraded is True
     assert not _disliked(suggestion.external_id)
+
+
+def test_a_favourite_by_matched_id_or_by_title_and_a_loved_ingredient_score_in_the_prepared_weeks(
+    tmp_path: Path,
+) -> None:
+    corpus = _corpus(tmp_path)
+    request = _request(
+        {
+            "favourite_meals": [
+                {"text": "Not the title", "recipe_id": "rec_04"},
+                {"text": "synthetic DISH 06", "recipe_id": None},
+            ],
+            "loved_ingredients": ["kale"],
+        }
+    )
+    prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
+    facts = {fact.recipe_id: fact for fact in prepared.facts}
+
+    assert {recipe_id for recipe_id, fact in facts.items() if fact.favourite} <= {"rec_04", "rec_06"}
+    for recipe_id, fact in facts.items():
+        assert fact.loved_ingredients == (() if _disliked(recipe_id) else ("kale",))
+    ctx = pipeline.scoring_context_of(prepared)
+    assert ctx.favourite_recipe_ids == frozenset(recipe_id for recipe_id, fact in facts.items() if fact.favourite)
+
+
+def test_a_recipe_the_agent_finds_is_scored_for_the_profile_like_a_candidate(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    # The favourites do not change the offer, so a first prepare names a recipe the agent will have to find.
+    offered = pipeline.prepare(_request(), corpus=corpus, rng=random.Random(1), now=NOW).offered_ids
+    target = next(f"rec_{n:02d}" for n in range(0, RECIPES, 2) if f"rec_{n:02d}" not in offered)
+    request = _request(
+        {
+            "favourite_meals": [{"text": f"Synthetic dish {target[-2:]}"}],
+            "loved_ingredients": ["kale"],
+        }
+    )
+    prepared = pipeline.prepare(request, corpus=corpus, rng=random.Random(1), now=NOW)
+    ctx = pipeline.tool_context(request, corpus=corpus, now=NOW)
+    found = get_eligible_recipes(RecipeFilter(exclude_ids=tuple(prepared.offered_ids)), ctx).recipes
+
+    widened = pipeline.widen(prepared, found, corpus=corpus)
+
+    new = {fact.recipe_id: fact for fact in widened.facts if fact.recipe_id not in prepared.offered_ids}
+    assert target in new
+    assert new[target].favourite is True
+    for recipe_id, fact in new.items():
+        assert fact.loved_ingredients == (() if _disliked(recipe_id) else ("kale",))
+    assert target in pipeline.scoring_context_of(widened).favourite_recipe_ids
+
+
+def test_the_profiles_cuisines_and_protein_targets_ride_the_prepared_plan(tmp_path: Path) -> None:
+    request = _request(
+        {
+            "cuisines_liked": ["Italian", "Asian"],
+            "cuisines_avoided": ["Thai food"],
+            "protein_targets": [
+                {"protein": "fish", "min_per_week": 1},
+                {"protein": "none", "max_per_week": 0},
+            ],
+        }
+    )
+    prepared = pipeline.prepare(request, corpus=_corpus(tmp_path), rng=random.Random(1), now=NOW)
+
+    ctx = pipeline.scoring_context_of(prepared)
+
+    assert ctx.liked_cuisines == frozenset({Cuisine.ITALIAN})
+    assert ctx.avoided_cuisines == frozenset({Cuisine.THAI})
+    assert [(target.protein, target.min_per_week) for target in ctx.protein_targets] == [(MainProtein.FISH, 1)]
