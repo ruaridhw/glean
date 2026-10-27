@@ -82,7 +82,7 @@ void main() {
       );
       for (final String note in <String>[_rice, _kids]) {
         expect(_inRow(note, find.text('Keep')), findsOneWidget);
-        expect(_inRow(note, find.byIcon(Icons.close)), findsOneWidget);
+        expect(_inRow(note, find.byIcon(Icons.close_rounded)), findsOneWidget);
       }
       expect(
         find.text(
@@ -163,7 +163,7 @@ void main() {
     (tester) async {
       final h = await open(tester);
 
-      await tester.tap(_inRow(_kids, find.byIcon(Icons.close)));
+      await tester.tap(_inRow(_kids, find.byIcon(Icons.close_rounded)));
       await tester.pumpAndSettle();
 
       expect(_row(_kids), findsNothing);
@@ -218,7 +218,7 @@ void main() {
     await tester.tap(_inRow(_rice, find.text('Keep')));
     await tester.pumpAndSettle();
     expect(_card(), findsOneWidget);
-    await tester.tap(_inRow(_kids, find.byIcon(Icons.close)));
+    await tester.tap(_inRow(_kids, find.byIcon(Icons.close_rounded)));
     await tester.pumpAndSettle();
 
     expect(_card(), findsNothing);
@@ -259,7 +259,7 @@ void main() {
     tester,
   ) async {
     await open(tester);
-    await tester.tap(_inRow(_rice, find.byIcon(Icons.close)));
+    await tester.tap(_inRow(_rice, find.byIcon(Icons.close_rounded)));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Swap'));
