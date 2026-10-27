@@ -63,6 +63,7 @@ from glean.agent.prompts import (
     AGENT_SYSTEM_PROMPT,
     SWAP_SYSTEM_PROMPT,
     bounded_transcript,
+    rated_meals,
     swap_user_message,
     user_message,
 )
@@ -70,11 +71,13 @@ from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
 from glean.meal_plan.household import ScreenedProfile
+from glean.meal_plan.profile_notes import SessionEvidence, kept_notes
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanResponse,
     MealPlanRequest,
     MealPlanResult,
+    ProfileNote,
 )
 from glean.observability import logger
 from glean.sessions.models import (
@@ -150,6 +153,10 @@ class PlanState(TypedDict, total=False):
     # The session's working seconds when it asked its question; the resumed attempt's budget starts there.
     working_seconds: float
     proposal: dict[str, Any] | None
+    # The notes the `propose` action carried (V15), before `finalise` keeps the ones its evidence supports.
+    profile_notes: list[dict[str, Any]]
+    # Whether the household answered the question rather than skipping it: an answer note's evidence.
+    answered: bool
     tool_calls: int
     invalid_actions: int
     degraded_reason: str | None
@@ -258,6 +265,7 @@ class _Nodes:
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         calls_left = max(MAX_TOOL_CALLS - tool_calls, 0)
         asked = state.get("questions_asked", 0)
+        rated = rated_meals(MealPlanRequest.model_validate(state["request"]).cooked_history)
         step = self._ask(
             PlanStep,
             AGENT_SYSTEM_PROMPT,
@@ -266,6 +274,7 @@ class _Nodes:
                 tool_results=results,
                 tool_calls_left=calls_left,
                 questions_left=max(MAX_QUESTIONS - asked, 0),
+                rated_meals=rated,
             ),
             transcript,
             invalid=state.get("invalid_actions", 0),
@@ -285,7 +294,12 @@ class _Nodes:
                 "working_seconds": self._guard.spent(),
             }
         if isinstance(action, Propose):
-            return {**update, "proposal": action.proposal.model_dump(mode="json"), "pending": None}
+            return {
+                **update,
+                "proposal": action.proposal.model_dump(mode="json"),
+                "profile_notes": [note.model_dump(mode="json") for note in action.profile_notes],
+                "pending": None,
+            }
         if not isinstance(action, CallTool):
             return _degrade(DegradedReason.INVALID_ACTIONS, **update)
         if tool_calls >= MAX_TOOL_CALLS:
@@ -383,6 +397,7 @@ class _Nodes:
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         reason = state.get("degraded_reason")
         result = None
+        notes: tuple[list[ProfileNote], dict[str, int]] = ([], {})
         if reason is None:
             draft = CorpusMealPlanResponse.model_validate(state.get("proposal") or {"suggestions": []})
             result = pipeline.finalise(prepared, draft)
@@ -390,6 +405,13 @@ class _Nodes:
                 # The model's answer kept nothing (it invented ids, or named meals already in the plan).
                 reason = DegradedReason.NOTHING_KEPT
                 result = None
+            else:
+                # A degraded week carries no notes: the agent that wrote them did not get its week.
+                notes = kept_notes(
+                    [ProfileNote.model_validate(note) for note in state.get("profile_notes") or []],
+                    _session_evidence(state),
+                )
+                result = result.model_copy(update={"profile_notes": notes[0]})
         if result is None:
             # Spec §6.2's fallback: the scorer's best week with template text, flagged degraded so the logs
             # and the evals see it. The household sees an ordinary proposal (spec §6.5). An agent stopped for
@@ -397,7 +419,11 @@ class _Nodes:
             week = _agents_best_week(state, prepared) if reason == DegradedReason.TOOL_BUDGET else None
             logger.warning("writing a fallback week", extra={"reason": reason, "agents_week": week is not None})
             result = pipeline.degraded(prepared, week=week)
-        metrics = _session_metrics(state, prepared, result, reason)
+        metrics = {
+            **_session_metrics(state, prepared, result, reason),
+            "profile_notes_kept": len(notes[0]),
+            "profile_notes_dropped": notes[1],
+        }
         logger.info("agent session finished", extra=metrics)
         return {"result": result.model_dump(mode="json"), "session_metrics": metrics}
 
@@ -626,6 +652,7 @@ def _hear(state: PlanState) -> PlanState:
     logger.info("the household answered", extra={"skipped": reply.skipped, "note_dropped": reply.note_dropped})
     return {
         "question": None,
+        "answered": not reply.skipped,
         "transcript": bounded_transcript([*(state.get("transcript") or []), {"question": question, "data": answer}]),
     }
 
@@ -643,6 +670,18 @@ def _swap_context(state: PlanState, prepared: pipeline.PreparedPlan) -> dict[str
         "unavailable_ids": swap.get("unavailable_ids", []),
         "swap_note": state.get("swap_note"),
     }
+
+
+def _session_evidence(state: PlanState) -> SessionEvidence:
+    """What this run holds that a profile note may rest on (V15)."""
+    request = MealPlanRequest.model_validate(state["request"])
+    return SessionEvidence(
+        # The rated cooks the model was shown, so a note never rests on one it could not see.
+        rated=bool(rated_meals(request.cooked_history)),
+        answered=bool(state.get("answered")),
+        # A week's run never has one: a swap comes after the proposal and carries its notes unchanged.
+        swap_note=bool(state.get("swap_note")),
+    )
 
 
 def _degrade(reason: str, **update: Any) -> PlanState:
