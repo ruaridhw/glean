@@ -4,7 +4,10 @@
 /// the first [maxPlanningListEntries] entries of each list, each string at most [maxPlanningTextChars] code points
 /// (a favourite meal [maxPlanningFavouriteChars], because it is matched against corpus titles),
 /// the two free-text fields at most [maxPlanningParagraphChars], and only the newest [maxPlanningNotes] notes, each
-/// at most [maxPlanningNoteChars]. Code points, not UTF-16 units, because that is what the backend counts. The
+/// at most [maxPlanningNoteChars]. The newest [maxPlanningDismissedNotes] dismissed notes go too, so the planner can
+/// drop a note it would repeat; one longer than [maxPlanningDismissedNoteChars] (a long note deleted in Settings) is
+/// left out rather than clipped, because a planner note is never that long and a clipped one would match nothing.
+/// Code points, not UTF-16 units, because that is what the backend counts. The
 /// numbers mirror `PlanningProfile` in the backend's `meal_plan/schemas.py`.
 library;
 
@@ -16,6 +19,8 @@ const int maxPlanningFavouriteChars = 120;
 const int maxPlanningParagraphChars = 500;
 const int maxPlanningNotes = 20;
 const int maxPlanningNoteChars = 200;
+const int maxPlanningDismissedNotes = 50;
+const int maxPlanningDismissedNoteChars = 120;
 
 /// The backend's `main_protein` values (its `MainProtein` enum). A protein target naming anything else is left
 /// out rather than sent, because the backend would refuse the whole Generate over it.
@@ -76,8 +81,16 @@ Map<String, dynamic>? planningProfileJson(HouseholdProfile? profile) {
           'source': note.source.name,
         },
     ],
+    'dismissed_notes': _newest(<String>[
+      for (final String note in profile.dismissedNotes)
+        if (note.runes.length <= maxPlanningDismissedNoteChars) note,
+    ], maxPlanningDismissedNotes),
   };
 }
+
+/// The last [count] of [values], which are kept newest last.
+List<String> _newest(List<String> values, int count) =>
+    values.length <= count ? values : values.sublist(values.length - count);
 
 List<String> _list(List<String> values) => <String>[
   for (final String value in values.take(maxPlanningListEntries))
