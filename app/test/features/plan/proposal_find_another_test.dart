@@ -18,30 +18,33 @@ import 'proposal_screen_test.dart' show alternative, recipeDetail, suggestion;
 
 const String _note = 'something lighter, maybe prawns';
 
-Map<String, dynamic> _proposal({List<String> notes = const <String>[]}) =>
-    <String, dynamic>{
-      'suggestions': <Map<String, dynamic>>[
-        suggestion(
-          'rec_a',
-          title: 'Chicken katsu curry',
-          reason: 'Uses up your coriander.',
-          alternative: alternative('rec_a_alt', 'Chicken & cashew stir-fry'),
-        ),
-        suggestion(
-          'rec_b',
-          title: 'Black bean tacos',
-          reason: 'A quick meat-free night.',
-          alternative: alternative('rec_b_alt', 'Chickpea & spinach dal'),
-        ),
-      ],
-      'week_summary': 'Two quick dinners.',
-      'planned_alternatives': <Map<String, dynamic>>[],
-      'degraded': false,
-      'profile_notes': <Map<String, dynamic>>[
-        for (final String text in notes)
-          <String, dynamic>{'text': text, 'evidence': 'answer'},
-      ],
-    };
+Map<String, dynamic> _proposal({
+  List<String> notes = const <String>[],
+  String? feedbackNote,
+}) => <String, dynamic>{
+  'suggestions': <Map<String, dynamic>>[
+    suggestion(
+      'rec_a',
+      title: 'Chicken katsu curry',
+      reason: 'Uses up your coriander.',
+      alternative: alternative('rec_a_alt', 'Chicken & cashew stir-fry'),
+    ),
+    suggestion(
+      'rec_b',
+      title: 'Black bean tacos',
+      reason: 'A quick meat-free night.',
+      alternative: alternative('rec_b_alt', 'Chickpea & spinach dal'),
+    ),
+  ],
+  'week_summary': 'Two quick dinners.',
+  'planned_alternatives': <Map<String, dynamic>>[],
+  'degraded': false,
+  'feedback_note': feedbackNote,
+  'profile_notes': <Map<String, dynamic>>[
+    for (final String text in notes)
+      <String, dynamic>{'text': text, 'evidence': 'answer'},
+  ],
+};
 
 Map<String, dynamic> _replacement() => suggestion(
   'rec_prawn',
@@ -86,6 +89,7 @@ Map<String, dynamic> _swap(
 class SwapBackend {
   SwapBackend({
     this.notes = const <String>[],
+    this.feedbackNote,
     this.swapPolls = const <Future<http.Response> Function()>[],
     this.accept,
     this.accepts = const <http.Response Function()>[],
@@ -93,6 +97,9 @@ class SwapBackend {
 
   /// The profile notes the first run's proposal carries.
   final List<String> notes;
+
+  /// What the first run's proposal says became of the week's note.
+  final String? feedbackNote;
   final List<Future<http.Response> Function()> swapPolls;
   final http.Response Function()? accept;
 
@@ -125,7 +132,7 @@ class SwapBackend {
         return _poll(
           status: 'done',
           progress: <String>['Choosing this week\'s dinners'],
-          result: _proposal(notes: notes),
+          result: _proposal(notes: notes, feedbackNote: feedbackNote),
         );
       }
       if (_swapPolled < swapPolls.length) return swapPolls[_swapPolled++]();
@@ -355,6 +362,39 @@ void main() {
     );
     expect(find.text('Glean noted'), findsOneWidget);
     expect(find.text(note), findsOneWidget);
+  });
+
+  gleanWidgetTest("a swap and its Undo keep what became of the week's note", (
+    tester,
+  ) async {
+    final backend = SwapBackend(
+      feedbackNote: 'not_a_preference',
+      swapPolls: <Future<http.Response> Function()>[
+        () async => _poll(
+          status: 'done',
+          swap: _swap('done', replacement: _replacement()),
+        ),
+      ],
+    );
+    final h = _harness(backend);
+    addTearDown(h.dispose);
+    String? outcome() =>
+        h.container.read(generateWeekControllerProvider).result?.feedbackNote;
+
+    await _openProposal(tester, h);
+    expect(outcome(), 'not_a_preference');
+    await _findAnother(tester, 1);
+
+    expect(
+      _inCard(1, find.text('Garlic & chilli prawn linguine')),
+      findsOneWidget,
+    );
+    expect(outcome(), 'not_a_preference');
+
+    await tester.tap(_inCard(1, find.text('Undo swap')));
+    await tester.pumpAndSettle();
+    expect(_inCard(1, find.text('Black bean tacos')), findsOneWidget);
+    expect(outcome(), 'not_a_preference');
   });
 
   gleanWidgetTest('a note the swap adds joins the "Glean noted" card', (
