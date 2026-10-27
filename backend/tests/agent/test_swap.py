@@ -21,7 +21,7 @@ from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.deps import AgentDeps
 from glean.agent.graph import MAX_SWAP_TOOL_CALLS, SWAP_FINALISE_LINE, SWAP_LINE, SWAP_NOTE_LINE
 from glean.meal_plan.pipeline import TEMPLATE_SWAP_REASON
-from glean.meal_plan.schemas import HumanFeedback
+from glean.meal_plan.schemas import HumanFeedback, PlanningProfile
 from glean.meal_plan.tools import FeedbackChip
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
@@ -620,6 +620,38 @@ class TestWeekNote:
         assert latest is not None
         prepared = latest.checkpoint["channel_values"]["prepared"]
         assert prepared["feedback"]["chips"] == [FeedbackChip.HEALTHIER.value]
+
+
+class TestHouseholdProfile:
+    """V13b: a swap sees the profile the week was planned with, and cannot find a recipe the household dislikes."""
+
+    def test_a_swap_sees_the_profile_and_its_search_obeys_the_dislike(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from tests.agent import test_graph  # noqa: PLC0415 - the parent's request builder
+
+        profile = PlanningProfile.model_validate({"spice_tolerance": "hot", "disliked_ingredients": ["gochujang"]})
+        run = SwapRun(tmp_path, monkeypatch, request=test_graph._request().model_copy(update={"profile": profile}))
+        run.swap(position=1)
+        model = Model(
+            swap=[
+                {
+                    "action": {
+                        "kind": "call_tool",
+                        "call": {"name": "get_eligible_recipes", "filter": {"text": "korean"}},
+                    }
+                },
+                replace_with(a_free_candidate),
+            ]
+        )
+
+        assert run.deliver(model) is True
+
+        first, second = model.users(SwapStep)
+        assert first["household_profile"]["spice_tolerance"] == "hot"
+        assert second["tool_results"][0]["data"]["recipes"] == []
+        assert run.view.swap.state is SwapState.DONE  # ty: ignore[possibly-missing-attribute]
+        assert test_graph.KOREAN_ID not in [meal.external_id for meal in run.record.result.suggestions]
 
 
 class TestSwapAfterTheQuestion:
