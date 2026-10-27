@@ -36,6 +36,10 @@ MAX_PANTRY_NAMES = 15
 _ID_CHARS = 64
 _VALUE_CHARS = 80
 _TEXT_CHARS = 80
+# Profile notes (V15): generous next to the three of at most 120 characters `meal_plan.profile_notes` keeps, so an
+# ordinary answer always parses, but bounded, because the action is checkpointed before those rules run.
+MAX_ACTION_NOTES = 10
+MAX_ACTION_NOTE_CHARS = 500
 
 
 def _at_most[T](count: int, chars: int) -> Callable[[list[T]], list[T]]:
@@ -47,6 +51,17 @@ def _at_most[T](count: int, chars: int) -> Callable[[list[T]], list[T]]:
         return values
 
     return check
+
+
+def _bounded_notes(notes: list[ProfileNote]) -> list[ProfileNote]:
+    if len(notes) > MAX_ACTION_NOTES:
+        raise ValueError(f"at most {MAX_ACTION_NOTES} profile notes, not {len(notes)}")
+    if any(len(note.text) > MAX_ACTION_NOTE_CHARS for note in notes):
+        raise ValueError(f"each profile note is at most {MAX_ACTION_NOTE_CHARS} characters")
+    return notes
+
+
+type _Notes = Annotated[list[ProfileNote], AfterValidator(_bounded_notes)]
 
 
 def _short(text: str | None) -> str | None:
@@ -175,8 +190,8 @@ class Propose(BaseModel):
 
     kind: Literal["propose"]
     proposal: CorpusMealPlanResponse
-    # V15. Unbounded here, like the question's fields: `meal_plan.profile_notes` keeps the ones that pass.
-    profile_notes: list[ProfileNote] = Field(
+    # V15. Bounded here (`_bounded_notes`); `meal_plan.profile_notes` then keeps the ones that pass.
+    profile_notes: _Notes = Field(
         default_factory=list,
         description="At most three durable facts about the household, each with its evidence; usually none",
     )
@@ -212,7 +227,7 @@ class ProposeReplacement(BaseModel):
     kind: Literal["propose_replacement"]
     replacement: CorpusMealPlanAlternative
     # A swap note can show a durable preference too; only notes resting on it are kept (`swap_finalise`).
-    profile_notes: list[ProfileNote] = Field(
+    profile_notes: _Notes = Field(
         default_factory=list,
         description="Durable facts the swap note shows about the household, evidence swap_note; usually none",
     )
