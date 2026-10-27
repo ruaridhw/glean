@@ -6,6 +6,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:glean/design_system/design_system.dart';
 
+/// The smallest tap target a row action gets.
+const double _targetSize = 48;
+
 class GleanNotedCard extends StatelessWidget {
   const GleanNotedCard({
     super.key,
@@ -31,12 +34,7 @@ class GleanNotedCard extends StatelessWidget {
     return Card(
       semanticContainer: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          tokens.spacing.md,
-          tokens.spacing.md,
-          tokens.spacing.xs,
-          tokens.spacing.md,
-        ),
+        padding: EdgeInsets.all(tokens.spacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -53,13 +51,10 @@ class GleanNotedCard extends StatelessWidget {
                 onKeep: () => onKeep(note),
                 onDismiss: () => onDismiss(note),
               ),
-            Padding(
-              padding: EdgeInsets.only(right: tokens.spacing.sm),
-              child: Text(
-                'From your ratings and answers. Kept notes go in your profile.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+            Text(
+              'From your ratings and answers. Kept notes go in your profile.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -91,14 +86,21 @@ class _NoteRow extends StatelessWidget {
           child: Text(note, style: Theme.of(context).textTheme.bodyMedium),
         ),
         TextButton(
-          style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(_targetSize, _targetSize),
+          ),
           onPressed: keeping ? null : onKeep,
           child: Text('Keep', semanticsLabel: 'Keep: $note'),
         ),
         IconButton(
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           onPressed: keeping ? null : onDismiss,
-          icon: Icon(Icons.close, semanticLabel: 'Dismiss: $note'),
+          // The theme's icon button is a 40 dp filled disc; a row action is a plain 48 dp target.
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            fixedSize: const Size.square(_targetSize),
+            minimumSize: const Size.square(_targetSize),
+          ),
+          icon: Icon(Icons.close_rounded, semanticLabel: 'Dismiss: $note'),
         ),
       ],
     );
