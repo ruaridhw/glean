@@ -247,6 +247,40 @@ class TestSwapNotes:
         assert "swap_note" in SWAP_SYSTEM_PROMPT.split("profile_notes", 1)[1]
 
 
+def _logged_text(caplog: pytest.LogCaptureFixture) -> str:
+    """Every record's message and every attribute it carries, extras included, as one string."""
+    return "\n".join(f"{record.getMessage()} {record.__dict__!r}" for record in caplog.records)
+
+
+class TestLogs:
+    """The logs count notes; the household's notes, kept or dropped, never appear in them."""
+
+    def test_a_weeks_notes_are_logged_as_counts_only(self, run: Run, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG)
+
+        run.start(ScriptedModel(noting(RICE, KIDS)))
+
+        assert texts(run.record.result.profile_notes) == [RICE["text"]]
+        logged = _logged_text(caplog)
+        assert "profile_notes_dropped" in logged
+        for note in (RICE, KIDS):
+            assert note["text"] not in logged
+
+    def test_a_swaps_notes_are_logged_as_counts_only(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG)
+        dropped = {**PRAWNS, "text": "You like chilli.", "evidence": "rating"}
+
+        _, after, _ = _swapped(tmp_path, monkeypatch, swap_notes=(PRAWNS, dropped))
+
+        assert texts(after.profile_notes) == [RICE["text"], PRAWNS["text"]]
+        logged = _logged_text(caplog)
+        assert "swap profile notes" in logged
+        for note in (RICE, PRAWNS, dropped):
+            assert note["text"] not in logged
+
+
 class TestPrompt:
     def test_the_rules_ask_for_notes_only_on_durable_evidence_and_frame_them_as_data(self) -> None:
         assert "profile_notes" in AGENT_SYSTEM_PROMPT
