@@ -19,7 +19,11 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient
-from glean.meal_plan.dietary_decisions import CorpusUnavailableError, produce_missing_decisions
+from glean.meal_plan.dietary_decisions import (
+    CALIBRATED_DIETARY,
+    CorpusUnavailableError,
+    produce_missing_decisions,
+)
 from glean.recipe_api.blob_store import BlobStore, FilesystemBlobStore, S3BlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 
@@ -45,7 +49,8 @@ def _client(*, timeout_s: float) -> DecisionClient:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise SystemExit("Set OPENROUTER_API_KEY to the OpenRouter key decision calls are billed to.")
-    return DecisionClient(api_key=SecretStr(api_key), timeout_s=timeout_s)
+    # The calibration owns which model is asked, so a validated dietary substitution is one reviewed change there.
+    return DecisionClient(api_key=SecretStr(api_key), model=CALIBRATED_DIETARY.model, timeout_s=timeout_s)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

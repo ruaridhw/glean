@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import httpx
 from pydantic import SecretStr
 from scripts import compute_dietary_decisions
 
-from glean.decisions import DECISION_MODEL, DecisionClient
+from glean.decisions import DECISION_MODEL, DecisionClient, DecisionModel
+from glean.meal_plan import dietary_decisions
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.search_index import INDEX_KEY
@@ -47,6 +49,20 @@ def _local_corpus(cache_dir: Path) -> None:
             ingredients=[StoredIngredient(canonical_name="tomato", quantity=1, unit="each")],
         )
     )
+
+
+def test_the_client_asks_the_model_the_dietary_calibration_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+
+    assert compute_dietary_decisions._client(timeout_s=1.0).model == dietary_decisions.CALIBRATED_DIETARY.model
+
+    alternate = replace(
+        dietary_decisions.CALIBRATED_DIETARY,
+        model=DecisionModel("another/model:free", served=("another/model",)),
+    )
+    monkeypatch.setattr(compute_dietary_decisions, "CALIBRATED_DIETARY", alternate)
+
+    assert compute_dietary_decisions._client(timeout_s=1.0).model == alternate.model
 
 
 def test_a_complete_run_prints_the_coverage_report_and_exits_zero(
