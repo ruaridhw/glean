@@ -111,15 +111,14 @@ CUISINE_ALIASES: dict[str, Cuisine] = {
 # that dislikes olives still cooks with olive oil, and one that dislikes peppers still seasons with black pepper.
 # Kept minimal on purpose, because a household may use a dislike for an allergy: a dislike that names the phrase
 # itself ("olive oil", "black pepper") still excludes it, and an ingredient that names the disliked thing as well
-# ("olive oil and black olives") still matches. Owner ruling 2026-10-27, from the V13b eval: "olives" alone left
-# out 270 of the corpus's 632 recipes, nearly all of them for their olive oil.
+# ("olive oil and black olives") still matches. "cracked black pepper" needs no entry of its own ("black pepper"
+# covers it), nor does "peppercorns", which the whole-word rule already keeps apart from "pepper". Owner ruling
+# 2026-10-27, from the V13b eval: "olives" alone left out 270 of the corpus's 632 recipes, nearly all for olive oil.
 STAPLE_PHRASES: dict[str, str] = {
     "olive oil": "olive",
-    "cracked black pepper": "pepper",
     "black pepper": "pepper",
     "white pepper": "pepper",
     "ground pepper": "pepper",
-    "peppercorns": "pepper",
 }
 _STAPLE_RES = {
     phrase: re.compile(
