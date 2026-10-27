@@ -98,6 +98,11 @@ class ProposalSwapPanel extends StatelessWidget {
   }
 }
 
+/// The widest a card's Swap / Swap back button may be. Uncapped, "Swap back" at 2x text is wider than the space
+/// beside the title on a 320 px screen and the title Row overflows; capped, its label wraps instead.
+double _swapButtonMaxWidth(BuildContext context) =>
+    MediaQuery.sizeOf(context).width * 0.4;
+
 /// One suggested meal. [meal] is what the card currently shows (the original or a swapped alternative);
 /// [alternative] is the server's alternative for the original, which is what Swap offers.
 class ProposalMealCard extends StatelessWidget {
@@ -134,9 +139,14 @@ class ProposalMealCard extends StatelessWidget {
               children: <Widget>[
                 Expanded(child: Text(meal.title, style: textTheme.titleMedium)),
                 if (alternative != null)
-                  TextButton(
-                    onPressed: onToggleSwap,
-                    child: Text(swapped ? 'Swap back' : 'Swap'),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: _swapButtonMaxWidth(context),
+                    ),
+                    child: TextButton(
+                      onPressed: onToggleSwap,
+                      child: Text(swapped ? 'Swap back' : 'Swap'),
+                    ),
                   ),
               ],
             ),
@@ -201,9 +211,14 @@ class ProposalPlannedCard extends StatelessWidget {
                 children: <Widget>[
                   Expanded(child: Text(title, style: textTheme.titleMedium)),
                   if (alternative != null)
-                    TextButton(
-                      onPressed: onToggleSwap,
-                      child: Text(swapped ? 'Swap back' : 'Swap'),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: _swapButtonMaxWidth(context),
+                      ),
+                      child: TextButton(
+                        onPressed: onToggleSwap,
+                        child: Text(swapped ? 'Swap back' : 'Swap'),
+                      ),
                     ),
                 ],
               ),

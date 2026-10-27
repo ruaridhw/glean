@@ -702,6 +702,17 @@ void main() {
           isNull,
           reason: 'the swap panel action must wrap inside the card too',
         );
+
+        await tester.ensureVisible(find.text('Use alternative'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Use alternative'));
+        await tester.pumpAndSettle();
+        expect(find.text('Swap back'), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'a swapped card\'s Swap back must fit beside its title',
+        );
       },
     );
   }
