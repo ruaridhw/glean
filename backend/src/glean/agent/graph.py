@@ -76,7 +76,7 @@ from glean.meal_plan.profile_notes import (
     MIN_RATED_COOKS,
     SessionEvidence,
     kept_notes,
-    known_notes,
+    note_digest,
 )
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
@@ -161,6 +161,9 @@ class PlanState(TypedDict, total=False):
     proposal: dict[str, Any] | None
     # The notes the `propose` action carried (V15), before `finalise` keeps the ones its evidence supports.
     profile_notes: list[dict[str, Any]]
+    # The `note_digest` of every note the household's profile holds or dismissed (V15), from the runtime: the
+    # request's profile prose is gone (`without_profile_text`), and only digests, never the text, ride the state.
+    known_notes: list[str]
     # The rated cooks the model reads for its profile notes, with their titles read from the corpus in `prepare`
     # (never the app's), so a note's rating evidence is exactly what the model was shown.
     rated_meals: list[dict[str, str]]
@@ -437,7 +440,7 @@ class _Nodes:
                 notes = kept_notes(
                     [ProfileNote.model_validate(note) for note in state.get("profile_notes") or []],
                     _session_evidence(state),
-                    known=known_notes(MealPlanRequest.model_validate(state["request"])),
+                    known=state.get("known_notes") or [],
                 )
                 result = result.model_copy(update={"profile_notes": notes[0]})
         if result is None:
@@ -718,7 +721,7 @@ def _with_swap_notes(state: PlanState, result: MealPlanResult) -> MealPlanResult
     notes, dropped = kept_notes(
         [ProfileNote.model_validate(note) for note in state.get("swap_profile_notes") or []],
         SessionEvidence(rated=False, answered=False, swap_note=bool(state.get("swap_note"))),
-        known=[*known_notes(MealPlanRequest.model_validate(state["request"])), *(note.text for note in held)],
+        known=[*(state.get("known_notes") or []), *(note_digest(note.text) for note in held)],
         limit=MAX_PROFILE_NOTES - len(held),
     )
     if notes or dropped:

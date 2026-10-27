@@ -7,6 +7,8 @@ misses whether the graph hands it the right evidence, which `tests/agent/test_pr
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from glean.meal_plan.profile_notes import (
@@ -15,6 +17,7 @@ from glean.meal_plan.profile_notes import (
     SessionEvidence,
     kept_notes,
     known_notes,
+    note_digest,
 )
 from glean.meal_plan.schemas import MealPlanRequest, NoteEvidence, ProfileNote
 
@@ -118,23 +121,44 @@ def test_no_evidence_at_all_keeps_nothing() -> None:
 def test_a_note_the_profile_already_holds_or_the_household_dismissed_is_dropped() -> None:
     notes = [note("You prefer rice over pasta."), note("Likes fish"), note("The kids avoid chilli")]
 
-    kept, dropped = kept_notes(notes, EVERYTHING, known=["you prefer RICE over pasta.", "  the kids avoid  chilli"])
+    known = [note_digest("you prefer RICE over pasta."), note_digest("  the kids avoid  chilli")]
+
+    kept, dropped = kept_notes(notes, EVERYTHING, known=known)
 
     assert [n.text for n in kept] == ["Likes fish"]
     assert dropped == {"known": 2}
 
 
-def test_until_the_session_carries_the_profile_nothing_is_known() -> None:
-    request = MealPlanRequest(
-        source="corpus",
-        pantry=[],
-        purchase_tolerance=0.5,
-        meals_per_week=2,
-        dietary_flags=[],
-        max_active_time_mins=None,
+def _request(profile: dict[str, Any] | None) -> MealPlanRequest:
+    return MealPlanRequest.model_validate(
+        {
+            "source": "corpus",
+            "pantry": [],
+            "purchase_tolerance": 0.5,
+            "meals_per_week": 2,
+            "dietary_flags": [],
+            "max_active_time_mins": None,
+            "profile": profile,
+        }
     )
 
-    assert known_notes(request) == []
+
+def test_the_known_notes_are_the_profiles_notes_and_its_dismissed_ones() -> None:
+    request = _request(
+        {
+            "notes": [{"date": "2026-10-20", "text": "Likes rice", "source": "feedback"}],
+            "dismissed_notes": ["Likes chilli"],
+        }
+    )
+
+    assert known_notes(request) == ["Likes rice", "Likes chilli"]
+    assert known_notes(_request(None)) == []
+
+
+def test_a_note_is_compared_with_a_known_one_by_digest_whatever_its_case_or_spacing() -> None:
+    assert note_digest(" You prefer RICE  over pasta. ") == note_digest("you prefer rice over pasta.")
+    assert note_digest("Likes rice") != note_digest("Likes fish")
+    assert "rice" not in note_digest("Likes rice")
 
 
 def test_a_kept_note_is_one_line_with_single_spaces() -> None:

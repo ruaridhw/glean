@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from glean.agent import graph, start
+from glean.agent import start
 from glean.agent.actions import MAX_ACTION_NOTE_CHARS, MAX_ACTION_NOTES, PlanStep, SwapStep
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, SWAP_SYSTEM_PROMPT
+from glean.meal_plan.schemas import MealPlanRequest, PlanningProfile
 from glean.sessions.models import HouseholdReply, SessionStatus, SwapMessage
 from tests.agent.test_graph import (
     NOTE,
@@ -35,7 +36,7 @@ from tests.agent.test_graph import (
 from tests.agent.test_swap import Model, a_free_candidate, replace_with
 
 if TYPE_CHECKING:
-    from glean.meal_plan.schemas import MealPlanRequest, ProfileNote
+    from glean.meal_plan.schemas import ProfileNote
 
 RICE = {"text": "You prefer rice over pasta midweek.", "evidence": "rating"}
 KIDS = {"text": "The kids don't like spicy food.", "evidence": "answer"}
@@ -175,13 +176,53 @@ class TestEvidence:
         assert texts(run.record.result.profile_notes) == [RICE["text"], "Note 0", "Note 1"]
 
 
+FISH = {"text": "You like fish on Fridays.", "evidence": "rating"}
+
+
+def with_profile(**profile: Any) -> MealPlanRequest:
+    """`rated_twice()` with a household profile holding *profile*."""
+    return rated_twice().model_copy(
+        update={"profile": PlanningProfile.model_validate({"spice_tolerance": "mild", **profile})}
+    )
+
+
+# A note the household kept (in another case and spacing) and one it dismissed, as the app sends them.
+KNOWN_PROFILE: dict[str, Any] = {
+    "notes": [{"date": "2026-10-20", "text": " you prefer RICE over pasta  midweek.", "source": "feedback"}],
+    "dismissed_notes": [KIDS["text"]],
+}
+
+
 class TestKnown:
-    def test_a_note_the_profile_already_knows_is_dropped(self, run: Run, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(graph, "known_notes", lambda _request: [RICE["text"].lower()])
+    """Notes the profile already holds, or the household dismissed, are not offered again (`known_notes`)."""
 
-        run.start(ScriptedModel(noting(RICE, KIDS | {"evidence": "rating"})))
+    def test_a_week_drops_a_note_the_profile_holds_and_one_the_household_dismissed(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO)
+        run = Run(tmp_path, monkeypatch, request=with_profile(**KNOWN_PROFILE))
 
-        assert texts(run.record.result.profile_notes) == [KIDS["text"]]
+        run.start(ScriptedModel(noting(RICE, KIDS | {"evidence": "rating"}, FISH)))
+
+        assert texts(run.record.result.profile_notes) == [FISH["text"]]
+        assert _finished(caplog).profile_notes_dropped == {"known": 2}
+
+    def test_a_swap_drops_a_note_the_profile_holds_and_one_the_household_dismissed(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        profile = {**KNOWN_PROFILE, "dismissed_notes": [PRAWNS["text"]]}
+        known = {**PRAWNS, "text": "You prefer rice over pasta midweek."}
+        fresh = {**PRAWNS, "text": "You like it lighter."}
+
+        _, after, _ = _swapped(
+            tmp_path,
+            monkeypatch,
+            week_notes=(FISH,),
+            swap_notes=(PRAWNS, known, fresh),
+            request=with_profile(**profile),
+        )
+
+        assert texts(after.profile_notes) == [FISH["text"], fresh["text"]]
 
 
 class TestNoNotes:
@@ -232,9 +273,10 @@ def _swapped(
     swap_notes: tuple[dict[str, str], ...] = (PRAWNS,),
     note: str | None = "prawns, please",
     pick: Any = a_free_candidate,
+    request: MealPlanRequest | None = None,
 ) -> tuple[Any, Any, Model]:
     """Run a week that notes *week_notes*, then a swap whose replacement notes *swap_notes*."""
-    run = Run(tmp_path, monkeypatch, request=rated_twice())
+    run = Run(tmp_path, monkeypatch, request=request or rated_twice())
     assert start(run.session, run.deps(Model(plan=[noting(*week_notes)]))) is True  # ty: ignore[invalid-argument-type]
     before = run.record.result
     week = [meal.external_id or "" for meal in before.suggestions]
