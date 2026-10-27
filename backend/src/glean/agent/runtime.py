@@ -58,7 +58,8 @@ from glean.agent.control import LostOwnership, RunGuard
 from glean.agent.errors import AgentError, SessionCancelled
 from glean.agent.graph import MAX_TOOL_CALLS, build_graph, outcome_of, session_metrics_of, swap_outcome_of
 from glean.meal_plan.feedback import screen_feedback, without_note
-from glean.meal_plan.schemas import MealPlanResult
+from glean.meal_plan.household import screen_profile, without_profile_text
+from glean.meal_plan.schemas import MealPlanRequest, MealPlanResult
 from glean.observability import logger, metrics
 from glean.sessions.models import (
     AgentSession,
@@ -420,17 +421,24 @@ def _run(
     if resume and snapshot.next:
         logger.info("resuming a session from its checkpoint", extra={"session_id": session.session_id})
         return graph.invoke(None, config=config)  # ty: ignore[invalid-argument-type]
-    # The week's note is screened here, before the graph exists for it: the graph's input, its state, its
-    # checkpoints and its traces carry the screen's outcome and the request without the raw note.
+    # The week's note and the profile's free text are screened here, before the graph exists for them: the graph's
+    # input, its state, its checkpoints and its traces carry the screens' outcomes and the request without either.
     feedback = screen_feedback(record.request.human_feedback, decision_client=deps.decision_client)
+    profile = screen_profile(record.request.profile, decision_client=deps.decision_client)
     return graph.invoke(
         {
             "session_id": session.session_id,
-            "request": without_note(record.request).model_dump(mode="json"),
+            "request": _screened_request(record.request),
             "feedback": feedback.model_dump(mode="json"),
+            "profile": profile.model_dump(mode="json"),
         },
         config=config,  # ty: ignore[invalid-argument-type]
     )
+
+
+def _screened_request(request: MealPlanRequest) -> dict[str, Any]:
+    """The request as the graph may hold it: no week's note and no profile prose, whose screened forms ride beside."""
+    return without_profile_text(without_note(request)).model_dump(mode="json")
 
 
 def _report_wall_time(started: float, guard: RunGuard, ended: MealPlanResult | PendingQuestion | None) -> None:
@@ -501,8 +509,9 @@ def _swap_state(
     return graph.invoke(
         {
             "session_id": session.session_id,
-            # Never the week's raw note: only the screened outcome `_run` stored for the first run reaches the graph.
-            "request": without_note(record.request).model_dump(mode="json"),
+            # Never the week's raw note or the profile's prose: only the screened outcomes `_run` stored for the first
+            # run reach the graph.
+            "request": _screened_request(record.request),
             "swap": swap_input(record, swap),
         },
         config=config,

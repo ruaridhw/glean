@@ -69,6 +69,7 @@ from glean.agent.prompts import (
 from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
+from glean.meal_plan.household import ScreenedProfile
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanResponse,
@@ -133,8 +134,10 @@ class PlanState(TypedDict, total=False):
 
     session_id: str
     # The request without the week's raw note (`feedback.without_note`); the note's screened form is `feedback`.
+    # Likewise without the profile's prose (`household.without_profile_text`), whose screened form is `profile`.
     request: dict[str, Any]
     feedback: dict[str, Any] | None
+    profile: dict[str, Any] | None
     prepared: dict[str, Any] | None
     # The run so far, as the model reads it: each tool call with its compact result, and any answer of the
     # model's that did not parse.
@@ -231,6 +234,8 @@ class _Nodes:
             MealPlanRequest.model_validate(state["request"]),
             # A state without `feedback` (none was screened) plans with the chips and no note.
             feedback=None if state.get("feedback") is None else ScreenedFeedback.model_validate(state["feedback"]),
+            # Likewise a state without `profile` plans with the profile's enum fields and none of its words.
+            profile=None if state.get("profile") is None else ScreenedProfile.model_validate(state["profile"]),
             corpus=self._deps.corpus_factory(),
             # The session id seeds the sampler, so a resumed run (or a swap whose checkpoint expired) is offered
             # the same candidates.
