@@ -343,8 +343,20 @@ class TestTransportFailures:
             _client(rate_limited).decide(state, questions)
 
         assert caught.value.status_code == 429
-        assert "Rate limited" in str(caught.value)
+        assert "429" in str(caught.value)
         assert API_KEY not in str(caught.value)
+
+    def test_an_http_error_never_carries_the_body_which_may_echo_the_household_text(self) -> None:
+        # The message is logged with exc_info; an error body that quoted the note would put profile text in the logs.
+        state, questions = _probe()
+        echoing = _respond_with({"error": {"message": "bad input: my-household-note-text"}}, status=400)
+
+        with pytest.raises(DecisionHTTPError) as caught:
+            _client(echoing).decide(state, questions)
+
+        assert caught.value.status_code == 400
+        assert "my-household-note-text" not in str(caught.value)
+        assert "my-household-note-text" not in repr(caught.value.args)
 
     def test_a_timeout_is_a_decision_timeout_error(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -380,7 +392,8 @@ class TestCredentialsNeverLeak:
             _client(_respond_with(reflected, status=401)).decide(state, questions)
 
         assert caught.value.status_code == 401
-        assert "Invalid credential" in str(caught.value)
+        # Nothing of the body is kept, so a reflected key has nowhere to be.
+        assert "Invalid credential" not in str(caught.value)
         assert API_KEY not in _exception_chain_text(caught.value)
 
     def test_a_key_reflected_in_a_malformed_answer_is_scrubbed_from_the_exception_chain(self) -> None:

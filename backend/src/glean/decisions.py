@@ -66,10 +66,14 @@ class DecisionTimeoutError(DecisionError):
 
 
 class DecisionHTTPError(DecisionError):
-    """The decisions endpoint answered with a non-2xx status."""
+    """The decisions endpoint answered with a non-2xx status.
 
-    def __init__(self, status_code: int, body: str) -> None:
-        super().__init__(f"Decisions endpoint returned HTTP {status_code}: {body[:300]}")
+    The status only, never the body: callers log this with `exc_info`, and an error body may quote the state it was
+    sent, which is household text (a screened note, a profile field).
+    """
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"Decisions endpoint returned HTTP {status_code}")
         self.status_code = status_code
 
 
@@ -297,7 +301,7 @@ class DecisionClient:
         except httpx.TransportError as exc:
             raise DecisionError(f"Decisions request failed: {exc}") from exc
         if not response.is_success:
-            raise DecisionHTTPError(response.status_code, response.text)
+            raise DecisionHTTPError(response.status_code)
         try:
             body = response.json()
         except ValueError as exc:
