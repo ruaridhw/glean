@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 from glean.llm import Feature
 from glean.observability import logger, tracer
 from glean.profile.schemas import (
+    MAX_NOTES,
     MAX_TURNS,
     OPENERS,
     FavouriteMeal,
@@ -602,7 +603,8 @@ def _finished(
         spice_tolerance=merged.spice_tolerance,
         habits=_paragraph(merged.habits),
         household=_paragraph(merged.household),
-        notes=list(held.notes)[:_MAX_LIST_ENTRIES],
+        # The newest the profile may hold: notes are appended, so the oldest go first.
+        notes=list(held.notes)[-MAX_NOTES:],
         dismissed_notes=list(held.dismissed_notes),
         interviewed_at=now,
     )
