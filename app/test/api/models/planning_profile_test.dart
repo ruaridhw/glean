@@ -100,4 +100,24 @@ void main() {
       expect((notes.first['text'] as String).length, 200);
     },
   );
+
+  test('a protein target the backend does not know is left out, not sent', () {
+    // The backend's main_protein is an enum, so an unknown value would fail the whole Generate with a 422.
+    final Map<String, dynamic> json = planningProfileJson(
+      const HouseholdProfile(
+        proteinTargets: <ProteinTarget>[
+          ProteinTarget(protein: 'goat', minPerWeek: 1),
+          ProteinTarget(protein: 'fish', minPerWeek: 2),
+        ],
+      ),
+    )!;
+
+    expect(json['protein_targets'], <Map<String, dynamic>>[
+      <String, dynamic>{
+        'protein': 'fish',
+        'min_per_week': 2,
+        'max_per_week': null,
+      },
+    ]);
+  });
 }
