@@ -264,7 +264,7 @@ is no corpus recipe to show for the app's own plan entries.
 `profile_notes` (V15) is what the agent noticed about the household, for the app's "Glean noted" card;
 nothing reaches the profile unless the household taps Keep. `propose` may carry notes, and `finalise`
 keeps at most three (`meal_plan.profile_notes`): trimmed, at most 120 code points, no empties or
-case-insensitive repeats, and each resting on evidence this session holds -- at least two rated corpus cooks (shown to
+case-insensitive repeats, and each resting on evidence this session holds -- at least two distinct rated corpus recipes (shown to
 the model as `rated_meals`: the thumb and the corpus's own title, read on the server, never the app's), an answered question, or a swap note. The rest are
 dropped and counted in the `agent session finished` log. A degraded week carries none. A swap keeps the
 proposal's notes and may add its own (`propose_replacement.profile_notes`), resting only on that swap's screened
