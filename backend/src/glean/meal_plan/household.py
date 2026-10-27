@@ -443,10 +443,15 @@ def without_profile_text(request: MealPlanRequest) -> MealPlanRequest:
 
 
 def _free_text(profile: PlanningProfile | None) -> dict[str, Any]:
-    """The profile's free text as a prompt would show it, clipped; empty fields left out."""
+    """The profile's free text as a prompt would show it, clipped; empty fields and blank notes left out.
+
+    A note that is only whitespace says nothing, so it is neither shown nor screened (a blank text cannot pass the
+    screen, and would be counted as dropped).
+    """
     if profile is None:
         return {}
-    newest = sorted(profile.notes, key=lambda note: note.date, reverse=True)[:PROMPT_NOTES]
+    written = [note for note in profile.notes if note.text.strip()]
+    newest = sorted(written, key=lambda note: note.date, reverse=True)[:PROMPT_NOTES]
     fields: dict[str, Any] = {
         "favourite_meals": [meal.text for meal in profile.favourite_meals[:PROMPT_LIST_ENTRIES]],
         "loved_ingredients": list(profile.loved_ingredients[:PROMPT_LIST_ENTRIES]),

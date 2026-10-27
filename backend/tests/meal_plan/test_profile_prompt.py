@@ -215,6 +215,25 @@ def test_an_unchanged_profile_with_many_entries_costs_no_call_the_second_time() 
     assert len(decisions.notes) == first
 
 
+def test_a_blank_note_is_not_screened_and_not_counted_as_dropped() -> None:
+    decisions = Decisions()
+    profile = _profile(
+        notes=[
+            {"date": "2026-10-20", "text": "   ", "source": "feedback"},
+            {"date": "2026-10-19", "text": "Prefers rice midweek", "source": "feedback"},
+        ]
+    )
+
+    screened = screen_profile(profile, decision_client=decisions.client())
+    block = prompt_payload(profile, screened)
+
+    assert screened.dropped == 0
+    assert screened.outcome is ProfileTextOutcome.USED
+    assert all(note.strip() for note in decisions.notes)
+    assert block is not None
+    assert [note["text"] for note in block["notes"]] == ["Prefers rice midweek"]
+
+
 def test_the_log_counts_what_was_dropped_and_never_says_what(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO):
         screen_profile(_profile(habits=INJECTION), decision_client=Decisions().client())
