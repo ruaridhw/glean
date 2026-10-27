@@ -112,7 +112,11 @@ def test_an_accepted_profile_reaches_the_prompt_as_data_in_typed_fields() -> Non
     # ever reads a text longer than one field (the bar was calibrated on single notes).
     assert sorted(decisions.notes) == sorted(
         [
-            "Fish pie\nbasil\nmushrooms\nItalian\nThai",
+            "Fish pie",
+            "basil",
+            "mushrooms",
+            "Italian",
+            "Thai",
             HABITS,
             "Two adults and a toddler",
             "Prefers rice midweek",
@@ -147,7 +151,7 @@ def test_an_unchanged_profile_is_screened_once_and_an_edited_field_alone_again()
     again = screen_profile(_profile(), decision_client=client)
     edited = screen_profile(_profile(habits="We cook every night"), decision_client=client)
 
-    assert calls == 5
+    assert calls == 9
     assert first == again
     assert decisions.notes[calls:] == ["We cook every night"]
     assert edited.outcome is ProfileTextOutcome.USED
@@ -184,15 +188,31 @@ def test_one_injected_note_is_dropped_on_its_own() -> None:
     assert block["habits"] == HABITS
 
 
-def test_an_injected_list_entry_drops_the_short_lists_together() -> None:
-    profile = _profile(loved_ingredients=["basil", INJECTION[:60]])
+def test_an_injected_list_entry_is_dropped_on_its_own_and_the_rest_stay() -> None:
+    profile = _profile(loved_ingredients=["basil", INJECTION[:60], "lemon"])
 
-    block = prompt_payload(profile, screen_profile(profile, decision_client=Decisions().client()))
+    screened = screen_profile(profile, decision_client=Decisions().client())
+    block = prompt_payload(profile, screened)
 
+    assert screened.dropped == 1
     assert block is not None
-    for field in ("favourite_meals", "loved_ingredients", "disliked_ingredients", "cuisines_liked", "cuisines_avoided"):
-        assert field not in block
+    assert block["loved_ingredients"] == ["basil", "lemon"]
+    assert block["disliked_ingredients"] == ["mushrooms"]
+    assert block["favourite_meals"] == ["Fish pie"]
     assert block["habits"] == HABITS
+
+
+def test_an_unchanged_profile_with_many_entries_costs_no_call_the_second_time() -> None:
+    decisions = Decisions()
+    client = decisions.client()
+    profile = _profile(loved_ingredients=[f"item {n}" for n in range(10)])
+
+    screen_profile(profile, decision_client=client)
+    first = len(decisions.notes)
+    screen_profile(profile, decision_client=client)
+
+    assert first == 18  # 4 other list entries + 10 loved + habits + household + 2 notes
+    assert len(decisions.notes) == first
 
 
 def test_the_log_counts_what_was_dropped_and_never_says_what(caplog: pytest.LogCaptureFixture) -> None:
@@ -200,7 +220,7 @@ def test_the_log_counts_what_was_dropped_and_never_says_what(caplog: pytest.LogC
         screen_profile(_profile(habits=INJECTION), decision_client=Decisions().client())
 
     record = next(r for r in caplog.records if r.getMessage() == "the profile's free text was screened")
-    assert record.screened == 5  # type: ignore[attr-defined]
+    assert record.screened == 9  # type: ignore[attr-defined]
     assert record.dropped == 1  # type: ignore[attr-defined]
     assert "IGNORE" not in repr(record.__dict__)
     assert "batch cook" not in repr(record.__dict__)

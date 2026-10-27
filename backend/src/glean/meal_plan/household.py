@@ -352,17 +352,17 @@ class ScreenedProfile(BaseModel):
     dropped: int = 0
 
 
-# The short lists a prompt shows, screened together as one text: each entry is at most a few words, so one of them
-# alone says little to the screen, and together they are still shorter than one note.
+# The short lists a prompt shows. Each entry is screened as its own text, so one bad entry costs only itself; the
+# per-text cache keeps an unchanged entry at no call, and an entry repeated across lists is asked once.
 _LIST_FIELDS = ("favourite_meals", "loved_ingredients", "disliked_ingredients", "cuisines_liked", "cuisines_avoided")
 
 
 def screen_profile(profile: PlanningProfile | None, *, decision_client: DecisionClient | None) -> ScreenedProfile:
     """Screen each free-text field a prompt would show of *profile* on its own, and keep only the ones that pass.
 
-    The short lists are one text, and habits, household and each note are one text each, so every screen reads a text
-    no longer than one field: the length the screen's bar was calibrated on (backend AGENTS.md, "Free text a model
-    will read"). Each fails closed alone: a field that is rejected, or cannot be screened, is dropped and the rest
+    Every list entry, habits, household and each note is one text, so every screen reads a text no longer than one
+    field: the length the screen's bar was calibrated on (backend AGENTS.md, "Free text a model
+    will read"). Each fails closed alone: a text that is rejected, or cannot be screened, is dropped and the rest
     stay. The screens run in parallel, and the per-text cache keeps an unchanged profile at no decision calls. The
     log records counts only, never the text.
     """
@@ -391,18 +391,15 @@ def screen_profile(profile: PlanningProfile | None, *, decision_client: Decision
 
 def _screen_units(text: dict[str, Any]) -> list[tuple[str, str, Any]]:
     """Each text the screen reads, as (text, the field it fills, what to keep if it passes)."""
-    lists = {name: text[name] for name in _LIST_FIELDS if name in text}
-    units = [("\n".join(entry for entries in lists.values() for entry in entries), "lists", lists)] if lists else []
+    units = [(entry, name, entry) for name in _LIST_FIELDS for entry in text.get(name, [])]
     units += [(text[name], name, text[name]) for name in ("habits", "household") if name in text]
     units += [(note["text"], "notes", note) for note in text.get("notes", [])]
     return units
 
 
 def _keep(kept: dict[str, Any], field: str, value: Any) -> None:
-    if field == "lists":
-        kept.update(value)
-    elif field == "notes":
-        kept.setdefault("notes", []).append(value)
+    if field in _LIST_FIELDS or field == "notes":
+        kept.setdefault(field, []).append(value)
     else:
         kept[field] = value
 

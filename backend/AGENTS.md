@@ -429,7 +429,7 @@ merged back after the model call. The interview only guarantees that the text it
 screened. Any route that hands a profile to a model later — sessions, eligibility, the scorer, feedback
 notes — screens that free text first or sends only the enum fields (`spice_tolerance`, `protein_targets`).
 Planning does both (`meal_plan.household.screen_profile`): the enum fields always reach `household_profile`, and its
-free text field by field (the short lists together, habits, household, each note), each screened on its own through
+free text text by text (each list entry, habits, household, each note), each screened on its own through
 `screening.screen_many` and dropped alone if it fails.
 
 The 0.9 bar is not yet calibrated on real traffic. The question and bar are pinned by
