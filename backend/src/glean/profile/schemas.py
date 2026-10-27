@@ -178,6 +178,14 @@ class HouseholdProfile(BaseModel):
     notes: list[ProfileNote] = Field(
         default_factory=list, max_length=MAX_NOTES, description="The running memory of dated notes."
     )
+    dismissed_notes: list[_Text] = Field(
+        default_factory=list,
+        max_length=MAX_NOTES,
+        description=(
+            "Notes the planner offered that the household dismissed, newest last, so the planner does not offer "
+            "them again. Absent from a profile written before they were kept, which reads as none."
+        ),
+    )
     interviewed_at: dt.datetime | None = Field(default=None, description="When the interview finished, or null.")
 
 
