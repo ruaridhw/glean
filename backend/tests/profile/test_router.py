@@ -13,7 +13,7 @@ from glean.dependencies import get_decision_client
 from glean.llm import Feature
 from glean.main import app
 from glean.profile import service
-from glean.profile.schemas import InterviewTurn, ProfileDraft
+from glean.profile.schemas import MAX_NOTES, InterviewTurn, ProfileDraft
 from glean.screening import clear_screen_cache
 from tests.profile.conftest import (
     FakeDecisions,
@@ -469,6 +469,14 @@ def test_the_interview_keeps_the_notes_the_household_dismissed_and_never_sends_t
     assert "You like it very spicy." not in model.sent_text()
     assert done["profile"]["dismissed_notes"] == ["You like it very spicy."]
     assert [note["text"] for note in done["profile"]["notes"]] == ["prefers rice midweek"]
+
+
+def test_the_interview_keeps_every_note_the_profile_may_hold(client: TestClient, auth_headers: dict[str, str]) -> None:
+    notes = [{"date": "2026-10-19", "text": f"Note {index}", "source": "feedback"} for index in range(MAX_NOTES)]
+
+    done = _walk_skipped(client, auth_headers, {**PROFILE, "notes": notes})
+
+    assert [note["text"] for note in done["profile"]["notes"]] == [note["text"] for note in notes]
 
 
 def test_the_clients_draft_free_text_never_reaches_the_model_when_the_screen_is_down(
