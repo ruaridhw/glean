@@ -588,7 +588,14 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         if (swap != null &&
             swap.swapId == accepted.swapId &&
             swap.state != MealPlanSwapState.pending) {
-          _land(attempt, find, index, swap, noteDropped: accepted.noteDropped);
+          _land(
+            attempt,
+            find,
+            index,
+            swap,
+            noteDropped: accepted.noteDropped,
+            profileNotes: update.result?.profileNotes,
+          );
           return;
         }
         if (update.status == MealPlanSessionStatus.failed) {
@@ -686,6 +693,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     int index,
     MealPlanSessionSwap swap, {
     bool noteDropped = false,
+    List<ProposedProfileNote>? profileNotes,
   }) {
     final MealPlanResponse? result = state.result;
     final MealPlanRecipe? replacement = swap.replacement;
@@ -700,7 +708,14 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       return;
     }
     state = state._copy(
-      result: _withSuggestion(result, index, replacement),
+      // The proposal's notes, then any the swap's note added on the server. Undo leaves them, since they are
+      // about the household rather than the meal.
+      result: _withSuggestion(
+        result,
+        index,
+        replacement,
+        profileNotes: profileNotes,
+      ),
       replacedFrom: <int, ReplacedMeal>{
         ...state.replacedFrom,
         index: ReplacedMeal(
@@ -725,8 +740,9 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
   MealPlanResponse _withSuggestion(
     MealPlanResponse result,
     int index,
-    MealPlanRecipe meal,
-  ) => MealPlanResponse(
+    MealPlanRecipe meal, {
+    List<ProposedProfileNote>? profileNotes,
+  }) => MealPlanResponse(
     suggestions: <MealPlanRecipe>[
       for (int i = 0; i < result.suggestions.length; i++)
         i == index ? meal : result.suggestions[i],
@@ -734,7 +750,15 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     weekSummary: result.weekSummary,
     plannedAlternatives: result.plannedAlternatives,
     degraded: result.degraded,
-    profileNotes: result.profileNotes,
+    profileNotes: <ProposedProfileNote>[
+      ...result.profileNotes,
+      for (final ProposedProfileNote note
+          in profileNotes ?? const <ProposedProfileNote>[])
+        if (!result.profileNotes.any(
+          (ProposedProfileNote held) => held.text == note.text,
+        ))
+          note,
+    ],
   );
 
   /// Saves the whole review in one transaction: the new meals (with any local swaps applied) into the empty

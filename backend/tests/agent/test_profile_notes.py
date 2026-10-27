@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from glean.agent import graph, start
-from glean.agent.prompts import AGENT_SYSTEM_PROMPT
+from glean.agent.prompts import AGENT_SYSTEM_PROMPT, SWAP_SYSTEM_PROMPT
 from glean.sessions.models import HouseholdReply, SessionStatus, SwapMessage
 from tests.agent.test_graph import NOTE, Run, ScriptedModel, _request, ask, propose_first
 from tests.agent.test_swap import Model, a_free_candidate, replace_with
@@ -172,6 +172,79 @@ class TestSwap:
         after = run.record.result
         assert after.suggestions[1].external_id != before.suggestions[1].external_id
         assert after.profile_notes == before.profile_notes
+
+
+PRAWNS = {"text": "You like prawns.", "evidence": "swap_note"}
+
+
+def _swapped(
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    week_notes: tuple[dict[str, str], ...] = (RICE,),
+    swap_notes: tuple[dict[str, str], ...] = (PRAWNS,),
+    note: str | None = "prawns, please",
+    pick: Any = a_free_candidate,
+) -> tuple[Any, Any, Model]:
+    """Run a week that notes *week_notes*, then a swap whose replacement notes *swap_notes*."""
+    run = Run(tmp_path, monkeypatch)
+    assert start(run.session, run.deps(Model(plan=[noting(*week_notes)]))) is True  # ty: ignore[invalid-argument-type]
+    before = run.record.result
+    week = [meal.external_id or "" for meal in before.suggestions]
+    run.sessions.enqueue_swap(
+        "user-a", "sess-1", SwapMessage(type="swap", slot=week[1], note=note, week=week), note_rejection=None
+    )
+    replace = replace_with(pick)
+
+    def answer(context: dict[str, Any]) -> dict[str, Any]:
+        step = replace(context)  # ty: ignore[call-non-callable]
+        step["action"]["profile_notes"] = list(swap_notes)
+        return step
+
+    model = Model(swap=[answer])
+    start(run.session, run.deps(model))  # ty: ignore[invalid-argument-type]
+    return before, run.record.result, model
+
+
+class TestSwapNotes:
+    def test_a_swap_adds_a_note_resting_on_its_own_note(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        before, after, _ = _swapped(tmp_path, monkeypatch)
+
+        assert after.suggestions[1].external_id != before.suggestions[1].external_id
+        assert texts(after.profile_notes) == [RICE["text"], PRAWNS["text"]]
+
+    def test_a_swap_without_a_note_adds_none(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        _, after, _ = _swapped(tmp_path, monkeypatch, note=None)
+
+        assert texts(after.profile_notes) == [RICE["text"]]
+
+    def test_only_the_swap_note_is_evidence_in_a_swap(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The week's run had a rated cook, but a swap's own notes may rest only on the swap's note.
+        _, after, _ = _swapped(tmp_path, monkeypatch, swap_notes=({**PRAWNS, "evidence": "rating"},))
+
+        assert texts(after.profile_notes) == [RICE["text"]]
+
+    def test_merged_notes_are_deduplicated_and_still_at_most_three(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        week = (RICE, {**RICE, "text": "Cooks for four."})
+        swap = ({**PRAWNS, "text": RICE["text"].upper()}, PRAWNS, {**PRAWNS, "text": "Likes it lighter."})
+
+        _, after, _ = _swapped(tmp_path, monkeypatch, week_notes=week, swap_notes=swap)
+
+        assert texts(after.profile_notes) == [RICE["text"], "Cooks for four.", PRAWNS["text"]]
+
+    def test_a_swap_that_falls_back_adds_no_notes(self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        def invented(_context: dict[str, Any]) -> dict[str, str]:
+            return {"external_id": "rec_invented", "title": "Nope"}
+
+        _, after, _ = _swapped(tmp_path, monkeypatch, pick=invented)
+
+        assert texts(after.profile_notes) == [RICE["text"]]
+
+    def test_the_swap_rules_ask_for_notes_only_from_the_swap_note(self) -> None:
+        assert "profile_notes" in SWAP_SYSTEM_PROMPT
+        assert "swap_note" in SWAP_SYSTEM_PROMPT.split("profile_notes", 1)[1]
 
 
 class TestPrompt:

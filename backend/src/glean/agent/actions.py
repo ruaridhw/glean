@@ -211,6 +211,11 @@ class ProposeReplacement(BaseModel):
 
     kind: Literal["propose_replacement"]
     replacement: CorpusMealPlanAlternative
+    # A swap note can show a durable preference too; only notes resting on it are kept (`swap_finalise`).
+    profile_notes: list[ProfileNote] = Field(
+        default_factory=list,
+        description="Durable facts the swap note shows about the household, evidence swap_note; usually none",
+    )
 
 
 type SwapAction = Annotated[CallTool | ProposeReplacement, Field(discriminator="kind")]

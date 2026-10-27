@@ -357,6 +357,38 @@ void main() {
     expect(find.text(note), findsOneWidget);
   });
 
+  gleanWidgetTest('a note the swap adds joins the "Glean noted" card', (
+    tester,
+  ) async {
+    const String kept = "The kids don't like spicy food.";
+    const String added = 'You like prawns.';
+    final backend = SwapBackend(
+      notes: const <String>[kept],
+      swapPolls: <Future<http.Response> Function()>[
+        () async => _poll(
+          status: 'done',
+          result: _proposal(notes: const <String>[kept, added]),
+          swap: _swap('done', replacement: _replacement()),
+        ),
+      ],
+    );
+    final h = _harness(backend);
+    addTearDown(h.dispose);
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _openProposal(tester, h);
+    expect(find.text(added), findsNothing);
+    await _findAnother(tester, 1, note: 'prawns, please');
+
+    expect(
+      _inCard(1, find.text('Garlic & chilli prawn linguine')),
+      findsOneWidget,
+    );
+    expect(find.text(kept), findsOneWidget);
+    expect(find.text(added), findsOneWidget);
+  });
+
   gleanWidgetTest(
     'the replacement lands in the same slot with Undo swap, and Undo puts the '
     'meal back',
