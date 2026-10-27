@@ -16,6 +16,7 @@ import httpx
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient, DecisionModel
+from glean.meal_plan.dietary_decisions import CALIBRATED_DIETARY
 from glean.meal_plan.dietary_evaluation import (
     LabelledSample,
     evaluate_dietary_model,
@@ -121,6 +122,50 @@ def test_a_missed_violation_is_reported_with_its_probability_and_label() -> None
         0.1,
         False,
     )
+
+
+def test_the_evidence_keeps_every_answer_not_only_the_mistakes() -> None:
+    api = FakeDecisionApi(
+        {
+            "Pesto Pasta": {"tree-nut-free": 0.9, "peanut-free": 0.01},
+            "Tomato Pasta": {"tree-nut-free": 0.4, "peanut-free": 0.01},
+        }
+    )
+
+    evidence = evaluate_dietary_model(api.client(), SAMPLES, flags=("tree-nut-free", "peanut-free")).evidence()
+
+    json.dumps(evidence)  # what the CLI saves must serialise without loss
+    rows = {(row["sample_id"], row["flag"]): row for row in evidence["scores"]}
+    assert rows[("sample-nutty", "tree-nut-free")] == {
+        "sample_id": "sample-nutty",
+        "flag": "tree-nut-free",
+        "violates": True,
+        "probability": 0.9,
+        "threshold": 0.3,
+        "excluded": True,
+    }
+    assert rows[("sample-plain", "tree-nut-free")]["violates"] is False
+    assert rows[("sample-plain", "tree-nut-free")]["probability"] == 0.4
+    assert evidence["requested_model"] == CANDIDATE.request
+    assert evidence["served_models"] == {SERVED: 2}
+    # The reference is the calibrated model, not the candidate being measured.
+    assert evidence["reference_calibration"]["model"]["request"] == CALIBRATED_DIETARY.model.request
+    assert evidence["reference_calibration"]["thresholds"] == {"tree-nut-free": 0.3, "peanut-free": 0.3}
+    assert (evidence["samples_scored"], evidence["requests_failed"]) == (2, 0)
+    assert evidence["usage"] == {"input_tokens": 20, "output_tokens": 4, "cost": 0.00002}
+
+
+def test_the_evidence_keeps_requests_that_failed() -> None:
+    api = FakeDecisionApi(
+        {"Pesto Pasta": {}, "Tomato Pasta": {"tree-nut-free": 0.01}},
+        fail_when=lambda body: body["state"]["recipe_title"] == "Pesto Pasta",
+    )
+
+    evidence = evaluate_dietary_model(api.client(), SAMPLES, flags=("tree-nut-free",)).evidence()
+
+    assert len(evidence["failures"]) == 1
+    assert "sample-nutty" in evidence["failures"][0]
+    assert evidence["requests_failed"] == 1
 
 
 def test_a_request_failure_is_reported_and_the_other_samples_are_still_scored() -> None:

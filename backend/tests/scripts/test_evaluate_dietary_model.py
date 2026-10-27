@@ -89,6 +89,51 @@ def test_the_run_writes_one_local_report_naming_the_model_and_the_reference_cuto
     assert sorted(path.name for path in tmp_path.iterdir()) == ["report.txt", "samples.json"]
 
 
+def test_the_run_saves_the_full_evidence_as_json_beside_the_text_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    output = tmp_path / "report.txt"
+    evidence_path = tmp_path / "evidence.json"
+
+    code = evaluate_dietary_model.main(
+        [
+            "--model",
+            "baseten/mammoth-1:free",
+            "--served-base",
+            "baseten/mammoth-1",
+            "--fixture",
+            str(_fixture(tmp_path)),
+            "--output",
+            str(output),
+            "--json-output",
+            str(evidence_path),
+        ],
+        client=_decision_api(),
+    )
+
+    evidence = json.loads(evidence_path.read_text())
+    rows = {(row["sample_id"], row["flag"]): row for row in evidence["scores"]}
+    assert code == 0
+    assert rows[("sample-nutty", "tree-nut-free")] == {
+        "sample_id": "sample-nutty",
+        "flag": "tree-nut-free",
+        "violates": True,
+        "probability": 0.9,
+        "threshold": 0.3,
+        "excluded": True,
+    }
+    assert rows[("sample-plain", "tree-nut-free")]["probability"] == 0.01
+    assert evidence["served_models"] == {SERVED: 2}
+    assert evidence["usage"] == {"input_tokens": 2, "output_tokens": 2, "cost": 0.0}
+    assert "not a calibration" in output.read_text().casefold()
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "evidence.json",
+        "report.txt",
+        "samples.json",
+    ]
+    capsys.readouterr()
+
+
 def test_it_refuses_options_that_could_point_at_the_live_corpus(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as caught:
         evaluate_dietary_model.main(

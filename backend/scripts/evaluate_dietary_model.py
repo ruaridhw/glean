@@ -8,7 +8,12 @@ and its reference cutoffs are not a calibration of the model it measures.
     uv run python scripts/evaluate_dietary_model.py --model baseten/mammoth-1:free \\
         --served-base baseten/mammoth-1 \\
         --fixture ../tests/fixtures/decisions/dietary_sample.json \\
-        --output /tmp/dietary-evaluation.txt
+        --output /tmp/dietary-evaluation.txt \\
+        --json-output /tmp/dietary-evaluation.json
+
+The text report is a summary; the JSON keeps every label and probability, so the run can be re-scored at
+other cutoffs later without asking the model again. Both are written where `--output`/`--json-output` say
+and nowhere else.
 
 Exits 1 if any sample could not be answered, so an incomplete run never reads as a pass.
 """
@@ -16,6 +21,7 @@ Exits 1 if any sample could not be answered, so an incomplete run never reads as
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -35,6 +41,9 @@ def main(argv: list[str] | None = None, *, client: DecisionClient | None = None)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered + "\n")
+    if args.json_output:
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(json.dumps(report.evidence(), indent=2) + "\n")
     return 1 if report.failures else 0
 
 
@@ -61,7 +70,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         type=Path,
         help='Labelled sample file shaped {"rows": [...]}. Repeatable.',
     )
-    parser.add_argument("--output", type=Path, help="Write the report here as well as printing it.")
+    parser.add_argument("--output", type=Path, help="Write the text report here as well as printing it.")
+    parser.add_argument(
+        "--json-output",
+        type=Path,
+        help="Write every score, label and probability from the run here, for re-scoring later.",
+    )
     parser.add_argument("--timeout", type=float, default=60.0, help="Seconds to wait for each answer.")
     return parser.parse_args(argv)
 

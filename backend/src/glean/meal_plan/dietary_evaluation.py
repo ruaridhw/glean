@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -65,6 +65,7 @@ class SampleScore:
     flag: str
     violates: bool
     probability: float
+    threshold: float
     excluded: bool
 
 
@@ -95,6 +96,41 @@ class EvaluationReport:
     usage: Usage
     flags: tuple[str, ...]
     calibration: DietaryCalibration
+
+    def evidence(self) -> dict[str, Any]:
+        """Everything the run saw, as JSON: every label and probability, not only the mistakes.
+
+        Saved evidence can be re-scored at other cutoffs later without asking the model again.
+        """
+        return {
+            "requested_model": self.requested_model,
+            "served_models": dict(self.served_models),
+            "samples_scored": self.samples,
+            "requests_failed": len(self.failures),
+            "usage": {
+                "input_tokens": self.usage.input_tokens,
+                "output_tokens": self.usage.output_tokens,
+                "cost": self.usage.cost,
+            },
+            "reference_calibration": {
+                "model": {"request": self.calibration.model.request, "served": list(self.calibration.model.served)},
+                "thresholds": dict(self.calibration.thresholds),
+                "default_threshold": self.calibration.default_threshold,
+                "evidence": self.calibration.evidence,
+            },
+            "failures": list(self.failures),
+            "scores": [
+                {
+                    "sample_id": score.sample_id,
+                    "flag": score.flag,
+                    "violates": score.violates,
+                    "probability": score.probability,
+                    "threshold": score.threshold,
+                    "excluded": score.excluded,
+                }
+                for score in self.scores
+            ],
+        }
 
     def summaries(self) -> dict[str, FlagSummary]:
         return {
@@ -171,13 +207,15 @@ def evaluate_dietary_model(
             if violates is None:
                 continue
             probability = decision.noul(flag).noul
+            threshold = calibration.threshold_for(flag)
             scores.append(
                 SampleScore(
                     sample_id=sample.id,
                     flag=flag,
                     violates=violates,
                     probability=probability,
-                    excluded=probability >= calibration.threshold_for(flag),
+                    threshold=threshold,
+                    excluded=probability >= threshold,
                 )
             )
     return EvaluationReport(
