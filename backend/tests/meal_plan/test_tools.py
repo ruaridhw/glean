@@ -171,6 +171,32 @@ def test_a_liked_cuisine_or_a_loved_ingredient_earns_one_and_both_together_still
     assert score(["a"], context(candidate("a"))).points(Term.LOVED_INGREDIENT) == 0.0
 
 
+def test_a_protein_minimum_is_not_charged_as_a_repeat_up_to_its_minimum() -> None:
+    # "Fish twice" must be reachable: the second fish is what the household asked for, so the soft one-of-each rule
+    # charges only the fish beyond the minimum. Without this the -5 repeat outbid the -4 miss and no week met it.
+    fish = [candidate(f"f{n}", main_protein=MainProtein.FISH) for n in range(3)]
+    ctx = context(*fish, protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=2),))
+
+    two = score(["f0", "f1"], ctx)
+    three = score(["f0", "f1", "f2"], ctx)
+
+    assert two.points(Term.REPEAT_MAIN_PROTEIN) == 0.0
+    assert two.points(Term.PROTEIN_TARGET) == 0.0
+    assert three.points(Term.REPEAT_MAIN_PROTEIN) == -5.0
+    # Without a target the second fish is a repeat as before.
+    assert score(["f0", "f1"], context(*fish)).points(Term.REPEAT_MAIN_PROTEIN) == -5.0
+
+
+def test_a_week_meeting_a_protein_minimum_beats_one_that_misses_it() -> None:
+    fish = [candidate(f"f{n}", main_protein=MainProtein.FISH) for n in range(2)]
+    others = [candidate("beef", main_protein=MainProtein.BEEF), candidate("pork", main_protein=MainProtein.PORK)]
+    ctx = context(*fish, *others, protein_targets=(ProteinTarget(MainProtein.FISH, min_per_week=2),))
+
+    best = create_candidate_meal_plans(["f0", "f1", "beef", "pork"], 3, ctx)[0]
+
+    assert {"f0", "f1"} <= set(best.recipe_ids)
+
+
 def test_a_protein_target_for_no_protein_or_an_unknown_one_never_counts() -> None:
     # "none" and "unsure" are not proteins a week can have more or less of, so a target on one costs nothing.
     recipes = (candidate("a", main_protein=MainProtein.NONE), candidate("b", main_protein=MainProtein.UNSURE))

@@ -281,7 +281,9 @@ class ScorerWeights:
     # reference, not the week's own median, so a plan can no longer make itself look light by choosing light
     # recipes, which the V6 eval saw it do.
     lighter_reference_kcal: int = 672
-    # "Protein targets from the profile": -4 per miss, such as fish at least once.
+    # "Protein targets from the profile": -4 per miss, such as fish at least once. A protein's repeats up to its own
+    # minimum are not charged by `repeat_main_protein` (the V13b eval: at -5 a repeat outbid the -4 miss, so "fish
+    # twice" was met by no week).
     protein_target_miss: float = -4.0
     # A plan-level row of the owner's adding (decision 2026-10-25), in the shape of the protein-target one: -4
     # per urgent pantry item (expiring within V4's three days) that a candidate recipe uses and the week does
@@ -634,6 +636,13 @@ class _Scorer:
         self._pool_urgent_items = frozenset(
             item for items in ctx.urgent_item_uses.values() for item in items
         ) - frozenset(ctx.urgent_items_already_used)
+        # A protein the profile wants at least N times may appear N times before the repeat row charges it: the
+        # household asked for the second fish, so the soft one-of-each rule must not outbid its own target.
+        self._protein_allowance = {
+            target.protein.value: target.min_per_week
+            for target in ctx.protein_targets
+            if target.min_per_week and target.protein not in _UNCOUNTED_PROTEINS
+        }
         self._recipes: dict[str, RecipeScore] = {}
         self._totals: dict[str, float] = {}
         self._values: dict[str, tuple[str, str, str, str]] = {}
@@ -738,12 +747,17 @@ class _Scorer:
     def penalties(self, recipe_ids: Sequence[str]) -> tuple[PlanPenalty, ...]:
         """What the plan as a whole loses: repeats, the lighter chip's calories term, and protein targets."""
         penalties = [
-            PlanPenalty(term=term, points=weight * (len(ids) - 1), recipe_ids=tuple(ids[1:]), detail=value)
+            PlanPenalty(
+                term=term,
+                points=weight * (len(ids) - free),
+                recipe_ids=tuple(ids[free:]),
+                detail=value,
+            )
             for term, weight, group in zip(
                 _REPEAT_TERMS, self._repeat_weights, self._occurrences(recipe_ids), strict=True
             )
             for value, ids in group.items()
-            if len(ids) > 1
+            if len(ids) > (free := self._free_occurrences(term, value))
         ]
         above, detail = self._lighter_offenders(recipe_ids)
         if above:
@@ -765,6 +779,12 @@ class _Scorer:
             for target, count, misses in self._target_misses(recipe_ids)
         )
         return tuple(penalties)
+
+    def _free_occurrences(self, term: Term, value: str) -> int:
+        """How many times one value may appear before its repeat row charges: once, or a protein's minimum."""
+        if term is Term.REPEAT_MAIN_PROTEIN:
+            return max(1, self._protein_allowance.get(value, 1))
+        return 1
 
     def _occurrences(self, recipe_ids: Sequence[str]) -> list[dict[str, list[str]]]:
         """One value-to-recipes map per repeat term, in plan order, so "the extra ones" are stable."""
@@ -844,8 +864,15 @@ class _Scorer:
     def _penalty_points(self, recipe_ids: Sequence[str]) -> float:
         """The same penalties `penalties` describes, as one number: the search's hot path builds no objects."""
         points = sum(
-            weight * sum(len(ids) - 1 for ids in group.values() if len(ids) > 1)
-            for weight, group in zip(self._repeat_weights, self._occurrences(recipe_ids), strict=True)
+            weight
+            * sum(
+                len(ids) - free
+                for value, ids in group.items()
+                if len(ids) > (free := self._free_occurrences(term, value))
+            )
+            for term, weight, group in zip(
+                _REPEAT_TERMS, self._repeat_weights, self._occurrences(recipe_ids), strict=True
+            )
         )
         above, _detail = self._lighter_offenders(recipe_ids)
         points += self._weights.lighter * len(above)
