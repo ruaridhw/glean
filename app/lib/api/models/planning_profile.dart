@@ -17,6 +17,23 @@ const int maxPlanningParagraphChars = 500;
 const int maxPlanningNotes = 20;
 const int maxPlanningNoteChars = 200;
 
+/// The backend's `main_protein` values (its `MainProtein` enum). A protein target naming anything else is left
+/// out rather than sent, because the backend would refuse the whole Generate over it.
+const Set<String> planningProteins = <String>{
+  'chicken',
+  'turkey_or_duck',
+  'beef',
+  'pork',
+  'lamb',
+  'fish',
+  'seafood',
+  'beans_and_pulses',
+  'tofu_or_plant_protein',
+  'vegetarian_other',
+  'mixed',
+  'none',
+};
+
 /// [profile] bounded for the wire, or `null` when there is no profile or nothing in it (the interview was skipped
 /// and nothing was added since): the planner then plans as it did before profiles existed.
 Map<String, dynamic>? planningProfileJson(HouseholdProfile? profile) {
@@ -39,9 +56,13 @@ Map<String, dynamic>? planningProfileJson(HouseholdProfile? profile) {
     'cuisines_liked': _list(profile.cuisinesLiked),
     'cuisines_avoided': _list(profile.cuisinesAvoided),
     'protein_targets': <Map<String, dynamic>>[
-      for (final ProteinTarget target in profile.proteinTargets.take(
-        maxPlanningListEntries,
-      ))
+      for (final ProteinTarget target
+          in profile.proteinTargets
+              .where(
+                (ProteinTarget target) =>
+                    planningProteins.contains(target.protein),
+              )
+              .take(maxPlanningListEntries))
         target.toJson(),
     ],
     'spice_tolerance': profile.spiceTolerance?.name,
