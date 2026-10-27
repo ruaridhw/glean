@@ -16,6 +16,8 @@ class ProfileList<T> {
     this.fromText,
     this.identity,
     this.alreadyThere,
+    this.removed,
+    this.restored,
   });
 
   /// The heading the Profile screen shows above the list.
@@ -38,6 +40,11 @@ class ProfileList<T> {
   /// What to say when [item] cannot go in because the list already has one like it. `null` gives
   /// "<label> is already there".
   final String Function(T item)? alreadyThere;
+
+  /// What else changes when [item] is removed, and what an Undo puts back: a deleted note is remembered as
+  /// dismissed, so Glean does not offer it again, and its Undo forgets that. `null` changes nothing else.
+  final HouseholdProfile Function(HouseholdProfile profile, T item)? removed;
+  final HouseholdProfile Function(HouseholdProfile profile, T item)? restored;
 
   String _identityOf(T item) => _key(identity?.call(item) ?? label(item));
 
@@ -106,8 +113,14 @@ class ProfileList<T> {
     return replaceAt(profile, index, fromText!(trimmed, read(profile)[index]));
   }
 
-  HouseholdProfile removeAt(HouseholdProfile profile, int index) =>
-      write(profile, <T>[...read(profile)]..removeAt(index));
+  HouseholdProfile removeAt(HouseholdProfile profile, int index) {
+    final T item = read(profile)[index];
+    final HouseholdProfile next = write(
+      profile,
+      <T>[...read(profile)]..removeAt(index),
+    );
+    return removed?.call(next, item) ?? next;
+  }
 
   /// Puts [item] back at [index], or at the end when the list has since become shorter than that. Skipped when
   /// the same item (by [identity]) has been added meanwhile, so Undo never makes a second chip or a second
@@ -115,7 +128,11 @@ class ProfileList<T> {
   HouseholdProfile insertAt(HouseholdProfile profile, int index, T item) {
     if (isTakenBy(profile, item)) return profile;
     final List<T> items = <T>[...read(profile)];
-    return write(profile, items..insert(index.clamp(0, items.length), item));
+    final HouseholdProfile next = write(
+      profile,
+      items..insert(index.clamp(0, items.length), item),
+    );
+    return restored?.call(next, item) ?? next;
   }
 }
 
@@ -173,6 +190,8 @@ abstract final class ProfileLists {
     read: _notes,
     write: _writeNotes,
     label: _noteLabel,
+    removed: _dismissNote,
+    restored: _undismissNote,
   );
 
   /// The plain-text lists, edited as chips.
@@ -229,6 +248,10 @@ HouseholdProfile _writeProteinTargets(
 List<ProfileNote> _notes(HouseholdProfile p) => p.notes;
 HouseholdProfile _writeNotes(HouseholdProfile p, List<ProfileNote> items) =>
     p.copyWith(notes: items);
+HouseholdProfile _dismissNote(HouseholdProfile p, ProfileNote note) =>
+    p.withDismissedNote(note.text);
+HouseholdProfile _undismissNote(HouseholdProfile p, ProfileNote note) =>
+    p.withoutDismissedNote(note.text);
 String _noteLabel(ProfileNote note) => '${note.date} ${note.text}';
 String _same(String value) => value;
 String _text(String text, String? _) => text;

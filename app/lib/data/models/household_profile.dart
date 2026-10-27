@@ -213,6 +213,17 @@ class HouseholdProfile {
     return copyWith(notes: kept);
   }
 
+  /// A copy that no longer remembers [text] as dismissed, compared as [knowsNote] compares.
+  HouseholdProfile withoutDismissedNote(String text) {
+    final String key = noteKey(text);
+    return _with(
+      dismissedNotes: <String>[
+        for (final String note in dismissedNotes)
+          if (noteKey(note) != key) note,
+      ],
+    );
+  }
+
   /// A copy that remembers [text] as dismissed: once, newest last, and only the newest [maxDismissedNotes].
   HouseholdProfile withDismissedNote(String text) {
     final String key = noteKey(text);
