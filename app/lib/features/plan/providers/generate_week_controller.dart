@@ -750,6 +750,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
     weekSummary: result.weekSummary,
     plannedAlternatives: result.plannedAlternatives,
     degraded: result.degraded,
+    feedbackNote: result.feedbackNote,
     profileNotes: <ProposedProfileNote>[
       ...result.profileNotes,
       for (final ProposedProfileNote note
