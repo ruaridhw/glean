@@ -71,7 +71,7 @@ from glean.llm import Feature
 from glean.meal_plan import pipeline, tools
 from glean.meal_plan.feedback import ScreenedFeedback
 from glean.meal_plan.household import ScreenedProfile
-from glean.meal_plan.profile_notes import SessionEvidence, kept_notes
+from glean.meal_plan.profile_notes import SessionEvidence, kept_notes, known_notes
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanResponse,
@@ -410,6 +410,7 @@ class _Nodes:
                 notes = kept_notes(
                     [ProfileNote.model_validate(note) for note in state.get("profile_notes") or []],
                     _session_evidence(state),
+                    known=known_notes(MealPlanRequest.model_validate(state["request"])),
                 )
                 result = result.model_copy(update={"profile_notes": notes[0]})
         if result is None:

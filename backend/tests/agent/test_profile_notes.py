@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from glean.agent import start
+from glean.agent import graph, start
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT
 from glean.sessions.models import HouseholdReply, SessionStatus, SwapMessage
 from tests.agent.test_graph import NOTE, Run, ScriptedModel, _request, ask, propose_first
@@ -126,6 +126,15 @@ class TestEvidence:
         run.start(ScriptedModel(noting(*notes)))
 
         assert texts(run.record.result.profile_notes) == [RICE["text"], "Note 0", "Note 1"]
+
+
+class TestKnown:
+    def test_a_note_the_profile_already_knows_is_dropped(self, run: Run, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(graph, "known_notes", lambda _request: [RICE["text"].lower()])
+
+        run.start(ScriptedModel(noting(RICE, KIDS | {"evidence": "rating"})))
+
+        assert texts(run.record.result.profile_notes) == [KIDS["text"]]
 
 
 class TestNoNotes:
