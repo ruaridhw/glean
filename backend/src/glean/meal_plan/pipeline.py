@@ -453,7 +453,8 @@ def _profile_scoring(request: MealPlanRequest) -> balance.ProfileScoring:
         protein_targets=[
             balance.ProfileTarget(
                 protein=MainProtein(target.protein.value),
-                min_per_week=target.min_per_week,
+                # A week of N dinners can hold at most N of anything, so a larger minimum is the week itself.
+                min_per_week=None if target.min_per_week is None else min(target.min_per_week, request.meals_per_week),
                 max_per_week=target.max_per_week,
             )
             for target in profile.protein_targets
