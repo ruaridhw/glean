@@ -540,6 +540,7 @@ def tool_context(
     """
     summaries = corpus.search(per_page=_ALL_RECIPES)[0]
     attributes = recipe_attributes(corpus, summaries)
+    scoring = _profile_scoring(request)
 
     def search(text: str) -> set[str]:
         return {summary.external_id for summary in corpus.search(q=text, per_page=_ALL_RECIPES)[0]}
@@ -569,6 +570,10 @@ def tool_context(
         now=now or datetime.now(UTC),
         dietary_excluded_ids=dietary_excluded_ids(corpus, summaries, request.dietary_flags),
         disliked_ingredients=_disliked_ingredients(request),
+        favourite_meals=tuple(scoring.favourites),
+        loved_ingredients=tuple(scoring.loved_ingredients),
+        liked_cuisines=frozenset(scoring.liked_cuisines),
+        avoided_cuisines=frozenset(scoring.avoided_cuisines),
         planned_ids=frozenset(request.exclude_external_ids),
         max_active_mins=request.max_active_time_mins,
         cooked=tuple(_floor_history(request, unscreened(request.human_feedback), now=now or datetime.now(UTC))[0]),

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from glean.meal_plan.tools import (
+    PANTRY_FIT_TOP,
     CandidateRecipe,
     PlanGap,
     PlanScore,
@@ -38,9 +39,6 @@ if TYPE_CHECKING:
     from glean.meal_plan.eligibility import RecipeHistory
     from glean.recipes.stored import StoredRecipe
 
-# The pantry fit row is "scaled so the top recipe is about +3" (spec §6.2): the offered set's strongest
-# pantry match is worth +3, and every other candidate scales below it.
-PANTRY_FIT_TOP = 3.0
 # How many weeks the model is offered to choose between. Two is the V6 starting point (spec §6.2).
 CANDIDATE_WEEKS = 2
 

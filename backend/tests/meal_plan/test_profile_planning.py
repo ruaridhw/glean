@@ -177,3 +177,12 @@ def test_the_profiles_cuisines_and_protein_targets_ride_the_prepared_plan(tmp_pa
     assert ctx.liked_cuisines == frozenset({Cuisine.ITALIAN})
     assert ctx.avoided_cuisines == frozenset({Cuisine.THAI})
     assert [(target.protein, target.min_per_week) for target in ctx.protein_targets] == [(MainProtein.FISH, 1)]
+
+
+def test_the_agents_search_ranks_a_favourite_first(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    # Every odd dish uses the urgent olives, so they tie on pantry fit; the favourite's +2 decides among them.
+    request = _request({"favourite_meals": [{"text": "Synthetic dish 31"}]})
+    ctx = pipeline.tool_context(request, corpus=corpus, now=NOW)
+
+    assert get_eligible_recipes(RecipeFilter(), ctx).recipes[0].recipe_id == "rec_31"

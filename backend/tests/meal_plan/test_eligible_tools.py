@@ -295,3 +295,46 @@ class TestGetRecipes:
 
         assert card.ingredients == ("200 g rice",)
         assert card.method == ("Cook the rice.",)
+
+
+class TestProfileRanking:
+    """Spec 6.2 step 5: the rest are ranked by pantry fit and profile affinity, on the scorer's own scale."""
+
+    @staticmethod
+    def _corpus() -> list[CorpusRecipe]:
+        return [
+            recipe("plain", ingredients=("cod",), cuisine="british"),
+            recipe("pantry", ingredients=("kale", "cod"), cuisine="british"),
+            recipe("thai", ingredients=("kale", "rice"), cuisine="thai"),
+            recipe("favourite", ingredients=("lamb",), cuisine="british"),
+            recipe("loved", ingredients=("basil", "pasta"), cuisine="british"),
+        ]
+
+    def test_without_a_profile_the_order_is_pantry_fit_as_before(self) -> None:
+        ctx = context(self._corpus(), pantry=(PantryItem(name="kale", urgency_score=1.0),))
+
+        ranked = ids(get_eligible_recipes(RecipeFilter(), ctx))
+
+        assert ranked[:2] == ["pantry", "thai"] or ranked[:2] == ["thai", "pantry"]
+
+    def test_a_favourite_and_a_loved_ingredient_rise_and_an_avoided_cuisine_falls(self) -> None:
+        ctx = context(
+            self._corpus(),
+            pantry=(PantryItem(name="kale", urgency_score=1.0),),
+            favourite_meals=(("Lamb stew", "favourite"),),
+            loved_ingredients=("basil",),
+            avoided_cuisines=frozenset({Cuisine.THAI}),
+        )
+
+        ranked = ids(get_eligible_recipes(RecipeFilter(), ctx))
+
+        # pantry +3; favourite +2; loved +1; thai +3 - 2 = +1; plain 0.
+        assert ranked[0] == "pantry"
+        assert ranked[1] == "favourite"
+        assert set(ranked[2:4]) == {"loved", "thai"}
+        assert ranked[-1] == "plain"
+
+    def test_a_liked_cuisine_ranks_like_a_loved_ingredient(self) -> None:
+        ctx = context(self._corpus(), liked_cuisines=frozenset({Cuisine.THAI}))
+
+        assert ids(get_eligible_recipes(RecipeFilter(), ctx))[0] == "thai"

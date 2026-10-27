@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Literal
 from glean.meal_plan.candidates import GUARANTEE_MAX, PantryItem, mentions_item, near_duplicate_ingredients
 from glean.meal_plan.eligibility import apply_recency_floor
 from glean.meal_plan.eligibility import recency_penalty as _recency_penalty
-from glean.meal_plan.household import disliked_recipe_ids
+from glean.meal_plan.household import disliked_recipe_ids, favourite_ids, loved_in
 from glean.recipes.attributes import (
     UNSURE,
     ActiveTimeBucket,
@@ -52,6 +52,7 @@ __all__ = [
     "LIGHTER_CHIP",
     "MAX_FILTER_LIMIT",
     "NARROWING_CHIPS",
+    "PANTRY_FIT_TOP",
     "CandidateRecipe",
     "CorpusRecipe",
     "DuplicateRecipeIds",
@@ -132,6 +133,9 @@ SIX_WEEKS_DAYS = 42
 NINE_WEEKS_DAYS = 63
 TWELVE_WEEKS_DAYS = 84
 
+# The pantry fit row is "scaled so the top recipe is about +3" (spec 6.2): the set's strongest match is worth this
+# much, in the scorer's weeks (`balance.pantry_fit_scale`) and in this module's ranking alike.
+PANTRY_FIT_TOP = 3.0
 # The filter's `limit` (spec 6.2): one call returns at most this many recipes, and asking for more is refused.
 MAX_FILTER_LIMIT = 120
 # A summary card's key ingredients: as many as the model's candidate list shows (`pipeline`).
@@ -1029,6 +1033,12 @@ class EligibilityContext:
     seed: int = 0
     text_search: Callable[[str], Collection[str]] | None = None
     load_full: Callable[[str], FullRecipe | None] | None = None
+    # The profile's ranking inputs (spec 6.2 step 5): favourites as (text, matched recipe id), loved ingredients, and
+    # liked and avoided cuisines as V5's enum. They rank; only `disliked_ingredients` excludes.
+    favourite_meals: tuple[tuple[str, str | None], ...] = ()
+    loved_ingredients: tuple[str, ...] = ()
+    liked_cuisines: frozenset[Cuisine] = frozenset()
+    avoided_cuisines: frozenset[Cuisine] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1124,8 +1134,9 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
     3. The agent's filter, which can only narrow.
     4. The urgent guarantee (V4): every pantry item that goes off within three days gets the best recipe that
        uses it, ahead of the ranking and inside the limit, up to `GUARANTEE_MAX` of them.
-    5. The ranking: urgency-weighted pantry fit, fresh before relaxed, seeded tie-breaks, and near-duplicates
-       of a recipe already taken left out.
+    5. The ranking: fresh before relaxed, then urgency-weighted pantry fit (scaled so the best match is +3, as the
+       scorer scales it) plus the profile's affinity in the scorer's own points (`_profile_affinity`), seeded
+       tie-breaks, and near-duplicates of a recipe already taken left out. Without a profile this is pantry fit.
 
     Raises `FilterRejected` for a filter that would widen what the session allows.
     """
@@ -1168,12 +1179,15 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
         for recipe in narrowed
     }
     ranks = _tie_break_ranks(list(entries), ctx.seed)
+    affinity = _profile_affinity(narrowed, ctx)
+    top_fit = max((entry.pantry_fit for entry in entries.values()), default=0.0)
+    fit_scale = PANTRY_FIT_TOP / top_fit if top_fit > 0 else 0.0
     ranked = sorted(
         entries.values(),
         key=lambda entry: (
             entry.offered_after_floor_relaxed,
             -entry.recency_penalty if entry.offered_after_floor_relaxed else 0.0,
-            -entry.pantry_fit,
+            -(entry.pantry_fit * fit_scale + affinity.get(entry.recipe_id, 0.0)),
             ranks[entry.recipe_id],
         ),
     )
@@ -1188,6 +1202,26 @@ def get_eligible_recipes(recipe_filter: RecipeFilter, ctx: EligibilityContext) -
             continue
         taken.append(entry)
     return EligibleRecipes(recipes=tuple(taken), matched=len(narrowed), floor_relaxed=floor.relaxed_floor)
+
+
+def _profile_affinity(recipes: Sequence[CorpusRecipe], ctx: EligibilityContext) -> dict[str, float]:
+    """Each recipe's profile points, the scorer's per-recipe rows for it: +2 favourite, +1 liked cuisine or loved
+    ingredient (at most +1 for the pair), -2 avoided cuisine. Empty without a profile."""
+    if not (ctx.favourite_meals or ctx.loved_ingredients or ctx.liked_cuisines or ctx.avoided_cuisines):
+        return {}
+    weights = ScorerWeights()
+    favourites = favourite_ids(((recipe.recipe_id, recipe.title) for recipe in recipes), ctx.favourite_meals)
+    points: dict[str, float] = {}
+    for recipe in recipes:
+        cuisine = recipe.attributes.cuisine
+        liked = cuisine in ctx.liked_cuisines
+        loved = bool(loved_in(recipe.ingredient_names, ctx.loved_ingredients))
+        points[recipe.recipe_id] = (
+            (weights.favourite if recipe.recipe_id in favourites else 0.0)
+            + (weights.liked_cuisine if liked else weights.loved_ingredient if loved else 0.0)
+            + (weights.avoided_cuisine if cuisine in ctx.avoided_cuisines else 0.0)
+        )
+    return points
 
 
 def get_recipes(
