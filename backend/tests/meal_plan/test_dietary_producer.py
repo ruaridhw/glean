@@ -330,6 +330,21 @@ def test_a_store_written_before_the_split_is_upgraded_by_asking_only_the_two_new
     assert second.requests == []
 
 
+def test_a_client_that_accepts_an_identity_the_calibration_does_not_is_refused_before_any_request_or_write(
+    tmp_path,
+) -> None:
+    corpus = _corpus(tmp_path)
+    api = FakeDecisionApi()
+    # Same request id as the calibration, but it would also accept a different model's answers.
+    widened = DecisionModel(DECISION_MODEL, served=("baseten/mammoth-1",))
+
+    with pytest.raises(UncalibratedModelError):
+        produce_missing_decisions(corpus, api.client(model=widened))
+
+    assert api.requests == []
+    assert DietaryDecisionStore(corpus.store).load() == []
+
+
 def test_a_client_asking_a_model_the_calibration_does_not_cover_is_refused_before_any_request_or_write(
     tmp_path,
 ) -> None:

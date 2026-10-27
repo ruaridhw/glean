@@ -62,6 +62,10 @@ of the prod corpus scores 0.52 and must be excluded.
 """
 
 
+class UncalibratedModelError(Exception):
+    """A client or an answer names a model the dietary calibration doesn't cover, so nothing may decide on it."""
+
+
 @dataclass(frozen=True, slots=True)
 class DietaryCalibration:
     """The model whose probabilities the dietary cutoffs were measured on, and the cutoffs themselves.
@@ -92,6 +96,14 @@ class DietaryCalibration:
     def threshold_for(self, flag: str) -> float:
         return self.thresholds.get(flag, self.default_threshold)
 
+    def served_identity(self, model: str) -> str:
+        """The identity a decision may be recorded under, refused unless this calibration covers the model."""
+        if not self.model.accepts(model):
+            raise UncalibratedModelError(
+                f"The endpoint answered as {model!r}, which the {self.model.request!r} calibration does not cover"
+            )
+        return model
+
 
 CALIBRATED_DIETARY = DietaryCalibration(
     model=DEFAULT_MODEL,
@@ -108,10 +120,6 @@ THRESHOLDS = CALIBRATED_DIETARY.thresholds
 
 class CorpusUnavailableError(Exception):
     """Candidate selection can't see any corpus recipe, so there is nothing coverage could be measured against."""
-
-
-class UncalibratedModelError(Exception):
-    """The client asks a model the dietary calibration doesn't cover, so its answers can't decide anything yet."""
 
 
 class DietaryDecision(BaseModel):
@@ -316,6 +324,10 @@ class CoverageReport:
         return "\n".join(lines)
 
 
+def _contract(model: DecisionModel) -> str:
+    return " or ".join(repr(base) for base in (model.request, *model.served))
+
+
 def produce_missing_decisions(
     corpus: RecipeCorpusStore,
     client: DecisionClient,
@@ -330,9 +342,11 @@ def produce_missing_decisions(
     left uncovered (and so excluded under every flag) and retried on the next run. A client asking a
     model the calibration doesn't cover is refused before any request or write.
     """
-    if client.model.request != calibration.model.request:
+    # The whole contract, not just the request id: a client that also accepts another model's answers would
+    # store rows the calibrated reader then rejects while still reporting full coverage.
+    if client.model != calibration.model:
         raise UncalibratedModelError(
-            f"The dietary calibration is for {calibration.model.request!r}, not {client.model.request!r}: "
+            f"The dietary calibration covers {_contract(calibration.model)}, not {_contract(client.model)}: "
             "measure the new model's cutoffs before it decides anything"
         )
     store = DietaryDecisionStore(corpus.store)
@@ -355,7 +369,7 @@ def produce_missing_decisions(
     ]
     done = 0
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_ask, client, summary, missing): summary for summary, missing in work}
+        futures = {pool.submit(_ask, client, summary, missing, calibration): summary for summary, missing in work}
         for future in as_completed(futures):
             summary = futures[future]
             try:
@@ -381,7 +395,9 @@ def produce_missing_decisions(
     return report
 
 
-def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...]) -> list[DietaryDecision]:
+def _ask(
+    client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...], calibration: DietaryCalibration
+) -> list[DietaryDecision]:
     state = {"recipe_title": summary.title, "ingredients": summary.ingredient_names}
     answer = client.decide(state, dietary_questions(flags))
     computed_at = datetime.now(UTC)
@@ -390,7 +406,7 @@ def _ask(client: DecisionClient, summary: RecipeSummary, flags: tuple[str, ...])
             recipe_id=summary.external_id,
             flag=flag,
             probability=answer.noul(flag).noul,
-            model=answer.model,
+            model=calibration.served_identity(answer.model),
             content_hash=content_fingerprint(summary.title, summary.ingredient_names),
             criteria_hash=question_hash(_QUESTIONS[flag]),
             computed_at=computed_at,

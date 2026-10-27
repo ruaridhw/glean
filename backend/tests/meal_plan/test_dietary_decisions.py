@@ -17,6 +17,7 @@ import pytest
 from glean.decisions import DECISION_MODEL, DEFAULT_MODEL, DecisionModel
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
+    CALIBRATED_DIETARY,
     DIETARY_DECISIONS_KEY,
     DIETARY_FLAGS,
     PREFERENCE_THRESHOLD,
@@ -26,6 +27,7 @@ from glean.meal_plan.dietary_decisions import (
     DietaryDecision,
     DietaryDecisions,
     DietaryDecisionStore,
+    UncalibratedModelError,
     content_fingerprint,
     dietary_questions,
     question_hash,
@@ -272,6 +274,13 @@ def test_a_calibration_needs_provenance_for_its_cutoffs(evidence: str) -> None:
 def test_a_calibration_rejects_a_threshold_for_a_flag_the_model_is_not_asked_about() -> None:
     with pytest.raises(ValueError, match="keto"):
         _calibration(DEFAULT_MODEL, thresholds={"keto": 0.3})
+
+
+def test_a_calibration_records_a_served_identity_only_under_the_model_it_covers() -> None:
+    assert CALIBRATED_DIETARY.served_identity(CURRENT_MODEL) == CURRENT_MODEL
+
+    with pytest.raises(UncalibratedModelError):
+        CALIBRATED_DIETARY.served_identity(CANDIDATE_SERVED)
 
 
 def test_a_calibration_owns_an_immutable_copy_of_the_cutoffs_it_was_given() -> None:
