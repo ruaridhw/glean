@@ -27,7 +27,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from glean.meal_plan.schemas import NoteEvidence, ProfileNote
+from glean.meal_plan.schemas import MAX_PROFILE_NOTE_CHARS, NoteEvidence, ProfileNote
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from glean.meal_plan.schemas import MealPlanRequest
 
 MAX_PROFILE_NOTES = 3
-MAX_PROFILE_NOTE_CHARS = 120
 # One thumb is not a pattern: a rating note needs at least this many distinct rated corpus recipes in the window.
 MIN_RATED_COOKS = 2
 # Control, format, private-use and unassigned characters: nothing a household would type in a one-line note, and

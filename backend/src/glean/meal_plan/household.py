@@ -434,7 +434,7 @@ def prompt_payload(profile: PlanningProfile | None, screened: ScreenedProfile) -
 
 
 def without_profile_text(request: MealPlanRequest) -> MealPlanRequest:
-    """The request with the profile's prose (habits, household, notes) removed, for everything after the screen.
+    """The request with the profile's prose (habits, household, notes, dismissed notes) removed, after the screen.
 
     Once `screen_profile` has run, that prose's only form is the `ScreenedProfile`: graph input, state, checkpoints
     and traces carry this request instead. The lists stay, because the exclusion and the scorer read them.
@@ -443,7 +443,9 @@ def without_profile_text(request: MealPlanRequest) -> MealPlanRequest:
     if profile is None:
         return request
     return request.model_copy(
-        update={"profile": profile.model_copy(update={"habits": "", "household": "", "notes": []})}
+        update={
+            "profile": profile.model_copy(update={"habits": "", "household": "", "notes": [], "dismissed_notes": []})
+        }
     )
 
 

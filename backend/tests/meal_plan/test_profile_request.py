@@ -7,7 +7,9 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from glean.meal_plan.profile_notes import MAX_PROFILE_NOTE_CHARS
 from glean.meal_plan.schemas import (
+    MAX_PLANNING_DISMISSED_NOTES,
     MAX_PLANNING_LIST_ENTRIES,
     MAX_PLANNING_NOTE_CHARS,
     MAX_PLANNING_NOTES,
@@ -121,3 +123,20 @@ def test_the_app_clips_to_the_same_numbers_the_server_refuses_past() -> None:
         PlanningProfile.model_validate(
             _profile(notes=[{"date": "2026-10-20", "text": "x" * 201, "source": "feedback"}])
         )
+
+
+def test_the_dismissed_notes_are_read_and_bounded() -> None:
+    assert PlanningProfile.model_validate(_profile()).dismissed_notes == []
+    newest = [f"Dismissed {index}" for index in range(MAX_PLANNING_DISMISSED_NOTES)]
+    assert PlanningProfile.model_validate(_profile(dismissed_notes=newest)).dismissed_notes == newest
+    assert PlanningProfile.model_validate(_profile(dismissed_notes=["x" * MAX_PROFILE_NOTE_CHARS])).dismissed_notes
+
+
+@pytest.mark.parametrize(
+    "dismissed",
+    [["A note"] * (MAX_PLANNING_DISMISSED_NOTES + 1), ["x" * (MAX_PROFILE_NOTE_CHARS + 1)], [""]],
+    ids=["too many", "too long", "empty"],
+)
+def test_dismissed_notes_past_the_bounds_are_refused(dismissed: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        PlanningProfile.model_validate(_profile(dismissed_notes=dismissed))

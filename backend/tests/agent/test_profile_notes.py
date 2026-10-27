@@ -19,7 +19,19 @@ from glean.agent import graph, start
 from glean.agent.actions import MAX_ACTION_NOTE_CHARS, MAX_ACTION_NOTES, PlanStep, SwapStep
 from glean.agent.prompts import AGENT_SYSTEM_PROMPT, SWAP_SYSTEM_PROMPT
 from glean.sessions.models import HouseholdReply, SessionStatus, SwapMessage
-from tests.agent.test_graph import NOTE, NOW, Run, ScriptedModel, _request, ask, propose_first
+from tests.agent.test_graph import (
+    NOTE,
+    NOW,
+    PROFILE_HABITS,
+    Decisions,
+    Run,
+    ScriptedModel,
+    _profile_run,
+    _request,
+    ask,
+    call,
+    propose_first,
+)
 from tests.agent.test_swap import Model, a_free_candidate, replace_with
 
 if TYPE_CHECKING:
@@ -322,6 +334,31 @@ class TestLogs:
         assert "swap profile notes" in logged
         for note in (RICE, PRAWNS, dropped):
             assert note["text"] not in logged
+
+
+DISMISSED = "DISMISSED-you-love-anchovies"
+
+
+class TestDismissedNotesStayOut:
+    """The dismissed notes ride the request only so the server can drop repeats: no prompt, screen or checkpoint."""
+
+    def test_dismissed_notes_reach_no_prompt_no_screen_and_no_checkpoint(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        decisions = Decisions()
+        profile_run = _profile_run(
+            tmp_path, monkeypatch, habits=PROFILE_HABITS, decisions=decisions, dismissed_notes=[DISMISSED]
+        )
+        model = ScriptedModel(call("get_eligible_recipes", filter={}), propose_first)
+
+        assert profile_run.start(model) is True
+
+        assert decisions.notes == [PROFILE_HABITS]
+        assert all(DISMISSED not in user for user in model.users)
+        config = {"configurable": {"thread_id": profile_run.session.session_id}}
+        saved = "\n".join(repr(entry) for entry in profile_run.checkpointer.list(config))
+        assert saved
+        assert DISMISSED not in saved
 
 
 class TestPrompt:
