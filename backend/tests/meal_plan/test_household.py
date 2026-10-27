@@ -13,10 +13,15 @@ from glean.meal_plan.household import (
     favourite_ids,
     loved_in,
     match_profile,
-    mentions_disliked,
     profile_cuisines,
 )
 from glean.recipes.attributes import Cuisine
+
+
+def mentions_disliked(ingredient_names: list[str], dislike: str) -> bool:
+    """Whether one recipe with these ingredient names is one the dislike leaves out (the rule the tools apply)."""
+    return disliked_recipe_ids([("rec", ingredient_names)], [dislike], log=False) == frozenset({"rec"})
+
 
 # --- a dislike is a whole ingredient word, with plurals folded --------------------------------------------
 
