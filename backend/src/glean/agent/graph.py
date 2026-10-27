@@ -155,6 +155,9 @@ class PlanState(TypedDict, total=False):
     proposal: dict[str, Any] | None
     # The notes the `propose` action carried (V15), before `finalise` keeps the ones its evidence supports.
     profile_notes: list[dict[str, Any]]
+    # The rated cooks the model reads for its profile notes, with their titles read from the corpus in `prepare`
+    # (never the app's), so a note's rating evidence is exactly what the model was shown.
+    rated_meals: list[dict[str, str]]
     # Whether the household answered the question rather than skipping it: an answer note's evidence.
     answered: bool
     tool_calls: int
@@ -231,21 +234,36 @@ class _Nodes:
     def prepare(self, state: PlanState) -> PlanState:
         # A budget spent here is `model_error`: there is no scorer week to fall back to yet.
         self._guard.step(PREPARE_LINE)
-        prepared = self._prepared(state)
+        # One corpus for the candidates and the rated cooks' titles: opening it is the expensive part.
+        corpus = self._deps.corpus_factory()
+        prepared = self._prepared(state, corpus)
         if not prepared.has_candidates:
             # Nothing passes the dietary decisions, the time cap and the recency floor: the app says
             # "No recipes fit your diet and time limit" and sends the household to Settings.
             raise AgentError(SessionError(code=SessionErrorCode.NO_ELIGIBLE_RECIPES))
-        return {"prepared": prepared.model_dump(mode="json"), "transcript": [], "tool_calls": 0, "invalid_actions": 0}
+        request = MealPlanRequest.model_validate(state["request"])
+        return {
+            "prepared": prepared.model_dump(mode="json"),
+            "rated_meals": rated_meals(
+                request.cooked_history,
+                pipeline.corpus_titles(
+                    corpus,
+                    [item.recipe_id for item in request.cooked_history if item.rating and item.recipe_id],
+                ),
+            ),
+            "transcript": [],
+            "tool_calls": 0,
+            "invalid_actions": 0,
+        }
 
-    def _prepared(self, state: PlanState) -> pipeline.PreparedPlan:
+    def _prepared(self, state: PlanState, corpus: RecipeCorpusStore | None = None) -> pipeline.PreparedPlan:
         return pipeline.prepare(
             MealPlanRequest.model_validate(state["request"]),
             # A state without `feedback` (none was screened) plans with the chips and no note.
             feedback=None if state.get("feedback") is None else ScreenedFeedback.model_validate(state["feedback"]),
             # Likewise a state without `profile` plans with the profile's enum fields and none of its words.
             profile=None if state.get("profile") is None else ScreenedProfile.model_validate(state["profile"]),
-            corpus=self._deps.corpus_factory(),
+            corpus=corpus or self._deps.corpus_factory(),
             # The session id seeds the sampler, so a resumed run (or a swap whose checkpoint expired) is offered
             # the same candidates.
             rng=random.Random(state["session_id"]),  # noqa: S311 - varies recipe sampling, not security
@@ -267,7 +285,7 @@ class _Nodes:
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         calls_left = max(MAX_TOOL_CALLS - tool_calls, 0)
         asked = state.get("questions_asked", 0)
-        rated = rated_meals(MealPlanRequest.model_validate(state["request"]).cooked_history)
+        rated = state.get("rated_meals") or []
         step = self._ask(
             PlanStep,
             AGENT_SYSTEM_PROMPT,
@@ -703,10 +721,9 @@ def _with_swap_notes(state: PlanState, result: MealPlanResult) -> MealPlanResult
 
 def _session_evidence(state: PlanState) -> SessionEvidence:
     """What this run holds that a profile note may rest on (V15)."""
-    request = MealPlanRequest.model_validate(state["request"])
     return SessionEvidence(
         # The rated cooks the model was shown, so a note never rests on one it could not see.
-        rated=bool(rated_meals(request.cooked_history)),
+        rated=bool(state.get("rated_meals")),
         answered=bool(state.get("answered")),
         # A week's run never has one: a swap's own notes are checked against its note in `swap_finalise`.
         swap_note=False,

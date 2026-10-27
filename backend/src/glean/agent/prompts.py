@@ -21,7 +21,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from glean.meal_plan.schemas import CookedHistoryItem
 
@@ -218,16 +218,20 @@ MAX_RATED_MEALS = 20
 _RATED_TITLE_CHARS = 80
 
 
-def rated_meals(history: Sequence[CookedHistoryItem]) -> list[dict[str, str]]:
+def rated_meals(history: Sequence[CookedHistoryItem], titles: Mapping[str, str]) -> list[dict[str, str]]:
     """The rated cooks as the model reads them (V15): the corpus title and the thumb, newest first.
 
-    Only cooks of a corpus recipe: their title is the recipe library's, data like any candidate's. A meal from the
-    household's own recipes has a title they typed, which has not been screened, so it stays out, as every
-    cook's note does.
+    *titles* is the corpus's own title for each recipe id, read on the server. The title the app sent with a cook
+    is never used: it is the plan entry's snapshot, which the server cannot tell from text the household typed. A
+    cook whose recipe the corpus does not hold (or a meal from the household's own recipes, with no corpus id) is
+    left out, as every cook's note is.
     """
     rated = sorted(
-        (item for item in history if item.rating is not None and item.recipe_id is not None),
+        (item for item in history if item.rating is not None and item.recipe_id in titles),
         key=lambda item: item.cooked_at,
         reverse=True,
     )
-    return [{"title": item.title[:_RATED_TITLE_CHARS], "rating": item.rating or ""} for item in rated[:MAX_RATED_MEALS]]
+    return [
+        {"title": titles[item.recipe_id or ""][:_RATED_TITLE_CHARS], "rating": item.rating or ""}
+        for item in rated[:MAX_RATED_MEALS]
+    ]
