@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -138,15 +139,86 @@ def mentions_disliked(ingredient_names: Iterable[str], dislike: str) -> bool:
 
     A `STAPLE_PHRASES` phrase does not count for the bare dislike it lists ("olives" never hits "olive oil").
     """
-    if not dislike.strip():
+    return _Rule.of(dislike).hits(_Names.of(ingredient_names))
+
+
+@dataclass(frozen=True, slots=True)
+class _Names:
+    """One recipe's ingredient names, folded and split into words once, however many rules read them."""
+
+    folded: tuple[str, ...]
+    words: tuple[list[frozenset[str]], ...]
+
+    @classmethod
+    def of(cls, names: Iterable[str]) -> _Names:
+        folded = tuple(_folded(name) for name in names)
+        return cls(folded=folded, words=tuple(_words(name) for name in folded))
+
+
+@dataclass(frozen=True, slots=True)
+class _Rule:
+    """One dislike or loved ingredient, compiled once: its words, and the staple phrases it must not count."""
+
+    wanted: list[frozenset[str]]
+    spared: tuple[re.Pattern, ...]
+
+    @classmethod
+    def of(cls, text: str) -> _Rule:
+        wanted = _words(text)
+        spared = tuple(
+            _STAPLE_RES[phrase]
+            for phrase, word in STAPLE_PHRASES.items()
+            if _mentions(wanted, _words(word)) and _mentions(_words(word), wanted)
+        )
+        return cls(wanted=wanted, spared=spared)
+
+    def hits(self, names: _Names) -> bool:
+        for folded, words in zip(names.folded, names.words, strict=True):
+            if self.spared and any(phrase.search(folded) for phrase in self.spared):
+                words = _words(_without(folded, self.spared))
+            if _mentions(words, self.wanted):
+                return True
         return False
-    wanted = _words(dislike)
-    spared = [
-        _STAPLE_RES[phrase]
-        for phrase, word in STAPLE_PHRASES.items()
-        if _mentions(wanted, _words(word)) and _mentions(_words(word), wanted)
-    ]
-    return any(_mentions(_words(_without(_folded(name), spared)), wanted) for name in ingredient_names)
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileMatches:
+    """The recipes the profile's lists pick out, matched once per session and handed to the tools as id sets."""
+
+    disliked_ids: frozenset[str] = frozenset()
+    favourite_ids: frozenset[str] = frozenset()
+    loved_ids: frozenset[str] = frozenset()
+
+
+def match_profile(
+    recipes: Iterable[tuple[str, str, Sequence[str]]],
+    *,
+    disliked: Sequence[str],
+    favourites: Sequence[tuple[str, str | None]],
+    loved: Sequence[str],
+    log: bool = True,
+) -> ProfileMatches:
+    """Every recipe, given as (id, title, ingredient names), the profile's dislikes, favourites and loves pick out.
+
+    One pass: each recipe's names are folded once and each rule compiled once, so a session pays for it once rather
+    than on every search (`pipeline.tool_context`). *log* is False where the offer already logged the counts.
+    """
+    rows = list(recipes)
+    loved_rules = [_Rule.of(item) for item in loved if item.strip()]
+    loved_ids = (
+        frozenset(recipe_id for recipe_id, _title, names in rows if _any_hit(loved_rules, _Names.of(names)))
+        if loved_rules
+        else frozenset()
+    )
+    return ProfileMatches(
+        disliked_ids=disliked_recipe_ids(((recipe_id, names) for recipe_id, _title, names in rows), disliked, log=log),
+        favourite_ids=favourite_ids(((recipe_id, title) for recipe_id, title, _names in rows), favourites),
+        loved_ids=loved_ids,
+    )
+
+
+def _any_hit(rules: Sequence[_Rule], names: _Names) -> bool:
+    return any(rule.hits(names) for rule in rules)
 
 
 def _folded(text: str) -> str:
@@ -175,24 +247,30 @@ def _without(name: str, phrases: Sequence[re.Pattern]) -> str:
     return text
 
 
-def disliked_recipe_ids(recipes: Iterable[tuple[str, Sequence[str]]], dislikes: Sequence[str]) -> frozenset[str]:
+def disliked_recipe_ids(
+    recipes: Iterable[tuple[str, Sequence[str]]], dislikes: Sequence[str], *, log: bool = True
+) -> frozenset[str]:
     """The recipes, given as (id, ingredient names), that use any of the household's disliked ingredients.
 
     Logs how many recipes each dislike removed, in the profile's order, and how many were removed in all: counts
-    only, so neither the household's words nor a recipe's text is ever logged.
+    only, so neither the household's words nor a recipe's text is ever logged. *log* False skips the line.
     """
     wanted = [dislike for dislike in dislikes if dislike.strip()]
     if not wanted:
         return frozenset()
-    unmatchable = sum(1 for dislike in wanted if not _words(dislike))
+    rules = [_Rule.of(dislike) for dislike in wanted]
+    unmatchable = sum(1 for rule in rules if not rule.wanted)
     removed_per_dislike = [0] * len(wanted)
     excluded: set[str] = set()
     for recipe_id, names in recipes:
-        hits = [index for index, dislike in enumerate(wanted) if mentions_disliked(names, dislike)]
+        folded = _Names.of(names)
+        hits = [index for index, rule in enumerate(rules) if rule.hits(folded)]
         for index in hits:
             removed_per_dislike[index] += 1
         if hits:
             excluded.add(recipe_id)
+    if not log:
+        return frozenset(excluded)
     logger.info(
         "disliked ingredients left out",
         extra={
@@ -226,7 +304,8 @@ def favourite_ids(recipes: Iterable[tuple[str, str]], favourites: Iterable[tuple
 
 def loved_in(ingredient_names: Sequence[str], loved: Sequence[str]) -> tuple[str, ...]:
     """The household's loved ingredients this recipe uses, in the profile's order (the scorer's +1 reads them)."""
-    return tuple(item for item in loved if mentions_disliked(ingredient_names, item))
+    names = _Names.of(ingredient_names)
+    return tuple(item for item in loved if item.strip() and _Rule.of(item).hits(names))
 
 
 def cuisine_for(text: str) -> Cuisine | None:

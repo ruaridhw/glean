@@ -541,6 +541,15 @@ def tool_context(
     summaries = corpus.search(per_page=_ALL_RECIPES)[0]
     attributes = recipe_attributes(corpus, summaries)
     scoring = _profile_scoring(request)
+    # Matched once per run, not on every search: the tools only read the id sets. `prepare` already logged this
+    # session's dislike counts for the offer, so this match does not log them again.
+    matches = household.match_profile(
+        ((summary.external_id, summary.title, summary.ingredient_names) for summary in summaries),
+        disliked=_disliked_ingredients(request),
+        favourites=scoring.favourites,
+        loved=scoring.loved_ingredients,
+        log=False,
+    )
 
     def search(text: str) -> set[str]:
         return {summary.external_id for summary in corpus.search(q=text, per_page=_ALL_RECIPES)[0]}
@@ -569,9 +578,9 @@ def tool_context(
         slots=request.meals_per_week,
         now=now or datetime.now(UTC),
         dietary_excluded_ids=dietary_excluded_ids(corpus, summaries, request.dietary_flags),
-        disliked_ingredients=_disliked_ingredients(request),
-        favourite_meals=tuple(scoring.favourites),
-        loved_ingredients=tuple(scoring.loved_ingredients),
+        disliked_ids=matches.disliked_ids,
+        favourite_ids=matches.favourite_ids,
+        loved_ids=matches.loved_ids,
         liked_cuisines=frozenset(scoring.liked_cuisines),
         avoided_cuisines=frozenset(scoring.avoided_cuisines),
         planned_ids=frozenset(request.exclude_external_ids),

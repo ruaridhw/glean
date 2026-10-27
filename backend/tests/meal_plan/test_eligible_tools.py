@@ -100,15 +100,16 @@ class TestHardConstraints:
             recipe("nutmeg", ingredients=("nutmeg", "milk")),
             recipe("plain", ingredients=("cod", "potatoes")),
         ]
-        ctx = context(corpus, disliked_ingredients=("mushroom", "nut"))
+        ctx = context(corpus, disliked_ids=frozenset({"mushroom"}))
 
+        # The caller matched the dislikes once per session (`household.match_profile`); the tool applies the set.
         assert ids(get_eligible_recipes(RecipeFilter(), ctx)) == ["nutmeg", "plain"]
 
     def test_the_floor_never_brings_back_a_disliked_recipe(self) -> None:
         # Exclusion comes before the floor: a dislike leaves too few fresh recipes, and the floor relaxes to the
         # recently cooked one rather than the disliked one.
         corpus = [recipe("disliked", ingredients=("olives",)), recipe("recent"), recipe("fresh")]
-        ctx = context(corpus, slots=1, cooked=(cooked("recent", 10),), disliked_ingredients=("olive",))
+        ctx = context(corpus, slots=1, cooked=(cooked("recent", 10),), disliked_ids=frozenset({"disliked"}))
 
         result = get_eligible_recipes(RecipeFilter(), ctx)
 
@@ -116,7 +117,7 @@ class TestHardConstraints:
 
     def test_a_filter_text_search_cannot_reach_a_disliked_recipe(self) -> None:
         corpus = [recipe("mushroom", ingredients=("mushrooms",)), recipe("other")]
-        ctx = context(corpus, disliked_ingredients=("mushroom",))
+        ctx = context(corpus, disliked_ids=frozenset({"mushroom"}))
 
         assert ids(get_eligible_recipes(RecipeFilter(text="mushrooms"), ctx)) == []
 
@@ -321,8 +322,8 @@ class TestProfileRanking:
         ctx = context(
             self._corpus(),
             pantry=(PantryItem(name="kale", urgency_score=1.0),),
-            favourite_meals=(("Lamb stew", "favourite"),),
-            loved_ingredients=("basil",),
+            favourite_ids=frozenset({"favourite"}),
+            loved_ids=frozenset({"loved"}),
             avoided_cuisines=frozenset({Cuisine.THAI}),
         )
 
