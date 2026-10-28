@@ -45,9 +45,59 @@ uv run python scripts/migrate_recipe_corpus.py --table glean-recipes-dev --bucke
 uv run python scripts/build_recipe_index.py --table glean-recipes-dev --bucket glean-recipe-cache-dev-<account>  # rebuild the projection
 ```
 
-The corpus scripts (`import_recipe_corpus.py`, `compute_dietary_decisions.py`, `build_recipe_index.py`) take
-the same `--table` switch; `--bucket` / `--cache-dir` says where the blobs (or, with `--table`, the projection)
-live.
+The corpus scripts (`import_recipe_corpus.py`, `enrich_corpus.py`, `build_recipe_index.py`) take the same
+`--table` switch; `--bucket` / `--local` says where the blobs (or, with `--table`, the projection) live.
+
+### Recipe enrichment
+
+Everything planning needs to know about a recipe beyond its own text — whether it breaks a dietary flag,
+and later its main protein, cuisine and active time — is one decision-model answer per question, stored as
+its own item beside the recipe (ADR 0025). `recipes/enrichment/` is the pipeline: enrichers declare their
+questions and confidence bars, and one runner asks every recipe only what is missing or stale, in a single
+request per recipe.
+
+The model is a paid external service, so this is a producer you run, never something a request triggers, and
+`make enrich-corpus` only ever touches the local corpus. It needs `OPENROUTER_API_KEY` in the environment
+(`--dry-run` needs no key and makes no calls):
+
+```bash
+make enrich-corpus ENRICH_ARGS=--dry-run   # what would be asked, from .cache/glean_recipe_cache
+make enrich-corpus                         # fill the local corpus; exit 1 unless coverage is 100%
+
+# anywhere, with an explicit source
+uv run python scripts/enrich_corpus.py --local .cache/glean_recipe_cache --workers 8
+```
+
+`make enrich-corpus` always passes `--local-only`, which makes the CLI refuse a `--table`, `--bucket` or
+`--i-am-the-owner` outright — not just the prod ones, and not even for a dry run — so the dev target cannot
+be walked towards a remote store. The CLI also rejects abbreviated flags, so `--tab` is not `--table`.
+
+The owner runs it against prod by hand after a corpus import, a question rewording or a model bump. The
+script refuses a table or bucket whose name contains `prod` unless `--i-am-the-owner` is passed, and exits
+non-zero unless every recipe has a current answer to every question — an unasked question excludes the
+recipe, so full coverage is the deploy gate:
+
+```bash
+uv run python scripts/enrich_corpus.py --table glean-recipes-prod \
+    --bucket glean-recipe-cache-prod-<account> --i-am-the-owner
+```
+
+The run prints a per-question coverage table (current / stale / missing / failed, requests made, and how
+many recipes state an active time), writes answers in checkpoints so an interrupted run resumes where it
+stopped, and rebuilds the projection once at the end. `--enricher dietary` narrows it to one enricher.
+
+The number of requests is the corpus times whatever is stale, not the corpus times the questions: a fresh
+migration answered under the current wording asks for nothing, an imported or edited recipe costs one
+request, a reworded question costs one request per recipe, and a model bump costs one request per recipe
+for every question. A checkpoint writes only the answers that run has produced, not the whole run again,
+and the final rebuild is a consistent scan of the table rather than another pay-per-call run — which is why
+it happens once at the end and not per recipe.
+
+Answers are written to the table as the run goes, so **a run that dies, or whose final projection rebuild
+fails, has still paid for and kept everything it finished**: the next run reads the answers out of the
+store and asks only for the rest. If a rebuild failed, the projection planning reads is stale until it is
+repaired — `scripts/build_recipe_index.py --table glean-recipes-<env> --bucket <recipe-cache-bucket>` — and
+that repair needs no new model call.
 
 Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
 cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command
@@ -57,8 +107,8 @@ while it ran is kept; add a few minutes for the scan to the migration's estimate
 
 **Rolling back to `blobs` is a snapshot rollback.** Nothing in dynamo mode writes the blobs or the dietary
 JSONL, so recipes imported and answers computed while `RECIPE_STORE=dynamo` are not in them. Re-import those
-recipes and re-run `compute_dietary_decisions.py` before flipping back if they must survive; the migration
-prints the same warning.
+recipes and re-run `scripts/enrich_corpus.py` before flipping back if they must survive; the migration prints
+the same warning.
 
 ### LangSmith Tracing
 

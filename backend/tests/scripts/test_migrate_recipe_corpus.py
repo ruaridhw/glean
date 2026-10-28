@@ -420,7 +420,7 @@ def test_the_summary_states_what_rolling_back_to_blobs_does_and_does_not_restore
     out = capsys.readouterr().out
     assert "as of this migration" in out
     assert "NOT in the blobs" in out
-    assert "re-run scripts/compute_dietary_decisions.py" in out
+    assert "scripts/enrich_corpus.py --bucket <recipe-cache-bucket>" in out
 
 
 def test_the_final_projection_is_rebuilt_from_the_table_not_from_the_source(

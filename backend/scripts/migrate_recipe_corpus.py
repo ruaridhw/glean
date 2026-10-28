@@ -72,8 +72,9 @@ _READ_UNITS_PER_SECOND = 5.0
 
 ROLLBACK_NOTE = (
     "Rollback note: flipping RECIPE_STORE back to blobs restores the corpus and dietary decisions as of this "
-    "migration. Recipes imported and answers computed while in dynamo mode are NOT in the blobs; re-import them "
-    "and re-run scripts/compute_dietary_decisions.py (or export them) before rolling back if they must survive."
+    "migration. Recipes imported and answers computed while in dynamo mode are NOT in the blobs; re-import them, "
+    "and re-run enrichment in blob mode with 'uv run python scripts/enrich_corpus.py --bucket <recipe-cache-bucket>' "
+    "(it writes corpus/_decisions/dietary.jsonl), or export them, before rolling back if they must survive."
 )
 
 
