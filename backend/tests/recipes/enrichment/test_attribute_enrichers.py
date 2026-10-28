@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from glean.decisions import DECISION_MODEL, ChoiceAnswer, Decision, ScoreAnswer, Usage
+from glean.decisions import DECISION_MODEL, ChoiceAnswer, Decision, DecisionModel, ScoreAnswer, Usage
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.attributes import (
@@ -32,12 +32,13 @@ from glean.recipes.enrichment import (
     DIETARY_ENRICHER,
     EnrichmentError,
     SafeSide,
+    UncalibratedModelError,
     current_value,
     run_enrichment,
 )
 from glean.recipes.enrichment.active_time import active_time_question
 from glean.recipes.enrichment.attributes import WHOLE_FOOD_LEVELS, AttributeEnricher, attribute_questions
-from glean.recipes.enrichment.enricher import MIN_ATTRIBUTE_BAR, attribute_bar
+from glean.recipes.enrichment.enricher import ATTRIBUTE_BAR_MODEL, MIN_ATTRIBUTE_BAR, attribute_bar
 from glean.recipes.stored import StoredIngredient, StoredInstruction, StoredRecipe
 from tests.recipes.enrichment.fakes import SNAPSHOT, FakeDecisionApi
 
@@ -399,3 +400,22 @@ def _stored_answer(question_name: str, value: str | None, probability: float) ->
 def _criteria_hash_of(question_name: str) -> str:
     questions = {question.name: question for question in (*ATTRIBUTE_ENRICHER.questions(), active_time_question())}
     return questions[question_name].criteria_hash
+
+
+def test_every_attribute_and_active_time_question_accepts_only_the_model_its_bar_was_measured_on() -> None:
+    questions = (*ATTRIBUTE_ENRICHER.questions(), *ACTIVE_TIME_ENRICHER.questions())
+
+    assert {question.model for question in questions} == {ATTRIBUTE_BAR_MODEL}
+    assert all(not question.model.accepts("baseten/mammoth-1-20261021") for question in questions)
+
+
+def test_an_attribute_run_asking_another_model_is_refused_before_any_request(tmp_path: Path) -> None:
+    corpus = _corpus(tmp_path)
+    api = FakeDecisionApi(snapshot="baseten/mammoth-1-20261021")
+    other = DecisionModel("baseten/mammoth-1:free", served=("baseten/mammoth-1",))
+
+    with pytest.raises(UncalibratedModelError):
+        run_enrichment(corpus, api.client(model=other), enrichers=(ATTRIBUTE_ENRICHER, ACTIVE_TIME_ENRICHER))
+
+    assert api.requests == []
+    assert corpus.answers() == []

@@ -14,6 +14,7 @@ from scripts import check_recipe_attributes
 from tests.recipes.enrichment.fakes import FakeDecisionApi
 
 from glean.recipes.attributes import Cuisine, MainCarb, WholeFood
+from glean.recipes.enrichment.enricher import ATTRIBUTE_BAR_MODEL
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
 if TYPE_CHECKING:
@@ -317,3 +318,9 @@ def _labels(tmp_path: Path, labels: dict) -> None:
     path = tmp_path / "v5-check" / "opus-labels.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(labels))
+
+
+def test_the_enrich_step_asks_the_model_the_bars_were_measured_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+
+    assert check_recipe_attributes._client(timeout_s=1.0).model == ATTRIBUTE_BAR_MODEL
