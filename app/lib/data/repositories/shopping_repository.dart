@@ -387,6 +387,19 @@ class ShoppingRepository {
     )).expand((item) => item.ids).where((id) => !before.contains(id)).length;
   });
 
+  /// Removes the requirement rows one plan entry derived, so a swapped entry does not keep the old recipe's
+  /// shopping demand. Rows the user added or checked by hand carry no source entry and are untouched.
+  Future<void> clearGapsForEntry({
+    required String userId,
+    required int mealPlanEntryId,
+  }) =>
+      (_db.delete(_db.shoppingListItems)..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.sourceMealPlanEntryId.equals(mealPlanEntryId),
+          ))
+          .go();
+
   Future<List<ShoppingListItem>> deleteRowsWithSnapshot({
     required List<int> ids,
     required String userId,

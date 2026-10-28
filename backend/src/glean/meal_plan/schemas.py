@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -163,6 +164,34 @@ class MealPlanResponse(BaseModel):
     suggestions: list[MealPlanRecipe] = Field(description="Ranked recipes that satisfy the request constraints.")
 
 
+class ReasonKind(StrEnum):
+    """What a meal's reason rests on (spec §6.2), so the card can show why it was picked.
+
+    Every proposal meal carries one. `balance` is the default: the pick is about the week's shape,
+    variety or fit rather than one piece of evidence.
+    """
+
+    URGENT_ITEM = "urgent_item"
+    PROFILE = "profile"
+    FEEDBACK = "feedback"
+    BALANCE = "balance"
+    HISTORY = "history"
+    ANSWER = "answer"
+
+
+class CorpusMealPlanAlternative(BaseModel):
+    """A candidate the model offers instead of the one it chose, for the card's Swap."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str = Field(description="external_id of the candidate offered as the alternative, copied exactly.")
+    title: str = Field(description="Title of that candidate, copied exactly.")
+    reason: str = Field(description="One sentence on why this recipe would work instead")
+    reason_kind: ReasonKind = Field(
+        default=ReasonKind.BALANCE, description="What this alternative's reason rests on (spec §6.2)"
+    )
+
+
 class CorpusMealPlanRecipe(BaseModel):
     """A corpus recipe the model selected from the candidates it was offered."""
 
@@ -171,6 +200,28 @@ class CorpusMealPlanRecipe(BaseModel):
     external_id: str = Field(description="external_id of the chosen candidate, copied exactly.")
     title: str = Field(description="Title of the chosen candidate, copied exactly.")
     reason: str = Field(description="Human-readable explanation of why this recipe belongs in the meal plan")
+    reason_kind: ReasonKind = Field(
+        default=ReasonKind.BALANCE,
+        description="What this meal's reason rests on: urgent_item, profile, feedback, balance, history or answer",
+    )
+    alternative: CorpusMealPlanAlternative | None = Field(
+        default=None,
+        description=(
+            "One candidate the household could cook instead, chosen from the candidates you were offered and "
+            "not among the meals you chose. Null only when nothing suitable is left."
+        ),
+    )
+
+
+class CorpusPlannedAlternative(BaseModel):
+    """An alternative the model offers for a meal already in the week, so it can be swapped too."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    planned_external_id: str = Field(
+        description="external_id of the meal already in the week, copied exactly from planned_meals"
+    )
+    alternative: CorpusMealPlanAlternative = Field(description="One candidate the household could swap it to")
 
 
 class CorpusMealPlanResponse(BaseModel):
@@ -178,7 +229,16 @@ class CorpusMealPlanResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    week_summary: str = Field(
+        default="", description="One line summing up the week, shown above the meals; empty when the model has none"
+    )
     suggestions: list[CorpusMealPlanRecipe] = Field(description="Ranked candidates that satisfy the constraints.")
+    planned_alternatives: list[CorpusPlannedAlternative] = Field(
+        default_factory=list,
+        description=(
+            "For each meal already in the week, one candidate it could be swapped to. Empty when none are planned."
+        ),
+    )
 
 
 class UsedUpPantryItem(BaseModel):
@@ -194,8 +254,21 @@ class UsedUpPantryItem(BaseModel):
     )
 
 
+class MealPlanAlternative(BaseModel):
+    """One swap target: a suggestion that carries no alternative of its own."""
+
+    recipe_id: int | None = None
+    external_id: str | None = None
+    title: str
+    reason: str
+    missing_ingredients: list[str] = Field(default_factory=list)
+    uses_up: list[UsedUpPantryItem] = Field(default_factory=list)
+    # Always set on a corpus proposal; saved mode, which the retiring sync route still serves, leaves it at balance.
+    reason_kind: ReasonKind = ReasonKind.BALANCE
+
+
 class MealPlanSuggestion(BaseModel):
-    """One planned meal: a saved recipe (recipe_id) or a corpus recipe (external_id)."""
+    """One proposed meal: a saved recipe (recipe_id) or a corpus recipe (external_id)."""
 
     recipe_id: int | None = None
     external_id: str | None = None
@@ -205,9 +278,40 @@ class MealPlanSuggestion(BaseModel):
     missing_ingredients: list[str] = Field(default_factory=list)
     # Urgent pantry items this meal uses, soonest to go off first. A proposal field the app shows later.
     uses_up: list[UsedUpPantryItem] = Field(default_factory=list)
+    # Always set on a corpus proposal; saved mode, which the retiring sync route still serves, leaves it at balance.
+    reason_kind: ReasonKind = ReasonKind.BALANCE
+    # The meal to cook instead if the household swaps this one; null when nothing suitable is left.
+    alternative: MealPlanAlternative | None = None
+
+
+class PlannedMealAlternative(BaseModel):
+    """An alternative for a meal already in the week, so it can be swapped without regenerating."""
+
+    external_id: str = Field(description="Corpus id of the meal already in the week")
+    alternative: MealPlanSuggestion = Field(
+        description="The swap target. It is a suggestion, so its own `alternative` is always null."
+    )
 
 
 class MealPlanResult(BaseModel):
-    """The POST /meal-plan response."""
+    """The proposal: what POST /meal-plan and a finished session return. New fields are additive."""
 
     suggestions: list[MealPlanSuggestion]
+    week_summary: str = Field(
+        default="",
+        description=(
+            "One line shown above the meals. Always set on a corpus proposal, template text when the plan is "
+            "degraded; empty only for a saved-mode plan, which the retiring sync route still serves."
+        ),
+    )
+    planned_alternatives: list[PlannedMealAlternative] = Field(
+        default_factory=list,
+        description="An alternative per planned meal that came from the corpus; empty when none are planned.",
+    )
+    degraded: bool = Field(
+        default=False,
+        description=(
+            "True when finalise fell back to the scorer's picks with template text. It looks like any other "
+            "proposal; degradation is recorded in logs and evals, not shown to the household."
+        ),
+    )

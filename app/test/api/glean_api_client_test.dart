@@ -305,6 +305,24 @@ void main() {
       expect(update.status, MealPlanSessionStatus.unknown);
       expect(update.isTerminal, isFalse);
     });
+
+    test('cancelMealPlanSession DELETEs the session and accepts 204', () async {
+      when(
+        () => httpClient.delete(any(), headers: any(named: 'headers')),
+      ).thenAnswer((_) async => http.Response('', 204));
+
+      await client.cancelMealPlanSession('sess-7');
+
+      final uri =
+          verify(
+                () => httpClient.delete(
+                  captureAny(),
+                  headers: any(named: 'headers'),
+                ),
+              ).captured.single
+              as Uri;
+      expect(uri.path, '/meal-plan/sessions/sess-7');
+    });
   });
 
   group('receipts', () {

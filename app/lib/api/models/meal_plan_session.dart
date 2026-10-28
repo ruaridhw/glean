@@ -4,8 +4,8 @@ import 'meal_plan.dart';
 
 part 'meal_plan_session.g.dart';
 
-/// Where a Generate session has got to. V1 renders the spinner for every non-terminal status and only reacts to
-/// [done] and [failed]; progress lines and [waitingForUser] arrive with V3.
+/// Where a Generate session has got to. [waitingForUser] keeps the proposal screen in its working state: the
+/// question step is V11. [cancelled] is terminal and is what the server reports after the app's DELETE.
 ///
 /// A status this build does not know parses as [unknown] and is never terminal, so an app meeting a newer
 /// backend keeps polling rather than inventing an outcome.
@@ -20,6 +20,8 @@ enum MealPlanSessionStatus {
   done,
   @JsonValue('failed')
   failed,
+  @JsonValue('cancelled')
+  cancelled,
   @JsonValue('unknown')
   unknown,
 }
@@ -83,8 +85,9 @@ class MealPlanSessionUpdate {
   /// staleness logic.
   final DateTime? updatedAt;
 
-  /// `done` and `failed` are the only outcomes that end a Generate attempt; everything else keeps polling.
+  /// `done`, `failed` and `cancelled` end a Generate attempt; everything else keeps polling.
   bool get isTerminal =>
       status == MealPlanSessionStatus.done ||
-      status == MealPlanSessionStatus.failed;
+      status == MealPlanSessionStatus.failed ||
+      status == MealPlanSessionStatus.cancelled;
 }

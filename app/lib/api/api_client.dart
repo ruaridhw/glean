@@ -121,6 +121,17 @@ class GleanApiClient {
     );
   }
 
+  /// Cancels a Generate run. The server answers 204 and the worker stops between graph steps; a terminal
+  /// session stays as it was, so this is safe to call after the result has arrived. Free and not rate limited.
+  Future<void> cancelMealPlanSession(String sessionId) {
+    final uri = _uri('/meal-plan/sessions/${Uri.encodeComponent(sessionId)}');
+    return _send(
+      uri,
+      () async => httpClient.delete(uri, headers: await _authHeaders()),
+      (dynamic json) {},
+    );
+  }
+
   // --- Receipts ---
 
   Future<ScanResponse> scanReceipt(

@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MEALS = 3
+_REASON_KINDS = {"urgent_item", "profile", "feedback", "balance", "history", "answer"}
 
 
 def _body(**overrides: Any) -> dict[str, Any]:
@@ -108,6 +109,22 @@ def _corpus(tmp_path) -> RecipeCorpusStore:
     return corpus
 
 
+class _InventingRouter:
+    """A model that answers with recipes nobody offered, so `finalise` keeps nothing."""
+
+    def invoke(self, _feature: object, _schema: type, *, user: str, **_kwargs: object) -> CorpusMealPlanResponse:
+        return CorpusMealPlanResponse(
+            week_summary="An invented week.",
+            suggestions=[
+                CorpusMealPlanRecipe(external_id=f"rec_invented_{n}", title=f"Invented {n}", reason="Made up.")
+                for n in range(MEALS)
+            ],
+        )
+
+    def model_id_for(self, _feature: object, **_kwargs: object) -> str:
+        return "fake/model"
+
+
 def _sign_in_as_header_user(request: Request) -> str:
     return request.headers.get("x-test-user", "user-a")
 
@@ -166,7 +183,7 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "rec_tofu_noodles",
         "rec_chickpea_curry",
     }
-    # The plan shape is the synchronous endpoint's, `uses_up` included.
+    # The plan shape is the synchronous endpoint's, `uses_up` included, plus V3's proposal fields.
     assert set(view["result"]["suggestions"][0]) == {
         "recipe_id",
         "external_id",
@@ -174,7 +191,40 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "reason",
         "missing_ingredients",
         "uses_up",
+        "reason_kind",
+        "alternative",
     }
+    assert set(view["result"]) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
+    assert view["result"]["degraded"] is False
+    assert view["result"]["week_summary"] == "3 dinners for this week."
+
+
+def test_a_finished_session_carries_a_complete_proposal(api: TestClient) -> None:
+    view = _plan_to_completion(api, _body())
+
+    result = view["result"]
+    assert all(suggestion["reason_kind"] in _REASON_KINDS for suggestion in result["suggestions"])
+    assert all(suggestion["reason"] for suggestion in result["suggestions"])
+    # Four recipes were offered and three were chosen, so one candidate is left to swap to.
+    alternatives = [suggestion["alternative"] for suggestion in result["suggestions"] if suggestion["alternative"]]
+    assert len(alternatives) == 1
+    chosen = {suggestion["external_id"] for suggestion in result["suggestions"]}
+    assert next(alternative["external_id"] for alternative in alternatives) not in chosen
+
+
+def test_an_answer_that_keeps_no_meals_ends_the_session_with_the_fallback_plan(api: TestClient) -> None:
+    api.app.dependency_overrides[get_llm_router] = lambda: _InventingRouter()
+
+    view = _plan_to_completion(api, _body())
+
+    assert view["status"] == "done"
+    assert view["error"] is None
+    result = view["result"]
+    assert result["degraded"] is True
+    assert len(result["suggestions"]) == MEALS
+    assert all(suggestion["reason"] for suggestion in result["suggestions"])
+    assert any(suggestion["alternative"] is not None for suggestion in result["suggestions"])
+    assert result["week_summary"]
 
 
 def test_the_session_result_matches_the_synchronous_endpoint_for_the_same_seed(
@@ -441,3 +491,85 @@ class _Throttled(Exception):
 
 def _throttled(*, retry_after: str | None) -> Exception:
     return _Throttled(retry_after)
+
+
+def _queued_only(api: TestClient) -> list[AgentSession]:
+    """A dispatcher that leaves the session queued, so a DELETE has something to cancel."""
+    handed_over: list[AgentSession] = []
+    api.app.dependency_overrides[get_session_dispatcher] = lambda: lambda session: handed_over.append(session)
+    return handed_over
+
+
+def test_deleting_a_session_cancels_it(api: TestClient, sessions: InMemorySessionStore) -> None:
+    handed_over = _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", json=_body()).json()["session_id"]
+
+    deleted = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    record = sessions.get("user-a", session_id)
+    assert record is not None
+    assert record.status is SessionStatus.CANCELLED
+    assert record.session_id == handed_over[0].session_id
+    polled = api.get(f"/meal-plan/sessions/{session_id}").json()
+    assert polled["status"] == "cancelled"
+    assert polled["result"] is None
+    assert polled["error"] is None
+
+
+def test_deleting_is_idempotent(api: TestClient, sessions: InMemorySessionStore) -> None:
+    _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", json=_body()).json()["session_id"]
+
+    first = api.delete(f"/meal-plan/sessions/{session_id}")
+    writes = sessions.writes
+    second = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert (first.status_code, second.status_code) == (204, 204)
+    assert sessions.writes == writes
+    assert sessions.get("user-a", session_id).status is SessionStatus.CANCELLED
+
+
+def test_deleting_a_finished_session_leaves_it_done(api: TestClient, sessions: InMemorySessionStore) -> None:
+    view = _plan_to_completion(api, _body())
+    session_id = view["session_id"]
+
+    deleted = api.delete(f"/meal-plan/sessions/{session_id}")
+
+    assert deleted.status_code == 204
+    record = sessions.get("user-a", session_id)
+    assert record is not None
+    assert record.status is SessionStatus.DONE
+    assert record.result is not None
+    assert record.result.suggestions
+
+
+def test_another_users_session_cannot_be_deleted(api: TestClient, sessions: InMemorySessionStore) -> None:
+    _queued_only(api)
+    session_id = api.post("/meal-plan/sessions", headers={"x-test-user": "user-a"}, json=_body()).json()["session_id"]
+
+    theirs = api.delete(f"/meal-plan/sessions/{session_id}", headers={"x-test-user": "user-b"})
+
+    assert theirs.status_code == 404
+    assert sessions.get("user-a", session_id).status is SessionStatus.QUEUED
+
+
+def test_deleting_an_unknown_session_is_not_found(api: TestClient) -> None:
+    assert api.delete("/meal-plan/sessions/does-not-exist").status_code == 404
+
+
+def test_the_delete_is_free_and_the_create_is_not(api: TestClient, test_settings: Settings) -> None:
+    app.dependency_overrides[get_settings] = lambda: test_settings.model_copy(update={"rate_limit_per_hour": 1})
+    try:
+        client = TestClient(app)
+        hand_over: list[AgentSession] = []
+        app.dependency_overrides[get_session_dispatcher] = lambda: lambda session: hand_over.append(session)
+        session_ids = [client.post("/meal-plan/sessions", json=_body()).json()["session_id"] for _ in range(1)]
+        refused = client.post("/meal-plan/sessions", json=_body())
+        deletes = [client.delete(f"/meal-plan/sessions/{session_ids[0]}") for _ in range(3)]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert refused.status_code == 429
+    assert [deleted.status_code for deleted in deletes] == [204, 204, 204]

@@ -108,14 +108,20 @@ class SessionStore(Protocol):
         ...
 
     def append_progress(self, user_sub: str, session_id: str, lines: Sequence[str], *, owner: str) -> bool:
-        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`. False when the lease was lost."""
+        """Add progress lines, keeping only the newest `MAX_PROGRESS_LINES`. False when the lease was lost.
+
+        A line that arrives after a cancel is refused too: a cancelled session writes nothing more, so
+        the graph stops at the next step rather than leaving one progress line behind it.
+        """
         ...
 
     def complete(self, user_sub: str, session_id: str, result: MealPlanResult, *, owner: str) -> bool:
         """Finish the session with its plan, if this attempt still owns it.
 
         Raises `SessionTooLargeError` when the plan would push the item past DynamoDB's limit: the
-        caller turns that into a typed failure, because there is nowhere left to write it.
+        caller turns that into a typed failure, because there is nowhere left to write it. A session the
+        household cancelled is no longer `running`, so the write is refused and a cancelled session can
+        never later become `done`.
         """
         ...
 
@@ -128,6 +134,14 @@ class SessionStore(Protocol):
 
         Fails it only when it is nonterminal and its owner's lease has lapsed. A live run is reported as
         `STILL_LIVE` so its caller can keep the message instead of acknowledging it away.
+        """
+        ...
+
+    def cancel(self, user_sub: str, session_id: str) -> bool:
+        """Cancel the session, unless it is already terminal. Says whether this call moved it.
+
+        Idempotent by design: a second cancel is a no-op, so DELETE answers 204 however often it is
+        called. A finished session is never rewritten.
         """
         ...
 
@@ -231,6 +245,15 @@ class InMemorySessionStore:
         if record is None:
             return False
         self._write(record.model_copy(update={"status": SessionStatus.FAILED, "error": error}))
+        return True
+
+    def cancel(self, user_sub: str, session_id: str) -> bool:
+        """Cancel the session unless it already finished. A cancelled session is terminal, so every
+        owner-conditioned write after this one is refused by `_owned`."""
+        record = self.get(user_sub, session_id)
+        if record is None or record.status.terminal:
+            return False
+        self._write(record.model_copy(update={"status": SessionStatus.CANCELLED}))
         return True
 
     def fail_if_abandoned(self, user_sub: str, session_id: str, error: SessionError) -> AbandonResult:

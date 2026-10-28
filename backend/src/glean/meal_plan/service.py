@@ -113,8 +113,13 @@ def _generate_from_corpus(
     rng: random.Random,
     now: datetime | None,
 ) -> MealPlanResult:
-    """Corpus mode, as the agent graph's three nodes run it: prepare, choose, finalise."""
+    """Corpus mode, as the agent graph's three nodes run it: prepare, choose, finalise.
+
+    The sync route has no degraded path: an answer that keeps nothing stays an empty plan here, so this
+    shape only ever gains fields. The agent's fallback is the graph's (§6.2), because it is the agent
+    loop -- not the route -- that runs out of budget or steps.
+    """
     prepared = pipeline.prepare(request, corpus=corpus, rng=rng, now=now)
     if not prepared.has_candidates:
-        return MealPlanResult(suggestions=[])
+        return MealPlanResult(suggestions=[], week_summary=pipeline.NO_MEALS_WEEK_SUMMARY)
     return pipeline.finalise(prepared, pipeline.choose(prepared, llm_router=llm_router))

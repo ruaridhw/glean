@@ -162,6 +162,9 @@ class UsedUpPantryItem {
 
 /// A single LLM-suggested recipe returned by `POST /meal-plan`: an ephemeral proposal, persisted only when the
 /// user commits it.
+///
+/// [reasonKind] and [alternative] are additive session-contract fields: an older backend omits them, so both
+/// parse as null and the app renders exactly as it did before they existed.
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class MealPlanRecipe {
   const MealPlanRecipe({
@@ -171,6 +174,8 @@ class MealPlanRecipe {
     required this.reason,
     this.missingIngredients = const [],
     this.usesUp = const [],
+    this.reasonKind,
+    this.alternative,
   });
 
   factory MealPlanRecipe.fromJson(Map<String, dynamic> json) =>
@@ -183,18 +188,67 @@ class MealPlanRecipe {
   @JsonKey(defaultValue: <String>[])
   final List<String> missingIngredients;
 
-  /// Urgent pantry items this meal uses up, soonest to go off first. Parsed now, shown once the proposal
-  /// screen exists.
+  /// Urgent pantry items this meal uses up, soonest to go off first. The reason already names them; the screen
+  /// does not invent separate copy for them.
   @JsonKey(defaultValue: <UsedUpPantryItem>[])
   final List<UsedUpPantryItem> usesUp;
+
+  /// Why the planner picked this meal, as a machine-readable tag. V3 shows the reason text; the tag is kept so a
+  /// later screen can group or explain reasons without re-parsing prose.
+  final String? reasonKind;
+
+  /// One diet-safe alternative from the same candidate pool, or null when the server offered none. Swapping is
+  /// local and instant: this is a suggestion, not a saved recipe.
+  final MealPlanRecipe? alternative;
 }
 
+/// A meal already in the week that the planner also offered an alternative for, matched by the corpus id the
+/// planned entry snapshots. Generation never replaces a planned meal on its own (ADR 0020); this only makes the
+/// user's own swap possible.
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
+class MealPlanPlannedAlternative {
+  const MealPlanPlannedAlternative({
+    required this.externalId,
+    required this.alternative,
+  });
+
+  factory MealPlanPlannedAlternative.fromJson(Map<String, dynamic> json) =>
+      _$MealPlanPlannedAlternativeFromJson(json);
+
+  /// Corpus id of the meal already in the week, as snapshotted on its plan entry.
+  final String externalId;
+  final MealPlanRecipe alternative;
+}
+
+/// The proposal a session's `done` status carries. The sync `POST /meal-plan` returns the same shape.
+///
+/// Every field beyond [suggestions] is additive: old responses parse with an empty summary, no planned
+/// alternatives and `degraded: false`, and the proposal screen renders them unchanged.
 @JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class MealPlanResponse {
-  const MealPlanResponse({required this.suggestions});
+  const MealPlanResponse({
+    required this.suggestions,
+    this.weekSummary = '',
+    this.plannedAlternatives = const <MealPlanPlannedAlternative>[],
+    this.degraded = false,
+  });
 
   factory MealPlanResponse.fromJson(Map<String, dynamic> json) =>
       _$MealPlanResponseFromJson(json);
 
   final List<MealPlanRecipe> suggestions;
+
+  /// One line describing the week. Empty only when an old backend did not send one; the screen then omits the
+  /// summary card rather than inventing copy.
+  @JsonKey(defaultValue: '')
+  final String weekSummary;
+
+  /// Alternatives for meals already in the week, for the user's own swap. May be empty.
+  @JsonKey(defaultValue: <MealPlanPlannedAlternative>[])
+  final List<MealPlanPlannedAlternative> plannedAlternatives;
+
+  /// True when finalise fell back to template reasons. The UI must not treat it differently, so nothing in the
+  /// app branches on it; it stays parsed for diagnostics and evals.
+  @JsonKey(defaultValue: false)
+  final bool degraded;
 }

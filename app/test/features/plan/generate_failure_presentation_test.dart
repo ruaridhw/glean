@@ -1,5 +1,6 @@
-// The Plan tab's Generate presentation: the spinner is unchanged while a session runs, and a failure shows the
-// approved catalogue copy with its action. The copy is V1's design gate, so these assertions are verbatim.
+// The proposal screen's Generate presentation: progress lines arrive while the session runs, and a failure
+// shows the approved catalogue copy with its action plus "Nothing was added to your plan.". The copy is V1's
+// design gate, so these assertions are verbatim.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -65,8 +66,7 @@ void main() {
   }
 
   gleanWidgetTest(
-    'the Generate spinner is unchanged while the session runs, and progress '
-    'lines stay off screen',
+    'the working state shows progress lines as the poll delivers them',
     (tester) async {
       var polls = 0;
       final h = AppTestHarness(
@@ -74,25 +74,14 @@ void main() {
           if (request.method == 'POST') {
             return http.Response('{"session_id":"s1"}', 202);
           }
-          if (!request.url.path.startsWith('/meal-plan/sessions/')) {
-            final String id = request.url.pathSegments.last;
-            return http.Response(
-              jsonEncode({
-                'external_id': id,
-                'title': 'Corpus $id',
-                'ingredients': [
-                  {'canonical_name': 'beans', 'quantity': 200, 'unit': 'g'},
-                ],
-              }),
-              200,
-            );
-          }
           polls++;
           if (polls < 3) {
             return http.Response(
               jsonEncode({
                 'status': 'running',
-                'progress': ['Ranking recipes'],
+                'progress': polls == 1
+                    ? ['Checking what you cooked recently']
+                    : ['Picking your meals'],
                 'next_cursor': polls,
                 'result': null,
                 'error': null,
@@ -110,21 +99,16 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(FilledButton, 'Generate'));
-      await pumpUntil(tester, () => polls >= 1, description: 'the first poll');
-      expect(find.text('Generating'), findsOneWidget);
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Generating'),
-            )
-            .onPressed,
-        isNull,
-        reason: 'a second tap cannot open a second session',
+      await pumpUntil(
+        tester,
+        () => find.text('Picking your meals').evaluate().isNotEmpty,
+        description: 'the second progress line',
       );
+      expect(find.text('Cancel'), findsOneWidget);
       expect(
-        find.textContaining('Ranking recipes'),
-        findsNothing,
-        reason: 'V1 shows no progress lines',
+        find.text('Checking what you cooked recently'),
+        findsOneWidget,
+        reason: 'earlier lines stay on screen',
       );
 
       await pumpUntil(
@@ -133,12 +117,8 @@ void main() {
         description: 'the session finishing',
       );
       await tester.pumpAndSettle();
-      expect(find.text('Generating'), findsNothing);
-      expect(
-        find.textContaining('Week generated'),
-        findsOneWidget,
-        reason: 'a done result commits and reports as before',
-      );
+      expect(find.text('Cancel'), findsNothing);
+      expect(find.text('Corpus rec_a'), findsOneWidget);
     },
   );
 
@@ -167,6 +147,7 @@ void main() {
         find.text('No recipes fit your diet and time limit.'),
         findsOneWidget,
       );
+      expect(find.text('Nothing was added to your plan.'), findsOneWidget);
       expect(find.text('Open Settings'), findsOneWidget);
 
       await tester.tap(find.text('Open Settings'));
@@ -178,13 +159,14 @@ void main() {
   gleanWidgetTest(
     'model_error shows the generic copy and Retry starts a new session',
     (tester) async {
+      final polls = <int>[];
       final h = AppTestHarness(
         httpClient: scripted([
           {
             'status': 'failed',
             'error': {'code': 'model_error', 'retry_after_minutes': null},
           },
-        ]),
+        ], pollsSeen: polls),
       );
       addTearDown(h.dispose);
       await h.pumpAt(tester, AppRoutes.plan.path);
@@ -196,11 +178,13 @@ void main() {
         find.text('Something went wrong planning your week.'),
         findsOneWidget,
       );
+      expect(find.text('Nothing was added to your plan.'), findsOneWidget);
       expect(find.textContaining('model_error'), findsNothing);
 
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Week generated'), findsOneWidget);
+      expect(find.text('Corpus rec_a'), findsOneWidget);
+      expect(polls.length, greaterThan(1), reason: 'Retry opened a new run');
     },
   );
 
@@ -227,6 +211,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text("Glean couldn't read this request."), findsOneWidget);
+      expect(find.text('Nothing was added to your plan.'), findsOneWidget);
       await tester.tap(find.text('Report'));
       await tester.pumpAndSettle();
       expect(
@@ -258,6 +243,8 @@ void main() {
       find.text("You've used too many AI credits. Try again in 3 minutes."),
       findsOneWidget,
     );
-    expect(find.byType(SnackBarAction), findsNothing);
+    expect(find.text('Nothing was added to your plan.'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+    expect(find.text('Open Settings'), findsNothing);
   });
 }

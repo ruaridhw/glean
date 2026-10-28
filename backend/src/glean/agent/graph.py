@@ -17,7 +17,8 @@ from langgraph.graph import END, START, StateGraph  # noqa: TID251 - this module
 
 from glean.agent.errors import AgentError, model_error_for
 from glean.meal_plan import pipeline
-from glean.meal_plan.schemas import CorpusMealPlanRecipe, MealPlanRequest, MealPlanResult
+from glean.meal_plan.schemas import CorpusMealPlanResponse, MealPlanRequest, MealPlanResult
+from glean.observability import logger
 from glean.sessions.models import SessionError, SessionErrorCode
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ class PlanState(TypedDict, total=False):
     session_id: str
     request: dict[str, Any]
     prepared: dict[str, Any] | None
-    picks: list[dict[str, Any]]
+    draft: dict[str, Any] | None
     result: dict[str, Any] | None
 
 
@@ -70,17 +71,23 @@ def build_graph(
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
         try:
             # The one blocking call: it may use what is left of the budget, never more.
-            picks = pipeline.choose(prepared, llm_router=deps.llm_router, timeout_ms=guard.remaining_ms())
+            draft = pipeline.choose(prepared, llm_router=deps.llm_router, timeout_ms=guard.remaining_ms())
         except Exception as exc:
             # The only LLM call in V1: a provider failure is the household's `model_error`, never a crash.
             raise AgentError(model_error_for(exc)) from exc
-        return {"picks": [pick.model_dump(mode="json") for pick in picks]}
+        return {"draft": draft.model_dump(mode="json")}
 
     def finalise(state: PlanState) -> PlanState:
         guard.step("Checking the week against what you can cook")
         prepared = pipeline.PreparedPlan.model_validate(state["prepared"])
-        picks = [CorpusMealPlanRecipe.model_validate(pick) for pick in state.get("picks", [])]
-        result = pipeline.finalise(prepared, picks)
+        draft = CorpusMealPlanResponse.model_validate(state.get("draft") or {})
+        result = pipeline.finalise(prepared, draft)
+        if not result.suggestions:
+            # The model's answer kept nothing (it invented ids, or named meals already in the plan).
+            # Spec §6.2's fallback: the sampler's best picks with template text, flagged degraded so the
+            # logs and the evals see it. The household sees an ordinary proposal (spec §6.5).
+            logger.warning("the model's answer kept no meals; writing the fallback plan")
+            result = pipeline.degraded(prepared)
         return {"result": result.model_dump(mode="json")}
 
     # ty cannot see that a TypedDict with optional keys is a TypedDictLike; LangGraph reads it as one.
