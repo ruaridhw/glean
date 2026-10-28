@@ -93,8 +93,5 @@ class RecipeApiClient:
         _cache_write(cache_key, parsed.data.model_dump())
         return parsed.data
 
-    def active_time_mins(self, recipe: RecipeApiRecipe) -> int | None:
-        return _iso_to_mins(recipe.meta.active_time)
-
     def total_time_mins(self, recipe: RecipeApiRecipe) -> int | None:
         return _iso_to_mins(recipe.meta.total_time)

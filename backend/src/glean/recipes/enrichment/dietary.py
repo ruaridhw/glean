@@ -24,6 +24,7 @@ from glean.recipes.enrichment.enricher import (
     ConfidenceBar,
     EnrichmentQuestion,
     SafeSide,
+    StoredValue,
     UncalibratedModelError,
 )
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from glean.decisions import Decision
+    from glean.recipes.stored import StoredRecipe
 
 __all__ = [
     "CALIBRATED_DIETARY",
@@ -217,8 +219,8 @@ def dietary_questions(flags: tuple[str, ...] = DIETARY_FLAGS) -> dict[str, NoulQ
 def _accept_noul(name: str) -> Acceptance:
     """Store the probability itself: a dietary question's bar is applied when planning reads the answer."""
 
-    def accept(decision: Decision) -> float:
-        return decision.noul(name).noul
+    def accept(decision: Decision) -> StoredValue:
+        return StoredValue(probability=decision.noul(name).noul)
 
     return accept
 
@@ -256,6 +258,10 @@ class DietaryEnricher:
 
     def questions(self) -> tuple[EnrichmentQuestion, ...]:
         return tuple(_enrichment_question(flag, self.calibration) for flag in self.flags)
+
+    def state(self, recipe: StoredRecipe | None) -> Mapping[str, object]:
+        """Nothing: a dietary question reads the title and ingredients, which the runner always sends."""
+        return {}
 
 
 DIETARY_ENRICHER = DietaryEnricher()

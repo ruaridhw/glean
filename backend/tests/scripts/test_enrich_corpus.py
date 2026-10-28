@@ -29,7 +29,7 @@ def test_a_dry_run_prints_what_would_be_asked_and_needs_no_api_key(
     out = capsys.readouterr().out
     assert code == 0
     assert "Dry run: 2 recipes would be asked; nothing was requested or stored." in out
-    assert "Coverage: 0/12 (0.0%)" in out
+    assert "Coverage: 0/24 (0.0%)" in out  # two recipes, twelve questions each
     assert corpus.answers() == []
 
 
@@ -39,7 +39,7 @@ def test_a_complete_run_exits_zero(tmp_path: Path, capsys: pytest.CaptureFixture
     code = enrich_corpus.main(["--local", str(tmp_path)], client=FakeDecisionApi().client())
 
     assert code == 0
-    assert "Coverage: 12/12 (100.0%)" in capsys.readouterr().out
+    assert "Coverage: 24/24 (100.0%)" in capsys.readouterr().out
 
 
 def test_an_incomplete_run_exits_nonzero_so_the_gate_can_fail(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
@@ -51,7 +51,7 @@ def test_an_incomplete_run_exits_nonzero_so_the_gate_can_fail(tmp_path: Path, ca
     out = capsys.readouterr().out
     assert code == 1
     assert "rec_tomato" in out
-    assert "Failed this run: 6" in out
+    assert "Failed this run: 12" in out  # every dietary, attribute and active-time question
 
 
 def test_a_missing_corpus_index_exits_nonzero_instead_of_passing_the_gate(
@@ -171,10 +171,10 @@ def test_an_unknown_enricher_is_refused_and_the_known_ones_are_named(
 ) -> None:
     _corpus(tmp_path)
 
-    code = enrich_corpus.main(["--local", str(tmp_path), "--dry-run", "--enricher", "attributes"])
+    code = enrich_corpus.main(["--local", str(tmp_path), "--dry-run", "--enricher", "oven"])
 
     assert code == 2
-    assert "no enricher called attributes; this build has: dietary" in capsys.readouterr().out
+    assert "no enricher called oven; this build has: active-time, attributes, dietary" in capsys.readouterr().out
 
 
 def test_the_enricher_filter_asks_only_that_enricher(tmp_path: Path) -> None:

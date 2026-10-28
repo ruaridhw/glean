@@ -23,18 +23,23 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from glean.decisions import DEFAULT_MODEL, DecisionModel
+from glean.recipes.attributes import UNSURE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from glean.decisions import Decision, Question
     from glean.recipes.answers import RecipeAnswer
     from glean.recipes.search_index import RecipeSummary
+    from glean.recipes.stored import StoredRecipe
 
 __all__ = [
+    "ATTRIBUTE_BAR_MODEL",
+    "DEFAULT_ATTRIBUTE_BAR",
+    "MIN_ATTRIBUTE_BAR",
     "Acceptance",
     "AnswerState",
     "ConfidenceBar",
@@ -44,8 +49,13 @@ __all__ = [
     "StoredValue",
     "UncalibratedModelError",
     "answer_state",
+    "attribute_bar",
+    "current_value",
+    "method_state",
     "question_hash",
     "recipe_state",
+    "top_choice",
+    "top_level",
 ]
 
 
@@ -53,13 +63,21 @@ class UncalibratedModelError(Exception):
     """A client or an answer names a model a question's bar wasn't measured on, so nothing may decide on it."""
 
 
-# What an acceptance rule stores for one question. Today's answer item carries a probability and nothing
-# else; V5's attribute enrichers widen this to a value (`unsure`, a cuisine) on the same item.
-type StoredValue = float
-# Given the whole decision, return the value to store, or None when the answer doesn't clear the bar and
-# the enricher would rather the question stayed open than stored a guess. None means "ask again next run",
-# not "store unsure": a stored below-the-bar value (`unsure`) needs a value on the answer item, which V5
-# adds with the attribute questions (ADR 0025).
+# What an acceptance rule stores for one question: the probability that decided the answer, and — for a
+# `choice` or `score` question — the option it chose (a label or a bucket, trusted or not). A `noul` answer is
+# its probability, so its value stays None and pre-V5 dietary lines are unchanged (ADR 0025, spec 6.1).
+@dataclass(frozen=True)
+class StoredValue:
+    """One question's answer, as it will be stored."""
+
+    probability: float
+    value: str | None = None
+
+
+# Given the whole decision, return what to store, or None when the enricher would rather the question stayed
+# open than stored an answer. None means "ask again next run", and it is not `unsure`: an answer under its
+# question's bar is still stored, because "we asked and are not sure" is an answer that stops the question
+# being re-asked and paid for on every run.
 type Acceptance = Callable[[Decision], StoredValue | None]
 
 
@@ -78,7 +96,11 @@ class ConfidenceBar:
 
     One field pair covers both kinds of bar, so the runner, the coverage report and a reviewer read the
     same fact: dietary questions are safe at `LOW` (a recipe that probably breaks no flag), so 0.3 is an
-    exclusion threshold; attribute questions are safe at `HIGH`, so 0.8 is a floor.
+    exclusion threshold; attribute questions are safe at `HIGH`, so 0.8 is the probability a stored label
+    needs to be read rather than read as `unsure`.
+
+    Both bars are applied when an answer is **read**, never when it is stored: a stored answer is what the
+    model said, and the bar is the policy over it (`current_value`).
     """
 
     threshold: float
@@ -133,6 +155,82 @@ class Enricher(Protocol):
         """Every question this family asks about each recipe, in the order they should be reported."""
         ...
 
+    def state(self, recipe: StoredRecipe | None) -> Mapping[str, Any]:
+        """Extra state this family's questions need, beyond the recipe's title and ingredients.
+
+        The runner merges it into the request only when this family has a question to ask, so a dietary run
+        pays for no method text. A family whose questions read only the ingredients returns nothing.
+        """
+        ...
+
+
+# The confidence floor G1 settled for an attribute-style answer, and the bar it starts at (spec 6.1). A bar
+# may be tuned per attribute on the labelled sample, never below the floor; below whichever bar applies the
+# value is stored as `unsure`, which earns no variety credit and no penalty.
+MIN_ATTRIBUTE_BAR = 0.7
+DEFAULT_ATTRIBUTE_BAR = 0.8
+# The model the attribute and active-time bars were measured on (the 50-recipe check asked the pinned decision
+# model). A bar only means something for that model's probabilities, as a dietary cutoff does (#216), so the
+# questions accept no other model's answers and a run asking another model is refused.
+ATTRIBUTE_BAR_MODEL: DecisionModel = DEFAULT_MODEL
+
+
+def attribute_bar(threshold: float = DEFAULT_ATTRIBUTE_BAR) -> ConfidenceBar:
+    """An attribute-style question's floor, refusing one looser than G1 allows.
+
+    V5's attributes and active time use this; dietary's bars are exclusion thresholds with `SafeSide.LOW`
+    and are not subject to the floor (ADR 0011).
+    """
+    if not MIN_ATTRIBUTE_BAR <= threshold <= 1.0:
+        raise ValueError(f"an attribute bar must be between {MIN_ATTRIBUTE_BAR} and 1.0, not {threshold}")
+    return ConfidenceBar(threshold=threshold, safe_side=SafeSide.HIGH)
+
+
+def top_choice(name: str) -> Acceptance:
+    """Store a `choice` question's top option and the probability that chose it, whatever the bar says.
+
+    The bar is applied when the answer is **read** (`current_value`), not here, so the stored answer is the
+    model's actual answer and the bar is a policy over it. That is what makes retuning a bar work: raising it
+    hides the labels it now rejects, lowering it recovers ones it used to reject, and neither re-asks the
+    corpus or pays for another call. Dietary has always worked this way — its probability is stored and its
+    threshold decides at read time — and this is the same rule for the questions that answer with a value.
+    """
+
+    def accept(decision: Decision) -> StoredValue:
+        answer = decision.choice(name)
+        top = max(answer.probabilities, key=lambda option: answer.probabilities[option])
+        return StoredValue(probability=answer.probabilities[top], value=top)
+
+    return accept
+
+
+def top_level(name: str, levels: Sequence[str]) -> Acceptance:
+    """The same rule for a `score` question, whose answer is the level with the highest probability.
+
+    `levels` is the question's own level order (`criteria[0]` first), so the stored value is the level's
+    label rather than its index.
+    """
+
+    def accept(decision: Decision) -> StoredValue:
+        answer = decision.score(name)
+        top = max(answer.probabilities, key=lambda index: answer.probabilities[index])
+        return StoredValue(probability=answer.probabilities[top], value=levels[top])
+
+    return accept
+
+
+def current_value(question: EnrichmentQuestion, answer: RecipeAnswer, *, content_hash: str) -> str | None:
+    """What `answer` reads as under the question's **current** bar, or None when it isn't a current answer.
+
+    `unsure` comes back for an answer whose stored probability is under today's bar: the answer exists, but the
+    question does not trust it enough to label the recipe. Because the decision is made here and not when the
+    answer was stored, a bar change takes effect on the next read — raising one makes existing labels read as
+    `unsure`, lowering one recovers a label that was stored below the old bar — with no re-enrichment.
+    """
+    if answer.value is None or not question.is_current(answer, content_hash=content_hash):
+        return None
+    return answer.value if answer.probability >= question.bar.threshold else UNSURE
+
 
 class AnswerState(StrEnum):
     """How a recipe stands against one question."""
@@ -163,3 +261,12 @@ def question_hash(question: Question) -> str:
 def recipe_state(summary: RecipeSummary) -> dict[str, str | list[str]]:
     """What the decision model is shown about a recipe: its title and its ingredient names."""
     return {"recipe_title": summary.title, "ingredients": list(summary.ingredient_names)}
+
+
+def method_state(recipe: StoredRecipe | None) -> dict[str, list[str]]:
+    """The recipe's method, step by step, for the questions that read it.
+
+    `None` is a recipe the projection lists and the table no longer has; the questions still get asked, with
+    no method to read, rather than the run failing on a corpus that is briefly inconsistent.
+    """
+    return {"method": [] if recipe is None else [step.text for step in recipe.instructions]}

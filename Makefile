@@ -15,6 +15,7 @@
 #   make start-web         — Flutter in a Chrome it launches, hot reload (web dev loop)
 #   make e2e-tokens        — Cognito test-user tokens for the e2e entrypoint (see app/README.md)
 #   make enrich-corpus     — fill the local recipe corpus's decision answers (paid API; local only)
+#   make check-attributes  — measure the attributes against SAMPLE=<dir> and the labels beside it (paid)
 #   make worktree BRANCH=feature/foo — isolated worktree branched from origin/main
 #                                      (BASE=<parent branch> for a stacked PR)
 #
@@ -128,6 +129,20 @@ pre-commit:  ## Run all pre-commit hooks across the repo
 # command always carries --local-only, so the CLI itself refuses a --table, --bucket, --i-am-the-owner or
 # any abbreviation of them: this target is the local dev loop and must not reach a remote table however
 # it is invoked. The case guard below is only there to fail fast with a readable message.
+
+.PHONY: check-attributes
+check-attributes:  ## Measure V5's attributes against SAMPLE=<dir> of exported recipes and the labels beside it (paid)
+	@if [ -z "$(SAMPLE)" ]; then \
+		echo "usage: make check-attributes SAMPLE=<a local sample directory of exported recipe bodies>"; \
+		echo "the sample and its v5-check/ answers and labels live outside this repo, never in it"; \
+		exit 2; \
+	fi
+	@if [ -z "$$OPENROUTER_API_KEY" ]; then \
+		echo "check-attributes asks the decision model and is billed: set OPENROUTER_API_KEY"; \
+		exit 2; \
+	fi
+	cd backend && uv run python scripts/check_recipe_attributes.py enrich --sample $(SAMPLE)
+	cd backend && uv run python scripts/check_recipe_attributes.py compare --sample $(SAMPLE)
 
 .PHONY: enrich-corpus
 enrich-corpus:  ## Fill what the local recipe corpus is missing (ENRICH_ARGS=--dry-run to preview, no key needed)

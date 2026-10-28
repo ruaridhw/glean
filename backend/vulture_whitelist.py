@@ -169,3 +169,9 @@ _from_legacy_flag  # Pydantic model validator (RecipeAnswer, pre-F1 dietary JSON
 
 # recipes/enrichment/ (F2): enrichers declare questions, the runner asks and stores them
 HIGH  # SafeSide.HIGH: declared now so V5's attribute questions state their safe side, per ADR 0025
+
+
+# The G1 attribute contract's enum members are read by value (a projection entry, a question's criteria, a
+# label) and the questions key their criteria on the members, so no member needs a line here. What is left is
+# a Pydantic validator, which only Pydantic calls.
+_labelled_questions_carry_a_value  # Pydantic model validator (RecipeAnswer: a labelled answer must carry a value)

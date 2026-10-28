@@ -6,6 +6,7 @@ and the `DecisionClient` requests it makes, faked at the HTTP boundary.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
@@ -31,6 +32,7 @@ from glean.recipes.enrichment.dietary import (
     DietaryCalibration,
     dietary_enrichment_questions,
 )
+from glean.recipes.enrichment.enricher import ConfidenceBar, EnrichmentQuestion, SafeSide
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.enrichment.fakes import DINNER, SNAPSHOT, CountingBackend, DinnerEnricher, FakeDecisionApi
@@ -60,7 +62,8 @@ def test_one_request_per_recipe_carries_every_question_missing_from_both_enriche
     assert pesto["model"] == DECISION_MODEL
     assert pesto["state"] == {"recipe_title": "Pesto Pasta", "ingredients": ["spaghetti", "basil pesto"]}
     assert set(pesto["questions"]) == {*DIETARY_QUESTIONS, DINNER}
-    assert {question["type"] for question in pesto["questions"].values()} == {"noul"}
+    assert pesto["questions"][DINNER]["type"] == "choice"
+    assert {pesto["questions"][name]["type"] for name in DIETARY_QUESTIONS} == {"noul"}
 
 
 def test_every_answer_is_stored_on_its_own_with_what_produced_it(tmp_path) -> None:
@@ -118,7 +121,7 @@ def test_answers_to_another_wording_live_beside_the_new_one_in_the_table(recipes
     assert before == {"dietary:vegan"}
 
     asked = FakeDecisionApi()
-    report = run_enrichment(corpus, asked.client())
+    report = run_enrichment(corpus, asked.client(), enrichers=(DIETARY_ENRICHER,))
 
     # Only vegan was stale, so the other five answers per recipe were not re-asked.
     assert {frozenset(request["questions"]) for request in asked.requests} == {frozenset({"dietary:vegan"})}
@@ -147,12 +150,12 @@ def test_an_answer_from_another_model_is_asked_again(tmp_path) -> None:
     _seed_answers(corpus, ["rec_pesto", "rec_tomato"], model="typesafe/jev-1.13-20260917")
     assert {answer.model for answer in corpus.answers()} == {"typesafe/jev-1.13-20260917"}
 
-    dry = run_enrichment(corpus, None, dry_run=True)
+    dry = run_enrichment(corpus, None, enrichers=(DIETARY_ENRICHER,), dry_run=True)
 
     assert (dry.question("dietary:vegan").stale, dry.question("dietary:vegan").missing) == (2, 0)
 
     api = FakeDecisionApi()
-    report = run_enrichment(corpus, api.client())
+    report = run_enrichment(corpus, api.client(), enrichers=(DIETARY_ENRICHER,))
 
     assert len(api.requests) == 2
     assert (report.answers_stored, report.coverage) == (12, 1.0)
@@ -163,28 +166,52 @@ def test_a_run_reports_only_the_enrichers_it_was_given(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
     run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DinnerEnricher(),))
 
-    report = run_enrichment(corpus, FakeDecisionApi().client())
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
     assert {coverage.name for coverage in report.questions} == DIETARY_QUESTIONS
     assert report.coverage == 1.0
 
 
-def test_an_answer_below_the_bar_is_not_stored_and_is_asked_again(tmp_path) -> None:
+def test_an_answer_under_its_bar_is_stored_as_the_top_option_and_reported_unsure(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    # The fake answers 0.9; a 0.95 bar is above it, so nothing clears it.
+    # The fake answers 0.9; a 0.95 bar is above it, so the option it chose is not trusted.
     strict = (DIETARY_ENRICHER, DinnerEnricher(threshold=0.95))
 
-    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=strict)
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=strict)
 
-    stored = {(answer.recipe_id, answer.question) for answer in corpus.answers()}
-    assert ("rec_pesto", DINNER) not in stored  # 0.9 is under the enricher's 0.95 bar
+    stored = {(answer.recipe_id, answer.question): answer for answer in corpus.answers()}
+    dinner = stored[("rec_pesto", DINNER)]
+    assert (dinner.value, dinner.probability) == ("dinner", 0.9)  # what the model said, kept as said
+    # The bar is read-time: the report counts it unsure without re-asking or re-paying for it.
+    assert (report.question(DINNER).current, report.question(DINNER).unsure) == (2, 2)
     # Dietary stores the probability itself and lets the bar decide at read time, so it is untouched.
-    assert ("rec_pesto", "dietary:vegetarian") in stored
+    assert stored[("rec_pesto", "dietary:vegetarian")].value is None
 
     asked_again = FakeDecisionApi()
     report = run_enrichment(corpus, asked_again.client(), enrichers=strict)
-    assert {frozenset(request["questions"]) for request in asked_again.requests} == {frozenset({DINNER})}
+    assert asked_again.requests == []  # the answer exists: nothing is re-asked or re-paid for
+    assert report.question(DINNER).current == 2
+
+
+def test_an_acceptance_that_stores_nothing_leaves_the_question_to_be_asked_again(tmp_path) -> None:
+    """`None` from an acceptance rule still means "nothing stored", which is not the same as `unsure`."""
+    corpus = _blob_corpus(tmp_path)
+    bar = ConfidenceBar(threshold=0.8, safe_side=SafeSide.HIGH)
+    open_ended = EnrichmentQuestion(
+        name=DINNER,
+        question=DinnerEnricher().questions()[0].question,
+        bar=bar,
+        accept=lambda decision: None,
+    )
+
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(_OneQuestion(open_ended),))
+
+    assert corpus.answers() == []
     assert report.question(DINNER).missing == 2
+
+    asked_again = FakeDecisionApi()
+    run_enrichment(corpus, asked_again.client(), enrichers=(_OneQuestion(open_ended),))
+    assert len(asked_again.requests) == 2
 
 
 def test_a_recipe_the_model_cannot_answer_is_recorded_and_the_run_continues(tmp_path) -> None:
@@ -244,7 +271,7 @@ def test_a_dry_run_counts_what_is_current_stale_and_missing_without_asking(tmp_p
     corpus = _blob_corpus(tmp_path)
     _seed_answers(corpus, ["rec_tomato"], flags=("vegan",), stale_criteria=True)
 
-    report = run_enrichment(corpus, None, dry_run=True)
+    report = run_enrichment(corpus, None, enrichers=(DIETARY_ENRICHER,), dry_run=True)
 
     assert _counts(report, "dietary:vegan") == (0, 1, 1, 0)
     assert _counts(report, "dietary:vegetarian") == (0, 0, 2, 0)
@@ -257,7 +284,7 @@ def test_the_report_counts_every_recipe_against_every_question(tmp_path) -> None
     _seed_answers(corpus, ["rec_tomato"], flags=("vegan",), stale_criteria=True)
     api = FakeDecisionApi(fail_when=lambda body: body["state"]["recipe_title"] == "Tomato Pasta")
 
-    report = run_enrichment(corpus, api.client())
+    report = run_enrichment(corpus, api.client(), enrichers=(DIETARY_ENRICHER,))
 
     assert _counts(report, "dietary:vegan") == (1, 0, 0, 1)
     assert _counts(report, "dietary:peanut-free") == (1, 0, 0, 1)
@@ -267,14 +294,14 @@ def test_the_report_counts_every_recipe_against_every_question(tmp_path) -> None
     assert [failure.question for failure in report.failures] == [dietary_question(flag) for flag in DIETARY_FLAGS]
 
 
-def test_the_report_states_how_many_recipes_give_an_active_time(tmp_path) -> None:
+def test_the_report_states_how_many_recipes_give_a_prep_time(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
-    corpus.save(_recipe("rec_timed", "Ten Minute Noodles", ["noodles"], active_time_mins=10))
+    corpus.save(_recipe("rec_timed", "Ten Minute Noodles", ["noodles"], prep_time_mins=10))
 
-    report = run_enrichment(corpus, FakeDecisionApi().client())
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
-    assert (report.stated_active_time, report.recipes) == (1, 3)
-    assert "Recipes with a stated active time: 1/3 (33.3%)" in report.render()
+    assert (report.stated_prep_time, report.recipes) == (1, 3)
+    assert "Recipes with a stated prep time: 1/3 (33.3%)" in report.render()
 
 
 def test_answers_persisted_before_a_failed_publication_are_not_paid_for_again(recipes_table, projections) -> None:
@@ -288,12 +315,13 @@ def test_answers_persisted_before_a_failed_publication_are_not_paid_for_again(re
     assert blocked.answers() == []  # nothing was published, so the projection says nothing about answers
 
     with pytest.raises(ProjectionPublishError):
-        run_enrichment(blocked, FakeDecisionApi().client())
+        run_enrichment(blocked, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
     resumed = FakeDecisionApi()
     report = run_enrichment(
         RecipeCorpusStore(DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore(recipes_only))),
         resumed.client(),
+        enrichers=(DIETARY_ENRICHER,),
     )
 
     assert resumed.requests == []  # the answers were in the table all along
@@ -311,13 +339,14 @@ def test_a_crash_after_a_checkpoint_is_resumed_from_the_table(recipes_table, pro
     crashing = FakeDecisionApi(crash_when=lambda body: body["state"]["recipe_title"] == "Tomato Pasta")
 
     with pytest.raises(ProjectionPublishError):
-        run_enrichment(blocked, crashing.client(), max_workers=1, checkpoint_every=1)
+        run_enrichment(blocked, crashing.client(), enrichers=(DIETARY_ENRICHER,), max_workers=1, checkpoint_every=1)
     assert blocked.answers() == []  # the checkpoint went to the table, and publication never happened
 
     resumed = FakeDecisionApi()
     report = run_enrichment(
         RecipeCorpusStore(DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=InMemoryProjectionStore(recipes_only))),
         resumed.client(),
+        enrichers=(DIETARY_ENRICHER,),
         max_workers=1,
     )
 
@@ -330,7 +359,7 @@ def test_the_dynamo_run_writes_each_answer_once_across_checkpoints(recipes_table
     corpus = RecipeCorpusStore(counting)
     _seed(corpus)
 
-    run_enrichment(corpus, FakeDecisionApi().client(), checkpoint_every=1)
+    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,), checkpoint_every=1)
 
     # A delta per checkpoint, not the whole run's answers again: six answers per recipe, written once each.
     assert counting.batches == [6, 6]
@@ -340,28 +369,28 @@ def test_the_dynamo_run_writes_each_answer_once_across_checkpoints(recipes_table
 def test_the_blob_run_still_rewrites_its_whole_jsonl_at_each_checkpoint(tmp_path) -> None:
     corpus, counting = _counting_blob_corpus(tmp_path)
 
-    run_enrichment(corpus, FakeDecisionApi().client(), checkpoint_every=1)
+    run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,), checkpoint_every=1)
 
     # One JSONL, so every write carries everything the run holds — the fallback the dynamo path avoids.
     assert counting.batches == [6, 12]
 
 
-def test_the_stated_active_time_count_is_read_from_the_recipes_themselves(recipes_table, projections) -> None:
+def test_the_stated_prep_time_count_is_read_from_the_recipes_themselves(recipes_table, projections) -> None:
     """The projection's summaries are only as fresh as the last rebuild; this number has to be true anyway."""
     corpus = _dynamo_corpus(projections)
     _seed(corpus)
-    corpus.save(_recipe("rec_timed", "Ten Minute Noodles", ["noodles"], active_time_mins=10))
+    corpus.save(_recipe("rec_timed", "Ten Minute Noodles", ["noodles"], prep_time_mins=10))
 
-    report = run_enrichment(corpus, FakeDecisionApi().client())
+    report = run_enrichment(corpus, FakeDecisionApi().client(), enrichers=(DIETARY_ENRICHER,))
 
-    assert (report.stated_active_time, report.recipes) == (1, 3)
+    assert (report.stated_prep_time, report.recipes) == (1, 3)
 
 
 def test_a_limit_asks_about_the_first_recipes_only(tmp_path) -> None:
     corpus = _blob_corpus(tmp_path)
     api = FakeDecisionApi()
 
-    report = run_enrichment(corpus, api.client(), limit=1)
+    report = run_enrichment(corpus, api.client(), enrichers=(DIETARY_ENRICHER,), limit=1)
 
     assert [request["state"]["recipe_title"] for request in api.requests] == ["Pesto Pasta"]
     # The report still describes the whole corpus, so it says who is left.
@@ -419,6 +448,20 @@ def test_a_corpus_with_no_visible_recipes_fails_loudly(tmp_path) -> None:
 def test_a_run_that_is_not_a_dry_run_needs_a_client(tmp_path) -> None:
     with pytest.raises(EnrichmentError, match="decision client"):
         run_enrichment(_blob_corpus(tmp_path), None)
+
+
+@dataclass(frozen=True)
+class _OneQuestion:
+    """An enricher of exactly one declared question, for testing a single acceptance rule."""
+
+    question: EnrichmentQuestion
+    name: str = "test-one"
+
+    def questions(self) -> tuple[EnrichmentQuestion, ...]:
+        return (self.question,)
+
+    def state(self, recipe) -> dict:
+        return {}
 
 
 def _counts(report, question: str) -> tuple[int, ...]:

@@ -28,7 +28,9 @@ from pydantic import BaseModel, Field, ValidationError
 
 from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, latest_per_question
+from glean.recipes.attributes import RecipeAttributes
 from glean.recipes.corpus import recipe_blob_key
+from glean.recipes.enrichment.projection_attributes import attributes_from_answers
 from glean.recipes.search_index import RecipeSummary
 
 if TYPE_CHECKING:
@@ -49,12 +51,18 @@ class ProjectionError(Exception):
 
 
 class ProjectedRecipe(BaseModel):
-    """One recipe as planning needs it: its summary, its current answers, and its future attributes."""
+    """One recipe as planning needs it: its summary, its current answers, and its attributes."""
 
     summary: RecipeSummary
     answers: list[RecipeAnswer] = Field(default_factory=list)
-    # F2/V5 fill these (`main_protein`, `cuisine`, `active_time_mins`, ...) without a schema change here.
-    attributes: dict[str, Any] = Field(default_factory=dict)
+    # V5's attributes by their G1 names (`main_protein`, `cuisine`, `active_time`, ...), each a stored value
+    # or `unsure` (recipes/attributes.py). Plain strings, so a document written by any build reads back.
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+    @property
+    def recipe_attributes(self) -> RecipeAttributes:
+        """The attributes typed, and `unsure` where the entry carries nothing: how planning reads them."""
+        return RecipeAttributes.from_mapping(self.attributes)
 
 
 class RecipeProjection(BaseModel):
@@ -243,16 +251,18 @@ def build_projection(
             recipe.title, [ingredient.canonical_name for ingredient in recipe.ingredients]
         )
         key = keys.get(recipe.external_id) or recipe_blob_key(recipe.external_id)
+        # Only the answers about the recipe's current state, and for each question only the one the latest
+        # wording produced: an older criteria hash must never shadow the current answer.
+        current = latest_per_question(
+            answer for answer in answers_by_recipe.get(recipe.external_id, []) if answer.content_hash == fingerprint
+        )
         projected.append(
             ProjectedRecipe(
                 summary=RecipeSummary.from_recipe(recipe, key=key),
-                # Only the answers about the recipe's current state, and for each question only the one
-                # the latest wording produced: an older criteria hash must never shadow the current answer.
-                answers=latest_per_question(
-                    answer
-                    for answer in answers_by_recipe.get(recipe.external_id, [])
-                    if answer.content_hash == fingerprint
-                ),
+                answers=current,
+                # Every recipe has attributes; one nothing has enriched is `unsure` throughout. Derived from
+                # the answers rather than stored twice: the answers are the authority, this is the cache.
+                attributes=attributes_from_answers(current, content_hash=fingerprint).as_mapping(),
             )
         )
     return RecipeProjection(recipes=sorted(projected, key=_by_id))

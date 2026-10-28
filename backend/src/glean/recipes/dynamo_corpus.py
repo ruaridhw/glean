@@ -44,6 +44,7 @@ from botocore.exceptions import ClientError
 from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, latest_per_question
 from glean.recipes.corpus import recipe_blob_key, recipe_payload
+from glean.recipes.enrichment.projection_attributes import attributes_from_answers
 from glean.recipes.projection import (
     PROJECTION_TTL_SECONDS,
     ProjectedRecipe,
@@ -302,7 +303,7 @@ class DynamoCorpusBackend:
             key = _stored_blob_key(self._get(recipe_pk(recipe.external_id), RECIPE_SK))
         blob_key = key or recipe_blob_key(recipe.external_id)
         return self._publish(
-            lambda projection, _refresh: projection.with_recipe(self._projected(recipe, projection, key=blob_key)),
+            lambda projection, _refresh: projection.with_recipe(self._projected(recipe, key=blob_key)),
             what=f"recipe {recipe.external_id}",
         )
 
@@ -438,17 +439,17 @@ class DynamoCorpusBackend:
             _LoadedProjection(raw=snapshot.data, projection=projection, index=index),
         )
 
-    def _projected(self, recipe: StoredRecipe, projection: RecipeProjection, *, key: str) -> ProjectedRecipe:
-        """The projection entry for a recipe just written: its summary and the answers that still apply."""
+    def _projected(self, recipe: StoredRecipe, *, key: str) -> ProjectedRecipe:
+        """The projection entry for a recipe just written: its summary, its answers and their attributes."""
         fingerprint = _fingerprint(recipe)
-        known = projection.by_id(recipe.external_id)
         answers = latest_per_question(
             answer for answer in self.answers_for(recipe.external_id) if answer.content_hash == fingerprint
         )
         return ProjectedRecipe(
             summary=RecipeSummary.from_recipe(recipe, key=key),
             answers=answers,
-            attributes=known.attributes if known is not None else {},
+            # Recomputed, never carried over: an edited recipe voids the attributes asked about the old body.
+            attributes=attributes_from_answers(answers, content_hash=fingerprint).as_mapping(),
         )
 
     def _project_answers(self, projection: RecipeProjection, changed: Sequence[RecipeAnswer]) -> RecipeProjection:
@@ -471,7 +472,15 @@ class DynamoCorpusBackend:
                 if answer.content_hash == fingerprint and _answer_key(answer) not in incoming
             ]
             answers_for_entry = latest_per_question([*kept, *incoming.values()])
-            projection = projection.with_recipe(entry.model_copy(update={"answers": answers_for_entry}))
+            projection = projection.with_recipe(
+                entry.model_copy(
+                    update={
+                        "answers": answers_for_entry,
+                        # The attributes a reader sees are always the ones these answers say.
+                        "attributes": attributes_from_answers(answers_for_entry, content_hash=fingerprint).as_mapping(),
+                    }
+                )
+            )
         return projection
 
     # -- table access -------------------------------------------------------------------------------
@@ -550,7 +559,7 @@ def source_item(recipe: StoredRecipe) -> dict[str, Any] | None:
 def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
     """The ANSWER item: one per (recipe, question, criteria hash)."""
     # DynamoDB takes no floats: the probability is a Decimal on the wire and a float in the model.
-    return {
+    item = {
         "pk": recipe_pk(answer.recipe_id),
         "sk": answer_sk(answer.question, answer.criteria_hash),
         "recipe_id": answer.recipe_id,
@@ -561,6 +570,11 @@ def answer_item(answer: RecipeAnswer) -> dict[str, Any]:
         "criteria_hash": answer.criteria_hash,
         "computed_at": answer.computed_at.isoformat(),
     }
+    # A dietary answer is its probability, so its item is exactly the pre-V5 item: no new attribute, no extra
+    # write unit, and an older build reads it unchanged.
+    if answer.value is not None:
+        item["value"] = answer.value
+    return item
 
 
 def item_write_units(item: dict[str, Any]) -> int:
@@ -660,6 +674,7 @@ def _answer_from_row(row: dict[str, Any]) -> RecipeAnswer:
         content_hash=str(row["content_hash"]),
         criteria_hash=str(row["criteria_hash"]),
         computed_at=row["computed_at"],
+        value=row.get("value"),
     )
 
 

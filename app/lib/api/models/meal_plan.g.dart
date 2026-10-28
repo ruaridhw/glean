@@ -71,6 +71,30 @@ UsedUpPantryItem _$UsedUpPantryItemFromJson(Map<String, dynamic> json) =>
       },
     );
 
+MealPlanAttributes _$MealPlanAttributesFromJson(Map<String, dynamic> json) =>
+    $checkedCreate(
+      'MealPlanAttributes',
+      json,
+      ($checkedConvert) {
+        final val = MealPlanAttributes(
+          mainProtein: $checkedConvert('main_protein', (v) => v as String?),
+          mainCarb: $checkedConvert('main_carb', (v) => v as String?),
+          dishType: $checkedConvert('dish_type', (v) => v as String?),
+          activeTimeMins: $checkedConvert(
+            'active_time_mins',
+            (v) => (v as num?)?.toInt(),
+          ),
+        );
+        return val;
+      },
+      fieldKeyMap: const {
+        'mainProtein': 'main_protein',
+        'mainCarb': 'main_carb',
+        'dishType': 'dish_type',
+        'activeTimeMins': 'active_time_mins',
+      },
+    );
+
 MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
     $checkedCreate(
       'MealPlanRecipe',
@@ -103,6 +127,12 @@ MealPlanRecipe _$MealPlanRecipeFromJson(Map<String, dynamic> json) =>
             (v) => v == null
                 ? null
                 : MealPlanRecipe.fromJson(v as Map<String, dynamic>),
+          ),
+          attributes: $checkedConvert(
+            'attributes',
+            (v) => v == null
+                ? null
+                : MealPlanAttributes.fromJson(v as Map<String, dynamic>),
           ),
         );
         return val;

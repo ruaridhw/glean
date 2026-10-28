@@ -23,30 +23,45 @@ from __future__ import annotations
 import inspect
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from glean.decisions import DecisionError
 from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
+from glean.recipes.attributes import UNSURE
+from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
+from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
 from glean.recipes.enrichment.coverage import AnswerFailure, CoverageReport, QuestionCoverage
 from glean.recipes.enrichment.dietary import DIETARY_ENRICHER
-from glean.recipes.enrichment.enricher import AnswerState, UncalibratedModelError, answer_state, recipe_state
+from glean.recipes.enrichment.enricher import (
+    AnswerState,
+    UncalibratedModelError,
+    answer_state,
+    current_value,
+    recipe_state,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from concurrent.futures import Future
 
     from glean.decisions import DecisionClient, DecisionModel
     from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
     from glean.recipes.enrichment.enricher import Enricher, EnrichmentQuestion
     from glean.recipes.search_index import RecipeSummary
+    from glean.recipes.stored import StoredRecipe
 
 __all__ = [
     "CHECKPOINT_EVERY",
+    "DEFAULT_ENRICHERS",
     "CorpusUnavailableError",
     "EnrichmentError",
     "run_enrichment",
 ]
+
+# Every enricher this build has, which is what a run asks unless it names a subset. A new family joins here
+# and in `ENRICHERS` (the `--enricher` registry), so a default run never silently leaves a question unasked.
+DEFAULT_ENRICHERS: tuple[Enricher, ...] = (DIETARY_ENRICHER, ATTRIBUTE_ENRICHER, ACTIVE_TIME_ENRICHER)
 
 # Recipes between answer writes. Small enough that an interrupted run loses only its last few requests.
 CHECKPOINT_EVERY = 25
@@ -65,7 +80,7 @@ def run_enrichment(
     corpus: RecipeCorpusStore,
     client: DecisionClient | None,
     *,
-    enrichers: Sequence[Enricher] = (DIETARY_ENRICHER,),
+    enrichers: Sequence[Enricher] = DEFAULT_ENRICHERS,
     dry_run: bool = False,
     max_workers: int = 8,
     limit: int | None = None,
@@ -76,16 +91,19 @@ def run_enrichment(
     `dry_run` works out what would be asked and returns without calling the model or writing anything, so
     `client` may be None. `limit` asks about the first N recipes only, for a smoke run.
     """
-    questions = _declared_questions(enrichers)
+    questions, owners = _declared(enrichers)
     summaries = sorted(_corpus_summaries(corpus), key=lambda summary: summary.external_id)
     selected = summaries[:limit] if limit is not None else summaries
     known = _KnownAnswers(corpus.store)
-    work = [(summary, missing) for summary in selected if (missing := _missing(questions, summary, known))]
-    stated_active_time = _stated_active_time(corpus)
+    recipes = _recipe_bodies(corpus)
+    stated_prep_time = sum(1 for recipe in recipes.values() if recipe.prep_time_mins is not None)
+    work = [
+        (summary, missing, _enricher_state(owners, missing, recipes.get(summary.external_id)))
+        for summary in selected
+        if (missing := _missing(questions, summary, known))
+    ]
     if dry_run:
-        return _report(
-            summaries, questions, known, stated_active_time=stated_active_time, planned=len(work), dry_run=True
-        )
+        return _report(summaries, questions, known, stated_prep_time=stated_prep_time, planned=len(work), dry_run=True)
     if client is None:
         raise EnrichmentError("a run needs a decision client unless it is a dry run")
     _check_models(client, questions)
@@ -93,10 +111,14 @@ def run_enrichment(
     run = _Run(corpus, known)
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_ask, client, summary, missing): (summary, missing) for summary, missing in work}
+            futures = {
+                pool.submit(_ask, client, summary, missing, state): (summary, missing, state)
+                for summary, missing, state in work
+            }
             try:
                 for completed, future in enumerate(as_completed(futures), start=1):
-                    run.collect(future, *futures[future])
+                    summary, missing, _state = futures[future]
+                    run.collect(future, summary, missing)
                     if completed % checkpoint_every == 0:
                         run.flush()
             except BaseException:
@@ -116,7 +138,7 @@ def run_enrichment(
         known,
         requests=run.requests,
         stored=run.produced,
-        stated_active_time=stated_active_time,
+        stated_prep_time=stated_prep_time,
         failures=run.failures,
     )
 
@@ -139,23 +161,32 @@ def _contract(model: DecisionModel) -> str:
     return " or ".join(repr(base) for base in (model.request, *model.served))
 
 
-def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[EnrichmentQuestion]) -> list[RecipeAnswer]:
-    """One request for every question this recipe is missing or stale on."""
-    decision = client.decide(recipe_state(summary), {question.name: question.question for question in questions})
+def _ask(
+    client: DecisionClient,
+    summary: RecipeSummary,
+    questions: Sequence[EnrichmentQuestion],
+    state: Mapping[str, Any],
+) -> list[RecipeAnswer]:
+    """One request for every question this recipe is missing or stale on, with the state those need."""
+    decision = client.decide(
+        {**recipe_state(summary), **state},
+        {question.name: question.question for question in questions},
+    )
     computed_at = datetime.now(UTC)
     content_hash = content_fingerprint(summary.title, summary.ingredient_names)
     return [
         RecipeAnswer(
             recipe_id=summary.external_id,
             question=question.name,
-            probability=value,
+            probability=stored.probability,
+            value=stored.value,
             model=question.served_identity(decision.model),
             content_hash=content_hash,
             criteria_hash=question.criteria_hash,
             computed_at=computed_at,
         )
         for question in questions
-        if (value := question.accept(decision)) is not None
+        if (stored := question.accept(decision)) is not None
     ]
 
 
@@ -274,7 +305,7 @@ def _report(
     *,
     requests: int = 0,
     stored: int = 0,
-    stated_active_time: int = 0,
+    stated_prep_time: int = 0,
     planned: int = 0,
     dry_run: bool = False,
     failures: Sequence[AnswerFailure] = (),
@@ -292,11 +323,15 @@ def _report(
                 counts.failed += 1
                 gap = True
                 continue
-            state = answer_state(
-                question, known.by_question(summary.external_id).get(question.name, ()), content_hash=content_hash
-            )
+            held = known.by_question(summary.external_id).get(question.name, ())
+            state = answer_state(question, held, content_hash=content_hash)
             if state is AnswerState.CURRENT:
                 counts.current += 1
+                # Counted for the scorer's sake: `unsure` earns no variety credit, so a high count is the
+                # report saying the corpus is plannable but not yet described. Read under the current bar, so
+                # a retuned bar shows up here without another run.
+                if any(current_value(question, answer, content_hash=content_hash) == UNSURE for answer in held):
+                    counts.unsure += 1
                 continue
             gap = True
             if state is AnswerState.STALE:
@@ -310,7 +345,7 @@ def _report(
         questions=[coverage[question.name] for question in questions],
         requests=requests,
         answers_stored=stored,
-        stated_active_time=stated_active_time,
+        stated_prep_time=stated_prep_time,
         rebuilt=stored > 0,
         dry_run=dry_run,
         planned_requests=planned,
@@ -332,27 +367,47 @@ def _missing(
     )
 
 
-def _stated_active_time(corpus: RecipeCorpusStore) -> int:
-    """How many recipes state an active time (spec 6.1).
+def _recipe_bodies(corpus: RecipeCorpusStore) -> dict[str, StoredRecipe]:
+    """Every recipe body, read once: the prep-time count and the enrichers' state both come from it.
 
-    Read from the recipe bodies rather than the projection's summaries: those are only as fresh as the last
-    rebuild, and the whole point of the number is that it is true of the corpus, not of a cached index.
+    Read from the bodies rather than the projection's summaries: those are only as fresh as the last rebuild,
+    and the prep-time count is meant to be true of the corpus, not of a cached index. A run loads them once,
+    which also means the request state and the count can never disagree.
     """
-    return sum(1 for recipe in corpus.all_recipes() if recipe.active_time_mins is not None)
+    return {recipe.external_id: recipe for recipe in corpus.all_recipes()}
 
 
-def _declared_questions(enrichers: Sequence[Enricher]) -> list[EnrichmentQuestion]:
+def _enricher_state(
+    owners: Mapping[str, Enricher], questions: Sequence[EnrichmentQuestion], recipe: StoredRecipe | None
+) -> dict[str, Any]:
+    """The extra state the enrichers being asked need, merged, and only for those with a question to ask.
+
+    A dietary-only run therefore sends exactly the state it sent before V5: no method text, no stated times,
+    and no extra tokens paid for.
+    """
+    state: dict[str, Any] = {}
+    asked: set[int] = set()
+    for question in questions:
+        enricher = owners[question.name]
+        if id(enricher) not in asked:
+            asked.add(id(enricher))
+            state.update(enricher.state(recipe))
+    return state
+
+
+def _declared(enrichers: Sequence[Enricher]) -> tuple[list[EnrichmentQuestion], dict[str, Enricher]]:
+    """Every declared question in enricher order, and which enricher declared it (for its state)."""
     questions: list[EnrichmentQuestion] = []
-    names: set[str] = set()
+    owners: dict[str, Enricher] = {}
     for enricher in enrichers:
         for question in enricher.questions():
-            if question.name in names:
+            if question.name in owners:
                 raise EnrichmentError(f"{question.name!r} is declared by more than one enricher")
-            names.add(question.name)
+            owners[question.name] = enricher
             questions.append(question)
     if not questions:
         raise EnrichmentError("no enricher declared a question, so there is nothing to ask")
-    return questions
+    return questions, owners
 
 
 def _corpus_summaries(corpus: RecipeCorpusStore) -> list[RecipeSummary]:

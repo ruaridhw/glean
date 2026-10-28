@@ -183,7 +183,8 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "rec_tofu_noodles",
         "rec_chickpea_curry",
     }
-    # The plan shape is the synchronous endpoint's, `uses_up` included, plus V3's proposal fields.
+    # The plan shape is the synchronous endpoint's, `uses_up` included, plus V3's proposal fields and V5's
+    # attribute labels.
     assert set(view["result"]["suggestions"][0]) == {
         "recipe_id",
         "external_id",
@@ -193,6 +194,7 @@ def test_a_session_runs_from_queued_to_done_with_the_plan(api: TestClient) -> No
         "uses_up",
         "reason_kind",
         "alternative",
+        "attributes",
     }
     assert set(view["result"]) == {"suggestions", "week_summary", "planned_alternatives", "degraded"}
     assert view["result"]["degraded"] is False

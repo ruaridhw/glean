@@ -46,11 +46,26 @@ def content_fingerprint(title: str, ingredient_names: Any) -> str:
 
 
 class RecipeAnswer(BaseModel):
-    """A decision model's answer about one recipe, with what produced it."""
+    """A decision model's answer about one recipe, with what produced it.
+
+    A `noul` question's answer is the probability itself, so `value` stays None and every pre-V5 dietary line
+    reads and writes back unchanged. A `choice` or `score` question's answer is a value — a label, an
+    active-time bucket, or `unsure` when the top option did not clear the question's bar — and `probability`
+    is the probability that decided it (the accepted option's, or the top option's when unsure). Adding the
+    value is what ADR 0025 deferred to V5: `unsure` is a stored answer, not "nothing stored".
+    """
 
     recipe_id: str = Field(description="External id of the corpus recipe that was assessed.")
     question: str = Field(description="Stable question name, e.g. `dietary:vegan`.")
-    probability: float = Field(ge=0.0, le=1.0, description="Probability the question's `true` holds.")
+    probability: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="The probability that decided this answer: P(`true`) for a `noul`, the accepted option otherwise.",
+    )
+    value: str | None = Field(
+        default=None,
+        description="The accepted value for a `choice` or `score` question (a label, a bucket, or `unsure`).",
+    )
     model: str = Field(description="Dated snapshot of the decision model that answered.")
     content_hash: str = Field(description="`content_fingerprint` of the recipe state (title, ingredients) assessed.")
     criteria_hash: str = Field(description="Hash of the question's instructions and criteria that were answered.")
@@ -62,6 +77,14 @@ class RecipeAnswer(BaseModel):
         if isinstance(data, dict) and not data.get("question") and data.get("flag"):
             return {**data, "question": dietary_question(str(data["flag"]))}
         return data
+
+    @model_validator(mode="after")
+    def _labelled_questions_carry_a_value(self) -> RecipeAnswer:
+        # A dietary answer is its probability, so a missing value is the format. Any other question's answer
+        # *is* a value: an answer without one would read as a current answer that says nothing.
+        if dietary_flag(self.question) is None and self.value is None:
+            raise ValueError(f"{self.question!r} is not a dietary question, so its answer must carry a value")
+        return self
 
     @computed_field  # serialised, so a pre-F1 dietary reader still finds the `flag` it knows
     @property

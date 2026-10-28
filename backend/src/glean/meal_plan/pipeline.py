@@ -29,13 +29,14 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from glean.llm import Feature
-from glean.meal_plan.candidates import PantryItem, sample_corpus_candidates, urgent_pantry_uses
+from glean.meal_plan.candidates import PantryItem, recipe_attributes, sample_corpus_candidates, urgent_pantry_uses
 from glean.meal_plan.eligibility import CookedMeal
 from glean.meal_plan.schemas import (
     CorpusMealPlanAlternative,
     CorpusMealPlanRecipe,
     CorpusMealPlanResponse,
     MealPlanAlternative,
+    MealPlanAttributes,
     MealPlanRequest,
     MealPlanResult,
     MealPlanSuggestion,
@@ -44,6 +45,7 @@ from glean.meal_plan.schemas import (
     UsedUpPantryItem,
 )
 from glean.observability import logger
+from glean.recipes.attributes import DishType, MainCarb, MainProtein, RecipeAttributes
 
 if TYPE_CHECKING:
     import random
@@ -153,6 +155,13 @@ class PreparedPlan(BaseModel):
         default_factory=list,
         description="The meals already in the week that came from the corpus, with their titles.",
     )
+    attributes: dict[str, MealPlanAttributes] = Field(
+        default_factory=dict,
+        description=(
+            "Per offered external_id, the labels its proposal card shows. Measured once, before the model "
+            "chooses, so a chosen meal and an alternative the server picks both carry them."
+        ),
+    )
 
     @property
     def has_candidates(self) -> bool:
@@ -198,6 +207,9 @@ def prepare(
         now=request_now,
     )
     urgent_uses = urgent_pantry_uses(corpus, pantry, [candidate.external_id for candidate in candidates])
+    # One read of the corpus's answers for the whole proposal: the labels a card shows are facts about the
+    # recipe, so they are measured here rather than asked of the model.
+    measured = recipe_attributes(corpus, [candidate.summary for candidate in candidates])
     planned = _planned_corpus_meals(corpus, request.exclude_external_ids)
     logger.info(
         "generating corpus meal plan",
@@ -247,6 +259,13 @@ def prepare(
         },
         titles={candidate.external_id: candidate.title for candidate in candidates},
         planned=planned,
+        attributes={
+            candidate.external_id: _proposal_attributes(
+                measured.get(candidate.external_id, RecipeAttributes()),
+                total_time_mins=candidate.summary.total_time_mins,
+            )
+            for candidate in candidates
+        },
     )
 
 
@@ -468,6 +487,23 @@ def _suggestion_for(
         reason=reason,
         uses_up=[_used_up(item, reference_date=prepared.reference_date) for item in items],
         reason_kind=meal.reason_kind,
+        attributes=prepared.attributes.get(meal.external_id, MealPlanAttributes()),
+    )
+
+
+def _proposal_attributes(attributes: RecipeAttributes, *, total_time_mins: int | None) -> MealPlanAttributes:
+    """What a proposal card may label: the known values, and the time the card should show.
+
+    `unsure` is not a label: a value the model was not confident about is left null so the card shows no chip.
+    The time is the same number the household's cap is compared against: the active-time bucket's upper bound,
+    capped by the recipe's total time (hands-on work cannot outlast the recipe), and total time alone when no
+    bucket is known (not enriched yet, below its bar, or `60+`, which has no upper bound).
+    """
+    return MealPlanAttributes(
+        main_protein=None if attributes.main_protein is MainProtein.UNSURE else attributes.main_protein,
+        main_carb=None if attributes.main_carb is MainCarb.UNSURE else attributes.main_carb,
+        dish_type=None if attributes.dish_type is DishType.UNSURE else attributes.dish_type,
+        active_time_mins=attributes.active_time_mins(total_time_mins),
     )
 
 

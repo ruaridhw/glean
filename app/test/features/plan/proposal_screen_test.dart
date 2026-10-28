@@ -27,6 +27,7 @@ Map<String, dynamic> suggestion(
   required String reason,
   String? reasonKind,
   Map<String, dynamic>? alternative,
+  Map<String, dynamic>? attributes,
 }) => <String, dynamic>{
   'recipe_id': null,
   'external_id': id,
@@ -35,13 +36,19 @@ Map<String, dynamic> suggestion(
   'reason_kind': ?reasonKind,
   'uses_up': <Map<String, dynamic>>[],
   'alternative': alternative,
+  'attributes': ?attributes,
 };
 
-Map<String, dynamic> alternative(String id, String title) => <String, dynamic>{
+Map<String, dynamic> alternative(
+  String id,
+  String title, {
+  Map<String, dynamic>? attributes,
+}) => <String, dynamic>{
   'recipe_id': null,
   'external_id': id,
   'title': title,
   'reason': 'The other one: $title',
+  'attributes': ?attributes,
 };
 
 const Map<String, String> _detailTitles = <String, String>{
@@ -130,7 +137,20 @@ void main() {
             title: 'Chicken katsu curry',
             reason: 'Uses up your coriander before it goes off.',
             reasonKind: 'urgent_item',
-            alternative: alternative('rec_a_alt', 'Chicken & cashew stir-fry'),
+            alternative: alternative(
+              'rec_a_alt',
+              'Chicken & cashew stir-fry',
+              attributes: <String, dynamic>{
+                'main_protein': 'chicken',
+                'active_time_mins': 20,
+              },
+            ),
+            attributes: const <String, dynamic>{
+              'main_protein': 'chicken',
+              'main_carb': 'rice',
+              'dish_type': 'curry',
+              'active_time_mins': 35,
+            },
           ),
           suggestion(
             'rec_b',
@@ -138,6 +158,12 @@ void main() {
             reason: 'A quick meat-free night.',
             reasonKind: 'balance',
             alternative: alternative('rec_b_alt', 'Chickpea & spinach dal'),
+            attributes: const <String, dynamic>{
+              'main_protein': 'beans_and_pulses',
+              'main_carb': 'bread_or_wraps',
+              'dish_type': 'handheld',
+              'active_time_mins': 15,
+            },
           ),
         ],
         'week_summary': 'Four quick dinners: one fish, one meat-free.',
@@ -146,8 +172,8 @@ void main() {
       };
 
   gleanWidgetTest(
-    'the proposal shows the summary, one card per meal, the reason and the '
-    'attribute placeholders',
+    'the proposal shows the summary, one card per meal, why it picked it, and '
+    'the attributes measured for it',
     (tester) async {
       final h = AppTestHarness(
         httpClient: proposalBackend(result: sampleResult()),
@@ -167,21 +193,45 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Black bean tacos'), findsOneWidget);
-      expect(find.byType(ProposalAttributePlaceholders), findsNWidgets(2));
       expect(find.byType(ProposalMealCard), findsNWidgets(2));
+      expect(find.byType(ProposalAttributeLabels), findsNWidgets(2));
       expect(find.text('Add 2 dinners to plan'), findsOneWidget);
-      expect(
-        find.textContaining('fish ·'),
-        findsNothing,
-        reason: 'no attribute values are invented before V5',
-      );
+      // The first card: chicken · rice · curry · 35 min, from what the backend measured.
       expect(
         find.descendant(
-          of: find.byType(ProposalAttributePlaceholders).first,
-          matching: find.byType(Container),
+          of: find.byKey(const ValueKey<String>('suggestion-0')),
+          matching: find.text('chicken'),
         ),
-        findsNWidgets(3),
-        reason: 'three empty chips, not fake attribute values',
+        findsOneWidget,
+      );
+      for (final String label in <String>['rice', 'curry', 'about 35 min']) {
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey<String>('suggestion-0')),
+            matching: find.text(label),
+          ),
+          findsOneWidget,
+        );
+      }
+      // The second: beans · wraps · handheld · 15 min.
+      for (final String label in <String>[
+        'beans',
+        'wraps',
+        'handheld',
+        'about 15 min',
+      ]) {
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey<String>('suggestion-1')),
+            matching: find.text(label),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.text('Recipe details not available yet'),
+        findsNothing,
+        reason: 'the labels are real, not the V3 placeholder',
       );
     },
   );
@@ -203,6 +253,21 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Alternative: Chicken & cashew stir-fry'), findsOneWidget);
+    // The panel labels the alternative too ("Also fish, 25 min" in the design), not the meal it replaces.
+    expect(
+      find.descendant(
+        of: find.byType(ProposalSwapPanel),
+        matching: find.text('chicken'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ProposalSwapPanel),
+        matching: find.text('about 20 min'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Use alternative'));
     await tester.pumpAndSettle();
@@ -439,7 +504,7 @@ void main() {
     await openProposal(tester, h);
 
     // The same content a normal proposal shows: summary, both cards, their reasons, the swap affordance and
-    // the attribute placeholders. Nothing announces the fallback and nothing is hidden because of it.
+    // the attribute labels. Nothing announces the fallback and nothing is hidden because of it.
     expect(find.text('This week'), findsOneWidget);
     expect(
       find.text('Four quick dinners: one fish, one meat-free.'),
@@ -453,7 +518,13 @@ void main() {
     );
     expect(find.text('Black bean tacos'), findsOneWidget);
     expect(find.text('Swap'), findsNWidgets(2));
-    expect(find.byType(ProposalAttributePlaceholders), findsNWidgets(2));
+    expect(find.byType(ProposalAttributeLabels), findsNWidgets(2));
+    expect(
+      find.text('fish'),
+      findsNothing,
+      reason: 'still only the measured labels are shown',
+    );
+    expect(find.text('curry'), findsOneWidget);
     expect(find.textContaining('degraded'), findsNothing);
     expect(find.text('Add 2 dinners to plan'), findsOneWidget);
   });
@@ -847,6 +918,12 @@ void main() {
       expect(find.text('This week'), findsNothing);
       expect(find.text('Swap'), findsNothing);
       expect(find.text('Old soup'), findsOneWidget);
+      expect(
+        find.byType(ProposalAttributeLabels),
+        findsNothing,
+        reason: 'no attributes on the wire means no badges, never an empty row',
+      );
+      expect(find.textContaining(' min'), findsNothing);
 
       await tester.tap(find.text('Add 1 dinner to plan'));
       await tester.pumpAndSettle();

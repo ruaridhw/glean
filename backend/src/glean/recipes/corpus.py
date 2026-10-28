@@ -216,7 +216,12 @@ class BlobCorpusBackend:
 
     def save_answers(self, answers: Sequence[RecipeAnswer]) -> int:
         ordered = sorted(answers, key=_answer_order)
-        self.blobs.write(DIETARY_DECISIONS_KEY, "".join(answer.model_dump_json() + "\n" for answer in ordered))
+        # `exclude_none` keeps a dietary line byte-for-byte what it was before V5 added `value`: a dietary
+        # answer is its probability, so it has no value to write and should not gain a null one.
+        self.blobs.write(
+            DIETARY_DECISIONS_KEY,
+            "".join(answer.model_dump_json(exclude_none=True) + "\n" for answer in ordered),
+        )
         return len(ordered)
 
     # The blob store itself, for the pieces that still work on blobs (and the tests that seed corrupt ones).

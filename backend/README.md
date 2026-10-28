@@ -51,10 +51,48 @@ The corpus scripts (`import_recipe_corpus.py`, `enrich_corpus.py`, `build_recipe
 ### Recipe enrichment
 
 Everything planning needs to know about a recipe beyond its own text — whether it breaks a dietary flag,
-and later its main protein, cuisine and active time — is one decision-model answer per question, stored as
-its own item beside the recipe (ADR 0025). `recipes/enrichment/` is the pipeline: enrichers declare their
-questions and confidence bars, and one runner asks every recipe only what is missing or stale, in a single
-request per recipe.
+its main protein, carb, dish type, cuisine and whole-food level, and how long it really takes to cook — is
+one decision-model answer per question, stored as its own item beside the recipe (ADR 0025).
+`recipes/enrichment/` is the pipeline: enrichers declare their questions and confidence bars, and one
+runner asks every recipe only what is missing or stale, in a single request per recipe. The three families
+are `dietary` (six `noul` questions, ADR 0011's thresholds unchanged), `attributes` (four `choice` questions
+and one `score`) and `active-time` (one `score`, answered as one of five minute buckets).
+
+**Confidence bars.** No answer is accepted because it is the top option, and no bar is applied when an answer
+is stored: a stored answer is what the model said — a probability for a `noul` question, and the option it
+chose plus that option's probability for a `choice` or `score` question. The bar decides when planning
+**reads** the answer, so an attribute reads as `unsure` under its bar: a real answer, which stops the recipe
+being re-asked and gives it no variety credit and no penalty. A bar may never be declared below 0.7 — a
+declaration below the floor is an error, not a quiet weakening. Because the bar is read-time, retuning one
+takes effect on the next read with no re-enrichment: raising it turns the labels it now rejects into
+`unsure`, and lowering it recovers labels stored under the old bar.
+
+The bars ship from the 50-recipe check (`MEASURED_BARS` in `recipes/enrichment/attributes.py`), provisional
+because it is one sample: `main_protein` 0.80, `main_carb` 0.80, `dish_type` 0.80, `cuisine` 0.85,
+`whole_food` 0.90. On that sample they accepted 48/48 protein and carb answers with 100% right, 42/42 dish
+types at 97.6%, 36/36 cuisines at 0.85 with 100%, and 25/25 whole-food answers at 0.90 with 96%. Active time
+stays at 0.80 and is the one bar the check did not move: the model is rarely confident about hands-on work
+(35 of the 50 answers were below even the floor), so below its bar the answer is `unsure` and the household's
+time filter falls back to total time, as it did before V5. In practice that is almost every recipe: 35 of the
+sample's 50 answers scored under even the 0.7 floor, and at the shipped 0.80 the check accepted one answer and
+it was wrong, so the time bucket is close to inert until a second sample says otherwise.
+
+Retuning a bar needs no re-ask and no paid run: the stored answers keep the model's own option and
+probability, and the new bar is applied when they are read. The only things that force another enrichment run
+are a wording change (a question's criteria hash) or a model bump — which is also why the check sample needs
+one run to measure every candidate bar.
+
+**The stated time is prep time.** Q3 found the field the corpus calls an active time is really schema.org
+`prepTime` (35% of recipes, median 10 minutes against a 35-minute median total), so it is now
+`StoredRecipe.prep_time_mins` — old bodies still carry it as `active_time_mins` and read unchanged — and
+active time is estimated for every recipe instead. The public recipe response keeps its `active_time_mins`
+field for the app and still carries the stated time until the app is served the enriched one.
+
+**The projection carries the attributes.** Every recipe's entry in the projection has all six, `unsure`
+where nothing has been enriched, derived from the recipe's current answers on every rebuild and every answer
+write (`recipes/enrichment/projection_attributes.py`). Planning reads the entry, and the household's time
+cap compares the active-time bucket's **upper** bound — a 60-minute traybake with 10 minutes of work fits a
+20-minute cap, and a `60+` bucket never fits any cap.
 
 The model is a paid external service, so this is a producer you run, never something a request triggers, and
 `make enrich-corpus` only ever touches the local corpus. It needs `OPENROUTER_API_KEY` in the environment
@@ -82,9 +120,17 @@ uv run python scripts/enrich_corpus.py --table glean-recipes-prod \
     --bucket glean-recipe-cache-prod-<account> --i-am-the-owner
 ```
 
-The run prints a per-question coverage table (current / stale / missing / failed, requests made, and how
-many recipes state an active time), writes answers in checkpoints so an interrupted run resumes where it
-stopped, and rebuilds the projection once at the end. `--enricher dietary` narrows it to one enricher.
+Each proposal line carries the meal's `attributes` — main protein, main carb, dish type and a hands-on time — so
+the app's cards can label it ("chicken · rice · curry · 35 min"). Only known values ride the wire: an
+attribute the model was not confident about is null and the card shows no chip for it, and the time is the
+active-time bucket's upper bound, or the recipe's total time when no bucket is known. They are measured from
+the corpus's answers before the model chooses, so a chosen meal and the alternative offered for it both carry
+their own.
+
+The run prints a per-question coverage table (current / stale / missing / failed / unsure, requests made,
+how many current answers are labelled and how many are stored `unsure`, and how many recipes state a prep
+time), writes answers in checkpoints so an interrupted run resumes where it stopped, and rebuilds the
+projection once at the end. `--enricher dietary` (or `attributes`, or `active-time`) narrows it.
 
 The number of requests is the corpus times whatever is stale, not the corpus times the questions: a fresh
 migration answered under the current wording asks for nothing, an imported or edited recipe costs one
@@ -98,6 +144,38 @@ fails, has still paid for and kept everything it finished**: the next run reads 
 store and asks only for the rest. If a rebuild failed, the projection planning reads is stale until it is
 repaired — `scripts/build_recipe_index.py --table glean-recipes-<env> --bucket <recipe-cache-bucket>` — and
 that repair needs no new model call.
+
+#### Measuring the attributes and choosing their bars
+
+The bars ship at 0.8 because that is G1's starting point; they are chosen from a labelled sample, the same
+discipline as the dietary audit. The sample is a directory of exported recipe bodies and an independent
+labeller's labels, both **outside this repo** (recipe text is third-party, ADR 0016). The tool runs the
+enrichers over the sample through the usual runner — one paid pass, because every stored answer keeps the
+model's own option and probability — then replays every bar from 0.7 to 0.95 and reports, per attribute, the
+accuracy of the answers each bar accepts, its coverage and confusion table, and the bar it recommends.
+
+**How the recommended bar is chosen.** The lowest bar (the widest coverage) whose accuracy reaches a target
+(default 95%) on at least a minimum number of answers (default 20); both are `--target` and `--min-accepted`.
+Ranking by accuracy alone rewards the bar that happened to accept one right answer — a 1-of-1 bar scores 100%
+— and on the first sample it recommended 0.95 for two attributes, which is why the rule changed. When no bar
+can meet both, the report names the best-supported one instead, by the lower end of a 95% Wilson interval on
+its accuracy, and says so.
+
+```bash
+# adopt the measured bars by editing MEASURED_BARS in recipes/enrichment/attributes.py: they are read-time
+# thresholds, so the next read applies them and the corpus is not re-asked
+make check-attributes SAMPLE=<sample-dir>          # paid: needs OPENROUTER_API_KEY
+
+# the same two steps by hand; compare makes no model calls and needs no key
+uv run python scripts/check_recipe_attributes.py enrich --sample <sample-dir>
+uv run python scripts/check_recipe_attributes.py compare --sample <sample-dir>
+```
+
+Answers land at `<sample-dir>/../v5-check/answers.json` and labels are read from
+`<sample-dir>/../v5-check/opus-labels.json`, so a sample exported as `v5-sample/` keeps its results in
+`v5-check/` beside it. The labels file maps each recipe id to its six attributes (`active_time_bucket` for
+the bucket), optionally with a per-attribute `confidence` and a `note`; an `unsure` label carries no truth
+and a label that names no G1 value is reported rather than guessed.
 
 Every change is published to the projection with an S3 conditional write, so two Lambdas importing at once
 cannot drop each other's recipe. If a publish fails outright the store raises and logs the repair command

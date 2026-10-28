@@ -87,6 +87,13 @@ test/                          # Unit + widget tests mirroring lib/, plus test/s
 integration_test/              # The one integration_test suite (app_test.dart), against main_e2e.dart
 ```
 
+## Proposal labels
+
+A proposal card's badges (protein · carb · dish · hands-on time) come from `MealPlanAttributes` on each
+suggestion, measured by the backend's enrichment run. `lib/features/plan/proposal_labels.dart` is the one place
+the wire's G1 values become the short words the card shows; it drops a value the backend left null, treats
+`none` as no badge, and shows nothing at all when nothing was measured. Never put a raw enum on a card.
+
 ## Catalogue sync
 
 `ingredient_groups`, `catalogue_items`, `catalogue_aliases` and `catalogue_sync_state` hold a synced copy of the

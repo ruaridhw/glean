@@ -23,6 +23,7 @@ from glean.meal_plan.dietary_decisions import (
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes import dynamo_corpus
 from glean.recipes.answers import RecipeAnswer, dietary_question
+from glean.recipes.attributes import ActiveTimeBucket, Cuisine, MainProtein
 from glean.recipes.corpus import RecipeCorpusStore, recipe_blob_key
 from glean.recipes.dynamo_corpus import (
     DynamoCorpusBackend,
@@ -34,6 +35,8 @@ from glean.recipes.dynamo_corpus import (
     retry_throttled,
     source_pk,
 )
+from glean.recipes.enrichment.active_time import ACTIVE_TIME_ENRICHER
+from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER
 from glean.recipes.projection import PROJECTION_TTL_SECONDS, loads
 from glean.recipes.search_index import RecipeSummary
 from glean.recipes.stored import StoredInstruction
@@ -866,6 +869,77 @@ def test_a_real_error_is_not_retried() -> None:
 def _projection(projections: _CountingProjectionStore) -> RecipeProjection:
     assert projections.data is not None
     return loads(projections.data)
+
+
+def test_attributes_reach_the_projection_when_their_answers_are_saved(
+    backend: DynamoCorpusBackend, projections: _CountingProjectionStore
+) -> None:
+    recipe = next(r for r in synthetic_corpus() if r.external_id == "rec_tomato_pasta")
+    backend.save(recipe)
+
+    backend.save_answers(
+        [
+            _labelled_answer("rec_tomato_pasta", "attribute:main_protein", "tofu_or_plant_protein"),
+            _labelled_answer("rec_tomato_pasta", "active_time:bucket", "15-30"),
+        ]
+    )
+
+    entry = _projection(projections).by_id("rec_tomato_pasta")
+    assert entry is not None
+    assert entry.recipe_attributes.main_protein is MainProtein.TOFU_OR_PLANT_PROTEIN
+    assert entry.recipe_attributes.active_time is ActiveTimeBucket.FROM_15_TO_30
+
+
+def test_a_rebuild_computes_the_same_attributes_from_the_table(
+    backend: DynamoCorpusBackend, recipes_table: Any
+) -> None:
+    recipe = next(r for r in synthetic_corpus() if r.external_id == "rec_tomato_pasta")
+    backend.save(recipe)
+    backend.save_answers([_labelled_answer("rec_tomato_pasta", "attribute:cuisine", "italian")])
+    published = backend.projection()
+
+    cold = _CountingProjectionStore()
+    DynamoCorpusBackend(RECIPES_TABLE_NAME, projection=cold).rebuild_projection()
+
+    assert loads(cold.data) == published
+    entry = loads(cold.data).by_id("rec_tomato_pasta")
+    assert entry is not None
+    assert entry.recipe_attributes.cuisine is Cuisine.ITALIAN
+
+
+def test_editing_a_recipe_voids_the_attributes_asked_about_the_old_body(
+    backend: DynamoCorpusBackend, projections: _CountingProjectionStore
+) -> None:
+    recipe = next(r for r in synthetic_corpus() if r.external_id == "rec_tomato_pasta")
+    backend.save(recipe)
+    backend.save_answers([_labelled_answer("rec_tomato_pasta", "attribute:main_protein", "tofu_or_plant_protein")])
+
+    backend.save(recipe.model_copy(update={"ingredients": [*recipe.ingredients][:1]}))
+
+    entry = _projection(projections).by_id("rec_tomato_pasta")
+    assert entry is not None
+    assert entry.recipe_attributes.main_protein is MainProtein.UNSURE
+
+
+def _labelled_answer(recipe_id: str, question: str, value: str) -> RecipeAnswer:
+    """An attribute answer under the current wording, about the recipe's content as it stands."""
+    declared = next(
+        question_
+        for enricher in (ATTRIBUTE_ENRICHER, ACTIVE_TIME_ENRICHER)
+        for question_ in enricher.questions()
+        if question_.name == question
+    )
+    recipe = next(r for r in synthetic_corpus() if r.external_id == recipe_id)
+    return RecipeAnswer(
+        recipe_id=recipe_id,
+        question=question,
+        probability=0.86,
+        value=value,
+        model=CURRENT_MODEL,
+        content_hash=content_fingerprint(recipe.title, [i.canonical_name for i in recipe.ingredients]),
+        criteria_hash=declared.criteria_hash,
+        computed_at=COMPUTED_AT,
+    )
 
 
 def _answer(recipe_id: str, flag: str, probability: float) -> RecipeAnswer:

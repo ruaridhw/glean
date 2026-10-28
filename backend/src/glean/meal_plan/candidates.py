@@ -20,6 +20,12 @@ Those flags, the household's time cap and the meals already planned are hard
 constraints: `meal_plan.eligibility` applies the six-week recency floor on top of them and
 never relaxes one to satisfy the other.
 
+The household's time cap is applied here too, against the enriched active-time
+bucket's upper bound (spec 6.1): the cap is about hands-on work, and a
+60-minute total of which 10 minutes is hands-on fits a 20-minute cap. With no
+bucket — not enriched yet, or below its bar — it falls back to total time as it
+did before V5.
+
 The guarantee is narrower than either. It never revives a recipe a hard constraint dropped, and
 it never reaches past a floor that held. When the floor has relaxed it covers each urgent item
 from the fresh recipes first and falls back to a relaxed recipe only for an item no fresh recipe
@@ -37,12 +43,16 @@ from typing import TYPE_CHECKING
 from glean.meal_plan.dietary_decisions import CALIBRATED_DIETARY, DietaryDecisions, DietaryDecisionStore
 from glean.meal_plan.eligibility import apply_recency_floor
 from glean.observability import logger
+from glean.recipes.answers import content_fingerprint
+from glean.recipes.attributes import RecipeAttributes
+from glean.recipes.enrichment.projection_attributes import attributes_from_answers
 
 if TYPE_CHECKING:
     import random
     from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from glean.meal_plan.eligibility import CookedMeal
+    from glean.recipes.answers import RecipeAnswer
     from glean.recipes.corpus import RecipeCorpusStore
     from glean.recipes.search_index import RecipeSummary
 
@@ -134,13 +144,15 @@ def sample_corpus_candidates(
     excluded = set(exclude_external_ids)
     flags = [flag.strip().casefold() for flag in dietary_flags]
     decisions = DietaryDecisions(DietaryDecisionStore(corpus.store).load(), calibration=CALIBRATED_DIETARY)
+    # Only read when a cap is set: with no cap every recipe fits, so the answers are not worth loading.
+    attributes = recipe_attributes(corpus, all_recipes) if max_total_time_mins is not None else {}
     # Hard constraints only: the recency floor is applied to what survives them, and relaxing the
     # floor must never bring back a recipe a flag, the time cap or an already-planned meal ruled out.
     eligible = {
         summary.external_id: summary
         for summary in all_recipes
         if summary.external_id not in excluded
-        and _fits_time(summary, max_total_time_mins)
+        and _fits_time(summary, max_total_time_mins, attributes.get(summary.external_id, RecipeAttributes()))
         and not any(decisions.excludes(summary, flag) for flag in flags)
     }
     floor = apply_recency_floor(
@@ -508,7 +520,28 @@ def _search_prefix(token: str) -> str:
     return token
 
 
-def _fits_time(summary: RecipeSummary, max_total_time_mins: int | None) -> bool:
-    return (
-        max_total_time_mins is None or summary.total_time_mins is None or summary.total_time_mins <= max_total_time_mins
-    )
+def _fits_time(summary: RecipeSummary, max_total_time_mins: int | None, attributes: RecipeAttributes) -> bool:
+    """The cap against the bucket's upper bound, and total time when no bucket is known (spec 6.1)."""
+    return attributes.fits_time_cap(max_total_time_mins, total_time_mins=summary.total_time_mins)
+
+
+def recipe_attributes(corpus: RecipeCorpusStore, summaries: Iterable[RecipeSummary]) -> dict[str, RecipeAttributes]:
+    """Each summary's attributes, from the same stored answers the projection is built from.
+
+    Public because planning reads attributes through it twice: the sampler for the household's time cap, and
+    `pipeline.prepare` for the labels a proposal card shows.
+
+    The answers are read once, not from the projection document: it is the backend's own cache, and the
+    seam every backend shares is `answers()`. An answer counts only while it is current for the summary as
+    it stands, which is the rule the projection uses too, so the two cannot disagree.
+    """
+    answers: dict[str, list[RecipeAnswer]] = {}
+    for answer in corpus.answers():
+        answers.setdefault(answer.recipe_id, []).append(answer)
+    return {
+        summary.external_id: attributes_from_answers(
+            answers.get(summary.external_id, ()),
+            content_hash=content_fingerprint(summary.title, summary.ingredient_names),
+        )
+        for summary in summaries
+    }
