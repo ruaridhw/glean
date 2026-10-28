@@ -8,7 +8,7 @@ the same blob the producer writes.
 from __future__ import annotations
 
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import httpx
@@ -414,3 +414,18 @@ def _corpus(tmp_path, recipes: list[tuple[str, str, list[str]]]) -> RecipeCorpus
             )
         )
     return corpus
+
+
+@pytest.mark.parametrize("uncovered_computed_last", [True, False])
+def test_an_answer_from_a_model_the_calibration_does_not_cover_never_shadows_a_covered_one(
+    tmp_path, uncovered_computed_last: bool
+) -> None:
+    corpus = _corpus(tmp_path, [("rec_curry", "Korma", ["curry paste"])])
+    covered = _decision(corpus, "rec_curry", TREE_NUT_FREE, 0.02, model=CURRENT_MODEL)
+    uncovered = _decision(corpus, "rec_curry", TREE_NUT_FREE, 0.02, model=CANDIDATE_SERVED).model_copy(
+        update={"computed_at": covered.computed_at + timedelta(days=1 if uncovered_computed_last else -1)}
+    )
+
+    decisions = DietaryDecisions([uncovered, covered], calibration=CALIBRATED_DIETARY)
+
+    assert not decisions.excludes(_summary(corpus, "rec_curry"), TREE_NUT_FREE)
