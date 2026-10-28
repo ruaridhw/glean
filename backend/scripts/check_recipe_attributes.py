@@ -48,14 +48,14 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import SecretStr, ValidationError
 
-from glean.decisions import DECISION_MODEL, DecisionClient
+from glean.decisions import DecisionClient
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.attributes import ATTRIBUTE_QUESTIONS, UNSURE, RecipeAttributes
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
 from glean.recipes.enrichment import run_enrichment
 from glean.recipes.enrichment.active_time import ACTIVE_TIME_BAR, ACTIVE_TIME_ENRICHER
 from glean.recipes.enrichment.attributes import ATTRIBUTE_ENRICHER, MEASURED_BARS
-from glean.recipes.enrichment.enricher import DEFAULT_ATTRIBUTE_BAR, MIN_ATTRIBUTE_BAR
+from glean.recipes.enrichment.enricher import ATTRIBUTE_BAR_MODEL, DEFAULT_ATTRIBUTE_BAR, MIN_ATTRIBUTE_BAR
 from glean.recipes.stored import StoredRecipe
 
 if TYPE_CHECKING:
@@ -136,7 +136,7 @@ def _enrich(args: argparse.Namespace, *, client: DecisionClient | None) -> int:
         encoding="utf-8",
     )
     print(f"Answers: {answers_path}")
-    print(f"Model: {DECISION_MODEL}")
+    print(f"Model: {ATTRIBUTE_BAR_MODEL.request}")
     print(f"Next: uv run python scripts/check_recipe_attributes.py compare --sample {args.sample}")
     return 0
 
@@ -176,7 +176,8 @@ def _client(*, timeout_s: float) -> DecisionClient:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise SystemExit("Set OPENROUTER_API_KEY: the enrich step asks the decision model, which is billed.")
-    return DecisionClient(api_key=SecretStr(api_key), timeout_s=timeout_s)
+    # The bars are measured for one model, so the sample is asked that model and no other.
+    return DecisionClient(api_key=SecretStr(api_key), model=ATTRIBUTE_BAR_MODEL, timeout_s=timeout_s)
 
 
 # -- step 2: compare against the labels -----------------------------------------------------------

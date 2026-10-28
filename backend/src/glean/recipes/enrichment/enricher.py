@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from glean.recipes.stored import StoredRecipe
 
 __all__ = [
+    "ATTRIBUTE_BAR_MODEL",
     "DEFAULT_ATTRIBUTE_BAR",
     "MIN_ATTRIBUTE_BAR",
     "Acceptance",
@@ -168,6 +169,10 @@ class Enricher(Protocol):
 # value is stored as `unsure`, which earns no variety credit and no penalty.
 MIN_ATTRIBUTE_BAR = 0.7
 DEFAULT_ATTRIBUTE_BAR = 0.8
+# The model the attribute and active-time bars were measured on (the 50-recipe check asked the pinned decision
+# model). A bar only means something for that model's probabilities, as a dietary cutoff does (#216), so the
+# questions accept no other model's answers and a run asking another model is refused.
+ATTRIBUTE_BAR_MODEL: DecisionModel = DEFAULT_MODEL
 
 
 def attribute_bar(threshold: float = DEFAULT_ATTRIBUTE_BAR) -> ConfidenceBar:

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from glean.decisions import ChoiceQuestion, ScoreQuestion
 from glean.recipes.attributes import ATTRIBUTE_QUESTIONS, Cuisine, DishType, MainCarb, MainProtein, WholeFood
 from glean.recipes.enrichment.enricher import (
+    ATTRIBUTE_BAR_MODEL,
     DEFAULT_ATTRIBUTE_BAR,
     Acceptance,
     EnrichmentQuestion,
@@ -243,7 +244,9 @@ class AttributeEnricher:
             if attribute == "whole_food"
             else top_choice(name)
         )
-        return EnrichmentQuestion(name=name, question=_QUESTIONS[attribute], bar=bar, accept=acceptance)
+        return EnrichmentQuestion(
+            name=name, question=_QUESTIONS[attribute], bar=bar, accept=acceptance, model=ATTRIBUTE_BAR_MODEL
+        )
 
 
 ATTRIBUTE_ENRICHER = AttributeEnricher()

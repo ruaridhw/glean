@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from glean.decisions import ScoreQuestion
 from glean.recipes.attributes import ACTIVE_TIME_QUESTION, ActiveTimeBucket
 from glean.recipes.enrichment.enricher import (
+    ATTRIBUTE_BAR_MODEL,
     DEFAULT_ATTRIBUTE_BAR,
     EnrichmentQuestion,
     attribute_bar,
@@ -99,6 +100,7 @@ def active_time_question(threshold: float = ACTIVE_TIME_BAR) -> EnrichmentQuesti
         question=_QUESTION,
         bar=bar,
         accept=top_level(ACTIVE_TIME_QUESTION, [bucket.value for bucket in BUCKETS]),
+        model=ATTRIBUTE_BAR_MODEL,
     )
 
 

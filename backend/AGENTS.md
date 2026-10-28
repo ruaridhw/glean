@@ -87,6 +87,8 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
   - `attributes.py` — five questions per recipe: `choice` for `main_protein`, `main_carb`, `dish_type` and
     `cuisine`, `score` for `whole_food`. Accepted only at the attribute's bar (0.8 by default, per-attribute
     tunable, never below 0.7), otherwise stored `unsure`.
+    Its bars, and active time's, are for `ATTRIBUTE_BAR_MODEL` (the model the 50-recipe check asked), so
+    those questions accept no other model's answers, as dietary's do under its calibration.
   - `active_time.py` — one `score` over the method, with the stated prep and total times as hints, answering
     with one of G1's five buckets. Below its bar it stores `unsure`, and the filter falls back to total time.
   - `projection_attributes.py` — `attributes_from_answers`: how a recipe's current answers become the
