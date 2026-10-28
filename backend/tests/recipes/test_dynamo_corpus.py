@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 from glean.decisions import DECISION_MODEL
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
+    CALIBRATED_DIETARY,
     DietaryDecision,
     DietaryDecisions,
     DietaryDecisionStore,
@@ -409,7 +410,7 @@ def test_the_store_and_a_rebuild_keep_the_current_wording_even_when_the_stale_an
         assert answered is not None
         assert {answer.criteria_hash for answer in answered.answers} == {stale_hash, current.criteria_hash}
     assert (
-        DietaryDecisions(DietaryDecisionStore(backend).load()).excludes(
+        DietaryDecisions(DietaryDecisionStore(backend).load(), calibration=CALIBRATED_DIETARY).excludes(
             RecipeSummary.from_recipe(recipe, key="k"), "vegan"
         )
         is False
