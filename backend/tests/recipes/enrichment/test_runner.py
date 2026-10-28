@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from glean.decisions import DECISION_MODEL
+from glean.decisions import DECISION_MODEL, DecisionModel
+from glean.meal_plan.dietary_decisions import DietaryDecisions, DietaryDecisionStore
 from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.answers import RecipeAnswer, content_fingerprint, dietary_question
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
@@ -18,16 +19,27 @@ from glean.recipes.dynamo_corpus import DynamoCorpusBackend, ProjectionPublishEr
 from glean.recipes.enrichment import (
     DIETARY_ENRICHER,
     CorpusUnavailableError,
+    DietaryEnricher,
     EnrichmentError,
+    UncalibratedModelError,
     run_enrichment,
 )
-from glean.recipes.enrichment.dietary import DIETARY_FLAGS, dietary_enrichment_questions
+from glean.recipes.enrichment.dietary import (
+    CALIBRATED_DIETARY,
+    DIETARY_FLAGS,
+    TREE_NUT_FREE,
+    DietaryCalibration,
+    dietary_enrichment_questions,
+)
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 from tests.conftest import RECIPES_TABLE_NAME
 from tests.recipes.enrichment.fakes import DINNER, SNAPSHOT, CountingBackend, DinnerEnricher, FakeDecisionApi
 from tests.recipes.fake_projection import InMemoryProjectionStore
 
 BOTH_ENRICHERS = (DIETARY_ENRICHER, DinnerEnricher())
+# A free route's request id and the identity it answers under differ, as observed in a pilot (#216).
+CANDIDATE = DecisionModel("baseten/mammoth-1:free", served=("baseten/mammoth-1",))
+CANDIDATE_SERVED = "baseten/mammoth-1-20261021"
 DIETARY_QUESTIONS = {dietary_question(flag) for flag in DIETARY_FLAGS}
 
 
@@ -499,3 +511,61 @@ def _seed_answers(
             for flag in flags
         ]
     )
+
+
+def test_a_client_that_accepts_an_identity_the_calibration_does_not_is_refused_before_any_request_or_write(
+    tmp_path,
+) -> None:
+    corpus = _blob_corpus(tmp_path)
+    api = FakeDecisionApi()
+    # Same request id as the calibration, but it would also accept a different model's answers.
+    widened = DecisionModel(DECISION_MODEL, served=("baseten/mammoth-1",))
+
+    with pytest.raises(UncalibratedModelError):
+        run_enrichment(corpus, api.client(model=widened))
+
+    assert api.requests == []
+    assert corpus.answers() == []
+
+
+def test_a_client_asking_a_model_the_calibration_does_not_cover_is_refused_before_any_request_or_write(
+    tmp_path,
+) -> None:
+    corpus = _blob_corpus(tmp_path)
+    api = FakeDecisionApi(snapshot=CANDIDATE_SERVED)
+
+    with pytest.raises(UncalibratedModelError):
+        run_enrichment(corpus, api.client(model=CANDIDATE), enrichers=BOTH_ENRICHERS)
+
+    assert api.requests == []
+    assert corpus.answers() == []
+
+
+def test_a_substitute_calibration_stores_its_served_identity_for_the_reader_under_it(tmp_path) -> None:
+    corpus = _blob_corpus(tmp_path)
+    substitute = DietaryCalibration(
+        model=CANDIDATE,
+        thresholds={},
+        default_threshold=0.5,
+        evidence="Observed responses on neutral samples only: a reference, not a calibration.",
+    )
+    api = FakeDecisionApi(snapshot=CANDIDATE_SERVED)
+
+    run_enrichment(corpus, api.client(model=CANDIDATE), enrichers=(DietaryEnricher(calibration=substitute),))
+
+    assert {answer.model for answer in corpus.answers()} == {CANDIDATE_SERVED}
+    assert {request["model"] for request in api.requests} == {CANDIDATE.request}
+    stored = DietaryDecisionStore(corpus.store).load()
+    summaries, _ = corpus.search(per_page=100)
+    lentils = next(summary for summary in summaries if "pesto" not in " ".join(summary.ingredient_names))
+    assert not DietaryDecisions(stored, calibration=substitute).excludes(lentils, TREE_NUT_FREE)
+    # The same answers mean nothing at the production calibration's model, so they exclude everything there.
+    assert DietaryDecisions(stored, calibration=CALIBRATED_DIETARY).excludes(lentils, TREE_NUT_FREE)
+
+
+def test_a_question_stores_an_answer_only_under_an_identity_its_model_covers() -> None:
+    question = dietary_enrichment_questions()[TREE_NUT_FREE]
+
+    assert question.served_identity(SNAPSHOT) == SNAPSHOT
+    with pytest.raises(UncalibratedModelError):
+        question.served_identity(CANDIDATE_SERVED)

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from scripts import enrich_corpus
 from tests.recipes.enrichment.fakes import FakeDecisionApi
 
+from glean.decisions import DecisionModel
 from glean.recipes.corpus import BlobCorpusBackend, RecipeCorpusStore
+from glean.recipes.enrichment import dietary
 from glean.recipes.search_index import INDEX_KEY
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
@@ -230,3 +233,16 @@ def _save(corpus: RecipeCorpusStore, external_id: str, title: str, ingredients: 
             ingredients=[StoredIngredient(canonical_name=name, quantity=1, unit="each") for name in ingredients],
         )
     )
+
+
+def test_the_client_asks_the_model_the_dietary_calibration_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+
+    assert enrich_corpus._client(timeout_s=1.0).model == dietary.CALIBRATED_DIETARY.model
+
+    alternate = replace(
+        dietary.CALIBRATED_DIETARY, model=DecisionModel("another/model:free", served=("another/model",))
+    )
+    monkeypatch.setattr(enrich_corpus, "CALIBRATED_DIETARY", alternate)
+
+    assert enrich_corpus._client(timeout_s=1.0).model == alternate.model

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import httpx
 from pydantic import SecretStr
 
-from glean.decisions import DECISION_MODEL, DecisionClient, NoulCriteria, NoulQuestion
+from glean.decisions import DECISION_MODEL, DEFAULT_MODEL, DecisionClient, DecisionModel, NoulCriteria, NoulQuestion
 from glean.recipes.corpus import BlobCorpusBackend
 from glean.recipes.enrichment import Acceptance, ConfidenceBar, EnrichmentQuestion, SafeSide
 
@@ -56,8 +56,8 @@ class FakeDecisionApi:
         self._low = low
         self._marker = marker
 
-    def client(self) -> DecisionClient:
-        return DecisionClient(api_key=SecretStr("sk-or-test"), transport=httpx.MockTransport(self._handle))
+    def client(self, *, model: DecisionModel = DEFAULT_MODEL) -> DecisionClient:
+        return DecisionClient(api_key=SecretStr("sk-or-test"), model=model, transport=httpx.MockTransport(self._handle))
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
