@@ -15,18 +15,17 @@ Each declared question carries the three things a stored answer depends on:
   planning reads it, so nothing is thrown away.
 
 An answer is **current** when it replied to this question's wording, to this recipe's content, under the
-pinned model. Anything else is stale, and the runner asks again.
+model its bar was measured on. Anything else is stale, and the runner asks again.
 """
 
 from __future__ import annotations
 
 import hashlib
-import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
-from glean.decisions import DECISION_MODEL
+from glean.decisions import DEFAULT_MODEL, DecisionModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -43,14 +42,16 @@ __all__ = [
     "EnrichmentQuestion",
     "SafeSide",
     "StoredValue",
+    "UncalibratedModelError",
     "answer_state",
-    "is_current_model",
     "question_hash",
     "recipe_state",
 ]
 
-# The endpoint reports the pinned model either as-is or as a dated snapshot of it (`<pinned>-YYYYMMDD`).
-_CURRENT_MODEL = re.compile(rf"{re.escape(DECISION_MODEL)}(-\d{{8}})?")
+
+class UncalibratedModelError(Exception):
+    """A client or an answer names a model a question's bar wasn't measured on, so nothing may decide on it."""
+
 
 # What an acceptance rule stores for one question. Today's answer item carries a probability and nothing
 # else; V5's attribute enrichers widen this to a value (`unsure`, a cuisine) on the same item.
@@ -93,6 +94,8 @@ class EnrichmentQuestion:
     question: Question
     bar: ConfidenceBar
     accept: Acceptance
+    model: DecisionModel = DEFAULT_MODEL
+    """The model the bar was measured on (#216): its answers are the only ones this question accepts."""
 
     @property
     def criteria_hash(self) -> str:
@@ -105,8 +108,16 @@ class EnrichmentQuestion:
             answer.question == self.name
             and answer.criteria_hash == self.criteria_hash
             and answer.content_hash == content_hash
-            and is_current_model(answer.model)
+            and self.model.accepts(answer.model)
         )
+
+    def served_identity(self, model: str) -> str:
+        """The identity an answer may be stored under, refused unless this question's model covers it."""
+        if not self.model.accepts(model):
+            raise UncalibratedModelError(
+                f"The endpoint answered {self.name!r} as {model!r}, which its {self.model.request!r} bar does not cover"
+            )
+        return model
 
 
 class Enricher(Protocol):
@@ -147,15 +158,6 @@ def answer_state(question: EnrichmentQuestion, stored: Sequence[RecipeAnswer], *
 def question_hash(question: Question) -> str:
     """Identifies the question a decision answered, so rewording a question voids its old answers."""
     return hashlib.sha256(question.model_dump_json().encode()).hexdigest()
-
-
-def is_current_model(model: str) -> bool:
-    """Whether `model` is the pinned decision model, or a dated snapshot of it.
-
-    Thresholds are calibrated to one snapshot's probabilities and don't carry over to another version, so
-    an answer from any other model is stale.
-    """
-    return _CURRENT_MODEL.fullmatch(model) is not None
 
 
 def recipe_state(summary: RecipeSummary) -> dict[str, str | list[str]]:

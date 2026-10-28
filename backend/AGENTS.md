@@ -70,9 +70,13 @@ Stateless FastAPI backend deployed as AWS Lambda (Mangum adapter). All app state
     the projection rebuilt once at the end. It decides that from `answers_for` (the authoritative read), so
     a run that died, or whose final rebuild failed, resumes instead of paying for the same answers again.
     Stale means the answer's criteria hash, the recipe's content hash or the model is no longer current.
+    Each question carries the `DecisionModel` its bar was measured on (#216): the runner refuses, before any
+    request or write, a client asking or accepting any other model, and stores only a served identity that
+    model covers.
   - `coverage.py` — the per-question coverage report (current / stale / missing / failed), printed as a
     table by `scripts/enrich_corpus.py` and readable as data.
-  - `dietary.py` — the first enricher: six `noul` questions with ADR 0011's thresholds unchanged.
+  - `dietary.py` — the first enricher: six `noul` questions with ADR 0011's thresholds unchanged, owned by
+    `CALIBRATED_DIETARY` (the model and cutoffs as one reviewed `DietaryCalibration`).
     `meal_plan/dietary_decisions.py` is now the read side and re-exports those questions.
 
 ### Rolling back to blobs

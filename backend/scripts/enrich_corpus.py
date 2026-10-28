@@ -36,6 +36,7 @@ from pydantic import SecretStr
 from glean.decisions import DecisionClient
 from glean.recipes.corpus import open_corpus
 from glean.recipes.enrichment import ENRICHERS, CorpusUnavailableError, EnrichmentError, run_enrichment
+from glean.recipes.enrichment.dietary import CALIBRATED_DIETARY
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -108,7 +109,8 @@ def _client(*, timeout_s: float) -> DecisionClient:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise SystemExit("Set OPENROUTER_API_KEY to the OpenRouter key decision calls are billed to.")
-    return DecisionClient(api_key=SecretStr(api_key), timeout_s=timeout_s)
+    # The calibration owns which model is asked, so a validated dietary substitution is one reviewed change there.
+    return DecisionClient(api_key=SecretStr(api_key), model=CALIBRATED_DIETARY.model, timeout_s=timeout_s)
 
 
 def _refuse_remote(

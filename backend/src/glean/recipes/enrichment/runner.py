@@ -30,13 +30,13 @@ from glean.observability import logger
 from glean.recipes.answers import RecipeAnswer, content_fingerprint
 from glean.recipes.enrichment.coverage import AnswerFailure, CoverageReport, QuestionCoverage
 from glean.recipes.enrichment.dietary import DIETARY_ENRICHER
-from glean.recipes.enrichment.enricher import AnswerState, answer_state, recipe_state
+from glean.recipes.enrichment.enricher import AnswerState, UncalibratedModelError, answer_state, recipe_state
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from concurrent.futures import Future
 
-    from glean.decisions import DecisionClient
+    from glean.decisions import DecisionClient, DecisionModel
     from glean.recipes.corpus import CorpusBackend, RecipeCorpusStore
     from glean.recipes.enrichment.enricher import Enricher, EnrichmentQuestion
     from glean.recipes.search_index import RecipeSummary
@@ -88,6 +88,7 @@ def run_enrichment(
         )
     if client is None:
         raise EnrichmentError("a run needs a decision client unless it is a dry run")
+    _check_models(client, questions)
 
     run = _Run(corpus, known)
     try:
@@ -120,6 +121,24 @@ def run_enrichment(
     )
 
 
+def _check_models(client: DecisionClient, questions: Sequence[EnrichmentQuestion]) -> None:
+    """Refuse, before any request or write, a client whose model isn't the one every question's bar names.
+
+    The whole contract, not just the request id: a client that also accepts another model's answers would
+    store answers the calibrated reader then rejects while the run still reported full coverage (#216).
+    """
+    for question in questions:
+        if client.model != question.model:
+            raise UncalibratedModelError(
+                f"{question.name!r} is calibrated for {_contract(question.model)}, not {_contract(client.model)}: "
+                "measure the new model's bar before it decides anything"
+            )
+
+
+def _contract(model: DecisionModel) -> str:
+    return " or ".join(repr(base) for base in (model.request, *model.served))
+
+
 def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[EnrichmentQuestion]) -> list[RecipeAnswer]:
     """One request for every question this recipe is missing or stale on."""
     decision = client.decide(recipe_state(summary), {question.name: question.question for question in questions})
@@ -130,7 +149,7 @@ def _ask(client: DecisionClient, summary: RecipeSummary, questions: Sequence[Enr
             recipe_id=summary.external_id,
             question=question.name,
             probability=value,
-            model=decision.model,
+            model=question.served_identity(decision.model),
             content_hash=content_hash,
             criteria_hash=question.criteria_hash,
             computed_at=computed_at,
