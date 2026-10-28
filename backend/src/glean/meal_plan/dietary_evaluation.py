@@ -141,10 +141,6 @@ class EvaluationReport:
             ],
         }
 
-    @property
-    def evaluated_flags(self) -> tuple[str, ...]:
-        return tuple(flag for flag, summary in self.summaries().items() if summary.evaluated)
-
     def summaries(self) -> dict[str, FlagSummary]:
         return {
             flag: _summarise(flag, [score for score in self.scores if score.flag == flag], self.calibration)
