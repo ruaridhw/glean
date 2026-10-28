@@ -245,7 +245,7 @@ def test_partial_labels_evaluate_what_they_label_and_leave_the_rest_not_evaluate
     assert report.summaries()["peanut-free"].evaluated is True
 
 
-def test_a_flag_with_no_labelled_samples_renders_as_not_evaluated() -> None:
+def test_a_flag_with_no_scored_samples_says_so_instead_of_showing_no_mistakes() -> None:
     api = FakeDecisionApi({"Pesto Pasta": {"tree-nut-free": 0.9, "peanut-free": 0.01}})
     partial = [
         LabelledSample(id="s", title="Pesto Pasta", ingredients=["pesto"], violates={"peanut-free": False}),
@@ -253,8 +253,18 @@ def test_a_flag_with_no_labelled_samples_renders_as_not_evaluated() -> None:
 
     rendered = evaluate_dietary_model(api.client(), partial, flags=("tree-nut-free", "peanut-free")).render()
 
-    assert "tree-nut-free: NOT EVALUATED" in rendered
-    assert "tree-nut-free: 0 labelled" not in rendered
+    assert "tree-nut-free: NOT EVALUATED (no scored samples)" in rendered
+    assert "0 labelled violations" not in rendered.split("tree-nut-free:", 1)[1].splitlines()[0]
+
+
+def test_a_flag_whose_samples_all_failed_renders_as_not_evaluated_with_the_reason() -> None:
+    api = FakeDecisionApi({}, fail_when=lambda _body: True)
+
+    report = evaluate_dietary_model(api.client(), SAMPLES, flags=("tree-nut-free",))
+
+    assert report.failures
+    assert report.summaries()["tree-nut-free"].evaluated is False
+    assert "tree-nut-free: NOT EVALUATED (no scored samples)" in report.render()
 
 
 def test_evaluating_a_model_cannot_write_the_stored_dietary_decisions() -> None:

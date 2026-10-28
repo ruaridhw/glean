@@ -157,7 +157,7 @@ class EvaluationReport:
         for flag, summary in self.summaries().items():
             lines.append("")
             if not summary.evaluated:
-                lines.append(f"{flag}: NOT EVALUATED (no labelled samples)")
+                lines.append(f"{flag}: NOT EVALUATED (no scored samples)")
                 continue
             lines.append(
                 f"{flag}: {summary.violations} labelled violations, {summary.clean} clean, "

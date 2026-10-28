@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Score a decision model against labelled dietary samples and write a local report.
+"""Score a decision model against labelled dietary samples, printing a report and saving optional files.
 
-Read-only with respect to Glean's storage: it reads labelled sample files, asks the model, and writes
-one local text file. It never opens the corpus store, so it cannot change the decisions Generate reads,
-and its reference cutoffs are not a calibration of the model it measures.
+Read-only with respect to Glean's storage: it reads labelled sample files, asks the model, and writes only the
+text and/or JSON report you point it at with `--output` and `--json-output`. It never opens the corpus store,
+so it cannot change the decisions Generate reads, and its reference cutoffs are not a calibration of the
+model it measures.
 
     uv run python scripts/evaluate_dietary_model.py --model baseten/mammoth-1:free \\
         --served-base baseten/mammoth-1 \\
