@@ -41,6 +41,10 @@ _REMAINING_VALIDATION = (
 )
 
 
+class EvaluationInputError(Exception):
+    """The samples can't evaluate anything: none given, none labelling an asked flag, or a misspelt flag."""
+
+
 class LabelledSample(BaseModel):
     """One recipe with the flags it does or doesn't break, labelled independently of any model."""
 
@@ -81,6 +85,11 @@ class FlagSummary:
     wrongly_excluded: tuple[SampleScore, ...]
     lowest_violation: float | None
     highest_clean: float | None
+
+    @property
+    def evaluated(self) -> bool:
+        """Whether any sample labelled this flag: an unlabelled flag proves nothing either way."""
+        return self.violations + self.clean > 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +141,10 @@ class EvaluationReport:
             ],
         }
 
+    @property
+    def evaluated_flags(self) -> tuple[str, ...]:
+        return tuple(flag for flag, summary in self.summaries().items() if summary.evaluated)
+
     def summaries(self) -> dict[str, FlagSummary]:
         return {
             flag: _summarise(flag, [score for score in self.scores if score.flag == flag], self.calibration)
@@ -147,6 +160,9 @@ class EvaluationReport:
         ]
         for flag, summary in self.summaries().items():
             lines.append("")
+            if not summary.evaluated:
+                lines.append(f"{flag}: NOT EVALUATED (no labelled samples)")
+                continue
             lines.append(
                 f"{flag}: {summary.violations} labelled violations, {summary.clean} clean, "
                 f"at the {summary.threshold:g} reference cutoff"
@@ -179,6 +195,8 @@ def evaluate_dietary_model(
     A request that fails is reported and skipped; the rest are still scored. The calibration only
     supplies the reference cutoffs, so a model it does not cover can be measured safely.
     """
+    samples = list(samples)
+    _check_labelled(samples, flags)
     questions = dietary_questions(flags)
     scores: list[SampleScore] = []
     failures: list[str] = []
@@ -228,6 +246,19 @@ def evaluate_dietary_model(
         flags=flags,
         calibration=calibration,
     )
+
+
+def _check_labelled(samples: list[LabelledSample], flags: tuple[str, ...]) -> None:
+    """Refuse input that would read as a clean run: no samples, a misspelt flag, or nothing being asked about."""
+    if not samples:
+        raise EvaluationInputError("No labelled samples to evaluate")
+    unknown = sorted({flag for sample in samples for flag in sample.violates} - set(DIETARY_FLAGS))
+    if unknown:
+        raise EvaluationInputError(f"Labels for flags the decision model is not asked about (misspelt?): {unknown}")
+    if not any(flag in sample.violates for sample in samples for flag in flags):
+        raise EvaluationInputError(
+            f"The samples label none of the flags being evaluated ({', '.join(flags)}): nothing was measured"
+        )
 
 
 def _summarise(flag: str, scores: list[SampleScore], calibration: DietaryCalibration) -> FlagSummary:

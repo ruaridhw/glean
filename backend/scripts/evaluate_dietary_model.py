@@ -15,7 +15,8 @@ The text report is a summary; the JSON keeps every label and probability, so the
 other cutoffs later without asking the model again. Both are written where `--output`/`--json-output` say
 and nowhere else.
 
-Exits 1 if any sample could not be answered, so an incomplete run never reads as a pass.
+Exits 1 if any sample could not be answered, and 2 if the samples can't evaluate anything (empty, a misspelt
+flag, or no label for any asked flag), so an inconclusive run never reads as a pass.
 """
 
 from __future__ import annotations
@@ -28,14 +29,22 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient, DecisionModel
-from glean.meal_plan.dietary_evaluation import evaluate_dietary_model, load_labelled_samples
+from glean.meal_plan.dietary_evaluation import (
+    EvaluationInputError,
+    evaluate_dietary_model,
+    load_labelled_samples,
+)
 
 
 def main(argv: list[str] | None = None, *, client: DecisionClient | None = None) -> int:
     args = _parse_args(argv)
     model = DecisionModel(args.model, served=tuple(args.served_base))
     client = client or _client(model, timeout_s=args.timeout)
-    report = evaluate_dietary_model(client, load_labelled_samples(args.fixture))
+    try:
+        report = evaluate_dietary_model(client, load_labelled_samples(args.fixture))
+    except EvaluationInputError as exc:
+        print(f"FAILED: {exc}")
+        return 2
     rendered = report.render()
     print(rendered)
     if args.output:

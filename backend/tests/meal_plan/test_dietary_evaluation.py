@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from glean.decisions import DecisionClient, DecisionModel
 from glean.meal_plan.dietary_decisions import CALIBRATED_DIETARY
 from glean.meal_plan.dietary_evaluation import (
+    EvaluationInputError,
     LabelledSample,
     evaluate_dietary_model,
     load_labelled_samples,
@@ -197,6 +199,62 @@ def test_the_report_says_the_cutoffs_are_a_reference_and_what_is_still_unproven(
     assert "not a calibration" in rendered.casefold()
     assert "tree-nut-free" in rendered
     assert "0.3" in rendered
+
+
+def test_no_samples_is_refused_before_any_request() -> None:
+    api = FakeDecisionApi({})
+
+    with pytest.raises(EvaluationInputError, match="No labelled samples"):
+        evaluate_dietary_model(api.client(), [])
+
+    assert api.requests == []
+
+
+def test_samples_that_label_none_of_the_asked_flags_are_refused_before_any_request() -> None:
+    api = FakeDecisionApi({})
+    unlabelled = [LabelledSample(id="s", title="Toast", ingredients=["bread"], violates={})]
+
+    with pytest.raises(EvaluationInputError, match="none of the flags"):
+        evaluate_dietary_model(api.client(), unlabelled)
+
+    assert api.requests == []
+
+
+def test_a_misspelt_flag_name_is_refused_naming_it() -> None:
+    api = FakeDecisionApi({})
+    misspelt = [
+        LabelledSample(id="s", title="Toast", ingredients=["bread"], violates={"tree_nut_free": True}),
+    ]
+
+    with pytest.raises(EvaluationInputError, match="tree_nut_free"):
+        evaluate_dietary_model(api.client(), misspelt)
+
+    assert api.requests == []
+
+
+def test_partial_labels_evaluate_what_they_label_and_leave_the_rest_not_evaluated() -> None:
+    api = FakeDecisionApi({"Pesto Pasta": {"tree-nut-free": 0.9, "peanut-free": 0.01}})
+    partial = [
+        LabelledSample(id="s", title="Pesto Pasta", ingredients=["pesto"], violates={"peanut-free": False}),
+    ]
+
+    report = evaluate_dietary_model(api.client(), partial, flags=("tree-nut-free", "peanut-free"))
+
+    assert {(score.flag, score.violates) for score in report.scores} == {("peanut-free", False)}
+    assert report.summaries()["tree-nut-free"].evaluated is False
+    assert report.summaries()["peanut-free"].evaluated is True
+
+
+def test_a_flag_with_no_labelled_samples_renders_as_not_evaluated() -> None:
+    api = FakeDecisionApi({"Pesto Pasta": {"tree-nut-free": 0.9, "peanut-free": 0.01}})
+    partial = [
+        LabelledSample(id="s", title="Pesto Pasta", ingredients=["pesto"], violates={"peanut-free": False}),
+    ]
+
+    rendered = evaluate_dietary_model(api.client(), partial, flags=("tree-nut-free", "peanut-free")).render()
+
+    assert "tree-nut-free: NOT EVALUATED" in rendered
+    assert "tree-nut-free: 0 labelled" not in rendered
 
 
 def test_evaluating_a_model_cannot_write_the_stored_dietary_decisions() -> None:

@@ -134,6 +134,21 @@ def test_the_run_saves_the_full_evidence_as_json_beside_the_text_report(
     capsys.readouterr()
 
 
+def test_an_empty_fixture_fails_loudly_without_writing_a_report(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    fixture = tmp_path / "empty.json"
+    fixture.write_text(json.dumps({"rows": []}))
+    output = tmp_path / "report.txt"
+
+    code = evaluate_dietary_model.main(
+        ["--model", "baseten/mammoth-1:free", "--fixture", str(fixture), "--output", str(output)],
+        client=_decision_api(),
+    )
+
+    assert code == 2
+    assert "no labelled samples" in capsys.readouterr().out.casefold()
+    assert not output.exists()
+
+
 def test_it_refuses_options_that_could_point_at_the_live_corpus(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as caught:
         evaluate_dietary_model.main(
