@@ -14,7 +14,9 @@ from tests.recipes.fake_projection import InMemoryProjectionStore
 
 from glean.decisions import DECISION_MODEL
 from glean.meal_plan.dietary_decisions import (
+    CALIBRATED_DIETARY,
     DietaryDecision,
+    DietaryDecisions,
     DietaryDecisionStore,
     content_fingerprint,
     dietary_questions,
@@ -138,6 +140,30 @@ def test_the_migration_writes_every_recipe_its_answers_and_the_projection(
     ]
     # Answers are written before their recipe, so even a partial projection carries the decisions.
     assert len(_projection(projections).answers()) == 3
+
+
+def test_the_migration_carries_each_answers_served_identity_for_the_calibrated_reader(
+    tmp_path: Path,
+    backend: DynamoCorpusBackend,
+    source: RecipeCorpusStore,
+    projections: InMemoryProjectionStore,
+) -> None:
+    # One answer the calibration does not cover: the migration copies it as it is, and the reader still rejects it.
+    blob_decisions = DietaryDecisionStore(source.store).load()
+    uncovered = blob_decisions[0].model_copy(update={"model": "another/model-20261014"})
+    DietaryDecisionStore(source.store).save([uncovered, *blob_decisions[1:]])
+
+    assert _run(tmp_path, backend, source, projections) == 0
+
+    def identities(decisions: list[DietaryDecision]) -> dict[tuple[str, str], str]:
+        return {(decision.recipe_id, decision.flag): decision.model for decision in decisions}
+
+    migrated = DietaryDecisionStore(backend).load()
+    assert identities(migrated) == identities(DietaryDecisionStore(source.store).load())
+    reader = DietaryDecisions(migrated, calibration=CALIBRATED_DIETARY)
+    summaries, _ = RecipeCorpusStore(backend).search(per_page=100)
+    excluded = {summary.external_id for summary in summaries if reader.excludes(summary, "tree-nut-free")}
+    assert excluded == {uncovered.recipe_id}
 
 
 def test_a_second_run_writes_nothing_and_leaves_the_same_items_and_projection(
