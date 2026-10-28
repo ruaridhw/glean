@@ -9,19 +9,25 @@ from __future__ import annotations
 
 import random
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 
-from glean.decisions import DECISION_MODEL
+from glean.decisions import DECISION_MODEL, DEFAULT_MODEL, DecisionModel
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
+    CALIBRATED_DIETARY,
     DIETARY_DECISIONS_KEY,
     DIETARY_FLAGS,
     PREFERENCE_THRESHOLD,
     THRESHOLDS,
+    TREE_NUT_FREE,
+    DietaryCalibration,
     DietaryDecision,
+    DietaryDecisions,
     DietaryDecisionStore,
+    UncalibratedModelError,
     content_fingerprint,
     dietary_questions,
     question_hash,
@@ -30,7 +36,13 @@ from glean.recipe_api.blob_store import FilesystemBlobStore
 from glean.recipes.corpus import RecipeCorpusStore
 from glean.recipes.stored import StoredIngredient, StoredRecipe
 
+if TYPE_CHECKING:
+    from glean.recipes.search_index import RecipeSummary
+
 CURRENT_MODEL = f"{DECISION_MODEL}-20261014"
+# A free route's request id and the identity it answers under differ, as observed in a pilot.
+CANDIDATE = DecisionModel("baseten/mammoth-1:free", served=("baseten/mammoth-1",))
+CANDIDATE_SERVED = "baseten/mammoth-1-20261021"
 
 
 def test_a_recipe_a_stored_decision_flags_is_excluded_though_its_ingredients_look_harmless(tmp_path) -> None:
@@ -214,6 +226,102 @@ def test_choosing_candidates_makes_no_network_call(tmp_path, monkeypatch) -> Non
     assert _ids(corpus, ["tree-nut-free", "peanut-free", "vegetarian"]) == {"rec_tomato"}
 
 
+def test_a_calibration_reads_a_decision_under_the_identity_it_names(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_curry", "Korma", ["curry paste"])])
+    decision = _decision(corpus, "rec_curry", "tree-nut-free", 0.02, model=CANDIDATE_SERVED)
+
+    decisions = DietaryDecisions([decision], calibration=_calibration(CANDIDATE))
+
+    assert not decisions.excludes(_summary(corpus, "rec_curry"), "tree-nut-free")
+
+
+def test_a_calibration_ignores_a_decision_from_any_other_identity(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_curry", "Korma", ["curry paste"])])
+    decision = _decision(corpus, "rec_curry", "tree-nut-free", 0.02, model=CURRENT_MODEL)
+
+    decisions = DietaryDecisions([decision], calibration=_calibration(CANDIDATE))
+
+    assert decisions.excludes(_summary(corpus, "rec_curry"), "tree-nut-free")
+
+
+def test_the_calibrations_own_thresholds_decide_the_exclusion(tmp_path) -> None:
+    corpus = _corpus(tmp_path, [("rec_curry", "Korma", ["curry paste"])])
+    decision = _decision(corpus, "rec_curry", "tree-nut-free", 0.4, model=CANDIDATE_SERVED)
+    summary = _summary(corpus, "rec_curry")
+
+    permissive = DietaryDecisions([decision], calibration=_calibration(CANDIDATE, default_threshold=0.5))
+    strict = DietaryDecisions([decision], calibration=_calibration(CANDIDATE, default_threshold=0.3))
+
+    assert not permissive.excludes(summary, "tree-nut-free")
+    assert strict.excludes(summary, "tree-nut-free")
+
+
+@pytest.mark.parametrize("cutoff", [float("nan"), float("inf"), 0.0, -0.1, 1.0, 1.1])
+def test_a_calibration_rejects_a_cutoff_outside_the_open_unit_interval(cutoff: float) -> None:
+    with pytest.raises(ValueError, match="cutoff"):
+        _calibration(DEFAULT_MODEL, thresholds={TREE_NUT_FREE: cutoff})
+
+    with pytest.raises(ValueError, match="cutoff"):
+        _calibration(DEFAULT_MODEL, default_threshold=cutoff)
+
+
+@pytest.mark.parametrize("evidence", ["", "   \n"])
+def test_a_calibration_needs_provenance_for_its_cutoffs(evidence: str) -> None:
+    with pytest.raises(ValueError, match="evidence"):
+        DietaryCalibration(model=DEFAULT_MODEL, thresholds={}, default_threshold=0.5, evidence=evidence)
+
+
+def test_a_calibration_rejects_a_threshold_for_a_flag_the_model_is_not_asked_about() -> None:
+    with pytest.raises(ValueError, match="keto"):
+        _calibration(DEFAULT_MODEL, thresholds={"keto": 0.3})
+
+
+def test_a_calibration_records_a_served_identity_only_under_the_model_it_covers() -> None:
+    assert CALIBRATED_DIETARY.served_identity(CURRENT_MODEL) == CURRENT_MODEL
+
+    with pytest.raises(UncalibratedModelError):
+        CALIBRATED_DIETARY.served_identity(CANDIDATE_SERVED)
+
+
+def test_a_calibration_owns_an_immutable_copy_of_the_cutoffs_it_was_given() -> None:
+    cutoffs = {TREE_NUT_FREE: 0.3}
+    calibration = _calibration(DEFAULT_MODEL, thresholds=cutoffs)
+
+    cutoffs[TREE_NUT_FREE] = 0.9
+
+    assert calibration.threshold_for(TREE_NUT_FREE) == 0.3
+    with pytest.raises(TypeError):
+        calibration.thresholds[TREE_NUT_FREE] = 0.9
+
+
+def _calibration(
+    model: DecisionModel,
+    *,
+    thresholds: dict[str, float] | None = None,
+    default_threshold: float = 0.5,
+) -> DietaryCalibration:
+    return DietaryCalibration(
+        model=model,
+        thresholds={} if thresholds is None else thresholds,
+        default_threshold=default_threshold,
+        evidence="Observed responses on neutral samples only: a reference, not a calibration.",
+    )
+
+
+def _decision(
+    corpus: RecipeCorpusStore, recipe_id: str, flag: str, probability: float, *, model: str
+) -> DietaryDecision:
+    return DietaryDecision(
+        recipe_id=recipe_id,
+        flag=flag,
+        probability=probability,
+        model=model,
+        content_hash=_hash(corpus, recipe_id),
+        criteria_hash=question_hash(dietary_questions()[flag]),
+        computed_at=datetime(2026, 10, 15, tzinfo=UTC),
+    )
+
+
 def _ids(corpus: RecipeCorpusStore, flags: list[str]) -> set[str]:
     candidates = sample_corpus_candidates(
         corpus,
@@ -250,8 +358,12 @@ def _store_decisions(
     )
 
 
+def _summary(corpus: RecipeCorpusStore, recipe_id: str) -> RecipeSummary:
+    return next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
+
+
 def _hash(corpus: RecipeCorpusStore, recipe_id: str) -> str:
-    summary = next(s for s in corpus.search(per_page=1000)[0] if s.external_id == recipe_id)
+    summary = _summary(corpus, recipe_id)
     return content_fingerprint(summary.title, summary.ingredient_names)
 
 

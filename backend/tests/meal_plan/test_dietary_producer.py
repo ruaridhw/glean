@@ -16,13 +16,14 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from glean.decisions import DECISION_MODEL, DecisionClient
+from glean.decisions import DECISION_MODEL, DecisionClient, DecisionModel
 from glean.meal_plan.candidates import sample_corpus_candidates
 from glean.meal_plan.dietary_decisions import (
     DIETARY_FLAGS,
     CorpusUnavailableError,
     DietaryDecision,
     DietaryDecisionStore,
+    UncalibratedModelError,
     content_fingerprint,
     dietary_questions,
     produce_missing_decisions,
@@ -37,6 +38,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 SNAPSHOT = f"{DECISION_MODEL}-20261014"
+# A free route's request id and the identity it answers under differ, as observed in a pilot.
+CANDIDATE = DecisionModel("baseten/mammoth-1:free", served=("baseten/mammoth-1",))
+CANDIDATE_SERVED = "baseten/mammoth-1-20261021"
 
 
 class FakeDecisionApi:
@@ -47,8 +51,11 @@ class FakeDecisionApi:
         self._snapshot = snapshot
         self._fail_when = fail_when
 
-    def client(self) -> DecisionClient:
-        return DecisionClient(api_key=SecretStr("sk-or-test"), transport=httpx.MockTransport(self._handle))
+    def client(self, *, model: DecisionModel | None = None) -> DecisionClient:
+        pinned = model or DecisionModel(DECISION_MODEL)
+        return DecisionClient(
+            api_key=SecretStr("sk-or-test"), model=pinned, transport=httpx.MockTransport(self._handle)
+        )
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -321,3 +328,31 @@ def test_a_store_written_before_the_split_is_upgraded_by_asking_only_the_two_new
     second = FakeDecisionApi()
     assert produce_missing_decisions(corpus, second.client()).computed == 0
     assert second.requests == []
+
+
+def test_a_client_that_accepts_an_identity_the_calibration_does_not_is_refused_before_any_request_or_write(
+    tmp_path,
+) -> None:
+    corpus = _corpus(tmp_path)
+    api = FakeDecisionApi()
+    # Same request id as the calibration, but it would also accept a different model's answers.
+    widened = DecisionModel(DECISION_MODEL, served=("baseten/mammoth-1",))
+
+    with pytest.raises(UncalibratedModelError):
+        produce_missing_decisions(corpus, api.client(model=widened))
+
+    assert api.requests == []
+    assert DietaryDecisionStore(corpus.store).load() == []
+
+
+def test_a_client_asking_a_model_the_calibration_does_not_cover_is_refused_before_any_request_or_write(
+    tmp_path,
+) -> None:
+    corpus = _corpus(tmp_path)
+    api = FakeDecisionApi(snapshot=CANDIDATE_SERVED)
+
+    with pytest.raises(UncalibratedModelError):
+        produce_missing_decisions(corpus, api.client(model=CANDIDATE))
+
+    assert api.requests == []
+    assert DietaryDecisionStore(corpus.store).load() == []

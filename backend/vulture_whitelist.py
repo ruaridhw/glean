@@ -147,3 +147,13 @@ LAMBDA_INIT_SECONDS
 QUEUE_VISIBILITY_MARGIN_SECONDS
 MAX_LEASE_SECONDS
 DEAD_LETTER_VISIBILITY_SECONDS  # the dead-letter queue's retry cadence, asserted in the template test
+
+# dietary model substitution: the calibration and evaluation are read by scripts, tests and the eval CLI,
+# which vulture does not scan (it scans src/ only).
+evidence  # DietaryCalibration field: provenance read when a calibration is reviewed
+TREE_NUT_FREE_THRESHOLD  # convenience alias read by tests/meal_plan/test_dietary_decisions.py
+PEANUT_FREE_THRESHOLD  # as above
+PREFERENCE_THRESHOLD  # read by the audit script and tests
+THRESHOLDS  # read by scripts/audit_dietary_corpus.py and tests
+load_labelled_samples  # used by scripts/evaluate_dietary_model.py and the live sample test
+evaluate_dietary_model  # used by scripts/evaluate_dietary_model.py and the live sample test
