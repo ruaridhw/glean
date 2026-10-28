@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     s3_recipe_cache_bucket: str = ""
     # DynamoDB catalogue table (ADR 0001). Empty locally / in tests: catalogue endpoints answer 503.
     catalogue_table: str = ""
+    # Which store the recipe corpus reads (F1/#162, ADR 0014): "blobs" is the S3 corpus/ prefix with its
+    # JSONL index and dietary JSONL; "dynamo" is the glean-recipes table plus its S3 projection. Flipped
+    # per deploy, so the blob path stays the default and a rollback is one parameter.
+    recipe_store: Literal["blobs", "dynamo"] = "blobs"
+    # DynamoDB recipe table (F1/#162). Only opened when recipe_store is "dynamo".
+    recipes_table: str = ""
     log_level: str = "INFO"
     rate_limit_per_hour: int = 20
     # Agent sessions (spec §6.3): the async stack behind POST /meal-plan/sessions.

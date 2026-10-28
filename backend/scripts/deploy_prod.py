@@ -29,6 +29,7 @@ PARAMETER_ENV_VARS = {
     "GitSha": "GIT_SHA",
     "RateLimitPerHour": "RATE_LIMIT_PER_HOUR",
     "AgentSessionTtlHours": "AGENT_SESSION_TTL_HOURS",
+    "RecipeStore": "RECIPE_STORE",
 }
 
 

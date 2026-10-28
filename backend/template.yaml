@@ -62,6 +62,13 @@ Parameters:
     Type: Number
     Default: 24
     MinValue: 1
+  # Which store the recipe corpus reads (F1/#162): `blobs` is the S3 corpus/ prefix with its JSONL index
+  # and dietary JSONL, `dynamo` is the glean-recipes table plus its S3 projection. Flipped with the deploy,
+  # so the blob path stays the default and rolling back is one parameter.
+  RecipeStore:
+    Type: String
+    AllowedValues: [blobs, dynamo]
+    Default: blobs
 
 Resources:
   # Every user's on-device data is keyed by their Cognito `sub`. A new pool
@@ -280,6 +287,29 @@ Resources:
         deadLetterTargetArn: !GetAtt GleanAgentDeadLetterQueue.Arn
         maxReceiveCount: 3
 
+  # Recipe bodies, answers and source pointers; planning reads the S3 projection.
+  GleanRecipesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "glean-recipes-${Environment}"
+      TableClass: STANDARD
+      BillingMode: PROVISIONED
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
   GleanFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -300,6 +330,8 @@ Resources:
           AGENT_CHECKPOINTS_TABLE: !Ref GleanAgentCheckpointsTable
           AGENT_SESSION_QUEUE_URL: !Ref GleanAgentQueue
           AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
+          RECIPES_TABLE: !Ref GleanRecipesTable
+          RECIPE_STORE: !Ref RecipeStore
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -318,6 +350,8 @@ Resources:
             TableName: !Ref GleanAgentSessionsTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt GleanAgentQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GleanRecipesTable
         - arn:aws:iam::aws:policy/AmazonTextractFullAccess
         - Statement:
             - Effect: Allow
@@ -354,6 +388,8 @@ Resources:
           AGENT_CHECKPOINTS_TABLE: !Ref GleanAgentCheckpointsTable
           AGENT_SESSION_QUEUE_URL: !Ref GleanAgentQueue
           AGENT_SESSION_TTL_HOURS: !Ref AgentSessionTtlHours
+          RECIPES_TABLE: !Ref GleanRecipesTable
+          RECIPE_STORE: !Ref RecipeStore
           LANGSMITH_TRACING: !Ref LangSmithTracing
           LANGSMITH_API_KEY: !Sub "{{resolve:secretsmanager:glean/${Environment}/langsmith-api-key:SecretString}}"
           LANGSMITH_PROJECT: glean
@@ -368,6 +404,8 @@ Resources:
             TableName: !Ref GleanAgentSessionsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref GleanAgentCheckpointsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref GleanRecipesTable
         # Receive, delete and get-queue-attributes on its own queue, nothing wider.
         - SQSPollerPolicy:
             QueueName: !GetAtt GleanAgentQueue.QueueName
@@ -490,5 +528,7 @@ Outputs:
     Value: !Ref GleanAgentQueue
   AgentDeadLetterQueueUrl:
     Value: !Ref GleanAgentDeadLetterQueue
+  RecipesTableName:
+    Value: !Ref GleanRecipesTable
   CognitoDomain:
     Value: !Sub "${CognitoDomainPrefix}-${Environment}.auth.eu-west-2.amazoncognito.com"
