@@ -438,7 +438,7 @@ def test_import_url_uses_rendered_html_when_supplied(client: TestClient) -> None
 def test_import_url_rejects_a_recipe_the_corpus_cannot_store(client: TestClient) -> None:
     corpus_store = _empty_corpus_store()
     corpus_store.save.side_effect = RecipeTooLargeError(
-        "recipe 'import:huge' is 12000 bytes, over the corpus's 10000 byte budget"
+        "recipe 'import:huge' is 16000 bytes, over the corpus's 15000 byte budget"
     )
     app.dependency_overrides[get_llm_router] = lambda: MagicMock()
 
@@ -458,7 +458,7 @@ def test_import_url_rejects_a_recipe_the_corpus_cannot_store(client: TestClient)
 
     assert resp.status_code == 422
     assert "too large" in resp.json()["detail"].lower()
-    assert "10000 byte budget" in resp.json()["detail"]
+    assert "15000 byte budget" in resp.json()["detail"]
 
 
 def test_a_retried_import_repairs_the_projection_the_first_attempt_could_not_publish(

@@ -190,10 +190,10 @@ def test_saving_an_unchanged_recipe_writes_nothing_the_second_time(backend: Dyna
 
 def test_a_recipe_over_the_size_budget_is_refused_with_a_clear_error(backend: DynamoCorpusBackend) -> None:
     oversized = synthetic_recipe("rec_big", title="Big", ingredients=["rice"]).model_copy(
-        update={"instructions": [StoredInstruction(step_number=1, phase="main", text="x" * 12_000)]}
+        update={"instructions": [StoredInstruction(step_number=1, phase="main", text="x" * 16_000)]}
     )
 
-    with pytest.raises(RecipeTooLargeError, match="over the corpus's 10000 byte budget"):
+    with pytest.raises(RecipeTooLargeError, match="over the corpus's 15000 byte budget"):
         backend.save(oversized)
 
     assert backend.get("rec_big") is None
