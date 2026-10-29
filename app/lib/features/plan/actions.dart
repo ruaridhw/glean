@@ -35,7 +35,9 @@ Future<void> markCookedWithUndo(
     failureMessage: 'Could not mark ${entry.recipeTitle} as cooked. Try again.',
     undoFailureMessage: 'Could not undo cooking ${entry.recipeTitle}.',
     describeError: (error) => error is PantryUnitMismatchException
-        ? error.userMessage
+        ? 'Could not mark ${entry.recipeTitle} as cooked. '
+              'Match the recipe and pantry units for ${error.canonicalName}, '
+              'then try again.'
         : 'Could not mark ${entry.recipeTitle} as cooked. Try again.',
     onSuccess: ref.read(hapticsProvider).mediumImpact,
   );
