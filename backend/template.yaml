@@ -317,6 +317,8 @@ Resources:
     Properties:
       CodeUri: .
       Handler: glean.main.handler
+      # The full recipe projection exceeds the shared 256-MB budget.
+      MemorySize: 512
       Tracing: Active
       Environment:
         Variables:
