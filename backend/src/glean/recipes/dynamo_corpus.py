@@ -3,7 +3,7 @@
 Table `glean-recipes-<env>`, provisioned at 5/5 with no GSIs (ADR 0001). Three item shapes, all keyed by
 `pk` + `sk` strings:
 
-- `pk=RECIPE#<id>`, `sk=RECIPE` — the recipe body as JSON, at most 10 KB, and `blob_key`: the key the body
+- `pk=RECIPE#<id>`, `sk=RECIPE` — the recipe body as JSON, at most 15 KB, and `blob_key`: the key the body
   has in the blob corpus (a legacy flat `rec_<id>.json` for the migrated recipes), so the projection rebuilt
   from the table alone keeps the blob layout.
 - `pk=RECIPE#<id>`, `sk=ANSWER#<question>#<criteria_hash>` — one decision answer (probabilities, model,
@@ -85,7 +85,7 @@ RECIPE_SK = "RECIPE"
 ANSWER_PREFIX = "ANSWER#"
 # The design's per-recipe budget: well inside a DynamoDB item's 400 KB, and small enough that a full
 # projection of the corpus stays about 1.6 MB uncompressed.
-MAX_RECIPE_BYTES = 10_000
+MAX_RECIPE_BYTES = 15_000
 
 _RETRYABLE = {
     "ProvisionedThroughputExceededException",
@@ -114,7 +114,7 @@ _REBUILD_COMMAND = "uv run python scripts/build_recipe_index.py --table <table> 
 
 
 class RecipeTooLargeError(Exception):
-    """A recipe body is over the corpus's 10 KB budget, so it can't be stored as one item."""
+    """A recipe body is over the corpus's 15 KB budget, so it can't be stored as one item."""
 
 
 class ProjectionPublishError(Exception):
