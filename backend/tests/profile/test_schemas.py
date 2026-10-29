@@ -182,7 +182,7 @@ def test_the_transcript_is_capped_at_the_maximum_turn_count() -> None:
 
 
 def test_the_answer_rejects_unknown_fields() -> None:
-    assert InterviewAnswer().model_dump() == {"text": None, "options": [], "skipped": False}
+    assert InterviewAnswer().model_dump() == {"text": None, "options": [], "skipped": False, "clear": False}
     with pytest.raises(ValidationError):
         InterviewAnswer.model_validate({"text": "fish pies", "dropped": True})
 
