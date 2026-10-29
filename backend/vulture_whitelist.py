@@ -231,6 +231,9 @@ interviewed_at  # HouseholdProfile field, stamped by the service
 skippable  # InterviewQuestion field, always true
 max_turns  # InterviewQuestionResponse field
 dropped_answer  # InterviewQuestionResponse / InterviewDoneResponse field
+_clear_is_exclusive  # InterviewAnswer model validator invoked by Pydantic during request parsing
+updated_fields  # InterviewDoneResponse field serialized by FastAPI and read by the app
+unapplied_fields  # InterviewDoneResponse field serialized by FastAPI and read by the app
 WRITABLE_PROFILE_FIELDS  # schemas.py, the fields an interview question may target
 WritableProfileField  # schemas.py, the narrowed field enum the model schema uses
 _answers_belong_to_this_interview  # Pydantic model validator (InterviewRequest)
