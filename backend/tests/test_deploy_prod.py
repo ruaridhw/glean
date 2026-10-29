@@ -87,7 +87,7 @@ class Sandbox:
                 "RateLimitPerHour": "60",
                 "AgentSessionTtlHours": "24",
                 "GitSha": stamp,
-                "RecipeStore": "blobs",
+                "RecipeStore": "dynamo",
             },
             lambda_env={
                 "ENVIRONMENT": "prod",
@@ -96,7 +96,7 @@ class Sandbox:
                 "RATE_LIMIT_PER_HOUR": "60",
                 "AGENT_SESSION_TTL_HOURS": "24",
                 "GIT_SHA": stamp,
-                "RECIPE_STORE": "blobs",
+                "RECIPE_STORE": "dynamo",
             },
             tags={"commit": stamp},
         )
