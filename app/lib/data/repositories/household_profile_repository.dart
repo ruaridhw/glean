@@ -1,7 +1,13 @@
 // Household profile persistence. `user_id` is the Cognito user sub, so the table is user-scoped by
 // construction and one user can only ever have one profile.
+import 'dart:convert';
+
 import '../database.dart';
 import '../models/household_profile.dart';
+
+class ProfileInterviewConflict implements Exception {
+  const ProfileInterviewConflict();
+}
 
 class HouseholdProfileRepository {
   HouseholdProfileRepository(this._db);
@@ -39,6 +45,44 @@ class HouseholdProfileRepository {
       );
       await save(userId: userId, profile: next);
       return next;
+    });
+  }
+
+  /// Confirms only the fields the interview accepted, preserving the latest independent memory.
+  /// A newer answer to any of these fields requires another review, never a silent overwrite.
+  Future<void> confirmInterview({
+    required String userId,
+    required HouseholdProfile baseline,
+    required HouseholdProfile candidate,
+    required Set<String> fields,
+  }) async {
+    const Set<String> protected = <String>{
+      'version',
+      'notes',
+      'dismissed_notes',
+      'interviewed_at',
+    };
+    final Map<String, dynamic> before = baseline.toJson();
+    final Map<String, dynamic> revised = candidate.toJson();
+    if (fields.any(
+      (String field) => !before.containsKey(field) || protected.contains(field),
+    )) {
+      throw ArgumentError('The interview cannot change these fields');
+    }
+    await _db.transaction(() async {
+      final HouseholdProfile current =
+          await get(userId) ?? const HouseholdProfile();
+      final Map<String, dynamic> latest = current.toJson();
+      for (final String field in fields) {
+        if (jsonEncode(latest[field]) != jsonEncode(before[field])) {
+          throw const ProfileInterviewConflict();
+        }
+      }
+      for (final String field in fields) {
+        latest[field] = revised[field];
+      }
+      latest['interviewed_at'] = revised['interviewed_at'];
+      await save(userId: userId, profile: HouseholdProfile.fromJson(latest));
     });
   }
 
