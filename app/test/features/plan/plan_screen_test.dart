@@ -256,6 +256,92 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, 'Cooked?'), findsOneWidget);
     },
   );
+  for (final stockUnit in ['units', '']) {
+    gleanWidgetTest(
+      'incompatible cooking units ($stockUnit stock) explain how to fix the '
+      'recipe and leave the whole meal uncooked',
+      (tester) async {
+        await stock();
+        await h.container
+            .read(pantryRepositoryProvider)
+            .addItem(
+              userId: h.userId,
+              name: 'butter',
+              quantity: 1,
+              unit: 'units',
+              groupId: 'dairy',
+            );
+        if (stockUnit.isEmpty) {
+          // A legacy row with a missing unit must still get useful error copy.
+          await h.db.customStatement(
+            "UPDATE pantry_items SET unit = '' WHERE unit = 'units'",
+          );
+        }
+        final recipeId = await h.container
+            .read(recipesRepositoryProvider)
+            .save(
+              userId: h.userId,
+              title: 'Butter chicken',
+              ingredients: const [
+                SaveRecipeIngredient(
+                  canonicalName: 'chicken breast',
+                  quantity: 100,
+                  unit: 'g',
+                ),
+                SaveRecipeIngredient(
+                  canonicalName: 'butter',
+                  quantity: 20,
+                  unit: 'g',
+                ),
+              ],
+            );
+        await h.container
+            .read(planRepositoryProvider)
+            .addEntry(
+              userId: h.userId,
+              recipeId: recipeId,
+              recipeTitle: 'Butter chicken',
+              servings: 1,
+              plannedDate: week,
+            );
+        await open(tester);
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Cooked?'));
+        await tester.pumpAndSettle();
+
+        final snack = find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.byType(Text),
+        );
+        final message = tester
+            .widgetList<Text>(snack)
+            .map((text) => text.data ?? '')
+            .join(' ');
+        expect(message, contains('Could not mark Butter chicken as cooked'));
+        expect(
+          message,
+          contains('Match the recipe and pantry units for butter'),
+        );
+        expect(message, isNot(contains('enter this amount')));
+        expect(message, isNot(contains('instead of .')));
+        expect(find.widgetWithText(OutlinedButton, 'Cooked?'), findsOneWidget);
+        final pantry = (await tester.runAsync(
+          () => h.container.read(pantryRepositoryProvider).getAll(h.userId),
+        ))!;
+        expect(
+          pantry.singleWhere((p) => p.canonicalName == 'butter').quantity,
+          1,
+        );
+        expect(
+          pantry
+              .singleWhere((p) => p.canonicalName == 'chicken breast')
+              .quantity,
+          500,
+        );
+        expect(pantry.map((p) => p.lastUsedAt), everyElement(isNull));
+      },
+    );
+  }
+
   gleanWidgetTest(
     'a real SQLite Undo cooking failure cannot half-restore stock',
     (tester) async {
