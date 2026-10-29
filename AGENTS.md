@@ -33,6 +33,30 @@ Makefile   — unified task runner for both sub-projects
 `app/` replaced the Expo/React Native app previously in this repository;
 see `app/AGENTS.md`, and git history for the deleted app's source.
 
+## Module design
+
+Build **deep modules**: a small, stable interface (the module's public
+functions or class) over a substantial implementation, so callers depend on
+what a module does, not how it does it.
+
+- **Libraries stay behind one module's interface.** Wrap each framework or
+  third-party library once, inside the module that uses it, and give callers
+  that module's own types. Replacing the library then changes one module, not
+  its callers. `DecisionClient.decide(state, questions)` in
+  `backend/src/glean/decisions.py` is the pattern: callers pass a plain mapping
+  and the module's own question types, and never see the HTTP call, tracing or
+  response validation behind it.
+- **Each piece of state has one owning module.** Other code reads and changes
+  it through that module's interface. A library's internal state, such as an
+  agent framework's checkpoints, is the owning module's implementation detail;
+  callers read the state the module exposes instead.
+- **Lint enforces the boundary, not review.** Once a module owns a library,
+  ban the library's imports everywhere else so the boundary cannot erode. In
+  the backend that is ruff's `TID251`: list the library under
+  `[tool.ruff.lint.flake8-tidy-imports.banned-api]` in `backend/pyproject.toml`,
+  with a message naming the module to call instead, and exempt only the owning
+  module in `per-file-ignores`.
+
 ## Makefile
 
 Run `make help` from the repo root to see all targets. Prefer `make` over running
@@ -76,6 +100,12 @@ make worktree-prune                      # prune stale git metadata
 - **Plans are ephemeral.** Plans, scratch notes and review ledgers live under
   `/tmp` and are never committed. (`docs/*` being gitignored hides plan files;
   it does not make committing them acceptable.)
+- **UI/UX changes pass a design gate.** Before building a ticket that adds or
+  changes a screen or interaction, make two or three options for each affected
+  screen (HTML wireframes, or a clickable prototype for a multi-step flow) and
+  serve them in Plannotator for the owner to annotate. Build from the option
+  the owner picks, with their annotations. Like plans, the options live under
+  `/tmp`.
 - **Worktrees start from `origin/main`.** `make worktree` fetches `origin` and
   branches from `BASE`, which defaults to `origin/main`, so a stale checkout
   never becomes the base. For a stacked PR pass `BASE=<parent branch>`.
