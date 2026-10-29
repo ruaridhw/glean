@@ -246,6 +246,19 @@ OPENERS: tuple[InterviewQuestion, ...] = (
 )
 
 
+RETAKE_QUESTIONS: tuple[InterviewQuestion, ...] = (
+    InterviewQuestion(
+        id="follow-up-6",
+        text="How spicy do you like your food?",
+        options=["Not at all", "Mild", "Medium", "Hot"],
+        field=ProfileField.SPICE_TOLERANCE,
+    ),
+    InterviewQuestion(
+        id="follow-up-7", text="How often would you like each protein on the plan?", field=ProfileField.PROTEIN_TARGETS
+    ),
+)
+
+
 def question_for_turn(turn: int) -> InterviewQuestion:
     """The server's own question for a 1-based turn number."""
     return OPENERS[turn - 1]
@@ -310,6 +323,12 @@ class InterviewRequest(BaseModel):
             expected = expected_question_id(index)
             if turn.question.id != expected:
                 raise ValueError(f"turn {index + 1} answers {turn.question.id!r}, but this interview asks {expected!r}")
+            if self.retake and index >= len(OPENERS):
+                fixed = RETAKE_QUESTIONS[index - len(OPENERS)]
+                if turn.question.field is not fixed.field:
+                    raise ValueError(f"retake question {expected!r} fills {fixed.field.value}")
+                # Retake questions are server-owned, including their wording and offered choices.
+                turn.question = fixed
             opener = OPENERS[index] if index < len(OPENERS) else None
             if opener is not None and turn.question.field is not opener.field:
                 raise ValueError(
@@ -341,6 +360,9 @@ class InterviewDoneResponse(BaseModel):
     summary: str = Field(description="Two short lines for the user to confirm.")
     updated_fields: list[WritableProfileField] = Field(
         default_factory=list, description="Server-derived retake targets accepted or explicitly cleared."
+    )
+    unapplied_fields: list[WritableProfileField] = Field(
+        default_factory=list, description="Accepted answer targets with no usable interpretation; saved facts retained."
     )
     dropped_answer: bool = Field(default=False, description="True when the last answer failed screening.")
 

@@ -30,6 +30,7 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
   final _chosen = <String>{};
   String? _shown;
   bool _saving = false;
+  bool _clearIntent = false;
   String? _saveError;
   bool _conflict = false;
   late String _userId;
@@ -56,7 +57,9 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
   }
 
   Future<void> _send() async {
-    if (_answer.text.trim().isEmpty && _chosen.isEmpty) {
+    if (_clearIntent && _answer.text.trim().isEmpty && _chosen.isEmpty) {
+      await _controller.clearAnswer();
+    } else if (_answer.text.trim().isEmpty && _chosen.isEmpty) {
       await _controller.skip();
     } else {
       await _controller.answer(text: _answer.text, options: _chosen.toList());
@@ -116,8 +119,14 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
     final question = state.question;
     if (question != null && _shown != question.id) {
       _shown = question.id;
-      _chosen.clear();
-      _answer.text = _controller.prefill(question);
+      final restored = _controller.draftAnswer(question);
+      _clearIntent = restored?.clear ?? false;
+      _chosen
+        ..clear()
+        ..addAll(restored?.options ?? const <String>[]);
+      _answer.text = restored == null || restored.skipped
+          ? _controller.prefill(question)
+          : restored.text ?? '';
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _questionFocus.requestFocus();
       });
@@ -126,7 +135,16 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
     final text = Theme.of(context).textTheme;
     final done = state.done;
     final failure = state.failure;
-    final children = <Widget>[];
+    final children = <Widget>[
+      if (state.droppedTurns.isNotEmpty ||
+          (done?.unappliedFields.isNotEmpty ?? false))
+        Semantics(
+          liveRegion: true,
+          child: const Text(
+            "Couldn't use that answer; kept your previous preference. Review your answers to try again.",
+          ),
+        ),
+    ];
     if (done != null) {
       children.addAll(<Widget>[
         Text('Does this sound like you?', style: text.headlineSmall),
@@ -158,13 +176,24 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
           ),
         ),
         Text(
-          _controller.prefill(question).isEmpty
+          _controller.draftAnswer(question) != null
+              ? 'Your draft answer'
+              : _controller.prefill(question).isEmpty
               ? 'Your answer'
               : 'Prefilled from your saved profile',
           style: text.labelMedium,
         ),
+        if (_clearIntent)
+          const Text(
+            'This answer is marked to be cleared. Continue keeps that change; Skip keeps the saved facts.',
+          ),
         TextField(
           controller: _answer,
+          onChanged: (value) {
+            if (_clearIntent && value.isNotEmpty) {
+              setState(() => _clearIntent = false);
+            }
+          },
           enabled: !state.pending,
           minLines: 4,
           maxLines: 8,
@@ -187,6 +216,7 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
                       ? null
                       : (selected) => setState(() {
                           if (selected) {
+                            _clearIntent = false;
                             _chosen.add(option);
                           } else {
                             _chosen.remove(option);

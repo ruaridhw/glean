@@ -21,7 +21,17 @@ def retake(client: TestClient, headers: dict[str, str], answers: list[dict[str, 
         json={"retake": True, "draft_profile": PROFILE, "transcript": transcript},
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    body = response.json()
+    while body["status"] == "question":
+        transcript.append({"question": body["question"], "answer": {"skipped": True}})
+        response = client.post(
+            "/profile/interview",
+            headers=headers,
+            json={"retake": True, "draft_profile": PROFILE, "transcript": transcript},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+    return body
 
 
 def test_retake_replaces_favourites_without_rewriting_untouched_fields(
