@@ -234,6 +234,7 @@ assets in `web/`: `sqlite3.wasm` and `drift_worker.js`.
 
 ```bash
 make start-web        # from the repo root
+make check-web        # compile that same target without launching Chrome; CI runs it on every app change
 ```
 
 Flutter launches and drives its own Chrome, so hot reload reaches the page
@@ -243,7 +244,11 @@ pid file `flutter run` writes. That is how an agent that started the server
 in the background reloads it. On a laptop the window opens in front of you;
 resize it to a phone shape (or use the DevTools device toolbar at 390×844).
 The in-browser database persists across restarts and reloads, so onboarding
-and seeded data survive.
+and seeded data survive. Nothing native-only is compiled in: backup restore is
+disabled in Developer settings here, because it works by swapping the SQLite
+file the app keeps on the device, which the web build does not have. There is
+no filesystem either, so the log goes to the browser console and an in-memory
+buffer, not the rotating log file native builds write.
 
 On a headless or remote box, put these in an untracked `.env.local` at the
 repo root; the Makefile includes it when present:
@@ -279,8 +284,8 @@ as obscured; click with `{force: true}`.
 colour for the maskable pair), so a Chrome tab shows the Glean mark. The
 scaffold's `manifest.json` would make a `flutter build web` output
 installable as a PWA, but nothing builds web for release: `make start-web`
-serves a debug build with no service worker, and no Makefile target or
-workflow runs `flutter build web`.
+serves a debug build with no service worker, and the only `flutter build web`
+here is `make check-web`'s compile, whose output nothing ships.
 
 ### What web does and doesn't cover
 
@@ -290,9 +295,11 @@ workflow runs `flutter build web`.
   backend. `defaultTargetPlatform` is the host OS on web, but the design
   system is Material-everywhere with no platform branching, so this is moot.
 - **Doesn't cover:** camera (receipt scan), real Cognito sign-in, secure
-  storage, haptics, connectivity. Those stay on a real device: the Codemagic
-  build on the owner's phone, and the emulator/simulator `integration_test`
-  jobs in CI, remain the pre-merge visual check for anything they touch.
+  storage, haptics, connectivity, backup restore (it swaps the app's own
+  SQLite file, so Developer settings disables it here). Those stay on a real
+  device: the Codemagic build on the owner's phone, and the
+  emulator/simulator `integration_test` jobs in CI, remain the pre-merge
+  visual check for anything they touch.
 - `flutter test --platform chrome` is **not** part of this loop; Flutter marks
   it deprecated/internal.
 

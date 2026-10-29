@@ -7,7 +7,7 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show kIsWeb, setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api.dart';
@@ -371,6 +371,9 @@ class _SettingsContentState extends ConsumerState<_SettingsContent> {
             onExportDiagnostics: () => unawaited(_handleExportDiagnostics()),
             restoring: _restoring,
             onRestoreBackup: () => unawaited(_handleRestoreBackup()),
+            // A restore swaps the app's own SQLite file; the web dev loop has none (its database lives in
+            // the browser), so the action is disabled there rather than failing when tapped.
+            restoreUnavailable: kIsWeb,
           ),
         ],
         VersionLabel(

@@ -41,9 +41,9 @@ abstract final class GleanConfig {
 
 /// Starts logging for the whole app: builds the logger and routes uncaught framework and async errors into it.
 /// Entrypoints call this first, so even a failure during startup is recorded, and pass the result to
-/// [gleanLoggerProvider].
-Future<GleanLogger> bootstrapLogging() async {
-  final GleanLogger logger = await createGleanLogger();
+/// [gleanLoggerProvider]. [logsToFile] is passed through to [createGleanLogger].
+Future<GleanLogger> bootstrapLogging({bool logsToFile = !kIsWeb}) async {
+  final GleanLogger logger = await createGleanLogger(logsToFile: logsToFile);
   installErrorHooks(logger);
   return logger;
 }

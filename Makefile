@@ -7,6 +7,7 @@
 #   make setup            — install all dependencies
 #   make test             — run all tests
 #   make lint             — lint + format everything
+#   make check-web        — compile the web dev-loop target (native-only imports break it)
 #   make start-backend    — FastAPI dev server on :8000
 #   make start-backend-docker — the whole backend in Docker: FastAPI on :8000 plus the async
 #                              stack (DynamoDB Local, ElasticMQ, the session worker)
@@ -124,6 +125,13 @@ lint-backend:  ## ruff + ty + vulture
 lint-app:  ## dart format (writes fixes) + flutter analyze
 	cd app && dart format lib test integration_test
 	cd app && flutter analyze
+
+# The web dev loop's only compile check. Every other app check runs on the VM,
+# where `dart:ffi` exists, so a native-only import (package:drift/native.dart)
+# reaching the web entrypoint would otherwise break `make start-web` silently.
+.PHONY: check-web
+check-web:  ## Compile the web dev-loop target (catches native-only imports in the web build)
+	cd app && flutter build web --target lib/main_e2e.dart --debug
 
 .PHONY: pre-commit
 pre-commit:  ## Run all pre-commit hooks across the repo
