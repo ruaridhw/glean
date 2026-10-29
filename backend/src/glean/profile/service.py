@@ -159,6 +159,7 @@ _WORD = re.compile(r"\w+")
 _PHRASE_SEPARATOR = re.compile(r"[,;\n]")
 _CONJUNCTION = re.compile(r"\s+and\s+|\s*&\s*", re.IGNORECASE)
 _SPICE_WORDS = {
+    "not at all": SpiceTolerance.NONE,
     "none": SpiceTolerance.NONE,
     "no spice": SpiceTolerance.NONE,
     "not spicy": SpiceTolerance.NONE,

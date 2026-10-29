@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glean/api/api_exception.dart';
+import 'package:glean/api/models/profile.dart' show ProfileField;
 import 'package:glean/data/models/household_profile.dart';
 import 'package:glean/data/providers/database_providers.dart';
 import 'package:glean/data/providers/repository_providers.dart';
@@ -54,6 +55,32 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
     _answer.dispose();
     _questionFocus.dispose();
     super.dispose();
+  }
+
+  Widget _option(String option, {required bool single, required bool enabled}) {
+    void select(bool selected) => setState(() {
+      if (single) {
+        _answer.clear();
+        _chosen.clear();
+      }
+      if (selected) {
+        _clearIntent = false;
+        _chosen.add(option);
+      } else {
+        _chosen.remove(option);
+      }
+    });
+    return single
+        ? ChoiceChip(
+            label: Text(option),
+            selected: _chosen.contains(option),
+            onSelected: enabled ? select : null,
+          )
+        : FilterChip(
+            label: Text(option),
+            selected: _chosen.contains(option),
+            onSelected: enabled ? select : null,
+          );
   }
 
   Future<void> _send() async {
@@ -155,7 +182,7 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
             Text(
               'Will be cleared: ${_fieldLabel(field)}. Nothing has been removed yet.',
             ),
-        ProfileFacts(profile: done.profile, memoryTitle: 'Kept unchanged'),
+        ProfileFacts(profile: done.profile),
         const Text(
           'Memory notes and dismissed notes stay unchanged. Cancel keeps your saved profile exactly as it was.',
         ),
@@ -190,8 +217,16 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
         TextField(
           controller: _answer,
           onChanged: (value) {
-            if (_clearIntent && value.isNotEmpty) {
-              setState(() => _clearIntent = false);
+            if (value.isNotEmpty &&
+                (_clearIntent ||
+                    (question.knownField == ProfileField.spiceTolerance &&
+                        _chosen.isNotEmpty))) {
+              setState(() {
+                _clearIntent = false;
+                if (question.knownField == ProfileField.spiceTolerance) {
+                  _chosen.clear();
+                }
+              });
             }
           },
           enabled: !state.pending,
@@ -209,19 +244,10 @@ class _TasteInterviewScreenState extends ConsumerState<TasteInterviewScreen> {
             runSpacing: tokens.spacing.sm,
             children: <Widget>[
               for (final option in question.options)
-                FilterChip(
-                  label: Text(option),
-                  selected: _chosen.contains(option),
-                  onSelected: state.pending
-                      ? null
-                      : (selected) => setState(() {
-                          if (selected) {
-                            _clearIntent = false;
-                            _chosen.add(option);
-                          } else {
-                            _chosen.remove(option);
-                          }
-                        }),
+                _option(
+                  option,
+                  single: question.knownField == ProfileField.spiceTolerance,
+                  enabled: !state.pending,
                 ),
             ],
           ),
