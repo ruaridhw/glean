@@ -784,7 +784,12 @@ class PlanRepository {
             servings: entry.servings,
             yieldCount: recipe.yieldCount,
           );
-          if (pantryRow != null) {
+          // An amount without a positive quantity and a unit cannot tell us
+          // how much stock was used. Record usage (and its Undo) without
+          // guessing a deduction or requiring a conversion for zero.
+          if (decrementQuantity <= 0 || recipeIngredient.unit.trim().isEmpty) {
+            decrementQuantity = 0;
+          } else if (pantryRow != null) {
             final normalized = normalizeUnit(
               quantity: decrementQuantity,
               unit: recipeIngredient.unit,
