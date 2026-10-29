@@ -27,6 +27,7 @@ from glean.profile.schemas import (
     MAX_NOTES,
     MAX_TURNS,
     OPENERS,
+    RETAKE_QUESTIONS,
     FavouriteMeal,
     FollowUp,
     HouseholdProfile,
@@ -202,11 +203,11 @@ def run_interview(
     turn = len(transcript) + 1
     held = request.draft_profile
 
-    if turn <= len(OPENERS):
+    if turn <= len(OPENERS) or (request.retake and turn <= MAX_TURNS):
         # The openers need no model: they are fixed. The answer is screened so the app can be told
         # its free text was unusable, and nothing else about the turn is needed.
         return InterviewQuestionResponse(
-            question=question_for_turn(turn),
+            question=(OPENERS + RETAKE_QUESTIONS)[turn - 1] if request.retake else question_for_turn(turn),
             turn=turn,
             dropped_answer=_last_answer_dropped(transcript, decision_client),
         )
@@ -239,25 +240,49 @@ def run_interview(
         )
 
     profile = _finished(merged, held, corpus, now=now or datetime.now(UTC))
+    unapplied: set[str] = set()
     if request.retake:
-        defaults = HouseholdProfile().model_dump()
-        # Only household intent can replace a field; model suggestions are not write authority.
-        profile = profile.model_copy(
-            update={
-                **{
-                    field: getattr(held, field)
-                    for field in type(held).model_fields
-                    if field not in updated and field != "interviewed_at"
-                },
-                **{field: defaults[field] for field in cleared},
-            }
-        )
+        profile, updated, unapplied = _retake_result(profile, request, screening.answers, updated, cleared)
     return InterviewDoneResponse(
         updated_fields=[WritableProfileField(field) for field in sorted(updated)],
+        unapplied_fields=[WritableProfileField(field) for field in sorted(unapplied)],
         profile=profile,
         summary=_summary(reply.summary) or _fallback_summary(profile),
         dropped_answer=screening.dropped,
     )
+
+
+def _retake_result(
+    profile: HouseholdProfile,
+    request: InterviewRequest,
+    answers: list[InterviewAnswer | None],
+    updated: set[str],
+    cleared: set[str],
+) -> tuple[HouseholdProfile, set[str], set[str]]:
+    """Screen acceptance alone cannot authorize an all-empty replacement."""
+    unapplied: set[str] = set()
+    for index, (turn, answer) in enumerate(zip(request.transcript, answers, strict=True)):
+        if answer is None:
+            continue
+        targets = _retake_targets(_field_for(index, turn))
+        active = (targets & updated) - cleared
+        if active and not any(getattr(profile, field) for field in targets):
+            unapplied.update(active)
+    applied = updated - unapplied
+    held = request.draft_profile
+    defaults = HouseholdProfile().model_dump()
+    # Model suggestions cannot rewrite untouched fields or reverse an explicit clear.
+    profile = profile.model_copy(
+        update={
+            **{
+                field: getattr(held, field)
+                for field in type(held).model_fields
+                if field not in applied and field != "interviewed_at"
+            },
+            **{field: defaults[field] for field in cleared},
+        }
+    )
+    return profile, applied, unapplied
 
 
 def _answered_draft(

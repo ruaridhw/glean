@@ -646,8 +646,11 @@ void main() {
       findsOneWidget,
     );
     expect(await rig.savedProfile(), isNull);
-    expect(find.widgetWithText(TextButton, 'Retry'), findsNothing,
-      reason: 'A local save failure must not offer a paid network retry');
+    expect(
+      find.widgetWithText(TextButton, 'Retry'),
+      findsNothing,
+      reason: 'A local save failure must not offer a paid network retry',
+    );
     expect(rig.backend.requests, hasLength(2));
     expect(
       find.text('Stock your pantry'),
@@ -668,7 +671,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(await rig.savedProfile(), isNotNull);
-    expect(rig.backend.requests, hasLength(2), reason: 'Local confirmation retries do not call the API');
+    expect(
+      rig.backend.requests,
+      hasLength(2),
+      reason: 'Local confirmation retries do not call the API',
+    );
     expect(find.text('Stock your pantry'), findsOneWidget);
     expect(
       find.bySemanticsLabel('Step 2 of 3: Taste, completed'),

@@ -121,15 +121,18 @@ class InterviewController extends Notifier<InterviewState> {
     await begin();
   }
 
+  /// Full staged intent, including explicit clears and selections, survives review navigation.
+  InterviewAnswer? draftAnswer(InterviewQuestion question) {
+    final prior = _drafted[question.id];
+    return prior != null &&
+            prior.question.text == question.text &&
+            prior.question.field == question.field
+        ? prior.answer
+        : null;
+  }
+
   /// Saved facts, not reconstructed historical answers or selected options.
   String prefill(InterviewQuestion question) {
-    final prior = _drafted[question.id];
-    if (prior != null &&
-        prior.question.text == question.text &&
-        prior.question.field == question.field &&
-        !prior.answer.skipped) {
-      return prior.answer.text ?? prior.answer.options.join(', ');
-    }
     final HouseholdProfile? profile = _baseline;
     if (profile == null) return '';
     return switch (question.knownField) {
@@ -250,7 +253,10 @@ class InterviewController extends Notifier<InterviewState> {
       }
       return true;
     } catch (error) {
-      if (ref.mounted) state = state.copyWith(failure: error);
+      // First run reports local confirmation failures separately from paid request failures.
+      if (ref.mounted && _baseline != null) {
+        state = state.copyWith(failure: error);
+      }
       return false;
     }
   }

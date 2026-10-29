@@ -190,6 +190,7 @@ sealed class InterviewResponse {
           ),
           summary: _required(json, 'summary'),
           updatedFields: _updatedFields(json['updated_fields']),
+          unappliedFields: _updatedFields(json['unapplied_fields']),
           droppedAnswer: json['dropped_answer'] == true,
         ),
         final Object? status => throw FormatException(
@@ -220,12 +221,14 @@ final class InterviewDone extends InterviewResponse {
     required this.profile,
     required this.summary,
     this.updatedFields = const <String>{},
+    this.unappliedFields = const <String>{},
     required super.droppedAnswer,
   });
 
   final HouseholdProfile profile;
   final String summary;
   final Set<String> updatedFields;
+  final Set<String> unappliedFields;
 }
 
 Set<String> _updatedFields(Object? value) {
