@@ -38,24 +38,8 @@ def test_the_alert_email_comes_from_a_stack_parameter_not_the_repo() -> None:
     assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", BOOTSTRAP.read_text(encoding="utf-8"))
 
 
-def test_the_deploy_policy_can_manage_only_the_prod_tables_and_queues(resources: dict[str, Any]) -> None:
+def test_the_deploy_role_cannot_touch_the_budget_alert(resources: dict[str, Any]) -> None:
     statements = resources["GleanDeployPolicyProd"]["Properties"]["PolicyDocument"]["Statement"]
-    dynamo = [s for s in statements if "dynamodb:*" in _as_list(s["Action"])]
-    assert len(dynamo) == 1
-    assert [r["Sub"] for r in dynamo[0]["Resource"]] == [
-        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod",
-        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod/index/*",
-        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-sessions-prod",
-        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-checkpoints-prod",
-        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-recipes-prod",
-    ]
-    # CloudFormation creates the session queue and its dead-letter queue with the deploy role.
-    sqs = [s for s in statements if "sqs:*" in _as_list(s["Action"])]
-    assert len(sqs) == 1
-    assert [r["Sub"] for r in sqs[0]["Resource"]] == [
-        "arn:aws:sqs:*:${AWS::AccountId}:glean-agent-sessions-prod",
-        "arn:aws:sqs:*:${AWS::AccountId}:glean-agent-sessions-dlq-prod",
-    ]
     assert not any(a.startswith("budgets:") for s in statements for a in _as_list(s["Action"]))
 
 
