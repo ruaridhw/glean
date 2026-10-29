@@ -47,6 +47,7 @@ def test_the_deploy_policy_can_manage_only_the_prod_tables_and_queues(resources:
         "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-catalogue-prod/index/*",
         "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-sessions-prod",
         "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-agent-checkpoints-prod",
+        "arn:aws:dynamodb:*:${AWS::AccountId}:table/glean-recipes-prod",
     ]
     # CloudFormation creates the session queue and its dead-letter queue with the deploy role.
     sqs = [s for s in statements if "sqs:*" in _as_list(s["Action"])]
