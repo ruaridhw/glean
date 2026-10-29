@@ -75,6 +75,23 @@ def test_the_api_lambda_reads_its_paid_model_rate_limit_from_a_template_paramete
     assert variables["RATE_LIMIT_PER_HOUR"] == {"Ref": "RateLimitPerHour"}
 
 
+def test_api_search_memory_headroom_does_not_raise_background_function_budgets() -> None:
+    template = _load()
+    default_memory = template["Globals"]["Function"]["MemorySize"]
+    assert default_memory == 256
+    effective_memory = {
+        name: resource["Properties"].get("MemorySize", default_memory)
+        for name, resource in template["Resources"].items()
+        if resource["Type"] == "AWS::Serverless::Function"
+    }
+    assert effective_memory == {
+        "GleanFunction": 512,
+        "AgentWorkerFunction": 256,
+        "AgentDeadLetterFunction": 128,
+        "PreSignUpFunction": 128,
+    }
+
+
 def test_only_the_api_lambda_receives_the_rate_limit() -> None:
     template = _load()
     for name, resource in template["Resources"].items():
