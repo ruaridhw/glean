@@ -16,14 +16,14 @@ void main() {
         habits: 'Quick dinners',
       );
       await profiles.save(userId: 'user', profile: baseline);
-      final note = ProfileNote(
+      const note = ProfileNote(
         date: '2026-10-29',
         text: 'Rice on Fridays',
         source: ProfileNoteSource.feedback,
       );
       await profiles.save(
         userId: 'user',
-        profile: HouseholdProfile(
+        profile: const HouseholdProfile(
           household: 'Two adults',
           habits: 'Slow weekends',
           notes: <ProfileNote>[note],

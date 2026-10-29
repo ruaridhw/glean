@@ -82,8 +82,94 @@ class InterviewController extends Notifier<InterviewState> {
   /// dropped rather than allowed to put the conversation back on screen.
   int _generation = 0;
 
+  HouseholdProfile? _baseline;
+  final List<InterviewState> _history = <InterviewState>[];
+  final Map<String, InterviewTurn> _drafted = <String, InterviewTurn>{};
+  late String _userId;
+
+  bool get canGoBack => _history.isNotEmpty;
+
+  void back() {
+    if (state.pending || _history.isEmpty) return;
+    _pending = null;
+    state = _history.removeLast();
+  }
+
+  void reviewAnswers() {
+    if (_history.isEmpty) return;
+    final first = _history.first;
+    _history.clear();
+    _pending = null;
+    state = first;
+  }
+
   @override
-  InterviewState build() => const InterviewState();
+  InterviewState build() {
+    _userId = ref.watch(currentUserIdProvider);
+    _baseline = null;
+    _history.clear();
+    _drafted.clear();
+    _pending = null;
+    _generation++;
+    ref.onDispose(() => _generation++);
+    return const InterviewState();
+  }
+
+  Future<void> beginRetake(HouseholdProfile profile) async {
+    reset();
+    _baseline = profile;
+    await begin();
+  }
+
+  /// Saved facts, not reconstructed historical answers or selected options.
+  String prefill(InterviewQuestion question) {
+    final prior = _drafted[question.id];
+    if (prior != null &&
+        prior.question.text == question.text &&
+        prior.question.field == question.field &&
+        !prior.answer.skipped) {
+      return prior.answer.text ?? prior.answer.options.join(', ');
+    }
+    final HouseholdProfile? profile = _baseline;
+    if (profile == null) return '';
+    return switch (question.knownField) {
+      ProfileField.favouriteMeals =>
+        profile.favouriteMeals
+            .map((FavouriteMeal meal) => meal.text)
+            .join(', '),
+      ProfileField.lovedIngredients => <String>[
+        ...profile.lovedIngredients,
+        ...profile.cuisinesLiked,
+      ].join(', '),
+      ProfileField.dislikedIngredients => <String>[
+        ...profile.dislikedIngredients,
+        ...profile.cuisinesAvoided,
+      ].join(', '),
+      ProfileField.cuisinesLiked => profile.cuisinesLiked.join(', '),
+      ProfileField.cuisinesAvoided => profile.cuisinesAvoided.join(', '),
+      ProfileField.habits => profile.habits,
+      ProfileField.household => profile.household,
+      ProfileField.spiceTolerance => profile.spiceTolerance?.name ?? '',
+      ProfileField.proteinTargets =>
+        profile.proteinTargets
+            .map(
+              (ProteinTarget target) =>
+                  '${target.protein} ${target.minPerWeek == null ? '' : 'at least ${target.minPerWeek}'} ${target.maxPerWeek == null ? '' : 'at most ${target.maxPerWeek}'} times per week',
+            )
+            .join(', '),
+      _ => '',
+    };
+  }
+
+  Future<void> clearAnswer() async {
+    final InterviewQuestion? asked = state.question;
+    if (_baseline == null || asked == null || state.pending) return;
+    _pending = InterviewTurn(
+      question: asked,
+      answer: const InterviewAnswer(clear: true),
+    );
+    await _send();
+  }
 
   /// Asks the first question. Idempotent: coming back to the page picks the interview up where it was rather
   /// than paying for the openers again.
@@ -133,6 +219,8 @@ class InterviewController extends Notifier<InterviewState> {
   /// stays available while a turn is in flight, because it is the way out of a slow one; [_generation] makes
   /// sure the reply that turn was waiting for cannot undo the skip.
   void reset() {
+    _history.clear();
+    _drafted.clear();
     _pending = null;
     _generation++;
     state = const InterviewState();
@@ -144,11 +232,25 @@ class InterviewController extends Notifier<InterviewState> {
     final InterviewDone? done = state.done;
     if (done == null) return false;
     try {
-      await ref
-          .read(householdProfileRepositoryProvider)
-          .save(userId: ref.read(currentUserIdProvider), profile: done.profile);
+      if (ref.read(currentUserIdProvider) != _userId) return false;
+      final HouseholdProfile? baseline = _baseline;
+      if (baseline == null) {
+        await ref
+            .read(householdProfileRepositoryProvider)
+            .save(userId: _userId, profile: done.profile);
+      } else {
+        await ref
+            .read(householdProfileRepositoryProvider)
+            .confirmInterview(
+              userId: _userId,
+              baseline: baseline,
+              candidate: done.profile,
+              fields: done.updatedFields,
+            );
+      }
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (ref.mounted) state = state.copyWith(failure: error);
       return false;
     }
   }
@@ -180,7 +282,8 @@ class InterviewController extends Notifier<InterviewState> {
             InterviewRequest(
               transcript: transcript,
               // A first interview starts from an empty profile: only the backend turns answers into fields.
-              draftProfile: const HouseholdProfile(),
+              draftProfile: _baseline ?? const HouseholdProfile(),
+              retake: _baseline != null,
             ),
           );
     } on ApiException catch (error) {
@@ -191,6 +294,10 @@ class InterviewController extends Notifier<InterviewState> {
     if (!ref.mounted || generation != _generation) return;
 
     _pending = null;
+    if (next != null) {
+      _history.add(before);
+      _drafted[next.question.id] = next;
+    }
     final Set<int> droppedTurns = <int>{
       ...before.droppedTurns,
       if (response.droppedAnswer) transcript.length - 1,
@@ -222,5 +329,10 @@ class InterviewController extends Notifier<InterviewState> {
 final NotifierProvider<InterviewController, InterviewState>
 interviewControllerProvider =
     NotifierProvider<InterviewController, InterviewState>(
+      InterviewController.new,
+    );
+
+final retakeInterviewControllerProvider =
+    NotifierProvider.autoDispose<InterviewController, InterviewState>(
       InterviewController.new,
     );

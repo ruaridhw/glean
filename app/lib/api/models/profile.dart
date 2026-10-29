@@ -92,6 +92,7 @@ class InterviewAnswer {
     this.text,
     this.options = const <String>[],
     this.skipped = false,
+    this.clear = false,
   });
 
   factory InterviewAnswer.fromJson(Map<String, dynamic> json) =>
@@ -103,17 +104,25 @@ class InterviewAnswer {
               if (option is String) option,
         ],
         skipped: json['skipped'] == true,
+        clear: json['clear'] == true,
       );
 
   final String? text;
   final List<String> options;
   final bool skipped;
+  final bool clear;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'text': text,
-    'options': options,
-    'skipped': skipped,
-  };
+  Map<String, dynamic> toJson() {
+    if (clear && (text != null || options.isNotEmpty || skipped)) {
+      throw ArgumentError('Clear cannot accompany text, options or skipped');
+    }
+    return <String, dynamic>{
+      'text': text,
+      'options': options,
+      'skipped': skipped,
+      if (clear) 'clear': true,
+    };
+  }
 }
 
 /// One exchange: the question asked and the answer given, as the transcript replays it.
@@ -142,16 +151,19 @@ class InterviewRequest {
   const InterviewRequest({
     required this.transcript,
     required this.draftProfile,
+    this.retake = false,
   });
 
   final List<InterviewTurn> transcript;
   final HouseholdProfile draftProfile;
+  final bool retake;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'transcript': <Map<String, dynamic>>[
       for (final InterviewTurn turn in transcript) turn.toJson(),
     ],
     'draft_profile': draftProfile.toJson(),
+    if (retake) 'retake': true,
   };
 }
 
@@ -177,6 +189,7 @@ sealed class InterviewResponse {
             json['profile']! as Map<String, dynamic>,
           ),
           summary: _required(json, 'summary'),
+          updatedFields: _updatedFields(json['updated_fields']),
           droppedAnswer: json['dropped_answer'] == true,
         ),
         final Object? status => throw FormatException(
@@ -206,11 +219,29 @@ final class InterviewDone extends InterviewResponse {
   const InterviewDone({
     required this.profile,
     required this.summary,
+    this.updatedFields = const <String>{},
     required super.droppedAnswer,
   });
 
   final HouseholdProfile profile;
   final String summary;
+  final Set<String> updatedFields;
+}
+
+Set<String> _updatedFields(Object? value) {
+  if (value == null) return const <String>{};
+  if (value is! List<dynamic>) {
+    throw const FormatException('Invalid interview targets');
+  }
+  return <String>{
+    for (final Object? field in value)
+      if (field is String &&
+          ProfileField.parse(field) != null &&
+          field != 'notes')
+        field
+      else
+        throw const FormatException('Invalid interview target'),
+  };
 }
 
 String _required(Map<String, dynamic> json, String key) => switch (json[key]) {
