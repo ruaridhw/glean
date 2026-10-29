@@ -378,6 +378,111 @@ void main() {
     });
 
     group('markCooked / undoCooked', () {
+      for (final amount in [
+        (quantity: 0.0, unit: ''),
+        (quantity: 0.0, unit: 'g'),
+        (quantity: 1.0, unit: '  '),
+        (quantity: 0.0, unit: 'units'),
+      ]) {
+        test(
+          'unmeasured butter ${amount.quantity} "${amount.unit}" leaves stock '
+          'unchanged while measured ingredients cook and undo exactly',
+          () async {
+            final before = DateTime(2026, 1, 1);
+            final cooked = DateTime(2026, 1, 6);
+            final week = startOfWeek(cooked);
+            await pantryRepository.addItem(
+              userId: userId,
+              name: 'butter',
+              quantity: 1,
+              unit: 'units',
+              groupId: 'dairy',
+              now: before,
+            );
+            await pantryRepository.addItem(
+              userId: userId,
+              name: 'chicken breast',
+              quantity: 500,
+              unit: 'g',
+              groupId: 'poultry',
+              now: before,
+            );
+            final recipeId = await createRecipe(
+              'Butter chicken',
+              ingredients: [
+                SaveRecipeIngredient(
+                  canonicalName: 'butter',
+                  quantity: amount.quantity,
+                  unit: amount.unit,
+                ),
+                const SaveRecipeIngredient(
+                  canonicalName: 'chicken breast',
+                  quantity: 200,
+                  unit: 'g',
+                ),
+              ],
+            );
+            final entryId = await repository.addEntry(
+              userId: userId,
+              recipeId: recipeId,
+              recipeTitle: 'Butter chicken',
+              servings: 2,
+              plannedDate: week,
+            );
+
+            await repository.markCooked(
+              entryId: entryId,
+              userId: userId,
+              now: cooked,
+            );
+            var pantry = await pantryRepository.getAll(userId);
+            expect(
+              pantry.singleWhere((p) => p.canonicalName == 'butter').quantity,
+              1,
+            );
+            expect(
+              pantry
+                  .singleWhere((p) => p.canonicalName == 'chicken breast')
+                  .quantity,
+              100,
+            );
+            expect(pantry.map((p) => p.lastUsedAt), everyElement(cooked));
+            expect(
+              (await repository.getWeek(
+                userId: userId,
+                weekStart: week,
+              )).single.isCooked,
+              isTrue,
+            );
+
+            await repository.undoCooked(
+              entryId: entryId,
+              userId: userId,
+              now: DateTime(2026, 1, 7),
+            );
+            pantry = await pantryRepository.getAll(userId);
+            expect(
+              pantry.singleWhere((p) => p.canonicalName == 'butter').quantity,
+              1,
+            );
+            expect(
+              pantry
+                  .singleWhere((p) => p.canonicalName == 'chicken breast')
+                  .quantity,
+              500,
+            );
+            expect(pantry.map((p) => p.lastUsedAt), everyElement(isNull));
+            expect(
+              (await repository.getWeek(
+                userId: userId,
+                weekStart: week,
+              )).single.isCooked,
+              isFalse,
+            );
+          },
+        );
+      }
+
       Future<int> saveChickenRecipe() {
         return createRecipe(
           'Chicken dinner',
