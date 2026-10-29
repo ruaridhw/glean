@@ -266,6 +266,13 @@ class InterviewAnswer(BaseModel):
         default_factory=list, max_length=MAX_OPTIONS, description="Which offered options they chose."
     )
     skipped: bool = Field(default=False, description="True when they skipped this turn.")
+    clear: bool = Field(default=False, description="Explicitly clear this question's saved facts in a retake.")
+
+    @model_validator(mode="after")
+    def _clear_is_exclusive(self) -> InterviewAnswer:
+        if self.clear and (self.text is not None or self.options or self.skipped):
+            raise ValueError("clear cannot accompany text, options or skipped")
+        return self
 
 
 class TranscriptTurn(BaseModel):
@@ -282,6 +289,7 @@ class InterviewRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    retake: bool = False
     transcript: list[TranscriptTurn] = Field(
         default_factory=list, max_length=MAX_TURNS, description="Every answered turn, oldest first."
     )
@@ -297,6 +305,8 @@ class InterviewRequest(BaseModel):
         answer against a field nothing writes. The opener's field is the server's, not the client's.
         """
         for index, turn in enumerate(self.transcript):
+            if turn.answer.clear and not self.retake:
+                raise ValueError("clearing saved facts requires a retake")
             expected = expected_question_id(index)
             if turn.question.id != expected:
                 raise ValueError(f"turn {index + 1} answers {turn.question.id!r}, but this interview asks {expected!r}")
@@ -329,6 +339,9 @@ class InterviewDoneResponse(BaseModel):
     status: Literal["done"] = "done"
     profile: HouseholdProfile = Field(description="The finished profile.")
     summary: str = Field(description="Two short lines for the user to confirm.")
+    updated_fields: list[WritableProfileField] = Field(
+        default_factory=list, description="Server-derived retake targets accepted or explicitly cleared."
+    )
     dropped_answer: bool = Field(default=False, description="True when the last answer failed screening.")
 
 

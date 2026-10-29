@@ -41,6 +41,7 @@ from glean.profile.schemas import (
     ProfileField,
     SpiceTolerance,
     TranscriptTurn,
+    WritableProfileField,
     question_for_turn,
 )
 from glean.recipes.corpus import RecipeCorpusStore
@@ -211,10 +212,7 @@ def run_interview(
         )
 
     screening = _screen_transcript(transcript, decision_client)
-    draft = _model_draft(held)
-    for index, (answered, answer) in enumerate(zip(transcript, screening.answers, strict=True)):
-        if answer is not None:
-            draft = _apply(draft, _field_for(index, answered), answer)
+    draft, effective_held, updated, cleared = _answered_draft(request, screening.answers)
 
     # Questions are numbered 1..MAX_TURNS; only the answer to the last one cannot be met by another.
     may_ask_follow_up = turn <= MAX_TURNS
@@ -231,7 +229,7 @@ def run_interview(
         # `LLMRouter.invoke` validates the reply against the schema, so a wrong shape arrives here.
         logger.warning("interview model reply was unusable", exc_info=True)
         raise InterviewUnavailableError from exc
-    merged = _merge(reply.draft_profile, draft, held)
+    merged = _merge(reply.draft_profile, draft, effective_held)
 
     if may_ask_follow_up and reply.question is not None:
         return InterviewQuestionResponse(
@@ -241,11 +239,63 @@ def run_interview(
         )
 
     profile = _finished(merged, held, corpus, now=now or datetime.now(UTC))
+    if request.retake:
+        defaults = HouseholdProfile().model_dump()
+        # Only household intent can replace a field; model suggestions are not write authority.
+        profile = profile.model_copy(
+            update={
+                **{
+                    field: getattr(held, field)
+                    for field in type(held).model_fields
+                    if field not in updated and field != "interviewed_at"
+                },
+                **{field: defaults[field] for field in cleared},
+            }
+        )
     return InterviewDoneResponse(
+        updated_fields=[WritableProfileField(field) for field in sorted(updated)],
         profile=profile,
         summary=_summary(reply.summary) or _fallback_summary(profile),
         dropped_answer=screening.dropped,
     )
+
+
+def _answered_draft(
+    request: InterviewRequest, answers: list[InterviewAnswer | None]
+) -> tuple[ProfileDraft, HouseholdProfile, set[str], set[str]]:
+    held = request.draft_profile
+    updated: set[str] = set()
+    cleared: set[str] = set()
+    if request.retake:
+        for index, (turn, answer) in enumerate(zip(request.transcript, answers, strict=True)):
+            if answer is None and not turn.answer.clear:
+                continue
+            fields = _retake_targets(_field_for(index, turn))
+            updated.update(fields)
+            if turn.answer.clear:
+                cleared.update(fields)
+            else:
+                cleared.difference_update(fields)
+    defaults = HouseholdProfile().model_dump()
+    effective = held.model_copy(update={field: defaults[field] for field in updated})
+    draft = _model_draft(effective)
+    for index, (turn, answer) in enumerate(zip(request.transcript, answers, strict=True)):
+        if request.retake and (answer is not None or turn.answer.clear):
+            fields = _retake_targets(_field_for(index, turn))
+            empty = _model_draft(HouseholdProfile()).model_dump()
+            draft = draft.model_copy(update={field: empty[field] for field in fields})
+        if answer is not None:
+            draft = _apply(draft, _field_for(index, turn), answer)
+    return draft, effective, updated, cleared
+
+
+def _retake_targets(field: ProfileField) -> set[str]:
+    """The paired cuisine fields belong to the same love/avoid question, not to the model."""
+    if field is ProfileField.LOVED_INGREDIENTS:
+        return {"loved_ingredients", "cuisines_liked"}
+    if field is ProfileField.DISLIKED_INGREDIENTS:
+        return {"disliked_ingredients", "cuisines_avoided"}
+    return {field.value}
 
 
 def _field_for(index: int, turn: TranscriptTurn) -> ProfileField:
