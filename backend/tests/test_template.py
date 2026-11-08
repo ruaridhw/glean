@@ -75,7 +75,7 @@ def test_the_api_lambda_reads_its_paid_model_rate_limit_from_a_template_paramete
     assert variables["RATE_LIMIT_PER_HOUR"] == {"Ref": "RateLimitPerHour"}
 
 
-def test_api_search_memory_headroom_does_not_raise_background_function_budgets() -> None:
+def test_only_the_api_and_the_worker_get_more_than_the_default_memory() -> None:
     template = _load()
     default_memory = template["Globals"]["Function"]["MemorySize"]
     assert default_memory == 256
@@ -86,7 +86,7 @@ def test_api_search_memory_headroom_does_not_raise_background_function_budgets()
     }
     assert effective_memory == {
         "GleanFunction": 512,
-        "AgentWorkerFunction": 256,
+        "AgentWorkerFunction": 1024,
         "AgentDeadLetterFunction": 128,
         "PreSignUpFunction": 128,
     }

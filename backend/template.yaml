@@ -377,7 +377,8 @@ Resources:
       CodeUri: .
       Handler: glean.worker.handler
       Timeout: 120
-      MemorySize: 256
+      # Planning a week loads the recipe corpus; at 256 MB the worker hits its ceiling and times out.
+      MemorySize: 1024
       Tracing: Active
       Environment:
         Variables:
