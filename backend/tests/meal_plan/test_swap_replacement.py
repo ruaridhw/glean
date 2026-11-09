@@ -151,3 +151,34 @@ def test_the_replacement_takes_only_its_slot_and_keeps_the_cards_alternative() -
     # The alternative itself as the replacement leaves the card nothing else to offer.
     same = pipeline.with_replacement(base, 1, MealPlanSuggestion(external_id="rec_alt", title="Alt", reason="r"))
     assert same.suggestions[1].alternative is None
+
+
+_FILLER = (
+    "A reliable pick for this week.",
+    "Another option from this week's shortlist.",
+    "Swapped in as the best fit with the rest of your week.",
+)
+
+
+def _filler_free(suggestion: MealPlanSuggestion) -> bool:
+    """Whether the reason is free of the server's old stock sentences; an expiry it computed is still allowed."""
+    return not any(filler in suggestion.reason for filler in _FILLER)
+
+
+def test_a_fallback_week_and_its_alternatives_carry_no_filler_reasons(prepared: pipeline.PreparedPlan) -> None:
+    result = pipeline.degraded(prepared)
+
+    lines = [*result.suggestions, *(s.alternative for s in result.suggestions if s.alternative is not None)]
+    assert lines
+    assert all(_filler_free(line) for line in lines)
+
+
+def test_a_fallback_replacement_carries_no_filler_reason(prepared: pipeline.PreparedPlan) -> None:
+    week = _week(prepared)
+
+    chosen = pipeline.replacement(prepared, None, locked=week[1:], unavailable=set(week))
+
+    assert chosen is not None
+    suggestion, degraded = chosen
+    assert degraded is True
+    assert _filler_free(suggestion)
