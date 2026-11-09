@@ -468,7 +468,7 @@ def test_the_week_summary_is_always_one_line(tmp_path: Path) -> None:
     assert result.week_summary == "Fish twice. And the coriander gets used."
 
 
-def test_the_degraded_fallback_fills_every_field_from_template_text(tmp_path: Path) -> None:
+def test_the_degraded_fallback_fills_every_field_but_the_reason(tmp_path: Path) -> None:
     prepared = _prepared(tmp_path, exclude_external_ids=["rec_lentil_bake"])
 
     result = pipeline.degraded(prepared)
@@ -477,7 +477,8 @@ def test_the_degraded_fallback_fills_every_field_from_template_text(tmp_path: Pa
     assert result.week_summary == "2 dinners for this week."
     # The fallback is the scorer's best week, not the sampler's first N: a degraded run still gets balance.
     assert [suggestion.external_id for suggestion in result.suggestions] == prepared.weeks[0].recipe_ids
-    assert all(suggestion.reason for suggestion in result.suggestions)
+    # No stock sentence stands in for a reason the model never wrote: the card shows no line instead.
+    assert [s.reason for s in result.suggestions if not s.uses_up] == ["" for s in result.suggestions if not s.uses_up]
     assert all(suggestion.reason_kind in set(ReasonKind) for suggestion in result.suggestions)
     # Every field a proposal carries is filled: a degraded week has alternatives like any other.
     assert all(suggestion.alternative is not None for suggestion in result.suggestions)

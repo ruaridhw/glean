@@ -107,7 +107,7 @@ def test_a_pick_the_week_may_not_use_falls_back_to_the_scorers_best(
     assert degraded is True
     assert suggestion.external_id not in unavailable | {"rec_11", "rec_invented"}
     assert suggestion.external_id in prepared.offered_ids
-    assert suggestion.reason.startswith(pipeline.TEMPLATE_SWAP_REASON)
+    assert _filler_free(suggestion)
 
 
 def test_the_fallback_is_the_candidate_that_scores_best_with_the_locked_meals(prepared: pipeline.PreparedPlan) -> None:

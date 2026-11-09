@@ -245,7 +245,8 @@ def test_an_answer_that_keeps_no_meals_ends_the_session_with_the_fallback_plan(a
     result = view["result"]
     assert result["degraded"] is True
     assert len(result["suggestions"]) == MEALS
-    assert all(suggestion["reason"] for suggestion in result["suggestions"])
+    # The fallback writes no stock reason; only an expiry the server computed may appear.
+    assert all(suggestion["reason"] == "" or suggestion["uses_up"] for suggestion in result["suggestions"])
     assert any(suggestion["alternative"] is not None for suggestion in result["suggestions"])
     assert result["week_summary"]
 

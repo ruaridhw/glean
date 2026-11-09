@@ -113,11 +113,9 @@ Rules:
 PROFILE_RESERVE = 3
 # The whole corpus as one page, so an already-planned meal's title can be looked up without a read per id.
 _ALL_RECIPES = 1_000_000
-# Template text for a proposal the server had to write itself: spec §6.2's degraded fallback.
-_TEMPLATE_MEAL_REASON = "A reliable pick for this week."
-_TEMPLATE_ALTERNATIVE_REASON = "Another option from this week's shortlist."
-# The reason a swap's fallback replacement carries: the scorer picked it, so all it can honestly say is the fit.
-TEMPLATE_SWAP_REASON = "Swapped in as the best fit with the rest of your week."
+# A proposal the server had to write itself (spec §6.2's degraded fallback) has no reason: the scorer picked the
+# meal, so all it could say is stock filler, and the app shows no line for an empty reason. An expiry the server
+# computed is still added by `_suggestion_for`.
 NO_MEALS_WEEK_SUMMARY = "No dinners for this week."
 
 _MAX_CANDIDATE_INGREDIENTS = 12
@@ -914,7 +912,7 @@ def degraded(prepared: PreparedPlan, *, week: Sequence[str] | None = None) -> Me
             CorpusMealPlanRecipe(
                 external_id=external_id,
                 title=prepared.titles.get(external_id, external_id),
-                reason=_TEMPLATE_MEAL_REASON,
+                reason="",
                 reason_kind=ReasonKind.URGENT_ITEM if _urgent_items(prepared, external_id) else ReasonKind.BALANCE,
             )
             for external_id in best
@@ -961,7 +959,7 @@ def replacement(
     template = CorpusMealPlanAlternative(
         external_id=fallback,
         title=prepared.titles.get(fallback, fallback),
-        reason=TEMPLATE_SWAP_REASON,
+        reason="",
         reason_kind=ReasonKind.URGENT_ITEM if items else ReasonKind.BALANCE,
     )
     return _suggestion_for(template, prepared), True
@@ -1088,7 +1086,7 @@ def _template_alternative(prepared: PreparedPlan, external_id: str) -> MealPlanS
         CorpusMealPlanAlternative(
             external_id=external_id,
             title=prepared.titles.get(external_id, external_id),
-            reason=_TEMPLATE_ALTERNATIVE_REASON,
+            reason="",
             reason_kind=ReasonKind.URGENT_ITEM if items else ReasonKind.BALANCE,
         ),
         prepared,
