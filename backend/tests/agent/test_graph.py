@@ -395,7 +395,7 @@ class TestInvalidActions:
         run.start(model)
 
         warning = next(r for r in caplog.records if r.getMessage() == "the model's answer was not a valid action")
-        assert "unexpected value 'propsoe'" in getattr(warning, "error")
+        assert "unexpected value 'propsoe'" in warning.__dict__["error"]
 
     def test_too_many_unparseable_answers_end_in_the_scorers_week(self, run: Run) -> None:
         model = ScriptedModel(*[ValueError("still not one")] * (MAX_INVALID_ACTIONS + 1))
