@@ -329,17 +329,31 @@ class ShoppingRepository {
                     t.ingredientId.equals(recipeIngredient.ingredientId),
               ))
               .getSingleOrNull();
-      final unit = canonicalUnitFor(pantryRow?.unit ?? recipeIngredient.unit);
-      final normalized = normalizeUnit(
-        quantity: recipeQuantityForServings(
-          quantity: recipeIngredient.quantity,
-          servings: servings,
-          yieldCount: recipe.yieldCount,
-        ),
+      final String recipeUnit = canonicalUnitFor(recipeIngredient.unit);
+      final double scaled = recipeQuantityForServings(
+        quantity: recipeIngredient.quantity,
+        servings: servings,
+        yieldCount: recipe.yieldCount,
+      );
+      var unit = canonicalUnitFor(pantryRow?.unit ?? recipeIngredient.unit);
+      var normalized = normalizeUnit(
+        quantity: scaled,
         unit: recipeIngredient.unit,
         canonicalUnit: unit,
         canonicalName: ingredient.canonicalName,
       );
+      if (normalized == null) {
+        // The pantry holds this in a unit the recipe's cannot convert to (brown sugar stocked as "units", needed in
+        // g). The stock cannot be netted, so the whole amount goes on the list in the recipe's own unit rather than
+        // failing the meal's add.
+        unit = recipeUnit;
+        normalized = normalizeUnit(
+          quantity: scaled,
+          unit: recipeIngredient.unit,
+          canonicalUnit: unit,
+          canonicalName: ingredient.canonicalName,
+        );
+      }
       if (normalized == null) {
         throw PantryUnitMismatchException(
           ingredientId: ingredient.id,
