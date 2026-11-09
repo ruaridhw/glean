@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean/data/providers/repository_providers.dart';
 import 'package:glean/features/plan/providers/generate_week_controller.dart';
 import 'package:glean/logging/logging.dart';
 import 'package:http/http.dart' as http;
