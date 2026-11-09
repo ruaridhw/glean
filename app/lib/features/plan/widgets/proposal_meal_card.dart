@@ -62,12 +62,16 @@ class ProposalProgressLines extends StatelessWidget {
                 SizedBox(
                   width: 20,
                   child: i == lines.length - 1
-                      ? const Padding(
-                          padding: EdgeInsets.only(top: 2),
-                          child: SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                      // Align loosens the slot's tight width; without it the 12 px box is stretched to the slot.
+                      ? const Align(
+                          alignment: Alignment.topLeft,
+                          child: Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           ),
                         )
                       : Icon(
