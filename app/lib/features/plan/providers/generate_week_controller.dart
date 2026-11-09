@@ -909,6 +909,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       state = const GenerateProposalState();
       return GenerateSaveSaved(inserted: saved.inserted, commit: saved.commit);
     } catch (error) {
+      _logFailure('add to plan failed', error);
       final GenerateFailure failure = GenerateFailure.from(error);
       if (saveAttempt == _attempt) {
         state = attempt._copy(
@@ -961,6 +962,7 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
       state = state._copy(sessionId: session.sessionId);
       await _poll(attempt, session.sessionId);
     } catch (error) {
+      _logFailure('planning failed', error);
       _fail(attempt, GenerateFailure.from(error));
     }
   }
@@ -1061,8 +1063,17 @@ class GenerateWeekController extends Notifier<GenerateProposalState> {
         if (!_owns(attempt)) return;
       }
     } catch (error) {
+      _logFailure('planning failed', error);
       _fail(attempt, GenerateFailure.from(error));
     }
+  }
+
+  /// Writes what an unexpected failure was to the app log. The household only sees the catalogue's generic copy,
+  /// so without this line a failed run leaves nothing to say why.
+  void _logFailure(String what, Object error) {
+    unawaited(
+      ref.read(gleanLoggerProvider)?.error('$what: ${describeError(error)}'),
+    );
   }
 
   void _fail(int attempt, GenerateFailure failure) {
