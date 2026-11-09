@@ -376,7 +376,9 @@ class _Nodes:
                     return _Answer(step.action, invalid)
                 error = refusal
             invalid += 1
-            logger.warning("the model's answer was not a valid action", extra={"invalid_actions": invalid})
+            logger.warning(
+                "the model's answer was not a valid action", extra={"invalid_actions": invalid, "error": error}
+            )
             if self._guard.remaining_ms() <= 0:
                 # The time ran out, whatever the answer was: a spent budget, as at any other step.
                 return _degrade(DegradedReason.TIME_BUDGET, invalid_actions=invalid, transcript=transcript)

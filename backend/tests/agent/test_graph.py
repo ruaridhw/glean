@@ -386,6 +386,17 @@ class TestInvalidActions:
         assert "not a valid action" in json.loads(model.users[-1])["tool_results"][0]["error"]
         assert run.metric("SessionInvalidActions") == [1]
 
+    def test_the_log_says_why_an_answer_was_not_a_valid_action(
+        self, run: Run, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level("WARNING")
+        model = ScriptedModel(ValueError("kind: unexpected value 'propsoe'"), propose_first)
+
+        run.start(model)
+
+        warning = next(r for r in caplog.records if r.getMessage() == "the model's answer was not a valid action")
+        assert "unexpected value 'propsoe'" in warning.__dict__["error"]
+
     def test_too_many_unparseable_answers_end_in_the_scorers_week(self, run: Run) -> None:
         model = ScriptedModel(*[ValueError("still not one")] * (MAX_INVALID_ACTIONS + 1))
 
