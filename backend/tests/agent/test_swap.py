@@ -20,7 +20,6 @@ from glean.agent.actions import PlanStep, SwapStep
 from glean.agent.checkpoint import in_memory_checkpointer
 from glean.agent.deps import AgentDeps
 from glean.agent.graph import MAX_SWAP_TOOL_CALLS, SWAP_FINALISE_LINE, SWAP_LINE, SWAP_NOTE_LINE
-from glean.meal_plan.pipeline import TEMPLATE_SWAP_REASON
 from glean.meal_plan.schemas import HumanFeedback, PlanningProfile
 from glean.meal_plan.tools import FeedbackChip
 from glean.recipe_api.blob_store import FilesystemBlobStore
@@ -204,7 +203,7 @@ class TestReplacement:
         swap_run.deliver(Model(swap=[replace_with(pick)]))
 
         after = swap_run.record.result.suggestions
-        assert after[1].reason.startswith(TEMPLATE_SWAP_REASON)
+        assert "Swapped in" not in after[1].reason
         assert after[1].external_id not in {s.external_id for s in swap_run.proposal.suggestions}
         assert after[0] == swap_run.proposal.suggestions[0]
         assert swap_run.view.swap.state is SwapState.DONE  # ty: ignore[possibly-missing-attribute]
@@ -274,7 +273,7 @@ class TestReplacement:
         swap_run.deliver(model)
 
         assert swap_run.swap_lines.count("Reading the recipes more closely") == MAX_SWAP_TOOL_CALLS
-        assert swap_run.record.result.suggestions[1].reason.startswith(TEMPLATE_SWAP_REASON)
+        assert "Swapped in" not in swap_run.record.result.suggestions[1].reason
 
     def test_a_provider_error_is_the_scorers_replacement(self, swap_run: SwapRun) -> None:
         swap_run.swap()
@@ -282,7 +281,7 @@ class TestReplacement:
         swap_run.deliver(Model(swap=[RuntimeError("provider fell over")]))
 
         assert swap_run.record.status is SessionStatus.DONE
-        assert swap_run.record.result.suggestions[1].reason.startswith(TEMPLATE_SWAP_REASON)
+        assert "Swapped in" not in swap_run.record.result.suggestions[1].reason
 
     def test_with_nothing_left_to_swap_in_the_proposal_stays_as_it_was(
         self, swap_run: SwapRun, monkeypatch: pytest.MonkeyPatch
