@@ -304,6 +304,37 @@ void main() {
       }
 
       test(
+        'lists the full amount when the pantry unit cannot be compared with the recipe unit',
+        () async {
+          final linked = await saveRecipeAndPlanEntry(
+            ingredient: 'brown sugar',
+            quantityPerServing: 100,
+            unit: 'g',
+          );
+          await pantry.addItem(
+            userId: userId,
+            name: 'brown sugar',
+            quantity: 1,
+            unit: 'units',
+            groupId: 'baking',
+          );
+
+          await repository.addGapsForRecipe(
+            userId: userId,
+            recipeId: linked.recipeId,
+            servings: 1,
+            sourceMealPlanEntryId: linked.entryId,
+          );
+
+          final items = await repository.watchAll(userId).first;
+          expect(items, hasLength(1));
+          expect(items.single.name, 'brown sugar');
+          expect(items.single.quantity, 100);
+          expect(items.single.unit, 'g');
+        },
+      );
+
+      test(
         'adds a shortfall item when the pantry has less than needed',
         () async {
           final linked = await saveRecipeAndPlanEntry(
