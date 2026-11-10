@@ -4,7 +4,10 @@
 # ~/.aws/credentials. `make aws-profile` (scripts/aws_op_profile.sh) installs
 # a copy and points a profile at it.
 #
-#   aws_op_credentials.sh op://<vault>/<item> [ssh-host]
+#   aws_op_credentials.sh op://<vault>/<item> ["ssh-host [ssh-host ...]"]
+#
+# Several ssh-hosts, space-separated in one argument, are tried in order with a
+# short connect timeout and the first that answers is used.
 #
 # With an ssh-host, `op` runs on that machine instead (a Mac with the
 # 1Password app), so a headless box needs no 1Password session of its own:
@@ -23,6 +26,23 @@ ssh_host="${2:-}"
 template="$(printf '{"Version": 1, "AccessKeyId": "{{ %s/access key id }}", "SecretAccessKey": "{{ %s/secret access key }}"}' "$item" "$item")"
 
 if [[ -n "$ssh_host" ]]; then
+  read -r -a hosts <<<"$ssh_host"
+  if ((${#hosts[@]} > 1)); then
+    # More than one Mac listed: take the first that answers, so a laptop that is
+    # asleep or off the network does not leave the prompt unseen on the wrong one.
+    chosen=""
+    for candidate in "${hosts[@]}"; do
+      if ssh -o BatchMode=yes -o ConnectTimeout=3 "$candidate" true >/dev/null 2>&1; then
+        chosen="$candidate"
+        break
+      fi
+    done
+    if [[ -z "$chosen" ]]; then
+      echo "aws_op_credentials: none of these hosts answered over ssh: ${hosts[*]}" >&2
+      exit 1
+    fi
+    ssh_host="$chosen"
+  fi
   # A non-interactive SSH shell on macOS does not have Homebrew on its PATH.
   printf '%s\n' "$template" \
     | ssh -o BatchMode=yes "$ssh_host" 'PATH=/opt/homebrew/bin:/usr/local/bin:$PATH op inject'

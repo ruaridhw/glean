@@ -65,7 +65,8 @@ _E2E_DEFINES = $(if $(E2E_USERNAME),$(shell scripts/e2e_tokens.sh --dart-defines
 # ~/.aws/credentials. Set OP_AWS_ITEM (an op://<vault>/<item> reference) in
 # .env.local; `make aws-profile` points AWS_OP_PROFILE at it. On a box with
 # no 1Password sign-in, set OP_SSH_HOST to a machine with the 1Password app
-# and `op` runs there over SSH (unlocking with Touch ID on that machine).
+# and `op` runs there over SSH (unlocking with Touch ID on that machine). It may
+# be a space-separated list; the first host that answers over SSH is used.
 OP_AWS_ITEM       ?=
 OP_SSH_HOST       ?=
 AWS_OP_PROFILE    ?= glean
