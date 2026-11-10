@@ -95,6 +95,38 @@ class TestAwsOpProfile(unittest.TestCase):
         self.assertEqual(creds["SecretAccessKey"], "fake/secret+key")
         self.assertEqual((self.state / "ssh.hosts").read_text().splitlines(), ["me@mac"])
 
+    def test_ssh_host_list_runs_op_on_the_first_reachable_machine(self) -> None:
+        self.env["UNREACHABLE"] = "down@mac"
+        result = self.run_script("op://v/i", "glean", "down@mac up@mac")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        creds = self.export_credentials("glean")
+
+        self.assertEqual(creds["AccessKeyId"], "AKIAFAKE")
+        self.assertEqual((self.state / "ssh.op_hosts").read_text().splitlines(), ["up@mac"])
+
+    def test_ssh_host_list_prefers_the_earlier_machine_when_both_are_up(self) -> None:
+        self.run_script("op://v/i", "glean", "first@mac second@mac")
+
+        self.export_credentials("glean")
+
+        self.assertEqual((self.state / "ssh.op_hosts").read_text().splitlines(), ["first@mac"])
+
+    def test_ssh_host_list_fails_naming_every_host_when_none_answer(self) -> None:
+        self.env["UNREACHABLE"] = "a@mac b@mac"
+        self.run_script("op://v/i", "glean", "a@mac b@mac")
+
+        out = subprocess.run(
+            ["aws", "configure", "export-credentials", "--profile", "glean", "--format", "process"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("a@mac", out.stderr)
+        self.assertIn("b@mac", out.stderr)
+        self.assertFalse((self.state / "ssh.op_hosts").exists())
 
     def test_helper_lives_beside_the_aws_config_not_in_the_checkout(self) -> None:
         self.run_script("op://v/i")
