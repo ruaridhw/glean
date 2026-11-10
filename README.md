@@ -75,7 +75,13 @@ make aws-profile   # then: export AWS_PROFILE=glean
 The `glean` profile reads the key through `op` on every call, so it is never
 written to `~/.aws/credentials`. On a machine without 1Password signed in, also
 set `OP_SSH_HOST` to a Mac with the 1Password app: `op` then runs there over
-SSH and asks for Touch ID on the Mac when it is locked.
+SSH and asks for Touch ID on the Mac when it is locked. List several Macs
+separated by spaces (`OP_SSH_HOST="me@mac-pro me@mac-air"`) and the first that
+answers over SSH within three seconds is used.
+
+`make aws-profile` also caches a 12-hour session token in
+`$XDG_RUNTIME_DIR/aws-glean-session.env` (tmpfs, owner-only), so scripts and
+agents keep working after 1Password locks: `unset AWS_PROFILE; . "$XDG_RUNTIME_DIR/aws-glean-session.env"`.
 
 ## Run Locally
 

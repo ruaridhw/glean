@@ -22,10 +22,14 @@ tee -a "$STATE/op.templates" \\
   | sed -e 's#{{ [^}]*/access key id }}#AKIAFAKE#' -e 's#{{ [^}]*/secret access key }}#fake/secret+key#'
 """
 
-# ssh [-o OPT]... HOST CMD: records the host, then runs CMD here, as the remote shell would.
+# ssh [-o OPT]... HOST CMD: records the host (and, separately, the hosts `op inject` ran on), fails
+# like an unreachable machine for hosts listed in $UNREACHABLE, else runs CMD here as the remote
+# shell would.
 FAKE_SSH = """#!/bin/sh
 while [ "$1" = -o ]; do shift 2; done
 echo "$1" >> "$STATE/ssh.hosts"
+case " $UNREACHABLE " in *" $1 "*) exit 255 ;; esac
+case "$2" in *"op inject"*) echo "$1" >> "$STATE/ssh.op_hosts" ;; esac
 exec sh -c "$2"
 """
 
@@ -91,6 +95,39 @@ class TestAwsOpProfile(unittest.TestCase):
         self.assertEqual(creds["SecretAccessKey"], "fake/secret+key")
         self.assertEqual((self.state / "ssh.hosts").read_text().splitlines(), ["me@mac"])
 
+    def test_ssh_host_list_runs_op_on_the_first_reachable_machine(self) -> None:
+        self.env["UNREACHABLE"] = "down@mac"
+        result = self.run_script("op://v/i", "glean", "down@mac up@mac")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        creds = self.export_credentials("glean")
+
+        self.assertEqual(creds["AccessKeyId"], "AKIAFAKE")
+        self.assertEqual((self.state / "ssh.op_hosts").read_text().splitlines(), ["up@mac"])
+
+    def test_ssh_host_list_prefers_the_earlier_machine_when_both_are_up(self) -> None:
+        self.run_script("op://v/i", "glean", "first@mac second@mac")
+
+        self.export_credentials("glean")
+
+        self.assertEqual((self.state / "ssh.op_hosts").read_text().splitlines(), ["first@mac"])
+
+    def test_ssh_host_list_fails_naming_every_host_when_none_answer(self) -> None:
+        self.env["UNREACHABLE"] = "a@mac b@mac"
+        self.run_script("op://v/i", "glean", "a@mac b@mac")
+
+        out = subprocess.run(
+            ["aws", "configure", "export-credentials", "--profile", "glean", "--format", "process"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("a@mac", out.stderr)
+        self.assertIn("b@mac", out.stderr)
+        self.assertFalse((self.state / "ssh.op_hosts").exists())
+
     def test_helper_lives_beside_the_aws_config_not_in_the_checkout(self) -> None:
         self.run_script("op://v/i")
         helper = self.config.parent / "op-credentials.sh"
@@ -110,6 +147,73 @@ class TestAwsOpProfile(unittest.TestCase):
         result = self.run_script("")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("OP_AWS_ITEM", result.stderr)
+
+
+SESSION_SCRIPT = Path(__file__).resolve().parents[1] / "aws_op_session.sh"
+
+# aws: only the two calls the session script makes. STS_FAIL makes the mint fail like a locked 1Password.
+FAKE_AWS = """#!/bin/sh
+case "$1 $2" in
+  "sts get-session-token")
+    [ -z "$STS_FAIL" ] || { echo "Touch ID timed out" >&2; exit 254; }
+    echo '{"Credentials":{"AccessKeyId":"ASIAFAKE","SecretAccessKey":"fake/session+secret","SessionToken":"fake-token","Expiration":"2030-01-01T00:00:00+00:00"}}'
+    ;;
+  "configure get") echo eu-west-2 ;;
+  *) exit 1 ;;
+esac
+"""
+
+
+class TestAwsOpSession(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        tmp = Path(self._tmp.name)
+        bin_dir = tmp / "bin"
+        bin_dir.mkdir()
+        aws = bin_dir / "aws"
+        aws.write_text(FAKE_AWS)
+        aws.chmod(aws.stat().st_mode | stat.S_IEXEC)
+        self.runtime = tmp / "run"
+        self.env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "XDG_RUNTIME_DIR": str(self.runtime),
+        }
+        self.cache = self.runtime / "aws-glean-session.env"
+
+    def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([str(SESSION_SCRIPT), *args], env=self.env, capture_output=True, text=True)
+
+    def test_caches_a_sourceable_session_owner_only(self) -> None:
+        result = self.run_script("glean")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        self.assertEqual(stat.S_IMODE(self.cache.stat().st_mode), 0o600)
+        sourced = subprocess.run(
+            ["sh", "-c", f". {self.cache} && echo $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY $AWS_SESSION_TOKEN $AWS_DEFAULT_REGION"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        self.assertEqual(sourced, ["ASIAFAKE", "fake/session+secret", "fake-token", "eu-west-2"])
+        self.assertIn("# expires 2030-01-01T00:00:00+00:00", self.cache.read_text())
+
+    def test_the_secret_never_appears_in_what_it_prints(self) -> None:
+        result = self.run_script("glean")
+        self.assertNotIn("fake/session+secret", result.stdout + result.stderr)
+        self.assertNotIn("fake-token", result.stdout + result.stderr)
+
+    def test_a_failed_mint_keeps_the_previous_session(self) -> None:
+        self.runtime.mkdir()
+        self.cache.write_text("# expires earlier\nexport OLD=1\n")
+        self.env["STS_FAIL"] = "1"
+
+        result = self.run_script("glean")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.cache.read_text(), "# expires earlier\nexport OLD=1\n")
+        self.assertEqual([p.name for p in self.runtime.iterdir()], ["aws-glean-session.env"])
 
 
 if __name__ == "__main__":

@@ -86,6 +86,24 @@ run without an Android SDK/Java/Xcode toolchain (a Mac, for both platforms);
 `setup-app`, `test-app`, `lint-app` and `start-web` need none of that and run anywhere,
 including a plain Linux box.
 
+### AWS access
+
+`make aws-profile` also mints a 12h STS session token while 1Password is
+unlocked and caches it in `$XDG_RUNTIME_DIR/aws-glean-session.env` (tmpfs, mode
+600). The `glean` profile itself needs Touch ID on the Mac each time, so
+agents should use the cached session instead, in the same command as the `aws`
+call (shell state does not persist between calls):
+
+```bash
+unset AWS_PROFILE; . /run/user/1000/aws-glean-session.env; aws ...
+```
+
+- Run `make aws-profile` before the first AWS command of a session, and before
+  the user goes away. If the cache is missing or past its `# expires` line and
+  minting fails, 1Password is locked: ask the user to unlock it, do not loop.
+- Never write the long-lived key or a token anywhere else, and never print
+  either.
+
 ### Worktrees
 
 ```bash

@@ -10,7 +10,8 @@
 # needs the key; with the 1Password desktop app's CLI integration on, that is
 # a Touch ID prompt at most every ten minutes. Give an ssh-host (e.g. the Mac
 # with the 1Password app) and `op` runs there over SSH instead, so this
-# machine needs no 1Password sign-in of its own.
+# machine needs no 1Password sign-in of its own. The ssh-host may be several
+# hosts separated by spaces; the helper uses the first that answers.
 #
 # 1Password references cannot contain parentheses; if the item's title has
 # any, use its ID (op://<vault>/<item-id>).
