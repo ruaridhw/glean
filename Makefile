@@ -239,8 +239,9 @@ e2e-tokens:  ## Print the Cognito test user's tokens as shell exports (needs E2E
 # ── AWS ───────────────────────────────────────────────────────────────────────
 
 .PHONY: aws-profile
-aws-profile:  ## Point the AWS CLI's glean profile at the IAM user's key in 1Password (OP_AWS_ITEM in .env.local)
+aws-profile:  ## Point the AWS CLI's glean profile at the IAM user's key in 1Password (OP_AWS_ITEM in .env.local), and cache a 12h session token in tmpfs
 	@scripts/aws_op_profile.sh "$(OP_AWS_ITEM)" "$(AWS_OP_PROFILE)" "$(OP_SSH_HOST)"
+	@scripts/aws_op_session.sh "$(AWS_OP_PROFILE)"
 	aws sts get-caller-identity --profile "$(AWS_OP_PROFILE)"
 
 # ── Git Worktrees ─────────────────────────────────────────────────────────────
