@@ -5,11 +5,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+import httpx
+from langchain_core.callbacks import BaseCallbackHandler  # noqa: TID251 - this module owns LangChain
 from langchain_core.messages import HumanMessage, SystemMessage  # noqa: TID251 - this module owns LangChain
 from langchain_core.messages.content import create_image_block, create_text_block  # noqa: TID251
 from langchain_openrouter import ChatOpenRouter  # noqa: TID251 - this module owns LangChain
 from openrouter import OpenRouter  # noqa: TID251 - this module owns the SDK
 from pydantic import BaseModel
+
+from glean.observability import logger
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -17,6 +21,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel, LanguageModelInput  # noqa: TID251
     from langchain_core.messages import BaseMessage  # noqa: TID251
     from langchain_core.messages.content import ContentBlock  # noqa: TID251
+    from langchain_core.outputs import LLMResult  # noqa: TID251
     from langchain_core.runnables import RunnableConfig  # noqa: TID251
     from pydantic import SecretStr
 
@@ -154,17 +159,81 @@ class LLMRouter:
         user: str | Sequence[str | ImagePart],
         purpose: ModelPurpose = ModelPurpose.PRODUCTION,
         timeout_ms: int | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        attempts: int = 1,
     ) -> StructuredResponseT:
         """Ask *feature*'s model one question: a *system* prompt and a *user* message, which is text or a
         sequence of text and image parts. Returns the reply validated as *schema*.
 
         The chat model, messages, structured-output policy and LangSmith metadata (`{"feature": feature}`) all stay
-        in this module, so callers never import LangChain. *timeout_ms* bounds the call; without it the call gets
-        create_chat_model's default.
+        in this module, so callers never import LangChain. *timeout_ms* bounds each wait for the server, not the
+        whole call (the SDK has no overall deadline); without it the call gets create_chat_model's default.
+
+        *max_tokens* is what bounds a call's total time: a model can run away, streaming tens of KB over minutes
+        while every chunk beats the read timeout. A reply cut off by it is never returned as an answer, because it
+        parses into a valid but shorter one: it raises LLMOutputTruncatedError. *attempts* is how many times to ask
+        before a truncated reply or a dropped connection is raised; any other error is raised at once.
         """
         options: dict[str, Any] = {} if timeout_ms is None else {"request_timeout": timeout_ms}
+        if temperature is not None:
+            options["temperature"] = temperature
+        if max_tokens is not None:
+            options["max_tokens"] = max_tokens
         model = create_chat_model(self.model_id_for(feature, purpose=purpose), api_key=self.api_key, **options)
-        return invoke_structured(model, schema, _messages(system, user), config={"metadata": {"feature": feature}})
+        messages = _messages(system, user)
+        for attempt in range(1, attempts + 1):
+            try:
+                return _invoke_untruncated(model, schema, messages, metadata={"feature": feature})
+            except (LLMOutputTruncatedError, httpx.TransportError) as error:
+                if attempt == attempts:
+                    raise
+                logger.warning(
+                    "llm call failed; asking again",
+                    extra={"feature": feature, "attempt": attempt, "error": type(error).__name__},
+                )
+        raise AssertionError("attempts must be at least 1")  # pragma: no cover
+
+
+class LLMOutputTruncatedError(RuntimeError):
+    """The model stopped because it hit its token limit, so its reply cannot be trusted as complete."""
+
+
+class _FinishReasons(BaseCallbackHandler):
+    """Collects why the model stopped; `length` means it was cut off by max_tokens."""
+
+    def __init__(self) -> None:
+        self.reasons: list[str] = []
+
+    def on_llm_end(self, response: LLMResult, **_: Any) -> None:
+        for generations in response.generations:
+            for generation in generations:
+                reason = (generation.generation_info or {}).get("finish_reason")
+                if isinstance(reason, str):
+                    self.reasons.append(reason)
+
+    @property
+    def truncated(self) -> bool:
+        return "length" in self.reasons
+
+
+def _invoke_untruncated[StructuredResponseT: BaseModel](
+    model: BaseChatModel,
+    schema: type[StructuredResponseT],
+    messages: list[BaseMessage],
+    *,
+    metadata: dict[str, Any],
+) -> StructuredResponseT:
+    finish = _FinishReasons()
+    try:
+        result = invoke_structured(model, schema, messages, config={"metadata": metadata, "callbacks": [finish]})
+    except Exception as error:
+        if finish.truncated:  # a reply cut off mid-JSON may not even parse
+            raise LLMOutputTruncatedError(f"reply hit the token limit and did not parse: {error}") from error
+        raise
+    if finish.truncated:
+        raise LLMOutputTruncatedError("reply hit the token limit")
+    return result
 
 
 def _messages(system: str, user: str | Sequence[str | ImagePart]) -> list[BaseMessage]:

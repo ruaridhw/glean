@@ -13,7 +13,13 @@ from glean.dependencies import get_llm_router
 from glean.llm import Feature, ImagePart
 from glean.main import app
 from glean.receipts.schemas import DescribeRequest, ParsedIngredient, ScanResponse
-from glean.receipts.service import NORMALISE_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT, describe_purchase
+from glean.receipts.service import (
+    NORMALISE_SYSTEM_PROMPT,
+    VISION_SYSTEM_PROMPT,
+    _extract_textract_lines,
+    describe_purchase,
+    reply_token_limit,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -230,13 +236,16 @@ def test_scan_receipt_asks_the_model_for_a_deterministic_bounded_reply_and_retri
     assert response.status_code == 200
     kwargs = llm_router.invoke.call_args.kwargs
     assert kwargs["temperature"] == 0
-    assert 1_500 <= kwargs["max_tokens"] <= 4_096
+    assert kwargs["max_tokens"] == reply_token_limit(line_count=len(_extract_textract_lines(_mock_textract_response())))
     assert kwargs["attempts"] == 2
 
 
-def test_the_token_limit_grows_with_the_receipt() -> None:
-    from glean.receipts.service import reply_token_limit
+def test_the_token_limit_leaves_room_for_the_measured_reply_without_letting_a_runaway_last() -> None:
+    # A real 12-line receipt's reply took 770-1,270 tokens; a runaway at 4,096 tokens ends within about 10 s.
+    assert 1_500 <= reply_token_limit(line_count=12) <= 4_096
 
+
+def test_the_token_limit_grows_with_the_receipt() -> None:
     assert reply_token_limit(line_count=12) < reply_token_limit(line_count=40) <= 8_192
     assert reply_token_limit(line_count=0) >= 512
     assert reply_token_limit(line_count=500) == 8_192
