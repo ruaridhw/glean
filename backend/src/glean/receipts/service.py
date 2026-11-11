@@ -43,6 +43,23 @@ Given an image of a grocery receipt, extract all line items and return structure
 - confidence: 0.0-1.0 reflecting how certain you are about the extraction and normalisation"""
 
 
+# Two asks fit Lambda's 30 s: Textract takes about 2.5 s and a reply cut off at the limit below about 7 s.
+_NORMALISE_ATTEMPTS = 2
+_REPLY_TOKENS_BASE = 512
+_REPLY_TOKENS_PER_LINE = 200  # a 12-line receipt's reply measured 770-1,270 tokens, about 85 a line
+_REPLY_TOKENS_MAX = 8_192
+
+
+def reply_token_limit(*, line_count: int) -> int:
+    """How many tokens the normalised reply to *line_count* receipt lines may take.
+
+    At the default sampling about 1 call in 6 ran away until the model's own limit, 13-67 KB over 23-159 s (replayed
+    from a real receipt), past Lambda's 30 s. The limit scales with the receipt so a long one is not cut off while
+    a runaway still ends within seconds.
+    """
+    return min(_REPLY_TOKENS_MAX, _REPLY_TOKENS_BASE + _REPLY_TOKENS_PER_LINE * line_count)
+
+
 def _extract_textract_lines(textract_response: dict) -> list[dict]:
     lines = []
     for doc in textract_response.get("ExpenseDocuments", []):
@@ -86,6 +103,9 @@ def _scan_via_textract(image_bytes: bytes, *, llm_router: LLMRouter, aws_region:
         ScanResponse,
         system=NORMALISE_SYSTEM_PROMPT,
         user=json.dumps(lines),
+        temperature=0,
+        max_tokens=reply_token_limit(line_count=len(lines)),
+        attempts=_NORMALISE_ATTEMPTS,
     )
     logger.info("llm normalised items")
     return response

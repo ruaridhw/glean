@@ -4,8 +4,10 @@ import base64
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from glean.config import Settings
@@ -14,6 +16,7 @@ from glean.llm import (
     Feature,
     ImagePart,
     LLMModelPolicy,
+    LLMOutputTruncatedError,
     LLMRouter,
     ModelPurpose,
     create_chat_model,
@@ -152,10 +155,10 @@ class TestLLMRouter:
         mock_cls.return_value.with_structured_output.assert_called_once_with(
             _StructuredTestResponse, method="json_schema"
         )
-        mock_cls.return_value.with_structured_output.return_value.invoke.assert_called_once_with(
-            [SystemMessage(content="Parse the list."), HumanMessage(content="2 apples")],
-            config={"metadata": {"feature": Feature.SHOPPING_LIST_DESCRIPTION}},
-        )
+        mock_cls.return_value.with_structured_output.return_value.invoke.assert_called_once()
+        (messages,), kwargs = mock_cls.return_value.with_structured_output.return_value.invoke.call_args
+        assert messages == [SystemMessage(content="Parse the list."), HumanMessage(content="2 apples")]
+        assert kwargs["config"]["metadata"] == {"feature": Feature.SHOPPING_LIST_DESCRIPTION}
 
     def test_invoke_sends_text_and_image_parts_as_one_user_message(self) -> None:
         _, messages = _invoke_and_capture(
@@ -309,3 +312,100 @@ class TestValidateModel:
             pytest.raises(ValueError, match="Unknown OpenRouter model"),
         ):
             validate_model("nonexistent/model-99", api_key=SecretStr("test-key"))
+
+
+class _ScriptedChatModel:
+    """Stands in for the chat model: each structured call replays one scripted outcome.
+
+    An outcome is an exception to raise, or ``(finish_reason, parsed)``. The finish reason reaches the
+    callbacks the caller attached, the way the real OpenRouter model reports it (checked live: ``length`` when
+    cut off by ``max_tokens``, ``stop`` otherwise), while the parsed value is returned regardless, as the real
+    model returns a truncated reply parsed into a valid, shorter answer.
+    """
+
+    def __init__(self, *outcomes: Exception | tuple[str, _StructuredTestResponse]) -> None:
+        self.outcomes = list(outcomes)
+        self.calls = 0
+
+    def with_structured_output(self, *_: Any, **__: Any) -> _ScriptedChatModel:
+        return self
+
+    def invoke(self, _messages: Any, config: dict[str, Any] | None = None) -> _StructuredTestResponse:
+        self.calls += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        finish_reason, parsed = outcome
+        reply = LLMResult(
+            generations=[
+                [ChatGeneration(message=AIMessage(content="{}"), generation_info={"finish_reason": finish_reason})]
+            ]
+        )
+        for handler in (config or {}).get("callbacks", []):
+            handler.on_llm_end(reply)
+        return parsed
+
+
+_FULL = _StructuredTestResponse(name="Receipt", values=["a", "b", "c"])
+_CUT_SHORT = _StructuredTestResponse(name="Receipt", values=["a"])
+
+
+class TestInvokeSafeguards:
+    @staticmethod
+    def _invoke(model: _ScriptedChatModel, monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> _StructuredTestResponse:
+        monkeypatch.setattr("glean.llm.create_chat_model", lambda *_, **__: model)
+        return LLMRouter(api_key=SecretStr("test-key")).invoke(
+            Feature.RECEIPT_SCAN, _StructuredTestResponse, system="s", user="u", **kwargs
+        )
+
+    def test_a_reply_cut_off_by_the_token_limit_is_an_error_not_a_short_answer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        model = _ScriptedChatModel(("length", _CUT_SHORT))
+
+        with pytest.raises(LLMOutputTruncatedError):
+            self._invoke(model, monkeypatch)
+
+    def test_a_complete_reply_is_returned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert self._invoke(_ScriptedChatModel(("stop", _FULL)), monkeypatch) == _FULL
+
+    def test_a_cut_off_reply_is_asked_again_when_attempts_allow(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        model = _ScriptedChatModel(("length", _CUT_SHORT), ("stop", _FULL))
+
+        assert self._invoke(model, monkeypatch, attempts=2) == _FULL
+        assert model.calls == 2
+
+    def test_it_gives_up_after_the_allowed_attempts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        model = _ScriptedChatModel(("length", _CUT_SHORT), ("length", _CUT_SHORT), ("stop", _FULL))
+
+        with pytest.raises(LLMOutputTruncatedError):
+            self._invoke(model, monkeypatch, attempts=2)
+        assert model.calls == 2
+
+    def test_a_dropped_connection_is_asked_again_when_attempts_allow(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        model = _ScriptedChatModel(httpx.ConnectError("Connection reset by peer"), ("stop", _FULL))
+
+        assert self._invoke(model, monkeypatch, attempts=2) == _FULL
+        assert model.calls == 2
+
+    def test_a_dropped_connection_is_an_error_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        model = _ScriptedChatModel(httpx.ConnectError("Connection reset by peer"), ("stop", _FULL))
+
+        with pytest.raises(httpx.ConnectError):
+            self._invoke(model, monkeypatch)
+        assert model.calls == 1
+
+    def test_other_errors_are_not_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        model = _ScriptedChatModel(ValueError("bad request"), ("stop", _FULL))
+
+        with pytest.raises(ValueError, match="bad request"):
+            self._invoke(model, monkeypatch, attempts=2)
+        assert model.calls == 1
+
+    def test_temperature_and_token_limit_are_applied_to_the_model(self) -> None:
+        chat_open_router, _ = _invoke_and_capture(
+            LLMRouter(api_key=SecretStr("test-key")), system="s", user="u", temperature=0, max_tokens=3_000
+        )
+
+        assert chat_open_router.call_args.kwargs["temperature"] == 0
+        assert chat_open_router.call_args.kwargs["max_tokens"] == 3_000
