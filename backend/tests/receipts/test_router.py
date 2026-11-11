@@ -206,3 +206,37 @@ def test_describe_purchase_uses_pantry_purchase_feature_metadata() -> None:
     assert args[1] is ScanResponse
     assert kwargs["system"] == NORMALISE_SYSTEM_PROMPT
     assert kwargs["user"] == "Parse this grocery purchase description: I bought chicken and milk"
+
+
+def test_scan_receipt_asks_the_model_for_a_deterministic_bounded_reply_and_retries_once(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """Replaying a real receipt: at the default sampling about 1 call in 6 ran away until the model's limit
+    (13-67 KB over 23-159 s, past Lambda's 30 s) or was cut short into a 1-item answer; at temperature 0 none did.
+    A 12-line receipt needs about 1,000 reply tokens, so the limit leaves room without letting a runaway last."""
+    mock_textract = MagicMock()
+    mock_textract.analyze_expense.return_value = _mock_textract_response()
+    llm_router = MagicMock()
+    llm_router.invoke.return_value = _mock_scan_response()
+    app.dependency_overrides[get_llm_router] = lambda: llm_router
+
+    with patch("boto3.client", side_effect=lambda name, **_: MagicMock() if name == "s3" else mock_textract):
+        response = client.post(
+            "/receipts/scan",
+            headers=auth_headers,
+            files={"file": ("receipt.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
+
+    assert response.status_code == 200
+    kwargs = llm_router.invoke.call_args.kwargs
+    assert kwargs["temperature"] == 0
+    assert 1_500 <= kwargs["max_tokens"] <= 4_096
+    assert kwargs["attempts"] == 2
+
+
+def test_the_token_limit_grows_with_the_receipt() -> None:
+    from glean.receipts.service import reply_token_limit
+
+    assert reply_token_limit(line_count=12) < reply_token_limit(line_count=40) <= 8_192
+    assert reply_token_limit(line_count=0) >= 512
+    assert reply_token_limit(line_count=500) == 8_192
